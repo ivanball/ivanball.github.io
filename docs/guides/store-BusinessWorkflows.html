@@ -411,6 +411,48 @@
           <td><code>DELETE /users/{userId}</code></td>
           <td>Identity</td>
           </tr>
+          <tr>
+          <td>47</td>
+          <td>Ship Order</td>
+          <td><code>PUT /orders/{id}/ship</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>48</td>
+          <td>Correct Shipment</td>
+          <td><code>PUT /orders/{id}/shipment</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>49</td>
+          <td>Submit Product Review</td>
+          <td><code>POST /reviews/by-product/{productId}</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>50</td>
+          <td>Revise Product Review</td>
+          <td><code>PUT /reviews/{id}</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>51</td>
+          <td>Withdraw Product Review</td>
+          <td><code>DELETE /reviews/{id}</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>52</td>
+          <td>Hide Product Review</td>
+          <td><code>PUT /reviews/{id}/hide</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>53</td>
+          <td>Unhide Product Review</td>
+          <td><code>PUT /reviews/{id}/unhide</code></td>
+          <td>Catalog</td>
+          </tr>
           </tbody></table></div>
           <hr>
           <h2 id="1-identity-module-workflows">1. Identity Module Workflows</h2>
@@ -856,6 +898,97 @@
           </tbody></table></div>
           <p>Every mutation evicts the products cache so the next read reflects the change.</p>
           <hr>
+          <h3 id="25-product-reviews">2.5 Product Reviews</h3>
+          <h4 id="earn-the-entitlement-orderfulfilled---verifiedpurchase">Earn the Entitlement (OrderFulfilled -&gt; VerifiedPurchase)</h4>
+          <p><strong>Entry Point:</strong> the <code>Sales.OrderFulfilled.v1</code> integration event, consumed by
+          <code>OrderFulfilledHandler</code> in its own DI scope. No HTTP surface: nothing else in the system creates a
+          verified purchase.</p>
+          <pre class="doc-pre"><code class="">Sales: order.MarkAsDelivered()
+  -&gt; raises OrderDelivered (in-process) AND OrderFulfilled (integration, line snapshot)
+  -&gt; stamps Order.FulfilledPublishedOn in the same unit of work
+  -&gt; outbox row commits with the order write, then ships to the broker
+
+Catalog: OrderFulfilledHandler
+  -&gt; resolve the event&#39;s variant ids to product ids in ONE projection
+     (soft-deleted variants are not resolved: a delisted product stays unreviewable)
+  -&gt; de-duplicate: two sizes of the same shirt are one entitlement
+  -&gt; read the order&#39;s existing entitlement rows (first idempotency guard)
+  -&gt; VerifiedPurchase.Create() for each missing product, one SaveChangesAsync</code></pre>
+          <p><strong>Idempotency:</strong> twice over. The existing-rows read means a redelivered event inserts nothing, and the
+          unique <code>(OrderId, ProductId)</code> index is the backstop for two deliveries racing. Deliveries are
+          at-least-once, so both halves are load-bearing. A variant that does not resolve is logged and skipped
+          rather than thrown, because a redelivery would fail on it identically forever and take the customer&#39;s
+          other entitlements down with it.</p>
+          <p><strong>Backfill:</strong> <code>OrderFulfilledBackfillService</code> publishes the event on startup for orders delivered
+          before it existed, selecting only Delivered orders whose <code>FulfilledPublishedOn</code> is still null. Bounded
+          per run and settings-gated (<code>OrderFulfilledBackfill:Enabled</code>).</p>
+          <h4 id="submit-review">Submit Review</h4>
+          <p><strong>Entry Point:</strong> <code>POST /reviews/by-product/{productId}</code>, authenticated customer, <code>[Idempotent]</code></p>
+          <pre class="doc-pre"><code class="">ReviewsController.SubmitAsync()
+  -&gt; resolve the caller: customer_id claim (fail closed with 403 when absent, admins not exempt)
+  -&gt; reviewer display name read from the token&#39;s name claim, never from the body
+  -&gt; SubmitReviewHandler
+    -&gt; VerifiedPurchase for (customer, product)?  no -&gt; Review.NotVerifiedPurchase
+    -&gt; existing review by this customer for this product?  yes -&gt; Review.AlreadyReviewed
+    -&gt; entitling order = lowest matching OrderId (the earliest entitlement)
+    -&gt; ProductReview.Create() -&gt; validates rating 1..5, title &lt;= 120, body &lt;= 2000
+       -&gt; raises ProductReviewChanged (Added), status Published
+    -&gt; AddAsync + SaveChangesAsync
+  -&gt; evict the catalog:products output-cache tag
+
+  (then, after commit)
+  -&gt; ProductReviewChangedHandler [own DI scope]
+    -&gt; recompute AVG/COUNT over the product&#39;s published, non-deleted reviews
+    -&gt; Product.UpdateRatingSummary(), written only when the summary actually differs</code></pre>
+          <p><strong>Response:</strong> 200 OK with <code>ProductReviewDTO</code></p>
+          <h4 id="revise--withdraw-review">Revise / Withdraw Review</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /reviews/{id}</code> and <code>DELETE /reviews/{id}</code>, owner or Admin</p>
+          <p>Ownership is checked in the controller and a non-owner is answered <strong>404, not 403</strong>, so the existence
+          of another customer&#39;s review id cannot be probed for. The revise path is conditional
+          (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a>): the <code>If-Match</code> header is mandatory and an edit
+          decided against a stale view answers 412. The delete is unconditional (soft delete; a delete has no
+          field to lose to a concurrent edit). Both raise <code>ProductReviewChanged</code>, so the rating summary is
+          recomputed either way. The frozen <code>ReviewerName</code> is deliberately not revisable.</p>
+          <h4 id="hide--unhide-review-moderation">Hide / Unhide Review (Moderation)</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /reviews/{id}/hide</code>, <code>PUT /reviews/{id}/unhide</code>, <code>catalog:reviews:moderate</code></p>
+          <p>Both are idempotent at the aggregate (a review already in the target status succeeds without raising a
+          second event) and conditional on the same <code>If-Match</code> terms, so two moderators working from the same
+          stale list cannot silently overwrite each other. A hidden review leaves the public list and drops out
+          of the product&#39;s rating summary; the moderation list still shows it.</p>
+          <h4 id="erasure">Erasure</h4>
+          <p><code>CustomerErasedHandler</code> consumes Identity&#39;s <code>CustomerErased.v1</code> and anonymizes every review that
+          customer wrote, hidden and soft-deleted rows included: name, title and body cleared, star rating kept
+          (<a href="../adr/005-soft-delete-vs-erasure.html">ADR-005</a>). Only rows that still carry personal data are
+          loaded, so a redelivery finds nothing to do and churns no audit fields.</p>
+          <h4 id="query-endpoints-2">Query Endpoints</h4>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>GET /reviews/by-product/{productId}/paged</code></td>
+          <td>Anonymous</td>
+          <td>Published reviews only, whoever asks, newest first; output-cached under the shared <code>ProductsCache</code> policy, which caches regardless of auth state (a role-varying response would be served to the wrong caller)</td>
+          </tr>
+          <tr>
+          <td><code>GET /reviews/by-product/{productId}/mine</code></td>
+          <td>Authenticated customer</td>
+          <td><code>HasPurchased</code> and <code>CanReview</code> as separate booleans, plus the caller&#39;s own review; the pair is what lets the UI tell &quot;never bought it&quot; apart from &quot;already had their say&quot;</td>
+          </tr>
+          <tr>
+          <td><code>GET /reviews/paged</code></td>
+          <td><code>catalog:reviews:moderate</code></td>
+          <td>Every review whatever its status, filterable and sortable; never cached</td>
+          </tr>
+          </tbody></table></div>
+          <p>Page sizes are capped server-side at 100. Every mutation evicts the <code>catalog:products</code> output-cache
+          tag as well as invalidating the application cache, because a review moves the stars the product reads
+          carry.</p>
+          <hr>
           <h2 id="3-sales-module-workflows">3. Sales Module Workflows</h2>
           <h3 id="31-shopping-cart">3.1 Shopping Cart</h3>
           <h4 id="add-item-to-cart">Add Item to Cart</h4>
@@ -987,10 +1120,10 @@
           <pre class="doc-pre"><code class="">                    +------------------------------------------+
                     |                                          |
                     v                                          |
-PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
-    |                    |               ^
-    |                    |               |
-    |                    v        (MarkAsPaidManually)
+PendingPayment --&gt; PaymentInitiated --&gt; Paid --&gt; Shipped --&gt; Delivered
+    |                    |               ^  |                   ^
+    |                    |               |  +-------------------+
+    |                    v        (MarkAsPaidManually)  (no carrier leg)
     |              PaymentFailed --------+
     |                    |
     |                    v (retry)
@@ -1000,6 +1133,11 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
  Cancelled &lt;------- Cancelled
 (from PendingPayment, PaymentInitiated, or PaymentFailed)</code></pre>
           <p><strong>Terminal States:</strong> Cancelled, Delivered</p>
+          <p><code>Shipped</code> is an optional stop, not a mandatory one: a fulfilment with no tracking to record still goes
+          Paid -&gt; Delivered directly, which is why Paid keeps both outgoing edges. Cancellation is refused from
+          Shipped exactly as it is from Paid. <code>UpdateShipment</code> is a self-transition on Shipped. The enum&#39;s
+          numeric values are persisted and travel on the <code>user_sales_export</code> gRPC contract, so <code>Shipped</code> is
+          appended LAST in <code>OrderStatus</code> even though it sits mid-lifecycle.</p>
           <h4 id="create-stripe-checkout-session">Create Stripe Checkout Session</h4>
           <p><strong>Entry Point:</strong> <code>POST /orders/{id}/checkout</code>, Authenticated (owner or admin)</p>
           <pre class="doc-pre"><code class="">OrdersController.CreateCheckoutSessionAsync()
@@ -1051,9 +1189,47 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
           verifiable state, the call succeeds without changes. This is the reconciliation half of
           <a href="../adr/054-saga-compensation-and-reconciliation.html">ADR-054</a>: the webhook is the fast path, this is
           the backstop that keeps a paid customer from sitting in <code>PaymentInitiated</code> forever.</p>
+          <h4 id="ship-order">Ship Order</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/ship</code>, <code>sales:orders:manage</code>, mandatory <code>If-Match</code></p>
+          <pre class="doc-pre"><code class="">OrdersController.ShipAsync()
+  -&gt; ShipOrderHandler
+    -&gt; Shipment.Create(carrier, trackingNumber, shippedOn, estimatedDeliveryOn?, trackingUrl?)
+       -&gt; tracking number required, max 100; shippedOn normalized to UTC
+       -&gt; estimated delivery cannot precede the ship date (same day allowed)
+       -&gt; a caller-supplied https tracking URL is accepted ONLY for carrier Other
+    -&gt; order.Ship(shipment)
+       -&gt; validates status is Paid  (Shipped/Delivered/Cancelled refuse)
+       -&gt; sets Shipment, status -&gt; Shipped, raises OrderShipped
+    -&gt; SaveChangesAsync()
+
+  (then, after commit)
+  -&gt; OrderShippedHandler [own DI scope]
+    -&gt; ICustomerService.GetContactInfoByIdAsync() for the address
+    -&gt; IEmailSender: carrier, tracking number, tracking link, dates
+    -&gt; send failures are logged, never fatal: the transition is already committed</code></pre>
+          <p>The tracking link is <strong>computed</strong> from the carrier&#39;s own template plus the tracking number for UPS,
+          FedEx, USPS and DHL, so the URL is written down in exactly one place and the client renders whatever
+          arrives rather than rebuilding a carrier URL of its own. Only <code>Carrier.Other</code> carries a stored URL.</p>
+          <p><strong>Response:</strong> 204 No Content. 412 when the <code>If-Match</code> token is stale, 428 when the header is absent.</p>
+          <h4 id="correct-shipment">Correct Shipment</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/shipment</code>, <code>sales:orders:manage</code>, mandatory <code>If-Match</code></p>
+          <p>Same request body as <code>ship</code>, because the shipment is a value object and a correction replaces it whole
+          rather than patching a field. Allowed from Shipped only; the status does not move, and <code>OrderShipped</code>
+          is raised again on purpose so a customer who was told the wrong tracking number gets the right one
+          (the notification is a re-send, not a duplicate). Kept as a separate endpoint from <code>ship</code> deliberately:
+          <code>ship</code> must refuse an already-shipped order and this one must refuse an order that never shipped, so
+          folding them together would make &quot;silently re-ship&quot; indistinguishable from &quot;fix the tracking number&quot;.</p>
           <h4 id="deliver-order">Deliver Order</h4>
-          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/deliver</code>, Admin only</p>
-          <p>Validates status is Paid. Status -&gt; Delivered. Publishes <code>OrderDelivered</code>.</p>
+          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/deliver</code>, <code>sales:orders:manage</code>, mandatory <code>If-Match</code></p>
+          <p>Validates status is Paid <strong>or</strong> Shipped. Status -&gt; Delivered, <code>FulfilledPublishedOn</code> stamped in the
+          same unit of work. Raises two events: the in-process <code>OrderDelivered</code>, and the <code>OrderFulfilled</code>
+          integration event carrying the delivered line snapshot, which Catalog turns into the verified-purchase
+          entitlements behind product reviews (Section 2.5). The snapshot travels on the event because the
+          consumer lives in another service and cannot query back (<a href="../adr/006-database-per-service.html">ADR-006</a>),
+          which is also why callers load <code>OrderLines</code> with the aggregate.</p>
+          <p>The admin order grid searches tracking numbers: the filter name <code>ShipmentTrackingNumber</code> maps to the
+          scalar column the owned shipment flattens onto, so it is one server-side CONTAINS rather than a client
+          scan.</p>
           <h4 id="cancel-order">Cancel Order</h4>
           <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/cancel</code>, Owner or Admin</p>
           <pre class="doc-pre"><code class="">OrdersController.CancelAsync()
@@ -1186,13 +1362,13 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
           <p><strong>State Management:</strong> <code>ICartStateService</code> singleton manages cart state centrally: all cart operations go through this service which refreshes the cart DTO after each mutation and notifies subscribers via <code>OnChange</code> event. Cart items are enriched with product names and SKUs from the Catalog API.</p>
           <h4 id="catalog-browse--product-detail">Catalog Browse &amp; Product Detail</h4>
           <ul>
-          <li><code>/catalog</code>, Product grid with name search, category filter, name/newest sort, quick &quot;Add to Cart&quot; per variant</li>
-          <li><code>/catalog/{id}</code>, Product detail with breadcrumbs, variant list, quantity selector, &quot;Add to Cart&quot; button, &quot;Buy Now&quot; (direct Stripe checkout)</li>
+          <li><code>/catalog</code>, Product grid with name search, category filter, name/newest sort, quick &quot;Add to Cart&quot; per variant, and a star rating with review count on each card (read off the product&#39;s denormalized <code>RatingSummary</code>, so a grid costs no per-card aggregate query)</li>
+          <li><code>/catalog/{id}</code>, Product detail with breadcrumbs, variant list, quantity selector, &quot;Add to Cart&quot; button, &quot;Buy Now&quot; (direct Stripe checkout), and a reviews section (anchor <code>#reviews</code>) listing published reviews with the review editor for an eligible signed-in customer</li>
           </ul>
           <h4 id="order-management">Order Management</h4>
           <ul>
-          <li><code>/orders</code>, MudDataGrid listing orders with ID, customer, total, status chips, item count</li>
-          <li><code>/orders/{id}</code>, Two-column layout: order summary (status, total, payment/delivery actions) + order lines</li>
+          <li><code>/orders</code>, MudDataGrid listing orders with ID, customer, total, status chips (Shipped included), item count; the admin search box also matches tracking numbers</li>
+          <li><code>/orders/{id}</code>, Two-column layout: order summary (status, total, payment/shipping/delivery actions, and the carrier, tracking number and tracking link once the order ships) + order lines. The admin ship and correct-tracking actions open one <code>ShipOrderDialog</code>, which serves both endpoints</li>
           </ul>
           <h3 id="42-admin-ui-workflows">4.2 Admin UI Workflows</h3>
           <div class="table-wrap"><table>
@@ -1232,6 +1408,11 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
           <td>Product Detail</td>
           <td><code>/products/{id}</code></td>
           <td>View/edit product, inline variant editor (add/edit/delete)</td>
+          </tr>
+          <tr>
+          <td>Reviews</td>
+          <td><code>/reviews</code></td>
+          <td>MudDataGrid: every review whatever its status, search, hide/unhide moderation</td>
           </tr>
           <tr>
           <td>Inventory</td>
@@ -1313,6 +1494,7 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
           <li>Home (<code>/</code>)</li>
           <li>Categories (<code>/categories</code>)</li>
           <li>Products (<code>/products</code>)</li>
+          <li>Reviews (<code>/reviews</code>)</li>
           <li>Inventory (<code>/inventory</code>)</li>
           <li>Shopping Carts (<code>/shoppingcarts</code>)</li>
           <li>Orders (<code>/orders</code>)</li>
@@ -1362,10 +1544,62 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
           <td>Seed data inventory setup</td>
           </tr>
           <tr>
+          <td>Sales -&gt; Identity</td>
+          <td><code>ICustomerService</code></td>
+          <td><code>GetContactInfoByIdAsync()</code></td>
+          <td>Contact details for the order paid / shipped / payment-failed emails</td>
+          </tr>
+          <tr>
+          <td>Identity -&gt; Sales</td>
+          <td><code>IUserSalesExportService</code></td>
+          <td><code>GetUserSalesExportAsync()</code></td>
+          <td>Orders section of the data-subject export</td>
+          </tr>
+          <tr>
+          <td>Identity -&gt; Catalog</td>
+          <td><code>IUserCatalogExportService</code></td>
+          <td><code>GetUserCatalogExportAsync()</code></td>
+          <td>Product-reviews section of the same export</td>
+          </tr>
+          <tr>
           <td>Identity (event)</td>
           <td>Domain Event</td>
           <td><code>UserRegisteredHandler</code></td>
           <td>Auto-creates Customer on registration</td>
+          </tr>
+          </tbody></table></div>
+          <p>Both export edges are <strong>best-effort</strong>: an unreachable peer degrades that one section rather than
+          failing the export, so neither carries a startup wait.</p>
+          <p>Asynchronously, four integration events cross the boundary through the outbox and the broker. Each is
+          the consumer&#39;s trigger to refresh a denormalized copy IT owns, never a prompt to query back into the
+          publisher (<a href="../adr/006-database-per-service.html">ADR-006</a>):</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Event</th>
+          <th>Publisher -&gt; Consumer</th>
+          <th>What the consumer does</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>Catalog.ProductVariantChanged.v1</code></td>
+          <td>Catalog -&gt; Sales</td>
+          <td>Creates the zero-stock inventory record; refreshes the denormalized SKU / product sort labels</td>
+          </tr>
+          <tr>
+          <td><code>Catalog.ProductInfoChanged.v1</code></td>
+          <td>Catalog -&gt; Sales</td>
+          <td>Fans a product rename or delete out to those same labels</td>
+          </tr>
+          <tr>
+          <td><code>Sales.OrderFulfilled.v1</code></td>
+          <td>Sales -&gt; Catalog</td>
+          <td>Writes one <code>VerifiedPurchase</code> per delivered product (Section 2.5)</td>
+          </tr>
+          <tr>
+          <td><code>Identity.CustomerErased.v1</code></td>
+          <td>Identity -&gt; Sales and Catalog</td>
+          <td>Sales clears the frozen order customer name; Catalog anonymizes the customer&#39;s reviews, keeping the ratings</td>
           </tr>
           </tbody></table></div>
           <p><strong>Module dependency:</strong> Sales declares a hard dependency on Catalog (<code>RequiresDependencies = true</code>). When Catalog is disabled, a <code>DisabledProductVariantService</code> stub is registered and Sales will fail to start.</p>
@@ -1396,8 +1630,13 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
           </tr>
           <tr>
           <td><strong>SMTP</strong></td>
-          <td>Email infrastructure</td>
-          <td><code>SmtpEmailSender</code>, infrastructure exists but no domain event handlers trigger emails</td>
+          <td>Transactional email</td>
+          <td><code>SmtpEmailSender</code>, driven by the password-reset handler and the Sales handlers <code>OrderPaidHandler</code>, <code>OrderShippedHandler</code> and <code>OrderPaymentFailedSagaHandler</code></td>
+          </tr>
+          <tr>
+          <td><strong>Message broker</strong></td>
+          <td>Cross-service integration events</td>
+          <td>MassTransit over RabbitMQ locally and Azure Service Bus in production, fed by the per-service outbox</td>
           </tr>
           </tbody></table></div>
           <hr>
@@ -1460,7 +1699,10 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
 5. Checkout          PUT /shoppingcarts/{id}/checkout  -&gt; Order created, inventory reserved
 6. Pay               POST /orders/{id}/checkout   -&gt; Stripe session created, redirect to payment
 7. Payment Complete  POST /payments/webhook        -&gt; Stripe confirms, order marked Paid
-8. Delivery          PUT /orders/{id}/deliver      -&gt; Admin marks as Delivered</code></pre>
+8. Shipment          PUT /orders/{id}/ship         -&gt; Admin records carrier + tracking, customer emailed
+9. Delivery          PUT /orders/{id}/deliver      -&gt; Admin marks as Delivered, OrderFulfilled published
+10. Entitlement      (broker)                      -&gt; Catalog writes one VerifiedPurchase per product
+11. Review           POST /reviews/by-product/{id} -&gt; Customer rates the product they received</code></pre>
           <p><strong>Alternative Flows:</strong></p>
           <ul>
           <li>Payment fails -&gt; Order status <code>PaymentFailed</code> -&gt; customer can retry (create new Stripe session)</li>
@@ -1489,9 +1731,9 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
           <td>Confirm if this is intentional or if order amendment is planned</td>
           </tr>
           <tr>
-          <td><strong>No email notifications</strong></td>
-          <td><code>SmtpEmailSender</code> infrastructure exists but no domain event handlers trigger email sending</td>
-          <td>Verify if notifications are planned (order confirmation, shipment, etc.)</td>
+          <td><strong>No order-confirmation or delivery email</strong></td>
+          <td>Email handlers exist for payment, shipment and payment failure, but <code>OrderPlaced</code>, <code>OrderDelivered</code> and <code>OrderCancelled</code> have none</td>
+          <td>Both would be an extra <code>IDomainEventHandler&lt;T&gt;</code> on an event that already exists, not new plumbing</td>
           </tr>
           <tr>
           <td><strong>No full-text search</strong></td>
@@ -1520,13 +1762,8 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
           </tr>
           <tr>
           <td><strong>No partial fulfillment</strong></td>
-          <td>Orders are delivered as a whole: no concept of partial shipments or split deliveries</td>
-          <td>Clarify if partial fulfillment is a future requirement</td>
-          </tr>
-          <tr>
-          <td><strong>No delivery tracking</strong></td>
-          <td><code>MarkAsDelivered</code> is a binary admin action with no tracking number, carrier, or ETA</td>
-          <td>Consider whether shipping/tracking details are needed</td>
+          <td>Orders ship and are delivered as a whole: <code>Shipped</code> applies to the order, not to individual lines, and an order carries one <code>Shipment</code> value object</td>
+          <td>A second parcel means turning the shipment into a collection; clarify whether split shipments are a real business case first</td>
           </tr>
           <tr>
           <td><strong>No refund compensation handler</strong></td>
@@ -1535,7 +1772,7 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
           </tr>
           </tbody></table></div>
           <hr>
-          <p><em>This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-07-27 (re-verified against MMCA.Store HEAD <code>1dfdc991</code>).</em></p>
+          <p><em>This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-09-05 (order shipment tracking and product reviews).</em></p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>

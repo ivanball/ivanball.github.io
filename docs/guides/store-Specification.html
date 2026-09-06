@@ -133,7 +133,9 @@
           <li><strong>Product Catalog Management</strong>: categories, products, and product variants with pricing</li>
           <li><strong>Shopping &amp; Ordering</strong>: cart management, checkout, order placement</li>
           <li><strong>Payment Processing</strong>: Stripe-integrated checkout with webhook confirmation</li>
+          <li><strong>Order Fulfilment</strong>: carrier shipment tracking from payment through delivery</li>
           <li><strong>Inventory Management</strong>: stock tracking per product variant</li>
+          <li><strong>Product Reviews</strong>: verified-purchase star ratings and reviews, with moderation</li>
           <li><strong>Customer Identity &amp; Authentication</strong>: registration, login, JWT-based sessions</li>
           </ul>
           <p><strong>Technical Stack:</strong></p>
@@ -314,6 +316,14 @@
           <td>StripePaymentIntentId</td>
           <td>Payment confirmation reference</td>
           </tr>
+          <tr>
+          <td>Shipment</td>
+          <td>The parcel the order left with (carrier, tracking number, dates), or null before it ships (value object)</td>
+          </tr>
+          <tr>
+          <td>FulfilledPublishedOn</td>
+          <td>When the <code>OrderFulfilled</code> integration event was published for this order; the idempotency marker the startup backfill sweeps on</td>
+          </tr>
           </tbody></table></div>
           <p><strong>Relationships:</strong></p>
           <ul>
@@ -485,7 +495,101 @@
           <td>AddressLine1 required; all fields have max lengths</td>
           <td><code>MMCA.Common.Shared/ValueObjects/Address.cs</code></td>
           </tr>
+          <tr>
+          <td><strong>Shipment</strong></td>
+          <td>Carrier, TrackingNumber, ShippedOn, EstimatedDeliveryOn, TrackingUrl, plus the computed TrackingLink</td>
+          <td>Tracking number required, max 100; estimated delivery cannot precede the ship date; a caller-supplied tracking URL is accepted only for carrier <code>Other</code> and must be absolute https, max 500</td>
+          <td><code>Sales.Shared/Orders/Shipment.cs</code></td>
+          </tr>
+          <tr>
+          <td><strong>RatingSummary</strong></td>
+          <td>AverageRating (decimal, 0 to 5), ReviewCount</td>
+          <td>Derived, never edited by hand: recomputed as AVG/COUNT over the product&#39;s published, non-deleted reviews. Stored as <code>decimal(3,2)</code></td>
+          <td><code>Catalog.Shared/Products/RatingSummary.cs</code></td>
+          </tr>
           </tbody></table></div>
+          <hr>
+          <h3 id="212-product-review">2.12 Product Review</h3>
+          <p><strong>Description:</strong> A shopper&#39;s review of a product: a star rating plus optional headline and text, written by a customer who received the product. Every review is a verified purchase by construction, so the aggregate carries no &quot;verified&quot; flag of its own.</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>ProductId</td>
+          <td>The reviewed product</td>
+          </tr>
+          <tr>
+          <td>CustomerId</td>
+          <td>The customer who wrote it</td>
+          </tr>
+          <tr>
+          <td>OrderId</td>
+          <td>The delivered order that entitled them to write it</td>
+          </tr>
+          <tr>
+          <td>Rating</td>
+          <td>Star rating, 1 through 5</td>
+          </tr>
+          <tr>
+          <td>Title / Body</td>
+          <td>Optional headline and text</td>
+          </tr>
+          <tr>
+          <td>ReviewerName</td>
+          <td>Display name frozen at submission from the caller&#39;s token, so a later profile rename does not rewrite published content. Marked <code>[Pii]</code></td>
+          </tr>
+          <tr>
+          <td>Status</td>
+          <td><code>Published</code> (the state every review is created in) or <code>Hidden</code> (moderator action)</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>One review per (customer, product); the entitling order is recorded on the row</li>
+          <li>Counted into the product&#39;s <code>RatingSummary</code> while published and not deleted</li>
+          </ul>
+          <p><strong>Erasure:</strong> the aggregate is <code>IAnonymizable</code> (<a href="../adr/005-soft-delete-vs-erasure.html">ADR-005</a>). Anonymizing clears the reviewer name, title and body and <strong>keeps the rating</strong>, because a bare star with no name and no words identifies nobody while removing it would silently rewrite every product average an erasure touched.</p>
+          <p><strong>Source:</strong> <code>Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Reviews/ProductReview.cs</code></p>
+          <hr>
+          <h3 id="213-verified-purchase">2.13 Verified Purchase</h3>
+          <p><strong>Description:</strong> Catalog&#39;s own record that a customer received a product: one row per (order, product). It is the entitlement behind a review, so &quot;verified purchase&quot; is answerable without a query into Sales.</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>ProductId</td>
+          <td>The product the customer received</td>
+          </tr>
+          <tr>
+          <td>CustomerId</td>
+          <td>The customer who received it</td>
+          </tr>
+          <tr>
+          <td>OrderId</td>
+          <td>The delivered order the entitlement came from</td>
+          </tr>
+          <tr>
+          <td>DeliveredOn</td>
+          <td>When the order was marked delivered (UTC)</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>Written only by the consumer of Sales&#39; <code>OrderFulfilled</code> integration event; nothing else creates one and nothing revokes one (delivery is terminal, so an entitlement earned stays earned)</li>
+          <li>Unique on (OrderId, ProductId), which is the database-level backstop for an at-least-once redelivery</li>
+          </ul>
+          <p>Carries no personal data (three identifiers and a date), so it is deliberately neither audited nor anonymizable, and it is deliberately not repeated in the data-subject export: it is a derived copy of order facts Sales already owns and already exports.</p>
+          <p><strong>Source:</strong> <code>Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Reviews/VerifiedPurchase.cs</code></p>
           <hr>
           <h2 id="3-business-workflows">3. Business Workflows</h2>
           <h3 id="31-customer-registration">3.1 Customer Registration</h3>
@@ -667,18 +771,51 @@
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs</code> (MarkAsPaidManually)</li>
           </ul>
           <hr>
-          <h3 id="38-order-delivery">3.8 Order Delivery</h3>
-          <p><strong>Trigger:</strong> An administrator marks a paid order as delivered.</p>
-          <p><strong>Steps:</strong></p>
+          <h3 id="38-order-shipping-and-delivery">3.8 Order Shipping and Delivery</h3>
+          <p><strong>Trigger:</strong> An administrator records that a paid order left with a carrier, corrects what was
+          recorded, or confirms the order arrived.</p>
+          <p><strong>Ship (<code>PUT /Orders/{id}/ship</code>, <code>OrdersManage</code> permission, mandatory <code>If-Match</code>):</strong></p>
           <ol>
           <li>Fetch the order</li>
-          <li>Validate order status is <code>Paid</code></li>
-          <li>Transition status to <code>Delivered</code></li>
-          <li>Persist changes</li>
+          <li>Validate status is <code>Paid</code> (the only state that may ship)</li>
+          <li>Build the <code>Shipment</code> value object: carrier, tracking number, ship date, optional estimated delivery</li>
+          <li>Transition status to <code>Shipped</code> and raise <code>OrderShipped</code></li>
+          <li>Persist changes; the domain-event handler emails the customer the carrier, the tracking number and the tracking link</li>
           </ol>
+          <p><strong>Correct the shipment (<code>PUT /Orders/{id}/shipment</code>, <code>OrdersManage</code> permission, mandatory <code>If-Match</code>):</strong>
+          Same request body, because the shipment is a value object and a correction replaces it whole rather
+          than patching a field. Allowed from <code>Shipped</code> only, and the status does not move. <code>OrderShipped</code> is
+          raised again on purpose, so a customer who was told the wrong tracking number gets the right one. The
+          two verbs stay separate endpoints deliberately: <code>ship</code> must refuse an already-shipped order, the
+          correction must refuse an order that never shipped, and folding them together would make &quot;silently
+          re-ship&quot; indistinguishable from &quot;fix the tracking number&quot;.</p>
+          <p><strong>Deliver (<code>PUT /Orders/{id}/deliver</code>, <code>OrdersManage</code> permission, mandatory <code>If-Match</code>):</strong></p>
+          <ol>
+          <li>Fetch the order</li>
+          <li>Validate status is <code>Paid</code> or <code>Shipped</code> (the carrier leg is optional; see the state machine)</li>
+          <li>Transition status to <code>Delivered</code>, stamp <code>FulfilledPublishedOn</code>, and raise both the in-process
+          <code>OrderDelivered</code> domain event and the <code>OrderFulfilled</code> integration event carrying the delivered
+          line snapshot</li>
+          <li>Persist changes; <code>OrderFulfilled</code> leaves through the outbox and Catalog turns it into the
+          verified-purchase entitlements behind product reviews (Section 3.13)</li>
+          </ol>
+          <p><strong>Tracking links:</strong> for UPS, FedEx, USPS and DHL the public link is computed from the carrier&#39;s own
+          template plus the tracking number, so the URL is written down in exactly one place; only the <code>Other</code>
+          carrier accepts a caller-supplied absolute https URL, and supplying one for a known carrier is
+          refused rather than stored as a second copy that could contradict the template.</p>
+          <p><strong>Backfill:</strong> <code>OrderFulfilledBackfillService</code> is a settings-gated, bounded one-shot startup sweep that
+          publishes <code>OrderFulfilled</code> for orders that reached <code>Delivered</code> before the event existed, which is the
+          only way those customers can ever review what they demonstrably bought. <code>Order.FulfilledPublishedOn</code>
+          is the marker: the sweep selects only Delivered orders where it is still null, and the marker and the
+          outbox row commit in the same unit of work, so a run converges, every later start is a no-op, and a
+          host that dies mid-sweep resumes where it stopped.</p>
           <p><strong>Implemented in:</strong></p>
           <ul>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Ship/ShipOrderHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/UpdateShipment/UpdateShipmentHandler.cs</code></li>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Deliver/DeliverOrderHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/DomainEventHandlers/OrderShippedHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Persistence/Backfill/OrderFulfilledBackfillService.cs</code></li>
           </ul>
           <hr>
           <h3 id="39-payment-verification-webhook-backstop">3.9 Payment Verification (webhook backstop)</h3>
@@ -758,6 +895,102 @@
           <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/UseCases/ResetPassword/ResetPasswordHandler.cs</code></li>
           </ul>
           <hr>
+          <h3 id="313-product-reviews">3.13 Product Reviews</h3>
+          <p><strong>Trigger:</strong> A customer who received a product rates it; anyone reads the ratings; a moderator hides
+          a review that should not be public.</p>
+          <p><strong>Aggregates:</strong> <code>ProductReview</code> (Section 2.12) and <code>VerifiedPurchase</code> (Section 2.13), both in the
+          Catalog module, with the derived <code>RatingSummary</code> on <code>Product</code>.</p>
+          <p><strong>Entitlement (the verified-purchase rule):</strong> a review can only be written by a customer who holds a
+          <code>VerifiedPurchase</code> for the product. Those rows are minted by Catalog&#39;s consumer of Sales&#39;
+          <code>OrderFulfilled</code> integration event, one per (order, product): the event names variants, because that
+          is all Sales knows, and Catalog resolves them to products and de-duplicates, so the entitlement is
+          &quot;you received this product&quot;, not &quot;you received this variant&quot;. A variant Catalog cannot resolve is
+          logged and skipped rather than failing the whole order&#39;s entitlements. Delivered, not Paid, is the
+          trigger on purpose: it is terminal and never reversed, so an entitlement never needs revoking.</p>
+          <p><strong>Submission rules:</strong> the submit handler enforces the two checks the aggregate cannot make for
+          itself, because both read rows outside it: no entitlement fails with <code>Review.NotVerifiedPurchase</code>,
+          and a second review of the same product by the same customer fails with <code>Review.AlreadyReviewed</code>
+          rather than landing as a unique-index violation. The entitling row also supplies the order the review
+          is filed against (the lowest order id, the earliest entitlement). The reviewing customer and the
+          frozen display name both come from the caller&#39;s validated token, never from the body.</p>
+          <p><strong>Rating summary:</strong> every review transition (submitted, revised, hidden, unhidden, anonymized,
+          removed) raises the <code>ProductReviewChanged</code> domain event, and the handler <strong>recomputes</strong> the product&#39;s
+          average and count from its published, non-deleted reviews rather than adjusting them incrementally,
+          so a lost or redelivered event still converges on the right numbers.</p>
+          <p><strong>Moderation:</strong> reviews publish immediately (there is no approval queue). A moderator holding the
+          <code>catalog:reviews:moderate</code> permission can hide a review and restore it; hidden reviews leave the
+          storefront and drop out of the rating summary. Hide and unhide are conditional writes on the same
+          terms as every other review write (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a>), so
+          two moderators acting on the same stale list cannot silently overwrite each other.</p>
+          <p><strong>Erasure:</strong> Catalog consumes Identity&#39;s <code>CustomerErased</code> and anonymizes every review that customer
+          wrote, soft-deleted and hidden rows included. The name, title and body are cleared and the rating is
+          kept (<a href="../adr/005-soft-delete-vs-erasure.html">ADR-005</a>, PRIVACY.md section 5). Because the rating does
+          not move, erasure disturbs no product average.</p>
+          <p><strong>Export:</strong> the reviews a customer wrote are a section of the data-subject export document, served by
+          Catalog through the <code>IUserCatalogExportService</code> cross-module contract and aggregated by Identity&#39;s
+          <code>GET /Users/{userId}/export</code> (Section 3.11). Hidden reviews are included: a moderator&#39;s decision does
+          not stop the text from being the subject&#39;s own data. The verified-purchase rows are deliberately not
+          exported, because they duplicate order facts Sales already exports.</p>
+          <p><strong>Endpoints:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>GET /Reviews/by-product/{productId}/paged</code></td>
+          <td>Anonymous</td>
+          <td>Published reviews of one product, newest first, page size capped server-side. Output-cached under the shared <code>ProductsCache</code> policy</td>
+          </tr>
+          <tr>
+          <td><code>GET /Reviews/by-product/{productId}/mine</code></td>
+          <td>Authenticated customer</td>
+          <td>The caller&#39;s eligibility: <code>HasPurchased</code>, <code>CanReview</code> (the entitlement minus an existing review), and their own review when there is one</td>
+          </tr>
+          <tr>
+          <td><code>POST /Reviews/by-product/{productId}</code></td>
+          <td>Authenticated customer</td>
+          <td>Submit. <code>[Idempotent]</code> (<code>Idempotency-Key</code> header)</td>
+          </tr>
+          <tr>
+          <td><code>PUT /Reviews/{id}</code></td>
+          <td>Owner or Admin</td>
+          <td>Revise the rating and text. Mandatory <code>If-Match</code></td>
+          </tr>
+          <tr>
+          <td><code>DELETE /Reviews/{id}</code></td>
+          <td>Owner or Admin</td>
+          <td>Withdraw (soft delete). Unconditional: a delete has no field to lose to a concurrent edit</td>
+          </tr>
+          <tr>
+          <td><code>PUT /Reviews/{id}/hide</code>, <code>PUT /Reviews/{id}/unhide</code></td>
+          <td><code>catalog:reviews:moderate</code></td>
+          <td>Moderation. Mandatory <code>If-Match</code></td>
+          </tr>
+          <tr>
+          <td><code>GET /Reviews/paged</code></td>
+          <td><code>catalog:reviews:moderate</code></td>
+          <td>The moderation list: every review whatever its status, filterable and sortable. Never cached</td>
+          </tr>
+          </tbody></table></div>
+          <p>A caller who is not the owner is answered 404 rather than 403, so the existence of another customer&#39;s
+          review id cannot be probed for. Every mutation evicts the <code>catalog:products</code> output-cache tag,
+          because a review moves the stars the product reads carry. The Gateway forwards <code>/Reviews/**</code> to the
+          Catalog cluster (<code>catalog-reviews</code> route).</p>
+          <p><strong>Field rules:</strong> rating 1 to 5, title at most 120 characters, body at most 2,000, frozen reviewer
+          name at most 201; title and body are both optional and a review with neither is a bare star rating.</p>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs</code></li>
+          <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/UseCases/</code></li>
+          <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/OrderFulfilledHandler.cs</code></li>
+          <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/CustomerErasedHandler.cs</code></li>
+          <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/DomainEventHandlers/ProductReviewChangedHandler.cs</code></li>
+          </ul>
+          <hr>
           <h2 id="4-order-status-state-machine">4. Order Status State Machine</h2>
           <pre class="doc-pre"><code class="">                    +------------------------------------------+
                     |                                          |
@@ -776,16 +1009,33 @@
  +--------------+                                    +-----------+-----+
  |  Cancelled   | &lt;---- MarkAsCancelled ------------ |      Paid       |
  +--------------+   (from PaymentInitiated)          +-----------------+
-                                                             |
-                                                        MarkAsDelivered
-                                                             |
-                                                             v
+                                                          |       |
+                                                        Ship      |
+                                                          |       |
+                                                          v       |
+                                                  +-----------+   |
+                                                  |  Shipped  |   | MarkAsDelivered
+                                                  +-----------+   | (no carrier leg)
+                                                          |       |
+                                                   MarkAsDelivered|
+                                                          |       |
+                                                          v       v
                                                      +-----------------+
                                                      |    Delivered    |
-                                                     +-----------------+</code></pre>
-          <p><strong>Cancellable States:</strong> PendingPayment, PaymentInitiated, PaymentFailed
+                                                     +-----------------+
+
+ UpdateShipment is a self-transition on Shipped: it replaces the recorded
+ shipment and re-raises OrderShipped without moving the status.</code></pre>
+          <p><strong>Cancellable States:</strong> PendingPayment, PaymentInitiated, PaymentFailed. <code>Shipped</code> is deliberately NOT
+          cancellable, for the same reason <code>Paid</code> is not: the goods and the money have both already moved.
+          <strong>Shippable States:</strong> Paid (only)
+          <strong>Shipment-correctable States:</strong> Shipped (only)
+          <strong>Deliverable States:</strong> Paid, Shipped. The carrier leg is optional: a fulfilment with no tracking to
+          record still goes Paid -&gt; Delivered directly, which is why Paid keeps both outgoing edges.
           <strong>Manual Payment States:</strong> PendingPayment, PaymentInitiated, PaymentFailed
           <strong>Terminal States:</strong> Cancelled, Delivered</p>
+          <p>The <code>OrderStatus</code> numeric values are persisted and travel on the <code>user_sales_export</code> gRPC contract, so
+          members are only ever appended: <code>Shipped</code> is last in the enum even though it sits mid-lifecycle.</p>
           <hr>
           <h2 id="5-business-rules">5. Business Rules</h2>
           <h3 id="51-product--catalog-rules">5.1 Product &amp; Catalog Rules</h3>
@@ -851,6 +1101,56 @@
           <td>SKU global uniqueness</td>
           <td>SKUs must be globally unique across all product variants (null allowed for multiple variants without SKUs)</td>
           <td><code>AddVariantHandler.cs</code>, <code>ProductVariantConfiguration.cs</code></td>
+          </tr>
+          <tr>
+          <td>Review rating range</td>
+          <td>A review rating must be between 1 and 5 stars</td>
+          <td><code>ProductReviewInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Review title max length</td>
+          <td>Max 120 characters (optional field)</td>
+          <td><code>ProductReviewInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Review body max length</td>
+          <td>Max 2,000 characters (optional field)</td>
+          <td><code>ProductReviewInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Reviewer name max length</td>
+          <td>Max 201 characters; frozen at submission from the caller&#39;s token and never revisable</td>
+          <td><code>ProductReviewInvariants.cs</code>, <code>ProductReview.cs</code></td>
+          </tr>
+          <tr>
+          <td>Verified purchase required</td>
+          <td>Only a customer holding a <code>VerifiedPurchase</code> for the product may review it (<code>Review.NotVerifiedPurchase</code>)</td>
+          <td><code>SubmitReviewHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>One review per customer and product</td>
+          <td>A second review of the same product by the same customer is refused (<code>Review.AlreadyReviewed</code>) rather than hitting the unique index</td>
+          <td><code>SubmitReviewHandler.cs</code>, <code>ProductReviewConfiguration.cs</code></td>
+          </tr>
+          <tr>
+          <td>Entitlement is per product, not per variant</td>
+          <td>Delivered lines naming several variants of one product mint a single entitlement row</td>
+          <td><code>OrderFulfilledHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Rating summary is derived</td>
+          <td><code>Product.RatingSummary</code> is recomputed (AVG/COUNT) over published, non-deleted reviews on every review change, never adjusted incrementally</td>
+          <td><code>ProductReviewChangedHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Hidden reviews do not count</td>
+          <td>A hidden review leaves the storefront and drops out of the product&#39;s rating summary</td>
+          <td><code>PublishedReviewsSpecification.cs</code></td>
+          </tr>
+          <tr>
+          <td>Review erasure keeps the rating</td>
+          <td>Anonymizing a review clears the name, title and body and retains the star rating</td>
+          <td><code>ProductReview.Anonymize()</code></td>
           </tr>
           </tbody></table></div>
           <h3 id="52-shopping-cart-rules">5.2 Shopping Cart Rules</h3>
@@ -944,8 +1244,48 @@
           </tr>
           <tr>
           <td>Delivery restriction</td>
-          <td>Only Paid orders can be marked as delivered</td>
-          <td><code>OrderInvariants.cs</code></td>
+          <td>Only Paid or Shipped orders can be marked as delivered</td>
+          <td><code>PaidState.cs</code>, <code>ShippedState.cs</code></td>
+          </tr>
+          <tr>
+          <td>Shipping restriction</td>
+          <td>Only Paid orders can ship; a Shipped order re-shipping would silently replace a tracking number the customer was already told</td>
+          <td><code>PaidState.cs</code>, <code>ShippedState.cs</code></td>
+          </tr>
+          <tr>
+          <td>Shipment correction restriction</td>
+          <td>Only a Shipped order&#39;s shipment can be corrected: there is nothing to correct before it ships, and after delivery the record is history</td>
+          <td><code>IOrderState.cs</code>, <code>DeliveredState.cs</code></td>
+          </tr>
+          <tr>
+          <td>Shipped is not cancellable</td>
+          <td>Cancellation is refused from Shipped exactly as it is from Paid</td>
+          <td><code>ShippedState.cs</code></td>
+          </tr>
+          <tr>
+          <td>Shipment replaces whole</td>
+          <td>A correction replaces the entire <code>Shipment</code> value object rather than patching a field, and re-raises <code>OrderShipped</code> so the customer is re-notified</td>
+          <td><code>Order.UpdateShipment()</code></td>
+          </tr>
+          <tr>
+          <td>Tracking number required</td>
+          <td>A shipment must carry a tracking number, max 100 characters</td>
+          <td><code>ShipmentInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Estimated delivery not before shipping</td>
+          <td>The estimated delivery date cannot fall before the day the parcel shipped (same-day is allowed)</td>
+          <td><code>ShipmentInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Tracking URL only for <code>Other</code></td>
+          <td>A caller-supplied absolute https tracking URL (max 500) is accepted only for carrier <code>Other</code>; every known carrier&#39;s link is computed from its template</td>
+          <td><code>ShipmentInvariants.cs</code>, <code>CarrierTrackingUrls.cs</code></td>
+          </tr>
+          <tr>
+          <td>Fulfilment published once</td>
+          <td><code>Order.FulfilledPublishedOn</code> is stamped in the same unit of work that raises <code>OrderFulfilled</code>, so the startup backfill can never re-publish for an order</td>
+          <td><code>Order.cs</code>, <code>OrderFulfilledBackfillService.cs</code></td>
           </tr>
           <tr>
           <td>Inventory restoration</td>
@@ -1172,7 +1512,27 @@
           <tr>
           <td>View order detail</td>
           <td>Customer</td>
-          <td>See order status, lines, and payment information</td>
+          <td>See order status, lines, payment information, and the carrier/tracking details once the order ships</td>
+          </tr>
+          <tr>
+          <td>Read product reviews</td>
+          <td>Anonymous</td>
+          <td>See a product&#39;s star rating and the published reviews of it</td>
+          </tr>
+          <tr>
+          <td>Write a product review</td>
+          <td>Customer</td>
+          <td>Rate and review a product from a delivered order (one review per product)</td>
+          </tr>
+          <tr>
+          <td>Revise a review</td>
+          <td>Customer</td>
+          <td>Change the rating or wording of their own review</td>
+          </tr>
+          <tr>
+          <td>Withdraw a review</td>
+          <td>Customer</td>
+          <td>Remove their own review</td>
           </tr>
           <tr>
           <td>Cancel order</td>
@@ -1225,9 +1585,24 @@
           <td>Manually override payment for an order</td>
           </tr>
           <tr>
+          <td>Ship order</td>
+          <td>Admin</td>
+          <td>Record the carrier, tracking number and estimated delivery on a paid order; the customer is emailed the tracking link</td>
+          </tr>
+          <tr>
+          <td>Correct tracking details</td>
+          <td>Admin</td>
+          <td>Replace the shipment recorded on a shipped order and re-notify the customer</td>
+          </tr>
+          <tr>
           <td>Mark order as delivered</td>
           <td>Admin</td>
-          <td>Confirm order has been delivered</td>
+          <td>Confirm order has been delivered (from Paid or Shipped)</td>
+          </tr>
+          <tr>
+          <td>Moderate reviews</td>
+          <td>Moderator (<code>catalog:reviews:moderate</code>)</td>
+          <td>Browse every review whatever its status, hide one, restore a hidden one</td>
           </tr>
           <tr>
           <td>View all orders</td>
@@ -1316,6 +1691,11 @@
           <td>Price updated (only if actually differs)</td>
           <td>Item pricing adjusted</td>
           </tr>
+          <tr>
+          <td>ProductReviewChanged</td>
+          <td>Review submitted, revised, hidden, unhidden, anonymized or removed</td>
+          <td>The product&#39;s rating summary is recomputed</td>
+          </tr>
           </tbody></table></div>
           <h3 id="sales-events">Sales Events</h3>
           <div class="table-wrap"><table>
@@ -1380,6 +1760,11 @@
           <td>OrderPaymentFailed</td>
           <td>Payment unsuccessful</td>
           <td>Payment needs retry or cancellation</td>
+          </tr>
+          <tr>
+          <td>OrderShipped</td>
+          <td>Order leaves with a carrier, and again on every correction to the recorded shipment</td>
+          <td>Customer is emailed the carrier, tracking number and tracking link</td>
           </tr>
           <tr>
           <td>OrderDelivered</td>
@@ -1462,6 +1847,45 @@
           <td>Shipping information changed</td>
           </tr>
           </tbody></table></div>
+          <h3 id="integration-events-cross-service">Integration Events (cross-service)</h3>
+          <p>The events above are in-process domain events. These four cross the service boundary through the
+          outbox and the message broker, and each one is a signal for the consumer to create or refresh a
+          denormalized copy IT owns, never a prompt to query back into the publisher (<a href="../adr/006-database-per-service.html">ADR-006</a>).
+          Contracts live in the publisher&#39;s Shared layer, so a consumer never references the publisher&#39;s Domain.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Event</th>
+          <th>Contract name</th>
+          <th>Publisher -&gt; Consumer</th>
+          <th>Business meaning</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>ProductVariantChanged</td>
+          <td><code>Catalog.ProductVariantChanged.v1</code></td>
+          <td>Catalog -&gt; Sales</td>
+          <td>Variant lifecycle; Sales auto-creates the zero-stock inventory record and refreshes its denormalized SKU/product sort labels</td>
+          </tr>
+          <tr>
+          <td>ProductInfoChanged</td>
+          <td><code>Catalog.ProductInfoChanged.v1</code></td>
+          <td>Catalog -&gt; Sales</td>
+          <td>A product rename or delete fans out to those same labels</td>
+          </tr>
+          <tr>
+          <td>OrderFulfilled</td>
+          <td><code>Sales.OrderFulfilled.v1</code></td>
+          <td>Sales -&gt; Catalog</td>
+          <td>A delivered order, with its line snapshot; Catalog turns it into the verified-purchase entitlements behind product reviews</td>
+          </tr>
+          <tr>
+          <td>CustomerErased</td>
+          <td><code>Identity.CustomerErased.v1</code></td>
+          <td>Identity -&gt; Sales <strong>and</strong> Catalog</td>
+          <td>Sales clears the frozen customer name on retained orders; Catalog anonymizes the customer&#39;s reviews, keeping the ratings (<a href="../adr/005-soft-delete-vs-erasure.html">ADR-005</a>)</td>
+          </tr>
+          </tbody></table></div>
           <hr>
           <h2 id="8-external-integrations">8. External Integrations</h2>
           <h3 id="81-stripe-payment-gateway">8.1 Stripe Payment Gateway</h3>
@@ -1484,7 +1908,7 @@
           <li>Default: <code>localhost:25</code> with SSL disabled</li>
           </ul>
           <p><strong>Source:</strong> <code>Source/Common/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs</code></p>
-          <p><strong>Consumers:</strong> the forgot-password handler (Section 3.12) sends the reset email through <code>IEmailSender</code>, alongside the Sales domain-event handlers <code>OrderPaidHandler</code> and <code>OrderPaymentFailedSagaHandler</code>. On the reset path delivery is awaited but never fatal: a send failure is logged and the request still answers 202, because reporting it would be an enumeration oracle, and the token stays live so the customer can retry.</p>
+          <p><strong>Consumers:</strong> the forgot-password handler (Section 3.12) sends the reset email through <code>IEmailSender</code>, alongside the Sales domain-event handlers <code>OrderPaidHandler</code>, <code>OrderShippedHandler</code> (carrier, tracking number and tracking link, re-sent on every correction to the recorded shipment) and <code>OrderPaymentFailedSagaHandler</code>. Every one of those resolves the customer&#39;s contact details through <code>ICustomerService</code> and treats a send failure as non-fatal: the order transition is already committed before the handler runs. On the reset path delivery is awaited but never fatal: a send failure is logged and the request still answers 202, because reporting it would be an enumeration oracle, and the token stays live so the customer can retry.</p>
           <hr>
           <h2 id="9-authorization-model">9. Authorization Model</h2>
           <div class="table-wrap"><table>
@@ -1498,12 +1922,12 @@
           <tbody><tr>
           <td>Anonymous</td>
           <td>No auth required</td>
-          <td>Catalog browsing (GET categories, products), login, registration, password reset (<code>POST /Auth/forgot-password</code>, <code>POST /Auth/reset-password</code>), payment webhooks</td>
+          <td>Catalog browsing (GET categories, products), published product reviews (<code>GET /Reviews/by-product/{productId}/paged</code>), login, registration, password reset (<code>POST /Auth/forgot-password</code>, <code>POST /Auth/reset-password</code>), payment webhooks</td>
           </tr>
           <tr>
           <td>RequireAuthenticated</td>
           <td>Any logged-in user</td>
-          <td>Shopping cart operations, order viewing (own), profile management</td>
+          <td>Shopping cart operations, order viewing (own), profile management, writing and revising own reviews</td>
           </tr>
           <tr>
           <td>RequireCustomer</td>
@@ -1513,9 +1937,19 @@
           <tr>
           <td>RequireAdmin</td>
           <td>Admin role</td>
-          <td>Catalog management, inventory management, manual payment, delivery confirmation</td>
+          <td>Catalog management, inventory management, manual payment, shipping and delivery confirmation</td>
           </tr>
           </tbody></table></div>
+          <p><strong>Permission-based endpoints:</strong> an endpoint states the capability it needs with <code>[HasPermission(...)]</code>
+          over a constant from the owning module&#39;s <code>{Module}Permissions</code>, and each module grants those to roles
+          in its API <code>DependencyInjection</code> (Admin holds all of them today). The shipment endpoints
+          (<code>PUT /Orders/{id}/ship</code>, <code>PUT /Orders/{id}/shipment</code>) carry <code>sales:orders:manage</code> alongside <code>pay</code>
+          and <code>deliver</code>; the review moderation surface (<code>GET /Reviews/paged</code>, <code>PUT /Reviews/{id}/hide</code>,
+          <code>PUT /Reviews/{id}/unhide</code>) carries <code>catalog:reviews:moderate</code>.</p>
+          <p><strong>Writing a review needs a customer profile, not a role.</strong> The reviews controller resolves the caller
+          through the <code>customer_id</code> claim and fails closed when the token carries none; admins are deliberately
+          not exempted, because writing a review is an act by a customer and an admin account with no customer
+          profile has nothing to write one as.</p>
           <p><strong>Ownership Enforcement:</strong> The <code>OwnerOrAdminFilter</code> validates that the route parameter <code>id</code> (CustomerIdentifierType) matches the authenticated user&#39;s customer ID, or that the user has the Admin role. Applied to shopping cart and order endpoints. Returns 403 Forbidden if unauthorized.</p>
           <p><strong>JWT Claims:</strong> Access tokens contain: <code>sub</code>, <code>jti</code>, <code>iat</code>, <code>user_id</code>, <code>email</code>, <code>role</code>, and <code>customer_id</code> (when applicable).</p>
           <hr>
@@ -1536,7 +1970,29 @@
           <td>Sales</td>
           <td>Verify variant existence, check SKU uniqueness, fetch unit prices, get ID by SKU</td>
           </tr>
+          <tr>
+          <td><code>ICustomerService</code></td>
+          <td>Identity</td>
+          <td>Sales</td>
+          <td>Resolve customer contact details for the order notification emails</td>
+          </tr>
+          <tr>
+          <td><code>IUserSalesExportService</code></td>
+          <td>Sales</td>
+          <td>Identity</td>
+          <td>The orders section of the data-subject export document</td>
+          </tr>
+          <tr>
+          <td><code>IUserCatalogExportService</code></td>
+          <td>Catalog</td>
+          <td>Identity</td>
+          <td>The product-reviews section of the same document</td>
+          </tr>
           </tbody></table></div>
+          <p>Across process boundaries these interfaces are satisfied by gRPC clients, resolved through service
+          discovery (<a href="../adr/007-grpc-extraction.html">ADR-007</a>). Both export edges out of Identity are
+          <strong>best-effort</strong>: an unreachable peer degrades that one section of the export rather than failing the
+          export, so neither carries a startup wait.</p>
           <p><strong>Confirmed behaviors:</strong></p>
           <ul>
           <li>Sales module cannot directly access Catalog domain entities</li>
@@ -1571,6 +2027,7 @@
           <li>Product grid with search by name</li>
           <li>Category filter dropdown</li>
           <li>Sort by name or price</li>
+          <li>Star rating and review count on each card, read straight off the product&#39;s denormalized <code>RatingSummary</code> so a grid of cards costs no per-card aggregate query</li>
           <li>Quick &quot;Add to Cart&quot; buttons per variant</li>
           <li>&quot;View Details&quot; navigation to product detail page</li>
           </ul>
@@ -1580,12 +2037,13 @@
           <li>Product description, brand, category</li>
           <li>Variant list with SKU, price, quantity selector, and &quot;Add to Cart&quot;</li>
           <li>&quot;Buy Now&quot; option (direct Stripe checkout for single variant)</li>
+          <li>A reviews section (anchor <code>#reviews</code>) listing the published reviews, plus the review editor for a signed-in customer who is eligible to write or revise one</li>
           </ul>
           <h3 id="114-navigation-structure">11.4 Navigation Structure</h3>
           <p><strong>Sidebar</strong> (role-based, dynamically populated from <code>IUIModule</code> registrations):</p>
           <ul>
           <li>Customer: Home, Shop, My Orders, My Profile</li>
-          <li>Admin: Home, Categories, Products, Inventory, Shopping Carts, Orders, Customers, My Profile</li>
+          <li>Admin: Home, Categories, Products, Reviews, Inventory, Shopping Carts, Orders, Customers, My Profile</li>
           </ul>
           <p><strong>Top App Bar</strong>: Cart icon with badge count, user email, Logout button (authenticated) or Login/Register buttons (anonymous)</p>
           <h3 id="115-module-registration">11.5 Module Registration</h3>
@@ -1683,9 +2141,9 @@
           </ul>
           <hr>
           <h2 id="14-missing-or-unclear-business-logic">14. Missing or Unclear Business Logic</h2>
-          <h3 id="141-no-email-notifications-on-events">14.1 No Email Notifications on Events</h3>
-          <p><strong>Observation:</strong> The SMTP email service infrastructure is implemented, but no domain event handlers trigger email notifications for events like order confirmation, payment receipt, or shipping notification.
-          <strong>Recommendation:</strong> Clarify whether email notifications are planned or intentionally omitted.</p>
+          <h3 id="141-email-notifications-cover-payment-and-shipping-only">14.1 Email Notifications Cover Payment and Shipping Only</h3>
+          <p><strong>Observation:</strong> Four handlers send email today: the password-reset request (Section 3.12), <code>OrderPaidHandler</code> (payment receipt), <code>OrderShippedHandler</code> (carrier, tracking number and tracking link, re-sent on every shipment correction) and <code>OrderPaymentFailedSagaHandler</code>. There is still no email at order placement (<code>OrderPlaced</code>), at delivery (<code>OrderDelivered</code>), or at cancellation.
+          <strong>Recommendation:</strong> Confirm whether an order-confirmation and a delivery-confirmation message are wanted; both would be additional <code>IDomainEventHandler&lt;T&gt;</code> registrations on events that already exist, not new plumbing.</p>
           <h3 id="142-no-returnrefund-workflow">14.2 No Return/Refund Workflow</h3>
           <p><strong>Observation:</strong> Once an order reaches <code>Paid</code> or <code>Delivered</code> status, there are no further state transitions available. No return, refund, or exchange workflow exists. Cancellation is only possible before payment succeeds.
           <strong>Recommendation:</strong> Clarify whether returns/refunds are in scope and whether Stripe refund integration is needed.</p>
@@ -1698,11 +2156,11 @@
           <h3 id="145-no-price-change-protection">14.5 No Price Change Protection</h3>
           <p><strong>Observation:</strong> Product variant prices can be changed at any time by administrators. If a customer has items in their cart and prices change before checkout, the customer will be charged the new price (prices are fetched at checkout, not at cart-add time).
           <strong>Recommendation:</strong> Determine if customers should be notified of price changes or if cart items should display price warnings.</p>
-          <h3 id="146-delivery-tracking-absent">14.6 Delivery Tracking Absent</h3>
-          <p><strong>Observation:</strong> The <code>MarkAsDelivered</code> transition exists but there is no tracking number, carrier information, or estimated delivery date. Delivery is a binary admin action.
-          <strong>Recommendation:</strong> Consider whether shipping/tracking details are needed for the business use case.</p>
+          <h3 id="146-one-parcel-per-order">14.6 One Parcel Per Order</h3>
+          <p><strong>Observation:</strong> Delivery tracking exists (Section 3.8): an order carries a single <code>Shipment</code> value object with a carrier, a tracking number and the two dates. An order that physically leaves in two parcels can therefore only record one of them, and correcting the recorded shipment replaces it rather than adding to it.
+          <strong>Recommendation:</strong> A second parcel needs the shipment to become a collection on the order, which is the same modelling change 14.7 asks for; clarify whether split shipments are a real business case before making it.</p>
           <h3 id="147-no-partial-order-fulfillment">14.7 No Partial Order Fulfillment</h3>
-          <p><strong>Observation:</strong> Orders are delivered as a whole: there is no concept of partial shipments or split deliveries.
+          <p><strong>Observation:</strong> Orders are delivered as a whole: there is no concept of partial shipments or split deliveries, and <code>Shipped</code> applies to the order rather than to individual lines.
           <strong>Recommendation:</strong> Clarify if partial fulfillment is a future requirement.</p>
           <h3 id="148-no-customeruser-deactivation-endpoint">14.8 No Customer/User Deactivation Endpoint</h3>
           <p><strong>Observation:</strong> <code>User.Deactivate()</code> method and <code>UserDeactivated</code> domain event exist in the domain model, but no API endpoint or UI action exposes this functionality.
@@ -1730,7 +2188,7 @@
           <p><strong>Inventory:</strong> 100,000 units per variant (for all 3 Gold Ring sizes)</p>
           <p><strong>Seeding is idempotent</strong>: seeders check for existing data via <code>ExistsAsync()</code> before inserting, and only run for enabled modules.</p>
           <hr>
-          <p><em>This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-07-27 (re-verified against MMCA.Store HEAD <code>1dfdc991</code>).</em></p>
+          <p><em>This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-09-05 (order shipment tracking and product reviews).</em></p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>

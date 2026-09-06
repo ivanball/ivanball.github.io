@@ -10,7 +10,9 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 - **Product Catalog Management**: categories, products, and product variants with pricing
 - **Shopping & Ordering**: cart management, checkout, order placement
 - **Payment Processing**: Stripe-integrated checkout with webhook confirmation
+- **Order Fulfilment**: carrier shipment tracking from payment through delivery
 - **Inventory Management**: stock tracking per product variant
+- **Product Reviews**: verified-purchase star ratings and reviews, with moderation
 - **Customer Identity & Authentication**: registration, login, JWT-based sessions
 
 **Technical Stack:**
@@ -122,6 +124,8 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 | Status | Current lifecycle stage (see state machine below) |
 | StripeSessionId | Payment gateway session reference |
 | StripePaymentIntentId | Payment confirmation reference |
+| Shipment | The parcel the order left with (carrier, tracking number, dates), or null before it ships (value object) |
+| FulfilledPublishedOn | When the `OrderFulfilled` integration event was published for this order; the idempotency marker the startup backfill sweeps on |
 
 **Relationships:**
 - An Order belongs to one Customer
@@ -213,6 +217,55 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 | **Money** | Amount (decimal), Currency (Currency) | Cannot have negative amount; currency mismatch on add | `MMCA.Common.Shared/ValueObjects/Money.cs` |
 | **Currency** | Code (string) | Must be "USD" or "EUR" | `MMCA.Common.Shared/ValueObjects/Currency.cs` |
 | **Address** | AddressLine1 (required, max 200), AddressLine2, City, State, ZipCode, Country | AddressLine1 required; all fields have max lengths | `MMCA.Common.Shared/ValueObjects/Address.cs` |
+| **Shipment** | Carrier, TrackingNumber, ShippedOn, EstimatedDeliveryOn, TrackingUrl, plus the computed TrackingLink | Tracking number required, max 100; estimated delivery cannot precede the ship date; a caller-supplied tracking URL is accepted only for carrier `Other` and must be absolute https, max 500 | `Sales.Shared/Orders/Shipment.cs` |
+| **RatingSummary** | AverageRating (decimal, 0 to 5), ReviewCount | Derived, never edited by hand: recomputed as AVG/COUNT over the product's published, non-deleted reviews. Stored as `decimal(3,2)` | `Catalog.Shared/Products/RatingSummary.cs` |
+
+---
+
+### 2.12 Product Review
+
+**Description:** A shopper's review of a product: a star rating plus optional headline and text, written by a customer who received the product. Every review is a verified purchase by construction, so the aggregate carries no "verified" flag of its own.
+
+**Key Properties:**
+| Property | Description |
+|----------|-------------|
+| ProductId | The reviewed product |
+| CustomerId | The customer who wrote it |
+| OrderId | The delivered order that entitled them to write it |
+| Rating | Star rating, 1 through 5 |
+| Title / Body | Optional headline and text |
+| ReviewerName | Display name frozen at submission from the caller's token, so a later profile rename does not rewrite published content. Marked `[Pii]` |
+| Status | `Published` (the state every review is created in) or `Hidden` (moderator action) |
+
+**Relationships:**
+- One review per (customer, product); the entitling order is recorded on the row
+- Counted into the product's `RatingSummary` while published and not deleted
+
+**Erasure:** the aggregate is `IAnonymizable` ([ADR-005](../adr/005-soft-delete-vs-erasure.md)). Anonymizing clears the reviewer name, title and body and **keeps the rating**, because a bare star with no name and no words identifies nobody while removing it would silently rewrite every product average an erasure touched.
+
+**Source:** `Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Reviews/ProductReview.cs`
+
+---
+
+### 2.13 Verified Purchase
+
+**Description:** Catalog's own record that a customer received a product: one row per (order, product). It is the entitlement behind a review, so "verified purchase" is answerable without a query into Sales.
+
+**Key Properties:**
+| Property | Description |
+|----------|-------------|
+| ProductId | The product the customer received |
+| CustomerId | The customer who received it |
+| OrderId | The delivered order the entitlement came from |
+| DeliveredOn | When the order was marked delivered (UTC) |
+
+**Relationships:**
+- Written only by the consumer of Sales' `OrderFulfilled` integration event; nothing else creates one and nothing revokes one (delivery is terminal, so an entitlement earned stays earned)
+- Unique on (OrderId, ProductId), which is the database-level backstop for an at-least-once redelivery
+
+Carries no personal data (three identifiers and a date), so it is deliberately neither audited nor anonymizable, and it is deliberately not repeated in the data-subject export: it is a derived copy of order facts Sales already owns and already exports.
+
+**Source:** `Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Reviews/VerifiedPurchase.cs`
 
 ---
 
@@ -397,18 +450,53 @@ bypasses the save pipeline, so **no `InventoryAdjusted` domain event is raised o
 
 ---
 
-### 3.8 Order Delivery
+### 3.8 Order Shipping and Delivery
 
-**Trigger:** An administrator marks a paid order as delivered.
+**Trigger:** An administrator records that a paid order left with a carrier, corrects what was
+recorded, or confirms the order arrived.
 
-**Steps:**
+**Ship (`PUT /Orders/{id}/ship`, `OrdersManage` permission, mandatory `If-Match`):**
 1. Fetch the order
-2. Validate order status is `Paid`
-3. Transition status to `Delivered`
-4. Persist changes
+2. Validate status is `Paid` (the only state that may ship)
+3. Build the `Shipment` value object: carrier, tracking number, ship date, optional estimated delivery
+4. Transition status to `Shipped` and raise `OrderShipped`
+5. Persist changes; the domain-event handler emails the customer the carrier, the tracking number and the tracking link
+
+**Correct the shipment (`PUT /Orders/{id}/shipment`, `OrdersManage` permission, mandatory `If-Match`):**
+Same request body, because the shipment is a value object and a correction replaces it whole rather
+than patching a field. Allowed from `Shipped` only, and the status does not move. `OrderShipped` is
+raised again on purpose, so a customer who was told the wrong tracking number gets the right one. The
+two verbs stay separate endpoints deliberately: `ship` must refuse an already-shipped order, the
+correction must refuse an order that never shipped, and folding them together would make "silently
+re-ship" indistinguishable from "fix the tracking number".
+
+**Deliver (`PUT /Orders/{id}/deliver`, `OrdersManage` permission, mandatory `If-Match`):**
+1. Fetch the order
+2. Validate status is `Paid` or `Shipped` (the carrier leg is optional; see the state machine)
+3. Transition status to `Delivered`, stamp `FulfilledPublishedOn`, and raise both the in-process
+   `OrderDelivered` domain event and the `OrderFulfilled` integration event carrying the delivered
+   line snapshot
+4. Persist changes; `OrderFulfilled` leaves through the outbox and Catalog turns it into the
+   verified-purchase entitlements behind product reviews (Section 3.13)
+
+**Tracking links:** for UPS, FedEx, USPS and DHL the public link is computed from the carrier's own
+template plus the tracking number, so the URL is written down in exactly one place; only the `Other`
+carrier accepts a caller-supplied absolute https URL, and supplying one for a known carrier is
+refused rather than stored as a second copy that could contradict the template.
+
+**Backfill:** `OrderFulfilledBackfillService` is a settings-gated, bounded one-shot startup sweep that
+publishes `OrderFulfilled` for orders that reached `Delivered` before the event existed, which is the
+only way those customers can ever review what they demonstrably bought. `Order.FulfilledPublishedOn`
+is the marker: the sweep selects only Delivered orders where it is still null, and the marker and the
+outbox row commit in the same unit of work, so a run converges, every later start is a no-op, and a
+host that dies mid-sweep resumes where it stopped.
 
 **Implemented in:**
+- `Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Ship/ShipOrderHandler.cs`
+- `Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/UpdateShipment/UpdateShipmentHandler.cs`
 - `Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Deliver/DeliverOrderHandler.cs`
+- `Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/DomainEventHandlers/OrderShippedHandler.cs`
+- `Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Persistence/Backfill/OrderFulfilledBackfillService.cs`
 
 ---
 
@@ -497,6 +585,80 @@ Both endpoints are anonymous by necessity (the caller has lost the credential), 
 
 ---
 
+### 3.13 Product Reviews
+
+**Trigger:** A customer who received a product rates it; anyone reads the ratings; a moderator hides
+a review that should not be public.
+
+**Aggregates:** `ProductReview` (Section 2.12) and `VerifiedPurchase` (Section 2.13), both in the
+Catalog module, with the derived `RatingSummary` on `Product`.
+
+**Entitlement (the verified-purchase rule):** a review can only be written by a customer who holds a
+`VerifiedPurchase` for the product. Those rows are minted by Catalog's consumer of Sales'
+`OrderFulfilled` integration event, one per (order, product): the event names variants, because that
+is all Sales knows, and Catalog resolves them to products and de-duplicates, so the entitlement is
+"you received this product", not "you received this variant". A variant Catalog cannot resolve is
+logged and skipped rather than failing the whole order's entitlements. Delivered, not Paid, is the
+trigger on purpose: it is terminal and never reversed, so an entitlement never needs revoking.
+
+**Submission rules:** the submit handler enforces the two checks the aggregate cannot make for
+itself, because both read rows outside it: no entitlement fails with `Review.NotVerifiedPurchase`,
+and a second review of the same product by the same customer fails with `Review.AlreadyReviewed`
+rather than landing as a unique-index violation. The entitling row also supplies the order the review
+is filed against (the lowest order id, the earliest entitlement). The reviewing customer and the
+frozen display name both come from the caller's validated token, never from the body.
+
+**Rating summary:** every review transition (submitted, revised, hidden, unhidden, anonymized,
+removed) raises the `ProductReviewChanged` domain event, and the handler **recomputes** the product's
+average and count from its published, non-deleted reviews rather than adjusting them incrementally,
+so a lost or redelivered event still converges on the right numbers.
+
+**Moderation:** reviews publish immediately (there is no approval queue). A moderator holding the
+`catalog:reviews:moderate` permission can hide a review and restore it; hidden reviews leave the
+storefront and drop out of the rating summary. Hide and unhide are conditional writes on the same
+terms as every other review write ([ADR-035](../adr/035-optimistic-concurrency.md)), so
+two moderators acting on the same stale list cannot silently overwrite each other.
+
+**Erasure:** Catalog consumes Identity's `CustomerErased` and anonymizes every review that customer
+wrote, soft-deleted and hidden rows included. The name, title and body are cleared and the rating is
+kept ([ADR-005](../adr/005-soft-delete-vs-erasure.md), PRIVACY.md section 5). Because the rating does
+not move, erasure disturbs no product average.
+
+**Export:** the reviews a customer wrote are a section of the data-subject export document, served by
+Catalog through the `IUserCatalogExportService` cross-module contract and aggregated by Identity's
+`GET /Users/{userId}/export` (Section 3.11). Hidden reviews are included: a moderator's decision does
+not stop the text from being the subject's own data. The verified-purchase rows are deliberately not
+exported, because they duplicate order facts Sales already exports.
+
+**Endpoints:**
+
+| Endpoint | Auth | Notes |
+|----------|------|-------|
+| `GET /Reviews/by-product/{productId}/paged` | Anonymous | Published reviews of one product, newest first, page size capped server-side. Output-cached under the shared `ProductsCache` policy |
+| `GET /Reviews/by-product/{productId}/mine` | Authenticated customer | The caller's eligibility: `HasPurchased`, `CanReview` (the entitlement minus an existing review), and their own review when there is one |
+| `POST /Reviews/by-product/{productId}` | Authenticated customer | Submit. `[Idempotent]` (`Idempotency-Key` header) |
+| `PUT /Reviews/{id}` | Owner or Admin | Revise the rating and text. Mandatory `If-Match` |
+| `DELETE /Reviews/{id}` | Owner or Admin | Withdraw (soft delete). Unconditional: a delete has no field to lose to a concurrent edit |
+| `PUT /Reviews/{id}/hide`, `PUT /Reviews/{id}/unhide` | `catalog:reviews:moderate` | Moderation. Mandatory `If-Match` |
+| `GET /Reviews/paged` | `catalog:reviews:moderate` | The moderation list: every review whatever its status, filterable and sortable. Never cached |
+
+A caller who is not the owner is answered 404 rather than 403, so the existence of another customer's
+review id cannot be probed for. Every mutation evicts the `catalog:products` output-cache tag,
+because a review moves the stars the product reads carry. The Gateway forwards `/Reviews/**` to the
+Catalog cluster (`catalog-reviews` route).
+
+**Field rules:** rating 1 to 5, title at most 120 characters, body at most 2,000, frozen reviewer
+name at most 201; title and body are both optional and a review with neither is a bare star rating.
+
+**Implemented in:**
+- `Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs`
+- `Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/UseCases/`
+- `Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/OrderFulfilledHandler.cs`
+- `Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/CustomerErasedHandler.cs`
+- `Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/DomainEventHandlers/ProductReviewChangedHandler.cs`
+
+---
+
 ## 4. Order Status State Machine
 
 ```
@@ -517,18 +679,36 @@ Both endpoints are anonymous by necessity (the caller has lost the credential), 
  +--------------+                                    +-----------+-----+
  |  Cancelled   | <---- MarkAsCancelled ------------ |      Paid       |
  +--------------+   (from PaymentInitiated)          +-----------------+
-                                                             |
-                                                        MarkAsDelivered
-                                                             |
-                                                             v
+                                                          |       |
+                                                        Ship      |
+                                                          |       |
+                                                          v       |
+                                                  +-----------+   |
+                                                  |  Shipped  |   | MarkAsDelivered
+                                                  +-----------+   | (no carrier leg)
+                                                          |       |
+                                                   MarkAsDelivered|
+                                                          |       |
+                                                          v       v
                                                      +-----------------+
                                                      |    Delivered    |
                                                      +-----------------+
+
+ UpdateShipment is a self-transition on Shipped: it replaces the recorded
+ shipment and re-raises OrderShipped without moving the status.
 ```
 
-**Cancellable States:** PendingPayment, PaymentInitiated, PaymentFailed
+**Cancellable States:** PendingPayment, PaymentInitiated, PaymentFailed. `Shipped` is deliberately NOT
+cancellable, for the same reason `Paid` is not: the goods and the money have both already moved.
+**Shippable States:** Paid (only)
+**Shipment-correctable States:** Shipped (only)
+**Deliverable States:** Paid, Shipped. The carrier leg is optional: a fulfilment with no tracking to
+record still goes Paid -> Delivered directly, which is why Paid keeps both outgoing edges.
 **Manual Payment States:** PendingPayment, PaymentInitiated, PaymentFailed
 **Terminal States:** Cancelled, Delivered
+
+The `OrderStatus` numeric values are persisted and travel on the `user_sales_export` gRPC contract, so
+members are only ever appended: `Shipped` is last in the enum even though it sits mid-lifecycle.
 
 ---
 
@@ -549,6 +729,16 @@ Both endpoints are anonymous by necessity (the caller has lost the credential), 
 | Price must be non-negative | Product variant prices must have Amount >= 0 | `ProductInvariants.cs` |
 | SKU max length | Max 50 characters | `ProductInvariants.cs` |
 | SKU global uniqueness | SKUs must be globally unique across all product variants (null allowed for multiple variants without SKUs) | `AddVariantHandler.cs`, `ProductVariantConfiguration.cs` |
+| Review rating range | A review rating must be between 1 and 5 stars | `ProductReviewInvariants.cs` |
+| Review title max length | Max 120 characters (optional field) | `ProductReviewInvariants.cs` |
+| Review body max length | Max 2,000 characters (optional field) | `ProductReviewInvariants.cs` |
+| Reviewer name max length | Max 201 characters; frozen at submission from the caller's token and never revisable | `ProductReviewInvariants.cs`, `ProductReview.cs` |
+| Verified purchase required | Only a customer holding a `VerifiedPurchase` for the product may review it (`Review.NotVerifiedPurchase`) | `SubmitReviewHandler.cs` |
+| One review per customer and product | A second review of the same product by the same customer is refused (`Review.AlreadyReviewed`) rather than hitting the unique index | `SubmitReviewHandler.cs`, `ProductReviewConfiguration.cs` |
+| Entitlement is per product, not per variant | Delivered lines naming several variants of one product mint a single entitlement row | `OrderFulfilledHandler.cs` |
+| Rating summary is derived | `Product.RatingSummary` is recomputed (AVG/COUNT) over published, non-deleted reviews on every review change, never adjusted incrementally | `ProductReviewChangedHandler.cs` |
+| Hidden reviews do not count | A hidden review leaves the storefront and drops out of the product's rating summary | `PublishedReviewsSpecification.cs` |
+| Review erasure keeps the rating | Anonymizing a review clears the name, title and body and retains the star rating | `ProductReview.Anonymize()` |
 
 ### 5.2 Shopping Cart Rules
 
@@ -573,7 +763,15 @@ Both endpoints are anonymous by necessity (the caller has lost the credential), 
 | Payment initiation restriction | Payment can only be initiated from PendingPayment or PaymentFailed states | `OrderInvariants.cs` |
 | Payment confirmation restriction | Only PaymentInitiated orders can be marked as paid (via webhook) | `OrderInvariants.cs` |
 | Manual payment restriction | Manual payment allowed from PendingPayment, PaymentInitiated, or PaymentFailed | `OrderInvariants.cs` |
-| Delivery restriction | Only Paid orders can be marked as delivered | `OrderInvariants.cs` |
+| Delivery restriction | Only Paid or Shipped orders can be marked as delivered | `PaidState.cs`, `ShippedState.cs` |
+| Shipping restriction | Only Paid orders can ship; a Shipped order re-shipping would silently replace a tracking number the customer was already told | `PaidState.cs`, `ShippedState.cs` |
+| Shipment correction restriction | Only a Shipped order's shipment can be corrected: there is nothing to correct before it ships, and after delivery the record is history | `IOrderState.cs`, `DeliveredState.cs` |
+| Shipped is not cancellable | Cancellation is refused from Shipped exactly as it is from Paid | `ShippedState.cs` |
+| Shipment replaces whole | A correction replaces the entire `Shipment` value object rather than patching a field, and re-raises `OrderShipped` so the customer is re-notified | `Order.UpdateShipment()` |
+| Tracking number required | A shipment must carry a tracking number, max 100 characters | `ShipmentInvariants.cs` |
+| Estimated delivery not before shipping | The estimated delivery date cannot fall before the day the parcel shipped (same-day is allowed) | `ShipmentInvariants.cs` |
+| Tracking URL only for `Other` | A caller-supplied absolute https tracking URL (max 500) is accepted only for carrier `Other`; every known carrier's link is computed from its template | `ShipmentInvariants.cs`, `CarrierTrackingUrls.cs` |
+| Fulfilment published once | `Order.FulfilledPublishedOn` is stamped in the same unit of work that raises `OrderFulfilled`, so the startup backfill can never re-publish for an order | `Order.cs`, `OrderFulfilledBackfillService.cs` |
 | Inventory restoration | Cancelling an order restores all order line quantities to inventory | `CancelOrderHandler.cs` |
 | Price snapshot | Order lines capture the unit price at checkout time, not current catalog price | `CheckOutDomainService.cs` |
 
@@ -631,7 +829,11 @@ Both endpoints are anonymous by necessity (the caller has lost the credential), 
 | Checkout | Customer | Convert shopping cart into an order (reserves inventory) |
 | Initiate payment | Customer | Start Stripe checkout session for a pending order |
 | View my orders | Customer | List all orders belonging to the authenticated customer |
-| View order detail | Customer | See order status, lines, and payment information |
+| View order detail | Customer | See order status, lines, payment information, and the carrier/tracking details once the order ships |
+| Read product reviews | Anonymous | See a product's star rating and the published reviews of it |
+| Write a product review | Customer | Rate and review a product from a delivered order (one review per product) |
+| Revise a review | Customer | Change the rating or wording of their own review |
+| Withdraw a review | Customer | Remove their own review |
 | Cancel order | Customer | Cancel a pending/initiated/failed order (restores inventory) |
 | Update profile | Customer | Change name, address, or password via profile page (email change is not offered in the UI) |
 | Change password | Customer | Update account password via profile page |
@@ -645,7 +847,10 @@ Both endpoints are anonymous by necessity (the caller has lost the credential), 
 | Manage product variants | Admin | Add/remove variants, change SKU and price |
 | Manage inventory | Admin | Increase, decrease, or set stock levels per variant |
 | Mark order as paid | Admin | Manually override payment for an order |
-| Mark order as delivered | Admin | Confirm order has been delivered |
+| Ship order | Admin | Record the carrier, tracking number and estimated delivery on a paid order; the customer is emailed the tracking link |
+| Correct tracking details | Admin | Replace the shipment recorded on a shipped order and re-notify the customer |
+| Mark order as delivered | Admin | Confirm order has been delivered (from Paid or Shipped) |
+| Moderate reviews | Moderator (`catalog:reviews:moderate`) | Browse every review whatever its status, hide one, restore a hidden one |
 | View all orders | Admin | View orders across all customers with filtering/pagination |
 | Cancel order | Admin | Cancel any cancellable order |
 | View all shopping carts | Admin | Browse customer shopping carts with status |
@@ -670,6 +875,7 @@ Both endpoints are anonymous by necessity (the caller has lost the credential), 
 | ProductVariantRemoved | Variant removed (soft delete) | Purchasable option discontinued |
 | ProductVariantSkuChanged | SKU updated (only if actually differs) | Inventory tracking identifier changed |
 | ProductVariantPriceChanged | Price updated (only if actually differs) | Item pricing adjusted |
+| ProductReviewChanged | Review submitted, revised, hidden, unhidden, anonymized or removed | The product's rating summary is recomputed |
 
 ### Sales Events
 
@@ -686,6 +892,7 @@ Both endpoints are anonymous by necessity (the caller has lost the credential), 
 | OrderPaymentInitiated | Stripe session created | Customer directed to payment |
 | OrderPaid | Payment confirmed (webhook or manual) | Revenue collected |
 | OrderPaymentFailed | Payment unsuccessful | Payment needs retry or cancellation |
+| OrderShipped | Order leaves with a carrier, and again on every correction to the recorded shipment | Customer is emailed the carrier, tracking number and tracking link |
 | OrderDelivered | Admin marks delivered | Fulfillment completed |
 | OrderCancelled | Order cancelled | Purchase reversed, inventory restored |
 | OrderDeleted | Order soft-deleted | Order record removed |
@@ -705,6 +912,20 @@ Both endpoints are anonymous by necessity (the caller has lost the credential), 
 | CustomerNameChanged | Name updated (only if differs) | Profile information changed |
 | CustomerEmailChanged | Email updated (only if differs) | Contact information changed |
 | CustomerAddressChanged | Address updated (only if differs) | Shipping information changed |
+
+### Integration Events (cross-service)
+
+The events above are in-process domain events. These four cross the service boundary through the
+outbox and the message broker, and each one is a signal for the consumer to create or refresh a
+denormalized copy IT owns, never a prompt to query back into the publisher ([ADR-006](../adr/006-database-per-service.md)).
+Contracts live in the publisher's Shared layer, so a consumer never references the publisher's Domain.
+
+| Event | Contract name | Publisher -> Consumer | Business meaning |
+|-------|---------------|-----------------------|------------------|
+| ProductVariantChanged | `Catalog.ProductVariantChanged.v1` | Catalog -> Sales | Variant lifecycle; Sales auto-creates the zero-stock inventory record and refreshes its denormalized SKU/product sort labels |
+| ProductInfoChanged | `Catalog.ProductInfoChanged.v1` | Catalog -> Sales | A product rename or delete fans out to those same labels |
+| OrderFulfilled | `Sales.OrderFulfilled.v1` | Sales -> Catalog | A delivered order, with its line snapshot; Catalog turns it into the verified-purchase entitlements behind product reviews |
+| CustomerErased | `Identity.CustomerErased.v1` | Identity -> Sales **and** Catalog | Sales clears the frozen customer name on retained orders; Catalog anonymizes the customer's reviews, keeping the ratings ([ADR-005](../adr/005-soft-delete-vs-erasure.md)) |
 
 ---
 
@@ -736,7 +957,7 @@ Both endpoints are anonymous by necessity (the caller has lost the credential), 
 
 **Source:** `Source/Common/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs`
 
-**Consumers:** the forgot-password handler (Section 3.12) sends the reset email through `IEmailSender`, alongside the Sales domain-event handlers `OrderPaidHandler` and `OrderPaymentFailedSagaHandler`. On the reset path delivery is awaited but never fatal: a send failure is logged and the request still answers 202, because reporting it would be an enumeration oracle, and the token stays live so the customer can retry.
+**Consumers:** the forgot-password handler (Section 3.12) sends the reset email through `IEmailSender`, alongside the Sales domain-event handlers `OrderPaidHandler`, `OrderShippedHandler` (carrier, tracking number and tracking link, re-sent on every correction to the recorded shipment) and `OrderPaymentFailedSagaHandler`. Every one of those resolves the customer's contact details through `ICustomerService` and treats a send failure as non-fatal: the order transition is already committed before the handler runs. On the reset path delivery is awaited but never fatal: a send failure is logged and the request still answers 202, because reporting it would be an enumeration oracle, and the token stays live so the customer can retry.
 
 ---
 
@@ -744,10 +965,22 @@ Both endpoints are anonymous by necessity (the caller has lost the credential), 
 
 | Policy | Access Level | Description |
 |--------|-------------|-------------|
-| Anonymous | No auth required | Catalog browsing (GET categories, products), login, registration, password reset (`POST /Auth/forgot-password`, `POST /Auth/reset-password`), payment webhooks |
-| RequireAuthenticated | Any logged-in user | Shopping cart operations, order viewing (own), profile management |
+| Anonymous | No auth required | Catalog browsing (GET categories, products), published product reviews (`GET /Reviews/by-product/{productId}/paged`), login, registration, password reset (`POST /Auth/forgot-password`, `POST /Auth/reset-password`), payment webhooks |
+| RequireAuthenticated | Any logged-in user | Shopping cart operations, order viewing (own), profile management, writing and revising own reviews |
 | RequireCustomer | Customer role | Customer-specific operations |
-| RequireAdmin | Admin role | Catalog management, inventory management, manual payment, delivery confirmation |
+| RequireAdmin | Admin role | Catalog management, inventory management, manual payment, shipping and delivery confirmation |
+
+**Permission-based endpoints:** an endpoint states the capability it needs with `[HasPermission(...)]`
+over a constant from the owning module's `{Module}Permissions`, and each module grants those to roles
+in its API `DependencyInjection` (Admin holds all of them today). The shipment endpoints
+(`PUT /Orders/{id}/ship`, `PUT /Orders/{id}/shipment`) carry `sales:orders:manage` alongside `pay`
+and `deliver`; the review moderation surface (`GET /Reviews/paged`, `PUT /Reviews/{id}/hide`,
+`PUT /Reviews/{id}/unhide`) carries `catalog:reviews:moderate`.
+
+**Writing a review needs a customer profile, not a role.** The reviews controller resolves the caller
+through the `customer_id` claim and fails closed when the token carries none; admins are deliberately
+not exempted, because writing a review is an act by a customer and an admin account with no customer
+profile has nothing to write one as.
 
 **Ownership Enforcement:** The `OwnerOrAdminFilter` validates that the route parameter `id` (CustomerIdentifierType) matches the authenticated user's customer ID, or that the user has the Admin role. Applied to shopping cart and order endpoints. Returns 403 Forbidden if unauthorized.
 
@@ -762,6 +995,14 @@ The system enforces strict module boundaries. Modules communicate only through s
 | Interface | Provider Module | Consumer Module | Purpose |
 |-----------|----------------|-----------------|---------|
 | `IProductVariantService` | Catalog | Sales | Verify variant existence, check SKU uniqueness, fetch unit prices, get ID by SKU |
+| `ICustomerService` | Identity | Sales | Resolve customer contact details for the order notification emails |
+| `IUserSalesExportService` | Sales | Identity | The orders section of the data-subject export document |
+| `IUserCatalogExportService` | Catalog | Identity | The product-reviews section of the same document |
+
+Across process boundaries these interfaces are satisfied by gRPC clients, resolved through service
+discovery ([ADR-007](../adr/007-grpc-extraction.md)). Both export edges out of Identity are
+**best-effort**: an unreachable peer degrades that one section of the export rather than failing the
+export, so neither carries a startup wait.
 
 **Confirmed behaviors:**
 - Sales module cannot directly access Catalog domain entities
@@ -800,6 +1041,7 @@ The catalog browse page (`/catalog`) provides:
 - Product grid with search by name
 - Category filter dropdown
 - Sort by name or price
+- Star rating and review count on each card, read straight off the product's denormalized `RatingSummary` so a grid of cards costs no per-card aggregate query
 - Quick "Add to Cart" buttons per variant
 - "View Details" navigation to product detail page
 
@@ -808,12 +1050,13 @@ The product detail page (`/catalog/{id}`) shows:
 - Product description, brand, category
 - Variant list with SKU, price, quantity selector, and "Add to Cart"
 - "Buy Now" option (direct Stripe checkout for single variant)
+- A reviews section (anchor `#reviews`) listing the published reviews, plus the review editor for a signed-in customer who is eligible to write or revise one
 
 ### 11.4 Navigation Structure
 
 **Sidebar** (role-based, dynamically populated from `IUIModule` registrations):
 - Customer: Home, Shop, My Orders, My Profile
-- Admin: Home, Categories, Products, Inventory, Shopping Carts, Orders, Customers, My Profile
+- Admin: Home, Categories, Products, Reviews, Inventory, Shopping Carts, Orders, Customers, My Profile
 
 **Top App Bar**: Cart icon with badge count, user email, Logout button (authenticated) or Login/Register buttons (anonymous)
 
@@ -881,9 +1124,9 @@ Entity types are routed to data sources via `[UseDataSource]` attribute on EF co
 
 ## 14. Missing or Unclear Business Logic
 
-### 14.1 No Email Notifications on Events
-**Observation:** The SMTP email service infrastructure is implemented, but no domain event handlers trigger email notifications for events like order confirmation, payment receipt, or shipping notification.
-**Recommendation:** Clarify whether email notifications are planned or intentionally omitted.
+### 14.1 Email Notifications Cover Payment and Shipping Only
+**Observation:** Four handlers send email today: the password-reset request (Section 3.12), `OrderPaidHandler` (payment receipt), `OrderShippedHandler` (carrier, tracking number and tracking link, re-sent on every shipment correction) and `OrderPaymentFailedSagaHandler`. There is still no email at order placement (`OrderPlaced`), at delivery (`OrderDelivered`), or at cancellation.
+**Recommendation:** Confirm whether an order-confirmation and a delivery-confirmation message are wanted; both would be additional `IDomainEventHandler<T>` registrations on events that already exist, not new plumbing.
 
 ### 14.2 No Return/Refund Workflow
 **Observation:** Once an order reaches `Paid` or `Delivered` status, there are no further state transitions available. No return, refund, or exchange workflow exists. Cancellation is only possible before payment succeeds.
@@ -901,12 +1144,12 @@ Entity types are routed to data sources via `[UseDataSource]` attribute on EF co
 **Observation:** Product variant prices can be changed at any time by administrators. If a customer has items in their cart and prices change before checkout, the customer will be charged the new price (prices are fetched at checkout, not at cart-add time).
 **Recommendation:** Determine if customers should be notified of price changes or if cart items should display price warnings.
 
-### 14.6 Delivery Tracking Absent
-**Observation:** The `MarkAsDelivered` transition exists but there is no tracking number, carrier information, or estimated delivery date. Delivery is a binary admin action.
-**Recommendation:** Consider whether shipping/tracking details are needed for the business use case.
+### 14.6 One Parcel Per Order
+**Observation:** Delivery tracking exists (Section 3.8): an order carries a single `Shipment` value object with a carrier, a tracking number and the two dates. An order that physically leaves in two parcels can therefore only record one of them, and correcting the recorded shipment replaces it rather than adding to it.
+**Recommendation:** A second parcel needs the shipment to become a collection on the order, which is the same modelling change 14.7 asks for; clarify whether split shipments are a real business case before making it.
 
 ### 14.7 No Partial Order Fulfillment
-**Observation:** Orders are delivered as a whole: there is no concept of partial shipments or split deliveries.
+**Observation:** Orders are delivered as a whole: there is no concept of partial shipments or split deliveries, and `Shipped` applies to the order rather than to individual lines.
 **Recommendation:** Clarify if partial fulfillment is a future requirement.
 
 ### 14.8 No Customer/User Deactivation Endpoint
@@ -942,4 +1185,4 @@ The system seeds the following data at startup:
 
 ---
 
-*This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-07-27 (re-verified against MMCA.Store HEAD `1dfdc991`).*
+*This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-09-05 (order shipment tracking and product reviews).*

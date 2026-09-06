@@ -152,7 +152,7 @@
           </tr>
           </tbody></table></div>
           <blockquote>
-          <p><strong>Roles and enforcement:</strong> <code>Admin</code> is the only elevated role (registration creates a <code>Customer</code>). The 14 admin pages carry page-level <code>[Authorize(Roles = &quot;Admin&quot;)]</code>, regression-gated in CI by the three per-module <code>*RouteAuthorizationTests</code> (<code>MMCA.Store.CI.slnf:39,45,51</code>). Customer-facing data is additionally row-scoped server-side (see <strong>Authorization Model</strong> at the end), so the page gate is defense-in-depth, never the boundary.</p>
+          <p><strong>Roles and enforcement:</strong> <code>Admin</code> is the only elevated role (registration creates a <code>Customer</code>). The 15 admin pages carry page-level <code>[Authorize(Roles = &quot;Admin&quot;)]</code>, regression-gated in CI by the three per-module <code>*RouteAuthorizationTests</code> (<code>MMCA.Store.CI.slnf:39,45,51</code>). Customer-facing data is additionally row-scoped server-side (see <strong>Authorization Model</strong> at the end), so the page gate is defense-in-depth, never the boundary.</p>
           </blockquote>
           <hr>
           <h2 id="1-anonymous-user">1. Anonymous User</h2>
@@ -191,6 +191,9 @@
           <p>Add-to-cart on the product detail page sits inside an <code>AuthorizeView</code>; an anonymous visitor is prompted to log in instead.</p>
           </blockquote>
           <blockquote>
+          <p>The product detail page carries a reviews section at the anchor <code>#reviews</code>, and the browse cards show a star rating. Both are readable anonymously: the published-reviews endpoint is <code>AllowAnonymous</code> and output-cached. Only the review editor inside that section is behind an <code>AuthorizeView</code>.</p>
+          </blockquote>
+          <blockquote>
           <p><code>/forgot-password</code> and <code>/reset-password</code> are shipped by the framework UI package and carry no <code>[Authorize]</code> attribute. The dashed edge is the reset email: the link carries the email and the token in the query string, and both fields stay editable so a recipient can paste the token by hand.</p>
           </blockquote>
           <hr>
@@ -204,6 +207,7 @@
     subgraph Catalog[&quot;Public Catalog&quot;]
         Browse[&quot;/catalog&lt;br/&gt;Catalog Browse&quot;]
         ProductDetail[&quot;/catalog/{Id}&lt;br/&gt;Product Detail&quot;]
+        Reviews[&quot;Reviews section&lt;br/&gt;(anchor on the product page)&quot;]
     end
 
     subgraph Sales[&quot;Cart and Orders&quot;]
@@ -228,7 +232,13 @@
     Cart --&gt;|Stripe payment| OrderDetail
 
     Orders --&gt;|row click| OrderDetail
-    OrderDetail --&gt;|back| Orders</pre>
+    OrderDetail --&gt;|back| Orders
+
+    ProductDetail --&gt;|reviews section| Reviews
+    OrderDetail --&gt;|Rate this product, delivered orders| Reviews</pre>
+          <blockquote>
+          <p>A delivered order&#39;s lines carry a &quot;Rate this product&quot; link to that product&#39;s reviews anchor, which is the shortest path from &quot;my parcel arrived&quot; to writing the review the delivery entitled the customer to. The editor inside the section still checks eligibility server-side (<code>GET /Reviews/by-product/{productId}/mine</code>), so the link is a shortcut, never the authorization.</p>
+          </blockquote>
           <blockquote>
           <p><code>/orders</code> lists only the caller&#39;s own orders (ownership <code>Specification</code> row-scoping); an admin on the same route sees all orders. The order detail data is ownership-checked server-side with 404-not-403 semantics so foreign order ids do not leak existence. Abandoned Stripe payments are recovered by the <code>OrphanOrderRecovery</code> component on return.</p>
           </blockquote>
@@ -243,6 +253,7 @@
         Products[&quot;/products&lt;br/&gt;Product List&quot;]
         ProductCreate[&quot;/products/create&lt;br/&gt;Create Product&quot;]
         ProductDetailAdm[&quot;/products/{Id}&lt;br/&gt;Product Detail&quot;]
+        ReviewsAdm[&quot;/reviews&lt;br/&gt;Review Moderation&quot;]
     end
 
     subgraph SalesAdmin[&quot;Sales Admin&quot;]
@@ -265,6 +276,7 @@
 
     Home --&gt;|nav menu| Categories
     Home --&gt;|nav menu| Products
+    Home --&gt;|nav menu| ReviewsAdm
     Home --&gt;|nav menu| Inventory
     Home --&gt;|nav menu| Carts
     Home --&gt;|nav menu| OrdersAll
@@ -279,12 +291,19 @@
     Carts --&gt;|row click| CartDetail
     OrdersAll --&gt;|row click| OrderDetailAdm
     Customers --&gt;|row click| CustomerDetail
-    Customers --&gt;|create| CustomerCreate</pre>
+    Customers --&gt;|create| CustomerCreate
+    ReviewsAdm --&gt;|reviewed product| ProductDetailAdm</pre>
+          <blockquote>
+          <p>The admin order detail page opens <code>ShipOrderDialog</code> for both shipment actions: &quot;Ship order&quot; on a Paid order and &quot;Edit tracking&quot; on a Shipped one. One dialog instance serves both, and the summary panel picks the endpoint. It is a dialog rather than a route, so it does not appear as a node above.</p>
+          </blockquote>
+          <blockquote>
+          <p><code>/reviews</code> is the moderation grid: every review whatever its status, with hide and unhide. The page carries the Admin route guard, and the endpoints behind it carry the finer-grained <code>catalog:reviews:moderate</code> permission, which today only the Admin role holds.</p>
+          </blockquote>
           <hr>
           <h2 id="authorization-model">Authorization Model</h2>
           <p>Three cooperating layers; the API is always the boundary:</p>
           <ol>
-          <li><strong>Page-level route guards.</strong> The 14 admin pages carry <code>[Authorize(Roles = &quot;Admin&quot;)]</code> and <code>/profile</code> / <code>/orders</code> carry <code>[Authorize]</code>. SSR session-cookie auth (ADR-022, <code>mmca_auth_access</code> HttpOnly cookie) lets these attributes pass on fresh GETs, F5, and new tabs, so deep links never render a protected shell to the wrong actor. Regression-gated by <code>Catalog/Sales/IdentityRouteAuthorizationTests</code> in CI (commit <code>c4adff2</code>).</li>
+          <li><strong>Page-level route guards.</strong> The 15 admin pages carry <code>[Authorize(Roles = &quot;Admin&quot;)]</code> and <code>/profile</code> / <code>/orders</code> carry <code>[Authorize]</code>. SSR session-cookie auth (ADR-022, <code>mmca_auth_access</code> HttpOnly cookie) lets these attributes pass on fresh GETs, F5, and new tabs, so deep links never render a protected shell to the wrong actor. Regression-gated by <code>Catalog/Sales/IdentityRouteAuthorizationTests</code> in CI (commit <code>c4adff2</code>).</li>
           <li><strong>API resource ownership (ADR-033).</strong> <code>OwnerOrAdminFilter</code> 403s requests whose <code>customer_id</code> claim mismatches the owner parameter, and <code>OwnershipHelper.GetOwnershipSpecification()</code> row-scopes collection queries so customers only ever receive their own carts/orders. Per-mutation checks on orders return 404-not-403 to avoid leaking existence.</li>
           <li><strong>In-page conditionals.</strong> <code>AuthorizeView</code> hides customer-only affordances (add-to-cart) from anonymous visitors and admin-only affordances from customers; these are UX sugar on top of layers 1-2, never the enforcement.</li>
           </ol>

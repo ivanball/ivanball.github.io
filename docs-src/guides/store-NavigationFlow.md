@@ -10,7 +10,7 @@ This document maps the site navigation flow for each actor in the MMCA.Store app
 | **Customer** | Anonymous + profile, cart/checkout, own orders | Authenticated, default `Customer` role (`customer_id` claim) |
 | **Admin** | Full access: Catalog/Sales/Identity admin CRUD | Authenticated, `Admin` role |
 
-> **Roles and enforcement:** `Admin` is the only elevated role (registration creates a `Customer`). The 14 admin pages carry page-level `[Authorize(Roles = "Admin")]`, regression-gated in CI by the three per-module `*RouteAuthorizationTests` (`MMCA.Store.CI.slnf:39,45,51`). Customer-facing data is additionally row-scoped server-side (see **Authorization Model** at the end), so the page gate is defense-in-depth, never the boundary.
+> **Roles and enforcement:** `Admin` is the only elevated role (registration creates a `Customer`). The 15 admin pages carry page-level `[Authorize(Roles = "Admin")]`, regression-gated in CI by the three per-module `*RouteAuthorizationTests` (`MMCA.Store.CI.slnf:39,45,51`). Customer-facing data is additionally row-scoped server-side (see **Authorization Model** at the end), so the page gate is defense-in-depth, never the boundary.
 
 ---
 
@@ -53,6 +53,8 @@ flowchart TD
 
 > Add-to-cart on the product detail page sits inside an `AuthorizeView`; an anonymous visitor is prompted to log in instead.
 
+> The product detail page carries a reviews section at the anchor `#reviews`, and the browse cards show a star rating. Both are readable anonymously: the published-reviews endpoint is `AllowAnonymous` and output-cached. Only the review editor inside that section is behind an `AuthorizeView`.
+
 > `/forgot-password` and `/reset-password` are shipped by the framework UI package and carry no `[Authorize]` attribute. The dashed edge is the reset email: the link carries the email and the token in the query string, and both fields stay editable so a recipient can paste the token by hand.
 
 ---
@@ -70,6 +72,7 @@ flowchart TD
     subgraph Catalog["Public Catalog"]
         Browse["/catalog<br/>Catalog Browse"]
         ProductDetail["/catalog/{Id}<br/>Product Detail"]
+        Reviews["Reviews section<br/>(anchor on the product page)"]
     end
 
     subgraph Sales["Cart and Orders"]
@@ -95,7 +98,12 @@ flowchart TD
 
     Orders -->|row click| OrderDetail
     OrderDetail -->|back| Orders
+
+    ProductDetail -->|reviews section| Reviews
+    OrderDetail -->|Rate this product, delivered orders| Reviews
 ```
+
+> A delivered order's lines carry a "Rate this product" link to that product's reviews anchor, which is the shortest path from "my parcel arrived" to writing the review the delivery entitled the customer to. The editor inside the section still checks eligibility server-side (`GET /Reviews/by-product/{productId}/mine`), so the link is a shortcut, never the authorization.
 
 > `/orders` lists only the caller's own orders (ownership `Specification` row-scoping); an admin on the same route sees all orders. The order detail data is ownership-checked server-side with 404-not-403 semantics so foreign order ids do not leak existence. Abandoned Stripe payments are recovered by the `OrphanOrderRecovery` component on return.
 
@@ -114,6 +122,7 @@ flowchart TD
         Products["/products<br/>Product List"]
         ProductCreate["/products/create<br/>Create Product"]
         ProductDetailAdm["/products/{Id}<br/>Product Detail"]
+        ReviewsAdm["/reviews<br/>Review Moderation"]
     end
 
     subgraph SalesAdmin["Sales Admin"]
@@ -136,6 +145,7 @@ flowchart TD
 
     Home -->|nav menu| Categories
     Home -->|nav menu| Products
+    Home -->|nav menu| ReviewsAdm
     Home -->|nav menu| Inventory
     Home -->|nav menu| Carts
     Home -->|nav menu| OrdersAll
@@ -151,7 +161,12 @@ flowchart TD
     OrdersAll -->|row click| OrderDetailAdm
     Customers -->|row click| CustomerDetail
     Customers -->|create| CustomerCreate
+    ReviewsAdm -->|reviewed product| ProductDetailAdm
 ```
+
+> The admin order detail page opens `ShipOrderDialog` for both shipment actions: "Ship order" on a Paid order and "Edit tracking" on a Shipped one. One dialog instance serves both, and the summary panel picks the endpoint. It is a dialog rather than a route, so it does not appear as a node above.
+
+> `/reviews` is the moderation grid: every review whatever its status, with hide and unhide. The page carries the Admin route guard, and the endpoints behind it carry the finer-grained `catalog:reviews:moderate` permission, which today only the Admin role holds.
 
 ---
 
@@ -159,7 +174,7 @@ flowchart TD
 
 Three cooperating layers; the API is always the boundary:
 
-1. **Page-level route guards.** The 14 admin pages carry `[Authorize(Roles = "Admin")]` and `/profile` / `/orders` carry `[Authorize]`. SSR session-cookie auth (ADR-022, `mmca_auth_access` HttpOnly cookie) lets these attributes pass on fresh GETs, F5, and new tabs, so deep links never render a protected shell to the wrong actor. Regression-gated by `Catalog/Sales/IdentityRouteAuthorizationTests` in CI (commit `c4adff2`).
+1. **Page-level route guards.** The 15 admin pages carry `[Authorize(Roles = "Admin")]` and `/profile` / `/orders` carry `[Authorize]`. SSR session-cookie auth (ADR-022, `mmca_auth_access` HttpOnly cookie) lets these attributes pass on fresh GETs, F5, and new tabs, so deep links never render a protected shell to the wrong actor. Regression-gated by `Catalog/Sales/IdentityRouteAuthorizationTests` in CI (commit `c4adff2`).
 2. **API resource ownership (ADR-033).** `OwnerOrAdminFilter` 403s requests whose `customer_id` claim mismatches the owner parameter, and `OwnershipHelper.GetOwnershipSpecification()` row-scopes collection queries so customers only ever receive their own carts/orders. Per-mutation checks on orders return 404-not-403 to avoid leaking existence.
 3. **In-page conditionals.** `AuthorizeView` hides customer-only affordances (add-to-cart) from anonymous visitors and admin-only affordances from customers; these are UX sugar on top of layers 1-2, never the enforcement.
 
