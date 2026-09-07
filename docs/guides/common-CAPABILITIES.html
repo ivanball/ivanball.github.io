@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>MMCA.Common Capability Catalog · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="MMCA.Common framework, v1.187.0.">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-CAPABILITIES.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="MMCA.Common Capability Catalog">
+  <meta property="og:description" content="MMCA.Common framework, v1.187.0.">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-CAPABILITIES.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MMCA.Common Capability Catalog">
+  <meta name="twitter:description" content="MMCA.Common framework, v1.187.0.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · MMCA.Common Capability Catalog","item":"https://ivanball.github.io/docs/guides/common-CAPABILITIES.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Common · MMCA.Common Capability Catalog</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-BUILD-BY-HAND.html">Common · Building on MMCA.Common by Hand</a></li>
+        <li><a href="common-CAPABILITIES.html" aria-current="page">Common · MMCA.Common Capability Catalog</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-ECOMMERCE-SAMPLE.html">Common · Build MMCA.ECommerce: a Two-Module Store from the Templates</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-SMALL-APPS.html">Common · Small Apps: the lowest floor MMCA.Common has</a></li>
+        <li><a href="common-TEMPLATES.html">Common · Templates: scaffolding an MMCA app</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="mmcacommon-capability-catalog">MMCA.Common Capability Catalog</h1>
+          <p><em>MMCA.Common framework, v1.187.0.</em></p>
+          <p>Everything an adopting team gets from the MMCA.Common framework: a .NET 10 package set for building a modular monolith on DDD, Clean Architecture, and CQRS, with a tested path to extract modules into microservices later. Every item below is grounded in a real shipped type, guide, CI job, or consumer call site (MMCA.ADC, MMCA.Store, MMCA.Helpdesk), verified against framework source at v1.187.0.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Figure</th>
+          <th>What it counts</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><strong>17</strong></td>
+          <td>NuGet packages, lockstep versioned</td>
+          </tr>
+          <tr>
+          <td><strong>124</strong></td>
+          <td>architecture fitness methods (47 bases)</td>
+          </tr>
+          <tr>
+          <td><strong>111</strong></td>
+          <td>ADRs documenting every pattern</td>
+          </tr>
+          <tr>
+          <td><strong>18</strong></td>
+          <td>named middleware steps, order under test</td>
+          </tr>
+          <tr>
+          <td><strong>23</strong></td>
+          <td>device capability contracts, web and native</td>
+          </tr>
+          <tr>
+          <td><strong>0</strong></td>
+          <td>tokens needed to install (public nuget.org)</td>
+          </tr>
+          </tbody></table></div>
+          <h2 id="package-map">Package map</h2>
+          <p>Seventeen packages, one version number. The layer rule is enforced at compile time inside the framework and at test time in every consumer: <code>API/Grpc</code> depend on <code>Infrastructure</code>, which depends on <code>Application</code>, then <code>Domain</code>, then <code>Shared</code>. <code>UI</code> and <code>Grpc</code> reference <code>Shared</code> only, so the UI runs in the browser and the transport stays pure.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Tier</th>
+          <th>Package</th>
+          <th>What it carries</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Core</td>
+          <td><code>MMCA.Common.Shared</code></td>
+          <td><code>Result</code>, errors, value objects, specifications, auth claim and permission primitives, resilience defaults, calendar and HTTP helpers. Safe for Blazor WASM.</td>
+          </tr>
+          <tr>
+          <td>Core</td>
+          <td><code>MMCA.Common.Domain</code></td>
+          <td>Entity hierarchy, aggregate helpers, invariants, domain and integration event bases, opt-in entity markers, PII and privacy contracts.</td>
+          </tr>
+          <tr>
+          <td>Core</td>
+          <td><code>MMCA.Common.Application</code></td>
+          <td>CQRS handlers and the decorator pipeline, module system, generic entity commands, validation rules, identity use cases, caching and messaging abstractions.</td>
+          </tr>
+          <tr>
+          <td>Core</td>
+          <td><code>MMCA.Common.Infrastructure</code></td>
+          <td>EF Core contexts for three engines, outbox and inbox, MassTransit broker adapters, scheduler, cache and lock implementations, audit trail, tenancy, encryption, identity stores, email, blob storage, push delivery.</td>
+          </tr>
+          <tr>
+          <td>Core</td>
+          <td><code>MMCA.Common.API</code></td>
+          <td>Controller bases, the named middleware pipeline, exception handlers, idempotency, rate limiting, authorization filters, JWT and JWKS and OIDC endpoints, session cookies, OpenAPI, CSV export.</td>
+          </tr>
+          <tr>
+          <td>Core</td>
+          <td><code>MMCA.Common.Aspire</code></td>
+          <td>Service defaults: OpenTelemetry, health checks, warm-up, Redis wiring, security headers and CSP, Serilog, Key Vault, data protection, gateway rate limiting and correlation, cost knobs.</td>
+          </tr>
+          <tr>
+          <td>Core</td>
+          <td><code>MMCA.Common</code></td>
+          <td>Metapackage bundling the six packages above as one reference (<a href="../adr/101-common-metapackage.html">ADR-101</a>).</td>
+          </tr>
+          <tr>
+          <td>Presentation</td>
+          <td><code>MMCA.Common.Grpc</code></td>
+          <td>Typed gRPC clients over service discovery, <code>Result</code> to and from gRPC status, server defaults with reflection.</td>
+          </tr>
+          <tr>
+          <td>Presentation</td>
+          <td><code>MMCA.Common.UI</code></td>
+          <td>Shared Blazor component layer: shell, pages, list-page bases, typed API clients, auth state, 23 device capability contracts, notifications, theming, localization.</td>
+          </tr>
+          <tr>
+          <td>Presentation</td>
+          <td><code>MMCA.Common.UI.Web</code></td>
+          <td>Blazor web head: server and WASM token handling, cookie sync, Blazor-aware CSP, form-factor detection, error page.</td>
+          </tr>
+          <tr>
+          <td>Presentation</td>
+          <td><code>MMCA.Common.UI.Maui</code></td>
+          <td>MAUI hybrid head across four targets (Android, iOS, Mac Catalyst, Windows): native capability implementations, secure token store, push token bridges, hardware back navigation, culture, crash handling. Built by dedicated Windows jobs (<a href="../adr/042-device-capability-abstraction.html">ADR-042</a>).</td>
+          </tr>
+          <tr>
+          <td>Hosting</td>
+          <td><code>MMCA.Common.Aspire.Hosting</code></td>
+          <td>AppHost DSL: per-module data sources, RabbitMQ and Service Bus emulator brokers, JWKS discovery, MailDev, h2c health gates, E2E lifts.</td>
+          </tr>
+          <tr>
+          <td>Hosting</td>
+          <td><code>MMCA.Common.Gateway</code></td>
+          <td>YARP composition from configuration: cluster request profiles, health-check defaults, trace headers, per-route rate-limiter policies, forwarded headers. Its only runtime dependency is YARP.</td>
+          </tr>
+          <tr>
+          <td>Testing</td>
+          <td><code>MMCA.Common.Testing</code></td>
+          <td>Integration and cross-service fixtures, Service Bus emulator fixture, production-mode host factory, runtime conformance suites, JWT and feature-flag helpers, handler test base.</td>
+          </tr>
+          <tr>
+          <td>Testing</td>
+          <td><code>MMCA.Common.Testing.Architecture</code></td>
+          <td>47 fitness-function bases over a 30-file <code>ArchitectureRules</code> library, parameterized by your architecture map. Folder-only organized (<code>Rules/</code>, <code>Bases/</code> by topic) so the flat namespace consumers subclass never moves (<a href="../adr/015-architecture-fitness-functions.html">ADR-015</a>).</td>
+          </tr>
+          <tr>
+          <td>Testing</td>
+          <td><code>MMCA.Common.Testing.E2E</code></td>
+          <td>Playwright fixtures, Blazor-aware page helpers, page objects, eight inheritable workflow suites, axe-core profiles, Web Vitals budgets.</td>
+          </tr>
+          <tr>
+          <td>Testing</td>
+          <td><code>MMCA.Common.Testing.UI</code></td>
+          <td>bUnit component-test base with MudBlazor provider handles, mutable auth state, capturing HTTP doubles, markup snapshots (<a href="../adr/103-bunit-component-test-tier.html">ADR-103</a>).</td>
+          </tr>
+          </tbody></table></div>
+          <h2 id="getting-started-and-scaffolding">Getting started and scaffolding</h2>
+          <p>From zero to a green, warning-free, tested solution before writing any business logic.</p>
+          <ul>
+          <li><strong>One-command solution scaffold.</strong> <code>dotnet new install MMCA.Templates</code> then <code>dotnet new mmca-app</code> generates a complete 12-project solution (roughly 5,300 to 6,600 lines you never hand-type) with a named module and aggregate, ready for the six-step Getting Started guide.</li>
+          <li><strong>Four templates at four grain sizes.</strong> <code>mmca-app</code> (solution), <code>mmca-module</code> (an 8-project module across all five layers plus tests and a migrations project), <code>mmca-command</code> and <code>mmca-query</code> (single vertical slice; handlers, validators, and mappers are convention-scanned, so no DI registration to write). A generated command slice arrives already passing the command-validator coverage rule.</li>
+          <li><strong>A wire-up script, not printed instructions.</strong> Generated apps ship <code>build/add-module.ps1</code>, which runs the module template and then performs the wire-ups <code>dotnet new</code> cannot patch: solution entries, project references, identifier-alias link, architecture-map lines, error resources, AppHost database routing, the first EF migration, and the new module&#39;s integration event appended to the frozen wire-contract test so the freeze stays green.</li>
+          <li><strong>The script refuses to half-apply.</strong> It detects the relational engine from the API host&#39;s own settings, cross-checks the existing migrations project, fails at preflight on a duplicate module name or an ambiguous architecture map, makes only anchored insertions so the diff shows added lines and nothing else, and is safe to rerun step by step.</li>
+          <li><strong>Shape flags remove code instead of leaving dead weight.</strong> <code>--flat</code>, <code>--no-status</code>, <code>--no-description</code>, <code>--no-owner</code>, <code>--child</code>, <code>--title</code>, <code>--event-verb</code>, plus solution axes <code>--database sqlserver|sqlite</code>, <code>--no-aspire</code>, and <code>-f|--framework-version</code> to pin which framework release the generated app restores, so a scaffold is reproducible months later.</li>
+          <li><strong>Green baseline on arrival.</strong> The generated solution builds warning-free under <code>TreatWarningsAsErrors</code> with five analyzers at error severity, and its domain, application, and architecture test suites pass with no database.</li>
+          <li><strong>Credential-free install.</strong> All packages are on public nuget.org; no feed configuration or token. The <code>MMCA.Common</code> metapackage bundles the core six packages as one reference.</li>
+          <li><strong>A deliberately low floor.</strong> <code>--database sqlite --no-aspire</code> gives two hosts, one database file, no Docker, no orchestrator, with nothing in the framework disabled that cannot be re-enabled by a config switch and a restart (not a migration). The Small Apps guide says when to flip each switch back on.</li>
+          <li><strong>Source-mode development.</strong> A gitignored <code>local.props</code> flips every <code>PackageReference</code> to a <code>ProjectReference</code> against framework source, so you can develop the framework and your app side by side.</li>
+          <li><strong>The generated app is gated, not just the seed.</strong> Templates are packed from MMCA.Helpdesk, the runnable reference app, and a dedicated <code>template-smoke</code> CI job packs, generates, builds, and tests a fresh app in package mode against a released framework, then sweeps the tree for residual reference-app tokens (<a href="../adr/065-scaffolding-templates.html">ADR-065</a>).</li>
+          <li><strong>Templates release on their own cadence.</strong> <code>MMCA.Templates</code> ships on <code>templates-vX.Y.Z</code> tags through its own keyless trusted-publishing job (current line 1.10.0, MIT licensed), deliberately outside the framework&#39;s lockstep family so the framework version stays a parameter rather than a coupling.</li>
+          <li><strong>Retrofit path for existing code.</strong> The Building by Hand guide walks the same solution phase by phase for teams adopting the framework inside an existing codebase; the two-module e-commerce sample shows the multi-module shape end to end.</li>
+          </ul>
+          <h2 id="architectural-core">Architectural core</h2>
+          <p>The opinionated backbone: errors as values, one sealed pipeline, DDD building blocks, and module composition.</p>
+          <h3 id="errors-as-values">Errors as values</h3>
+          <ul>
+          <li><strong>Result pattern end to end.</strong> <code>Result</code> / <code>Result</code> with nine <code>ErrorType</code> classifications (Validation, Invariant, NotFound, Conflict, Unauthorized, Forbidden, UnprocessableEntity, Failure, Unexpected), severity ranking, <code>Combine</code>, and a full combinator surface: map, bind, tap, <code>Ensure</code>, <code>Match</code>, <code>OnFailure</code>, implicit conversions, and <code>Task&gt;</code> mirrors of each. Failures map to RFC 9457 ProblemDetails at the HTTP edge and to gRPC status on the wire, and <code>ProblemDetailsResultReader</code> reads them back into typed errors on the client, so pages branch instead of catch.</li>
+          <li><strong>Results survive a cache.</strong> <code>ResultJsonConverterFactory</code> makes <code>Result</code> round-trippable through Redis, so a cached query result keeps its typed failure shape.</li>
+          <li><strong>A reusable invariant library.</strong> <code>CommonInvariants</code> ships 22 <code>Result</code>-returning guards (string bounds, ids, enums, ranges, URLs, time zones, uniqueness, collection size, culture, theme) that module invariant classes compose with <code>Result.Combine</code>.</li>
+          </ul>
+          <h3 id="cqrs-pipeline">CQRS pipeline</h3>
+          <ul>
+          <li><strong>Sealed decorator pipeline.</strong> Commands flow FeatureGate, Authorization, Logging, Caching, Validating, Timeout, Transactional, then the handler (queries the same six minus Transactional). Authorization sits outside Caching on purpose, so a denied query never reads or populates the cache; validation runs inside Caching because a cached entry was validated when produced. <code>AddMmcaApplicationPipeline</code> seals the composition: any framework registration helper called afterwards throws, and <code>VerifyDecoratorPipeline()</code> exposes the check to fitness tests for anything registered by hand. An opt-in profiling decorator pair is available via <code>AddApplicationProfiling()</code>.</li>
+          <li><strong>Behavior by marker interface.</strong> A handler opts into cross-cutting behavior declaratively: <code>ITransactional</code>, <code>IQueryCacheable</code>, <code>ICacheInvalidating</code>, <code>IRequiresPermission</code>, <code>IFeatureGated</code>, <code>IHasTimeout</code>. Transactional commands roll back on exceptions and on business failures alike; in-process domain events dispatch only after commit.</li>
+          <li><strong>Contract markers with an inspector.</strong> Opt-in <code>ICommand</code> / <code>IQuery</code> on a request let <code>CqrsContractInspector.FindContractMismatches</code> fail a build when a handler&#39;s return type or kind drifts from what the request declared.</li>
+          <li><strong>Convention-based registration.</strong> <code>ScanModuleApplicationServices</code> auto-registers command and query handlers, validators, DTO mappers and projectors, request mappers, update appliers, domain and integration event handlers, and a validator bridge for every command that embeds a request. The <code>MmcaApplicationPipelineBuilder</code> callback offers <code>ScanModule</code>, <code>ScanModules</code>, and <code>Register</code> for cross-service client wiring.</li>
+          <li><strong>Guard-clause extensions.</strong> <code>ICurrentUserService.RequireUserId(...)</code> collapses the read-then-null-check block into one <code>Result</code>, and <code>IReadRepository.GetByIdOrFailAsync</code> returns a <code>NotFound</code> failure instead of a null.</li>
+          </ul>
+          <h3 id="domain-building-blocks">Domain building blocks</h3>
+          <ul>
+          <li><strong>DDD entity hierarchy.</strong> <code>BaseEntity</code> (identity equality with a transient-id rule so two unsaved rows are never equal), <code>AuditableBaseEntity</code> (audit fields, soft delete, row version), <code>AuditableAggregateRootEntity</code> (domain event collection plus five child helpers: <code>SetItems</code> with a validation hook, <code>GetChildOrNotFound</code>, <code>RemoveChildOrNotFound</code>, <code>RestoreChild</code>, and cascading <code>DeleteChildren</code>). Factory methods return <code>Result</code>.</li>
+          <li><strong>Value object library.</strong> Seven <code>ValueObject</code> types: <code>Money</code>, <code>Currency</code>, <code>Email</code>, <code>PhoneNumber</code>, <code>Address</code>, <code>DateRange</code>, <code>DateTimeRange</code>, each with a <code>Result</code>-returning factory; Address, Email, and PhoneNumber carry separate invariant classes. EF value converters ship for Email, PhoneNumber, and <code>Enumeration</code>; <code>Money</code> maps as an owned type; Currency and Enumeration have JSON converters.</li>
+          <li><strong>Smart enums are opt-in.</strong> Plain enums by default, <code>Enumeration</code> with its JSON and EF converters when a value needs behavior (<a href="../adr/104-smart-enums-as-opt-in-capability.html">ADR-104</a>).</li>
+          <li><strong>Opt-in entity markers.</strong> <code>ITenantEntity</code>, <code>IAuditedEntity</code>, <code>IHasOrderingKey</code>, <code>IReactivatable</code>, <code>IAnonymizable</code>, <code>IErasableUser</code>, <code>IRowVersioned</code>, <code>IAggregateRoot</code>: each is inert until the host enables the matching feature.</li>
+          <li><strong>Declarative attributes.</strong> <code>[UseDatabase]</code> and <code>[UseDataSource]</code> route an entity to its database and engine, <code>[IdValueGenerated]</code> tells factories the database owns the key, <code>[Navigation]</code> lets the Application layer name include paths without EF, <code>[ServiceContract]</code> marks the wire surface of an extractable service, <code>[EventName]</code> pins a wire name, <code>[Pii]</code> marks personal data.</li>
+          <li><strong>Composable specifications.</strong> <code>Specification</code> / <code>QuerySpecification</code> with criteria, ordering, includes, paging, tracking control, and <code>.And()/.Or()/.Not()</code> composition. <code>CrossSourceSpecification.BuildAsync</code> resolves a principal&#39;s keys in its own database and returns a portable <code>key IN (...)</code> specification, so a predicate that would need a cross-database join stays translatable.</li>
+          <li><strong>Manual, compile-checked mapping.</strong> Mapperly DTO mappers and projectors behind <code>IEntityDTOMapper</code> / <code>IEntityDTOProjector</code>: no runtime reflection mapping surprises (<a href="../adr/001-manual-dto-mapping.html">ADR-001</a>).</li>
+          </ul>
+          <h3 id="module-composition">Module composition</h3>
+          <ul>
+          <li><strong>Module system.</strong> Modules implement <code>IModule</code> (a leaf module is a name plus <code>Register</code>); <code>ModuleLoader</code> discovers them by reflection and registers them in topological (Kahn) order. Seeding is a separate <code>IModuleSeeder</code> contract invoked in the same order. A module disabled by <code>ModulesSettings</code> gets stub registrations so cross-module interfaces still resolve, and <code>RemoteDependencies</code> declares that a disabled dependency is satisfied out of process.</li>
+          <li><strong>Identifier type aliases.</strong> Entity ID types are solution-wide <code>global using</code> aliases linked into every project, so switching an ID type is a one-line change.</li>
+          <li><strong>Feature by folder, enforced.</strong> The aggregate names the first folder level in Domain, Application, and Shared; UI, API, and Infrastructure put a technical root first with the aggregate beneath it; no folder holds more than twelve direct code files, and namespaces follow folders. The framework&#39;s own packages are organized the same way (<code>Messaging/</code>, <code>Notifications/Push/</code>, <code>Capabilities/Geo/</code>), and <code>FolderWidthTestsBase</code> makes the cap a merge gate in every consumer (<a href="../adr/109-feature-by-folder-convention.html">ADR-109</a>).</li>
+          <li><strong>Shared utilities you would otherwise write.</strong> <code>KeyedSemaphoreStripe</code> (bounded per-key locking), <code>IcsCalendarBuilder</code> (RFC 5545 export), <code>ConcurrencyETag</code>, <code>IdempotencyHeaders</code>, <code>ModuleNameConventions</code>, <code>ClaimsPrincipalExtensions</code>, and one shared set of HTTP, gRPC, and broker resilience defaults.</li>
+          </ul>
+          <h2 id="monolith-now-services-later">Monolith now, services later</h2>
+          <p>The framework&#39;s central promise, and it is a tested property, not a slogan.</p>
+          <ul>
+          <li><strong>Host-only extraction.</strong> Turning a module into its own service changes hosting code only; Domain, Application, Shared, Infrastructure, and API code stay untouched. You add a service host (<code>AddModuleHost</code> boots one module per process), a <code>.Contracts</code> proto project, a gateway route, broker transport, and JWKS auth.</li>
+          <li><strong>Database per module from day one.</strong> Even inside the monolith each module owns its database with its own outbox and inbox tables, and relationships that cross a database boundary degrade automatically (FK constraint and navigation removed, scalar column and index kept), so extraction costs no data migration rework.</li>
+          <li><strong>YARP gateway as a package.</strong> <code>AddMmcaGateway()</code> composes four things from configuration: cluster request profiles layered per property (defaults, then per-cluster overrides), health-check defaults (passive on by default, active probing configured and one flag away), trace headers that strip any client-supplied value before stamping the gateway&#39;s own, and named per-route rate-limiter policies. <code>UseCommonForwardedHeaders()</code> ships alongside. The package&#39;s only runtime dependency is YARP; the host still loads its route table and maps the proxy.</li>
+          <li><strong>gRPC cross-service calls with Result over the wire.</strong> <code>AddTypedGrpcClient</code> gives service discovery over h2c, JWT forwarding, the standard resilience pipeline, and a pinned <code>SocketsHttpHandler</code> so HTTP/2 negotiation and connection rollover survive the global client defaults. <code>AddGrpcServiceDefaults()</code> adds the <code>Result</code> interceptor, turns detailed errors off, and enables reflection. <code>ResultGrpcExtensions</code> maps all nine error types in both directions, so a caller branches on <code>Result</code> instead of catching <code>RpcException</code>. Any <code>*.Contracts</code> project auto-compiles its protos. The hand-written adapter over the generated client is the consuming module&#39;s Anti-Corruption Layer, the one place the peer&#39;s wire model is translated into the module&#39;s own contract (<a href="../adr/007-grpc-extraction.html">ADR-007</a>), and lifting a module out follows the Strangler Fig route: stand the service host up beside the monolith, move traffic through the typed client, retire the in-process path last (<a href="../adr/008-service-extraction-topology.html">ADR-008</a>).</li>
+          <li><strong>Transport-agnostic eventing.</strong> The same <code>IEventBus</code> publish call works in-process (monolith) or over RabbitMQ / Azure Service Bus (extracted), selected purely by <code>MessageBus:Provider</code>; the outbox turns itself on when a broker appears (<a href="../adr/100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a>).</li>
+          <li><strong>Broker parity locally.</strong> The AppHost can provision the official Azure Service Bus emulator, so a development stack exercises the production transport rather than a stand-in.</li>
+          <li><strong>Cross-service trust without shared secrets.</strong> <code>WithJwksDiscovery(identity, gateway)</code> routes JWT metadata discovery through the gateway (extracted services listen HTTP/2-only on cleartext), <code>GetRequiredJwtAuthority()</code> fails at startup if the authority was never injected, and OIDC discovery lets each service derive the issuer instead of pinning it.</li>
+          <li><strong>Extraction readiness is enforced.</strong> <code>MicroserviceExtractionTestsBase</code> fails the build if MassTransit, Grpc, or Protobuf types reach Domain, Application, or Shared; <code>ServiceContractPurityTestsBase</code> keeps a <code>[ServiceContract]</code> free of the producer&#39;s internals; <code>ContractImplementationTestsBase</code> keeps implementations non-public; <code>ProtoContractTestsBase</code> diffs the live proto against a committed snapshot.</li>
+          <li><strong>Guided by the docs.</strong> The guides tell you to extract on an observable constraint, not on principle, and walk the full extraction phase step by step (ADRs 007 and 008).</li>
+          </ul>
+          <h2 id="data-and-persistence">Data and persistence</h2>
+          <p>EF Core with the cross-cutting concerns every production system eventually rebuilds, already built.</p>
+          <h3 id="routing-and-contexts">Routing and contexts</h3>
+          <ul>
+          <li><strong>Multi-database routing.</strong> Every entity resolves to a <code>DataSourceKey</code> (engine, name): the engine from its configuration base class, the database from <code>[UseDatabase]</code>, the module namespace, or <code>Default</code>. One sealed context class per engine (<code>SQLServerDbContext</code>, <code>CosmosDbContext</code>, <code>SqliteDbContext</code>) over the abstract <code>ApplicationDbContext</code>, one instance per database, with EF&#39;s model cache keyed per source (<a href="../adr/006-database-per-service.html">ADR-006</a>).</li>
+          <li><strong>Logical-to-physical collapse.</strong> Logical names that share a connection string collapse onto one physical source, and a framework table asking for an engine the host never configured gets the configured one, so a single-database SQLite host runs the whole framework unchanged.</li>
+          <li><strong>Cross-source navigation.</strong> <code>INavigationPopulator</code> batch-loads navigations that span physical databases (<a href="../adr/002-navigation-populators.html">ADR-002</a>); transactions are per source, best-effort sequential, with cross-source consistency left to the outbox.</li>
+          <li><strong>Repository, unit of work, and narrow read interfaces.</strong> <code>IRepository</code> / <code>IUnitOfWork</code> with transaction control, narrowed <code>IEntityReader</code> / <code>IEntityQuerier</code> for read paths, an <code>ExecuteUpdate</code> builder for set-based writes, and a repository factory that wraps every repository in MiniProfiler timing when profiling is on.</li>
+          <li><strong>Schema lifecycle on one interface.</strong> <code>IDbContextFactory</code> exposes <code>MigrateAsync</code>, <code>HasPendingMigrationsAsync</code>, <code>EnsureCreatedAsync</code>, and <code>RequestIdentityInsert</code> across every physical source; <code>InitializeDatabaseAsync</code> drives per-source migration and module seeding from a <code>DatabaseInitStrategy</code>.</li>
+          </ul>
+          <h3 id="cross-cutting-behavior">Cross-cutting behavior</h3>
+          <ul>
+          <li><strong>Soft delete done right.</strong> <code>IsDeleted</code> flag, a named <code>SoftDelete</code> query filter that can be dropped independently of the <code>Tenant</code> filter, filtered unique indexes so a deleted row does not block re-creating the same value (<a href="../adr/095-soft-delete-unique-indexes.html">ADR-095</a>), <code>HasSoftDeleteFilter()</code> for hand-authored indexes, <code>RestoreChild</code> for reversible deletes, and cascade-to-children enforced by a fitness rule.</li>
+          <li><strong>Automatic audit stamping and concurrency.</strong> <code>CreatedOn/By</code>, <code>LastModifiedOn/By</code>, <code>DeletedOn/By</code> stamped by a save interceptor, and <code>RowVersion</code> configured as the concurrency token on every auditable entity by the base context, so no entity configuration opts in.</li>
+          <li><strong>Optimistic concurrency via ETag / If-Match.</strong> <code>RowVersion</code> round-trips as a weak ETag; <code>[SupportsIfMatch]</code> yields 428 / 412 semantics; a convention test keeps every mutating endpoint covered.</li>
+          <li><strong>Field-level audit trail (opt-in).</strong> <code>AddAuditTrail()</code> records per-field change history in the same transaction as the data, redacts <code>[Pii]</code> values at capture, stamps each row with trace id and tenant, exposes <code>IAuditTrailReader</code>, and sweeps on a retention window through the scheduler.</li>
+          <li><strong>Field-level encryption at rest.</strong> <code>EncryptedStringConverter</code> encrypts designated columns with AES-256-GCM in a versioned envelope over a key ring: writes use the current key version, reads resolve theirs from the stored envelope, so rotation is zero-downtime, and an unregistered version fails loudly. <code>GenerateKey()</code> produces a conforming key.</li>
+          <li><strong>Multi-tenancy in two isolation modes.</strong> Shared schema via the tenant query filter and a stamping interceptor with cross-tenant write protection, or database-per-tenant via a per-tenant per-source connection override. Three ordered resolution strategies (claim, header, host), <code>RequireTenant</code>, excluded path prefixes, tenant-scoped cache keys, a startup validator that rejects an override naming a nonexistent source, and background sweeps that visit every per-tenant copy of a source.</li>
+          <li><strong>One transaction contract, ambiguity reported, never retried.</strong> <code>ExecuteInTransactionAsync</code> is re-entrant (an inner call joins the ambient transaction), runs the whole delegate under EF&#39;s execution strategy with a change-tracker reset per attempt, rolls back on a failed <code>Result</code> exactly as on a throw, and never retries the commit: a commit whose outcome is unknowable escapes as <code>TransactionCommitAmbiguousException</code> naming each physical source as committed, ambiguous, or rolled back (<a href="../adr/107-transaction-execution-contract.html">ADR-107</a>). <code>IUniqueConstraintViolationDetector</code> turns a lost insert race into a typed conflict instead of a 500.</li>
+          </ul>
+          <h3 id="jobs-paging-migrations">Jobs, paging, migrations</h3>
+          <ul>
+          <li><strong>Persistent cron scheduler.</strong> <code>IScheduledJob</code> with claim-lease execution so an occurrence runs exactly once across replicas, per-job cron overrides from configuration (<code>Scheduler:Jobs:{Name}:Cron</code>), a run-history row per job (outcome, duration, truncated error), and three metrics.</li>
+          <li><strong>A sweep base for your own jobs.</strong> <code>PeriodicBackgroundService</code> gives an enablement gate, startup delay, a fixed-interval loop that survives a failing cycle, and <code>TimeProvider</code>-driven waits so the loop is testable with a fake clock.</li>
+          <li><strong>Keyset and offset pagination.</strong> Opaque cursor encoding and a keyset query builder for stable deep paging, classic offset paging with <code>X-Pagination</code> metadata, a 1,000-row ceiling on any unbounded read inside the query pipeline, and <code>Id</code> appended as a total-order tie-break on every page.</li>
+          <li><strong>Migration ergonomics.</strong> Design-time factories for SQL Server and SQLite that never open a connection (<code>dotnet ef ... -- --datasource Name</code>), per-service migrations assemblies, a startup sole-migrator pattern, expand/contract schema evolution enforced as a CI gate, and the consumer canary applying MMCA.Helpdesk&#39;s real migrations to an ephemeral SQL Server on every framework PR.</li>
+          <li><strong>Seeding as a shipped base.</strong> <code>IDbSeeder</code> handles int or Guid seed identifiers, and <code>IdentityModuleDbSeederBase</code> seeds development accounts (normalize, skip existing, hash, create, save) behind two hooks.</li>
+          <li><strong>Schema ships with the framework.</strong> Outbox, inbox, audit trail, scheduler, notification, and refresh-session tables arrive as scaffolded consumer migrations when you enable the feature or bump the framework. One <code>Persistence:CommandTimeoutSeconds</code> knob applies to every relational source; <code>CosmosIntIdValueGenerator</code> covers the engine without identity columns.</li>
+          </ul>
+          <h2 id="messaging-and-eventing">Messaging and eventing</h2>
+          <p>Reliable events with two deliberately distinct paths: in-process domain events and durable integration events.</p>
+          <ul>
+          <li><strong>Transactional outbox.</strong> The save interceptor writes every captured domain event to <code>OutboxMessages</code> in the same transaction as the data; local events dispatch in-process after commit and their rows are stamped processed, while integration event rows stay pending for <code>OutboxProcessor</code>. The processor drains on signal or a smart wait, batches, retries with jittered exponential backoff capped at the claim lease, dead-letters loudly, claims rows under a lease so replicas scale out safely, delivers in order per key for events implementing <code>IHasOrderingKey</code>, and captures W3C trace context so a consumer&#39;s work correlates back to the request that caused it (<a href="../adr/003-outbox-dual-dispatch.html">ADR-003</a>).</li>
+          <li><strong>An operator surface, not a SQL script.</strong> <code>IOutboxAdministration</code> lists and replays dead letters and counts pending rows across every source the host owns; replay resets the retry count and lease but keeps the last error and original timestamp.</li>
+          <li><strong>Failure isolation.</strong> A circuit breaker guards the broker publish call only, so a broker outage stops publishing without stopping retry-state persistence. Five instruments (<code>outbox.processed.count</code>, <code>dead_letter.count</code>, <code>dispatch.lag</code>, <code>pending.depth</code>, <code>oldest_pending.age</code>) plus broker fault and breaker counters report health.</li>
+          <li><strong>Retention as a privacy control.</strong> Processed rows purge after <code>Outbox:RetentionDays</code> (payloads can carry personal data); dead-lettered rows keep a separate, wider window so they stay long enough to diagnose and replay. Eleven outbox knobs in all.</li>
+          <li><strong>Consumer-side inbox.</strong> <code>EfInboxStore</code> dedups broker redeliveries inside the handler&#39;s own transaction, giving effectively-once handling on top of at-least-once delivery.</li>
+          <li><strong>Broker choice by config.</strong> MassTransit (pinned v8) behind <code>IMessageBus</code>: InProcess, RabbitMQ, or Azure Service Bus by <code>MessageBus:Provider</code>. Two retry tiers: in-process exponential retry (5 attempts, 1s to 30s) then broker-scheduled delayed redelivery (60s, 600s, 3600s), unconditional on Service Bus and plugin-gated on RabbitMQ. <code>EndpointPrefix</code> namespaces queues on a shared broker; a broker paired with <code>EnableOutbox=false</code> fails at startup; a host running with the outbox or inbox off logs one startup notice.</li>
+          <li><strong>Schema-versioned events with upcasting.</strong> <code>BaseIntegrationEvent</code> carries a <code>SchemaVersion</code>; <code>IEventUpcaster</code> registrations migrate old payloads on consumption. <code>EventUpcasterRegistry</code> rejects duplicate sources, self-maps, and cycles at construction and restamps message identity after each hop so inbox dedup keeps working; a startup validator and a contract fitness test freeze the wire shape.</li>
+          <li><strong>Two event paths, one aggregate API.</strong> <code>AddDomainEvent</code> on the aggregate feeds both in-process dispatch (post-commit, compiled-delegate dispatcher) and outbox-backed integration events. Three consumer verbs: <code>RegisterIntegrationEventConsumer</code> (with an automatic fault consumer that turns an exhausted retry into one structured error plus a metric), <code>RegisterUpcastedIntegrationEventConsumer</code> for draining a retired contract, and <code>RegisterOutputCacheEvictionConsumer</code>.</li>
+          <li><strong>Handler bases that keep the retry promise honest.</strong> <code>SafeDomainEventHandler</code> logs a failure with full context and then lets it propagate so the outbox actually redelivers; <code>ScopedIntegrationEventHandlerBase</code> gives a cross-module handler its own DI scope.</li>
+          <li><strong>Saga support.</strong> Compensation plus a reconciliation backstop pattern for cross-module workflows (used by Store&#39;s order payment flow).</li>
+          <li><strong>Stable wire names.</strong> <code>[EventName]</code> decouples event class names from wire contracts for rows written after the attribute is applied; renaming with pending rows is a documented drain-then-rename move.</li>
+          <li><strong>Best-effort side effects.</strong> <code>BestEffort.ExecuteAsync</code> standardizes swallow-and-log for side effects that must never fail the main operation, counts each swallowed failure on its own meter, and never swallows the caller&#39;s own cancellation (<a href="../adr/096-best-effort-side-effects.html">ADR-096</a>).</li>
+          <li><strong>Shipped event shapes.</strong> <code>EntityChangedEvent</code> with <code>DomainEntityState</code>, and <code>OutputCacheEvictionRequested</code> as a framework-owned integration event.</li>
+          </ul>
+          <h2 id="http-api-surface">HTTP API surface</h2>
+          <p>Controllers and middleware that erase most CRUD endpoint code and keep the pipeline order under test.</p>
+          <h3 id="read-side">Read side</h3>
+          <ul>
+          <li><strong>Five generic read endpoints for free.</strong> <code>EntityControllerBase</code> gives list, paged list, lookup, by-id, and CSV export, with dynamic filters bound from <code>?filters[Name].operator=contains&amp;filters[Name].value=...</code> (typed strategies chosen by the leaf property of a dotted path, extensible via <code>RegisterStrategy</code>), sparse fieldsets, sorting, and pagination headers. Helpdesk&#39;s CSV export endpoint is zero lines of module code: the controller base supplies it.</li>
+          <li><strong>One row-scoping hook governs all five.</strong> <code>GetReadSpecificationAsync</code> is ANDed with the caller&#39;s filters on list, paged, lookup, by-id, and export alike, and a row it excludes returns 404 rather than 403, so a scoped read is never an existence oracle and export cannot drift wider than the list it mirrors.</li>
+          <li><strong>ETags from the generic path.</strong> <code>GetByIdAsync</code> publishes the DTO&#39;s <code>RowVersion</code> as a weak ETag; a protected <code>SetConcurrencyETag</code> lets hand-written reads emit the identical header.</li>
+          <li><strong>CSV export with a stated ceiling.</strong> Every export sends <code>X-Export-Row-Limit</code> up front, page-loops the query service, appends an in-body truncation record if the ceiling is hit, drops binary and collection columns, and uses a hand-written RFC 4180 writer with invariant formatting, so no CSV library is added to every consumer.</li>
+          </ul>
+          <h3 id="write-side">Write side</h3>
+          <ul>
+          <li><strong>Generic write endpoints and handlers.</strong> <code>AggregateRootEntityControllerBase</code> ships idempotent <code>POST</code> and <code>DELETE</code>; <code>CrudEntityControllerBase</code> adds <code>PUT</code> carrying both <code>[Idempotent]</code> and <code>[SupportsIfMatch]</code>. <code>AddEntityCrud()</code> registers the create, update, and delete commands and the update validator bridge; <code>AddEntityUpdateVerb</code> and <code>AddEntityUpdate</code> cover derived update commands that carry route-derived ids or server-decided flags (<a href="../adr/099-generic-write-side-entity-commands.html">ADR-099</a>).</li>
+          <li><strong>Handler bases for richer writes.</strong> <code>MutateEntityHandlerCore</code> supplies the load-mutate-save workflow with three subclasses for the three return shapes, plus <code>CreateEntityHandlerBase</code> and the add-child / remove-child pair for aggregate children. <code>MutationContext</code> carries typed values from load to post-save hooks, and <code>SkipSave()</code> is an idempotent no-op signal.</li>
+          <li><strong>Validators written once, against the request.</strong> <code>CommandRequestValidator</code> bridges a command to its embedded request&#39;s rules, registered automatically by the module scan. Seventeen reusable FluentValidation rule classes (required and optional strings, email, absolute URL with a <code>javascript:</code> / <code>data:</code> guard, positive and non-negative numbers, required and optional ids, password and strong password, six address fields) each accept an optional machine-readable error code.</li>
+          <li><strong>HTTP idempotency.</strong> <code>[Idempotent]</code> caches responses by <code>Idempotency-Key</code> for 24 hours under a composite SHA-256 key (subject, method, route, client key), holds a distributed lock across the execute-then-store window, answers an in-flight duplicate with 409, and marks replays with <code>X-Idempotent-Replay</code> (<a href="../adr/017-request-idempotency.html">ADR-017</a>). <code>[NonIdempotent(justification)]</code> is the required marker for the rest, and a fitness rule fails any POST carrying neither.</li>
+          </ul>
+          <h3 id="pipeline-and-errors">Pipeline and errors</h3>
+          <ul>
+          <li><strong>Eighteen named middleware steps, order under test.</strong> <code>UseCommonMiddlewarePipeline()</code> applies ExceptionHandler, CorrelationId, RequestLocalization, PreForwardedCapture, ForwardedHeaders, HttpsRedirection, ResponseCompression, Routing, Cors, Authentication, TenantResolution, RateLimiting, SoftDeletedUserFilter, Authorization, OutputCache, JwksEndpoint, OidcDiscoveryEndpoint, Controllers. A second overload hands you <code>MiddlewarePipelineBuilder</code> to insert, replace, or remove steps by name, and <code>Build()</code> rechecks four load-bearing adjacency invariants before anything is applied. A shipped test base pins the order in every consumer.</li>
+          <li><strong>Error mapping as a system.</strong> Five exception handlers registered most-specific first (cancellation, domain, DB update, validation, global) plus a <code>requestId</code> extension on every ProblemDetails; <code>UnhandledResultFailureFilter</code> rewrites a failing <code>Result</code> that an action returned inside <code>Ok(...)</code> into the correct ProblemDetails status instead of a 200.</li>
+          <li><strong>Service-side rate limiting.</strong> <code>AddCommonRateLimiting</code> binds an eight-knob <code>RateLimiting</code> section: permit and queue limits, per-user and global limits, fixed or sliding window, and <code>Distributed</code>, which moves counters onto Redis and degrades to per-instance when no multiplexer exists. A dedicated <code>auth-ip</code> policy throttles anonymous sign-in attempts per IP and never depends on Redis. Probes, <code>.well-known</code>, and gRPC traffic are exempt.</li>
+          <li><strong>API versioning, OpenAPI, Scalar UI.</strong> <code>AddCommonApiVersioning</code>, <code>AddCommonOpenApi</code> (one document per version, with a descriptor backfill so URL-segment versioning and tenant tokens cannot 500 the document), and a versioned <code>/service-info</code> endpoint, all covered by shipped contract test bases. OpenAPI and Scalar are no-ops in Production and Scalar&#39;s assets are bundled, no CDN.</li>
+          <li><strong>Feature flags at endpoint and handler level.</strong> Feature management integration with user-targeting context, a disabled-feature handler, and <code>IFeatureGated</code> short-circuiting in the CQRS pipeline.</li>
+          <li><strong>Localized error codes and culture.</strong> <code>AddErrorResources()</code> per module returns localized, coded errors the UI displays directly; <code>UseCommonRequestLocalization()</code> and <code>MapCultureEndpoint()</code> (<code>GET /culture/set</code>, allow-listed cultures, Development-only pseudo-locale) ship as extensions.</li>
+          <li><strong>Module-aware plumbing.</strong> Controllers of config-disabled modules are removed from MVC&#39;s application parts so no live endpoint is left behind; <code>AddModuleHealthChecks</code> emits one <code>module-{Name}</code> check per module, Degraded when disabled.</li>
+          <li><strong>Ready-to-mount extras.</strong> <code>AddNotificationControllers()</code> adds three concrete controllers (send and history, inbox, devices); <code>MapNotificationHub()</code> maps the SignalR hub only when push is enabled; <code>MapAppAssociationEndpoints</code> serves Apple app-site-association and Android asset-links for deep links; <code>AddMiniProfilerIfEnabled</code> mounts <code>/profiler</code> behind a settings flag.</li>
+          </ul>
+          <h2 id="identity-auth-and-authorization">Identity, auth, and authorization</h2>
+          <p>A full identity building-block set you compose when you want it; a fresh app runs issuer-less until then.</p>
+          <h3 id="tokens-and-trust">Tokens and trust</h3>
+          <ul>
+          <li><strong>RS256 + JWKS + OIDC discovery across services.</strong> <code>TokenService</code> signs with RS256 by default (HS256 selectable by configuration for a single host); <code>MapJwksEndpoint</code> and <code>MapOidcDiscoveryEndpoint</code> serve <code>/.well-known/jwks.json</code> and <code>/.well-known/openid-configuration</code>; every service validates through <code>AddForwardedJwtBearer</code> with the algorithm pinned to RS256 as defense against algorithm confusion. The issuer is derived from discovery, so the internal authority and the public issuer can differ.</li>
+          <li><strong>Insecure metadata is legal but loud.</strong> <code>RequireHttpsMetadata</code> resolves argument, then configuration, then true outside Development; a resolved false outside Development installs a startup filter that logs one warning naming the key rather than failing or staying silent.</li>
+          <li><strong>SignalR authenticates off the query string.</strong> Both bearer registrations lift <code>access_token</code> for <code>/hubs</code> paths, because WebSocket connections cannot send an <code>Authorization</code> header.</li>
+          <li><strong>JWT plus rotating refresh sessions.</strong> Multi-device sessions store only a SHA-256 digest, record a rotation chain, and treat a replayed rotated token as reuse that revokes the whole live family; <code>TryRotateAsync</code> makes the rotation an atomic database claim so two simultaneous refreshes cannot both mint a successor. A per-user cap (default 10) evicts the oldest session, the table lives in the Identity database only, and spent rows are hard-deleted on a retention window (<a href="../adr/097-multi-device-refresh-sessions.html">ADR-097</a>).</li>
+          <li><strong>Per-device session management.</strong> <code>GetSessionsAsync</code>, <code>RevokeSessionByIdAsync</code>, and <code>RevokeAllSessionsAsync</code> behind an additive <code>sid</code> claim; the controller base exposes my-sessions and revoke-by-session, and the UI ships a sessions page with per-device and account-wide revoke paths.</li>
+          </ul>
+          <h3 id="credentials">Credentials</h3>
+          <ul>
+          <li><strong>Password security.</strong> PBKDF2-HMAC-SHA512 with 600,000 iterations, a 32-byte salt, and constant-time verification as the only supported algorithm (<a href="../adr/102-pbkdf2-only-password-hashing.html">ADR-102</a>), pinned by known-answer tests.</li>
+          <li><strong>Brute-force protection is five configured numbers.</strong> <code>ILoginProtectionService</code> applies per-email lockout with exponential backoff and a per-IP registration rate limit on cache-backed atomic counters keyed on normalized identity, so capitalization cannot defeat the backoff.</li>
+          <li><strong>Reset tokens are hashed, capped, and throttled.</strong> <code>IPasswordResetTokenService</code> keeps one active token per address, stores only its digest, discards it after a bounded number of wrong guesses, and throttles requests per email per window, all on cache TTL with no schema and no sweeper (<a href="../adr/091-cache-backed-password-reset.html">ADR-091</a>).</li>
+          <li><strong>External OAuth.</strong> Google, GitHub, and Apple via <code>AddExternalAuthProviders</code>, each gated independently on its <code>ClientId</code>, with a ten-minute <code>ExternalLogin</code> cookie carrying the external principal to completion, GitHub&#39;s email scope requested explicitly, Apple&#39;s ES256 client secret minted from key material rather than a static secret, and a <code>POST exchange</code> action for the native mobile callback.</li>
+          </ul>
+          <h3 id="authorization">Authorization</h3>
+          <ul>
+          <li><strong>Permission-based authorization.</strong> Endpoints declare capabilities with <code>[HasPermission]</code> against a permission registry; policies materialize on first use, so nothing is pre-registered per role. Modules declare grants additively with <code>AddPermissions</code>, and a host that never declares any gets a registry that denies everything and logs once naming the fix. <code>RoleValue</code> gives case-insensitive role equality against a per-app known set.</li>
+          <li><strong>Resource-ownership authorization.</strong> <code>OwnerOrAdminFilter</code> reads the owner id from the route or bound arguments, parses invariantly, and denies when it cannot resolve one; <code>[AllowMissingOwner]</code> is the explicit opt-out. On the handler side, <code>UserOwnershipRule.CheckOwnership</code> with <code>IUserOwnedRequest</code> / <code>IUserScopedRequest</code> markers is what every shipped account handler uses.</li>
+          <li><strong>Session-cookie (BFF) auth for Blazor SSR.</strong> <code>MapSessionCookieEndpoints()</code> maps the cookie set and clear endpoints plus a same-origin validate-or-refresh call that hydrates the browser&#39;s in-memory access token while the refresh token stays server-side; it rejects cross-site fetches on top of SameSite, and a single-flight refresher collapses a thundering herd so a token is never double-rotated.</li>
+          <li><strong>Soft-deleted-user revocation.</strong> A pipeline step rejects requests from confirmed deleted accounts with 401, backed by a 30-second cache marker and a database validator fallback; on a cache or validator error it logs and lets the request through (fail open, by design). The shared erasure workflow writes the marker itself right after commit and before any app-specific tail runs, so every app gets the identical token-revocation window without hand-rolling the write (<a href="../adr/047-soft-deleted-user-session-revocation.html">ADR-047</a>).</li>
+          </ul>
+          <h3 id="account-use-cases-and-ui">Account use cases and UI</h3>
+          <ul>
+          <li><strong>Reusable account use cases.</strong> <code>AuthenticationServiceBase</code> implements login, register, refresh, revoke, sessions, and external login; seven handler bases cover change password, change and get preferences, forgot and reset password, delete account, and data export; three controller bases expose login, register, refresh, revoke, my-sessions, revoke-by-session, password, preferences, forgot-password, and reset-password. An Identity module becomes thin subclassing.</li>
+          <li><strong>Auth UI included.</strong> Login, register, forgot and reset password, OAuth completion, and session management pages ship in the UI package, every return URL passes through an open-redirect guard, and client-side password and URL validation attributes mirror the server rules (section 10).</li>
+          </ul>
+          <h2 id="caching-resilience-and-performance">Caching, resilience, and performance</h2>
+          <h3 id="server-side">Server side</h3>
+          <ul>
+          <li><strong>Declarative handler caching.</strong> A query implements <code>IQueryCacheable</code>, its invalidating commands implement <code>ICacheInvalidating</code>, and the pipeline does the rest; tenant-scoped keys are automatic. On a miss, a per-key striped lock with a double check means exactly one request populates a hot key (stampede protection), bounded by <code>Cache:PopulateLockTimeout</code>; failed results are never cached; hits and misses are metered.</li>
+          <li><strong>Swappable cache substrate.</strong> Memory, distributed Redis, or opt-in HybridCache behind one <code>ICacheService</code>, with <code>Cache:KeyPrefix</code> namespacing every key on a shared Redis, a 30-second default TTL, an L1 ceiling for the two-level cache, a disjoint <code>hc:</code> keyspace so the two implementations never meet at one key, and <code>RemoveByPrefixAsync</code> and atomic <code>IncrementAsync</code> beyond get and set. Every call is fail-open: a cache outage degrades to uncached reads.</li>
+          <li><strong>Distributed locking ships with the cache.</strong> <code>IDistributedLock</code> is one non-reentrant, TTL-bounded, best-effort contract (<code>TryAcquireAsync(key, ttl, wait)</code> with owner-scoped release): Redis SET-NX-PX with Lua compare-and-delete when a multiplexer exists, otherwise a warn-once in-process fallback, registered by the same <code>AddCaching</code> call. It guards windows like the idempotency execute-then-store gap; anything the database can enforce keeps its claim lease instead (<a href="../adr/108-distributed-lock-primitive.html">ADR-108</a>).</li>
+          <li><strong>Readiness-safe Redis wiring.</strong> <code>AddRedisCaching()</code> and <code>AddRedisOutputCaching()</code> register Aspire&#39;s Redis integrations with their untagged health checks switched off (they issue an admin-class command that Azure Managed Redis refuses) and add a PING-only <code>redis</code> check tagged optional; both are no-ops without a connection string (<a href="../adr/025-startup-warmup-readiness.html">ADR-025</a>).</li>
+          <li><strong>Output caching at the edge.</strong> <code>AddPublicEndpointPolicy(name, expiration, bypassRoles, tags)</code> varies by every query key, skips lookup and storage for any bypass role, and refuses to store a response that sets a cookie or is not a 200 (<a href="../adr/040-authenticated-output-caching-for-public-reads.html">ADR-040</a>). <code>EvictTagsAsync</code> and best-effort <code>TryEvictTagsAsync</code> evict multiple tags at once; cross-host eviction is one DI call plus one bus registration, driven by the <code>OutputCacheEvictionRequested</code> event.</li>
+          <li><strong>Warm-up before ready.</strong> <code>IWarmupTask</code> registrations run before <code>/health/ready</code> reports healthy, so a cold instance never receives traffic; the gate opens whether or not the tasks succeed, each task is capped at 120 seconds, an OIDC-metadata warm-up is built in, and <code>SelfHttpWarmupTaskBase</code> replays your hot read paths against the host&#39;s own port.</li>
+          <li><strong>Standard resilience everywhere.</strong> One shared set of numbers (30s per attempt, 60s breaker window, 90s total, exactly one retry per hop so a brownout cannot become a request storm) for HTTP, gRPC, and broker; every outbound client also gets a pooled connection lifetime, idle timeout, and TCP keep-alive tuned so a low-traffic replica stays on idle billing.</li>
+          </ul>
+          <h3 id="client-side">Client side</h3>
+          <ul>
+          <li><strong>Client-side staleness policy.</strong> <code>IUiReadCache</code> is a per-circuit read-through cache keyed on path plus query (the same key shape as the server output cache), with a 60-second default, longest-prefix per-route TTLs, prefix invalidation after a write, and a full clear on sign-out; opt in per service through the <code>EntityServiceBase</code> constructor.</li>
+          <li><strong>Typed clients retry with a constant idempotency key.</strong> <code>AuthenticatedServiceBase</code> retries transport failures, 5xx, 408, and 429 three times with 2s, 4s, 8s backoff plus jitter, disposing each retried response, and <code>HttpResultExecutor</code> turns transport failures and timeouts into typed <code>Result</code> errors.</li>
+          <li><strong>Offline and stale-load guards.</strong> <code>OfflineFirstPageSnapshot</code> serves a list page&#39;s first page from device storage when offline; <code>LatestLoadGuard</code> cancels the previous load on a route-parameter change so a slow response can never overwrite the entity on screen; <code>UseAuthenticatedNoStore()</code> keeps signed-in pages out of the back-forward cache while public pages stay eligible.</li>
+          </ul>
+          <h3 id="gates-and-cost">Gates and cost</h3>
+          <ul>
+          <li><strong>Performance as a gate.</strong> BenchmarkDotNet suites for specification evaluation and the query pipeline, a committed baseline enforced by <code>perfgate</code> (allocation ceilings in bytes, machine-independent latency ratios, and a missing benchmark counts as a violation), and Core Web Vitals budgets enforced as E2E assertions (<a href="../adr/092-web-vitals-budget-gate.html">ADR-092</a>).</li>
+          <li><strong>Cost knobs baked in.</strong> Four telemetry knobs: <code>Telemetry:FilterProbeTelemetry</code> (on by default, keeps probe traces and their child spans out of export), <code>TracesSampleRatio</code>, and <code>DisableHttpClientMetrics</code> / <code>DisableRuntimeMetrics</code>, which drop whole meter families with views so they hold even under the Azure Monitor distro. Outbox poll interval and every retention window are configuration; the FinOps guide lists the levers (rubric section 31).</li>
+          </ul>
+          <h2 id="ui-blazor-web-desktop-and-mobile">UI: Blazor web, desktop, and mobile</h2>
+          <p>One shared component layer serving Blazor Server, WASM, and MAUI hybrid heads on Android, iOS, Mac Catalyst, and Windows.</p>
+          <ul>
+          <li><strong>Module-composed application shell.</strong> <code>AddUIModule()</code> scans a module&#39;s typed services and registers its <code>IUIModule</code> descriptor; the shared router and layout consume nav items, app-bar and layout components, and routable assemblies from every module. Twelve pages ship in the shared layer: home, login, register, forgot and reset password, OAuth completion, sessions, notification inbox (with a typed deep-link route), notification list and send, not-found, and forbidden; the web head adds the error page.</li>
+          <li><strong>List pages nearly for free.</strong> <code>DataGridListPageBase</code> wires MudBlazor&#39;s grid to server-side paging, filtering, and sorting in three layouts: paged desktop grid, opt-in virtualized grid, and mobile infinite scroll. Page, size, sort, density, filters, and scroll position persist per route in session storage and round-trip through the URL query string, so a shared link reopens on the same rows.</li>
+          <li><strong>Result-shaped API clients.</strong> <code>EntityServiceBase</code> typed clients return <code>Result</code> for every outcome, and <code>ResultUiExtensions</code> adds localized error lists, <code>NotifyOnFailure</code> straight to a toast, and <code>IsNotFound</code> / <code>IsUnauthorized</code> predicates so a page branches on classification instead of catching.</li>
+          <li><strong>Vendor-neutral toast and dialog facades.</strong> <code>IToastService</code> and <code>IAppDialogService</code> are the only types that name MudBlazor&#39;s snackbar and dialog services, so the component library stays replaceable and a bUnit test records toasts without a rendered host.</li>
+          <li><strong>Full auth UI stack.</strong> Authentication state provider, a two-layer token store (raw persistence beneath a freshness-checking layer, so a refresh can never re-enter the acquisition that started it) with per-head implementations for WASM, server cookie, and MAUI secure storage, token refreshers, session-cookie sync, <code>ReturnUrlProtector</code> against open redirects, a drop-in <code>BiometricGate</code>, and a native OAuth broker for the system-browser round trip.</li>
+          <li><strong>Client-side validation parity.</strong> <code>PasswordComplexityAttribute</code> and <code>AbsoluteUrlAttribute</code> mirror the server rules so an <code>EditForm</code> gives the verdict the API would, with every message resolved through the page&#39;s localizer.</li>
+          <li><strong>Device capability abstraction.</strong> Twenty-three contracts registered by one call: share, clipboard, haptics, geolocation, geocoding, map navigation, external links, biometrics, barcode scanning, media picker, local notifications, push registration, push device token, connectivity, battery, preferences, speech-to-text, text-to-speech, accessibility announcer, screenshots, deep links, external auth broker, and a local cache store, grouped into nine families (accessibility, auth, device status, device storage, geo, interop, media, navigation, notifications) where each family holds the contract, its browser implementation, and its null fallback together. Browser implementations override eight, MAUI overrides twenty-two, and null fallbacks cover the rest, so one component tree runs on web and device.</li>
+          <li><strong>Push notifications end to end.</strong> SignalR hub for live in-app delivery with scoped channels (<code>JoinChannelAsync</code> / <code>LeaveChannelAsync</code> reference-counted so one component leaving cannot disconnect another), a configurable notification bell, an inbox with unread counts, native push via FCM and APNs through Azure Notification Hubs with token-rotation handling (<a href="../adr/044-native-push-delivery.html">ADR-044</a>), and a singleton deep-link dispatcher that buffers cold-start taps until the router is alive.</li>
+          <li><strong>Navigation that behaves like an app.</strong> Real <code>history.back()</code> with route fallback, the Android hardware back and iOS swipe routed into the WebView history stack, <code>IPublicLinkBuilder</code> so shared links never point at the WebView&#39;s internal origin, and <code>IFormFactor</code> per head. The shared layout clips horizontal overflow at every width, so an off-screen drawer cannot widen the mobile layout viewport and push centered snackbars and dialogs to the screen edge.</li>
+          <li><strong>Theming and dark mode.</strong> Shared theme with brand color tokens, OS-preference default, a toggle component, the choice persisted per user through the API, and mirrored into the native MAUI app theme.</li>
+          <li><strong>Internationalization.</strong> English and Spanish resources at string-for-string parity (182 shared strings plus 145 MudBlazor chrome strings), a culture switcher with cookie forwarding, a document-language component, an in-process culture path for MAUI heads that persists the choice in device preferences, pseudo-localization for testing, and translation completeness enforced as a fitness gate.</li>
+          <li><strong>MAUI hosting one-liners.</strong> <code>UseMauiDeviceCapabilities()</code> registers the native implementations and culture path, <code>UseMmcaMauiErrorHandling()</code> installs last-chance unhandled and unobserved exception handlers with an optional crash-reporter callback, and <code>AddMauiPushDeviceTokenProvider()</code> selects FCM or APNs by target framework, inert until push credentials exist.</li>
+          <li><strong>Utility components.</strong> Error summary, delete confirmation, unsaved-changes guard, empty, loading, and error states, page header (guaranteeing the axe-required h1), QR code display, file download button with a sanitized file name, share button, offline banner, infinite-scroll sentinel, mobile card list, external link, lazy JS module loader, and a bfcache-restore refetch scope.</li>
+          <li><strong>Accessibility built in.</strong> WCAG 2.1 AA is a shipped, CI-enforced test contract across three browser engines, not an aspiration (section 12).</li>
+          </ul>
+          <h2 id="hosting-orchestration-and-operations">Hosting, orchestration, and operations</h2>
+          <p>Aspire-first local orchestration and one-line production plumbing.</p>
+          <h3 id="apphost-and-service-defaults">AppHost and service defaults</h3>
+          <ul>
+          <li><strong>AppHost DSL.</strong> Thirteen extensions: <code>WithSQLServerDataSource</code>, <code>WithCosmosDataSource</code>, <code>WithSqliteDataSource</code> (per-module databases), <code>AddMessageBroker</code> and <code>AddServiceBusEmulatorBroker</code> with matching <code>WithBroker</code> overloads, <code>WithJwksDiscovery</code>, <code>AddMailDev</code> (local SMTP sink with a web inbox on fixed ports), <code>WithH2cHealthCheck</code>, and three E2E helpers: <code>WithE2eRsaKeys</code>, <code>WithE2eRegistrationThrottleLift</code>, <code>WithE2eGatewayRateLimitLift</code>, all triggered by one environment variable absent locally and in production (<a href="../adr/098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a>).</li>
+          <li><strong>Service defaults in one call.</strong> <code>AddServiceDefaults()</code> wires OpenTelemetry, service discovery, standard resilience, default health checks, and warm-up readiness; <code>MapDefaultEndpoints()</code> maps <code>/health</code>, <code>/alive</code>, and <code>/health/ready</code>. Three tags decide what each endpoint consults: <code>live</code>, <code>ready</code>, and <code>optional</code>, the last so a degradable dependency shows on <code>/health</code> without turning every replica unready at once.</li>
+          <li><strong>Infrastructure health from configuration alone.</strong> <code>AddInfrastructureHealthChecks(requireDatabase)</code> registers one check per declared relational database plus optional-tagged Redis and RabbitMQ checks, and throws at startup when a host that requires a database has none configured.</li>
+          <li><strong>h2c endpoint profiles with a probe listener.</strong> <code>ConfigureEndpointsWithHealthProbe</code> configures cleartext HTTP/2 (for gRPC behind a gateway) or mixed HTTP/1+2 profiles, and adds a dedicated HTTP/1.1 listener when <code>HealthProbe:Port</code> is set, because platform probes speak HTTP/1.1 and an HTTP/2-only endpoint answers <code>HTTP_1_1_REQUIRED</code>. <code>WithH2cHealthCheck</code> gates Aspire <code>WaitFor</code> edges on a prior-knowledge probe and defaults to <code>/alive</code>, since gating startup on readiness can deadlock the graph.</li>
+          <li><strong>Module hosting.</strong> <code>AddModuleHost</code> binds and validates application and module settings, builds the loader, and hands back a context the host places inside its own registration order; the same module runs unchanged inside the monolith.</li>
+          </ul>
+          <h3 id="gateway-operations">Gateway operations</h3>
+          <ul>
+          <li><strong>Downstream probes that negotiate their own protocol.</strong> <code>AddGatewayDownstreamHealthChecks</code> registers one readiness check per fronted service, resolved through service discovery, trying h2c and falling back to HTTP/1.1 inside the same poll and latching the answer for the process lifetime.</li>
+          <li><strong>Edge rate limiting distinct from the service-side limiter.</strong> A per-client-IP fixed window chained with a replica-wide concurrency ceiling, both answering 429 with no queue, with probes and <code>.well-known</code> always exempt so a spike cannot fail a liveness probe into a restart, an unresolvable IP failing open rather than collapsing into one shared bucket, host-specific <code>BypassPathPrefixes</code>, and a secret-gated, constant-time synthetic-traffic bypass so a scheduled capacity proof measures the system rather than the limiter.</li>
+          <li><strong>Correlation and CORS at the edge.</strong> <code>UseGatewayCorrelation()</code> stamps <code>X-Correlation-ID</code> (preferring the W3C trace id) so the service-side middleware adopts the same id, with no dependency beyond the request delegate; <code>AddCommonGatewayCors</code> gives the edge its deliberately looser two-tier policy.</li>
+          </ul>
+          <h3 id="observability-and-production-plumbing">Observability and production plumbing</h3>
+          <ul>
+          <li><strong>Observability with framework meters.</strong> Seven meters (CQRS, outbox, broker, scheduler, idempotency, output cache, best-effort) and two trace sources, exported to OTLP and Azure Monitor simultaneously when both are configured; outbox poll spans and probe telemetry are filtered from export by processors, and correlation IDs propagate from gateway to service.</li>
+          <li><strong>Serilog that does not silence Application Insights.</strong> <code>AddCommonSerilog</code> registers Serilog as one provider rather than replacing the logger factory, so application log lines still reach the OpenTelemetry export; a bootstrap logger covers startup diagnostics.</li>
+          <li><strong>Secrets and keys.</strong> <code>AddCommonKeyVaultConfiguration</code> layers a vault over host configuration under managed identity, gated on <code>KeyVault:Uri</code> so local hosts take no Azure dependency, with a reload interval so a rotated secret reaches the process without a redeploy. <code>AddCommonDataProtection</code> persists the key ring to blob storage with an optional, deliberately decoupled Key Vault encryption step, so a lagging role assignment cannot break sign-in.</li>
+          <li><strong>Storage and email.</strong> <code>AddAzureBlobFileStorage</code> behind <code>IFileStorage</code>, and <code>SmtpEmailSender</code> behind <code>IEmailSender</code>, both in the Infrastructure package.</li>
+          <li><strong>Security headers and CSP.</strong> One-call security response headers with a complete default policy sized for Blazor and MudBlazor, a per-request <code>{nonce}</code> path exposed through <code>CspNonce.Get</code> as the supported way off <code>unsafe-inline</code>, a Report-Only mode for rolling a tightened policy out in observation first, configurable HSTS, frame, referrer, and permissions headers, and a Blazor-aware provider that fails closed on a misconfigured API endpoint.</li>
+          <li><strong>Fail-fast configuration.</strong> Settings on the fail-fast contract bind with data-annotation validation and <code>ValidateOnStart()</code>, and two cross-section validators (connection strings, tenancy) catch mismatches a single section cannot see, so a misconfigured host dies at startup, not at first request (<a href="../adr/070-fail-fast-configuration-contract.html">ADR-070</a>).</li>
+          <li><strong>Ops as executable practice.</strong> SLO alert-to-runbook pairing is a fitness test that reads the Bicep alerts and the operations runbook in both directions; deploy proof-of-recency preconditions, automatic revision rollback, cost baseline as a deploy gate, container image posture (<a href="../adr/093-container-image-posture.html">ADR-093</a>), and a tested restore drill with a measured RTO baseline are ADR-documented practices the production apps run.</li>
+          <li><strong>A reference Azure deployment ships with the framework.</strong> <code>samples/deployment</code> carries a foundation template (Log Analytics, container registry) and a per-release template (Container App pulling by managed identity, SQL, Key Vault, App Insights, cost tags, a budget with alerts), keeps the SQL connection string as a Key Vault secret read through the app&#39;s own identity rather than a plaintext Container App secret, documents federated OIDC for CD with no long-lived cloud credential, and is compiled by a CI job.</li>
+          </ul>
+          <h2 id="testing-and-quality-gates">Testing and quality gates</h2>
+          <p>The framework ships its own enforcement: adopters subclass, and drift fails the build.</p>
+          <h3 id="architecture-fitness-functions">Architecture fitness functions</h3>
+          <ul>
+          <li><strong>124 test methods across 47 abstract bases.</strong> Thirty-seven are parameterized by your <code>IArchitectureMap</code> and are a three-line subclass per repo; the other ten take an allow-list, a resource assembly, a package-version file, a module type, a source tree, infrastructure files, or a frozen snapshot, with non-vacuity floors so a renamed folder cannot pass with zero findings. The rule bodies live in a 30-file <code>ArchitectureRules</code> library you can also call directly, and <code>CallGraphIndex</code> walks IL so rules catch what signatures cannot: a domain event handler reaching <code>SaveChanges</code>, a hard delete outside the allow-list, raw <code>IQueryable</code> in Application. The families:<ul>
+          <li>Layer pairs and layer-map completeness, per-module layer overrides, module isolation across the full internal cross product, module Shared purity, namespace acyclicity</li>
+          <li>Domain and Shared framework purity, Application free of EF Core and ASP.NET Core, transport containment, service contract purity and non-public implementations</li>
+          <li>Entity and aggregate conventions, factory-returns-Result, immutability of DTOs, commands, queries, events, and value objects, naming and sealing across ten type families, domain throw discipline</li>
+          <li>Handler placement, handler-injection bans, constructor arity ceiling, handler result typing, vertical slice cohesion, command validator coverage, cancellation-token conventions</li>
+          <li>Soft delete allow-list and cascade soft delete, specification navigation limits, raw queryable ban, concurrency-attribute placement</li>
+          <li>Idempotency intent on every POST, controller conventions, route authorization, anonymous-endpoint allow-list, PII and anonymizability, data residency versus deployed region (<a href="../adr/105-data-residency-build-gate.html">ADR-105</a>)</li>
+          <li>Error-code catalog uniqueness and module prefixes, integration event versioning and base type, upcaster registry rules, frozen wire contracts for events and protos</li>
+          <li>Localization completeness and localized user-visible text, sortable grid columns, brand color tokens, create-form guards, UI code-behind caps, Blazor Server static-state safety</li>
+          <li>Module conformance (declared name, dependencies, disabled stubs), dependency-pin governance, folder width (twelve direct code files per folder), SLO alert-to-runbook pairing</li>
+          </ul>
+          </li>
+          <li><strong>Compile-time layer guard for the framework itself.</strong> An MSBuild targets file fails a framework build on a forbidden project reference between the seven layered packages before the build resolves, the same rule set the runtime tests assert against compiled assemblies in every consumer.</li>
+          <li><strong>Runtime conformance suites.</strong> Eight shipped bases prove you wired the framework correctly: decorator pipeline order, middleware pipeline order, security headers, ProblemDetails contract, OpenAPI contract, service-info versioning, gateway hardening (eight assertions covering throttling, per-route policies, bypasses, correlation, downstream readiness, active probes, and partitioning by forwarded client IP), and graceful shutdown.</li>
+          <li><strong>Guard rails on dependencies.</strong> <code>DependencyVersionTestsBase</code> fails if MassTransit reaches v9 or ImageSharp reaches v4 (both commercial-license boundaries); <code>FrameworkVersionConsistencyTestsBase</code> fails if a consumer&#39;s framework pins drift out of lockstep.</li>
+          </ul>
+          <h3 id="integration-and-unit-infrastructure">Integration and unit infrastructure</h3>
+          <ul>
+          <li><strong>Integration fixtures at three scales.</strong> <code>SqlServerIntegrationTestFixtureBase</code> creates one throwaway database and resets it per test; <code>CrossServiceFixtureBase</code> boots several hosts in one process against Testcontainers SQL Server and RabbitMQ with one physical database per logical source, so database-per-module is exercised rather than simulated; <code>ServiceBusEmulatorFixtureBase</code> runs the broker-parity tier against the Service Bus emulator with wall-clock-bounded start and stop phases that name the phase that hung.</li>
+          <li><strong>Host and helper doubles.</strong> <code>ProductionHostApplicationFactory</code> boots a host with the environment pinned to Production so restrictive CORS, HSTS, and production-only branches are exercised; <code>JwtTokenGenerator</code> mints tokens and configures in-process validation so a fixture needs no JWKS endpoint; <code>ConfigureTestFeatureFlags</code> layers flags without blanking connection strings; <code>NeutralizeGlobalRateLimiter</code> removes only the global limiter; <code>RecordingHttpForwarder</code> stands in for YARP&#39;s forwarder.</li>
+          <li><strong>Unit test ergonomics.</strong> <code>HandlerTestBase</code> with an auto-mocked unit of work and repository registration helpers, <code>EntityBuilderBase</code> for arranging aggregates, <code>TestPolling.PollUntilAsync</code> for eventually-consistent assertions without sleeps, and a registration-idempotence assertion for <code>Add*</code> extensions.</li>
+          </ul>
+          <h3 id="component-e2e-and-gates">Component, E2E, and gates</h3>
+          <ul>
+          <li><strong>Component test infrastructure.</strong> A bUnit base with typed handles to the rendered snackbar, dialog, and popover providers, a mutable authentication state that satisfies both <code>AuthorizeView</code> and direct injection, a list-page host configuration, a request-capturing HTTP double with canned responses, a one-line UI service harness for typed clients, RFC 9457 response factories, error-summary and text-based interaction helpers, and caller-relative markup snapshots (<a href="../adr/103-bunit-component-test-tier.html">ADR-103</a>).</li>
+          <li><strong>E2E infrastructure.</strong> A shared Playwright browser fixture selected by environment (base URL, headless, browser, slow-mo, tracing, timeouts, credentials all configurable), Blazor-render-aware helpers (<code>WaitForBlazorAsync</code>, <code>GotoProtectedAsync</code>, <code>WaitForGridToSettleAsync</code>, verifying <code>FillAndVerifyAsync</code> and <code>ClickAndVerifyAsync</code>), five accessibility-first page objects, and eight inheritable workflow suites (login, registration, logout, password reset, authorization, profile management, user preferences, pseudo-localization). A silent sign-in failure throws instead of passing, and <code>SignOutAsync</code> absorbs the superseded-navigation abort Firefox raises when the app&#39;s own redirect overtakes the logout, so the same suites pass on all three engines.</li>
+          <li><strong>Accessibility and performance gates.</strong> Two documented axe profiles (strict WCAG 2.1 AA, and the same with one upstream MudBlazor pager defect waived for grid pages) and a Web Vitals collector that samples LCP, CLS, and INP into labelled artifacts and asserts them against a budget.</li>
+          <li><strong>Test platform.</strong> Every project runs on Microsoft Testing Platform with xUnit v3; the framework&#39;s own CI refuses a run that discovers fewer than 2,000 tests, so a discovery regression cannot pass quietly.</li>
+          </ul>
+          <h2 id="compliance-and-privacy">Compliance and privacy</h2>
+          <ul>
+          <li><strong>PII handling.</strong> <code>[Pii]</code> marks personal data; the audit trail redacts marked values at capture so it never becomes a second copy erasure has to chase; <code>PiiRedactor</code> (<code>Redact</code>, <code>RedactToString</code>, <code>HasPii</code>) is the opt-in helper for log-safe rendering; a convention test keeps PII markings honest.</li>
+          <li><strong>GDPR data export (DSAR).</strong> <code>ExportUserDataHandlerBase</code> composes per-module <code>IUserDataExportSection</code> contributions registered with <code>AddUserDataExportSection</code> into a versioned envelope where each section reports availability and a caller-safe reason, so an unreachable peer costs one section rather than the document. <code>DataExportControllerBase</code> is authorized and feature-gated at the class level, off until <code>PrivacyFeatures.DataExport</code> is enabled, and returns a dated JSON file download.</li>
+          <li><strong>Erasure and anonymization.</strong> <code>DeleteUserHandlerBase</code> runs owner-or-role authorization, soft delete, anonymize-in-place, save, the soft-deleted-user cache marker (best effort, never a failure the caller would retry against an already-erased account), and then a post-commit tail through <code>IErasableUser</code>; <code>IAnonymizable</code> distinguishes true erasure from soft delete.</li>
+          <li><strong>Encryption at rest.</strong> Field-level AES-256-GCM column encryption with a versioned key ring and zero-downtime rotation (section 5).</li>
+          <li><strong>Retention across three tables.</strong> Outbox payloads, refresh-session device records, and audit trail rows each have their own configured window and sweep; refresh sessions are hard-deleted because the row is a credential digest.</li>
+          <li><strong>Data residency.</strong> A fitness test base asserts the policy text against the deployed region your fixture extracts from infrastructure (<a href="../adr/105-data-residency-build-gate.html">ADR-105</a>).</li>
+          <li><strong>Audit evidence.</strong> The field-level audit trail provides the who-changed-what record, stamped with trace id and tenant so a compliance question and a telemetry trace answer each other.</li>
+          <li><strong>Signed-in pages stay out of shared caches.</strong> Authenticated HTML responses carry <code>Cache-Control: no-store</code>, so a signed-out user pressing back never sees the previous render.</li>
+          </ul>
+          <h2 id="governance-versioning-and-supply-chain">Governance, versioning, and supply chain</h2>
+          <ul>
+          <li><strong>111 ADRs.</strong> Every framework pattern is documented as an architecture decision record with context and consequences, published publicly and indexed in one place; adopters inherit the reasoning, not just the code.</li>
+          <li><strong>Lockstep SemVer with a stated policy.</strong> All 17 packages release at one version from a git tag; consumers bump once per release, no phased rollout (<a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>). Breaking changes ship as minor bumps inside 1.x with the call site named in the CHANGELOG, and there is no obsolete grace period, so read the entry at bump time.</li>
+          <li><strong>An upgrade map for every breaking release.</strong> <code>UPGRADING.md</code> at the repo root carries one section per breaking release, newest first, with the old-to-new map and the mechanical fix (a namespace move is a <code>using</code> rewrite; a constructor change names the parameter to forward), kept identical to the CHANGELOG block so a consumer outside the workspace has the same recipe the in-workspace script applies.</li>
+          <li><strong>The public API surface is a reviewable diff.</strong> Every packable project declares its shipped surface in <code>PublicAPI.Shipped.txt</code>, and the build fails on an undeclared public member or a disappeared declared one, so widening or breaking a package API is caught in review rather than by a consumer after release.</li>
+          <li><strong>Supply-chain provenance.</strong> CycloneDX SBOM on both release jobs, committed lock files, a build-time vulnerability audit promoted to error, and package source mapping cleared to a single nuget.org source as a dependency-confusion defense. The nuget.org push is keyless OIDC trusted publishing pinned to the release workflow file; GitHub Packages receives the same set via the workflow token (<a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>).</li>
+          <li><strong>Eight required merge checks, and more that run.</strong> Build and test with a FACTS drift gate, the Windows MAUI build across four targets, three browser accessibility legs, coverage (68.3 percent floor on the unit tier), the Helpdesk consumer canary (source build plus real migrations against ephemeral SQL Server), and the performance gate are required; a package-mode consumer build, Redis behavior against a real server, and Bicep compilation also run on every PR.</li>
+          <li><strong>Generated, gated facts.</strong> <code>FACTS.md</code> is produced from source (version, package list, fitness counts) and CI fails when the committed file drifts, so counts cannot rot in prose.</li>
+          <li><strong>Dependency updates arrive grouped and policy-aware.</strong> Weekly Dependabot with analyzer, OpenTelemetry, and test-stack groups, plus commercial-license ceilings mirrored as ignores beside the fitness function that enforces them; <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a> records the MassTransit v8 support horizon and the exit candidates.</li>
+          <li><strong>Security invariants that are tests, not prose.</strong> Private advisory reporting, an allow-listed scan of every anonymous endpoint across controllers and routable pages, known-answer PBKDF2 tests pinning iteration count and salt size, and unit tests proving permissive CORS is never combined with credentials.</li>
+          <li><strong>A living reference app.</strong> MMCA.Helpdesk exercises one module through all five layers, doubles as the template source, and pairs step by step with the getting-started guide; a two-module e-commerce sample shows the multi-module shape.</li>
+          <li><strong>Production proof.</strong> Two full applications (MMCA.Store e-commerce with Stripe, MMCA.ADC conference platform with native mobile apps) run on the framework in Azure production, so every capability above is exercised by real deployed software.</li>
+          <li><strong>Shared analyzer baseline.</strong> Five analyzers (Meziantou, Sonar, StyleCop, Roslynator, VS Threading) at error severity plus the public API analyzer, under <code>TreatWarningsAsErrors</code>, with the baseline kept in sync across framework and consumers by a comparison script.</li>
+          <li><strong>Governance you can copy.</strong> A versioned 34-category evaluation rubric (maturity 0 to 4 and implementation 0 to 10 per category; version 2 realigned two categories in place into Messaging and Integration Architecture and AI-Native Application Architecture, <a href="../adr/110-rubric-v2-category-realignment.html">ADR-110</a>) with an evidence-cited scorecard and remediation backlog per repo, CODEOWNERS with a documented review ratchet, PR and issue templates, a code of conduct, and a scoped-commit convention tying commits to rubric categories and ADR numbers. Apache-2.0 on every package with an explicit patent grant; the CHANGELOG, icon, and source-linked symbols ship inside each nupkg.</li>
+          </ul>
+          <h2 id="documentation-library">Documentation library</h2>
+          <p>This library holds ten framework guides, the ADR index, the governance rubric with scorecards, and a chapter-per-subsystem onboarding walkthrough.</p>
+          <ul>
+          <li><strong><a href="common-GETTING-STARTED.html">Getting Started</a>.</strong> Nothing to a running, migrated app in six steps from the scaffold, with MMCA.Helpdesk as the worked companion.</li>
+          <li><strong><a href="common-TEMPLATES.html">Templates</a>.</strong> Every parameter of the four templates and of the add-module script.</li>
+          <li><strong><a href="common-BUILD-BY-HAND.html">Building by Hand</a>.</strong> The same solution phase by phase, for retrofitting an existing codebase.</li>
+          <li><strong><a href="common-ECOMMERCE-SAMPLE.html">Build MMCA.ECommerce</a>.</strong> A two-module Products plus Orders sample built end to end.</li>
+          <li><strong><a href="common-SMALL-APPS.html">Small Apps</a>.</strong> The <code>--database sqlite --no-aspire</code> floor and when to flip each switch back on.</li>
+          <li><strong><a href="common-VERSIONING.html">Versioning and Breaking-Change Policy</a>.</strong> SemVer, lockstep, what counts as breaking, and the absence of an obsolete grace period.</li>
+          <li><strong><a href="common-ACCESSIBILITY.html">Accessibility</a>.</strong> The WCAG 2.1 AA target and the split between the axe gate and the manual screen-reader pass.</li>
+          <li><strong><a href="common-RESILIENCE.html">Resilience and Business Continuity</a>.</strong> What a library can guarantee versus what the consumer&#39;s infrastructure owns, plus the restore-drill baseline.</li>
+          <li><strong><a href="common-RESPONSIVE.html">Responsive Design and Cross-Browser Support</a>.</strong> The supported viewport, touch-target, and browser-engine matrix.</li>
+          <li><strong><a href="common-COST.html">Cost and FinOps Notes</a>.</strong> The cost-relevant defaults the framework ships and the levers consumers should set.</li>
+          <li><strong><a href="../adr/index.html">ADRs</a>, <a href="../governance/index.html">governance</a>, <a href="../onboarding/index.html">onboarding</a>.</strong> 111 decision records with one-line summaries; the 34-category rubric with three scorecards and three backlogs; thirty-plus onboarding chapters walking every first-party type plus DevOps chapters for Aspire, CI/CD, infrastructure, runbooks, and testing. In the repo: <code>FACTS.md</code>, <code>CHANGELOG.md</code>, <code>UPGRADING.md</code>, <code>SECURITY.md</code>, and the deployment sample&#39;s <code>DEPLOYMENT.md</code>.</li>
+          </ul>
+          <h2 id="constraints-worth-knowing">Constraints worth knowing</h2>
+          <p>Design choices an adopter should read before sizing a plan around them. None is a defect; each is documented in source or an ADR.</p>
+          <ul>
+          <li><strong>The outbox is off in in-process mode.</strong> With <code>MessageBus:Provider=InProcess</code> nothing is written to the outbox and the processor is not registered; the durable path switches on when a broker is configured (<a href="../adr/100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a>).</li>
+          <li><strong>Encrypted columns are not queryable.</strong> Ciphertext is non-deterministic, so an encrypted column supports no equality or range predicate, unique index, or server-side sort; a filter on it silently returns no rows.</li>
+          <li><strong>Edge rate limits count per replica.</strong> The gateway limiters live in process memory, so the effective allowance is the configured number times the replica count; a fleet-wide limit belongs on the service-side distributed limiter.</li>
+          <li><strong>Breaking changes ship as minor versions.</strong> Inside 1.x the version number is not a breakage signal and there is no <code>[Obsolete]</code> window; the CHANGELOG entry names each call site to touch.</li>
+          <li><strong>A folder move is a public API rename.</strong> Namespaces follow folders across a lockstep-released package family, so reorganizing the framework&#39;s own layout ships as a breaking release with an <code>UPGRADING.md</code> map; the fix is a mechanical <code>using</code> rewrite with no configuration, database, or behavior change.</li>
+          <li><strong>The soft-deleted-user gate fails open.</strong> A confirmed deleted account gets 401; a cache or validator error is logged and the request proceeds.</li>
+          <li><strong>Renaming an event with pending rows is two steps.</strong> <code>[EventName]</code> affects rows written after it is applied; drain the outbox, then rename.</li>
+          <li><strong>The audit trail reader reads one database.</strong> In a database-per-module host it returns the trail of the modules in the configured source; retention needs the scheduler enabled.</li>
+          <li><strong>The single-database integration fixture is single-database.</strong> Multi-source reset is the cross-service fixture&#39;s job, and hosts with several physical sources must reset every one.</li>
+          <li><strong>Not every settings class validates on start.</strong> Those on the fail-fast contract do; the security-headers section, for example, binds without validation.</li>
+          <li><strong>Source mode can mask package-mode failures.</strong> A green <code>local.props</code> build does not prove a package-mode Release build is green; the package-consumption CI job exists for that reason.</li>
+          <li><strong>The MAUI package builds separately.</strong> <code>MMCA.Common.UI.Maui</code> lives outside the main solution and is built and packed by Windows jobs (<a href="../adr/042-device-capability-abstraction.html">ADR-042</a>).</li>
+          </ul>
+          <blockquote>
+          <p><strong>The one-paragraph pitch:</strong> adopt MMCA.Common and a small team gets, on day one, the architecture a platform team would take years to build: a scaffolded modular monolith with errors-as-values, a sealed CQRS pipeline, reliable messaging, multi-tenancy, full identity, a shared Blazor, desktop, and mobile UI layer, and 124 architecture tests guarding it all, plus a proven, host-only path to split into microservices when (and only when) an observable constraint demands it.</p>
+          </blockquote>
+          <hr>
+          <p>Compiled 2026-09-06 against MMCA.Common v1.187.0. The authoritative package and fitness counts live in <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> and the ADR range in the <a href="../adr/index.html">ADR index</a>; the figures above are a snapshot at that version. Every capability is verified in framework source and in consumer use (MMCA.ADC, MMCA.Store, MMCA.Helpdesk).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/common-CAPABILITIES.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#package-map">Package map</a></li>
+            <li><a href="#getting-started-and-scaffolding">Getting started and scaffolding</a></li>
+            <li><a href="#architectural-core">Architectural core</a></li>
+            <li><a href="#monolith-now-services-later">Monolith now, services later</a></li>
+            <li><a href="#data-and-persistence">Data and persistence</a></li>
+            <li><a href="#messaging-and-eventing">Messaging and eventing</a></li>
+            <li><a href="#http-api-surface">HTTP API surface</a></li>
+            <li><a href="#identity-auth-and-authorization">Identity, auth, and authorization</a></li>
+            <li><a href="#caching-resilience-and-performance">Caching, resilience, and performance</a></li>
+            <li><a href="#ui-blazor-web-desktop-and-mobile">UI: Blazor web, desktop, and mobile</a></li>
+            <li><a href="#hosting-orchestration-and-operations">Hosting, orchestration, and operations</a></li>
+            <li><a href="#testing-and-quality-gates">Testing and quality gates</a></li>
+            <li><a href="#compliance-and-privacy">Compliance and privacy</a></li>
+            <li><a href="#governance-versioning-and-supply-chain">Governance, versioning, and supply chain</a></li>
+            <li><a href="#documentation-library">Documentation library</a></li>
+            <li><a href="#constraints-worth-knowing">Constraints worth knowing</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
