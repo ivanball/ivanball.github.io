@@ -105,7 +105,7 @@ AuthController.RegisterAsync()
 - Creates `User` (Active, with RefreshToken and RefreshTokenExpiry)
 - Creates `Customer` (linked via User.CustomerId)
 
-**Domain Events:** `UserRegistered` -> triggers `CustomerCreated`
+**Domain Events:** `UserRegistered` -> `UserRegisteredHandler` creates the linked `Customer`, which raises `CustomerChanged` with the `Added` state
 
 ---
 
@@ -200,9 +200,9 @@ AuthController.ChangePasswordAsync()
 
 | Workflow | Endpoint | Domain Method | Event |
 |----------|----------|---------------|-------|
-| Change Name | `PUT /customers/{id}/name` | `Customer.ChangeName()` | `CustomerNameChanged` |
-| Change Address | `PUT /customers/{id}/address` | `Customer.ChangeAddress()` | `CustomerAddressChanged` |
-| Change Email | `PUT /customers/{id}/email` | `Customer.ChangeEmail()` | `CustomerEmailChanged` |
+| Change Name | `PUT /customers/{id}/name` | `Customer.ChangeName()` | `CustomerChanged` (`Updated`) |
+| Change Address | `PUT /customers/{id}/address` | `Customer.ChangeAddress()` | `CustomerChanged` (`Updated`) |
+| Change Email | `PUT /customers/{id}/email` | `Customer.ChangeEmail()` | `CustomerChanged` (`Updated`) |
 
 Email change includes uniqueness check across customers.
 
@@ -211,7 +211,7 @@ Email change includes uniqueness check across customers.
 | Workflow | Endpoint | Auth | Notes |
 |----------|----------|------|-------|
 | Create Customer | `POST /customers` | Admin | Idempotent via `[Idempotent]` attribute |
-| Delete Customer | `DELETE /customers/{id}` | Admin | Soft delete (IsDeleted=true), publishes `CustomerDeleted` |
+| Delete Customer | `DELETE /customers/{id}` | Admin | Soft delete (IsDeleted=true), raises `CustomerChanged` with the `Deleted` state |
 | Get Customer | `GET /customers/{id}` | Authenticated | Owner or admin |
 | List Customers | `GET /customers` | Admin | All customers |
 | List Customers (paged) | `GET /customers/paged` | Admin | Paged |
@@ -251,7 +251,7 @@ controller-wide policy ([ADR-005](../adr/005-soft-delete-vs-erasure.md)).
 CategoriesController.CreateAsync()
   -> CreateCategoryHandler
     -> CategoryCreateRequestValidator (name: required, max 255)
-    -> Category.Create(id, name, parentCategoryId?) -> publishes CategoryCreated
+    -> Category.Create(id, name, parentCategoryId?) -> raises CategoryChanged (Added)
     -> Repository.AddAsync() + SaveChangesAsync()
 ```
 
@@ -267,7 +267,7 @@ CategoriesController.RenameAsync()
     -> Validate name (max 255)
     -> Fetch category -> category.Rename(name)
     -> Only updates if name differs (case-insensitive comparison)
-    -> Publishes CategoryNameChanged if changed
+    -> Raises CategoryChanged (Updated) if changed
     -> Cache invalidation
 ```
 
@@ -281,7 +281,7 @@ Sets or clears `ParentCategoryId` to establish hierarchy. No domain event raised
 
 **Entry Point:** `DELETE /categories/{id}`, Admin only
 
-Soft delete (`IsDeleted=true`). Publishes `CategoryDeleted`.
+Soft delete (`IsDeleted=true`). Raises `CategoryChanged` with the `Deleted` state.
 
 #### Query Endpoints
 
@@ -304,7 +304,7 @@ Soft delete (`IsDeleted=true`). Publishes `CategoryDeleted`.
 ProductsController.CreateAsync()
   -> CreateProductHandler
     -> Validate: name (required, max 100), description (max 4000), brand (max 100, no whitespace if provided)
-    -> Product.Create() factory -> publishes ProductCreated
+    -> Product.Create() factory -> raises ProductChanged (Added)
     -> Repository.AddAsync() + SaveChangesAsync()
 ```
 
@@ -312,14 +312,14 @@ ProductsController.CreateAsync()
 
 | Workflow | Endpoint | Validation | Event |
 |----------|----------|-----------|-------|
-| Rename | `PUT /products/{id}/name` | Max 100, required | `ProductNameChanged` |
+| Rename | `PUT /products/{id}/name` | Max 100, required | `ProductChanged` (`Updated`) plus the `ProductInfoChanged` integration event (`Updated`) |
 | Change Description | `PUT /products/{id}/description` | Max 4000, nullable | None |
 | Change Brand | `PUT /products/{id}/brand` | Max 100, no whitespace | None |
 | Assign Category | `PUT /products/{id}/category` | Nullable FK | None |
 
 #### Delete Product
 
-**Entry Point:** `DELETE /products/{id}`, Admin only. Soft delete, publishes `ProductDeleted`.
+**Entry Point:** `DELETE /products/{id}`, Admin only. Soft delete, raises `ProductChanged` with the `Deleted` state plus the `ProductInfoChanged` integration event (`Deleted`).
 
 #### Query Endpoints
 
@@ -347,8 +347,9 @@ ProductVariantsController.CreateAsync()
     -> Fetch Product with variants
     -> product.AddProductVariant(variantId, sku, price)
       -> ProductVariant.Create() validates price not negative
-      -> Publishes ProductVariantAdded
+      -> Raises no Catalog domain event
     -> SaveChangesAsync()
+    -> IEventBus.PublishAsync(ProductVariantChanged, Added) after the commit
 ```
 
 **Cross-Module:** SKU uniqueness checked via `IProductVariantService`
@@ -357,13 +358,13 @@ ProductVariantsController.CreateAsync()
 
 **Entry Point:** `PUT /products/{id}/productvariants/{variantId}/sku`, Admin only
 
-SKU uniqueness verified globally (excluding current variant). Publishes `ProductVariantSkuChanged` if changed.
+SKU uniqueness verified globally (excluding current variant). Raises the `ProductVariantChanged` integration event with the `Updated` state if changed.
 
 #### Change Variant Price
 
 **Entry Point:** `PUT /products/{id}/productvariants/{variantId}/price`, Admin only
 
-Price must be positive. Publishes `ProductVariantPriceChanged` if changed. The price edited here is
+Price must be positive. Raises the `ProductVariantChanged` integration event with the `Updated` state if changed. The price edited here is
 the LIST price. A variant that carries a discount re-validates it against the new price and the
 change is refused when the pair would be inconsistent (a special price no longer below the list
 price, or a percentage leaving nothing), so the discount is cleared first.
@@ -422,7 +423,7 @@ untouched, so a half-discounted catalog page is not reachable.
 
 **Entry Point:** `DELETE /products/{id}/productvariants/{variantId}`, Admin only
 
-Soft delete on variant. Publishes `ProductVariantRemoved`.
+Soft delete on variant. Raises the `ProductVariantChanged` integration event with the `Deleted` state.
 
 ### 2.4 Product Image Management
 
@@ -558,11 +559,11 @@ ShoppingCartsController.CreateShoppingCartItemAsync()
     -> Validate quantity > 0
     -> IProductVariantService.ExistsAsync() [cross-module: Catalog]
     -> Fetch ShoppingCart by CustomerId
-    -> If no cart exists -> ShoppingCart.Create(customerId) -> ShoppingCartCreated event
+    -> If no cart exists -> ShoppingCart.Create(customerId) -> ShoppingCartChanged (Added)
     -> If cart is CheckedOut -> shoppingCart.Reactivate() (clears items, resets to Active)
     -> shoppingCart.AddShoppingCartItem(variantId, quantity)
-      -> If item already in cart -> IncreaseQuantity -> ShoppingCartItemQuantityAdjusted
-      -> If new item -> ShoppingCartItem.Create() -> ShoppingCartItemAdded
+      -> If item already in cart -> IncreaseQuantity -> ShoppingCartItemChanged (Updated)
+      -> If new item -> ShoppingCartItem.Create() -> ShoppingCartItemChanged (Added)
     -> SaveChangesAsync()
 ```
 
@@ -576,19 +577,19 @@ ShoppingCartsController.CreateShoppingCartItemAsync()
 
 **Entry Point:** `PUT /shoppingcarts/{id}/shoppingcartitems/{variantId}/quantity`
 
-Validates cart is Active, item exists, quantity > 0. Publishes `ShoppingCartItemQuantityAdjusted`.
+Validates cart is Active, item exists, quantity > 0. Raises `ShoppingCartItemChanged` with the `Updated` state, carrying the old and new quantity.
 
 #### Remove Item
 
 **Entry Point:** `DELETE /shoppingcarts/{id}/shoppingcartitems/{variantId}`
 
-Validates cart is Active. Soft-deletes item. Publishes `ShoppingCartItemRemoved`.
+Validates cart is Active. Soft-deletes item. Raises `ShoppingCartItemChanged` with the `Deleted` state.
 
 #### Clear Cart
 
 **Entry Point:** `PUT /shoppingcarts/{id}/clear`
 
-Deletes all items. Publishes `ShoppingCartCleared`.
+Deletes all items. Raises `ShoppingCartChanged` with the `Updated` state.
 
 #### Cart Query Endpoints
 
@@ -633,7 +634,7 @@ ShoppingCartsController.CheckOutAsync()
         3. Fail-fast sufficiency check per item against the point-in-time snapshot
            (NOT the oversell guard: that is the atomic decrement below)
         4. Build order items (variant + price + quantity)
-        5. Order.Create(customerId, items) -> publishes OrderPlaced
+        5. Order.Create(customerId, items) -> raises OrderChanged (Added)
         6. shoppingCart.MarkAsCheckedOut() -> publishes ShoppingCartCheckedOut
     -> orderRepository.AddAsync(order)
     -> unitOfWork.ExecuteInTransactionAsync:            <-- the whole write phase, one transaction
@@ -668,7 +669,7 @@ ShoppingCartsController.CheckOutAsync()
 - Decrements `InventoryItem.AvailableQuantity` for each item
 - `ShoppingCart.Status` -> CheckedOut
 
-**Domain Events:** `OrderPlaced`, `ShoppingCartCheckedOut`.
+**Domain Events:** `OrderChanged` (`Added`), `ShoppingCartCheckedOut`.
 
 > **No `InventoryAdjusted` on the checkout path.** The decrement runs as `ExecuteUpdateAsync`, which
 > bypasses the save pipeline (and therefore the audit interceptor and domain-event dispatch) by design:
@@ -1072,7 +1073,7 @@ publisher ([ADR-006](../adr/006-database-per-service.md)):
 |-------------|----------|----------------|
 | **No refund workflow** | Order can be cancelled only before payment completes (PendingPayment/PaymentInitiated/PaymentFailed); no refund logic for Paid orders | Verify if refunds are handled externally via Stripe dashboard or if a refund workflow is planned |
 | **No order editing** | Once checkout completes, order lines cannot be modified | Confirm if this is intentional or if order amendment is planned |
-| **No order-confirmation or delivery email** | Email handlers exist for payment, shipment and payment failure, but `OrderPlaced`, `OrderDelivered` and `OrderCancelled` have none | Both would be an extra `IDomainEventHandler<T>` on an event that already exists, not new plumbing |
+| **No order-confirmation or delivery email** | Email handlers exist for payment, shipment and payment failure, but `OrderChanged` (`Added`) and `OrderDelivered` have no email handler, and `OrderCancelled` has only the inventory-restoring saga | Both would be an extra `IDomainEventHandler<T>` on an event that already exists, not new plumbing |
 | **No full-text search** | Catalog browse offers a name-contains search box (E2E-covered); there is no full-text/fuzzy search | Consider full-text search for larger catalogs |
 | **Inventory not checked during cart add** | Inventory validation only happens at checkout, not when adding to cart | Could lead to poor UX if items go out of stock between add and checkout |
 | **No post-payment cancellation** | Cancellation allowed from PendingPayment, PaymentInitiated, or PaymentFailed; cannot cancel after payment succeeds | Verify if post-payment cancellation with Stripe refund is needed |

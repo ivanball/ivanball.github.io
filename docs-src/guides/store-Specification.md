@@ -880,64 +880,57 @@ members are only ever appended: `Shipped` is last in the enum even though it sit
 
 ## 7. Domain Events and State Changes
 
+Most mutations raise a single `{Entity}Changed` lifecycle event carrying a `DomainEntityState`
+discriminator (`Added`, `Updated`, `Deleted`) rather than one event per verb
+([ADR-083](../adr/083-crud-lifecycle-event-taxonomy.md)). Those events derive from
+`EntityChangedEvent<TId>`; the remaining ones are business events that name a specific transition and
+derive from `BaseDomainEvent`. The **Kind / State** column below says which is which, and the states
+a given event actually reaches. Every event listed is a real record type under the module's
+`Domain/{Aggregate}/DomainEvents/` folder.
+
 ### Catalog Events
 
-| Event | Trigger | Business Meaning |
-|-------|---------|-----------------|
-| CategoryCreated | Category added to catalog | New product classification available |
-| CategoryDeleted | Category removed (soft delete) | Classification no longer available |
-| CategoryNameChanged | Category renamed (only if name actually differs) | Classification label updated |
-| ProductCreated | New product added | New item available for sale |
-| ProductDeleted | Product removed (soft delete) | Item no longer available |
-| ProductNameChanged | Product renamed (only if name actually differs) | Item label updated |
-| ProductVariantAdded | Variant added to product | New purchasable option available |
-| ProductVariantRemoved | Variant removed (soft delete) | Purchasable option discontinued |
-| ProductVariantSkuChanged | SKU updated (only if actually differs) | Inventory tracking identifier changed |
-| ProductVariantPriceChanged | Price updated (only if actually differs) | Item pricing adjusted |
-| ProductReviewChanged | Review submitted, revised, hidden, unhidden, anonymized or removed | The product's rating summary is recomputed |
+| Event | Kind / State | Trigger | Business Meaning |
+|-------|--------------|---------|-----------------|
+| `CategoryChanged` | Lifecycle: `Added`, `Updated`, `Deleted` | `Category.Create`; `Category.Rename` (only if the name actually differs); `Category.Delete` (soft delete) | A product classification becomes available, is relabelled, or is withdrawn |
+| `ProductChanged` | Lifecycle: `Added`, `Updated`, `Deleted` | `Product.Create`; `Product.Rename` (only if the name actually differs); `Product.Delete` (soft delete) | An item becomes available for sale, is relabelled, or is withdrawn. Description, brand and category reassignment raise no event |
+| `ProductImageChanged` | State-carrying business event: `Added`, `Updated`, `Deleted` (carries the image id, null on a reorder) | `Product.AddProductImage`; `Product.ReorderProductImages` (`Updated`); `Product.RemoveProductImage` | The product's image gallery changed |
+| `ProductReviewChanged` | Lifecycle: `Added`, `Updated`, `Deleted` | `ProductReview.Create`; `Revise`, `Hide`, `Unhide` and `Anonymize` (all `Updated`); `ProductReview.Delete` | `ProductReviewChangedHandler` recomputes the product's rating summary from the published, non-deleted reviews |
 
-Setting a variant discount, clearing one, and applying one across a whole product each raise
-`ProductVariantChanged` with the `Updated` state and the variant's **list** price, exactly as the
-price and SKU verbs do. The event contract does not grow a discount field: its consumers denormalize
-catalog labels and stock rows and none of them price anything, so a consumer that ever needs what a
-shopper pays asks `IProductVariantService.GetUnitPricesAsync`, which already answers with the
-effective price ([ADR-112](../adr/112-catalog-owned-effective-pricing.md)).
+Variant-level changes raise no Catalog domain event at all: adding, removing, re-pricing and
+re-SKU-ing a variant all signal through the `ProductVariantChanged` **integration** event described
+below. Setting a variant discount, clearing one, and applying one across a whole product do the same,
+each raising `ProductVariantChanged` with the `Updated` state and the variant's **list** price. The
+event contract does not grow a discount field: its consumers denormalize catalog labels and stock rows
+and none of them price anything, so a consumer that ever needs what a shopper pays asks
+`IProductVariantService.GetUnitPricesAsync`, which already answers with the effective price
+([ADR-112](../adr/112-catalog-owned-effective-pricing.md)).
 
 ### Sales Events
 
-| Event | Trigger | Business Meaning |
-|-------|---------|-----------------|
-| ShoppingCartCreated | First item added by customer | Customer started shopping |
-| ShoppingCartItemAdded | New variant added to cart | Customer interested in a product |
-| ShoppingCartItemQuantityAdjusted | Quantity changed (increase on duplicate add, or explicit change) | Customer adjusted desired quantity |
-| ShoppingCartItemRemoved | Item removed from cart (soft delete) | Customer no longer wants item |
-| ShoppingCartCheckedOut | Checkout completed | Customer committed to purchase |
-| ShoppingCartCleared | All items removed | Customer abandoned selections |
-| ShoppingCartDeleted | Cart soft-deleted | Cart record removed |
-| OrderPlaced | Checkout creates order | Purchase order confirmed |
-| OrderPaymentInitiated | Stripe session created | Customer directed to payment |
-| OrderPaid | Payment confirmed (webhook or manual) | Revenue collected |
-| OrderPaymentFailed | Payment unsuccessful | Payment needs retry or cancellation |
-| OrderShipped | Order leaves with a carrier, and again on every correction to the recorded shipment | Customer is emailed the carrier, tracking number and tracking link |
-| OrderDelivered | Admin marks delivered | Fulfillment completed |
-| OrderCancelled | Order cancelled | Purchase reversed, inventory restored |
-| OrderDeleted | Order soft-deleted | Order record removed |
-| InventoryItemCreated | Stock record created | Variant now trackable |
-| InventoryAdjusted | Stock level changed (only when quantity actually changes) | Available quantity updated |
-| InventoryItemDeleted | Stock record soft-deleted | Variant no longer tracked |
+| Event | Kind / State | Trigger | Business Meaning |
+|-------|--------------|---------|-----------------|
+| `ShoppingCartChanged` | Lifecycle: `Added`, `Updated`, `Deleted` | `ShoppingCart.Create`; `ShoppingCart.Clear` (`Updated`); `ShoppingCart.Delete` (soft delete) | The customer's cart is opened, emptied, or removed |
+| `ShoppingCartItemChanged` | State-carrying business event: `Added`, `Updated`, `Deleted` (carries the old and new quantity) | `AddShoppingCartItem` (`Added` for a new variant, `Updated` when a duplicate add raises the quantity); `ChangeShoppingCartItemQuantity` (`Updated`); `RemoveShoppingCartItem` (soft delete) | Line-level movement in the cart |
+| `ShoppingCartCheckedOut` | Business event | `ShoppingCart.MarkAsCheckedOut` | Customer committed to purchase |
+| `OrderChanged` | Lifecycle: `Added`, `Deleted` (no `Updated` is raised) | `Order.Create` at checkout; `Order.Delete` (soft delete) | A purchase order is recorded or its record is withdrawn |
+| `OrderPaymentInitiated` | Business event (carries the Stripe session id) | `Order.InitiatePayment` | Customer directed to payment |
+| `OrderPaid` | Business event (carries the total and a snapshot of every order line) | `Order.MarkAsPaid` (webhook) and `Order.MarkAsPaidManually` | Revenue collected; `OrderPaidHandler` emails the payment confirmation |
+| `OrderPaymentFailed` | Business event | `Order.MarkAsPaymentFailed` | `OrderPaymentFailedSagaHandler` tells the customer the payment needs a retry |
+| `OrderShipped` | Business event (carries carrier, tracking number, tracking link, ship date and estimated delivery date) | `Order.Ship`, and again on `Order.UpdateShipment` for every correction to the recorded shipment | `OrderShippedHandler` emails the carrier, tracking number and tracking link, re-sending on a correction |
+| `OrderDelivered` | Business event | `Order.MarkAsDelivered` | Fulfillment completed; raised alongside the `OrderFulfilled` integration event |
+| `OrderCancelled` | Business event | `Order.MarkAsCancelled` | `OrderCancelledSagaHandler` restores the inventory taken at checkout |
+| `InventoryItemChanged` | Lifecycle: `Added`, `Deleted` (no `Updated` is raised) | `InventoryItem.Create`; `InventoryItem.Delete` (soft delete) | A variant becomes trackable, or stops being tracked |
+| `InventoryAdjusted` | Business event (carries the old and new available quantity) | `InventoryItem.SetInventory`, only when the quantity actually changes; `IncreaseInventory` and `DecreaseInventory` reach it through that method | Available quantity updated |
 
 ### Identity Events
 
-| Event | Trigger | Business Meaning |
-|-------|---------|-----------------|
-| UserRegistered | New account created | New user in the system |
-| UserPasswordChanged | Password updated | Security credentials rotated |
-| UserDeactivated | Account disabled | User can no longer access system |
-| CustomerCreated | Auto-created on registration | Customer profile established |
-| CustomerDeleted | Customer soft-deleted | Profile removed |
-| CustomerNameChanged | Name updated (only if differs) | Profile information changed |
-| CustomerEmailChanged | Email updated (only if differs) | Contact information changed |
-| CustomerAddressChanged | Address updated (only if differs) | Shipping information changed |
+| Event | Kind / State | Trigger | Business Meaning |
+|-------|--------------|---------|-----------------|
+| `UserRegistered` | Business event (carries the email, name, role and address) | `User.Create` | `UserRegisteredHandler` creates the linked `Customer` profile for non-admin accounts |
+| `UserPasswordChanged` | Business event | `User.ChangePassword` | Security credentials rotated. No handler today: the event is an extension point |
+| `UserDeactivated` | Business event | `User.Deactivate` | User can no longer access the system. No handler today |
+| `CustomerChanged` | Lifecycle: `Added`, `Updated`, `Deleted` | `Customer.Create`; `ChangeName`, `ChangeEmail` and `ChangeAddress` (all `Updated`, and only when the value actually differs); `Customer.Delete` (soft delete) | The customer profile is established, corrected, or withdrawn |
 
 ### Integration Events (cross-service)
 
@@ -945,13 +938,15 @@ The events above are in-process domain events. These four cross the service boun
 outbox and the message broker, and each one is a signal for the consumer to create or refresh a
 denormalized copy IT owns, never a prompt to query back into the publisher ([ADR-006](../adr/006-database-per-service.md)).
 Contracts live in the publisher's Shared layer, so a consumer never references the publisher's Domain.
+Their payloads are frozen by `IntegrationEventContractTests` in the architecture test project, which
+fails on any member added, removed or retyped without a new contract version.
 
-| Event | Contract name | Publisher -> Consumer | Business meaning |
-|-------|---------------|-----------------------|------------------|
-| ProductVariantChanged | `Catalog.ProductVariantChanged.v1` | Catalog -> Sales | Variant lifecycle; Sales auto-creates the zero-stock inventory record and refreshes its denormalized SKU/product sort labels |
-| ProductInfoChanged | `Catalog.ProductInfoChanged.v1` | Catalog -> Sales | A product rename or delete fans out to those same labels |
-| OrderFulfilled | `Sales.OrderFulfilled.v1` | Sales -> Catalog | A delivered order, with its line snapshot; Catalog turns it into the verified-purchase entitlements behind product reviews |
-| CustomerErased | `Identity.CustomerErased.v1` | Identity -> Sales **and** Catalog | Sales clears the frozen customer name on retained orders; Catalog anonymizes the customer's reviews, keeping the ratings ([ADR-005](../adr/005-soft-delete-vs-erasure.md)) |
+| Event | Contract name | Payload (frozen) | Publisher -> Consumer | Business meaning |
+|-------|---------------|------------------|-----------------------|------------------|
+| `ProductVariantChanged` | `Catalog.ProductVariantChanged.v1` | `State`, `ProductId`, `ProductVariantId`, `Sku`, `Price`, `ProductName` | Catalog -> Sales: raised by `Product` for `Updated` and `Deleted`, and published by `AddVariantHandler` after the commit for `Added`. Consumer `ProductVariantChangedHandler` | Variant lifecycle; Sales auto-creates the zero-stock inventory record and refreshes its denormalized SKU/product sort labels. `Price` is always the **list** price |
+| `ProductInfoChanged` | `Catalog.ProductInfoChanged.v1` | `State`, `ProductId`, `Name` | Catalog -> Sales: raised by `Product.Rename` and `Product.Delete`. Consumer `ProductInfoChangedHandler` | A product rename or delete fans out to those same labels on every inventory row of the product |
+| `OrderFulfilled` | `Sales.OrderFulfilled.v1` | `OrderId`, `CustomerId`, `DeliveredOn`, `Lines` (variant id and quantity) | Sales -> Catalog: raised by `Order.MarkAsDelivered` and `Order.RepublishFulfillment`. Consumer `OrderFulfilledHandler` | A delivered order, with its line snapshot; Catalog turns it into the verified-purchase entitlements behind product reviews |
+| `CustomerErased` | `Identity.CustomerErased.v1` | `CustomerId` | Identity -> Sales **and** Catalog: raised by `Customer.Anonymize`. Consumers: a `CustomerErasedHandler` in each of Sales and Catalog | Sales clears the frozen customer name on retained orders; Catalog anonymizes the customer's reviews, keeping the ratings ([ADR-005](../adr/005-soft-delete-vs-erasure.md)) |
 
 ---
 
@@ -1152,7 +1147,7 @@ Entity types are routed to data sources via `[UseDataSource]` attribute on EF co
 ## 14. Missing or Unclear Business Logic
 
 ### 14.1 Email Notifications Cover Payment and Shipping Only
-**Observation:** Four handlers send email today: the password-reset request (Section 3.12), `OrderPaidHandler` (payment receipt), `OrderShippedHandler` (carrier, tracking number and tracking link, re-sent on every shipment correction) and `OrderPaymentFailedSagaHandler`. There is still no email at order placement (`OrderPlaced`), at delivery (`OrderDelivered`), or at cancellation.
+**Observation:** Four handlers send email today: the password-reset request (Section 3.12), `OrderPaidHandler` (payment receipt), `OrderShippedHandler` (carrier, tracking number and tracking link, re-sent on every shipment correction) and `OrderPaymentFailedSagaHandler`. There is still no email at order placement (`OrderChanged` with the `Added` state), at delivery (`OrderDelivered`), or at cancellation (`OrderCancelled`).
 **Recommendation:** Confirm whether an order-confirmation and a delivery-confirmation message are wanted; both would be additional `IDomainEventHandler<T>` registrations on events that already exist, not new plumbing.
 
 ### 14.2 No Return/Refund Workflow

@@ -1706,175 +1706,137 @@
           </tbody></table></div>
           <hr>
           <h2 id="7-domain-events-and-state-changes">7. Domain Events and State Changes</h2>
+          <p>Most mutations raise a single <code>{Entity}Changed</code> lifecycle event carrying a <code>DomainEntityState</code>
+          discriminator (<code>Added</code>, <code>Updated</code>, <code>Deleted</code>) rather than one event per verb
+          (<a href="../adr/083-crud-lifecycle-event-taxonomy.html">ADR-083</a>). Those events derive from
+          <code>EntityChangedEvent&lt;TId&gt;</code>; the remaining ones are business events that name a specific transition and
+          derive from <code>BaseDomainEvent</code>. The <strong>Kind / State</strong> column below says which is which, and the states
+          a given event actually reaches. Every event listed is a real record type under the module&#39;s
+          <code>Domain/{Aggregate}/DomainEvents/</code> folder.</p>
           <h3 id="catalog-events">Catalog Events</h3>
           <div class="table-wrap"><table>
           <thead>
           <tr>
           <th>Event</th>
+          <th>Kind / State</th>
           <th>Trigger</th>
           <th>Business Meaning</th>
           </tr>
           </thead>
           <tbody><tr>
-          <td>CategoryCreated</td>
-          <td>Category added to catalog</td>
-          <td>New product classification available</td>
+          <td><code>CategoryChanged</code></td>
+          <td>Lifecycle: <code>Added</code>, <code>Updated</code>, <code>Deleted</code></td>
+          <td><code>Category.Create</code>; <code>Category.Rename</code> (only if the name actually differs); <code>Category.Delete</code> (soft delete)</td>
+          <td>A product classification becomes available, is relabelled, or is withdrawn</td>
           </tr>
           <tr>
-          <td>CategoryDeleted</td>
-          <td>Category removed (soft delete)</td>
-          <td>Classification no longer available</td>
+          <td><code>ProductChanged</code></td>
+          <td>Lifecycle: <code>Added</code>, <code>Updated</code>, <code>Deleted</code></td>
+          <td><code>Product.Create</code>; <code>Product.Rename</code> (only if the name actually differs); <code>Product.Delete</code> (soft delete)</td>
+          <td>An item becomes available for sale, is relabelled, or is withdrawn. Description, brand and category reassignment raise no event</td>
           </tr>
           <tr>
-          <td>CategoryNameChanged</td>
-          <td>Category renamed (only if name actually differs)</td>
-          <td>Classification label updated</td>
+          <td><code>ProductImageChanged</code></td>
+          <td>State-carrying business event: <code>Added</code>, <code>Updated</code>, <code>Deleted</code> (carries the image id, null on a reorder)</td>
+          <td><code>Product.AddProductImage</code>; <code>Product.ReorderProductImages</code> (<code>Updated</code>); <code>Product.RemoveProductImage</code></td>
+          <td>The product&#39;s image gallery changed</td>
           </tr>
           <tr>
-          <td>ProductCreated</td>
-          <td>New product added</td>
-          <td>New item available for sale</td>
-          </tr>
-          <tr>
-          <td>ProductDeleted</td>
-          <td>Product removed (soft delete)</td>
-          <td>Item no longer available</td>
-          </tr>
-          <tr>
-          <td>ProductNameChanged</td>
-          <td>Product renamed (only if name actually differs)</td>
-          <td>Item label updated</td>
-          </tr>
-          <tr>
-          <td>ProductVariantAdded</td>
-          <td>Variant added to product</td>
-          <td>New purchasable option available</td>
-          </tr>
-          <tr>
-          <td>ProductVariantRemoved</td>
-          <td>Variant removed (soft delete)</td>
-          <td>Purchasable option discontinued</td>
-          </tr>
-          <tr>
-          <td>ProductVariantSkuChanged</td>
-          <td>SKU updated (only if actually differs)</td>
-          <td>Inventory tracking identifier changed</td>
-          </tr>
-          <tr>
-          <td>ProductVariantPriceChanged</td>
-          <td>Price updated (only if actually differs)</td>
-          <td>Item pricing adjusted</td>
-          </tr>
-          <tr>
-          <td>ProductReviewChanged</td>
-          <td>Review submitted, revised, hidden, unhidden, anonymized or removed</td>
-          <td>The product&#39;s rating summary is recomputed</td>
+          <td><code>ProductReviewChanged</code></td>
+          <td>Lifecycle: <code>Added</code>, <code>Updated</code>, <code>Deleted</code></td>
+          <td><code>ProductReview.Create</code>; <code>Revise</code>, <code>Hide</code>, <code>Unhide</code> and <code>Anonymize</code> (all <code>Updated</code>); <code>ProductReview.Delete</code></td>
+          <td><code>ProductReviewChangedHandler</code> recomputes the product&#39;s rating summary from the published, non-deleted reviews</td>
           </tr>
           </tbody></table></div>
-          <p>Setting a variant discount, clearing one, and applying one across a whole product each raise
-          <code>ProductVariantChanged</code> with the <code>Updated</code> state and the variant&#39;s <strong>list</strong> price, exactly as the
-          price and SKU verbs do. The event contract does not grow a discount field: its consumers denormalize
-          catalog labels and stock rows and none of them price anything, so a consumer that ever needs what a
-          shopper pays asks <code>IProductVariantService.GetUnitPricesAsync</code>, which already answers with the
-          effective price (<a href="../adr/112-catalog-owned-effective-pricing.html">ADR-112</a>).</p>
+          <p>Variant-level changes raise no Catalog domain event at all: adding, removing, re-pricing and
+          re-SKU-ing a variant all signal through the <code>ProductVariantChanged</code> <strong>integration</strong> event described
+          below. Setting a variant discount, clearing one, and applying one across a whole product do the same,
+          each raising <code>ProductVariantChanged</code> with the <code>Updated</code> state and the variant&#39;s <strong>list</strong> price. The
+          event contract does not grow a discount field: its consumers denormalize catalog labels and stock rows
+          and none of them price anything, so a consumer that ever needs what a shopper pays asks
+          <code>IProductVariantService.GetUnitPricesAsync</code>, which already answers with the effective price
+          (<a href="../adr/112-catalog-owned-effective-pricing.html">ADR-112</a>).</p>
           <h3 id="sales-events">Sales Events</h3>
           <div class="table-wrap"><table>
           <thead>
           <tr>
           <th>Event</th>
+          <th>Kind / State</th>
           <th>Trigger</th>
           <th>Business Meaning</th>
           </tr>
           </thead>
           <tbody><tr>
-          <td>ShoppingCartCreated</td>
-          <td>First item added by customer</td>
-          <td>Customer started shopping</td>
+          <td><code>ShoppingCartChanged</code></td>
+          <td>Lifecycle: <code>Added</code>, <code>Updated</code>, <code>Deleted</code></td>
+          <td><code>ShoppingCart.Create</code>; <code>ShoppingCart.Clear</code> (<code>Updated</code>); <code>ShoppingCart.Delete</code> (soft delete)</td>
+          <td>The customer&#39;s cart is opened, emptied, or removed</td>
           </tr>
           <tr>
-          <td>ShoppingCartItemAdded</td>
-          <td>New variant added to cart</td>
-          <td>Customer interested in a product</td>
+          <td><code>ShoppingCartItemChanged</code></td>
+          <td>State-carrying business event: <code>Added</code>, <code>Updated</code>, <code>Deleted</code> (carries the old and new quantity)</td>
+          <td><code>AddShoppingCartItem</code> (<code>Added</code> for a new variant, <code>Updated</code> when a duplicate add raises the quantity); <code>ChangeShoppingCartItemQuantity</code> (<code>Updated</code>); <code>RemoveShoppingCartItem</code> (soft delete)</td>
+          <td>Line-level movement in the cart</td>
           </tr>
           <tr>
-          <td>ShoppingCartItemQuantityAdjusted</td>
-          <td>Quantity changed (increase on duplicate add, or explicit change)</td>
-          <td>Customer adjusted desired quantity</td>
-          </tr>
-          <tr>
-          <td>ShoppingCartItemRemoved</td>
-          <td>Item removed from cart (soft delete)</td>
-          <td>Customer no longer wants item</td>
-          </tr>
-          <tr>
-          <td>ShoppingCartCheckedOut</td>
-          <td>Checkout completed</td>
+          <td><code>ShoppingCartCheckedOut</code></td>
+          <td>Business event</td>
+          <td><code>ShoppingCart.MarkAsCheckedOut</code></td>
           <td>Customer committed to purchase</td>
           </tr>
           <tr>
-          <td>ShoppingCartCleared</td>
-          <td>All items removed</td>
-          <td>Customer abandoned selections</td>
+          <td><code>OrderChanged</code></td>
+          <td>Lifecycle: <code>Added</code>, <code>Deleted</code> (no <code>Updated</code> is raised)</td>
+          <td><code>Order.Create</code> at checkout; <code>Order.Delete</code> (soft delete)</td>
+          <td>A purchase order is recorded or its record is withdrawn</td>
           </tr>
           <tr>
-          <td>ShoppingCartDeleted</td>
-          <td>Cart soft-deleted</td>
-          <td>Cart record removed</td>
-          </tr>
-          <tr>
-          <td>OrderPlaced</td>
-          <td>Checkout creates order</td>
-          <td>Purchase order confirmed</td>
-          </tr>
-          <tr>
-          <td>OrderPaymentInitiated</td>
-          <td>Stripe session created</td>
+          <td><code>OrderPaymentInitiated</code></td>
+          <td>Business event (carries the Stripe session id)</td>
+          <td><code>Order.InitiatePayment</code></td>
           <td>Customer directed to payment</td>
           </tr>
           <tr>
-          <td>OrderPaid</td>
-          <td>Payment confirmed (webhook or manual)</td>
-          <td>Revenue collected</td>
+          <td><code>OrderPaid</code></td>
+          <td>Business event (carries the total and a snapshot of every order line)</td>
+          <td><code>Order.MarkAsPaid</code> (webhook) and <code>Order.MarkAsPaidManually</code></td>
+          <td>Revenue collected; <code>OrderPaidHandler</code> emails the payment confirmation</td>
           </tr>
           <tr>
-          <td>OrderPaymentFailed</td>
-          <td>Payment unsuccessful</td>
-          <td>Payment needs retry or cancellation</td>
+          <td><code>OrderPaymentFailed</code></td>
+          <td>Business event</td>
+          <td><code>Order.MarkAsPaymentFailed</code></td>
+          <td><code>OrderPaymentFailedSagaHandler</code> tells the customer the payment needs a retry</td>
           </tr>
           <tr>
-          <td>OrderShipped</td>
-          <td>Order leaves with a carrier, and again on every correction to the recorded shipment</td>
-          <td>Customer is emailed the carrier, tracking number and tracking link</td>
+          <td><code>OrderShipped</code></td>
+          <td>Business event (carries carrier, tracking number, tracking link, ship date and estimated delivery date)</td>
+          <td><code>Order.Ship</code>, and again on <code>Order.UpdateShipment</code> for every correction to the recorded shipment</td>
+          <td><code>OrderShippedHandler</code> emails the carrier, tracking number and tracking link, re-sending on a correction</td>
           </tr>
           <tr>
-          <td>OrderDelivered</td>
-          <td>Admin marks delivered</td>
-          <td>Fulfillment completed</td>
+          <td><code>OrderDelivered</code></td>
+          <td>Business event</td>
+          <td><code>Order.MarkAsDelivered</code></td>
+          <td>Fulfillment completed; raised alongside the <code>OrderFulfilled</code> integration event</td>
           </tr>
           <tr>
-          <td>OrderCancelled</td>
-          <td>Order cancelled</td>
-          <td>Purchase reversed, inventory restored</td>
+          <td><code>OrderCancelled</code></td>
+          <td>Business event</td>
+          <td><code>Order.MarkAsCancelled</code></td>
+          <td><code>OrderCancelledSagaHandler</code> restores the inventory taken at checkout</td>
           </tr>
           <tr>
-          <td>OrderDeleted</td>
-          <td>Order soft-deleted</td>
-          <td>Order record removed</td>
+          <td><code>InventoryItemChanged</code></td>
+          <td>Lifecycle: <code>Added</code>, <code>Deleted</code> (no <code>Updated</code> is raised)</td>
+          <td><code>InventoryItem.Create</code>; <code>InventoryItem.Delete</code> (soft delete)</td>
+          <td>A variant becomes trackable, or stops being tracked</td>
           </tr>
           <tr>
-          <td>InventoryItemCreated</td>
-          <td>Stock record created</td>
-          <td>Variant now trackable</td>
-          </tr>
-          <tr>
-          <td>InventoryAdjusted</td>
-          <td>Stock level changed (only when quantity actually changes)</td>
+          <td><code>InventoryAdjusted</code></td>
+          <td>Business event (carries the old and new available quantity)</td>
+          <td><code>InventoryItem.SetInventory</code>, only when the quantity actually changes; <code>IncreaseInventory</code> and <code>DecreaseInventory</code> reach it through that method</td>
           <td>Available quantity updated</td>
-          </tr>
-          <tr>
-          <td>InventoryItemDeleted</td>
-          <td>Stock record soft-deleted</td>
-          <td>Variant no longer tracked</td>
           </tr>
           </tbody></table></div>
           <h3 id="identity-events">Identity Events</h3>
@@ -1882,87 +1844,79 @@
           <thead>
           <tr>
           <th>Event</th>
+          <th>Kind / State</th>
           <th>Trigger</th>
           <th>Business Meaning</th>
           </tr>
           </thead>
           <tbody><tr>
-          <td>UserRegistered</td>
-          <td>New account created</td>
-          <td>New user in the system</td>
+          <td><code>UserRegistered</code></td>
+          <td>Business event (carries the email, name, role and address)</td>
+          <td><code>User.Create</code></td>
+          <td><code>UserRegisteredHandler</code> creates the linked <code>Customer</code> profile for non-admin accounts</td>
           </tr>
           <tr>
-          <td>UserPasswordChanged</td>
-          <td>Password updated</td>
-          <td>Security credentials rotated</td>
+          <td><code>UserPasswordChanged</code></td>
+          <td>Business event</td>
+          <td><code>User.ChangePassword</code></td>
+          <td>Security credentials rotated. No handler today: the event is an extension point</td>
           </tr>
           <tr>
-          <td>UserDeactivated</td>
-          <td>Account disabled</td>
-          <td>User can no longer access system</td>
+          <td><code>UserDeactivated</code></td>
+          <td>Business event</td>
+          <td><code>User.Deactivate</code></td>
+          <td>User can no longer access the system. No handler today</td>
           </tr>
           <tr>
-          <td>CustomerCreated</td>
-          <td>Auto-created on registration</td>
-          <td>Customer profile established</td>
-          </tr>
-          <tr>
-          <td>CustomerDeleted</td>
-          <td>Customer soft-deleted</td>
-          <td>Profile removed</td>
-          </tr>
-          <tr>
-          <td>CustomerNameChanged</td>
-          <td>Name updated (only if differs)</td>
-          <td>Profile information changed</td>
-          </tr>
-          <tr>
-          <td>CustomerEmailChanged</td>
-          <td>Email updated (only if differs)</td>
-          <td>Contact information changed</td>
-          </tr>
-          <tr>
-          <td>CustomerAddressChanged</td>
-          <td>Address updated (only if differs)</td>
-          <td>Shipping information changed</td>
+          <td><code>CustomerChanged</code></td>
+          <td>Lifecycle: <code>Added</code>, <code>Updated</code>, <code>Deleted</code></td>
+          <td><code>Customer.Create</code>; <code>ChangeName</code>, <code>ChangeEmail</code> and <code>ChangeAddress</code> (all <code>Updated</code>, and only when the value actually differs); <code>Customer.Delete</code> (soft delete)</td>
+          <td>The customer profile is established, corrected, or withdrawn</td>
           </tr>
           </tbody></table></div>
           <h3 id="integration-events-cross-service">Integration Events (cross-service)</h3>
           <p>The events above are in-process domain events. These four cross the service boundary through the
           outbox and the message broker, and each one is a signal for the consumer to create or refresh a
           denormalized copy IT owns, never a prompt to query back into the publisher (<a href="../adr/006-database-per-service.html">ADR-006</a>).
-          Contracts live in the publisher&#39;s Shared layer, so a consumer never references the publisher&#39;s Domain.</p>
+          Contracts live in the publisher&#39;s Shared layer, so a consumer never references the publisher&#39;s Domain.
+          Their payloads are frozen by <code>IntegrationEventContractTests</code> in the architecture test project, which
+          fails on any member added, removed or retyped without a new contract version.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
           <th>Event</th>
           <th>Contract name</th>
+          <th>Payload (frozen)</th>
           <th>Publisher -&gt; Consumer</th>
           <th>Business meaning</th>
           </tr>
           </thead>
           <tbody><tr>
-          <td>ProductVariantChanged</td>
+          <td><code>ProductVariantChanged</code></td>
           <td><code>Catalog.ProductVariantChanged.v1</code></td>
-          <td>Catalog -&gt; Sales</td>
-          <td>Variant lifecycle; Sales auto-creates the zero-stock inventory record and refreshes its denormalized SKU/product sort labels</td>
+          <td><code>State</code>, <code>ProductId</code>, <code>ProductVariantId</code>, <code>Sku</code>, <code>Price</code>, <code>ProductName</code></td>
+          <td>Catalog -&gt; Sales: raised by <code>Product</code> for <code>Updated</code> and <code>Deleted</code>, and published by <code>AddVariantHandler</code> after the commit for <code>Added</code>. Consumer <code>ProductVariantChangedHandler</code></td>
+          <td>Variant lifecycle; Sales auto-creates the zero-stock inventory record and refreshes its denormalized SKU/product sort labels. <code>Price</code> is always the <strong>list</strong> price</td>
           </tr>
           <tr>
-          <td>ProductInfoChanged</td>
+          <td><code>ProductInfoChanged</code></td>
           <td><code>Catalog.ProductInfoChanged.v1</code></td>
-          <td>Catalog -&gt; Sales</td>
-          <td>A product rename or delete fans out to those same labels</td>
+          <td><code>State</code>, <code>ProductId</code>, <code>Name</code></td>
+          <td>Catalog -&gt; Sales: raised by <code>Product.Rename</code> and <code>Product.Delete</code>. Consumer <code>ProductInfoChangedHandler</code></td>
+          <td>A product rename or delete fans out to those same labels on every inventory row of the product</td>
           </tr>
           <tr>
-          <td>OrderFulfilled</td>
+          <td><code>OrderFulfilled</code></td>
           <td><code>Sales.OrderFulfilled.v1</code></td>
-          <td>Sales -&gt; Catalog</td>
+          <td><code>OrderId</code>, <code>CustomerId</code>, <code>DeliveredOn</code>, <code>Lines</code> (variant id and quantity)</td>
+          <td>Sales -&gt; Catalog: raised by <code>Order.MarkAsDelivered</code> and <code>Order.RepublishFulfillment</code>. Consumer <code>OrderFulfilledHandler</code></td>
           <td>A delivered order, with its line snapshot; Catalog turns it into the verified-purchase entitlements behind product reviews</td>
           </tr>
           <tr>
-          <td>CustomerErased</td>
+          <td><code>CustomerErased</code></td>
           <td><code>Identity.CustomerErased.v1</code></td>
-          <td>Identity -&gt; Sales <strong>and</strong> Catalog</td>
+          <td><code>CustomerId</code></td>
+          <td>Identity -&gt; Sales <strong>and</strong> Catalog: raised by <code>Customer.Anonymize</code>. Consumers: a <code>CustomerErasedHandler</code> in each of Sales and Catalog</td>
           <td>Sales clears the frozen customer name on retained orders; Catalog anonymizes the customer&#39;s reviews, keeping the ratings (<a href="../adr/005-soft-delete-vs-erasure.html">ADR-005</a>)</td>
           </tr>
           </tbody></table></div>
@@ -2223,7 +2177,7 @@
           <hr>
           <h2 id="14-missing-or-unclear-business-logic">14. Missing or Unclear Business Logic</h2>
           <h3 id="141-email-notifications-cover-payment-and-shipping-only">14.1 Email Notifications Cover Payment and Shipping Only</h3>
-          <p><strong>Observation:</strong> Four handlers send email today: the password-reset request (Section 3.12), <code>OrderPaidHandler</code> (payment receipt), <code>OrderShippedHandler</code> (carrier, tracking number and tracking link, re-sent on every shipment correction) and <code>OrderPaymentFailedSagaHandler</code>. There is still no email at order placement (<code>OrderPlaced</code>), at delivery (<code>OrderDelivered</code>), or at cancellation.
+          <p><strong>Observation:</strong> Four handlers send email today: the password-reset request (Section 3.12), <code>OrderPaidHandler</code> (payment receipt), <code>OrderShippedHandler</code> (carrier, tracking number and tracking link, re-sent on every shipment correction) and <code>OrderPaymentFailedSagaHandler</code>. There is still no email at order placement (<code>OrderChanged</code> with the <code>Added</code> state), at delivery (<code>OrderDelivered</code>), or at cancellation (<code>OrderCancelled</code>).
           <strong>Recommendation:</strong> Confirm whether an order-confirmation and a delivery-confirmation message are wanted; both would be additional <code>IDomainEventHandler&lt;T&gt;</code> registrations on events that already exist, not new plumbing.</p>
           <h3 id="142-no-returnrefund-workflow">14.2 No Return/Refund Workflow</h3>
           <p><strong>Observation:</strong> Once an order reaches <code>Paid</code> or <code>Delivered</code> status, there are no further state transitions available. No return, refund, or exchange workflow exists. Cancellation is only possible before payment succeeds.
