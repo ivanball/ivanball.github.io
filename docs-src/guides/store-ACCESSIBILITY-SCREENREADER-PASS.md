@@ -52,7 +52,7 @@ the Web UI at `https://localhost:6002`. Test with the **keyboard only** (no mous
 | 2 | **Register** (`/register`) | Same; password-rule helper text announced |
 | 3 | **Profile** (`/profile`) | Name/address save confirmations announced; change-password per-field errors plus summary announced |
 | 4 | **Theme + culture switch** | Toggling dark mode / `es` announces the change and does not lose focus |
-| 5 | **Anonymous browse** (`/catalog`, `/catalog/{id}`) | Product cards announce name and price; the sign-in-to-purchase affordance is announced for anonymous visitors |
+| 5 | **Anonymous browse** (`/catalog`, `/catalog/{id}`) | Product cards announce name and price; a discounted variant announces both numbers as "Was X, now Y" rather than relying on the strikethrough and the sale badge alone; the sign-in-to-purchase affordance is announced for anonymous visitors |
 | 6 | **Shopper, cart drawer** | Add-to-cart announces the added item; opening the drawer moves focus into it; quantity increase/decrease and Remove announce the result; Checkout handoff announced |
 | 7 | **Shopper, orders** (`/orders`, `/orders/{id}`) | Grid navigation; the status chip is announced; Pay Now / Retry Payment / Cancel Order buttons have names |
 | 8 | **Admin catalog CRUD**, create/edit a product and its variants (`/products`), create/edit a category (`/categories`) | Required-field errors announced; the inline variant editor's fields are reachable and named; delete confirm dialog focus trap |

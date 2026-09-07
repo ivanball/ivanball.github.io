@@ -224,7 +224,15 @@
           </tr>
           <tr>
           <td>Price</td>
-          <td>Unit price as Money (amount + currency, must be non-negative)</td>
+          <td>LIST unit price as Money (amount + currency, must be non-negative). A discount never rewrites it, so clearing the discount restores the original price with no bookkeeping</td>
+          </tr>
+          <tr>
+          <td>Discount</td>
+          <td>Optional promotional pricing as an owned <code>VariantDiscount</code> value object: either a percentage off or a fixed special price, with an optional activation window (inclusive start, exclusive end, either bound open) and an optional storefront label (max 50 chars)</td>
+          </tr>
+          <tr>
+          <td>Effective price</td>
+          <td>Derived, never stored: <code>GetEffectivePrice(now)</code> returns the list price with the discount applied when the window covers that instant, and the list price otherwise</td>
           </tr>
           </tbody></table></div>
           <p><strong>Relationships:</strong></p>
@@ -233,7 +241,8 @@
           <li>A Product Variant has zero or one Inventory Item</li>
           <li>A Product Variant can appear in Shopping Cart Items and Order Lines</li>
           </ul>
-          <p><strong>Source:</strong> <code>Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs</code></p>
+          <p><strong>Source:</strong> <code>Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs</code>,
+          <code>Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/VariantDiscount.cs</code></p>
           <hr>
           <h3 id="24-shopping-cart">2.4 Shopping Cart</h3>
           <p><strong>Description:</strong> A temporary collection of items a customer intends to purchase. Each customer has exactly one shopping cart (the cart ID equals the customer ID).</p>
@@ -685,6 +694,10 @@
           <li>All product variants must have corresponding inventory records</li>
           <li>Sufficient inventory must be available for each item</li>
           <li>Prices are locked at checkout time (not at cart-add time)</li>
+          <li>The price locked is the <strong>effective</strong> price: Catalog resolves each variant&#39;s list price against any
+          active discount at the instant of the call, so the order line, the receipt and the Stripe total all
+          carry the discounted amount and Sales never reasons about promotions
+          (<a href="../adr/112-catalog-owned-effective-pricing.html">ADR-112</a>)</li>
           <li>The write phase is atomic, but the command is <strong>deliberately not <code>ITransactional</code></strong>: the handler
           opens the transaction itself so the cross-module price fetch stays outside it and cross-service
           latency never extends lock hold time</li>
@@ -1153,6 +1166,61 @@
           <td>Anonymizing a review clears the name, title and body and retains the star rating</td>
           <td><code>ProductReview.Anonymize()</code></td>
           </tr>
+          <tr>
+          <td>Discount percentage range</td>
+          <td>A percentage discount must be greater than 0 and less than 100</td>
+          <td><code>VariantDiscount.cs</code></td>
+          </tr>
+          <tr>
+          <td>Special price is positive</td>
+          <td>A special price amount must be greater than 0</td>
+          <td><code>VariantDiscount.cs</code></td>
+          </tr>
+          <tr>
+          <td>Special price currency matches</td>
+          <td>A special price must be quoted in the same currency as the list price</td>
+          <td><code>VariantDiscount.cs</code></td>
+          </tr>
+          <tr>
+          <td>Special price below list price</td>
+          <td>A special price must sit strictly below the variant&#39;s list price</td>
+          <td><code>VariantDiscount.cs</code>, <code>ProductVariant.SetDiscount()</code></td>
+          </tr>
+          <tr>
+          <td>Discount window ordered</td>
+          <td>When both bounds are given, the end must be after the start; the start is inclusive and the end exclusive, and a null bound leaves that side open</td>
+          <td><code>VariantDiscount.cs</code></td>
+          </tr>
+          <tr>
+          <td>Discount label max length</td>
+          <td>Max 50 characters (optional, trimmed at construction)</td>
+          <td><code>VariantDiscount.cs</code></td>
+          </tr>
+          <tr>
+          <td>Effective price stays positive</td>
+          <td>Applying a discount must leave an amount greater than zero, so a zero-priced variant cannot carry one</td>
+          <td><code>VariantDiscount.cs</code></td>
+          </tr>
+          <tr>
+          <td>Percentage rounding</td>
+          <td>A percentage result is rounded to two decimals, away from zero</td>
+          <td><code>VariantDiscount.ApplyTo()</code></td>
+          </tr>
+          <tr>
+          <td>Price change re-validates the discount</td>
+          <td>Changing a discounted variant&#39;s list price fails when the stored discount no longer resolves against the new price; the admin clears the discount first</td>
+          <td><code>ProductVariant.cs</code></td>
+          </tr>
+          <tr>
+          <td>Product-wide discount is all or nothing</td>
+          <td>A discount applied across a product is validated against every active variant before any variant is touched</td>
+          <td><code>Product.SetDiscountOnAllVariants()</code></td>
+          </tr>
+          <tr>
+          <td>Discounting is a separate permission</td>
+          <td>Setting or clearing a discount requires <code>catalog:pricing:manage</code>, not the broader variant-management permission</td>
+          <td><code>CatalogPermissions.cs</code>, <code>ProductVariantsController.cs</code></td>
+          </tr>
           </tbody></table></div>
           <h3 id="52-shopping-cart-rules">5.2 Shopping Cart Rules</h3>
           <div class="table-wrap"><table>
@@ -1573,7 +1641,12 @@
           <tr>
           <td>Manage product variants</td>
           <td>Admin</td>
-          <td>Add/remove variants, change SKU and price</td>
+          <td>Add/remove variants, change SKU and list price (the list price is what the variant editor edits; promotional pricing is a separate use case)</td>
+          </tr>
+          <tr>
+          <td>Manage discounts</td>
+          <td>Pricing manager (<code>catalog:pricing:manage</code>)</td>
+          <td>Set or clear promotional pricing on one variant (a percentage off or a special price, with an optional window and label), or apply one discount across every active variant of a product in a single all-or-nothing write</td>
           </tr>
           <tr>
           <td>Manage inventory</td>
@@ -1698,6 +1771,12 @@
           <td>The product&#39;s rating summary is recomputed</td>
           </tr>
           </tbody></table></div>
+          <p>Setting a variant discount, clearing one, and applying one across a whole product each raise
+          <code>ProductVariantChanged</code> with the <code>Updated</code> state and the variant&#39;s <strong>list</strong> price, exactly as the
+          price and SKU verbs do. The event contract does not grow a discount field: its consumers denormalize
+          catalog labels and stock rows and none of them price anything, so a consumer that ever needs what a
+          shopper pays asks <code>IProductVariantService.GetUnitPricesAsync</code>, which already answers with the
+          effective price (<a href="../adr/112-catalog-owned-effective-pricing.html">ADR-112</a>).</p>
           <h3 id="sales-events">Sales Events</h3>
           <div class="table-wrap"><table>
           <thead>
@@ -2029,6 +2108,7 @@
           <li>Category filter dropdown</li>
           <li>Sort by name or price</li>
           <li>Star rating and review count on each card, read straight off the product&#39;s denormalized <code>RatingSummary</code> so a grid of cards costs no per-card aggregate query</li>
+          <li>Effective-price range per card, with a sale badge and the struck-through list price when any variant on the card carries an active discount</li>
           <li>Quick &quot;Add to Cart&quot; buttons per variant</li>
           <li>&quot;View Details&quot; navigation to product detail page</li>
           </ul>
@@ -2036,7 +2116,7 @@
           <ul>
           <li>Breadcrumbs (Home &gt; Catalog &gt; Product)</li>
           <li>Product description, brand, category</li>
-          <li>Variant list with SKU, price, quantity selector, and &quot;Add to Cart&quot;</li>
+          <li>Variant list with SKU, price, quantity selector, and &quot;Add to Cart&quot;. A discounted variant shows the effective price beside the struck-through list price and a sale badge, and carries an accessible &quot;Was X, now Y&quot; label so a screen reader hears both numbers rather than the visual strike alone</li>
           <li>&quot;Buy Now&quot; option (direct Stripe checkout for single variant)</li>
           <li>A reviews section (anchor <code>#reviews</code>) listing the published reviews, plus the review editor for a signed-in customer who is eligible to write or revise one</li>
           </ul>

@@ -454,6 +454,24 @@
           <td><code>PUT /reviews/{id}/unhide</code></td>
           <td>Catalog</td>
           </tr>
+          <tr>
+          <td>54</td>
+          <td>Set Variant Discount</td>
+          <td><code>PUT /products/{id}/productvariants/{variantId}/discount</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>55</td>
+          <td>Clear Variant Discount</td>
+          <td><code>DELETE /products/{id}/productvariants/{variantId}/discount</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>56</td>
+          <td>Discount All Variants</td>
+          <td><code>PUT /products/{id}/discount</code></td>
+          <td>Catalog</td>
+          </tr>
           </tbody></table></div>
           <hr>
           <h2 id="1-identity-module-workflows">1. Identity Module Workflows</h2>
@@ -835,7 +853,45 @@
           <p>SKU uniqueness verified globally (excluding current variant). Publishes <code>ProductVariantSkuChanged</code> if changed.</p>
           <h4 id="change-variant-price">Change Variant Price</h4>
           <p><strong>Entry Point:</strong> <code>PUT /products/{id}/productvariants/{variantId}/price</code>, Admin only</p>
-          <p>Price must be positive. Publishes <code>ProductVariantPriceChanged</code> if changed.</p>
+          <p>Price must be positive. Publishes <code>ProductVariantPriceChanged</code> if changed. The price edited here is
+          the LIST price. A variant that carries a discount re-validates it against the new price and the
+          change is refused when the pair would be inconsistent (a special price no longer below the list
+          price, or a percentage leaving nothing), so the discount is cleared first.</p>
+          <h4 id="set-variant-discount">Set Variant Discount</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /products/{id}/productvariants/{variantId}/discount</code>, <code>catalog:pricing:manage</code></p>
+          <pre class="doc-pre"><code class="">ProductVariantsController.SetDiscountAsync()
+  -&gt; SetProductVariantDiscountCommand (If-Match product ETag + VariantRowVersion in the body)
+    -&gt; VariantDiscountRules validates kind, percentage, special price, window order, label
+    -&gt; ProductVariantSetDiscountRequest.ToDiscount()
+      -&gt; VariantDiscount.CreatePercentage() / CreateSpecialPrice() -&gt; Result&lt;VariantDiscount&gt;
+    -&gt; product.SetProductVariantDiscount(variantId, discount)
+      -&gt; ProductVariant.SetDiscount() runs VariantDiscount.ApplyTo(Price) first
+      -&gt; Publishes ProductVariantChanged (Updated) with the LIST price
+    -&gt; SaveChangesAsync()
+  -&gt; Evicts the catalog:products output-cache tag</code></pre>
+          <p>Replaces any discount already on the variant. Returns 204; 400 on a broken invariant, 404 on an
+          unknown product or variant, 412 on a stale ETag, 428 when <code>If-Match</code> is missing
+          (<a href="../adr/035-optimistic-concurrency.html">ADR-035</a> two-token rule: the header carries the product&#39;s
+          ETag, the body carries the variant&#39;s row version).</p>
+          <h4 id="clear-variant-discount">Clear Variant Discount</h4>
+          <p><strong>Entry Point:</strong> <code>DELETE /products/{id}/productvariants/{variantId}/discount</code>, <code>catalog:pricing:manage</code></p>
+          <p>Returns the variant to its list price, which was never rewritten, so there is nothing to restore.
+          Clearing a variant that carries no discount changes nothing, so clearing twice is safe. Publishes
+          <code>ProductVariantChanged</code> (Updated) and evicts the <code>catalog:products</code> tag. The body carries only the
+          variant&#39;s row version; the status codes match the set action.</p>
+          <h4 id="discount-all-variants">Discount All Variants</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /products/{id}/discount</code>, <code>catalog:pricing:manage</code></p>
+          <pre class="doc-pre"><code class="">ProductsController.SetDiscountAsync()
+  -&gt; SetProductDiscountCommand (If-Match product ETag)
+    -&gt; ProductSetDiscountRequest.ToDiscount() -&gt; Result&lt;VariantDiscount&gt;
+    -&gt; product.SetDiscountOnAllVariants(discount)
+      -&gt; ApplyTo() is checked against EVERY active variant&#39;s list price FIRST
+      -&gt; All-or-nothing: one refusal leaves the product exactly as it was
+      -&gt; Publishes one ProductVariantChanged (Updated) per variant, each with its LIST price
+    -&gt; SaveChangesAsync()
+  -&gt; Evicts the catalog:products output-cache tag</code></pre>
+          <p>A product whose variants are priced differently either takes the promotion whole or is left
+          untouched, so a half-discounted catalog page is not reachable.</p>
           <h4 id="remove-product-variant">Remove Product Variant</h4>
           <p><strong>Entry Point:</strong> <code>DELETE /products/{id}/productvariants/{variantId}</code>, Admin only</p>
           <p>Soft delete on variant. Publishes <code>ProductVariantRemoved</code>.</p>
@@ -1365,6 +1421,7 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid --&gt; Shipped --&gt; Deliver
           <ul>
           <li><code>/catalog</code>, Product grid with name search, category filter, name/newest sort, quick &quot;Add to Cart&quot; per variant, and a star rating with review count on each card (read off the product&#39;s denormalized <code>RatingSummary</code>, so a grid costs no per-card aggregate query)</li>
           <li><code>/catalog/{id}</code>, Product detail with breadcrumbs, variant list, quantity selector, &quot;Add to Cart&quot; button, &quot;Buy Now&quot; (direct Stripe checkout), and a reviews section (anchor <code>#reviews</code>) listing published reviews with the review editor for an eligible signed-in customer</li>
+          <li>A discounted variant reads as a sale on both pages: the card shows a sale badge and an effective-price range, the variant card shows the effective price beside the struck-through list price, and the pair carries a &quot;Was X, now Y&quot; accessible label. The numbers are server-resolved, so a browser clock never decides whether a promotion is running</li>
           </ul>
           <h4 id="order-management">Order Management</h4>
           <ul>
@@ -1408,7 +1465,7 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid --&gt; Shipped --&gt; Deliver
           <tr>
           <td>Product Detail</td>
           <td><code>/products/{id}</code></td>
-          <td>View/edit product, inline variant editor (add/edit/delete)</td>
+          <td>View/edit product, inline variant editor (add/edit/delete); the variants table adds a Discount column showing the badge and effective price against the struck-through list price, per-row Discount and Clear discount actions opening an inline dialog, and a &quot;Discount all variants&quot; button that applies one discount across the whole product</td>
           </tr>
           <tr>
           <td>Reviews</td>

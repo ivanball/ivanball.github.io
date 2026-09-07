@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 111 ADRs</summary>
+        <summary>All 112 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -210,6 +210,7 @@
         <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
         <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
         <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
           </ol>
         </nav>
       </details>
@@ -781,6 +782,11 @@
           <td><a href="111-ai-session-scoring-governance.html">111</a></td>
           <td>AI session scoring governance</td>
           <td>ADC&#39;s one product feature that calls a language model, governed as a production dependency. The call sits behind <code>IAiScoringService</code> (declared in Application, carrying <code>ModelId</code> and <code>PromptVersion</code>), model <code>claude-haiku-4-5</code>, and both versions are persisted on every <code>SessionAiScore</code> row (<code>PromptVersion</code> <code>nvarchar(32)</code>, expand-only migration defaulting pre-column rows to <code>legacy</code>) so a score is attributable to the exact reviewer brief behind it. A SHA-256 hash of the rendered prompt is pinned per version in <code>Golden/prompt-versions.json</code>, so a prompt edit without a bump fails a test instead of silently re-basing every score on the dashboard; the five-step change protocol (bump, record hash, run the live judge, review drift case by case, accept a mixed-version dashboard) is in the suite&#39;s README. The <code>ai-eval-gate</code> job is in <code>deploy.needs</code>: golden replay plus prompt contract on every code deploy (seven recorded cases, no key, <code>--minimum-expected-tests 1</code>), and the paid live judge only when the diff touches the scoring paths. Input guardrails are a delimited <code>&lt;session_proposal&gt;</code> envelope with angle brackets escaped, a named anti-injection paragraph wiring an override attempt to the existing 1.0 penalty, and email/phone redaction of submitted free text (names deliberately kept, they are the credibility evidence). Output is schema-constrained structured JSON with refusal, empty and partial responses all failing rather than defaulting, and the weighted overall computed in C#, never by the model. Cost is <code>scoring.tokens.input</code>/<code>scoring.tokens.output</code> tagged by model and prompt version on meter <code>MMCA.ADC.Conference.Scoring</code>, with a 30-day rolling token-ceiling alert; the real spend control is that the only trigger is a permission-gated organizer click and nothing starts unrequested paid work. Costs: recorded-response replay cannot see model drift, the live judge needs the key in CI and reports green when it skips, and score semantics change on every prompt bump.</td>
+          </tr>
+          <tr>
+          <td><a href="112-catalog-owned-effective-pricing.html">112</a></td>
+          <td>Catalog owns effective pricing</td>
+          <td>Admin-managed variant discounts modelled as a variant-level owned value object, not a Promotion aggregate. <code>VariantDiscount</code> (percentage off or fixed special price, optional inclusive-start / exclusive-end window, optional 50-char label) is a sealed <code>ValueObject</code> record flattened onto the variant row as nullable columns by an add-only migration (ADR-057); product-wide discounting is all-or-nothing fan-out over the same value, validated against every active variant&#39;s list price before any of them is touched. <code>ProductVariant.Price</code> stays the LIST price, so clearing a discount restores it with no bookkeeping, and one method (<code>GetEffectivePrice(now)</code> / <code>ResolveEffectivePrice</code>) is the single place a price is decided, resolved against an injected <code>TimeProvider</code> for both the read model and the cross-module pricing call. Sales stores no cart price and re-fetches at checkout through the existing <code>IProductVariantService.GetUnitPricesAsync</code>, which now answers with the effective price: the gRPC contract, <code>CheckOutHandler</code>, <code>CheckOutDomainService</code>, <code>Order.Create</code> and the <code>ProductVariantChanged</code> event (still carrying the LIST price) are all unchanged, so the feature is additive across the module boundary. The effective price must stay above zero because Sales&#39; order-line validator rejects a non-positive unit price, which is why a zero-priced variant cannot carry a discount. Three endpoints gated on the narrower <code>catalog:pricing:manage</code> permission under ADR-035&#39;s two-token rule. Costs: a window that opens or closes on the clock evicts no cache, so a cached storefront read can lag a boundary by up to the five-minute TTL (checkout never does, it is a live call); order lines record neither the list price nor the promotion name; no coupon codes, category-wide promotions or stacking, though a future Promotion aggregate would resolve into the same effective-price method.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

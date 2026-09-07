@@ -68,14 +68,17 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 | Property | Description |
 |----------|-------------|
 | SKU | Stock-keeping unit identifier (max 50 chars, globally unique, optional) |
-| Price | Unit price as Money (amount + currency, must be non-negative) |
+| Price | LIST unit price as Money (amount + currency, must be non-negative). A discount never rewrites it, so clearing the discount restores the original price with no bookkeeping |
+| Discount | Optional promotional pricing as an owned `VariantDiscount` value object: either a percentage off or a fixed special price, with an optional activation window (inclusive start, exclusive end, either bound open) and an optional storefront label (max 50 chars) |
+| Effective price | Derived, never stored: `GetEffectivePrice(now)` returns the list price with the discount applied when the window covers that instant, and the list price otherwise |
 
 **Relationships:**
 - A Product Variant belongs to exactly one Product
 - A Product Variant has zero or one Inventory Item
 - A Product Variant can appear in Shopping Cart Items and Order Lines
 
-**Source:** `Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs`
+**Source:** `Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs`,
+`Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/VariantDiscount.cs`
 
 ---
 
@@ -363,6 +366,10 @@ Carries no personal data (three identifiers and a date), so it is deliberately n
 - All product variants must have corresponding inventory records
 - Sufficient inventory must be available for each item
 - Prices are locked at checkout time (not at cart-add time)
+- The price locked is the **effective** price: Catalog resolves each variant's list price against any
+  active discount at the instant of the call, so the order line, the receipt and the Stripe total all
+  carry the discounted amount and Sales never reasons about promotions
+  ([ADR-112](../adr/112-catalog-owned-effective-pricing.md))
 - The write phase is atomic, but the command is **deliberately not `ITransactional`**: the handler
   opens the transaction itself so the cross-module price fetch stays outside it and cross-service
   latency never extends lock hold time
@@ -739,6 +746,17 @@ members are only ever appended: `Shipped` is last in the enum even though it sit
 | Rating summary is derived | `Product.RatingSummary` is recomputed (AVG/COUNT) over published, non-deleted reviews on every review change, never adjusted incrementally | `ProductReviewChangedHandler.cs` |
 | Hidden reviews do not count | A hidden review leaves the storefront and drops out of the product's rating summary | `PublishedReviewsSpecification.cs` |
 | Review erasure keeps the rating | Anonymizing a review clears the name, title and body and retains the star rating | `ProductReview.Anonymize()` |
+| Discount percentage range | A percentage discount must be greater than 0 and less than 100 | `VariantDiscount.cs` |
+| Special price is positive | A special price amount must be greater than 0 | `VariantDiscount.cs` |
+| Special price currency matches | A special price must be quoted in the same currency as the list price | `VariantDiscount.cs` |
+| Special price below list price | A special price must sit strictly below the variant's list price | `VariantDiscount.cs`, `ProductVariant.SetDiscount()` |
+| Discount window ordered | When both bounds are given, the end must be after the start; the start is inclusive and the end exclusive, and a null bound leaves that side open | `VariantDiscount.cs` |
+| Discount label max length | Max 50 characters (optional, trimmed at construction) | `VariantDiscount.cs` |
+| Effective price stays positive | Applying a discount must leave an amount greater than zero, so a zero-priced variant cannot carry one | `VariantDiscount.cs` |
+| Percentage rounding | A percentage result is rounded to two decimals, away from zero | `VariantDiscount.ApplyTo()` |
+| Price change re-validates the discount | Changing a discounted variant's list price fails when the stored discount no longer resolves against the new price; the admin clears the discount first | `ProductVariant.cs` |
+| Product-wide discount is all or nothing | A discount applied across a product is validated against every active variant before any variant is touched | `Product.SetDiscountOnAllVariants()` |
+| Discounting is a separate permission | Setting or clearing a discount requires `catalog:pricing:manage`, not the broader variant-management permission | `CatalogPermissions.cs`, `ProductVariantsController.cs` |
 
 ### 5.2 Shopping Cart Rules
 
@@ -844,7 +862,8 @@ members are only ever appended: `Shipped` is last in the enum even though it sit
 |----------|-------|-------------|
 | Manage categories | Admin | Create, rename, assign parent, delete categories |
 | Manage products | Admin | Create, rename, update description/brand/category of products |
-| Manage product variants | Admin | Add/remove variants, change SKU and price |
+| Manage product variants | Admin | Add/remove variants, change SKU and list price (the list price is what the variant editor edits; promotional pricing is a separate use case) |
+| Manage discounts | Pricing manager (`catalog:pricing:manage`) | Set or clear promotional pricing on one variant (a percentage off or a special price, with an optional window and label), or apply one discount across every active variant of a product in a single all-or-nothing write |
 | Manage inventory | Admin | Increase, decrease, or set stock levels per variant |
 | Mark order as paid | Admin | Manually override payment for an order |
 | Ship order | Admin | Record the carrier, tracking number and estimated delivery on a paid order; the customer is emailed the tracking link |
@@ -876,6 +895,13 @@ members are only ever appended: `Shipped` is last in the enum even though it sit
 | ProductVariantSkuChanged | SKU updated (only if actually differs) | Inventory tracking identifier changed |
 | ProductVariantPriceChanged | Price updated (only if actually differs) | Item pricing adjusted |
 | ProductReviewChanged | Review submitted, revised, hidden, unhidden, anonymized or removed | The product's rating summary is recomputed |
+
+Setting a variant discount, clearing one, and applying one across a whole product each raise
+`ProductVariantChanged` with the `Updated` state and the variant's **list** price, exactly as the
+price and SKU verbs do. The event contract does not grow a discount field: its consumers denormalize
+catalog labels and stock rows and none of them price anything, so a consumer that ever needs what a
+shopper pays asks `IProductVariantService.GetUnitPricesAsync`, which already answers with the
+effective price ([ADR-112](../adr/112-catalog-owned-effective-pricing.md)).
 
 ### Sales Events
 
@@ -1042,13 +1068,14 @@ The catalog browse page (`/catalog`) provides:
 - Category filter dropdown
 - Sort by name or price
 - Star rating and review count on each card, read straight off the product's denormalized `RatingSummary` so a grid of cards costs no per-card aggregate query
+- Effective-price range per card, with a sale badge and the struck-through list price when any variant on the card carries an active discount
 - Quick "Add to Cart" buttons per variant
 - "View Details" navigation to product detail page
 
 The product detail page (`/catalog/{id}`) shows:
 - Breadcrumbs (Home > Catalog > Product)
 - Product description, brand, category
-- Variant list with SKU, price, quantity selector, and "Add to Cart"
+- Variant list with SKU, price, quantity selector, and "Add to Cart". A discounted variant shows the effective price beside the struck-through list price and a sale badge, and carries an accessible "Was X, now Y" label so a screen reader hears both numbers rather than the visual strike alone
 - "Buy Now" option (direct Stripe checkout for single variant)
 - A reviews section (anchor `#reviews`) listing the published reviews, plus the review editor for a signed-in customer who is eligible to write or revise one
 

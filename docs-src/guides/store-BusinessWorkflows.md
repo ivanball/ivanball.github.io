@@ -57,6 +57,9 @@
 | 51 | Withdraw Product Review | `DELETE /reviews/{id}` | Catalog |
 | 52 | Hide Product Review | `PUT /reviews/{id}/hide` | Catalog |
 | 53 | Unhide Product Review | `PUT /reviews/{id}/unhide` | Catalog |
+| 54 | Set Variant Discount | `PUT /products/{id}/productvariants/{variantId}/discount` | Catalog |
+| 55 | Clear Variant Discount | `DELETE /products/{id}/productvariants/{variantId}/discount` | Catalog |
+| 56 | Discount All Variants | `PUT /products/{id}/discount` | Catalog |
 
 ---
 
@@ -360,7 +363,60 @@ SKU uniqueness verified globally (excluding current variant). Publishes `Product
 
 **Entry Point:** `PUT /products/{id}/productvariants/{variantId}/price`, Admin only
 
-Price must be positive. Publishes `ProductVariantPriceChanged` if changed.
+Price must be positive. Publishes `ProductVariantPriceChanged` if changed. The price edited here is
+the LIST price. A variant that carries a discount re-validates it against the new price and the
+change is refused when the pair would be inconsistent (a special price no longer below the list
+price, or a percentage leaving nothing), so the discount is cleared first.
+
+#### Set Variant Discount
+
+**Entry Point:** `PUT /products/{id}/productvariants/{variantId}/discount`, `catalog:pricing:manage`
+
+```
+ProductVariantsController.SetDiscountAsync()
+  -> SetProductVariantDiscountCommand (If-Match product ETag + VariantRowVersion in the body)
+    -> VariantDiscountRules validates kind, percentage, special price, window order, label
+    -> ProductVariantSetDiscountRequest.ToDiscount()
+      -> VariantDiscount.CreatePercentage() / CreateSpecialPrice() -> Result<VariantDiscount>
+    -> product.SetProductVariantDiscount(variantId, discount)
+      -> ProductVariant.SetDiscount() runs VariantDiscount.ApplyTo(Price) first
+      -> Publishes ProductVariantChanged (Updated) with the LIST price
+    -> SaveChangesAsync()
+  -> Evicts the catalog:products output-cache tag
+```
+
+Replaces any discount already on the variant. Returns 204; 400 on a broken invariant, 404 on an
+unknown product or variant, 412 on a stale ETag, 428 when `If-Match` is missing
+([ADR-035](../adr/035-optimistic-concurrency.md) two-token rule: the header carries the product's
+ETag, the body carries the variant's row version).
+
+#### Clear Variant Discount
+
+**Entry Point:** `DELETE /products/{id}/productvariants/{variantId}/discount`, `catalog:pricing:manage`
+
+Returns the variant to its list price, which was never rewritten, so there is nothing to restore.
+Clearing a variant that carries no discount changes nothing, so clearing twice is safe. Publishes
+`ProductVariantChanged` (Updated) and evicts the `catalog:products` tag. The body carries only the
+variant's row version; the status codes match the set action.
+
+#### Discount All Variants
+
+**Entry Point:** `PUT /products/{id}/discount`, `catalog:pricing:manage`
+
+```
+ProductsController.SetDiscountAsync()
+  -> SetProductDiscountCommand (If-Match product ETag)
+    -> ProductSetDiscountRequest.ToDiscount() -> Result<VariantDiscount>
+    -> product.SetDiscountOnAllVariants(discount)
+      -> ApplyTo() is checked against EVERY active variant's list price FIRST
+      -> All-or-nothing: one refusal leaves the product exactly as it was
+      -> Publishes one ProductVariantChanged (Updated) per variant, each with its LIST price
+    -> SaveChangesAsync()
+  -> Evicts the catalog:products output-cache tag
+```
+
+A product whose variants are priced differently either takes the promotion whole or is left
+untouched, so a half-discounted catalog page is not reachable.
 
 #### Remove Product Variant
 
@@ -863,6 +919,7 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 
 - `/catalog`, Product grid with name search, category filter, name/newest sort, quick "Add to Cart" per variant, and a star rating with review count on each card (read off the product's denormalized `RatingSummary`, so a grid costs no per-card aggregate query)
 - `/catalog/{id}`, Product detail with breadcrumbs, variant list, quantity selector, "Add to Cart" button, "Buy Now" (direct Stripe checkout), and a reviews section (anchor `#reviews`) listing published reviews with the review editor for an eligible signed-in customer
+- A discounted variant reads as a sale on both pages: the card shows a sale badge and an effective-price range, the variant card shows the effective price beside the struck-through list price, and the pair carries a "Was X, now Y" accessible label. The numbers are server-resolved, so a browser clock never decides whether a promotion is running
 
 #### Order Management
 
@@ -878,7 +935,7 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 | Category Detail | `/categories/{id}` | View/edit mode, parent link, product list |
 | Products | `/products` | MudDataGrid: name, brand, category, variants |
 | Product Create | `/products/create` | Form: name, description, brand, category |
-| Product Detail | `/products/{id}` | View/edit product, inline variant editor (add/edit/delete) |
+| Product Detail | `/products/{id}` | View/edit product, inline variant editor (add/edit/delete); the variants table adds a Discount column showing the badge and effective price against the struck-through list price, per-row Discount and Clear discount actions opening an inline dialog, and a "Discount all variants" button that applies one discount across the whole product |
 | Reviews | `/reviews` | MudDataGrid: every review whatever its status, search, hide/unhide moderation |
 | Inventory | `/inventory` | MudDataGrid: product name, SKU, quantity, in-stock |
 | Inventory Create | `/inventory/create` | Initialize new inventory item |
