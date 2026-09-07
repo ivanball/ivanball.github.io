@@ -221,6 +221,9 @@
           <h1 id="adr-112-catalog-owns-effective-pricing-sales-snapshots-it-at-checkout">ADR-112: Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-09-07).</p>
+          <p>Revised 2026-09-07: an order line freezes the list price and the promotion label beside the charged
+          unit price, so an order answers what it saved without asking Catalog again. The two cross-service
+          reply contracts grow additive fields for them; the integration events are untouched.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Store sells product variants, and a variant&#39;s price is one <code>Money</code> on the variant row
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:26</code>).
@@ -249,9 +252,11 @@
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:45-93</code>,
           migration <code>20260907185422_AddProductVariantDiscounts</code>, add-only per ADR-057). Product-level
           discounting is fan-out over the same value object, all or
-          nothing: <code>Product.SetDiscountOnAllVariants</code> validates the discount against every active variant&#39;s
-          list price before it touches any of them
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:583-606</code>).</p>
+          nothing: <code>Product.SetDiscountOnAllVariants</code> refuses a product that has no active variant to discount
+          (<code>Product.NoActiveVariants</code>, an invariant error surfaced as 400) and otherwise validates the discount
+          against every active variant&#39;s list price before it touches any of them
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:588-597</code>,
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductInvariants.cs:114</code>).</p>
           <p><strong>The list price is preserved and the effective price is computed in one method.</strong>
           <code>ProductVariant.Price</code> stays the list price whatever the discount says, so clearing a discount
           restores the original price with no bookkeeping. <code>ProductVariant.GetEffectivePrice(now)</code> and its
@@ -263,13 +268,39 @@
           and the cross-module pricing service over its projection
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductVariantService.cs:84-90</code>),
           both against an injected <code>TimeProvider</code>.</p>
-          <p><strong>Sales re-fetches at checkout and stores no cart price.</strong> <code>IProductVariantService.GetUnitPricesAsync</code>
-          returns the effective price rather than the list price, so <code>CheckOutHandler</code>, <code>CheckOutDomainService</code>
-          and <code>Order.Create</code> are unchanged: the discounted amount lands on <code>OrderLine.UnitPrice</code>, and the
-          receipt and the Stripe total follow from it. Neither the gRPC contract nor the
-          <code>ProductVariantChanged</code> integration event grows a field: the event keeps carrying the list price
-          (<code>Product.cs:545-546</code>), which is what its consumers denormalize, so ADR-010&#39;s schema-version rule is
-          not engaged and ADR-083&#39;s one-lifecycle-event-per-entity taxonomy is unchanged.</p>
+          <p><strong>Sales re-fetches at checkout, stores no cart price, and freezes the whole answer.</strong>
+          <code>IProductVariantService.GetUnitPricesAsync</code> replies with a <code>VariantUnitPrice</code> triple: the effective
+          price to charge, the list price it was struck from, and the active promotion&#39;s label
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/VariantUnitPrice.cs:32</code>,
+          <code>IProductVariantService.cs:104</code>). The label is resolved only while its discount is in force at the
+          instant asked, so an expired or not-yet-open window names nothing (<code>ProductVariantService.cs:103</code>).
+          <code>CheckOutHandler</code> translates the triple into Sales&#39; own <code>OrderLinePricing</code> record at the module
+          boundary (<code>CheckOutHandler.cs:75</code>, <code>OrderLinePricing.cs:22</code>), which is what keeps <code>Sales.Domain</code> free
+          of any reference to <code>Catalog.Shared</code>. The three values land on <code>OrderLine.UnitPrice</code>,
+          <code>OrderLine.ListPrice</code> and <code>OrderLine.PromotionLabel</code> (<code>OrderLine.cs:30,42,49</code>), guarded by
+          <code>OrderInvariants.EnsureListPriceIsValid</code> (non-negative, same currency, never below the unit price)
+          and <code>EnsurePromotionLabelIsValid</code> (50 characters) (<code>OrderInvariants.cs:38,60,87</code>). Only <code>UnitPrice</code>
+          is money owed: the line total and the Stripe total still follow from it alone.</p>
+          <p><strong>What the order saved is derived, not stored.</strong> <code>OrderLine.Savings</code> and <code>Order.TotalSavings</code> are
+          computed on read from the frozen pair and excluded from the EF mapping (<code>OrderLine.cs:65</code>,
+          <code>Order.cs:72</code>): a stored total could only ever disagree with the two numbers it restates. <code>OrderPaid</code>
+          carries the order&#39;s <code>TotalSavings</code> and each line&#39;s <code>ListPrice</code> and <code>PromotionLabel</code>
+          (<code>Orders/DomainEvents/OrderPaid.cs:21,42</code>), so the receipt email and the order detail page each show
+          a struck &quot;Was&quot; amount, the label (HTML-encoded in the email), an accessible &quot;Was X, now Y&quot; sentence
+          and a &quot;You saved&quot; total, every one only when there is a saving
+          (<code>Orders/DomainEventHandlers/OrderPaidHandler.cs:89,97,111</code>,
+          <code>Sales.UI/Pages/Orders/OrderLinesPanel.razor:56,72,95</code>).</p>
+          <p><strong>The wire contracts grow additive fields; the event contracts do not.</strong> <code>UnitPriceEntry</code> gains
+          <code>list_price = 3</code> and <code>promotion_label = 4</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:106,109</code>) and
+          the data-subject export line gains <code>list_price_amount = 6</code> and <code>promotion_label = 7</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Contracts/Protos/user_sales_export.proto:87,90</code>,
+          <code>UserSalesExportService.cs:70-71</code>): new numbers on existing messages, which a peer built against the
+          previous generation ignores. The <code>ProductVariantChanged</code> integration event keeps carrying the list
+          price and nothing else (<code>Product.cs:544-545</code>), so ADR-010&#39;s schema-version rule is not engaged and
+          ADR-083&#39;s one-lifecycle-event-per-entity taxonomy is unchanged. The two Sales columns land NOT NULL
+          with defaults plus a guarded backfill from the unit price, add-only under ADR-057
+          (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260907232734_AddOrderLineListPrice.cs:60-63</code>).</p>
           <p><strong>The effective price must stay above zero.</strong> Sales&#39; order-line validator rejects a non-positive unit
           price
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Validation/OrderLineValidationRules.cs:33</code>),
@@ -294,9 +325,10 @@
           old one somewhere anyway, which is the same field with worse naming.</p>
           <p>Putting the computation in the domain, and having the cross-service method return its result, keeps
           the pricing decision inside the service that owns pricing. Sales asks what a variant costs and gets
-          the number to charge; it never learns what a window or a percentage is. That is what leaves the wire
-          contract and the event contract untouched: the feature is entirely additive across the module
-          boundary, which is the property ADR-007 exists to protect.</p>
+          the number to charge; it never learns what a window or a percentage is, and the two members it gets
+          alongside are an amount and a string for display, not rules to evaluate. That is what keeps the
+          change additive across the module boundary: new proto field numbers, unchanged event contracts, and a
+          Sales domain that still knows nothing about promotions, which is the property ADR-007 protects.</p>
           <p>Checkout re-fetching rather than trusting a cart price is not new here, it is the existing rule
           (prices lock at checkout, not at cart-add) and it happens to be exactly what a timed promotion needs:
           a sale that ends between cart-add and checkout charges the list price, with no reconciliation job.</p>
@@ -308,9 +340,11 @@
           cached storefront read can show the pre-boundary price until the tag&#39;s five-minute TTL expires
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:155</code>). Checkout is never stale
           because it is a live cross-service call.</li>
-          <li><strong>Order lines record neither the list price nor the promotion name.</strong> A line carries one number, the
-          amount charged. &quot;This was 20% off Summer Sale&quot; is not answerable from an order after the fact.
-          Deliberate: adding those fields is an order-schema change, and nothing today asks the question.</li>
+          <li><strong>An order line records the two prices and the promotion&#39;s name, not the promotion itself.</strong> A line
+          answers &quot;struck from 24.99, charged at 19.99, Summer Sale&quot;, which is what the receipt, the order
+          page and the data-subject export render. It does not record the discount&#39;s kind, figure or window,
+          so &quot;was that 20% off or a special price&quot; is still unanswerable from an order after the fact: the
+          label is a string frozen for display, not a reference into a promotion nobody models.</li>
           <li><strong>No coupon codes, no category-wide or basket-level promotions, no stacking.</strong> One discount per
           variant, replaced wholesale. A future Promotion aggregate is not foreclosed: it would resolve into
           the same <code>ResolveEffectivePrice</code> call, which is the one place a price is decided.</li>

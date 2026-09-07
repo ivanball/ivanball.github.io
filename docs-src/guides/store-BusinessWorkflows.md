@@ -409,6 +409,7 @@ ProductsController.SetDiscountAsync()
   -> SetProductDiscountCommand (If-Match product ETag)
     -> ProductSetDiscountRequest.ToDiscount() -> Result<VariantDiscount>
     -> product.SetDiscountOnAllVariants(discount)
+      -> A product with NO active variant is refused first: Product.NoActiveVariants (400)
       -> ApplyTo() is checked against EVERY active variant's list price FIRST
       -> All-or-nothing: one refusal leaves the product exactly as it was
       -> Publishes one ProductVariantChanged (Updated) per variant, each with its LIST price
@@ -417,7 +418,9 @@ ProductsController.SetDiscountAsync()
 ```
 
 A product whose variants are priced differently either takes the promotion whole or is left
-untouched, so a half-discounted catalog page is not reachable.
+untouched, so a half-discounted catalog page is not reachable. A product with nothing to discount,
+because it has no variants yet or every one is soft-deleted, is a 400 rather than a write that
+succeeds over an empty set.
 
 #### Remove Product Variant
 
@@ -626,6 +629,8 @@ ShoppingCartsController.CheckOutAsync()
     -> Fetch ShoppingCart with items (tracking)
     -> Collect productVariantIds from cart items
     -> IProductVariantService.GetUnitPricesAsync(ids) [cross-module: Catalog, OUTSIDE the transaction]
+         each entry is effective price + list price + promotion label (VariantUnitPrice)
+    -> Translate each entry into Sales' own OrderLinePricing at the module boundary
     -> Reject any variant missing from the price map (soft-deleted between add and checkout)
     -> Fetch InventoryItems for all variants
     -> CheckOutDomainService.Execute():
@@ -633,7 +638,7 @@ ShoppingCartsController.CheckOutAsync()
         2. Validate inventory exists for all items
         3. Fail-fast sufficiency check per item against the point-in-time snapshot
            (NOT the oversell guard: that is the atomic decrement below)
-        4. Build order items (variant + price + quantity)
+        4. Build order items (variant + pricing triple + quantity)
         5. Order.Create(customerId, items) -> raises OrderChanged (Added)
         6. shoppingCart.MarkAsCheckedOut() -> publishes ShoppingCartCheckedOut
     -> orderRepository.AddAsync(order)
@@ -648,9 +653,14 @@ ShoppingCartsController.CheckOutAsync()
 **Business Steps:**
 
 1. Validate cart exists and has items
-2. Fetch current prices from Catalog module, and reject variants that no longer exist
+2. Fetch current pricing from Catalog module, and reject variants that no longer exist
 3. Fail-fast inventory sufficiency check against the loaded snapshot
-4. Create Order aggregate with OrderLines (price snapshot at time of purchase)
+4. Create Order aggregate with OrderLines. Each line freezes the effective price it is charged, the
+   list price that price was struck from and the active promotion's label, so the order can say what
+   it saved without asking Catalog again. Only the effective price is money owed: the line total, the
+   order total and the Stripe amount follow from it alone. `OrderLine.Savings` and
+   `Order.TotalSavings` are computed from the frozen pair on read and never stored
+   ([ADR-112](../adr/112-catalog-owned-effective-pricing.md))
 5. Transition cart to CheckedOut status
 6. Commit the write phase in one explicit transaction: atomic inventory decrements, then the order
    insert and cart transition
@@ -760,6 +770,12 @@ PaymentsController.HandleWebhookAsync()
 **Idempotency:** Already-paid or already-failed orders return success without modification.
 
 **Controller behavior:** Returns 400 only for signature verification failures; returns 200 for all other cases (including handler errors) to prevent Stripe retries.
+
+**Receipt email:** `OrderPaidHandler` turns `OrderPaid` into the payment confirmation. The event
+carries the order's total savings and each line's frozen list price and promotion label, so a
+discounted line prints a struck "Was" amount above the price charged with the label (HTML-encoded)
+beneath it, and the order gets a "You saved" total. Each of those appears only when there is a saving
+to show.
 
 #### Manual Admin Payment
 
@@ -926,6 +942,7 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 
 - `/orders`, MudDataGrid listing orders with ID, customer, total, status chips (Shipped included), item count; the admin search box also matches tracking numbers
 - `/orders/{id}`, Two-column layout: order summary (status, total, payment/shipping/delivery actions, and the carrier, tracking number and tracking link once the order ships) + order lines. The admin ship and correct-tracking actions open one `ShipOrderDialog`, which serves both endpoints
+- A discounted order line reads the same way the storefront does: the struck list price beside the price charged, a chip carrying the promotion label, and a "Was X, now Y" sentence for assistive tech since the two bare numbers are hidden from it. The order adds a "you saved" row when its total savings are above zero. Every number is the one frozen at checkout, so an order page never re-prices against a promotion that has since ended
 
 ### 4.2 Admin UI Workflows
 
@@ -989,7 +1006,7 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 | From -> To | Interface | Methods Used | Context |
 |-----------|-----------|-------------|---------|
 | Sales -> Catalog | `IProductVariantService` | `ExistsAsync()` | Cart item validation, inventory creation |
-| Sales -> Catalog | `IProductVariantService` | `GetUnitPricesAsync()` | Checkout pricing |
+| Sales -> Catalog | `IProductVariantService` | `GetUnitPricesAsync()` | Checkout pricing: effective price, list price and promotion label per variant |
 | Sales -> Catalog | `IProductVariantService` | `SkuExistsAsync()` | SKU uniqueness (Catalog internal) |
 | Sales -> Catalog | `IProductVariantService` | `GetIdBySkuAsync()` | Seed data inventory setup |
 | Sales -> Identity | `ICustomerService` | `GetContactInfoByIdAsync()` | Contact details for the order paid / shipped / payment-failed emails |

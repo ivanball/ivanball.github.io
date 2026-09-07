@@ -886,13 +886,16 @@
   -&gt; SetProductDiscountCommand (If-Match product ETag)
     -&gt; ProductSetDiscountRequest.ToDiscount() -&gt; Result&lt;VariantDiscount&gt;
     -&gt; product.SetDiscountOnAllVariants(discount)
+      -&gt; A product with NO active variant is refused first: Product.NoActiveVariants (400)
       -&gt; ApplyTo() is checked against EVERY active variant&#39;s list price FIRST
       -&gt; All-or-nothing: one refusal leaves the product exactly as it was
       -&gt; Publishes one ProductVariantChanged (Updated) per variant, each with its LIST price
     -&gt; SaveChangesAsync()
   -&gt; Evicts the catalog:products output-cache tag</code></pre>
           <p>A product whose variants are priced differently either takes the promotion whole or is left
-          untouched, so a half-discounted catalog page is not reachable.</p>
+          untouched, so a half-discounted catalog page is not reachable. A product with nothing to discount,
+          because it has no variants yet or every one is soft-deleted, is a 400 rather than a write that
+          succeeds over an empty set.</p>
           <h4 id="remove-product-variant">Remove Product Variant</h4>
           <p><strong>Entry Point:</strong> <code>DELETE /products/{id}/productvariants/{variantId}</code>, Admin only</p>
           <p>Soft delete on variant. Raises the <code>ProductVariantChanged</code> integration event with the <code>Deleted</code> state.</p>
@@ -1124,6 +1127,8 @@ Catalog: OrderFulfilledHandler
     -&gt; Fetch ShoppingCart with items (tracking)
     -&gt; Collect productVariantIds from cart items
     -&gt; IProductVariantService.GetUnitPricesAsync(ids) [cross-module: Catalog, OUTSIDE the transaction]
+         each entry is effective price + list price + promotion label (VariantUnitPrice)
+    -&gt; Translate each entry into Sales&#39; own OrderLinePricing at the module boundary
     -&gt; Reject any variant missing from the price map (soft-deleted between add and checkout)
     -&gt; Fetch InventoryItems for all variants
     -&gt; CheckOutDomainService.Execute():
@@ -1131,7 +1136,7 @@ Catalog: OrderFulfilledHandler
         2. Validate inventory exists for all items
         3. Fail-fast sufficiency check per item against the point-in-time snapshot
            (NOT the oversell guard: that is the atomic decrement below)
-        4. Build order items (variant + price + quantity)
+        4. Build order items (variant + pricing triple + quantity)
         5. Order.Create(customerId, items) -&gt; raises OrderChanged (Added)
         6. shoppingCart.MarkAsCheckedOut() -&gt; publishes ShoppingCartCheckedOut
     -&gt; orderRepository.AddAsync(order)
@@ -1144,9 +1149,14 @@ Catalog: OrderFulfilledHandler
           <p><strong>Business Steps:</strong></p>
           <ol>
           <li>Validate cart exists and has items</li>
-          <li>Fetch current prices from Catalog module, and reject variants that no longer exist</li>
+          <li>Fetch current pricing from Catalog module, and reject variants that no longer exist</li>
           <li>Fail-fast inventory sufficiency check against the loaded snapshot</li>
-          <li>Create Order aggregate with OrderLines (price snapshot at time of purchase)</li>
+          <li>Create Order aggregate with OrderLines. Each line freezes the effective price it is charged, the
+          list price that price was struck from and the active promotion&#39;s label, so the order can say what
+          it saved without asking Catalog again. Only the effective price is money owed: the line total, the
+          order total and the Stripe amount follow from it alone. <code>OrderLine.Savings</code> and
+          <code>Order.TotalSavings</code> are computed from the frozen pair on read and never stored
+          (<a href="../adr/112-catalog-owned-effective-pricing.html">ADR-112</a>)</li>
           <li>Transition cart to CheckedOut status</li>
           <li>Commit the write phase in one explicit transaction: atomic inventory decrements, then the order
           insert and cart transition</li>
@@ -1236,6 +1246,11 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid --&gt; Shipped --&gt; Deliver
       Other events: silently ignored (returns success)</code></pre>
           <p><strong>Idempotency:</strong> Already-paid or already-failed orders return success without modification.</p>
           <p><strong>Controller behavior:</strong> Returns 400 only for signature verification failures; returns 200 for all other cases (including handler errors) to prevent Stripe retries.</p>
+          <p><strong>Receipt email:</strong> <code>OrderPaidHandler</code> turns <code>OrderPaid</code> into the payment confirmation. The event
+          carries the order&#39;s total savings and each line&#39;s frozen list price and promotion label, so a
+          discounted line prints a struck &quot;Was&quot; amount above the price charged with the label (HTML-encoded)
+          beneath it, and the order gets a &quot;You saved&quot; total. Each of those appears only when there is a saving
+          to show.</p>
           <h4 id="manual-admin-payment">Manual Admin Payment</h4>
           <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/pay</code>, Admin only</p>
           <p>Validates status allows manual payment (PendingPayment, PaymentInitiated, or PaymentFailed). Sets <code>StripePaymentIntentId = &quot;manual-admin-override&quot;</code>, status -&gt; Paid. Publishes <code>OrderPaid</code>.</p>
@@ -1428,6 +1443,7 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid --&gt; Shipped --&gt; Deliver
           <ul>
           <li><code>/orders</code>, MudDataGrid listing orders with ID, customer, total, status chips (Shipped included), item count; the admin search box also matches tracking numbers</li>
           <li><code>/orders/{id}</code>, Two-column layout: order summary (status, total, payment/shipping/delivery actions, and the carrier, tracking number and tracking link once the order ships) + order lines. The admin ship and correct-tracking actions open one <code>ShipOrderDialog</code>, which serves both endpoints</li>
+          <li>A discounted order line reads the same way the storefront does: the struck list price beside the price charged, a chip carrying the promotion label, and a &quot;Was X, now Y&quot; sentence for assistive tech since the two bare numbers are hidden from it. The order adds a &quot;you saved&quot; row when its total savings are above zero. Every number is the one frozen at checkout, so an order page never re-prices against a promotion that has since ended</li>
           </ul>
           <h3 id="42-admin-ui-workflows">4.2 Admin UI Workflows</h3>
           <div class="table-wrap"><table>
@@ -1588,7 +1604,7 @@ PendingPayment --&gt; PaymentInitiated --&gt; Paid --&gt; Shipped --&gt; Deliver
           <td>Sales -&gt; Catalog</td>
           <td><code>IProductVariantService</code></td>
           <td><code>GetUnitPricesAsync()</code></td>
-          <td>Checkout pricing</td>
+          <td>Checkout pricing: effective price, list price and promotion label per variant</td>
           </tr>
           <tr>
           <td>Sales -&gt; Catalog</td>

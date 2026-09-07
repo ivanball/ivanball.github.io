@@ -315,6 +315,10 @@
           <td>Calculated order total (Money value, sum of all line totals)</td>
           </tr>
           <tr>
+          <td>TotalSavings</td>
+          <td>Computed: the sum of every line&#39;s Savings, in the order&#39;s currency. Zero when nothing on the order was discounted. Derived on read, never persisted</td>
+          </tr>
+          <tr>
           <td>Status</td>
           <td>Current lifecycle stage (see state machine below)</td>
           </tr>
@@ -362,18 +366,31 @@
           </tr>
           <tr>
           <td>UnitPrice</td>
-          <td>Price per unit at time of order (Money)</td>
+          <td>Price per unit actually charged at time of order (Money)</td>
+          </tr>
+          <tr>
+          <td>ListPrice</td>
+          <td>The undiscounted price the charge was struck from (Money), frozen alongside UnitPrice. Equal to UnitPrice when no promotion was in force</td>
+          </tr>
+          <tr>
+          <td>PromotionLabel</td>
+          <td>The storefront name of the promotion that moved the price (max 50 characters), or null when none was in force or the one in force carried no label</td>
           </tr>
           <tr>
           <td>LineTotal</td>
           <td>Computed: UnitPrice x Quantity</td>
+          </tr>
+          <tr>
+          <td>Savings</td>
+          <td>Computed: (ListPrice - UnitPrice) x Quantity, in the line&#39;s currency. Zero when the line was not discounted. Derived on read, never persisted</td>
           </tr>
           </tbody></table></div>
           <p><strong>Relationships:</strong></p>
           <ul>
           <li>Belongs to exactly one Order</li>
           </ul>
-          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs</code></p>
+          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs</code>,
+          <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLinePricing.cs</code></p>
           <hr>
           <h3 id="28-inventory-item">2.8 Inventory Item</h3>
           <p><strong>Description:</strong> Tracks available stock for a specific product variant. One inventory record per product variant (the inventory item ID equals the product variant ID).</p>
@@ -672,7 +689,8 @@
           <p><strong>Steps:</strong></p>
           <ol>
           <li>Fetch the customer&#39;s shopping cart with all items</li>
-          <li>Retrieve current unit prices for all product variants from the Catalog module (cross-module call)</li>
+          <li>Retrieve current pricing for all product variants from the Catalog module (cross-module call): the
+          effective price, the list price it was struck from, and the active promotion&#39;s label</li>
           <li>Fetch inventory items for all product variants</li>
           <li>Reject the checkout if any variant is missing from the price map (it was soft-deleted between
           cart-add and checkout), naming the offending variant</li>
@@ -680,7 +698,7 @@
           a. Validates the cart is not empty
           b. Validates inventory exists for every item in the cart
           c. Runs a <strong>fail-fast sufficiency check</strong> per item against the loaded snapshot
-          d. Creates Order Lines with current prices (price snapshot at time of purchase)
+          d. Creates Order Lines with the current pricing triple (price snapshot at time of purchase)
           e. Creates the Order with status <code>PendingPayment</code>
           f. Transitions the cart to <code>CheckedOut</code> status</li>
           <li>Commit the write phase inside one explicit transaction: the <strong>atomic conditional inventory
@@ -698,6 +716,9 @@
           active discount at the instant of the call, so the order line, the receipt and the Stripe total all
           carry the discounted amount and Sales never reasons about promotions
           (<a href="../adr/112-catalog-owned-effective-pricing.html">ADR-112</a>)</li>
+          <li>The list price and the promotion label are frozen beside the effective price on the same line, so
+          the order can say what it saved later without asking Catalog again. Only the effective price is
+          money owed: the line total, the order total and the Stripe amount all follow from it alone</li>
           <li>The write phase is atomic, but the command is <strong>deliberately not <code>ITransactional</code></strong>: the handler
           opens the transaction itself so the cross-module price fetch stays outside it and cross-service
           latency never extends lock hold time</li>
@@ -1217,6 +1238,11 @@
           <td><code>Product.SetDiscountOnAllVariants()</code></td>
           </tr>
           <tr>
+          <td>Product-wide discount needs a variant</td>
+          <td>A product with no active variant to discount is refused (<code>Product.NoActiveVariants</code>, a 400) rather than silently succeeding on an empty set</td>
+          <td><code>ProductInvariants.cs</code>, <code>Product.SetDiscountOnAllVariants()</code></td>
+          </tr>
+          <tr>
           <td>Discounting is a separate permission</td>
           <td>Setting or clearing a discount requires <code>catalog:pricing:manage</code>, not the broader variant-management permission</td>
           <td><code>CatalogPermissions.cs</code>, <code>ProductVariantsController.cs</code></td>
@@ -1292,6 +1318,21 @@
           <td><code>OrderInvariants.cs</code></td>
           </tr>
           <tr>
+          <td>List price not below unit price</td>
+          <td>An order line&#39;s frozen list price cannot be negative and cannot sit below the price actually charged</td>
+          <td><code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>List price currency matches</td>
+          <td>The frozen list price must be quoted in the same currency as the unit price</td>
+          <td><code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Promotion label max length</td>
+          <td>Max 50 characters, the same bound the Catalog discount label carries; null means no promotion was in force</td>
+          <td><code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
           <td>Cancellation restriction</td>
           <td>Only PendingPayment, PaymentInitiated, or PaymentFailed orders can be cancelled</td>
           <td><code>OrderInvariants.cs</code></td>
@@ -1363,8 +1404,13 @@
           </tr>
           <tr>
           <td>Price snapshot</td>
-          <td>Order lines capture the unit price at checkout time, not current catalog price</td>
-          <td><code>CheckOutDomainService.cs</code></td>
+          <td>Order lines capture the effective price, the list price it was struck from and the promotion label at checkout time, not the current catalog price</td>
+          <td><code>CheckOutDomainService.cs</code>, <code>OrderLinePricing.cs</code></td>
+          </tr>
+          <tr>
+          <td>Savings are derived</td>
+          <td><code>OrderLine.Savings</code> and <code>Order.TotalSavings</code> are computed from the frozen pair on every read and never stored, so no column can disagree with the prices it restates</td>
+          <td><code>OrderLine.cs</code>, <code>Order.cs</code></td>
           </tr>
           </tbody></table></div>
           <h3 id="54-inventory-rules">5.4 Inventory Rules</h3>
@@ -1581,7 +1627,7 @@
           <tr>
           <td>View order detail</td>
           <td>Customer</td>
-          <td>See order status, lines, payment information, and the carrier/tracking details once the order ships</td>
+          <td>See order status, lines, payment information, and the carrier/tracking details once the order ships. A discounted line shows the struck list price and the promotion label, and the order shows a &quot;you saved&quot; total</td>
           </tr>
           <tr>
           <td>Read product reviews</td>
@@ -1754,7 +1800,8 @@
           each raising <code>ProductVariantChanged</code> with the <code>Updated</code> state and the variant&#39;s <strong>list</strong> price. The
           event contract does not grow a discount field: its consumers denormalize catalog labels and stock rows
           and none of them price anything, so a consumer that ever needs what a shopper pays asks
-          <code>IProductVariantService.GetUnitPricesAsync</code>, which already answers with the effective price
+          <code>IProductVariantService.GetUnitPricesAsync</code>, which answers with the effective price, the list price it
+          was struck from and the active promotion&#39;s label
           (<a href="../adr/112-catalog-owned-effective-pricing.html">ADR-112</a>).</p>
           <h3 id="sales-events">Sales Events</h3>
           <div class="table-wrap"><table>
@@ -1798,7 +1845,7 @@
           </tr>
           <tr>
           <td><code>OrderPaid</code></td>
-          <td>Business event (carries the total and a snapshot of every order line)</td>
+          <td>Business event (carries the total, the order&#39;s total savings, and a snapshot of every order line including its list price and promotion label)</td>
           <td><code>Order.MarkAsPaid</code> (webhook) and <code>Order.MarkAsPaidManually</code></td>
           <td>Revenue collected; <code>OrderPaidHandler</code> emails the payment confirmation</td>
           </tr>
@@ -2002,7 +2049,7 @@
           <td><code>IProductVariantService</code></td>
           <td>Catalog</td>
           <td>Sales</td>
-          <td>Verify variant existence, check SKU uniqueness, fetch unit prices, get ID by SKU</td>
+          <td>Verify variant existence, check SKU uniqueness, fetch unit pricing (effective price, list price and promotion label), get ID by SKU</td>
           </tr>
           <tr>
           <td><code>ICustomerService</code></td>
@@ -2177,7 +2224,7 @@
           <hr>
           <h2 id="14-missing-or-unclear-business-logic">14. Missing or Unclear Business Logic</h2>
           <h3 id="141-email-notifications-cover-payment-and-shipping-only">14.1 Email Notifications Cover Payment and Shipping Only</h3>
-          <p><strong>Observation:</strong> Four handlers send email today: the password-reset request (Section 3.12), <code>OrderPaidHandler</code> (payment receipt), <code>OrderShippedHandler</code> (carrier, tracking number and tracking link, re-sent on every shipment correction) and <code>OrderPaymentFailedSagaHandler</code>. There is still no email at order placement (<code>OrderChanged</code> with the <code>Added</code> state), at delivery (<code>OrderDelivered</code>), or at cancellation (<code>OrderCancelled</code>).
+          <p><strong>Observation:</strong> Four handlers send email today: the password-reset request (Section 3.12), <code>OrderPaidHandler</code> (payment receipt, which prints a struck &quot;Was&quot; amount and the promotion label on a discounted line and a &quot;You saved&quot; total when the order saved anything), <code>OrderShippedHandler</code> (carrier, tracking number and tracking link, re-sent on every shipment correction) and <code>OrderPaymentFailedSagaHandler</code>. There is still no email at order placement (<code>OrderChanged</code> with the <code>Added</code> state), at delivery (<code>OrderDelivered</code>), or at cancellation (<code>OrderCancelled</code>).
           <strong>Recommendation:</strong> Confirm whether an order-confirmation and a delivery-confirmation message are wanted; both would be additional <code>IDomainEventHandler&lt;T&gt;</code> registrations on events that already exist, not new plumbing.</p>
           <h3 id="142-no-returnrefund-workflow">14.2 No Return/Refund Workflow</h3>
           <p><strong>Observation:</strong> Once an order reaches <code>Paid</code> or <code>Delivered</code> status, there are no further state transitions available. No return, refund, or exchange workflow exists. Cancellation is only possible before payment succeeds.
