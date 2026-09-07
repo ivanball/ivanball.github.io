@@ -4,7 +4,8 @@
 Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21, provider-email validation ahead of the by-email lookup documented 2026-07-25, one-provider-link-per-user conflict branch documented and the provider-columns migration attribution corrected 2026-09-01).
 Revised 2026-09-07 (an external account's empty credential is explicitly non-authenticating on both
 login and change-password, an OAuth completion must match a flow this client started, and ADC's
-link-by-email requires a provider-verified address).
+link-by-email requires both a provider-verified address and a local
+account that has no password).
 ## Context
 The framework's Identity story so far is entirely first-party: a user registers with an email and
 password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -193,7 +194,23 @@ Three changes from the 2026-09-07 security review.
    A code that arrives without a matching local attempt is dropped, so a deep-linked or emailed
    completion URL cannot force the browser to sign in as the attacker's account. Enforcement follows
    the store's availability (`IsEnforced`, `:39`).
-3. **ADC's link-by-email requires a provider-verified address.** The `UserRegistered` integration
+3. **ADC's link-by-email requires a provider-verified address AND a password-less local account.**
+   Both halves are load-bearing, and each answers a different failure. The verifier proves only the
+   provider side of the address, so `ExternalLoginAsync` first refuses a link when the provider did
+   not assert the email as verified
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:306`,
+   answering `Auth.ExternalEmailNotVerified` at `:309`). It then refuses when the matched local
+   account already signs in with a password (`:321`, answering `Auth.ExternalLinkRequiresLocalSignIn`
+   at `:324`), because nothing proves that local row's address was ever confirmed: the account may
+   have been opened by whoever merely typed the address into the registration form, and linking would
+   hand that person the provider owner's account while leaving their chosen password in place
+   (`:314-320`). Only an account nobody can sign into with a password is claimable by an email match,
+   which the aggregate states as `User.HasLocalPassword`
+   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:120`, with the reasoning
+   at `:114-119`); the state lives on the aggregate rather than being inferred from the raw hash at
+   the call site. Everyone else proves possession by signing in with the password first and linking
+   the provider from their profile, which is what the refusal message tells them (`:325`).
+4. **The same verified-email requirement gates ADC's speaker auto-link.** The `UserRegistered` integration
    event carries `EmailVerified` (default `false`,
    `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:42`),
    and the Conference-side handler links a speaker only when that flag says an external provider
