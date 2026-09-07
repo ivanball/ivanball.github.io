@@ -14,7 +14,8 @@ the inbox does, ON for a broker and OFF for `InProcess`, so a single-process hos
 directly and runs neither background service; a broker with the outbox explicitly disabled is refused
 at startup; and the `OutboxMessages` table stays mapped either way, so the flag is never a migration.
 Everything below describes the outbox a host that runs it gets, unchanged.
-
+Revised 2026-09-07 (shared broker and cache resources are namespaced per application by default,
+so an unset `MessageBus:EndpointPrefix` now yields prefixed queue names).
 ## Context
 Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:
 1. In-process dispatch fails (e.g., handler throws): the event is lost if not persisted.
@@ -236,3 +237,26 @@ hands a consumer twice.
    `:74`, rethrow at `:81`, detach at `EfInboxStore.cs:106-109`). ADR-021 owns the inbox contract; this is the
    outbox-side consequence, and it makes the delivery story symmetric: the outbox guarantees the event
    leaves, the inbox guarantees it lands once.
+
+## Revision (2026-09-07)
+The dispatch model is unchanged. What changed is the **name** the outbox's downstream resources take
+by default, from the 2026-09-07 security review (SEC-Common-53).
+
+`ApplicationNamespace.Resolve`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53`)
+derives one namespace from `Application:Namespace`, falling back to the host application name, and
+that namespace now supplies three defaults that used to be empty: `MessageBus:EndpointPrefix`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:66`, resolved at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:793`), `Cache:KeyPrefix`
+and with it the distributed-lock keyspace
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:83`, rationale at
+`:68`), and the SignalR Redis backplane channel prefix (`DependencyInjection.cs:653`). Two
+applications sharing one broker or one Redis therefore no longer share a queue name or a cache key by
+accident.
+
+**The cutover rule this creates.** Adopting the upgrade renames resources: queue names gain a prefix,
+cache and lock keys gain a prefix (a cold cache after deploy), and the backplane moves channel. A
+consumer that must keep its current names pins the pre-upgrade values explicitly (set
+`Application:Namespace`, or the individual prefix keys) **before** upgrading; a consumer that takes
+the new names drains the old broker queues on cutover, because in-flight messages sit under the old
+endpoint name and nothing reads it afterwards.

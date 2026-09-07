@@ -2,7 +2,9 @@
 
 ## Status
 Accepted (2026-07-06; revised 2026-07-21).
-
+Revised 2026-09-07 (MMCA.Common pins every action by commit SHA and every global tool by version,
+restores in locked mode, fails the vulnerability gate closed, and gates the release behind a
+protected environment plus a merged-main assertion).
 ## Context
 MMCA.Common is a published framework: it packs its NuGet packages and pushes them to GitHub Packages
 on every `v*` tag (release.yml:3-5), where the two production apps and the reference seed consume
@@ -99,6 +101,37 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
 - **Source mapping constrains where packages come from.** Restricting to nuget.org (nuget.config:15)
   is the point, but it means adding a dependency from any other feed is a deliberate `nuget.config`
   edit, not an ambient possibility.
+
+## Revision (2026-09-07)
+The provenance chain gained the controls that make it reproducible under an attacker, from the
+2026-09-07 security review.
+
+1. **Actions are pinned by commit SHA, not by a mutable tag** (SEC-Common-59). Every `uses:` in
+   MMCA.Common's pipelines names a 40-character SHA with the tag as a trailing comment, in CI
+   (`MMCA.Common/.github/workflows/ci.yml:51`, `:96`, `:245`) and in the release
+   (`MMCA.Common/.github/workflows/release.yml:22`, `:44`, `:89`, and `NuGet/login` at `:109`). A tag
+   is a movable pointer in someone else's repository; the SHA is what a supply-chain record can
+   actually claim.
+2. **Global tools are version-pinned** (SEC-Common-58 / SEC-ADC-35). `CycloneDX` is installed at
+   `--version 6.2.0` in both release jobs (`release.yml:83`, `:186`) and `dotnet-coverage` at
+   `--version 18.11.0` in CI (`ci.yml:172`, `:336`). The SBOM generator in particular ran unpinned
+   inside the job that goes on to publish, which put an unreviewed binary upstream of the artifact
+   the SBOM describes.
+3. **Restores run in locked mode** (SEC-Common-63 / SEC-ADC-34). `dotnet restore MMCA.Common.slnx --locked-mode`
+   in CI (`ci.yml:129`, and the same flag on the other restore steps at `:103`, `:217`, `:296`) and
+   in the release (`release.yml:62`, `:163`). The lock files were committed but never enforced, so a
+   drifted graph silently re-resolved rather than failing.
+4. **The vulnerability gate fails closed** (SEC-Common-62). The audit step captures the tool's exit
+   code and fails the job when `dotnet list --vulnerable` itself errors (`ci.yml:146-149`) instead of
+   reading an empty log as a clean result, and it honors the same accepted-advisory list the build
+   uses, sourced from `Directory.Build.props` (`:154-166`).
+5. **The publish is gated** (SEC-Common-64). Both release jobs declare `environment: release`
+   (`release.yml:16`, `:127`) and assert the tagged commit is on merged `main` before doing anything
+   (`:34`, `:145`). A push to nuget.org is irreversible, so the one ref that is not reviewed through
+   a pull request gets a check that it descends from one that was.
+6. **Store watches its base images.** A `docker` ecosystem joins the GitHub Actions one in Store's
+   Dependabot configuration (`MMCA.Store/.github/dependabot.yml:32`, beside `:15`), which is what
+   keeps a digest-pinned base image (ADR-093) from becoming a pin to a stale layer.
 
 ## Related
 ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency

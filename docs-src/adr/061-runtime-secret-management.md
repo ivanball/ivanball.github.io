@@ -3,7 +3,8 @@
 ## Status
 Accepted (2026-08-01; vault-backed configuration source recorded and citations re-anchored 2026-08-23;
 gateway synthetic-traffic secret recorded and citations re-anchored 2026-09-03).
-
+Revised 2026-09-07 (each service gets its own Service Bus SAS rule instead of sharing one
+namespace-wide rule, and ADC gained parameterized Data Protection key-ring posture knobs).
 ## Context
 A Container App can hold a credential two ways: as a literal value in the app's own `secrets`
 collection, or as a reference to a Key Vault secret that the platform resolves at runtime through an
@@ -194,6 +195,32 @@ consumer-by-consumer state is named.
   `CREATE USER ... FROM EXTERNAL PROVIDER` grants are run and the flag is set, the shared SQL admin
   login is still what every service authenticates with, so password rotation is deferred rather than
   solved. Same audit-the-inventory caveat as ADR-018 and ADR-020.
+
+## Revision (2026-09-07)
+Two changes from the 2026-09-07 security review.
+
+1. **Per-service Service Bus SAS rules** (SEC-ADC-26 / SEC-Store-38). One namespace-wide rule shared
+   by every service means any one compromised service holds every other service's rights on the
+   broker, and rotating it is an all-services outage. Both templates now declare a rule per service
+   beside the namespace rule: ADC has Identity, Conference, Engagement and Notification rules
+   (`MMCA.ADC/infra/main.bicep:977`, `:989`, `:1001`, `:1013`, beside `:934`), and Store has Catalog,
+   Sales and Identity rules (`MMCA.Store/infra/main.bicep:1005`, `:1017`, `:1029`, beside `:966`).
+   Each service's connection string is sourced from its own rule, so a rotation is scoped to one
+   service and a leaked credential names its holder.
+2. **Data Protection key-ring posture is parameterized in ADC** (SEC-ADC-12 / SEC-ADC-48). The key
+   ring is persisted to blob storage (`MMCA.ADC/infra/main.bicep:1584`, application name at `:1585`),
+   which by itself leaves it unencrypted at rest. Encrypting it needs three independently reversible
+   steps, because the middle one is a role assignment the deploy identity deliberately lacks
+   (the same restriction as `grantAvatarStorageRole`): `createDataProtectionKeyVaultKey` mints the
+   key (`:135`, resource at `:1354`), an operator grants the apps identity **Key Vault Crypto User**
+   on it by hand, and only then does `dataProtectionKeyVaultKeyUri` (`:137`) switch the hosts over
+   (`hasDataProtectionKek` at `:155`, env var at `:1634-1635`). With the URI set and the role
+   missing, the Identity and UI hosts fail to wrap the key ring and authentication breaks, which is
+   why the knobs are separate and both default off. The storage account's Shared Key posture is a
+   third parameter (`:131`), documented as still required by the disaster-recovery bacpac path.
+
+**Not changed here:** Key Vault purge protection is not enabled by either template as of this
+revision.
 
 ## Related
 ADR-037 (`037-field-level-encryption-at-rest.md:108-110` directs a consumer to keep the

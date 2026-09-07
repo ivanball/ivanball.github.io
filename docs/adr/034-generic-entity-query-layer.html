@@ -230,7 +230,10 @@
           generic arity is deliberately unchanged; everything below is untouched.
           Revised (2026-08-31): the update-applier interface is named <code>IEntityUpdateCommandApplier</code>
           (<code>Source/Core/MMCA.Common.Application/UseCases/Crud/IEntityUpdateCommandApplier.cs:38</code>); source
-          citations below rebased to their current lines.</p>
+          citations below rebased to their current lines.
+          Revised 2026-09-07 (sort keys, filter keys and lookup name columns resolve against the response
+          contract rather than the entity, navigation depth and lookup rows are capped, and the selector cache
+          is bounded).</p>
           <h2 id="context">Context</h2>
           <p>Every module exposes many entities, and most of them need the same read and write
           surface: list, page, look up for a dropdown, fetch by id, create, delete. Hand
@@ -366,6 +369,42 @@
           so a controller that needs bespoke behavior overrides the specific action rather
           than abandoning the base, but the default surface is opt-out, not opt-in.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>The query layer&#39;s shape is unchanged. What a caller is allowed to <strong>name</strong> is not, from the
+          2026-09-07 security review.</p>
+          <ol>
+          <li><strong>Client keys resolve against the DTO contract</strong> (SEC-Common-25 / SEC-ADC-09). <code>QueryFieldContract</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/QueryFieldContract.cs:34</code>) holds a
+          response type&#39;s public property names, built with <code>For&lt;TContract&gt;()</code> (<code>:56</code>) or narrowed with
+          <code>ForNames</code> (<code>:83</code>), and tested through <code>AllowsClientKey</code> (<code>:103</code>).
+          <code>EntityQueryService.FieldContract</code> defaults to <code>QueryFieldContract.For&lt;TEntityDTO&gt;()</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:123</code>) and flows
+          through <code>EntityQueryParameters</code> into sorting and filtering. A key the property map does not cover
+          must name a contract field, and a dotted path the server did not author is refused, so a caller
+          can neither order a public page by a column the mapper redacts nor turn a list endpoint into an
+          inference oracle over the object graph. Overriding <code>FieldContract</code> with <code>null</code> restores the old
+          entity-based resolution.</li>
+          <li><strong>Navigation depth is capped at three segments.</strong> <code>QueryFieldContract.MaxNavigationDepth</code> (<code>:42</code>)
+          is enforced by <code>IsWithinNavigationDepth</code> (<code>:115</code>, <code>:130</code>) on any resolved entity path, whoever
+          authored it. A self-referencing segment repeated hundreds of times is otherwise that many LEFT
+          JOINs from one anonymous request (SEC-Store-13).</li>
+          <li><strong>The lookup read is contract-bound and capped</strong> (SEC-Common-24).
+          <code>EntityQueryService.LookupNameContract</code> (<code>:135</code>, defaulting to <code>FieldContract</code>) validates the
+          caller&#39;s <code>nameProperty</code> and answers 400 for anything else (<code>:393</code>), and
+          <code>EFReadRepository.GetAllForLookupAsync</code> applies <code>EntityQueryPipeline.MaxUnboundedResultLimit</code>
+          (1000,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:23</code>) at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:244</code>.
+          The lookup was the one read that never entered the pipeline enforcing that limit.</li>
+          <li><strong>The selector cache is bounded and canonically keyed</strong> (SEC-Store-14). <code>QueryFieldService</code> caps
+          the compiled-selector cache at <code>MaxCacheEntries</code> 512
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:39</code>, documented at
+          <code>:323</code> and <code>:574</code>) and keys on the property&#39;s canonical name, so the case permutations of one real
+          column collapse onto a single entry instead of minting an unevictable one each.</li>
+          </ol>
+          <p><strong>Adopting this is a behaviour change.</strong> A client key naming a field only the entity carries now
+          answers 400. The fix is to add the field to the DTO, map it in <code>DTOToEntityPropertyMap</code>, or override
+          <code>FieldContract</code>.</p>
           <h2 id="related">Related</h2>
           <p>ADR-001 (manual DTO mapping: the generic controllers project through
           <code>IEntityDTOMapper</code>), ADR-002 (navigation populators: the unsupported-include path),
@@ -431,6 +470,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-07-24">Revision (2026-07-24)</a></li>
             <li><a href="#revision-2026-07-25">Revision (2026-07-25)</a></li>

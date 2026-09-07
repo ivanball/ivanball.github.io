@@ -223,7 +223,9 @@
           citations). The implementation lands in the MMCA.Common &quot;enterprise capability wave&quot; release
           and is opt-in twice over: <code>AddAuditTrail(configuration)</code> registers the interceptor and the settings, and
           an entity is audited only when it carries the <code>IAuditedEntity</code> marker. Absent registration the interceptor
-          is not resolved and the whole feature is a no-op.</p>
+          is not resolved and the whole feature is a no-op.
+          Revised 2026-09-07 (Store pins the reverse <code>[Pii]</code> convention with a fitness test, and deployed SQL
+          auditing backstops the in-database trail).</p>
           <h2 id="context">Context</h2>
           <p>The framework already answers &quot;who touched this row last&quot;. Every <code>AuditableBaseEntity</code> carries
           <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code>, stamped by <code>AuditSaveChangesInterceptor</code> on the way into
@@ -372,6 +374,25 @@
           from the day <code>AddAuditTrail</code> is called; nobody sees them until a consumer writes a page or an endpoint
           over <code>IAuditTrailReader</code>.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>Two additions from the 2026-09-07 security review.</p>
+          <ol>
+          <li><strong>The <code>[Pii]</code> convention is now checked in both directions</strong> (SEC-Store-19 / SEC-Store-24). The
+          shared base already obliged a <code>[Pii]</code> property&#39;s entity to be anonymizable. Store adds the reverse
+          assertion: whatever <code>Anonymize()</code> actually overwrites must carry <code>[Pii]</code>
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/PiiConventionTests.cs:76</code>),
+          with a companion test that every anonymizable domain entity is covered by a sample so the first
+          test cannot pass vacuously (<code>:55</code>). This catches the failure mode the forward rule cannot: a field
+          the erasure path overwrites but the attribute does not cover keeps its pre-erasure value in the
+          audit trail&#39;s <code>OldValue</code> for the full retention window (<code>:106</code>), which is an erasure promise
+          broken by the record that exists to prove erasure happened.</li>
+          <li><strong>The trail is backstopped by database-level auditing</strong> (SEC-Store-21). The application owns its
+          own trail table, so an actor with write access to the database can edit the evidence. Both apps
+          now deploy SQL auditing to the Log Analytics workspace (<code>MMCA.ADC/infra/main.bicep:790</code>,
+          <code>MMCA.Store/infra/main.bicep:833</code>), which records the statements outside the application&#39;s reach.
+          That does not make the in-database trail tamper-evident, and this record does not claim it does:
+          it means a tampering event leaves a trace somewhere the same credential cannot reach.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the same-transaction write this copies wholesale, including the
           retry-discard and the <code>Add</code>-only mutation rule),
@@ -400,6 +421,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -19,7 +19,8 @@ re-anchored after file moves inside `MMCA.Common`: `MessageBusSettings.cs` now s
 `Messaging/` and the shared test fixture bases under `MMCA.Common.Testing/Fixtures/`; the Azure
 Service Bus emulator host build moved out of `ConfigureBrokerTransport` into the
 `ServiceBusEmulatorSupport` helper, so the bullet describing that branch is restated).
-
+Revised 2026-09-07 (the single shared client SAS is replaced by a rule per service in both
+consumers, so broker rights and rotations are scoped to one service).
 ## Context
 ADR-003 decides that integration events leave an aggregate through the outbox and are published by
 `OutboxProcessor` via `IMessageBus`, and it settles the *dispatch* question ("in-process for the
@@ -224,6 +225,21 @@ broker, so extraction later is an AppHost change rather than a code change.
   the call it describes at `:132`). The `ADC_BROKER` opt-in adds a second block of the same kind, a
   23-line rationale above the selection itself (`:66-88`). Keeping the transport decision in
   orchestration code puts the explanation in comments, which are not checked by anything.
+
+## Revision (2026-09-07)
+The transport selection is unchanged. The credential topology under it is (SEC-ADC-26 /
+SEC-Store-38).
+
+Both repos previously sourced their Service Bus connection strings from one shared authorization
+rule on the namespace. Each service now has its own: ADC declares Identity, Conference, Engagement
+and Notification rules (`MMCA.ADC/infra/main.bicep:977`, `:989`, `:1001`, `:1013`) beside the
+namespace-level rule (`:934`), and Store declares Catalog, Sales and Identity rules
+(`MMCA.Store/infra/main.bicep:1005`, `:1017`, `:1029`) beside `:966`.
+
+The consequence for this record is operational rather than architectural: dev/prod parity is
+unaffected (the emulator tier has no SAS at all), but a rotation is now a per-service action instead
+of a synchronized restart of every service on the namespace, and a leaked connection string names
+which service leaked it.
 
 ## Related
 ADR-003 (the outbox that feeds `IMessageBus`; this ADR picks the transport underneath it), ADR-016

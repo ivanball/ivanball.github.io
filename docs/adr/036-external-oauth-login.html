@@ -219,7 +219,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-036-external-oauth-login-federated-googlegithub-with-local-jwt-exchange">ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21, provider-email validation ahead of the by-email lookup documented 2026-07-25, one-provider-link-per-user conflict branch documented and the provider-columns migration attribution corrected 2026-09-01).</p>
+          <p>Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21, provider-email validation ahead of the by-email lookup documented 2026-07-25, one-provider-link-per-user conflict branch documented and the provider-columns migration attribution corrected 2026-09-01).
+          Revised 2026-09-07 (an external account&#39;s empty credential is explicitly non-authenticating on both
+          login and change-password, an OAuth completion must match a flow this client started, and ADC&#39;s
+          link-by-email requires a provider-verified address).</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s Identity story so far is entirely first-party: a user registers with an email and
           password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -384,6 +387,40 @@
           rather than relinked, and the rejection message points the person back at the provider already
           linked, or at Forgot password to set a local one (<code>AuthenticationService.cs:214</code>).</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>Three changes from the 2026-09-07 security review.</p>
+          <ol>
+          <li><strong>The empty credential an external account carries is explicitly non-authenticating</strong>
+          (SEC-Common-01). This record already said an external-login account is created with no password;
+          what it did not say is what the password paths do with that shape.
+          <code>AuthenticationServiceBase.LoginAsync</code> now refuses password login for an account with no stored
+          credential before it verifies anything
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:151</code>,
+          predicate at <code>:758</code>), answering exactly as it does for an unknown address, cost included (<code>:153</code>).
+          <code>ChangePasswordHandlerBase</code> refuses ahead of its own verify
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:73</code>):
+          an account with no current password has no current password to prove, so it has no
+          change-password path either. The consequence for adopters is that linking a local password to an
+          external account is an explicit flow, never a side effect of change-password.</li>
+          <li><strong>A completion is bound to the flow this client started</strong> (SEC-Common-85). <code>OAuthFlowStateStore</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/OAuth/OAuthFlowStateStore.cs:20</code>)
+          mints a per-attempt value before the challenge (<code>BeginAsync</code>, <code>:46</code>) into device-local storage
+          under one key (<code>:23</code>), and the completion page round-trips it (<code>TryCompleteAsync</code>, <code>:68</code>).
+          A code that arrives without a matching local attempt is dropped, so a deep-linked or emailed
+          completion URL cannot force the browser to sign in as the attacker&#39;s account. Enforcement follows
+          the store&#39;s availability (<code>IsEnforced</code>, <code>:39</code>).</li>
+          <li><strong>ADC&#39;s link-by-email requires a provider-verified address.</strong> The <code>UserRegistered</code> integration
+          event carries <code>EmailVerified</code> (default <code>false</code>,
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:42</code>),
+          and the Conference-side handler links a speaker only when that flag says an external provider
+          asserted the address
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:14-22</code>,
+          match at <code>:70</code>). An address typed into a local registration form proves nothing, and a speaker
+          profile carries rights over that speaker&#39;s own record and sessions, so a local password
+          registration under a speaker&#39;s address links nothing and is logged as an organizer cue instead
+          (<code>:31-33</code>). Sessionize-imported speakers, whose email is always null, are linked deliberately by
+          an organizer through <code>PUT /Speakers/{id}/link</code> (BR-209).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the RS256/JWKS token this flow exchanges the external identity <em>for</em>, and validates
           everywhere after), ADR-022 (the browser cookies that carry the resulting session), ADR-029 (the
@@ -407,6 +444,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

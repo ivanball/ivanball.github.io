@@ -13,7 +13,8 @@ handler's own unit of work so it commits atomically with the handler's mutations
 record's three-valued resolution rule to the **producer** side: `MessageBus:EnableOutbox` is `bool?`
 and resolves from the transport the same way `EnableInbox` does here, so the two settings now read
 identically. Nothing about the inbox contract changes.
-
+Revised 2026-09-07 (queue and endpoint names are prefixed per application by default, so a
+consumer either pins its pre-upgrade prefix or drains its old queues on cutover).
 ## Context
 ADR-003 makes integration-event delivery **at-least-once**: the outbox guarantees a published event
 is not lost, and the MassTransit broker redelivers on consumer failure. At-least-once means a
@@ -126,6 +127,24 @@ default.
 - **Dedup is keyed on `MessageId`, not payload.** Dedup is per-message-identity (the intended
   granularity); a producer that re-published the *same* business action under a *new* `MessageId`
   would not be deduped by the inbox.
+
+## Revision (2026-09-07)
+Inbox idempotency is unchanged. The names the consumer endpoints take are not (SEC-Common-53).
+`MessageBus:EndpointPrefix` left unset used to mean "no prefix"; it now defaults to the resolved
+application namespace
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:66`, resolved
+through `ApplicationNamespace.Resolve` at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:793`; the resolver itself
+is at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53` and
+takes `Application:Namespace`, falling back to the host application name).
+
+This matters here because the inbox is keyed per consumer endpoint. A rename moves the endpoint, so
+the cutover rule is explicit: a consumer that must keep its current endpoint names pins the
+pre-upgrade value (`Application:Namespace` or `MessageBus:EndpointPrefix`) **before** upgrading, and
+a consumer that accepts the new names drains the old queues, because messages already sitting under
+the old endpoint name have no subscriber afterwards. The inbox rows themselves are unaffected: they
+record the message id, and a redelivery under the new endpoint is still recognised as a duplicate.
 
 ## Related
 ADR-003 (the outbox and at-least-once delivery whose consumer side this deduplicates; handler

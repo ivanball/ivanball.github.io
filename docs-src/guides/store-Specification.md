@@ -634,7 +634,7 @@ exported, because they duplicate order facts Sales already exports.
 
 | Endpoint | Auth | Notes |
 |----------|------|-------|
-| `GET /Reviews/by-product/{productId}/paged` | Anonymous | Published reviews of one product, newest first, page size capped server-side. Output-cached under the shared `ProductsCache` policy |
+| `GET /Reviews/by-product/{productId}/paged` | Anonymous | Published reviews of one product, newest first, page size capped server-side. Returns `PublicProductReviewDTO`, which declares no `CustomerId` and no `OrderId`: a pseudonymous key kept through anonymization would re-attach every anonymized review to one subject (ADR-005). The caller's `sortColumn` is validated against that same type. Output-cached under the shared `ProductsCache` policy |
 | `GET /Reviews/by-product/{productId}/mine` | Authenticated customer | The caller's eligibility: `HasPurchased`, `CanReview` (the entitlement minus an existing review), and their own review when there is one |
 | `POST /Reviews/by-product/{productId}` | Authenticated customer | Submit. `[Idempotent]` (`Idempotency-Key` header) |
 | `PUT /Reviews/{id}` | Owner or Admin | Revise the rating and text. Mandatory `If-Match` |

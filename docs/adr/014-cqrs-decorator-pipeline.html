@@ -228,7 +228,9 @@
           joins the <strong>query</strong> chain, and the registration sequence gains a sealed composition path plus a
           fitness hook). Revised 2026-08-31 (correction: both Validating decorators run <strong>every</strong> registered
           validator and union the failures, they do not stop at the first registration; the sealed composition
-          path is the shipped idiom in all seven production service hosts; citations refreshed).</p>
+          path is the shipped idiom in all seven production service hosts; citations refreshed).
+          Revised 2026-09-07 (the caching decorator&#39;s key carries the calling user for a query that declares
+          itself caller-scoped, with an explicit opt-out marker).</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -474,6 +476,23 @@
           decorators deep and a query six, and the &quot;registration order is the reverse of execution order&quot;
           foot-gun is unchanged, but its worst outcome (a handler that quietly runs undecorated) is now a throw
           rather than a silence.</p>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>One decorator&#39;s key composition changed (SEC-Common-19 / SEC-Common-37). <code>CachingQueryDecorator</code>
+          builds its entry key as <code>TenantCacheKey.Scope(tenantContext, UserCacheKey.Scope(cacheable, cacheable.CacheKey))</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:59</code>):
+          the tenant scope that was always there now wraps a <strong>caller</strong> scope. <code>UserCacheKey</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/UserCacheKey.cs:26</code>) appends the
+          target user when the query implements <code>IUserScopedRequest</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/IUserScopedRequest.cs:8</code>), and the new
+          <code>ISharedQueryCache</code> marker
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Markers/ISharedQueryCache.cs:21</code>) opts a
+          genuinely public result back out.</p>
+          <p>Two consequences for handler authors, which are the reason this sits in the pipeline record rather
+          than only in the caching one. A query whose result depends on who is asking has to say so on the
+          request type: the decorator cannot infer it, and a query that carries the target user in its own
+          payload already varies its <code>CacheKey</code> by construction. And because the user segment is a <strong>suffix</strong>,
+          the prefix-based invalidation the decorators already do still clears every caller&#39;s copy in one
+          sweep.</p>
           <h2 id="related">Related</h2>
           <p>ADR-013 (Result, the short-circuit currency of the pipeline, and the <code>Failure</code> error type the timeout
           decorator reuses because the taxonomy has no timeout member), ADR-003 (handlers raise domain events
@@ -502,6 +521,7 @@
             <li><a href="#revision-2026-07-19">Revision (2026-07-19)</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-08-26">Revision (2026-08-26)</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -241,7 +241,10 @@
           source citations below are refreshed against current line numbers. Nothing in the decision changes.</p>
           <p><strong>Revised 2026-09-03:</strong> the citations are refreshed again: the rate-limiting kit&#39;s anchors all moved
           when the synthetic-traffic bypass tier (the 2026-09-01 amendment below) landed in the same two
-          files. Nothing in the decision changes.</p>
+          files. Nothing in the decision changes.
+          Revised 2026-09-07 (health endpoints serve a cached report with single flight while keeping their
+          rate-limit bypass, and edge-shaped controls are no longer gateway-only: Store&#39;s storefront host
+          carries its own limiter and a circuit cap).</p>
           <h2 id="context">Context</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> made the Gateway the only client entry point and gave it
           three jobs: the route-to-service map, CORS, and forwarding the caller&#39;s <code>Authorization</code> header. Nothing
@@ -599,6 +602,39 @@
           wiring habit rather than an enforced invariant, which is the audit-the-inventory caveat ADR-005 and
           ADR-017 both record, now applied to the edge.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>Two changes from the 2026-09-07 security review.</p>
+          <ol>
+          <li><strong>Health endpoints are cached server-side, and the bypass stays</strong> (SEC-Common-71 / SEC-ADC-17 /
+          SEC-ADC-56). <code>/health</code> and <code>/health/ready</code> are anonymous and rate-limit exempt by design, which is
+          correct for a probe and wrong under a flood: each request ran every live dependency probe, and on
+          a gateway it fanned out to every backend. <code>CachedHealthReportProvider</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/CachedHealthReportProvider.cs:25</code>) runs the
+          probes at most once per <code>HealthChecks:CacheSeconds</code> (default 5,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/HealthReportCacheOptions.cs:38</code>, read at
+          <code>CachedHealthReportProvider.cs:59</code>) with single flight through a per-entry semaphore (<code>:39</code>), so a
+          flood costs one probe round per window instead of one per request. The exemption is kept rather
+          than replaced: a throttled probe is an outage signal the orchestrator would act on. <code>/alive</code> is
+          unchanged and still uncached, which preserves the rule that startup gates read liveness, never
+          readiness. ADC&#39;s gateway caches its downstream readiness probes the same way
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/HealthChecks/DownstreamReadinessCache.cs:24</code>,
+          <code>GetOrProbeAsync</code> at <code>:78</code>).</li>
+          <li><strong>Edge-shaped controls are not gateway-only.</strong> This record assigned rate limiting and connection
+          bounds to the gateway, which left a public HTML origin fronted by a different ingress with
+          neither (SEC-Store-56). Store&#39;s storefront host now carries its own fixed-window limiter
+          (<code>UiRateLimitingSettings</code>, on by default,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/UiRateLimitingSettings.cs:31</code>, 300
+          requests per 60 seconds at <code>:54</code> and <code>:58</code>, global concurrency 200 at <code>:68</code>; registered at
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:106</code> and applied at <code>:213</code>) and a
+          <code>BoundedCircuitHandler</code>
+          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/BoundedCircuitHandler.cs:37</code>, registered
+          at <code>Program.cs:98</code>) that caps concurrent Blazor circuits at
+          <code>BlazorCircuitLimitSettings.MaxActiveCircuits</code> (200,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:39</code>), with
+          <code>DisconnectedCircuitMaxRetained</code> 25 (<code>:47</code>) and <code>DisconnectedCircuitRetentionSeconds</code> 60 (<code>:55</code>).
+          A request limiter alone does not bound a server-rendered origin, because the expensive resource is
+          the circuit a single page load opens, not the request that opened it.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> (the record that made the Gateway the only entry point
           and gave it routing, CORS and auth forwarding; this is the first record to add cross-cutting behavior
@@ -634,6 +670,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

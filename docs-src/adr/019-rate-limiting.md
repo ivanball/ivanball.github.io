@@ -9,7 +9,10 @@ section, a sliding-window algorithm option joins the fixed window, and the globa
 partitions gain an optional Redis-backed distributed limiter with a fail-open posture, which partly
 retires the "in-process counters" trade-off below; `auth-ip` stays deliberately local. See the
 Revision (2026-08-18) at the end).
-
+Revised 2026-09-07 (the gRPC exemption keys on endpoint metadata and the negotiated protocol
+instead of a caller-set header; anonymous `/hubs` traffic is metered per IP; ADC's tighter gateway
+policy is scoped to the two credential-submission routes; and a trusted-internal-caller exemption
+generalizes the synthetic-traffic bypass).
 ## Context
 Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
 Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -177,6 +180,45 @@ ceiling is still roughly N times the configured limit across N replicas for `aut
 `FixedPolicy`, and for the global and per-user partitions in any host that has not set `Distributed`
 or has no multiplexer. Every other trade-off in this record stands unchanged, including the
 forwarded-header trust posture, which the Redis partition key inherits verbatim.
+
+## Revision (2026-09-07)
+The layering is unchanged: the global limiter is still authenticated-only, login and register still
+carry `auth-ip`, and infrastructure paths are still exempt. Four things below it moved, all from the
+2026-09-07 security review.
+
+1. **The gRPC exemption no longer trusts a request header** (SEC-Common-44). `IsRateLimitBypassed`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:75`,
+   applied at `:171`) decides on gRPC **endpoint metadata**, which routing produces from the server's
+   own `MapGrpcService` registrations, so stamping `Content-Type: application/grpc` on an ordinary
+   request no longer switches off the per-user cap. The HTTPS-redirect skip that shared the old test
+   keys on the negotiated protocol instead (`MiddlewarePipelineBuilder.IsCleartextHttp2`,
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:362`,
+   branched at `:98`).
+2. **Anonymous hub traffic is metered rather than exempt** (SEC-ADC-25). `IsAnonymousHubRequest`
+   (`WebApplicationBuilderExtensions.cs:111`) matches the request path against
+   `RateLimitingSettings.HubPathPrefixes` (default `["/hubs"]`,
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:91`) and
+   partitions those requests per client IP at `AnonymousHubPermitLimit` (default 60 per minute,
+   `:99`, applied at `WebApplicationBuilderExtensions.cs:92-97`). This is the one hole the
+   "exempt anonymous traffic" rule left that no edge control reliably covers: a hub path is a
+   long-lived upgrade an edge limiter is usually configured to pass through, and the traffic is
+   anonymous until the connection is established.
+3. **A trusted internal caller can be exempted at the gateway.**
+   `GatewayRateLimitingSettings.TrustedCallerSecret` (`:151`) and `TrustedCallerHeaderName`
+   (default `X-Internal-Caller-Key`, `:123`)
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingSettings.cs`)
+   generalize the synthetic-traffic bypass that already sat beside them (`:91`, `:115`). It is off
+   unless the secret is configured, the header is single-valued, and the comparison is constant time
+   (`CryptographicOperations.FixedTimeEquals`,
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:162`,
+   wired at `:138-139`). It exists for the shared-origin problem this record already names: a
+   server-rendered UI host's own back-end calls, token refresh above all, otherwise collapse into one
+   client-IP partition and throttle every visitor together.
+4. **ADC scopes its tighter gateway policy to the credential-submission routes.** The gateway's
+   `auth-tight` policy (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:49`) is attached to
+   `/Auth/login` (`:68-72`) and `/Auth/register` (`:74-78`) and to nothing else, so `/Auth/refresh`
+   keeps the exemption this record requires for Blazor Server circuits, whose refreshes all leave
+   from the UI host's address.
 
 ## Related
 ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),

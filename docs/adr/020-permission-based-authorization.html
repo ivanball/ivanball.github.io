@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-020: Permission-Based Authorization Layered over Roles · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23).">
+  <meta name="description" content="Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23). Revised 2026-09-07 (a fallback policy requiring an authenticated caller is on by default, so…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-020: Permission-Based Authorization Layered over Roles">
-  <meta property="og:description" content="Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23).">
+  <meta property="og:description" content="Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23). Revised 2026-09-07 (a fallback policy requiring an authenticated caller is on by default, so…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-020: Permission-Based Authorization Layered over Roles">
-  <meta name="twitter:description" content="Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23).">
+  <meta name="twitter:description" content="Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23). Revised 2026-09-07 (a fallback policy requiring an authenticated caller is on by default, so…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"020 · Permission-Based Authorization Layered over Roles","item":"https://ivanball.github.io/docs/adr/020-permission-based-authorization.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -219,7 +219,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-020-permission-based-authorization-layered-over-roles">ADR-020: Permission-Based Authorization Layered over Roles</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23).</p>
+          <p>Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23).
+          Revised 2026-09-07 (a fallback policy requiring an authenticated caller is on by default, so
+          anonymity has to be declared explicitly, and a fitness base enumerates endpoints that declare
+          nothing at all).</p>
           <h2 id="context">Context</h2>
           <p>The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
           <code>[Authorize(Policy = &quot;RequireOrganizer&quot;)]</code> against a named policy that calls <code>RequireRole(...)</code>, and a
@@ -321,6 +324,41 @@
           strings are also stringly-typed, mitigated by exposing them as constants (for example
           <code>ConferencePermissions</code>).</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>Permission-based authorization is unchanged. What changed is the <strong>default for an endpoint that
+          declares nothing</strong> (SEC-Common-16 / SEC-ADC-03).</p>
+          <ol>
+          <li><strong>An undecorated endpoint now requires an authenticated caller.</strong> <code>AddAuthorizationPolicies</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:25</code>,
+          and the configurable overload at <code>:60</code>) registers <code>FallbackAuthorizationHandler</code>
+          (<code>:81</code>; class at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationHandler.cs:15</code>)
+          and sets <code>AuthorizationOptions.FallbackPolicy</code> from the bound options (<code>:86-89</code>).
+          <code>FallbackAuthorizationOptions.Enabled</code> defaults to <code>true</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:52</code>).
+          Framework and static surfaces are exempt by path prefix rather than by attribute:
+          <code>DefaultExemptPathPrefixes</code> (<code>:21</code>) covers the Blazor framework files and circuit, static asset
+          roots, health probes and well-known documents, and a host can extend the list through
+          <code>ExemptPathPrefixes</code> (<code>:61</code>). The documented opt-out is
+          <code>AddAuthorizationPolicies(options =&gt; options.Enabled = false)</code> (<code>AuthorizationExtensions.cs:43</code>).</li>
+          <li><strong>The rule this makes explicit: declare anonymity.</strong> Public means <code>[AllowAnonymous]</code> or
+          <code>.AllowAnonymous()</code> on the endpoint, not the absence of an attribute. The framework&#39;s own public
+          surface says so (the <code>OAuthControllerBase</code> challenge and completion actions, the credential and
+          landing pages in <code>MMCA.Common.UI</code>, the Aspire health endpoints). A YARP gateway is the one host
+          that cannot express it as an attribute: a proxied route carries no endpoint metadata of its own,
+          so a public route declares <code>&quot;AuthorizationPolicy&quot;: &quot;anonymous&quot;</code> in its route config. A Blazor page
+          is unaffected at the component level, because <code>AuthorizeRouteView</code> reads attributes and ignores
+          the fallback policy.</li>
+          <li><strong>A fitness gate that can see the undecorated case.</strong> <code>AnonymousEndpointTestsBase</code> already
+          allow-listed endpoints marked <code>[AllowAnonymous]</code>; it now also enumerates every concrete controller
+          and routable page carrying <strong>no</strong> authorization attribute at all and asserts that set against a
+          second allow-list: <code>Endpoints_DeclareAnAuthorizationDecision</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Api/AnonymousEndpointTestsBase.cs:118</code>),
+          opted into per repo through <code>RequireExplicitAuthorizationDecision</code> (<code>:68</code>, default <code>false</code>), with
+          the allow-list at <code>:76</code> and a staleness check at <code>:141</code>. MMCA.Common holds itself to it. The
+          opt-in is deliberate: a consumer adopting the fallback policy fixes its endpoints first and turns
+          the gate on last, and until then the runtime behaviour is already the safe one.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the authenticated principal and claims this keys on, including the optional <code>permission</code>
           claim), ADR-008 (each extracted service authorizes independently, so the registry is wired per
@@ -340,6 +378,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

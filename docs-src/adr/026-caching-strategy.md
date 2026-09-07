@@ -22,7 +22,9 @@ rather than Aspire's integrations directly, because the raw integrations registe
 check that gated readiness (ADR-025), and all seven also opt into ADR-077's `HybridCacheService`, so
 the memory-or-distributed auto-swap is the no-Redis path rather than the production one. Tier 2 gains
 a cache-bypassing-roles policy overload. See the Revision (2026-09-03) at the end.
-
+Revised 2026-09-07 (Tier-1 query cache keys carry the caller for a caller-scoped query, the public
+output-cache policy varies by resolved tenant and reads roles through the one shared helper, and the
+cache key prefix is namespaced per application by default).
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
 are memoized and invalidated on mutation (the Caching decorators of ADR-014, keyed by
@@ -258,6 +260,41 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   no build, test or startup notices the difference. That is Tier 2's audit-the-inventory caveat one
   layer further out, and it is the intended posture rather than a gap to sweep: client-side staleness
   is visible to the user, so each UI service opts in on its own read pattern or does not opt in at all.
+
+## Revision (2026-09-07)
+Four changes from the 2026-09-07 security review. The tiers themselves are unchanged.
+
+1. **Tier-1 keys are caller-scoped where the result is caller-scoped** (SEC-Common-19 /
+   SEC-Common-37). `CachingQueryDecorator` composes
+   `TenantCacheKey.Scope(tenantContext, UserCacheKey.Scope(cacheable, cacheable.CacheKey))`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:59`).
+   `UserCacheKey`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/UserCacheKey.cs:26`) appends
+   the target user when the query implements `IUserScopedRequest`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/IUserScopedRequest.cs:8`); the
+   `ISharedQueryCache` marker
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Markers/ISharedQueryCache.cs:21`) opts a
+   genuinely public result back out. Because the caller segment is a suffix, prefix invalidation
+   still clears every caller's copy in one sweep.
+2. **The public output-cache key varies by resolved tenant** (SEC-Common-46).
+   `PublicEndpointOutputCachePolicy` stamps `ITenantContext.TenantId` into `CacheVaryByRules` under
+   the `t` key
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:50`,
+   `:102-105`), mirroring the `t:{tenantId}` prefix the CQRS decorators already used. An unresolved
+   tenant (a single-tenant host, a background call) adds nothing to the key, so nothing changes for
+   the deployments that have no tenant.
+3. **Roles are read one way.** The policy's bypass check goes through
+   `ClaimsPrincipalExtensions.HasRole`
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:75`, over
+   `GetRoleValues` at `:59`, which reads `ClaimTypes.Role`, `role` and `roles`
+   case-insensitively), applied at `PublicEndpointOutputCachePolicy.cs:142`. A narrower read here
+   than the permission handler's meant a privileged caller under an unmapped claim type could have
+   an elevated response stored under the shared public key.
+4. **The cache key prefix is namespaced per application.** `Cache:KeyPrefix` left unset now defaults
+   to the resolved application namespace
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:83`, rationale at
+   `:68`), and the distributed-lock keyspace follows it. Two applications sharing one Redis no longer
+   collide, at the cost of a cold cache on the deploy that adopts it.
 
 ## Related
 ADR-014 (the Caching decorators and `IQueryCacheable` / `ICacheInvalidating` markers that consume this

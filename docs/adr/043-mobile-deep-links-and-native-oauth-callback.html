@@ -260,7 +260,9 @@
           (<code>Source/Presentation/MMCA.Common.API/Startup/Endpoints/AppAssociationEndpointExtensions.cs:63</code>), so the
           served <code>assetlinks.json</code> names a real certificate. No other setting of that key exists in the ADC
           repo. MMCA.Store has not adopted the wave: no association endpoints, allowlist config, or platform
-          callback registrations exist there yet.</p>
+          callback registrations exist there yet.
+          Revised 2026-09-07 (the dispatcher rejects any route that is not app-relative, so the guard is
+          shape-based and covers an explicit intent that never passed an intent filter).</p>
           <h2 id="context">Context</h2>
           <p>Three mobile flows all need a URL to leave the web world and land inside the MAUI app:</p>
           <ol>
@@ -489,6 +491,24 @@
           checked-in fingerprint a placeholder, so that documentation lag from the 2026-08-01 entry is
           still open.</li>
           </ol>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>The callback routing is unchanged. The boundary where a platform-supplied URI enters the app is now
+          validated (SEC-Common-88 / SEC-ADC-65).</p>
+          <p><code>DeepLinkDispatcher.Publish</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs:100</code>)
+          accepts only a single-leading-slash app-relative path with no scheme, no backslash and no control
+          character, tested by <code>IsAppRelativeRoute</code> (<code>:45</code>, applied at <code>:104</code>), which is public so a head that
+          wants the same check earlier can call it.</p>
+          <p><strong>Why the guard sits on shape rather than on the host.</strong> An Android intent filter constrains what the
+          system will route to the activity from a browser, but an explicit intent naming the component
+          bypasses the filter entirely: any app on the device can start the activity with a URI of its
+          choosing. Host allow-listing at the filter is therefore not a control the app can rely on, and a
+          protocol-relative value such as <code>//attacker.example/p</code> is not caught by an origin check at all, since
+          the web view resolves it against the app origin&#39;s scheme. Checking the shape at the one point every
+          platform funnels through covers both. ADC&#39;s Android head publishes through that path from both
+          entry points (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:46</code> on launch
+          and <code>:59-61</code> on a new intent), with its own route allow-list behind it
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/DeepLinkRouteGuard.cs:34</code>).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -508,6 +528,7 @@
             <li><a href="#revision-2026-08-01">Revision (2026-08-01)</a></li>
             <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
             <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             </ul>
           </nav>
         </aside>

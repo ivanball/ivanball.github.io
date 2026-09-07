@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (re-verified against source 2026-09-03).">
+  <meta name="description" content="Accepted (re-verified against source 2026-09-03). Revised 2026-09-07 (the rate-limit and HTTPS-redirect exemptions that used to key on a caller-set…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)">
-  <meta property="og:description" content="Accepted (re-verified against source 2026-09-03).">
+  <meta property="og:description" content="Accepted (re-verified against source 2026-09-03). Revised 2026-09-07 (the rate-limit and HTTPS-redirect exemptions that used to key on a caller-set…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)">
-  <meta name="twitter:description" content="Accepted (re-verified against source 2026-09-03).">
+  <meta name="twitter:description" content="Accepted (re-verified against source 2026-09-03). Revised 2026-09-07 (the rate-limit and HTTPS-redirect exemptions that used to key on a caller-set…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)","item":"https://ivanball.github.io/docs/adr/012-grpc-host-transport.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -219,7 +219,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-012-grpc-host-transport-convention-http2-only-h2c-vs-http1andhttp2--alpn">ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (re-verified against source 2026-09-03).</p>
+          <p>Accepted (re-verified against source 2026-09-03).
+          Revised 2026-09-07 (the rate-limit and HTTPS-redirect exemptions that used to key on a caller-set
+          <code>Content-Type: application/grpc</code> now key on gRPC endpoint metadata and on the negotiated protocol).</p>
           <h2 id="update-2026-06-22-store-converged-to-profile-a">Update (2026-06-22): Store converged to Profile A</h2>
           <p>Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
           <code>Http1AndHttp2</code> Kestrel + <code>transport: &#39;auto&#39;</code> ingress on a <strong>cleartext</strong> endpoint there is no ALPN, so
@@ -673,6 +675,30 @@
           exposes it). The port is a per-host cost, not a per-edge one: that one endpoint already serves two
           gRPC services.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>The transport profiles are unchanged. What changed is how the rest of the pipeline <strong>recognises</strong> an
+          h2c gRPC request, from the 2026-09-07 security review (SEC-Common-44).</p>
+          <p>Two exemptions used to accept a client-supplied <code>Content-Type: application/grpc</code> as proof that a
+          request was inter-service gRPC: the global rate limiter&#39;s bypass and the HTTPS-redirect skip that
+          exists precisely because a cleartext HTTP/2 endpoint (Profile A) cannot be redirected. Both now key
+          on something the server owns.</p>
+          <ul>
+          <li>The limiter bypass reads gRPC <strong>endpoint metadata</strong>, which routing produces from the host&#39;s own
+          <code>MapGrpcService</code> registrations: <code>IsRateLimitBypassed</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:75</code>,
+          applied at <code>:171</code>).</li>
+          <li>The redirect skip reads the <strong>negotiated protocol</strong>: <code>MiddlewarePipelineBuilder.IsCleartextHttp2</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:362</code>,
+          which requires a non-HTTPS request speaking HTTP/2, <code>:367</code>) is what
+          <code>UseHttpsRedirection</code> is now branched on (<code>:98</code>).</li>
+          </ul>
+          <p>The practical effect for this record is that Profile A&#39;s cleartext HTTP/2 endpoint keeps its redirect
+          exemption on the strength of the protocol it actually negotiated, and an ordinary HTTP/1.1 caller can
+          no longer claim the same exemption by naming a content type.</p>
+          <p>Store&#39;s Identity gRPC surface also gained a caller-side guard on the customer-contact lookup:
+          <code>CustomersGrpcService</code> composes <code>CustomerContactLookupGuard</code> in front of the inner service
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Grpc/CustomersGrpcService.cs:28</code>, rationale
+          at <code>:21</code>).</p>
           <h2 id="related">Related</h2>
           <ul>
           <li>ADR-004 (cross-service token validation via JWKS / OIDC discovery), ADR-007 (gRPC cross-service
@@ -702,6 +728,7 @@
             <li><a href="#update-2026-08-29-east-west-grpc-clients-state-their-own-circuit-breaker-v11680">Update (2026-08-29): east-west gRPC clients state their own circuit breaker (v1.168.0)</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

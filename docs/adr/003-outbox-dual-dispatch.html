@@ -231,7 +231,9 @@
           the inbox does, ON for a broker and OFF for <code>InProcess</code>, so a single-process host dispatches events
           directly and runs neither background service; a broker with the outbox explicitly disabled is refused
           at startup; and the <code>OutboxMessages</code> table stays mapped either way, so the flag is never a migration.
-          Everything below describes the outbox a host that runs it gets, unchanged.</p>
+          Everything below describes the outbox a host that runs it gets, unchanged.
+          Revised 2026-09-07 (shared broker and cache resources are namespaced per application by default,
+          so an unset <code>MessageBus:EndpointPrefix</code> now yields prefixed queue names).</p>
           <h2 id="context">Context</h2>
           <p>Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:</p>
           <ol>
@@ -458,6 +460,26 @@
           outbox-side consequence, and it makes the delivery story symmetric: the outbox guarantees the event
           leaves, the inbox guarantees it lands once.</li>
           </ol>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>The dispatch model is unchanged. What changed is the <strong>name</strong> the outbox&#39;s downstream resources take
+          by default, from the 2026-09-07 security review (SEC-Common-53).</p>
+          <p><code>ApplicationNamespace.Resolve</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53</code>)
+          derives one namespace from <code>Application:Namespace</code>, falling back to the host application name, and
+          that namespace now supplies three defaults that used to be empty: <code>MessageBus:EndpointPrefix</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:66</code>, resolved at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:793</code>), <code>Cache:KeyPrefix</code>
+          and with it the distributed-lock keyspace
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:83</code>, rationale at
+          <code>:68</code>), and the SignalR Redis backplane channel prefix (<code>DependencyInjection.cs:653</code>). Two
+          applications sharing one broker or one Redis therefore no longer share a queue name or a cache key by
+          accident.</p>
+          <p><strong>The cutover rule this creates.</strong> Adopting the upgrade renames resources: queue names gain a prefix,
+          cache and lock keys gain a prefix (a cold cache after deploy), and the backplane moves channel. A
+          consumer that must keep its current names pins the pre-upgrade values explicitly (set
+          <code>Application:Namespace</code>, or the individual prefix keys) <strong>before</strong> upgrading; a consumer that takes
+          the new names drains the old broker queues on cutover, because in-flight messages sit under the old
+          endpoint name and nothing reads it afterwards.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -478,6 +500,7 @@
             <li><a href="#revision-2026-08-01">Revision (2026-08-01)</a></li>
             <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
             <li><a href="#revision-2026-08-26">Revision (2026-08-26)</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             </ul>
           </nav>
         </aside>

@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-039: Live channel push (ephemeral events over the notification hub) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-09).">
+  <meta name="description" content="Accepted (2026-07-09). Revised 2026-09-07 (channel subscription can be gated by an app-supplied authorizer, connections are capped per user, the…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/039-live-channel-push.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-039: Live channel push (ephemeral events over the notification hub)">
-  <meta property="og:description" content="Accepted (2026-07-09).">
+  <meta property="og:description" content="Accepted (2026-07-09). Revised 2026-09-07 (channel subscription can be gated by an app-supplied authorizer, connections are capped per user, the…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/039-live-channel-push.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-039: Live channel push (ephemeral events over the notification hub)">
-  <meta name="twitter:description" content="Accepted (2026-07-09).">
+  <meta name="twitter:description" content="Accepted (2026-07-09). Revised 2026-09-07 (channel subscription can be gated by an app-supplied authorizer, connections are capped per user, the…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"039 · Live channel push (ephemeral events over the notification hub)","item":"https://ivanball.github.io/docs/adr/039-live-channel-push.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -219,7 +219,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-039-live-channel-push-ephemeral-events-over-the-notification-hub">ADR-039: Live channel push (ephemeral events over the notification hub)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-09).</p>
+          <p>Accepted (2026-07-09).
+          Revised 2026-09-07 (channel subscription can be gated by an app-supplied authorizer, connections
+          are capped per user, the backplane channel is namespaced per application, and ADC scopes live poll
+          reads to the audience-visible states).</p>
           <h2 id="context">Context</h2>
           <p>Conference-day features (live polls, session Q&amp;A, live result counters) need sub-second fan-out of
           small events to whoever is looking at a page right now. The existing notification pipeline
@@ -306,6 +309,39 @@
           inferred from missing client updates.</p>
           </li>
           </ol>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>The channel model is unchanged: a client subscribes to a channel key and the server pushes to it.
+          What a signed-in client is allowed to subscribe to, and how much it may hold open, is now bounded
+          (SEC-Common-18 / SEC-ADC-25 / SEC-ADC-27).</p>
+          <ol>
+          <li><strong>Subscription can be authorized per channel.</strong> <code>NotificationHub</code> takes an optional
+          <code>IChannelJoinAuthorizer</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:27</code>; contract
+          at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IChannelJoinAuthorizer.cs</code>)
+          and consults it after the channel-key shape check. It stays optional because the framework cannot
+          know what a channel key means: a host publishing anything that is not public to every signed-in
+          user registers one, and a host whose channels are event-wide announcements does not.</li>
+          <li><strong>Connections are capped per user.</strong> A connection past
+          <code>PushNotifications:MaxConnectionsPerUser</code> (default 20,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:42</code>)
+          is refused (<code>NotificationHub.cs:56</code>). A hub connection is long-lived server state that the request
+          rate limiter never sees, so it needs its own bound.</li>
+          <li><strong>The backplane is namespaced per application.</strong> The Redis backplane channel prefix defaults to
+          the resolved application namespace
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:653</code>, resolver at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53</code>).</li>
+          <li><strong>ADC scopes what a live poll read returns.</strong> <code>GetPollResultsHandler</code> treats a poll as
+          audience-readable only when it has reached <code>Open</code> or <code>Closed</code> <strong>and</strong> its event or session is
+          published
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/GetPollResults/GetPollResultsHandler.cs:65-66</code>,
+          applied at <code>:111</code> and <code>:126</code>). A <code>Draft</code> poll carries the question and every option an organizer
+          has staged, so reading one by id was a preview of unannounced content to any authenticated
+          caller. The authoring rights in BR-236 are unchanged: this is a read-scope rule, and the manage
+          surface (<code>GET /api/livepolls/manage</code>,
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:189</code>)
+          still returns every state to a caller who passes that check.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -322,6 +358,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-07-24">Revision (2026-07-24)</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             </ul>
           </nav>
         </aside>

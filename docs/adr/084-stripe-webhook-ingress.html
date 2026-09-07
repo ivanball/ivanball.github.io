@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-14). Revised 2026-09-03.">
+  <meta name="description" content="Accepted (2026-08-14). Revised 2026-09-03. Revised 2026-09-07 (the webhook action carries its own request size limit, the auto-minted signing secret is…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/084-stripe-webhook-ingress.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)">
-  <meta property="og:description" content="Accepted (2026-08-14). Revised 2026-09-03.">
+  <meta property="og:description" content="Accepted (2026-08-14). Revised 2026-09-03. Revised 2026-09-07 (the webhook action carries its own request size limit, the auto-minted signing secret is…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/084-stripe-webhook-ingress.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)">
-  <meta name="twitter:description" content="Accepted (2026-08-14). Revised 2026-09-03.">
+  <meta name="twitter:description" content="Accepted (2026-08-14). Revised 2026-09-03. Revised 2026-09-07 (the webhook action carries its own request size limit, the auto-minted signing secret is…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)","item":"https://ivanball.github.io/docs/adr/084-stripe-webhook-ingress.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -219,7 +219,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-084-stripe-webhook-ingress-acceptance-coded-responses-and-startup-self-registration">ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-14). Revised 2026-09-03.</p>
+          <p>Accepted (2026-08-14). Revised 2026-09-03.
+          Revised 2026-09-07 (the webhook action carries its own request size limit, the auto-minted signing
+          secret is shared through the distributed cache, cancelling a payable order expires the provider
+          session, and reconciliation sweeps stranded unpaid orders).</p>
           <h2 id="context">Context</h2>
           <p>Four ADRs already cover how a message crosses a boundary in this workspace. ADR-003 decides how an
           event leaves a service (outbox, at-least-once). ADR-021 decides how a redelivered broker message is
@@ -408,6 +411,47 @@
           or another repo) starts from a copy of <code>PaymentsController</code> and <code>StripeWebhookRegistrationService</code>
           rather than from a framework contract.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>Four changes from the 2026-09-07 security review. The ingress contract (raw body, signature verified
+          before parsing, anonymous endpoint) is unchanged.</p>
+          <ol>
+          <li><strong>The webhook action bounds its own request body</strong> (SEC-Store-15). Signature verification requires
+          buffering the whole body before anything is known about the caller, on an anonymous endpoint, in a
+          service that runs at 0.5 GiB. <code>[RequestSizeLimit(1_000_000)]</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/PaymentsController.cs:76</code>) is
+          enforced by Kestrel at the transport layer (<code>:72</code>), so an oversized body is rejected before it is
+          read rather than after.</li>
+          <li><strong>The auto-minted signing secret is shared across replicas</strong> (SEC-Store-35).
+          <code>SharedCacheStripeWebhookSecretStore</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/SharedCacheStripeWebhookSecretStore.cs:37</code>)
+          keeps the secret under <code>stripe:webhook-signing-secret:</code> plus the endpoint URL (<code>:46</code>, read at
+          <code>:57</code>, written at <code>:75</code>). Held in one replica&#39;s memory, a scaled-out Sales rejected every event
+          that landed on a replica which had not minted it. The endpoint URL is part of the key so a public
+          URL change does not read a stale secret. The rationale for the cache over the database or Key
+          Vault is recorded on the type (<code>:13-19</code>): the app identity holds only get and list on Key Vault,
+          so it cannot write there.</li>
+          <li><strong>Cancelling a payable order expires the provider session</strong> (SEC-Store-34). <code>CancelOrderHandler</code>
+          acts only on an order that is <code>PaymentInitiated</code> and carries a session id
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Cancel/CancelOrderHandler.cs:92</code>).
+          If the provider says the session is already paid, the cancel is refused with
+          <code>OrderCancellationErrorCodes.PaymentAlreadyCompleted</code> (<code>:101-105</code>; constant at
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Cancel/OrderCancellationErrorCodes.cs:18</code>)
+          rather than cancelling an order the customer has paid for. Otherwise it expires the hosted session
+          (<code>:116</code>), because a cancelled order whose checkout page stays payable takes money for something
+          nothing will fulfil. A failure to read or expire is logged with the manual-refund consequence
+          spelled out (<code>:140</code>, <code>:145</code>) and does not block the cancel.</li>
+          <li><strong>Reconciliation sweeps stranded unpaid orders</strong> (SEC-Store-61). Beside the existing class of
+          <code>PaymentInitiated</code> orders it asks the provider about, the service now takes <code>PendingPayment</code> and
+          <code>PaymentFailed</code> orders older than <code>StuckAgeMinutes</code> (default 30,
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationSettings.cs:42</code>)
+          straight to <code>Cancelled</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:28-36</code>).
+          It asks the provider nothing for this class, because a <code>PendingPayment</code> order may have no session
+          at all. <code>Cancelled</code> rather than <code>PaymentFailed</code> is deliberate: <code>PaymentFailed</code> is retryable, and
+          only <code>Cancelled</code> is the terminal state the <code>OrderCancelled</code> compensation listens on to return the
+          committed stock (<code>:37-42</code>). Checkout commits stock, so without this an abandoned checkout held
+          inventory forever and repeating it was a denial-of-service on availability.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (outbound at-least-once delivery, the other end of the same family), ADR-021 (broker-side
           inbound dedup, which never sees a webhook), ADR-017 (client-supplied idempotency keys, which a third
@@ -431,6 +475,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

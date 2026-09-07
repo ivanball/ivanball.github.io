@@ -6,7 +6,8 @@ citations). The implementation lands in the MMCA.Common "enterprise capability w
 and is opt-in twice over: `AddAuditTrail(configuration)` registers the interceptor and the settings, and
 an entity is audited only when it carries the `IAuditedEntity` marker. Absent registration the interceptor
 is not resolved and the whole feature is a no-op.
-
+Revised 2026-09-07 (Store pins the reverse `[Pii]` convention with a fitness test, and deployed SQL
+auditing backstops the in-database trail).
 ## Context
 The framework already answers "who touched this row last". Every `AuditableBaseEntity` carries
 `CreatedOn/By` and `LastModifiedOn/By`, stamped by `AuditSaveChangesInterceptor` on the way into
@@ -165,6 +166,25 @@ adopts separately rather than sharing one database), and Helpdesk's Tickets.
 - **No shipped read surface means the capability is invisible until someone builds one.** Rows accumulate
   from the day `AddAuditTrail` is called; nobody sees them until a consumer writes a page or an endpoint
   over `IAuditTrailReader`.
+
+## Revision (2026-09-07)
+Two additions from the 2026-09-07 security review.
+
+1. **The `[Pii]` convention is now checked in both directions** (SEC-Store-19 / SEC-Store-24). The
+   shared base already obliged a `[Pii]` property's entity to be anonymizable. Store adds the reverse
+   assertion: whatever `Anonymize()` actually overwrites must carry `[Pii]`
+   (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/PiiConventionTests.cs:76`),
+   with a companion test that every anonymizable domain entity is covered by a sample so the first
+   test cannot pass vacuously (`:55`). This catches the failure mode the forward rule cannot: a field
+   the erasure path overwrites but the attribute does not cover keeps its pre-erasure value in the
+   audit trail's `OldValue` for the full retention window (`:106`), which is an erasure promise
+   broken by the record that exists to prove erasure happened.
+2. **The trail is backstopped by database-level auditing** (SEC-Store-21). The application owns its
+   own trail table, so an actor with write access to the database can edit the evidence. Both apps
+   now deploy SQL auditing to the Log Analytics workspace (`MMCA.ADC/infra/main.bicep:790`,
+   `MMCA.Store/infra/main.bicep:833`), which records the statements outside the application's reach.
+   That does not make the in-database trail tamper-evident, and this record does not claim it does:
+   it means a tampering event leaves a trace somewhere the same credential cannot reach.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the same-transaction write this copies wholesale, including the

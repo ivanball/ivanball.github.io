@@ -221,7 +221,9 @@
           <h2 id="status">Status</h2>
           <p>Accepted. Updated 2026-06-27 (documented the <code>[Pii]</code> → <code>IAnonymizable</code> build-time guard and <code>PiiRedactor</code>).
           Updated 2026-08-26 (<code>DeletedOn</code>/<code>DeletedBy</code> stamps, the <code>DeleteChildren</code> cascade helper, and a
-          hard-delete fitness rule).</p>
+          hard-delete fitness rule).
+          Updated 2026-09-07 (a pseudonymous key kept through anonymization must not appear on an
+          anonymous surface; Store&#39;s public review list is served through a contract that declares none).</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s default deletion model is <strong>soft-delete</strong>: <code>AuditableBaseEntity.Delete()</code> sets <code>IsDeleted = true</code> and EF Core global query filters exclude the row from normal queries. The row (including any personal data it holds) stays in the database indefinitely, which is exactly what audit, referential integrity, and &quot;undelete&quot; (BR-135) require.</p>
           <p>This conflicts with data-subject <strong>erasure</strong> rights (GDPR Art. 17 right-to-be-forgotten, CCPA deletion): when a person requests deletion, their personal data must actually be removed or anonymized, not merely hidden. Soft-delete alone is therefore non-compliant for personal data, and a consumer app&#39;s published privacy policy (e.g. a &quot;we delete your data within 30 days&quot; promise) cannot be honored by soft-delete.</p>
@@ -256,6 +258,23 @@
           <li>The <code>DeletedOn</code>/<code>DeletedBy</code> stamps are <strong>two new nullable columns on every auditable table</strong>, so adopting the framework version that introduced them costs one scaffolded migration per consumer database. They are additive (expand only, no ADR-057 override needed) and they are not backfilled: rows soft-deleted before the migration keep null stamps forever, so the pair answers &quot;who deleted this&quot; only from that point on.</li>
           <li>The fitness rule turns &quot;we soft-delete, mostly&quot; into a <strong>reviewed inventory</strong>, not into a guarantee. It sees direct IL calls in the assemblies the repo&#39;s architecture map registers, so raw SQL, a stored procedure, or a delete issued from an unmapped assembly is invisible to it, and an allowlist entry covers every erasing call in the named type rather than the one that was reviewed.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>Anonymization keeps the row and its foreign keys: <code>Anonymize()</code> overwrites the personal fields and
+          leaves the entity&#39;s relationships intact, because the aggregate still has to hang off the order and
+          the customer it belongs to. That is deliberate, and it creates one rule this record did not state.</p>
+          <p><strong>A pseudonymous key retained through anonymization must never be projected onto an anonymous
+          surface.</strong> A customer id or an order id is not personal data on its own, but on a public list it
+          re-attaches every &quot;anonymized&quot; row to the same subject, and to that subject&#39;s other rows, for any
+          reader. Anonymization that a caller can undo by grouping is not anonymization.</p>
+          <p>Store&#39;s anonymous review list is the worked case (SEC-Store-07 / SEC-Store-18). The read is served
+          through <code>PublicProductReviewDTO</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Reviews/PublicProductReviewDTO.cs:30</code>),
+          which declares the product id, rating, title, body, reviewer name, status and timestamps (<code>:33-60</code>)
+          and no <code>CustomerId</code> and no <code>OrderId</code>. The controller closes the anonymous paged endpoint over that
+          type rather than over the owner-facing DTO
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs:58</code>,
+          <code>:94-99</code>), and the caller&#39;s <code>sortColumn</code> is validated against the same type (<code>:107</code>), so the public
+          shape bounds both what is returned and what can be ordered on.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -271,6 +290,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             </ul>
           </nav>
         </aside>

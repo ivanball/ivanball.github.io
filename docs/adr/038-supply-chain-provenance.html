@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-038: Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-06; revised 2026-07-21).">
+  <meta name="description" content="Accepted (2026-07-06; revised 2026-07-21). Revised 2026-09-07 (MMCA.Common pins every action by commit SHA and every global tool by version, restores…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-038: Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)">
-  <meta property="og:description" content="Accepted (2026-07-06; revised 2026-07-21).">
+  <meta property="og:description" content="Accepted (2026-07-06; revised 2026-07-21). Revised 2026-09-07 (MMCA.Common pins every action by commit SHA and every global tool by version, restores…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-038: Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)">
-  <meta name="twitter:description" content="Accepted (2026-07-06; revised 2026-07-21).">
+  <meta name="twitter:description" content="Accepted (2026-07-06; revised 2026-07-21). Revised 2026-09-07 (MMCA.Common pins every action by commit SHA and every global tool by version, restores…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)","item":"https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -219,7 +219,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-038-supply-chain-provenance-sbom-release-gate--lock-files--vulnerability-audit">ADR-038: Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-06; revised 2026-07-21).</p>
+          <p>Accepted (2026-07-06; revised 2026-07-21).
+          Revised 2026-09-07 (MMCA.Common pins every action by commit SHA and every global tool by version,
+          restores in locked mode, fails the vulnerability gate closed, and gates the release behind a
+          protected environment plus a merged-main assertion).</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common is a published framework: it packs its NuGet packages and pushes them to GitHub Packages
           on every <code>v*</code> tag (release.yml:3-5), where the two production apps and the reference seed consume
@@ -317,6 +320,37 @@
           is the point, but it means adding a dependency from any other feed is a deliberate <code>nuget.config</code>
           edit, not an ambient possibility.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>The provenance chain gained the controls that make it reproducible under an attacker, from the
+          2026-09-07 security review.</p>
+          <ol>
+          <li><strong>Actions are pinned by commit SHA, not by a mutable tag</strong> (SEC-Common-59). Every <code>uses:</code> in
+          MMCA.Common&#39;s pipelines names a 40-character SHA with the tag as a trailing comment, in CI
+          (<code>MMCA.Common/.github/workflows/ci.yml:51</code>, <code>:96</code>, <code>:245</code>) and in the release
+          (<code>MMCA.Common/.github/workflows/release.yml:22</code>, <code>:44</code>, <code>:89</code>, and <code>NuGet/login</code> at <code>:109</code>). A tag
+          is a movable pointer in someone else&#39;s repository; the SHA is what a supply-chain record can
+          actually claim.</li>
+          <li><strong>Global tools are version-pinned</strong> (SEC-Common-58 / SEC-ADC-35). <code>CycloneDX</code> is installed at
+          <code>--version 6.2.0</code> in both release jobs (<code>release.yml:83</code>, <code>:186</code>) and <code>dotnet-coverage</code> at
+          <code>--version 18.11.0</code> in CI (<code>ci.yml:172</code>, <code>:336</code>). The SBOM generator in particular ran unpinned
+          inside the job that goes on to publish, which put an unreviewed binary upstream of the artifact
+          the SBOM describes.</li>
+          <li><strong>Restores run in locked mode</strong> (SEC-Common-63 / SEC-ADC-34). <code>dotnet restore MMCA.Common.slnx --locked-mode</code>
+          in CI (<code>ci.yml:129</code>, and the same flag on the other restore steps at <code>:103</code>, <code>:217</code>, <code>:296</code>) and
+          in the release (<code>release.yml:62</code>, <code>:163</code>). The lock files were committed but never enforced, so a
+          drifted graph silently re-resolved rather than failing.</li>
+          <li><strong>The vulnerability gate fails closed</strong> (SEC-Common-62). The audit step captures the tool&#39;s exit
+          code and fails the job when <code>dotnet list --vulnerable</code> itself errors (<code>ci.yml:146-149</code>) instead of
+          reading an empty log as a clean result, and it honors the same accepted-advisory list the build
+          uses, sourced from <code>Directory.Build.props</code> (<code>:154-166</code>).</li>
+          <li><strong>The publish is gated</strong> (SEC-Common-64). Both release jobs declare <code>environment: release</code>
+          (<code>release.yml:16</code>, <code>:127</code>) and assert the tagged commit is on merged <code>main</code> before doing anything
+          (<code>:34</code>, <code>:145</code>). A push to nuget.org is irreversible, so the one ref that is not reviewed through
+          a pull request gets a check that it descends from one that was.</li>
+          <li><strong>Store watches its base images.</strong> A <code>docker</code> ecosystem joins the GitHub Actions one in Store&#39;s
+          Dependabot configuration (<code>MMCA.Store/.github/dependabot.yml:32</code>, beside <code>:15</code>), which is what
+          keeps a digest-pinned base image (ADR-093) from becoming a pin to a stale layer.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency
           governance from versioning and licensing into supply-chain provenance and integrity), ADR-015
@@ -340,6 +374,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

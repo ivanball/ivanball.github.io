@@ -4,7 +4,8 @@
 Accepted (2026-07-11). Records the BR-116 amendment (ADC): avatar photos are IN scope, powered
 by two new framework extension points. The framework legs are implemented; each consumer provisions its
 own storage account and wires the upload endpoints.
-
+Revised 2026-09-07 (a decoded-pixel and dimension ceiling is checked from the image header before
+any frame buffer is allocated, beside the existing compressed-size cap).
 ## Context
 The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
 BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -51,3 +52,17 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
   (Storage Blob Data Contributor) for the app identity - a bicep-level grant, not a secret.
 - ImageSharp joins the Infrastructure dependency set (vuln-audited like everything else); the
   license note above must be revisited if the project's revenue posture changes.
+
+## Revision (2026-09-07)
+The 2 MB compressed upload cap bounds the bytes on the wire; it does not bound what those bytes
+**decode** to. A highly compressible image declares its dimensions in a header that costs nothing to
+read and expands to a frame buffer of width times height times bytes-per-pixel, which is how a small
+upload becomes a multi-gigabyte allocation (SEC-Common-28).
+
+`ImageSharpImageProcessor` now reads the header first with `Image.IdentifyAsync`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/ImageSharpImageProcessor.cs:47`) and
+refuses anything past `MaxDecodedPixels` (50,000,000, `:26`) or `MaxDecodedDimension` (20,000, `:33`)
+as `Image.TooLarge`, using the predicate at `:112-114`. The dimension ceiling exists beside the pixel
+one because a long thin image can stay under the area limit and still be pathological for the
+resampler (`:30`). The decoded frame is re-checked after decoding, so a header that under-reports
+does not get through.

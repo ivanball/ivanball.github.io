@@ -2,7 +2,9 @@
 
 ## Status
 Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23).
-
+Revised 2026-09-07 (a fallback policy requiring an authenticated caller is on by default, so
+anonymity has to be declared explicitly, and a fitness base enumerates endpoints that declare
+nothing at all).
 ## Context
 The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
 `[Authorize(Policy = "RequireOrganizer")]` against a named policy that calls `RequireRole(...)`, and a
@@ -103,6 +105,41 @@ tests.
   resolve; an `AddPermissions(...)` call after it has been materialized is not seen. Permission
   strings are also stringly-typed, mitigated by exposing them as constants (for example
   `ConferencePermissions`).
+
+## Revision (2026-09-07)
+Permission-based authorization is unchanged. What changed is the **default for an endpoint that
+declares nothing** (SEC-Common-16 / SEC-ADC-03).
+
+1. **An undecorated endpoint now requires an authenticated caller.** `AddAuthorizationPolicies`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:25`,
+   and the configurable overload at `:60`) registers `FallbackAuthorizationHandler`
+   (`:81`; class at
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationHandler.cs:15`)
+   and sets `AuthorizationOptions.FallbackPolicy` from the bound options (`:86-89`).
+   `FallbackAuthorizationOptions.Enabled` defaults to `true`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:52`).
+   Framework and static surfaces are exempt by path prefix rather than by attribute:
+   `DefaultExemptPathPrefixes` (`:21`) covers the Blazor framework files and circuit, static asset
+   roots, health probes and well-known documents, and a host can extend the list through
+   `ExemptPathPrefixes` (`:61`). The documented opt-out is
+   `AddAuthorizationPolicies(options => options.Enabled = false)` (`AuthorizationExtensions.cs:43`).
+2. **The rule this makes explicit: declare anonymity.** Public means `[AllowAnonymous]` or
+   `.AllowAnonymous()` on the endpoint, not the absence of an attribute. The framework's own public
+   surface says so (the `OAuthControllerBase` challenge and completion actions, the credential and
+   landing pages in `MMCA.Common.UI`, the Aspire health endpoints). A YARP gateway is the one host
+   that cannot express it as an attribute: a proxied route carries no endpoint metadata of its own,
+   so a public route declares `"AuthorizationPolicy": "anonymous"` in its route config. A Blazor page
+   is unaffected at the component level, because `AuthorizeRouteView` reads attributes and ignores
+   the fallback policy.
+3. **A fitness gate that can see the undecorated case.** `AnonymousEndpointTestsBase` already
+   allow-listed endpoints marked `[AllowAnonymous]`; it now also enumerates every concrete controller
+   and routable page carrying **no** authorization attribute at all and asserts that set against a
+   second allow-list: `Endpoints_DeclareAnAuthorizationDecision`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Api/AnonymousEndpointTestsBase.cs:118`),
+   opted into per repo through `RequireExplicitAuthorizationDecision` (`:68`, default `false`), with
+   the allow-list at `:76` and a staleness check at `:141`. MMCA.Common holds itself to it. The
+   opt-in is deliberate: a consumer adopting the fallback policy fixes its endpoints first and turns
+   the gate on last, and until then the runtime behaviour is already the safe one.
 
 ## Related
 ADR-004 (the authenticated principal and claims this keys on, including the optional `permission`

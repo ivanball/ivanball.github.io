@@ -672,7 +672,7 @@
           <li>Unauthenticated users accessing protected pages are redirected to <code>/login</code> via the <code>RedirectToLogin</code> component.</li>
           <li>Successful login/register redirects to Home (<code>/</code>) with a full page reload.</li>
           <li>Logout (from NavMenu, MainLayout, or Profile) redirects to <code>/login</code> with a full page reload.</li>
-          <li>The &quot;Forgot password?&quot; link on <code>/login</code> opens <code>/forgot-password</code>. The emailed reset link opens <code>/reset-password</code> with the email and token already in the query string (both fields stay editable, so a recipient can paste the token by hand instead), and a successful reset returns to <code>/login</code>.</li>
+          <li>The &quot;Forgot password?&quot; link on <code>/login</code> opens <code>/forgot-password</code>. The emailed reset link opens <code>/reset-password</code> with the email and token in the URL <strong>fragment</strong> (<code>#</code>), which the browser never sends to a server, so the single-use token stays out of ingress access logs, request telemetry and the <code>Referer</code> header; the page reads them from <code>location.hash</code> and scrubs it, and both fields stay editable so a recipient can paste the token by hand instead, and a successful reset returns to <code>/login</code>.</li>
           </ul>
           <h3 id="authorization-model">Authorization Model</h3>
           <ul>

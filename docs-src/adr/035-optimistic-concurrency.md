@@ -2,7 +2,9 @@
 
 ## Status
 Accepted (2026-07-02).
-
+Revised 2026-09-07 (a conditional write always stamps the aggregate root, so `If-Match` is enforced
+even when only child rows changed, and a concurrency-conflict detector joins the infrastructure
+contracts).
 ## Context
 Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
 case fetches the tracked entity, applies the request, and calls `SaveChangesAsync`. With one shared
@@ -195,6 +197,33 @@ stale update fails inside the UPDATE statement.
 - **Adoption is a schema step per database.** Every table needs the `RowVersion` column for the token
   to exist there, so a new database, or a table introduced outside the migrations that carry it, has
   no version to condition on.
+
+## Revision (2026-09-07)
+Two additions from the 2026-09-07 security review.
+
+1. **`If-Match` is enforced even when the root row is otherwise unchanged** (SEC-Common-77).
+   `IWriteRepository.TouchConcurrencyToken`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:440`)
+   is a default no-op on the interface, implemented by `EFRepository`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:97`),
+   and called by `MutateEntityHandlerBase` under a conditional write
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:314`).
+   It marks an otherwise-`Unchanged` aggregate root as modified, so the save always emits a root
+   UPDATE carrying the caller's token. Without it, a mutation that touched only child rows produced
+   no root UPDATE, EF Core had nothing to compare the `RowVersion` against, and a stale precondition
+   was silently accepted: the caller got 200 while overwriting a concurrent edit it had never seen.
+   With it, the same request answers 412.
+2. **A conflict detector, so the Application layer does not catch provider exceptions.**
+   `IConcurrencyConflictDetector`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IConcurrencyConflictDetector.cs:23`)
+   and `EfCoreConcurrencyConflictDetector`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EfCoreConcurrencyConflictDetector.cs:18`)
+   sit beside `IUniqueConstraintViolationDetector` and are registered by `AddInfrastructure` with
+   `TryAdd`. A handler that claims work by writing a row can now recognise losing that claim without
+   referencing `DbUpdateConcurrencyException` from the Application layer, which the layer rules
+   forbid. ADC's Sessionize refresh throttle is the first consumer: it turns a lost claim race into
+   the same throttled answer a within-cooldown request gets
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeHandler.cs:87-92`).
 
 ## Related
 ADR-017 (HTTP request idempotency, which dedups retries of the **same** request, the mirror-image

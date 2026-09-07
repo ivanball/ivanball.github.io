@@ -2,7 +2,9 @@
 
 ## Status
 Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21, provider-email validation ahead of the by-email lookup documented 2026-07-25, one-provider-link-per-user conflict branch documented and the provider-columns migration attribution corrected 2026-09-01).
-
+Revised 2026-09-07 (an external account's empty credential is explicitly non-authenticating on both
+login and change-password, an OAuth completion must match a flow this client started, and ADC's
+link-by-email requires a provider-verified address).
 ## Context
 The framework's Identity story so far is entirely first-party: a user registers with an email and
 password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -168,6 +170,40 @@ Identity story stays local-credential + RS256 only.
   second provider arriving with the same email is rejected (`Auth.ExternalProviderAlreadyLinked`)
   rather than relinked, and the rejection message points the person back at the provider already
   linked, or at Forgot password to set a local one (`AuthenticationService.cs:214`).
+
+## Revision (2026-09-07)
+Three changes from the 2026-09-07 security review.
+
+1. **The empty credential an external account carries is explicitly non-authenticating**
+   (SEC-Common-01). This record already said an external-login account is created with no password;
+   what it did not say is what the password paths do with that shape.
+   `AuthenticationServiceBase.LoginAsync` now refuses password login for an account with no stored
+   credential before it verifies anything
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:151`,
+   predicate at `:758`), answering exactly as it does for an unknown address, cost included (`:153`).
+   `ChangePasswordHandlerBase` refuses ahead of its own verify
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:73`):
+   an account with no current password has no current password to prove, so it has no
+   change-password path either. The consequence for adopters is that linking a local password to an
+   external account is an explicit flow, never a side effect of change-password.
+2. **A completion is bound to the flow this client started** (SEC-Common-85). `OAuthFlowStateStore`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/OAuth/OAuthFlowStateStore.cs:20`)
+   mints a per-attempt value before the challenge (`BeginAsync`, `:46`) into device-local storage
+   under one key (`:23`), and the completion page round-trips it (`TryCompleteAsync`, `:68`).
+   A code that arrives without a matching local attempt is dropped, so a deep-linked or emailed
+   completion URL cannot force the browser to sign in as the attacker's account. Enforcement follows
+   the store's availability (`IsEnforced`, `:39`).
+3. **ADC's link-by-email requires a provider-verified address.** The `UserRegistered` integration
+   event carries `EmailVerified` (default `false`,
+   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:42`),
+   and the Conference-side handler links a speaker only when that flag says an external provider
+   asserted the address
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:14-22`,
+   match at `:70`). An address typed into a local registration form proves nothing, and a speaker
+   profile carries rights over that speaker's own record and sessions, so a local password
+   registration under a speaker's address links nothing and is logged as an organizer cue instead
+   (`:31-33`). Sessionize-imported speakers, whose email is always null, are linked deliberately by
+   an organizer through `PUT /Speakers/{id}/link` (BR-209).
 
 ## Related
 ADR-004 (the RS256/JWKS token this flow exchanges the external identity *for*, and validates

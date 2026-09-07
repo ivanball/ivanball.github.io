@@ -2,7 +2,8 @@
 
 ## Status
 Accepted (re-verified against source 2026-09-03).
-
+Revised 2026-09-07 (the rate-limit and HTTPS-redirect exemptions that used to key on a caller-set
+`Content-Type: application/grpc` now key on gRPC endpoint metadata and on the negotiated protocol).
 ## Update (2026-06-22): Store converged to Profile A
 Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
 `Http1AndHttp2` Kestrel + `transport: 'auto'` ingress on a **cleartext** endpoint there is no ALPN, so
@@ -462,6 +463,33 @@ discrimination, not before.
   any one of them fails only at runtime (discovery resolves a port nothing listens on, or ACA never
   exposes it). The port is a per-host cost, not a per-edge one: that one endpoint already serves two
   gRPC services.
+
+## Revision (2026-09-07)
+The transport profiles are unchanged. What changed is how the rest of the pipeline **recognises** an
+h2c gRPC request, from the 2026-09-07 security review (SEC-Common-44).
+
+Two exemptions used to accept a client-supplied `Content-Type: application/grpc` as proof that a
+request was inter-service gRPC: the global rate limiter's bypass and the HTTPS-redirect skip that
+exists precisely because a cleartext HTTP/2 endpoint (Profile A) cannot be redirected. Both now key
+on something the server owns.
+
+- The limiter bypass reads gRPC **endpoint metadata**, which routing produces from the host's own
+  `MapGrpcService` registrations: `IsRateLimitBypassed`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:75`,
+  applied at `:171`).
+- The redirect skip reads the **negotiated protocol**: `MiddlewarePipelineBuilder.IsCleartextHttp2`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:362`,
+  which requires a non-HTTPS request speaking HTTP/2, `:367`) is what
+  `UseHttpsRedirection` is now branched on (`:98`).
+
+The practical effect for this record is that Profile A's cleartext HTTP/2 endpoint keeps its redirect
+exemption on the strength of the protocol it actually negotiated, and an ordinary HTTP/1.1 caller can
+no longer claim the same exemption by naming a content type.
+
+Store's Identity gRPC surface also gained a caller-side guard on the customer-contact lookup:
+`CustomersGrpcService` composes `CustomerContactLookupGuard` in front of the inner service
+(`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Grpc/CustomersGrpcService.cs:28`, rationale
+at `:21`).
 
 ## Related
 - ADR-004 (cross-service token validation via JWKS / OIDC discovery), ADR-007 (gRPC cross-service

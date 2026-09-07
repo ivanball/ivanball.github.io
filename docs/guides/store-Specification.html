@@ -944,7 +944,7 @@
           <tbody><tr>
           <td><code>GET /Reviews/by-product/{productId}/paged</code></td>
           <td>Anonymous</td>
-          <td>Published reviews of one product, newest first, page size capped server-side. Output-cached under the shared <code>ProductsCache</code> policy</td>
+          <td>Published reviews of one product, newest first, page size capped server-side. Returns <code>PublicProductReviewDTO</code>, which declares no <code>CustomerId</code> and no <code>OrderId</code>: a pseudonymous key kept through anonymization would re-attach every anonymized review to one subject (ADR-005). The caller&#39;s <code>sortColumn</code> is validated against that same type. Output-cached under the shared <code>ProductsCache</code> policy</td>
           </tr>
           <tr>
           <td><code>GET /Reviews/by-product/{productId}/mine</code></td>
