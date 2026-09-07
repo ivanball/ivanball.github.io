@@ -50,6 +50,13 @@
 | 44 | Change UI Preferences | `PUT /auth/preferences` | Identity |
 | 45 | Export Personal Data | `GET /users/{userId}/export` | Identity |
 | 46 | Erase User Account | `DELETE /users/{userId}` | Identity |
+| 47 | Ship Order | `PUT /orders/{id}/ship` | Sales |
+| 48 | Correct Shipment | `PUT /orders/{id}/shipment` | Sales |
+| 49 | Submit Product Review | `POST /reviews/by-product/{productId}` | Catalog |
+| 50 | Revise Product Review | `PUT /reviews/{id}` | Catalog |
+| 51 | Withdraw Product Review | `DELETE /reviews/{id}` | Catalog |
+| 52 | Hide Product Review | `PUT /reviews/{id}/hide` | Catalog |
+| 53 | Unhide Product Review | `PUT /reviews/{id}/unhide` | Catalog |
 
 ---
 
@@ -383,6 +390,104 @@ Every mutation evicts the products cache so the next read reflects the change.
 
 ---
 
+### 2.5 Product Reviews
+
+#### Earn the Entitlement (OrderFulfilled -> VerifiedPurchase)
+
+**Entry Point:** the `Sales.OrderFulfilled.v1` integration event, consumed by
+`OrderFulfilledHandler` in its own DI scope. No HTTP surface: nothing else in the system creates a
+verified purchase.
+
+```
+Sales: order.MarkAsDelivered()
+  -> raises OrderDelivered (in-process) AND OrderFulfilled (integration, line snapshot)
+  -> stamps Order.FulfilledPublishedOn in the same unit of work
+  -> outbox row commits with the order write, then ships to the broker
+
+Catalog: OrderFulfilledHandler
+  -> resolve the event's variant ids to product ids in ONE projection
+     (soft-deleted variants are not resolved: a delisted product stays unreviewable)
+  -> de-duplicate: two sizes of the same shirt are one entitlement
+  -> read the order's existing entitlement rows (first idempotency guard)
+  -> VerifiedPurchase.Create() for each missing product, one SaveChangesAsync
+```
+
+**Idempotency:** twice over. The existing-rows read means a redelivered event inserts nothing, and the
+unique `(OrderId, ProductId)` index is the backstop for two deliveries racing. Deliveries are
+at-least-once, so both halves are load-bearing. A variant that does not resolve is logged and skipped
+rather than thrown, because a redelivery would fail on it identically forever and take the customer's
+other entitlements down with it.
+
+**Backfill:** `OrderFulfilledBackfillService` publishes the event on startup for orders delivered
+before it existed, selecting only Delivered orders whose `FulfilledPublishedOn` is still null. Bounded
+per run and settings-gated (`OrderFulfilledBackfill:Enabled`).
+
+#### Submit Review
+
+**Entry Point:** `POST /reviews/by-product/{productId}`, authenticated customer, `[Idempotent]`
+
+```
+ReviewsController.SubmitAsync()
+  -> resolve the caller: customer_id claim (fail closed with 403 when absent, admins not exempt)
+  -> reviewer display name read from the token's name claim, never from the body
+  -> SubmitReviewHandler
+    -> VerifiedPurchase for (customer, product)?  no -> Review.NotVerifiedPurchase
+    -> existing review by this customer for this product?  yes -> Review.AlreadyReviewed
+    -> entitling order = lowest matching OrderId (the earliest entitlement)
+    -> ProductReview.Create() -> validates rating 1..5, title <= 120, body <= 2000
+       -> raises ProductReviewChanged (Added), status Published
+    -> AddAsync + SaveChangesAsync
+  -> evict the catalog:products output-cache tag
+
+  (then, after commit)
+  -> ProductReviewChangedHandler [own DI scope]
+    -> recompute AVG/COUNT over the product's published, non-deleted reviews
+    -> Product.UpdateRatingSummary(), written only when the summary actually differs
+```
+
+**Response:** 200 OK with `ProductReviewDTO`
+
+#### Revise / Withdraw Review
+
+**Entry Point:** `PUT /reviews/{id}` and `DELETE /reviews/{id}`, owner or Admin
+
+Ownership is checked in the controller and a non-owner is answered **404, not 403**, so the existence
+of another customer's review id cannot be probed for. The revise path is conditional
+([ADR-035](../adr/035-optimistic-concurrency.md)): the `If-Match` header is mandatory and an edit
+decided against a stale view answers 412. The delete is unconditional (soft delete; a delete has no
+field to lose to a concurrent edit). Both raise `ProductReviewChanged`, so the rating summary is
+recomputed either way. The frozen `ReviewerName` is deliberately not revisable.
+
+#### Hide / Unhide Review (Moderation)
+
+**Entry Point:** `PUT /reviews/{id}/hide`, `PUT /reviews/{id}/unhide`, `catalog:reviews:moderate`
+
+Both are idempotent at the aggregate (a review already in the target status succeeds without raising a
+second event) and conditional on the same `If-Match` terms, so two moderators working from the same
+stale list cannot silently overwrite each other. A hidden review leaves the public list and drops out
+of the product's rating summary; the moderation list still shows it.
+
+#### Erasure
+
+`CustomerErasedHandler` consumes Identity's `CustomerErased.v1` and anonymizes every review that
+customer wrote, hidden and soft-deleted rows included: name, title and body cleared, star rating kept
+([ADR-005](../adr/005-soft-delete-vs-erasure.md)). Only rows that still carry personal data are
+loaded, so a redelivery finds nothing to do and churns no audit fields.
+
+#### Query Endpoints
+
+| Endpoint | Auth | Notes |
+|----------|------|-------|
+| `GET /reviews/by-product/{productId}/paged` | Anonymous | Published reviews only, whoever asks, newest first; output-cached under the shared `ProductsCache` policy, which caches regardless of auth state (a role-varying response would be served to the wrong caller) |
+| `GET /reviews/by-product/{productId}/mine` | Authenticated customer | `HasPurchased` and `CanReview` as separate booleans, plus the caller's own review; the pair is what lets the UI tell "never bought it" apart from "already had their say" |
+| `GET /reviews/paged` | `catalog:reviews:moderate` | Every review whatever its status, filterable and sortable; never cached |
+
+Page sizes are capped server-side at 100. Every mutation evicts the `catalog:products` output-cache
+tag as well as invalidating the application cache, because a review moves the stars the product reads
+carry.
+
+---
+
 ## 3. Sales Module Workflows
 
 ### 3.1 Shopping Cart
@@ -524,10 +629,10 @@ ShoppingCartsController.CheckOutAsync()
                     +------------------------------------------+
                     |                                          |
                     v                                          |
-PendingPayment --> PaymentInitiated --> Paid -----------> Delivered
-    |                    |               ^
-    |                    |               |
-    |                    v        (MarkAsPaidManually)
+PendingPayment --> PaymentInitiated --> Paid --> Shipped --> Delivered
+    |                    |               ^  |                   ^
+    |                    |               |  +-------------------+
+    |                    v        (MarkAsPaidManually)  (no carrier leg)
     |              PaymentFailed --------+
     |                    |
     |                    v (retry)
@@ -539,6 +644,12 @@ PendingPayment --> PaymentInitiated --> Paid -----------> Delivered
 ```
 
 **Terminal States:** Cancelled, Delivered
+
+`Shipped` is an optional stop, not a mandatory one: a fulfilment with no tracking to record still goes
+Paid -> Delivered directly, which is why Paid keeps both outgoing edges. Cancellation is refused from
+Shipped exactly as it is from Paid. `UpdateShipment` is a self-transition on Shipped. The enum's
+numeric values are persisted and travel on the `user_sales_export` gRPC contract, so `Shipped` is
+appended LAST in `OrderStatus` even though it sits mid-lifecycle.
 
 #### Create Stripe Checkout Session
 
@@ -610,11 +721,60 @@ verifiable state, the call succeeds without changes. This is the reconciliation 
 [ADR-054](../adr/054-saga-compensation-and-reconciliation.md): the webhook is the fast path, this is
 the backstop that keeps a paid customer from sitting in `PaymentInitiated` forever.
 
+#### Ship Order
+
+**Entry Point:** `PUT /orders/{id}/ship`, `sales:orders:manage`, mandatory `If-Match`
+
+```
+OrdersController.ShipAsync()
+  -> ShipOrderHandler
+    -> Shipment.Create(carrier, trackingNumber, shippedOn, estimatedDeliveryOn?, trackingUrl?)
+       -> tracking number required, max 100; shippedOn normalized to UTC
+       -> estimated delivery cannot precede the ship date (same day allowed)
+       -> a caller-supplied https tracking URL is accepted ONLY for carrier Other
+    -> order.Ship(shipment)
+       -> validates status is Paid  (Shipped/Delivered/Cancelled refuse)
+       -> sets Shipment, status -> Shipped, raises OrderShipped
+    -> SaveChangesAsync()
+
+  (then, after commit)
+  -> OrderShippedHandler [own DI scope]
+    -> ICustomerService.GetContactInfoByIdAsync() for the address
+    -> IEmailSender: carrier, tracking number, tracking link, dates
+    -> send failures are logged, never fatal: the transition is already committed
+```
+
+The tracking link is **computed** from the carrier's own template plus the tracking number for UPS,
+FedEx, USPS and DHL, so the URL is written down in exactly one place and the client renders whatever
+arrives rather than rebuilding a carrier URL of its own. Only `Carrier.Other` carries a stored URL.
+
+**Response:** 204 No Content. 412 when the `If-Match` token is stale, 428 when the header is absent.
+
+#### Correct Shipment
+
+**Entry Point:** `PUT /orders/{id}/shipment`, `sales:orders:manage`, mandatory `If-Match`
+
+Same request body as `ship`, because the shipment is a value object and a correction replaces it whole
+rather than patching a field. Allowed from Shipped only; the status does not move, and `OrderShipped`
+is raised again on purpose so a customer who was told the wrong tracking number gets the right one
+(the notification is a re-send, not a duplicate). Kept as a separate endpoint from `ship` deliberately:
+`ship` must refuse an already-shipped order and this one must refuse an order that never shipped, so
+folding them together would make "silently re-ship" indistinguishable from "fix the tracking number".
+
 #### Deliver Order
 
-**Entry Point:** `PUT /orders/{id}/deliver`, Admin only
+**Entry Point:** `PUT /orders/{id}/deliver`, `sales:orders:manage`, mandatory `If-Match`
 
-Validates status is Paid. Status -> Delivered. Publishes `OrderDelivered`.
+Validates status is Paid **or** Shipped. Status -> Delivered, `FulfilledPublishedOn` stamped in the
+same unit of work. Raises two events: the in-process `OrderDelivered`, and the `OrderFulfilled`
+integration event carrying the delivered line snapshot, which Catalog turns into the verified-purchase
+entitlements behind product reviews (Section 2.5). The snapshot travels on the event because the
+consumer lives in another service and cannot query back ([ADR-006](../adr/006-database-per-service.md)),
+which is also why callers load `OrderLines` with the aggregate.
+
+The admin order grid searches tracking numbers: the filter name `ShipmentTrackingNumber` maps to the
+scalar column the owned shipment flattens onto, so it is one server-side CONTAINS rather than a client
+scan.
 
 #### Cancel Order
 
@@ -701,13 +861,13 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 
 #### Catalog Browse & Product Detail
 
-- `/catalog`, Product grid with name search, category filter, name/newest sort, quick "Add to Cart" per variant
-- `/catalog/{id}`, Product detail with breadcrumbs, variant list, quantity selector, "Add to Cart" button, "Buy Now" (direct Stripe checkout)
+- `/catalog`, Product grid with name search, category filter, name/newest sort, quick "Add to Cart" per variant, and a star rating with review count on each card (read off the product's denormalized `RatingSummary`, so a grid costs no per-card aggregate query)
+- `/catalog/{id}`, Product detail with breadcrumbs, variant list, quantity selector, "Add to Cart" button, "Buy Now" (direct Stripe checkout), and a reviews section (anchor `#reviews`) listing published reviews with the review editor for an eligible signed-in customer
 
 #### Order Management
 
-- `/orders`, MudDataGrid listing orders with ID, customer, total, status chips, item count
-- `/orders/{id}`, Two-column layout: order summary (status, total, payment/delivery actions) + order lines
+- `/orders`, MudDataGrid listing orders with ID, customer, total, status chips (Shipped included), item count; the admin search box also matches tracking numbers
+- `/orders/{id}`, Two-column layout: order summary (status, total, payment/shipping/delivery actions, and the carrier, tracking number and tracking link once the order ships) + order lines. The admin ship and correct-tracking actions open one `ShipOrderDialog`, which serves both endpoints
 
 ### 4.2 Admin UI Workflows
 
@@ -719,6 +879,7 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 | Products | `/products` | MudDataGrid: name, brand, category, variants |
 | Product Create | `/products/create` | Form: name, description, brand, category |
 | Product Detail | `/products/{id}` | View/edit product, inline variant editor (add/edit/delete) |
+| Reviews | `/reviews` | MudDataGrid: every review whatever its status, search, hide/unhide moderation |
 | Inventory | `/inventory` | MudDataGrid: product name, SKU, quantity, in-stock |
 | Inventory Create | `/inventory/create` | Initialize new inventory item |
 | Inventory Detail | `/inventory/{id}` | Edit inventory quantity |
@@ -750,6 +911,7 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 - Home (`/`)
 - Categories (`/categories`)
 - Products (`/products`)
+- Reviews (`/reviews`)
 - Inventory (`/inventory`)
 - Shopping Carts (`/shoppingcarts`)
 - Orders (`/orders`)
@@ -772,7 +934,24 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 | Sales -> Catalog | `IProductVariantService` | `GetUnitPricesAsync()` | Checkout pricing |
 | Sales -> Catalog | `IProductVariantService` | `SkuExistsAsync()` | SKU uniqueness (Catalog internal) |
 | Sales -> Catalog | `IProductVariantService` | `GetIdBySkuAsync()` | Seed data inventory setup |
+| Sales -> Identity | `ICustomerService` | `GetContactInfoByIdAsync()` | Contact details for the order paid / shipped / payment-failed emails |
+| Identity -> Sales | `IUserSalesExportService` | `GetUserSalesExportAsync()` | Orders section of the data-subject export |
+| Identity -> Catalog | `IUserCatalogExportService` | `GetUserCatalogExportAsync()` | Product-reviews section of the same export |
 | Identity (event) | Domain Event | `UserRegisteredHandler` | Auto-creates Customer on registration |
+
+Both export edges are **best-effort**: an unreachable peer degrades that one section rather than
+failing the export, so neither carries a startup wait.
+
+Asynchronously, four integration events cross the boundary through the outbox and the broker. Each is
+the consumer's trigger to refresh a denormalized copy IT owns, never a prompt to query back into the
+publisher ([ADR-006](../adr/006-database-per-service.md)):
+
+| Event | Publisher -> Consumer | What the consumer does |
+|-------|-----------------------|------------------------|
+| `Catalog.ProductVariantChanged.v1` | Catalog -> Sales | Creates the zero-stock inventory record; refreshes the denormalized SKU / product sort labels |
+| `Catalog.ProductInfoChanged.v1` | Catalog -> Sales | Fans a product rename or delete out to those same labels |
+| `Sales.OrderFulfilled.v1` | Sales -> Catalog | Writes one `VerifiedPurchase` per delivered product (Section 2.5) |
+| `Identity.CustomerErased.v1` | Identity -> Sales and Catalog | Sales clears the frozen order customer name; Catalog anonymizes the customer's reviews, keeping the ratings |
 
 **Module dependency:** Sales declares a hard dependency on Catalog (`RequiresDependencies = true`). When Catalog is disabled, a `DisabledProductVariantService` stub is registered and Sales will fail to start.
 
@@ -785,7 +964,8 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 | **Stripe** | Payment processing | `StripePaymentService`, creates checkout sessions, handles webhooks |
 | **SQL Server** | Primary persistence | Via EF Core + Aspire container orchestration |
 | **SQLite / Cosmos DB** | Alternative persistence | Configurable via `IDbContextFactory` strategy |
-| **SMTP** | Email infrastructure | `SmtpEmailSender`, infrastructure exists but no domain event handlers trigger emails |
+| **SMTP** | Transactional email | `SmtpEmailSender`, driven by the password-reset handler and the Sales handlers `OrderPaidHandler`, `OrderShippedHandler` and `OrderPaymentFailedSagaHandler` |
+| **Message broker** | Cross-service integration events | MassTransit over RabbitMQ locally and Azure Service Bus in production, fed by the per-service outbox |
 
 ---
 
@@ -814,7 +994,10 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 5. Checkout          PUT /shoppingcarts/{id}/checkout  -> Order created, inventory reserved
 6. Pay               POST /orders/{id}/checkout   -> Stripe session created, redirect to payment
 7. Payment Complete  POST /payments/webhook        -> Stripe confirms, order marked Paid
-8. Delivery          PUT /orders/{id}/deliver      -> Admin marks as Delivered
+8. Shipment          PUT /orders/{id}/ship         -> Admin records carrier + tracking, customer emailed
+9. Delivery          PUT /orders/{id}/deliver      -> Admin marks as Delivered, OrderFulfilled published
+10. Entitlement      (broker)                      -> Catalog writes one VerifiedPurchase per product
+11. Review           POST /reviews/by-product/{id} -> Customer rates the product they received
 ```
 
 **Alternative Flows:**
@@ -832,16 +1015,15 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 |-------------|----------|----------------|
 | **No refund workflow** | Order can be cancelled only before payment completes (PendingPayment/PaymentInitiated/PaymentFailed); no refund logic for Paid orders | Verify if refunds are handled externally via Stripe dashboard or if a refund workflow is planned |
 | **No order editing** | Once checkout completes, order lines cannot be modified | Confirm if this is intentional or if order amendment is planned |
-| **No email notifications** | `SmtpEmailSender` infrastructure exists but no domain event handlers trigger email sending | Verify if notifications are planned (order confirmation, shipment, etc.) |
+| **No order-confirmation or delivery email** | Email handlers exist for payment, shipment and payment failure, but `OrderPlaced`, `OrderDelivered` and `OrderCancelled` have none | Both would be an extra `IDomainEventHandler<T>` on an event that already exists, not new plumbing |
 | **No full-text search** | Catalog browse offers a name-contains search box (E2E-covered); there is no full-text/fuzzy search | Consider full-text search for larger catalogs |
 | **Inventory not checked during cart add** | Inventory validation only happens at checkout, not when adding to cart | Could lead to poor UX if items go out of stock between add and checkout |
 | **No post-payment cancellation** | Cancellation allowed from PendingPayment, PaymentInitiated, or PaymentFailed; cannot cancel after payment succeeds | Verify if post-payment cancellation with Stripe refund is needed |
 | **No customer deactivation endpoint** | `User.Deactivate()` method and `UserDeactivated` event exist in domain but no API endpoint exposes this. (Account *erasure* is exposed, see 1.9; deactivation is the separate reversible state.) | May be an admin feature not yet implemented |
 | **Category deletion has no cascade check** | Deleting a category doesn't check for assigned products | Products with deleted category may have orphaned CategoryId |
-| **No partial fulfillment** | Orders are delivered as a whole: no concept of partial shipments or split deliveries | Clarify if partial fulfillment is a future requirement |
-| **No delivery tracking** | `MarkAsDelivered` is a binary admin action with no tracking number, carrier, or ETA | Consider whether shipping/tracking details are needed |
+| **No partial fulfillment** | Orders ship and are delivered as a whole: `Shipped` applies to the order, not to individual lines, and an order carries one `Shipment` value object | A second parcel means turning the shipment into a collection; clarify whether split shipments are a real business case first |
 | **No refund compensation handler** | [ADR-054](../adr/054-saga-compensation-and-reconciliation.md) makes refunds a natural third saga handler alongside `OrderCancelledSagaHandler` and `OrderPaymentFailedSagaHandler`, but none exists | Add when post-payment cancellation lands |
 
 ---
 
-*This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-07-27 (re-verified against MMCA.Store HEAD `1dfdc991`).*
+*This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-09-05 (order shipment tracking and product reviews).*

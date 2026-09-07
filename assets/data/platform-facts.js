@@ -16,8 +16,8 @@
    ============================================================================ */
 window.PLATFORM_FACTS = {
   /* FACTS.md "Published packages" */
-  packages: 16,
-  /* The same 16 packages, grouped by the layer they serve, for the stack on
+  packages: 17,
+  /* The same 17 packages, grouped by the layer they serve, for the stack on
      platform.html. The count above is derived from this list at build time, so a
      package added here cannot leave the headline figure behind (the hand-typed
      pill list this replaced had drifted to 13 while the copy still said fifteen).
@@ -31,9 +31,10 @@ window.PLATFORM_FACTS = {
     { name: "UI", note: "Blazor shared components, MudBlazor theme, web and MAUI clients", items: ["MMCA.Common.UI", "MMCA.Common.UI.Web", "MMCA.Common.UI.Maui"] },
     { name: "Hosting", note: "Aspire service defaults, OpenTelemetry, health checks, broker wiring, YARP gateway composition", items: ["MMCA.Common.Aspire", "MMCA.Common.Aspire.Hosting", "MMCA.Common.Gateway"], edge: true },
     { name: "Testing", note: "Integration bases, architecture rule library, Playwright and bUnit harnesses", items: ["MMCA.Common.Testing", "MMCA.Common.Testing.Architecture", "MMCA.Common.Testing.E2E", "MMCA.Common.Testing.UI"] },
+    { name: "Metapackage", note: "MMCA.Common: one reference that bundles the six core packages (Shared, Domain, Application, Infrastructure, API, Aspire) so a standard app starts from a single PackageReference", items: ["MMCA.Common"] },
   ],
   /* FACTS.md "Architecture fitness functions": test methods, not base classes */
-  fitnessTests: 119,
+  fitnessTests: 124,
   /* Store, ADC, Helpdesk */
   referenceApps: 3,
   /* docs-src/governance/ArchitectureEvaluationCriteria.md */

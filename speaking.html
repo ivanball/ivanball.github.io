@@ -22,9 +22,9 @@
   <meta name="twitter:title" content="Speaking &amp; Community · Ivan Ball-llovera">
   <meta name="twitter:description" content="Conference talks on enterprise .NET architecture, plus lead-organizer and co-organizer roles at two Atlanta technology conferences.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <!-- Delivered talks only. The organizing cards (Atlanta Cloud + AI 2026, Atlanta
-       Developers Conference 2026) are conferences I run, not talks I gave, so they
-       carry no Event entries here. -->
+  <!-- Delivered talks plus scheduled sessions I present. The organizing cards (Atlanta
+       Cloud + AI 2026, Atlanta Developers Conference 2026) are conferences I run, not talks
+       I gave, so they carry no Event entries here. -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -51,10 +51,24 @@
         "item": {
           "@type": "Event",
           "name": "Building Enterprise .NET Applications with Clean Architecture and Domain-Driven Design",
-          "startDate": "2026-10-24",
+          "startDate": "2025-10-11",
           "eventStatus": "https://schema.org/EventScheduled",
           "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
           "location": { "@type": "Place", "name": "Atlanta Developers Conference", "address": { "@type": "PostalAddress", "addressLocality": "Atlanta", "addressRegion": "GA", "addressCountry": "US" } },
+          "superEvent": { "@type": "Event", "name": "Atlanta Developers Conference 2025", "url": "https://www.atldevcon.com/" },
+          "performer": { "@type": "Person", "name": "Ivan Ball-llovera", "url": "https://ivanball.github.io/" }
+        }
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "item": {
+          "@type": "Event",
+          "name": "Build a Modular Monolith with an AI Pair (full-day precon workshop)",
+          "startDate": "2026-10-16",
+          "eventStatus": "https://schema.org/EventScheduled",
+          "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
+          "location": { "@type": "Place", "name": "Atlanta Developers Conference precon day", "address": { "@type": "PostalAddress", "addressLocality": "Atlanta", "addressRegion": "GA", "addressCountry": "US" } },
           "superEvent": { "@type": "Event", "name": "Atlanta Developers Conference 2026", "url": "https://www.atldevcon.com/" },
           "performer": { "@type": "Person", "name": "Ivan Ball-llovera", "url": "https://ivanball.github.io/" }
         }
@@ -143,9 +157,15 @@
       <div class="container">
         <div class="section-head">
           <p class="eyebrow">Talks</p>
-          <h2>Recent sessions</h2>
+          <h2>Sessions and workshops</h2>
         </div>
         <div class="grid grid--2">
+          <article class="card">
+            <span class="kicker kicker--accent">Upcoming · Atlanta Developers Conference precon · October 16, 2026</span>
+            <h3>Build a Modular Monolith with an AI Pair</h3>
+            <p style="font-weight:600;color:var(--text);margin-bottom:0.6rem">Full-day, hands-on workshop</p>
+            <p class="mb-0">Attendees build a modular monolith on plain .NET 10 from an empty solution with Claude Code as the pair: aggregates and the Result pattern, CQRS handlers behind a decorator pipeline, an outbox for domain events, architecture fitness tests that fail the build, and a closing lab that extracts one module into its own service behind a gateway. Everyone leaves with an MIT-licensed starter kit (a CLAUDE.md template, deny rules, hooks, a fitness-test seed, and a slash command) to adopt in their own repo.</p>
+          </article>
           <article class="card">
             <span class="kicker kicker--accent">Atlanta Cloud + AI Conference · 2026</span>
             <h3>The App You're Using Right Now</h3>
@@ -180,8 +200,8 @@
           <article class="card">
             <span class="kicker kicker--accent">Lead organizer</span>
             <h3>Atlanta Developers Conference 2026</h3>
-            <p class="muted" style="margin-bottom:0.6rem">October 24, 2026 · <a href="https://www.atldevcon.com/" target="_blank" rel="noopener">www.atldevcon.com</a></p>
-            <p class="mb-0">Lead organizer for the 2026 edition of the Atlanta Developers Conference, a community-driven event covering .NET, Azure, and modern application development, applying the same playbook and the same user-group network that feeds both Atlanta conferences.</p>
+            <p class="muted" style="margin-bottom:0.6rem">October 17, 2026 · <a href="https://www.atldevcon.com/" target="_blank" rel="noopener">www.atldevcon.com</a></p>
+            <p class="mb-0">Lead organizer for the 2026 edition of the Atlanta Developers Conference, a community-driven event covering .NET, Azure, and modern application development, applying the same playbook and the same user-group network that feeds both Atlanta conferences. The 2026 edition adds a precon workshop day on October 16.</p>
           </article>
         </div>
       </div>

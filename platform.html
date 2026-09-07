@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>The MMCA Platform · Ivan Ball-llovera</title>
-  <meta name="description" content="MMCA is an open-source .NET 10 platform: a 15-package framework (DDD, Clean Architecture, CQRS) plus reference apps that extract a modular monolith into microservices, proven in production on Azure.">
+  <meta name="description" content="MMCA is an open-source .NET 10 platform: a 17-package framework (DDD, Clean Architecture, CQRS) plus reference apps that extract a modular monolith into microservices, proven in production on Azure.">
   <link rel="canonical" href="https://ivanball.github.io/platform.html">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="The MMCA Platform · Ivan Ball-llovera">
-  <meta property="og:description" content="An open-source .NET 10 framework (15 packages) plus reference apps that take a modular monolith to microservices, proven in production on Azure.">
+  <meta property="og:description" content="An open-source .NET 10 framework (17 packages) plus reference apps that take a modular monolith to microservices, proven in production on Azure.">
   <meta property="og:url" content="https://ivanball.github.io/platform.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="The MMCA Platform · Ivan Ball-llovera">
-  <meta name="twitter:description" content="An open-source .NET 10 framework (15 packages) plus reference apps that take a modular monolith to microservices, proven in production on Azure.">
+  <meta name="twitter:description" content="An open-source .NET 10 framework (17 packages) plus reference apps that take a modular monolith to microservices, proven in production on Azure.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <!-- BEGIN head-assets -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -37,7 +37,7 @@
     "@type": "SoftwareSourceCode",
     "name": "MMCA",
     "alternateName": "Modular Monolith Clean Architecture",
-    "description": "An open-source .NET 10 framework of fifteen NuGet packages for building a modular monolith you can extract services out of later, without a rewrite: DDD, Clean Architecture, CQRS, a transactional outbox, database-per-module, and architecture fitness functions that fail the build.",
+    "description": "An open-source .NET 10 framework of lockstep-versioned NuGet packages for building a modular monolith you can extract services out of later, without a rewrite: DDD, Clean Architecture, CQRS, a transactional outbox, database-per-module, and architecture fitness functions that fail the build.",
     "url": "https://ivanball.github.io/platform.html",
     "codeRepository": "https://github.com/ivanball/MMCA.Common",
     "programmingLanguage": [{ "@type": "ComputerLanguage", "name": "C#" }],
@@ -110,18 +110,18 @@
       <div class="container">
         <p class="eyebrow">Featured work · Open source</p>
         <h1>The MMCA platform</h1>
-        <p class="lede">A production-grade .NET 10 platform that demonstrates modern enterprise architecture end to end: an open-source framework of fifteen NuGet packages plus real applications that prove the patterns under live traffic. The design goal is one sentence: build the monolith now, extract a service later, without a rewrite.</p>
+        <p class="lede">A production-grade .NET 10 platform that demonstrates modern enterprise architecture end to end: an open-source framework of lockstep-versioned NuGet packages plus real applications that prove the patterns under live traffic. The design goal is one sentence: build the monolith now, extract a service later, without a rewrite.</p>
         <p><a href="https://cleavestack.com/" target="_blank" rel="noopener"><strong>Cleavestack</strong> ↗</a> is the commercial home of MMCA: build as one, ship as many.</p>
         <div class="btn-row">
-          <a class="btn btn--primary" href="docs/guides/common-GETTING-STARTED.html">Get started in 15 minutes →</a>
+          <a class="btn btn--primary" href="docs/guides/common-GETTING-STARTED.html">Get started in six steps →</a>
           <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">View on GitHub ↗</a>
           <a class="btn btn--ghost" href="writing.html">Read the deep dives</a>
         </div>
         <div class="stats">
           <!-- BEGIN platform-stats -->
-          <div class="stat"><div class="num">16</div><div class="label">NuGet packages</div></div>
+          <div class="stat"><div class="num">17</div><div class="label">NuGet packages</div></div>
           <div class="stat"><div class="num">111</div><div class="label">Architecture Decision Records</div></div>
-          <div class="stat"><div class="num">119</div><div class="label">Architecture fitness tests</div></div>
+          <div class="stat"><div class="num">124</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
         </div>
@@ -134,7 +134,7 @@
         <div class="section-head">
           <p class="eyebrow">The framework</p>
           <h2>MMCA.Common</h2>
-          <p>A NuGet package framework for building modular-monolith applications with DDD, Clean Architecture, and CQRS, and the extension points to extract a module into its own microservice later. Fifteen packages release in lockstep and span every layer.</p>
+          <p>A NuGet package framework for building modular-monolith applications with DDD, Clean Architecture, and CQRS, and the extension points to extract a module into its own microservice later. Every package releases in lockstep at one version and the set spans every layer; a metapackage installs the core six with a single reference.</p>
         </div>
         <!-- GENERATED from assets/data/platform-facts.js (packageLayers). The build fails
              if the package count there disagrees with the headline figure. -->
@@ -196,6 +196,13 @@
               <span class="layer-note">Integration bases, architecture rule library, Playwright and bUnit harnesses</span>
             </span>
           </li>
+          <li class="layer">
+            <span class="layer-name">Metapackage</span>
+            <span>
+              <span class="pill-list"><span class="pill">MMCA.Common</span></span>
+              <span class="layer-note">MMCA.Common: one reference that bundles the six core packages (Shared, Domain, Application, Infrastructure, API, Aspire) so a standard app starts from a single PackageReference</span>
+            </span>
+          </li>
           <!-- END package-layers -->
         </ul>
 
@@ -206,7 +213,7 @@
           </div>
           <div class="card">
             <h3>CQRS decorator pipeline</h3>
-            <p class="mb-0">Thin command and query handlers wrapped by a Scrutor decorator chain: FeatureGate → Logging → Caching → Validating → Transactional → Handler. The order is load-bearing and registered once.</p>
+            <p class="mb-0">Thin command and query handlers wrapped by a Scrutor decorator chain: FeatureGate → Authorization → Logging → Caching → Validating → Timeout → Transactional → Handler. The order is load-bearing and registered once.</p>
           </div>
           <div class="card">
             <h3>Extraction boundaries</h3>
@@ -233,7 +240,7 @@
           <div class="card">
             <span class="kicker kicker--accent">E-commerce</span>
             <h3>MMCA.Store</h3>
-            <p class="mb-0">An e-commerce app refactored from a monolith into three microservices (Catalog, Sales, Identity) with Stripe payments, output caching, role-based access control, and an accessible Blazor and .NET MAUI UI.</p>
+            <p class="mb-0">An e-commerce app refactored from a monolith into three microservices (Catalog, Sales, Identity) with Stripe payments, output caching, permission-based access control, and an accessible Blazor and .NET MAUI UI.</p>
           </div>
           <div class="card">
             <span class="kicker kicker--accent">Reference seed</span>
@@ -284,7 +291,7 @@
           </div>
           <div class="card">
             <h3>CQRS</h3>
-            <p class="mb-0">Commands mutate and return a Result; queries are side-effect-free. Both flow through a decorator pipeline (feature gate, logging, caching, validation, transaction), so cross-cutting concerns live in the pipeline, not in each handler.</p>
+            <p class="mb-0">Commands mutate and return a Result; queries are side-effect-free. Both flow through a decorator pipeline (feature gate, authorization, logging, caching, validation, timeout, transaction), so cross-cutting concerns live in the pipeline, not in each handler.</p>
           </div>
           <div class="card">
             <h3>One shared HTTP middleware pipeline</h3>
@@ -575,8 +582,8 @@
           </div>
           <div class="card">
             <h3>Install the packages</h3>
-            <p>Fifteen packages, released in lockstep at one version. One reference is usually enough to start: each package brings the layers below it.</p>
-            <div class="card-foot"><a href="https://www.nuget.org/packages/MMCA.Common.API" target="_blank" rel="noopener">MMCA.Common.API on nuget.org ↗</a></div>
+            <p>Every package releases in lockstep at one version. The MMCA.Common metapackage is one reference that installs the six core packages; add Grpc, UI, Gateway, or Testing.* as you need them.</p>
+            <div class="card-foot"><a href="https://www.nuget.org/packages/MMCA.Common" target="_blank" rel="noopener">MMCA.Common on nuget.org ↗</a></div>
           </div>
           <div class="card">
             <h3>Read the code</h3>
