@@ -932,7 +932,7 @@
           </tr>
           <tr>
           <td>BR-6</td>
-          <td>Sessionize data refresh requires a non-empty <code>SessionizeCode</code> on the event</td>
+          <td>Sessionize data refresh requires a <code>SessionizeCode</code> on the event that is non-empty <strong>and well-formed</strong>: 1 to 64 characters drawn from letters, digits, hyphen and underscore (<code>SessionizeCodeFormat.Pattern</code>, <code>MaxLength</code> 64). The code is composed into the Sessionize request path, so a value outside that alphabet is rejected at validation rather than reaching the HTTP call.</td>
           </tr>
           <tr>
           <td>BR-7</td>
@@ -1244,7 +1244,7 @@
           </tr>
           <tr>
           <td>BR-236</td>
-          <td><strong>Live-layer authoring rights:</strong> organizers and admins manage everything; a speaker manages only content scoped to a session they are assigned to. Event-wide scope is organizer/admin only. The caller identity is bound from the token at the API edge, <strong>never from the request body</strong>, and the server re-checks on every call, so the client-side gate is convenience rather than security.</td>
+          <td><strong>Live-layer authoring rights:</strong> organizers and admins manage everything; a speaker manages only content scoped to a session they are assigned to. Event-wide scope is organizer/admin only. <strong>Audience read scope (separate from authoring):</strong> a live poll&#39;s question and results are readable by an attendee only once the poll has reached <strong>Open or Closed</strong> on a <strong>published</strong> event or session; a <code>Draft</code> poll is visible only through the organizer manage surface, since it carries staged, unannounced content. The caller identity is bound from the token at the API edge, <strong>never from the request body</strong>, and the server re-checks on every call, so the client-side gate is convenience rather than security.</td>
           </tr>
           <tr>
           <td>BR-237</td>
@@ -3468,7 +3468,7 @@
           </thead>
           <tbody><tr>
           <td>BR-63</td>
-          <td>Sessionize refresh (<code>POST /api/events/{id}/refresh</code>) is throttled to <strong>once per 5 minutes per event</strong>. Subsequent requests within the cooldown window return HTTP 429 with a <code>Retry-After</code> header indicating seconds remaining. This prevents excessive load on the Sessionize API and redundant processing.</td>
+          <td>Sessionize refresh (<code>POST /api/events/{id}/refresh</code>) is throttled to <strong>once per 5 minutes per event</strong>. Subsequent requests within the cooldown window return HTTP 429 with a <code>Retry-After</code> header indicating seconds remaining. This prevents excessive load on the Sessionize API and redundant processing. <strong>Concurrency:</strong> the cooldown read is a check-then-act, so two requests arriving together could both pass it; the refresh claims the event&#39;s concurrency token, and the request that loses that race returns the same throttled answer rather than issuing a second Sessionize call. No distributed lock is involved.</td>
           </tr>
           </tbody></table></div>
           <hr>
@@ -4980,7 +4980,7 @@
           </tr>
           <tr>
           <td>BR-207</td>
-          <td><strong>Speaker-user linking</strong> is automatic at registration and login when <code>User.Email</code> matches <code>Speaker.Email</code> (case-insensitive). The link is stored bidirectionally (<code>User.LinkedSpeakerId</code>, <code>Speaker.LinkedUserId</code>). <strong>Discovery limitation:</strong> Speaker emails are not exposed via public API (BR-66), so attendees cannot verify which email their Speaker profile uses in Sessionize. Organizers should inform speakers of their Sessionize-registered email address before the conference so they register with the matching email. When automatic matching fails (e.g., speaker uses a different personal email), organizers can use manual linking (BR-209). <strong>Clarification (2026-08-04, BugHunt C5):</strong> matching is by email equality ONLY; a name-based fallback that briefly existed in code was removed as a security fix (registration names are unverified free text, so a name match would let anyone claim a speaker profile). Sessionize-imported speakers carry no email, so the organizer manual link (BR-209) is their intended path; when a registration&#39;s email match misses but unlinked speakers share the registrant&#39;s name, the handler logs an Information-level cue for the organizer rather than linking.</td>
+          <td><strong>Speaker-user linking</strong> is automatic at registration and login when <code>User.Email</code> matches <code>Speaker.Email</code> (case-insensitive). The link is stored bidirectionally (<code>User.LinkedSpeakerId</code>, <code>Speaker.LinkedUserId</code>). <strong>Discovery limitation:</strong> Speaker emails are not exposed via public API (BR-66), so attendees cannot verify which email their Speaker profile uses in Sessionize. Organizers should inform speakers of their Sessionize-registered email address before the conference so they register with the matching email. When automatic matching fails (e.g., speaker uses a different personal email), organizers can use manual linking (BR-209). <strong>Clarification (2026-09-07):</strong> matching is by email equality AND requires a <strong>provider-verified</strong> address: the <code>UserRegistered</code> integration event carries an <code>EmailVerified</code> flag, and the Conference-side handler links only when an external identity provider asserted the address. A local password registration under a speaker&#39;s address links nothing (an address typed into a form proves nothing, and a speaker profile carries rights over that speaker&#39;s own record and sessions); when the name matches unlinked speakers the handler logs an organizer cue instead, and the organizer manual link (BR-209) is the path. <strong>Clarification (2026-08-04, BugHunt C5):</strong> matching is by email equality ONLY; a name-based fallback that briefly existed in code was removed as a security fix (registration names are unverified free text, so a name match would let anyone claim a speaker profile). Sessionize-imported speakers carry no email, so the organizer manual link (BR-209) is their intended path; when a registration&#39;s email match misses but unlinked speakers share the registrant&#39;s name, the handler logs an Information-level cue for the organizer rather than linking.</td>
           </tr>
           <tr>
           <td>BR-208</td>
@@ -4988,7 +4988,7 @@
           </tr>
           <tr>
           <td>BR-209</td>
-          <td>Organizers can <strong>manually link or unlink</strong> a User and Speaker regardless of email match. Manual linking overrides automatic linking.</td>
+          <td>Organizers can <strong>manually link or unlink</strong> a User and Speaker regardless of email match (<code>PUT /Speakers/{id}/link</code>). Manual linking overrides automatic linking. It is also the <strong>only</strong> path for a Sessionize-imported speaker (whose email is always null) and for any registration whose address no identity provider verified (BR-207).</td>
           </tr>
           <tr>
           <td>BR-210</td>
@@ -5043,7 +5043,7 @@
           </ol>
           <p>Both endpoints are <code>AllowAnonymous</code> (the caller has lost the credential, so requiring one would be circular), carry the same <code>auth-ip</code> per-IP rate limit as login and register, and are <code>[Idempotent]</code>. They are served by a dedicated <code>PasswordResetController</code> routed to the same <code>Auth</code> prefix as the other auth actions, so the Gateway forwards them on its existing <code>/Auth</code> route with no gateway change.</p>
           <p><strong>Token storage:</strong> reset tokens live in the cache, not the database, so the feature adds <strong>no schema change and no migration</strong>: expired tokens are reaped by cache TTL rather than by a sweeper. The trade-off is that a cache eviction or flush invalidates every outstanding token; requesting a new link is cheap, so the failure mode is a repeated request rather than a locked-out account.</p>
-          <p><strong>UI:</strong> the framework UI package ships <code>/forgot-password</code> and <code>/reset-password</code> as anonymous pages, plus the &quot;Forgot password?&quot; link on <code>/login</code>. The reset page prefills <code>email</code> and <code>token</code> from the query string and keeps the token field visible and editable, so the manual-entry path works when the link cannot be followed. Email copy is English only in this version; the subject, body, and link composition are overridable hooks on the handler for a later localization pass.</p>
+          <p><strong>UI:</strong> the framework UI package ships <code>/forgot-password</code> and <code>/reset-password</code> as anonymous pages, plus the &quot;Forgot password?&quot; link on <code>/login</code>. The reset page prefills <code>email</code> and <code>token</code> from the URL <strong>fragment</strong> (<code>location.hash</code>, which browsers never send to a server) and scrubs the fragment once read, so a live single-use token stays out of ingress access logs, request telemetry and the <code>Referer</code> header; <code>/reset-password</code> additionally answers <code>Referrer-Policy: no-referrer</code> and <code>Cache-Control: no-store</code> (ADR-023). The token field stays visible and editable, so the manual-entry path works when the link cannot be followed. Email copy is English only in this version; the subject, body, and link composition are overridable hooks on the handler for a later localization pass.</p>
           <p><strong>Configuration:</strong> section <code>PasswordReset</code> (<code>ResetUrl</code>, <code>TokenLifetimeMinutes</code>, <code>MaxValidationAttempts</code>, <code>MaxRequestsPerEmail</code>, <code>RequestWindowMinutes</code>), bound with data-annotation validation at startup. <code>ResetUrl</code> is deliberately optional so a host without a UI base still boots; production sets it through the <code>PasswordReset__ResetUrl</code> container-app environment variable, and the Aspire AppHost sets it for local runs.</p>
           <p>See <a href="../adr/091-cache-backed-password-reset.html">ADR-091</a> for the decision record behind the token substrate, the anti-enumeration contract, and the email-delivery posture.</p>
           <hr>

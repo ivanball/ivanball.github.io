@@ -4,7 +4,8 @@
 Accepted. Updated 2026-06-27 (documented the `[Pii]` → `IAnonymizable` build-time guard and `PiiRedactor`).
 Updated 2026-08-26 (`DeletedOn`/`DeletedBy` stamps, the `DeleteChildren` cascade helper, and a
 hard-delete fitness rule).
-
+Updated 2026-09-07 (a pseudonymous key kept through anonymization must not appear on an
+anonymous surface; Store's public review list is served through a contract that declares none).
 ## Context
 The framework's default deletion model is **soft-delete**: `AuditableBaseEntity.Delete()` sets `IsDeleted = true` and EF Core global query filters exclude the row from normal queries. The row (including any personal data it holds) stays in the database indefinitely, which is exactly what audit, referential integrity, and "undelete" (BR-135) require.
 
@@ -38,3 +39,23 @@ The framework provides the **extension points** (`IAnonymizable`, `OutboxCleanup
 - The default 7-day outbox retention is a **behavior change**: consumers upgrading the framework begin purging processed outbox rows older than 7 days unless they set `Outbox:RetentionDays = 0`.
 - The `DeletedOn`/`DeletedBy` stamps are **two new nullable columns on every auditable table**, so adopting the framework version that introduced them costs one scaffolded migration per consumer database. They are additive (expand only, no ADR-057 override needed) and they are not backfilled: rows soft-deleted before the migration keep null stamps forever, so the pair answers "who deleted this" only from that point on.
 - The fitness rule turns "we soft-delete, mostly" into a **reviewed inventory**, not into a guarantee. It sees direct IL calls in the assemblies the repo's architecture map registers, so raw SQL, a stored procedure, or a delete issued from an unmapped assembly is invisible to it, and an allowlist entry covers every erasing call in the named type rather than the one that was reviewed.
+
+## Revision (2026-09-07)
+Anonymization keeps the row and its foreign keys: `Anonymize()` overwrites the personal fields and
+leaves the entity's relationships intact, because the aggregate still has to hang off the order and
+the customer it belongs to. That is deliberate, and it creates one rule this record did not state.
+
+**A pseudonymous key retained through anonymization must never be projected onto an anonymous
+surface.** A customer id or an order id is not personal data on its own, but on a public list it
+re-attaches every "anonymized" row to the same subject, and to that subject's other rows, for any
+reader. Anonymization that a caller can undo by grouping is not anonymization.
+
+Store's anonymous review list is the worked case (SEC-Store-07 / SEC-Store-18). The read is served
+through `PublicProductReviewDTO`
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Reviews/PublicProductReviewDTO.cs:30`),
+which declares the product id, rating, title, body, reviewer name, status and timestamps (`:33-60`)
+and no `CustomerId` and no `OrderId`. The controller closes the anonymous paged endpoint over that
+type rather than over the owner-facing DTO
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewsController.cs:58`,
+`:94-99`), and the caller's `sortColumn` is validated against the same type (`:107`), so the public
+shape bounds both what is returned and what can be ordered on.

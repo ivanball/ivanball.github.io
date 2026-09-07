@@ -6,7 +6,8 @@ app-level concern outside the channel model; see Revision below). Revised 2026-0
 dedup short-circuit and the scope key recorded; the `Enabled` gate narrowed to the hub endpoint).
 Revised 2026-08-31 (email adoption re-stated: `IEmailSender` is now consumed inside the framework
 itself by the password-reset workflow, so it is no longer an app-level-only primitive).
-
+Revised 2026-09-07 (a per-user cap on concurrent hub connections, and the notification backplane
+channel is namespaced per application).
 ## Context
 The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
 a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -106,6 +107,26 @@ recipient policy both behind abstractions.
 - **Backplane is a deployment dependency for multi-replica correctness.** Without Redis, a push only
   reaches users connected to the same replica that handled the send; the inbox masks this for correctness
   but not for immediacy.
+
+## Revision (2026-09-07)
+Two bounds were added under the delivery model, from the 2026-09-07 security review.
+
+1. **A connection cap per user.** `NotificationHub` refuses a connection once the caller already
+   holds `PushNotifications:MaxConnectionsPerUser` open ones (default 20,
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:42`,
+   read at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:56`). The
+   default is generous on purpose: one person legitimately runs several tabs and a phone, and a
+   reconnecting browser briefly holds two. It bounds the one resource an authenticated caller could
+   otherwise take without limit, since a hub connection is long-lived state on the server rather than
+   a request the rate limiter counts.
+2. **The backplane channel is per application.** The SignalR Redis backplane's channel prefix now
+   defaults to the resolved application namespace
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:653`, resolver at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53`), so
+   two applications sharing one Redis instance no longer publish notifications onto each other's
+   channel. Adopting it moves the channel, so a rolling deploy has a window where old and new
+   replicas do not see each other's broadcasts.
 
 ## Related
 ADR-003 (the outbox dual-dispatch path, which is distinct: that carries service-to-service integration

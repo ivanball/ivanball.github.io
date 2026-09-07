@@ -230,7 +230,9 @@
           <a href="100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a> (2026-08-29, v1.170.0), which applies this
           record&#39;s three-valued resolution rule to the <strong>producer</strong> side: <code>MessageBus:EnableOutbox</code> is <code>bool?</code>
           and resolves from the transport the same way <code>EnableInbox</code> does here, so the two settings now read
-          identically. Nothing about the inbox contract changes.</p>
+          identically. Nothing about the inbox contract changes.
+          Revised 2026-09-07 (queue and endpoint names are prefixed per application by default, so a
+          consumer either pins its pre-upgrade prefix or drains its old queues on cutover).</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 makes integration-event delivery <strong>at-least-once</strong>: the outbox guarantees a published event
           is not lost, and the MassTransit broker redelivers on consumer failure. At-least-once means a
@@ -342,6 +344,22 @@
           granularity); a producer that re-published the <em>same</em> business action under a <em>new</em> <code>MessageId</code>
           would not be deduped by the inbox.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>Inbox idempotency is unchanged. The names the consumer endpoints take are not (SEC-Common-53).
+          <code>MessageBus:EndpointPrefix</code> left unset used to mean &quot;no prefix&quot;; it now defaults to the resolved
+          application namespace
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:66</code>, resolved
+          through <code>ApplicationNamespace.Resolve</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:793</code>; the resolver itself
+          is at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53</code> and
+          takes <code>Application:Namespace</code>, falling back to the host application name).</p>
+          <p>This matters here because the inbox is keyed per consumer endpoint. A rename moves the endpoint, so
+          the cutover rule is explicit: a consumer that must keep its current endpoint names pins the
+          pre-upgrade value (<code>Application:Namespace</code> or <code>MessageBus:EndpointPrefix</code>) <strong>before</strong> upgrading, and
+          a consumer that accepts the new names drains the old queues, because messages already sitting under
+          the old endpoint name have no subscriber afterwards. The inbox rows themselves are unaffected: they
+          record the message id, and a redelivery under the new endpoint is still recognised as a duplicate.</p>
           <h2 id="related">Related</h2>
           <p>ADR-003 (the outbox and at-least-once delivery whose consumer side this deduplicates; handler
           idempotency is still required for the crash window), ADR-006 (the inbox lives in the consumer&#39;s own
@@ -485,6 +503,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-08-26">Revision (2026-08-26)</a></li>

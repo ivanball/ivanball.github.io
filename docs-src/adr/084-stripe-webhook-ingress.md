@@ -2,7 +2,9 @@
 
 ## Status
 Accepted (2026-08-14). Revised 2026-09-03.
-
+Revised 2026-09-07 (the webhook action carries its own request size limit, the auto-minted signing
+secret is shared through the distributed cache, cancelling a payable order expires the provider
+session, and reconciliation sweeps stranded unpaid orders).
 ## Context
 Four ADRs already cover how a message crosses a boundary in this workspace. ADR-003 decides how an
 event leaves a service (outbox, at-least-once). ADR-021 decides how a redelivered broker message is
@@ -192,6 +194,47 @@ and the deletion predicate in five, including the operator-created endpoint that
 - **Single-module adoption.** None of this lives in MMCA.Common, so a second inbound webhook (in this
   or another repo) starts from a copy of `PaymentsController` and `StripeWebhookRegistrationService`
   rather than from a framework contract.
+
+## Revision (2026-09-07)
+Four changes from the 2026-09-07 security review. The ingress contract (raw body, signature verified
+before parsing, anonymous endpoint) is unchanged.
+
+1. **The webhook action bounds its own request body** (SEC-Store-15). Signature verification requires
+   buffering the whole body before anything is known about the caller, on an anonymous endpoint, in a
+   service that runs at 0.5 GiB. `[RequestSizeLimit(1_000_000)]`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/PaymentsController.cs:76`) is
+   enforced by Kestrel at the transport layer (`:72`), so an oversized body is rejected before it is
+   read rather than after.
+2. **The auto-minted signing secret is shared across replicas** (SEC-Store-35).
+   `SharedCacheStripeWebhookSecretStore`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/SharedCacheStripeWebhookSecretStore.cs:37`)
+   keeps the secret under `stripe:webhook-signing-secret:` plus the endpoint URL (`:46`, read at
+   `:57`, written at `:75`). Held in one replica's memory, a scaled-out Sales rejected every event
+   that landed on a replica which had not minted it. The endpoint URL is part of the key so a public
+   URL change does not read a stale secret. The rationale for the cache over the database or Key
+   Vault is recorded on the type (`:13-19`): the app identity holds only get and list on Key Vault,
+   so it cannot write there.
+3. **Cancelling a payable order expires the provider session** (SEC-Store-34). `CancelOrderHandler`
+   acts only on an order that is `PaymentInitiated` and carries a session id
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Cancel/CancelOrderHandler.cs:92`).
+   If the provider says the session is already paid, the cancel is refused with
+   `OrderCancellationErrorCodes.PaymentAlreadyCompleted` (`:101-105`; constant at
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Cancel/OrderCancellationErrorCodes.cs:18`)
+   rather than cancelling an order the customer has paid for. Otherwise it expires the hosted session
+   (`:116`), because a cancelled order whose checkout page stays payable takes money for something
+   nothing will fulfil. A failure to read or expire is logged with the manual-refund consequence
+   spelled out (`:140`, `:145`) and does not block the cancel.
+4. **Reconciliation sweeps stranded unpaid orders** (SEC-Store-61). Beside the existing class of
+   `PaymentInitiated` orders it asks the provider about, the service now takes `PendingPayment` and
+   `PaymentFailed` orders older than `StuckAgeMinutes` (default 30,
+   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationSettings.cs:42`)
+   straight to `Cancelled`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:28-36`).
+   It asks the provider nothing for this class, because a `PendingPayment` order may have no session
+   at all. `Cancelled` rather than `PaymentFailed` is deliberate: `PaymentFailed` is retryable, and
+   only `Cancelled` is the terminal state the `OrderCancelled` compensation listens on to return the
+   committed stock (`:37-42`). Checkout commits stock, so without this an abandoned checkout held
+   inventory forever and repeating it was a denial-of-service on availability.
 
 ## Related
 ADR-003 (outbound at-least-once delivery, the other end of the same family), ADR-021 (broker-side

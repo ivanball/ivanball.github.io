@@ -244,7 +244,9 @@
           one being paid rather than as a hypothetical. The framework base and its cross-assembly guard moved
           into <code>Governance/</code> subfolders, and every <code>main.bicep</code> and <code>OPERATIONS.md</code> citation is re-anchored. The
           trade-off that described ADC&#39;s runbook headings as dropping the environment segment and the <code>-v2</code>
-          suffix is corrected: they spell the deployed production name out in full. No decision changed.</p>
+          suffix is corrected: they spell the deployed production name out in full. No decision changed.
+          Revised 2026-09-07 (a security-signal rule and an ingestion-cap rule join the SLO rules in Store,
+          which is what makes the deliberate 401 exclusion in the failure rules safe).</p>
           <h2 id="context">Context</h2>
           <p>ADR-041 standardized what the fleet <strong>emits</strong>: RED histograms off the CQRS pipeline, an outbox
           dead-letter counter, correlation ids, exporters, and the cost knobs that keep ingestion affordable.
@@ -487,6 +489,25 @@
           resources and subclassing the base gets no gate at all, the same audit-the-inventory caveat that
           applies to the rest of the fitness tier (ADR-015).</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>The alert-to-runbook model is unchanged. Store&#39;s rule set grew by two, from the 2026-09-07 security
+          review.</p>
+          <ol>
+          <li><strong>A security signal now has a rule of its own</strong> (SEC-Store-54). The failed-request and
+          failed-dependency SLO rules exclude 401 and 499 on purpose
+          (<code>MMCA.Store/infra/main.bicep:276</code>, <code>:294</code>, reasoning at <code>:264-270</code>), because an expired token and
+          a client disconnect are not service failures. The side effect was that a credential-stuffing run
+          produced nothing an alert could see. A dedicated rule watches sustained 401s on the <code>/Auth</code> route
+          (<code>:491</code>, query at <code>:501</code>), with the trade-off written beside it (<code>:460-475</code>): a lockout storm
+          under ADR-029 also surfaces as a 401, so the rule&#39;s runbook has to distinguish an attack from
+          real users being locked out.</li>
+          <li><strong>The workspace ingestion cap is alerted on</strong> (SEC-Store-55). At the cap, ingestion of every table
+          stops until the next UTC midnight and every other rule in this deployment evaluates empty data, so
+          the cap event is a detection outage that has to page before the rules go quiet: <code>:571</code>, query at
+          <code>:587</code>, matching <code>ApproachingQuota</code> as well as <code>OverQuota</code>.</li>
+          </ol>
+          <p>Both rules are declared in the same template as the rest, so the alert-to-runbook build gate applies
+          to them unchanged.</p>
           <h2 id="related">Related</h2>
           <p>ADR-041 (the telemetry this alerts on top of: it defines emission, instrumentation and cost knobs and
           stops before thresholds, severities and runbooks), ADR-009 (recovery objectives and the drilled
@@ -509,6 +530,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

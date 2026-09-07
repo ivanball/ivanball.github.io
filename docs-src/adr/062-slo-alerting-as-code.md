@@ -27,7 +27,8 @@ one being paid rather than as a hypothetical. The framework base and its cross-a
 into `Governance/` subfolders, and every `main.bicep` and `OPERATIONS.md` citation is re-anchored. The
 trade-off that described ADC's runbook headings as dropping the environment segment and the `-v2`
 suffix is corrected: they spell the deployed production name out in full. No decision changed.
-
+Revised 2026-09-07 (a security-signal rule and an ingestion-cap rule join the SLO rules in Store,
+which is what makes the deliberate 401 exclusion in the failure rules safe).
 ## Context
 ADR-041 standardized what the fleet **emits**: RED histograms off the CQRS pipeline, an outbox
 dead-letter counter, correlation ids, exporters, and the cost knobs that keep ingestion affordable.
@@ -268,6 +269,26 @@ outbox rule is declared (`:353-354`), so a narrower SQL-scoped twin would page t
 - **Adoption is opt-in per consumer.** A consumer that provisions alerts without embedding the two
   resources and subclassing the base gets no gate at all, the same audit-the-inventory caveat that
   applies to the rest of the fitness tier (ADR-015).
+
+## Revision (2026-09-07)
+The alert-to-runbook model is unchanged. Store's rule set grew by two, from the 2026-09-07 security
+review.
+
+1. **A security signal now has a rule of its own** (SEC-Store-54). The failed-request and
+   failed-dependency SLO rules exclude 401 and 499 on purpose
+   (`MMCA.Store/infra/main.bicep:276`, `:294`, reasoning at `:264-270`), because an expired token and
+   a client disconnect are not service failures. The side effect was that a credential-stuffing run
+   produced nothing an alert could see. A dedicated rule watches sustained 401s on the `/Auth` route
+   (`:491`, query at `:501`), with the trade-off written beside it (`:460-475`): a lockout storm
+   under ADR-029 also surfaces as a 401, so the rule's runbook has to distinguish an attack from
+   real users being locked out.
+2. **The workspace ingestion cap is alerted on** (SEC-Store-55). At the cap, ingestion of every table
+   stops until the next UTC midnight and every other rule in this deployment evaluates empty data, so
+   the cap event is a detection outage that has to page before the rules go quiet: `:571`, query at
+   `:587`, matching `ApproachingQuota` as well as `OverQuota`.
+
+Both rules are declared in the same template as the rest, so the alert-to-runbook build gate applies
+to them unchanged.
 
 ## Related
 ADR-041 (the telemetry this alerts on top of: it defines emission, instrumentation and cost knobs and

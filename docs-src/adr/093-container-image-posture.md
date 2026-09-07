@@ -6,7 +6,9 @@ postures" are recorded as **undecided**: they describe what the images do today 
 each one carries, not a decision to keep doing it. Revised 2026-09-03: the Container Apps sizing
 that decision 3's cold-start argument rests on is now uniform across all six ADC apps, so the
 4-vs-2 split that argument cited is gone. See Revision (2026-09-03) at the end.
-
+Revised 2026-09-07 (base images are digest-pinned, every final stage drops to `USER $APP_UID`,
+image builds restore in locked mode, and both consumers scan the built image with Trivy: gating in
+ADC, report-only for one cycle in Store).
 ## Context
 Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
 MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -149,6 +151,31 @@ therefore not be reported by the checks that gate a deploy.
 - **Root plus a floating base is the compounding one.** Individually each open posture is mild; a
   base-layer vulnerability that no scanner reports, in a container whose process runs as root, is
   the combination worth closing first.
+
+## Revision (2026-09-07)
+The open postures this record listed are closed in both consumers, from the 2026-09-07 security
+review.
+
+1. **Base images are pinned by digest** (SEC-ADC-32 / SEC-ADC-54 / SEC-Store-45 / SEC-Store-57). Each
+   Dockerfile names the runtime and SDK images by `sha256` with the tag left as a readable suffix, so
+   a rebuild resolves the same layers: for example
+   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Dockerfile:4` and `:10`, and
+   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:5` and `:12`. Dependabot's docker
+   ecosystem (ADR-038) is what keeps a digest pin from becoming a pin to a stale, unpatched layer.
+2. **The final stage runs as a non-root user** (SEC-ADC-58). `USER $APP_UID` is the last instruction
+   before the entrypoint in every image (ADC `Dockerfile:67`, Store `Dockerfile:65`). The variable is
+   set by the .NET base image, so the app does not have to invent a uid.
+3. **The image build restores in locked mode** (SEC-Store-44 / SEC-ADC-31). The restore inside the
+   build stage passes `--locked-mode` (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:37`,
+   rationale at `:31`), which is what makes the shipped artifact's package graph the one the lock
+   file and the CI vulnerability gate actually saw.
+4. **The built image is scanned.** ADC's deploy scans each image with Trivy and **fails the job** on a
+   finding (`MMCA.ADC/.github/workflows/deploy.yml:1292`, action pinned by SHA at `:1294`,
+   `exit-code: '1'` at `:1300`). Store runs the same scan **report-only for one release cycle**
+   (`MMCA.Store/.github/workflows/deploy.yml:1154`, `:1162`, `exit-code: '0'` at `:1168`), with the
+   flip to gating recorded as a follow-up beside it (`:1145-1152`) once the baseline is clean or the
+   residue is captured in a `.trivyignore` with a written justification. `ignore-unfixed: true` stays
+   either way.
 
 ## Related
 [ADR-038](038-supply-chain-provenance.md) (supply-chain provenance: it gates the **package** graph

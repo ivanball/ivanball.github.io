@@ -27,7 +27,9 @@ source citations below are refreshed against current line numbers. Nothing in th
 **Revised 2026-09-03:** the citations are refreshed again: the rate-limiting kit's anchors all moved
 when the synthetic-traffic bypass tier (the 2026-09-01 amendment below) landed in the same two
 files. Nothing in the decision changes.
-
+Revised 2026-09-07 (health endpoints serve a cached report with single flight while keeping their
+rate-limit bypass, and edge-shaped controls are no longer gateway-only: Store's storefront host
+carries its own limiter and a circuit cap).
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
 three jobs: the route-to-service map, CORS, and forwarding the caller's `Authorization` header. Nothing
@@ -414,6 +416,39 @@ off and the deployed answer is on.
   today (ADC `Program.cs:64`, `:78`, `:114`; Store `Program.cs:87`, `:112`, `:140`), but that is a
   wiring habit rather than an enforced invariant, which is the audit-the-inventory caveat ADR-005 and
   ADR-017 both record, now applied to the edge.
+
+## Revision (2026-09-07)
+Two changes from the 2026-09-07 security review.
+
+1. **Health endpoints are cached server-side, and the bypass stays** (SEC-Common-71 / SEC-ADC-17 /
+   SEC-ADC-56). `/health` and `/health/ready` are anonymous and rate-limit exempt by design, which is
+   correct for a probe and wrong under a flood: each request ran every live dependency probe, and on
+   a gateway it fanned out to every backend. `CachedHealthReportProvider`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/CachedHealthReportProvider.cs:25`) runs the
+   probes at most once per `HealthChecks:CacheSeconds` (default 5,
+   `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Health/HealthReportCacheOptions.cs:38`, read at
+   `CachedHealthReportProvider.cs:59`) with single flight through a per-entry semaphore (`:39`), so a
+   flood costs one probe round per window instead of one per request. The exemption is kept rather
+   than replaced: a throttled probe is an outage signal the orchestrator would act on. `/alive` is
+   unchanged and still uncached, which preserves the rule that startup gates read liveness, never
+   readiness. ADC's gateway caches its downstream readiness probes the same way
+   (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/HealthChecks/DownstreamReadinessCache.cs:24`,
+   `GetOrProbeAsync` at `:78`).
+2. **Edge-shaped controls are not gateway-only.** This record assigned rate limiting and connection
+   bounds to the gateway, which left a public HTML origin fronted by a different ingress with
+   neither (SEC-Store-56). Store's storefront host now carries its own fixed-window limiter
+   (`UiRateLimitingSettings`, on by default,
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/UiRateLimitingSettings.cs:31`, 300
+   requests per 60 seconds at `:54` and `:58`, global concurrency 200 at `:68`; registered at
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:106` and applied at `:213`) and a
+   `BoundedCircuitHandler`
+   (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/BoundedCircuitHandler.cs:37`, registered
+   at `Program.cs:98`) that caps concurrent Blazor circuits at
+   `BlazorCircuitLimitSettings.MaxActiveCircuits` (200,
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:39`), with
+   `DisconnectedCircuitMaxRetained` 25 (`:47`) and `DisconnectedCircuitRetentionSeconds` 60 (`:55`).
+   A request limiter alone does not bound a server-rendered origin, because the expensive resource is
+   the circuit a single page load opens, not the request that opened it.
 
 ## Related
 [ADR-008](008-service-extraction-topology.md) (the record that made the Gateway the only entry point

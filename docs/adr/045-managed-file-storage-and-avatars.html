@@ -221,7 +221,9 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-11). Records the BR-116 amendment (ADC): avatar photos are IN scope, powered
           by two new framework extension points. The framework legs are implemented; each consumer provisions its
-          own storage account and wires the upload endpoints.</p>
+          own storage account and wires the upload endpoints.
+          Revised 2026-09-07 (a decoded-pixel and dimension ceiling is checked from the image header before
+          any frame buffer is allocated, beside the existing compressed-size cap).</p>
           <h2 id="context">Context</h2>
           <p>The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
           BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -269,6 +271,18 @@
           <li>ImageSharp joins the Infrastructure dependency set (vuln-audited like everything else); the
           license note above must be revisited if the project&#39;s revenue posture changes.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>The 2 MB compressed upload cap bounds the bytes on the wire; it does not bound what those bytes
+          <strong>decode</strong> to. A highly compressible image declares its dimensions in a header that costs nothing to
+          read and expands to a frame buffer of width times height times bytes-per-pixel, which is how a small
+          upload becomes a multi-gigabyte allocation (SEC-Common-28).</p>
+          <p><code>ImageSharpImageProcessor</code> now reads the header first with <code>Image.IdentifyAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/ImageSharpImageProcessor.cs:47</code>) and
+          refuses anything past <code>MaxDecodedPixels</code> (50,000,000, <code>:26</code>) or <code>MaxDecodedDimension</code> (20,000, <code>:33</code>)
+          as <code>Image.TooLarge</code>, using the predicate at <code>:112-114</code>. The dimension ceiling exists beside the pixel
+          one because a long thin image can stay under the area limit and still be pathological for the
+          resampler (<code>:30</code>). The decoded frame is re-checked after decoding, so a header that under-reports
+          does not get through.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -283,6 +297,7 @@
             <li><a href="#context">Context</a></li>
             <li><a href="#decision">Decision</a></li>
             <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             </ul>
           </nav>
         </aside>

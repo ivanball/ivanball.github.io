@@ -593,7 +593,7 @@ flowchart TD
 - Unauthenticated users accessing protected pages are redirected to `/login` via the `RedirectToLogin` component.
 - Successful login/register redirects to Home (`/`) with a full page reload.
 - Logout (from NavMenu, MainLayout, or Profile) redirects to `/login` with a full page reload.
-- The "Forgot password?" link on `/login` opens `/forgot-password`. The emailed reset link opens `/reset-password` with the email and token already in the query string (both fields stay editable, so a recipient can paste the token by hand instead), and a successful reset returns to `/login`.
+- The "Forgot password?" link on `/login` opens `/forgot-password`. The emailed reset link opens `/reset-password` with the email and token in the URL **fragment** (`#`), which the browser never sends to a server, so the single-use token stays out of ingress access logs, request telemetry and the `Referer` header; the page reads them from `location.hash` and scrubs it, and both fields stay editable so a recipient can paste the token by hand instead, and a successful reset returns to `/login`.
 
 ### Authorization Model
 - **Roles:** `Organizer` is the only elevated role; every other authenticated user is an `Attendee` (the default). There is no separate "Admin" role.

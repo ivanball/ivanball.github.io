@@ -3,7 +3,9 @@
 ## Status
 
 Accepted (2026-07-09).
-
+Revised 2026-09-07 (channel subscription can be gated by an app-supplied authorizer, connections
+are capped per user, the backplane channel is namespaced per application, and ADC scopes live poll
+reads to the audience-visible states).
 ## Context
 
 Conference-day features (live polls, session Q&A, live result counters) need sub-second fan-out of
@@ -94,3 +96,36 @@ Two corrections from a code review; the best-effort, per-session-ordered decisio
    and every drop was silent. Drops now go through the channel's `itemDropped` callback: counted on
    `DroppedCount` and logged with a running total, so a drain falling behind is visible rather than
    inferred from missing client updates.
+
+## Revision (2026-09-07)
+The channel model is unchanged: a client subscribes to a channel key and the server pushes to it.
+What a signed-in client is allowed to subscribe to, and how much it may hold open, is now bounded
+(SEC-Common-18 / SEC-ADC-25 / SEC-ADC-27).
+
+1. **Subscription can be authorized per channel.** `NotificationHub` takes an optional
+   `IChannelJoinAuthorizer`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:27`; contract
+   at
+   `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Notifications/IChannelJoinAuthorizer.cs`)
+   and consults it after the channel-key shape check. It stays optional because the framework cannot
+   know what a channel key means: a host publishing anything that is not public to every signed-in
+   user registers one, and a host whose channels are event-wide announcements does not.
+2. **Connections are capped per user.** A connection past
+   `PushNotifications:MaxConnectionsPerUser` (default 20,
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:42`)
+   is refused (`NotificationHub.cs:56`). A hub connection is long-lived server state that the request
+   rate limiter never sees, so it needs its own bound.
+3. **The backplane is namespaced per application.** The Redis backplane channel prefix defaults to
+   the resolved application namespace
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:653`, resolver at
+   `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53`).
+4. **ADC scopes what a live poll read returns.** `GetPollResultsHandler` treats a poll as
+   audience-readable only when it has reached `Open` or `Closed` **and** its event or session is
+   published
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/GetPollResults/GetPollResultsHandler.cs:65-66`,
+   applied at `:111` and `:126`). A `Draft` poll carries the question and every option an organizer
+   has staged, so reading one by id was a preview of unannounced content to any authenticated
+   caller. The authoring rights in BR-236 are unchanged: this is a read-scope rule, and the manage
+   surface (`GET /api/livepolls/manage`,
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:189`)
+   still returns every state to a caller who passes that check.

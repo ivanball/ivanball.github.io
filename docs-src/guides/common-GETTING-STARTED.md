@@ -135,7 +135,13 @@ soft-deleted rows are filtered out, and that an outbox row was written for the
 `OrderOpenedIntegrationEvent`.
 
 The app runs **issuer-less**: with no Identity module it registers a bare auth scheme and the
-controller is `[AllowAnonymous]`, so nothing blocks you on day one. Adding real RS256/JWKS auth is
+controller is `[AllowAnonymous]`, so nothing blocks you on day one. That attribute is load-bearing,
+not decoration: `AddAuthorizationPolicies()` installs a **fallback authorization policy** that
+requires an authenticated caller on any endpoint declaring no authorization of its own, so an
+endpoint you meant to be public has to say so with `[AllowAnonymous]` or `.AllowAnonymous()`.
+Framework and static surfaces (the Blazor framework files and circuit, static asset roots, health
+probes, well-known documents) are exempt by path prefix, and the opt-out is
+`AddAuthorizationPolicies(options => options.Enabled = false)`. Adding real RS256/JWKS auth is
 under [Then what](#then-what) below.
 
 ## 6. The one-time fixup
@@ -460,8 +466,11 @@ category intact, and the snackbar shows "A closed order cannot be transferred to
   [versioning policy](common-VERSIONING.md).
 - **Add real authentication.** Copy MMCA.Store's or MMCA.ADC's Identity module and rename the
   namespaces (Store's is local-credential + RS256 only, the simpler base), set
-  `Authentication:JwtBearer:Authority`, and flip the controller back to `[Authorize]`. See
-  [Phase 2](common-BUILD-BY-HAND.md#phase-2-scaffold-the-module-project-set).
+  `Authentication:JwtBearer:Authority`, and flip the controller back to `[Authorize]`. Keep
+  `[AllowAnonymous]` on the endpoints that stay public: with the fallback policy on, an endpoint that
+  declares nothing requires a signed-in caller, and a YARP gateway route (which carries no endpoint
+  metadata of its own) declares `"AuthorizationPolicy": "anonymous"` instead. See
+  [Phase 2](common-BUILD-BY-HAND.md#phase-2-scaffold-the-module-project-set) and ADR-020.
 - **Extract a module into its own service.** The generated solution already carries the plumbing (the
   `.Contracts` proto convention and the `.Service` OpenAPI block). Your module code does not change:
   only host wiring and transport are added. See

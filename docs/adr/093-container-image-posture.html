@@ -223,7 +223,10 @@
           postures&quot; are recorded as <strong>undecided</strong>: they describe what the images do today and the trade-off
           each one carries, not a decision to keep doing it. Revised 2026-09-03: the Container Apps sizing
           that decision 3&#39;s cold-start argument rests on is now uniform across all six ADC apps, so the
-          4-vs-2 split that argument cited is gone. See Revision (2026-09-03) at the end.</p>
+          4-vs-2 split that argument cited is gone. See Revision (2026-09-03) at the end.
+          Revised 2026-09-07 (base images are digest-pinned, every final stage drops to <code>USER $APP_UID</code>,
+          image builds restore in locked mode, and both consumers scan the built image with Trivy: gating in
+          ADC, report-only for one cycle in Store).</p>
           <h2 id="context">Context</h2>
           <p>Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
           MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -359,6 +362,31 @@
           base-layer vulnerability that no scanner reports, in a container whose process runs as root, is
           the combination worth closing first.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>The open postures this record listed are closed in both consumers, from the 2026-09-07 security
+          review.</p>
+          <ol>
+          <li><strong>Base images are pinned by digest</strong> (SEC-ADC-32 / SEC-ADC-54 / SEC-Store-45 / SEC-Store-57). Each
+          Dockerfile names the runtime and SDK images by <code>sha256</code> with the tag left as a readable suffix, so
+          a rebuild resolves the same layers: for example
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Dockerfile:4</code> and <code>:10</code>, and
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:5</code> and <code>:12</code>. Dependabot&#39;s docker
+          ecosystem (ADR-038) is what keeps a digest pin from becoming a pin to a stale, unpatched layer.</li>
+          <li><strong>The final stage runs as a non-root user</strong> (SEC-ADC-58). <code>USER $APP_UID</code> is the last instruction
+          before the entrypoint in every image (ADC <code>Dockerfile:67</code>, Store <code>Dockerfile:65</code>). The variable is
+          set by the .NET base image, so the app does not have to invent a uid.</li>
+          <li><strong>The image build restores in locked mode</strong> (SEC-Store-44 / SEC-ADC-31). The restore inside the
+          build stage passes <code>--locked-mode</code> (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:37</code>,
+          rationale at <code>:31</code>), which is what makes the shipped artifact&#39;s package graph the one the lock
+          file and the CI vulnerability gate actually saw.</li>
+          <li><strong>The built image is scanned.</strong> ADC&#39;s deploy scans each image with Trivy and <strong>fails the job</strong> on a
+          finding (<code>MMCA.ADC/.github/workflows/deploy.yml:1292</code>, action pinned by SHA at <code>:1294</code>,
+          <code>exit-code: &#39;1&#39;</code> at <code>:1300</code>). Store runs the same scan <strong>report-only for one release cycle</strong>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1154</code>, <code>:1162</code>, <code>exit-code: &#39;0&#39;</code> at <code>:1168</code>), with the
+          flip to gating recorded as a follow-up beside it (<code>:1145-1152</code>) once the baseline is clean or the
+          residue is captured in a <code>.trivyignore</code> with a written justification. <code>ignore-unfixed: true</code> stays
+          either way.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p><a href="038-supply-chain-provenance.html">ADR-038</a> (supply-chain provenance: it gates the <strong>package</strong> graph
           with lock files, a vulnerability audit and an SBOM, and stops at the repository boundary, so the
@@ -409,6 +437,7 @@
             <li><a href="#open-postures-undecided">Open postures (undecided)</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
             </ul>

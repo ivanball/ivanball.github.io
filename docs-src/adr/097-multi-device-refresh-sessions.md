@@ -15,7 +15,8 @@ sweep introduces one of its own. Every addition is additive: no consumer signatu
 two requests presenting the same live token cannot both walk away with a successor: the one that
 loses the claim is answered exactly like a replay. The sessions page carries a sign-out-everywhere
 action beside its per-device revokes.
-
+Revised 2026-09-07 (a password change or reset revokes the whole session family, through an
+optional refresh-session store on the two handler bases).
 ## Context
 ADR-050 stores a user's refresh token as a single nullable `RefreshToken` string plus its
 `RefreshTokenExpiry` on the app's `User` aggregate. That model settles rotation and reuse detection
@@ -408,6 +409,27 @@ chained on rotation.
   can verify the pairing, since the digest is deterministic and unsalted (`RefreshSession.cs:160-164`).
   That is the accepted cost of lookup-by-hash and it holds only because the input is high-entropy
   random; the same scheme applied to anything guessable would be wrong.
+
+## Revision (2026-09-07)
+Credential rotation now ends the session family (SEC-Common-02). A stolen refresh chain otherwise
+survived the exact remediation a user performs on discovering it: the rotation replaced the password
+and left every live refresh session minting tokens.
+
+`RefreshSessionRevocation.RevokeAllAsync`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionRevocation.cs:27`, in the
+internal helper at `:17`) reads the account's un-revoked sessions through
+`GetUnrevokedByUserAsync` (`:39`), revokes them and saves (`:50`). It is called after a successful
+save by `ChangePasswordHandlerBase`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:93`)
+and `ResetPasswordHandlerBase`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:105`).
+
+Both bases take the store as an **optional** constructor parameter with a `TimeProvider`
+(`ChangePasswordHandlerBase.cs:40`, `ResetPasswordHandlerBase.cs:49`), so this is not a breaking
+signature change: a consumer that has not wired `IRefreshSessionStore` keeps compiling and keeps the
+old behaviour, and injecting it is what turns the revocation on. The revocation runs after the
+password save rather than before it, so a failure to revoke cannot leave an account whose password
+changed but whose caller was told it did not.
 
 ## Related
 [ADR-050](050-jwt-refresh-token-rotation.md) (the single-column model this record replaces, and the

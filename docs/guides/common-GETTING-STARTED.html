@@ -228,7 +228,13 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           soft-deleted rows are filtered out, and that an outbox row was written for the
           <code>OrderOpenedIntegrationEvent</code>.</p>
           <p>The app runs <strong>issuer-less</strong>: with no Identity module it registers a bare auth scheme and the
-          controller is <code>[AllowAnonymous]</code>, so nothing blocks you on day one. Adding real RS256/JWKS auth is
+          controller is <code>[AllowAnonymous]</code>, so nothing blocks you on day one. That attribute is load-bearing,
+          not decoration: <code>AddAuthorizationPolicies()</code> installs a <strong>fallback authorization policy</strong> that
+          requires an authenticated caller on any endpoint declaring no authorization of its own, so an
+          endpoint you meant to be public has to say so with <code>[AllowAnonymous]</code> or <code>.AllowAnonymous()</code>.
+          Framework and static surfaces (the Blazor framework files and circuit, static asset roots, health
+          probes, well-known documents) are exempt by path prefix, and the opt-out is
+          <code>AddAuthorizationPolicies(options =&gt; options.Enabled = false)</code>. Adding real RS256/JWKS auth is
           under <a href="#then-what">Then what</a> below.</p>
           <h2 id="6-the-one-time-fixup">6. The one-time fixup</h2>
           <p>The scaffold deliberately does not hand this one over, because renaming invalidates it and no fixed
@@ -512,8 +518,11 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <a href="common-VERSIONING.html">versioning policy</a>.</li>
           <li><strong>Add real authentication.</strong> Copy MMCA.Store&#39;s or MMCA.ADC&#39;s Identity module and rename the
           namespaces (Store&#39;s is local-credential + RS256 only, the simpler base), set
-          <code>Authentication:JwtBearer:Authority</code>, and flip the controller back to <code>[Authorize]</code>. See
-          <a href="common-BUILD-BY-HAND.html#phase-2-scaffold-the-module-project-set">Phase 2</a>.</li>
+          <code>Authentication:JwtBearer:Authority</code>, and flip the controller back to <code>[Authorize]</code>. Keep
+          <code>[AllowAnonymous]</code> on the endpoints that stay public: with the fallback policy on, an endpoint that
+          declares nothing requires a signed-in caller, and a YARP gateway route (which carries no endpoint
+          metadata of its own) declares <code>&quot;AuthorizationPolicy&quot;: &quot;anonymous&quot;</code> instead. See
+          <a href="common-BUILD-BY-HAND.html#phase-2-scaffold-the-module-project-set">Phase 2</a> and ADR-020.</li>
           <li><strong>Extract a module into its own service.</strong> The generated solution already carries the plumbing (the
           <code>.Contracts</code> proto convention and the <code>.Service</code> OpenAPI block). Your module code does not change:
           only host wiring and transport are added. See

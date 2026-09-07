@@ -9,7 +9,8 @@ read-modify-write, and the native-counter window claim was dropped). Updated 202
 that login and registration carry no rate limiter at all is stale: ADR-019's `auth-ip` per-IP window
 now sits on both endpoints by default, so the context and the ADR-019 comparison were corrected to
 describe the layering instead; the lockout decision itself is unchanged).
-
+Revised 2026-09-07 (the account-state gate runs after the password check, a credential-less account
+cannot authenticate, and every login branch pays the same key-derivation cost).
 ## Context
 ADR-019's global rate limiter is **authenticated-only**: it caps requests per authenticated principal
 and deliberately *exempts* anonymous traffic. The highest-value anonymous attack surface (the login
@@ -120,6 +121,32 @@ table.
   is intercept the HTTP endpoints: an Identity flow written *without* the base class (calling
   `ILoginProtectionService` by hand, or not at all) remains unprotected. That residual is the same
   audit-the-inventory caveat as the other opt-in capabilities (ADR-019/020/021/026).
+
+## Revision (2026-09-07)
+The lockout model is unchanged. Three things about the order and cost of the login path changed, all
+from the 2026-09-07 security review.
+
+1. **The account-state gate runs after the password check** (SEC-Common-05).
+   `AuthenticationServiceBase.LoginAsync` verifies the password
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:159`) and only
+   then calls the app's `ValidateLoginCandidateAsync` gate (`:170`, hook declared at `:559`).
+   Reaching the gate therefore proves the caller owns the account, so the gate's distinct message
+   (a deactivated account, say) is told to the owner rather than to anyone sweeping addresses. It
+   also closes a counting hole: a wrong password against a gated account now increments the
+   failed-attempt counter (`:160-163`) instead of short-circuiting ahead of it.
+2. **An account with no stored credential cannot authenticate** (SEC-Common-01). `HasStoredCredential`
+   (`:758`) is checked before the verify (`:151`), and `PasswordHasher.VerifyPassword`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:43`) rejects credential
+   material it never produced, meaning anything other than a `HashSize` 64-byte hash over a
+   `SaltSize` 32-byte salt (`:18`, `:15`). This is what makes an external-OAuth account
+   (ADR-036), which carries empty hash and salt, unreachable by password login rather than
+   verifiable against any password.
+3. **Timing is equalized for an address with no usable credential** (SEC-Common-78). The
+   unknown-address and no-credential branch runs one throwaway verification before answering:
+   `BurnPasswordVerificationCost` (`:766`, the verify at `:775`), called at `:153`. Without it the
+   401 for an address with no account came back in a fraction of the time a real check takes, which
+   is a membership oracle that no amount of response-body sameness closes. The generic
+   `Auth.InvalidCredentials` answer (`:156`, `:163`) is unchanged.
 
 ## Related
 ADR-019 (the layered limiter: an authenticated-only global cap that exempts this anonymous surface,

@@ -223,7 +223,9 @@
           app-level concern outside the channel model; see Revision below). Revised 2026-08-14 (the opt-in
           dedup short-circuit and the scope key recorded; the <code>Enabled</code> gate narrowed to the hub endpoint).
           Revised 2026-08-31 (email adoption re-stated: <code>IEmailSender</code> is now consumed inside the framework
-          itself by the password-reset workflow, so it is no longer an app-level-only primitive).</p>
+          itself by the password-reset workflow, so it is no longer an app-level-only primitive).
+          Revised 2026-09-07 (a per-user cap on concurrent hub connections, and the notification backplane
+          channel is namespaced per application).</p>
           <h2 id="context">Context</h2>
           <p>The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
           a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -325,6 +327,26 @@
           reaches users connected to the same replica that handled the send; the inbox masks this for correctness
           but not for immediacy.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>Two bounds were added under the delivery model, from the 2026-09-07 security review.</p>
+          <ol>
+          <li><strong>A connection cap per user.</strong> <code>NotificationHub</code> refuses a connection once the caller already
+          holds <code>PushNotifications:MaxConnectionsPerUser</code> open ones (default 20,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:42</code>,
+          read at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:56</code>). The
+          default is generous on purpose: one person legitimately runs several tabs and a phone, and a
+          reconnecting browser briefly holds two. It bounds the one resource an authenticated caller could
+          otherwise take without limit, since a hub connection is long-lived state on the server rather than
+          a request the rate limiter counts.</li>
+          <li><strong>The backplane channel is per application.</strong> The SignalR Redis backplane&#39;s channel prefix now
+          defaults to the resolved application namespace
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:653</code>, resolver at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53</code>), so
+          two applications sharing one Redis instance no longer publish notifications onto each other&#39;s
+          channel. Adopting it moves the channel, so a rolling deploy has a window where old and new
+          replicas do not see each other&#39;s broadcasts.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-003 (the outbox dual-dispatch path, which is distinct: that carries service-to-service integration
           events, this carries user-facing notifications), ADR-004 (the <code>/hubs</code> <code>access_token</code> query-string auth
@@ -401,6 +423,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
             </ul>

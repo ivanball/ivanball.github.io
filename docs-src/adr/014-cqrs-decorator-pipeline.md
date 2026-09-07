@@ -11,7 +11,8 @@ joins the **query** chain, and the registration sequence gains a sealed composit
 fitness hook). Revised 2026-08-31 (correction: both Validating decorators run **every** registered
 validator and union the failures, they do not stop at the first registration; the sealed composition
 path is the shipped idiom in all seven production service hosts; citations refreshed).
-
+Revised 2026-09-07 (the caching decorator's key carries the calling user for a query that declares
+itself caller-scoped, with an explicit opt-out marker).
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
 logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -257,6 +258,25 @@ The trade-off list gains nothing new in kind: a command that declares every mark
 decorators deep and a query six, and the "registration order is the reverse of execution order"
 foot-gun is unchanged, but its worst outcome (a handler that quietly runs undecorated) is now a throw
 rather than a silence.
+
+## Revision (2026-09-07)
+One decorator's key composition changed (SEC-Common-19 / SEC-Common-37). `CachingQueryDecorator`
+builds its entry key as `TenantCacheKey.Scope(tenantContext, UserCacheKey.Scope(cacheable, cacheable.CacheKey))`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:59`):
+the tenant scope that was always there now wraps a **caller** scope. `UserCacheKey`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/UserCacheKey.cs:26`) appends the
+target user when the query implements `IUserScopedRequest`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/IUserScopedRequest.cs:8`), and the new
+`ISharedQueryCache` marker
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Markers/ISharedQueryCache.cs:21`) opts a
+genuinely public result back out.
+
+Two consequences for handler authors, which are the reason this sits in the pipeline record rather
+than only in the caching one. A query whose result depends on who is asking has to say so on the
+request type: the decorator cannot infer it, and a query that carries the target user in its own
+payload already varies its `CacheKey` by construction. And because the user segment is a **suffix**,
+the prefix-based invalidation the decorators already do still clears every caller's copy in one
+sweep.
 
 ## Related
 ADR-013 (Result, the short-circuit currency of the pipeline, and the `Failure` error type the timeout

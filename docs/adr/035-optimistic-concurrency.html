@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-035: Optimistic Concurrency via RowVersion Round-Trip · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-02).">
+  <meta name="description" content="Accepted (2026-07-02). Revised 2026-09-07 (a conditional write always stamps the aggregate root, so If-Match is enforced even when only child rows…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-035: Optimistic Concurrency via RowVersion Round-Trip">
-  <meta property="og:description" content="Accepted (2026-07-02).">
+  <meta property="og:description" content="Accepted (2026-07-02). Revised 2026-09-07 (a conditional write always stamps the aggregate root, so If-Match is enforced even when only child rows…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-035: Optimistic Concurrency via RowVersion Round-Trip">
-  <meta name="twitter:description" content="Accepted (2026-07-02).">
+  <meta name="twitter:description" content="Accepted (2026-07-02). Revised 2026-09-07 (a conditional write always stamps the aggregate root, so If-Match is enforced even when only child rows…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"035 · Optimistic Concurrency via RowVersion Round-Trip","item":"https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -219,7 +219,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-035-optimistic-concurrency-via-rowversion-round-trip">ADR-035: Optimistic Concurrency via RowVersion Round-Trip</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02).</p>
+          <p>Accepted (2026-07-02).
+          Revised 2026-09-07 (a conditional write always stamps the aggregate root, so <code>If-Match</code> is enforced
+          even when only child rows changed, and a concurrency-conflict detector joins the infrastructure
+          contracts).</p>
           <h2 id="context">Context</h2>
           <p>Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
           case fetches the tracked entity, applies the request, and calls <code>SaveChangesAsync</code>. With one shared
@@ -423,6 +426,33 @@
           to exist there, so a new database, or a table introduced outside the migrations that carry it, has
           no version to condition on.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>Two additions from the 2026-09-07 security review.</p>
+          <ol>
+          <li><strong><code>If-Match</code> is enforced even when the root row is otherwise unchanged</strong> (SEC-Common-77).
+          <code>IWriteRepository.TouchConcurrencyToken</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:440</code>)
+          is a default no-op on the interface, implemented by <code>EFRepository</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:97</code>),
+          and called by <code>MutateEntityHandlerBase</code> under a conditional write
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:314</code>).
+          It marks an otherwise-<code>Unchanged</code> aggregate root as modified, so the save always emits a root
+          UPDATE carrying the caller&#39;s token. Without it, a mutation that touched only child rows produced
+          no root UPDATE, EF Core had nothing to compare the <code>RowVersion</code> against, and a stale precondition
+          was silently accepted: the caller got 200 while overwriting a concurrent edit it had never seen.
+          With it, the same request answers 412.</li>
+          <li><strong>A conflict detector, so the Application layer does not catch provider exceptions.</strong>
+          <code>IConcurrencyConflictDetector</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IConcurrencyConflictDetector.cs:23</code>)
+          and <code>EfCoreConcurrencyConflictDetector</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EfCoreConcurrencyConflictDetector.cs:18</code>)
+          sit beside <code>IUniqueConstraintViolationDetector</code> and are registered by <code>AddInfrastructure</code> with
+          <code>TryAdd</code>. A handler that claims work by writing a row can now recognise losing that claim without
+          referencing <code>DbUpdateConcurrencyException</code> from the Application layer, which the layer rules
+          forbid. ADC&#39;s Sessionize refresh throttle is the first consumer: it turns a lost claim race into
+          the same throttled answer a within-cooldown request gets
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeHandler.cs:87-92</code>).</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-017 (HTTP request idempotency, which dedups retries of the <strong>same</strong> request, the mirror-image
           concern to two <strong>distinct</strong> edits racing here, and whose declared-intent gate sits at this same
@@ -451,6 +481,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

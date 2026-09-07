@@ -224,7 +224,10 @@
           both directives; <code>BlazorCspPolicyProvider</code> fails closed on an API/Gateway origin it cannot resolve,
           narrowing <code>connect-src</code> to <code>&#39;self&#39;</code> while staying enforced, rather than degrading to a permissive
           Report-Only policy; the middleware also substitutes a per-request nonce for a <code>{nonce}</code> token in the
-          resolved policy).</p>
+          resolved policy).
+          Revised 2026-09-07 (HSTS and forwarded headers are applied on the UI hosts and not only at the
+          gateway, and credential-carrying paths additionally answer <code>Referrer-Policy: no-referrer</code> and
+          <code>Cache-Control: no-store</code>).</p>
           <h2 id="context">Context</h2>
           <p>Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
           hardened HTTP response headers: <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>,
@@ -315,6 +318,34 @@
           being enforced is the worse failure mode), and the cost is that the configuration mistake lands on the
           users of that deployment rather than in a passive report.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>Two changes from the 2026-09-07 security review.</p>
+          <ol>
+          <li><strong>Credential-carrying paths get a stricter referrer and cache posture.</strong>
+          <code>SecurityHeadersSettings.CredentialPathPrefixes</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:46</code>) defaults to
+          <code>[&quot;/reset-password&quot;, &quot;/auth/oauth-complete&quot;]</code>. <code>SecurityHeadersMiddleware</code> matches the request
+          path against it (<code>:175</code>) and, on a hit, replaces the site-wide
+          <code>strict-origin-when-cross-origin</code> with <code>no-referrer</code> (<code>:188</code>) and writes
+          <code>Cache-Control: no-store, no-cache, must-revalidate, max-age=0</code> (<code>:194</code>). Both pages carry a
+          single-use secret in the URL: the reset token and the OAuth authorization code. <code>no-referrer</code>
+          keeps that URL out of the <code>Referer</code> header of every asset and outbound link the page loads, and
+          <code>no-store</code> keeps the rendered page out of the browser&#39;s back/forward cache and out of any shared
+          proxy. The list is a settings property rather than a constant so an app that mounts these flows on
+          its own routes can name them.</li>
+          <li><strong>The UI origin emits its own HSTS.</strong> These headers used to be a gateway responsibility, which
+          left a server-rendered HTML origin behind a different ingress with none (SEC-ADC-18 /
+          SEC-Store-27). ADC&#39;s Blazor host registers the middleware
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:111</code>) and runs <code>UseForwardedHeaders</code> with
+          <code>XForwardedFor | XForwardedProto | XForwardedHost</code> (<code>:128-134</code>) ahead of it, which is what makes
+          <code>Request.IsHttps</code> true behind a container ingress that terminates TLS: without that step the host
+          sees plain HTTP on port 8080, <code>UseHttpsRedirection</code> (<code>:153</code>) is inert and no
+          <code>Strict-Transport-Security</code> is emitted (<code>:137</code>). The forwarded-headers options mirror the gateway
+          and the service pipeline exactly, so all three hosts agree on what they trust
+          (<code>:121-122</code>). Store&#39;s storefront host carries the same posture with a conformance test beside it
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.UI.Web.Tests/SecurityHeadersTests.cs</code>), closing the gap where
+          only the JSON gateway was pinned by a test.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022
           (browser session-cookie auth, the other browser-edge security control), ADR-008 (the gateway topology
@@ -334,6 +365,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

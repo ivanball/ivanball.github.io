@@ -236,7 +236,9 @@
           re-anchored after file moves inside <code>MMCA.Common</code>: <code>MessageBusSettings.cs</code> now sits under
           <code>Messaging/</code> and the shared test fixture bases under <code>MMCA.Common.Testing/Fixtures/</code>; the Azure
           Service Bus emulator host build moved out of <code>ConfigureBrokerTransport</code> into the
-          <code>ServiceBusEmulatorSupport</code> helper, so the bullet describing that branch is restated).</p>
+          <code>ServiceBusEmulatorSupport</code> helper, so the bullet describing that branch is restated).
+          Revised 2026-09-07 (the single shared client SAS is replaced by a rule per service in both
+          consumers, so broker rights and rotations are scoped to one service).</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 decides that integration events leave an aggregate through the outbox and are published by
           <code>OutboxProcessor</code> via <code>IMessageBus</code>, and it settles the <em>dispatch</em> question (&quot;in-process for the
@@ -441,6 +443,18 @@
           23-line rationale above the selection itself (<code>:66-88</code>). Keeping the transport decision in
           orchestration code puts the explanation in comments, which are not checked by anything.</li>
           </ul>
+          <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
+          <p>The transport selection is unchanged. The credential topology under it is (SEC-ADC-26 /
+          SEC-Store-38).</p>
+          <p>Both repos previously sourced their Service Bus connection strings from one shared authorization
+          rule on the namespace. Each service now has its own: ADC declares Identity, Conference, Engagement
+          and Notification rules (<code>MMCA.ADC/infra/main.bicep:977</code>, <code>:989</code>, <code>:1001</code>, <code>:1013</code>) beside the
+          namespace-level rule (<code>:934</code>), and Store declares Catalog, Sales and Identity rules
+          (<code>MMCA.Store/infra/main.bicep:1005</code>, <code>:1017</code>, <code>:1029</code>) beside <code>:966</code>.</p>
+          <p>The consequence for this record is operational rather than architectural: dev/prod parity is
+          unaffected (the emulator tier has no SAS at all), but a rotation is now a per-service action instead
+          of a synchronized restart of every service on the namespace, and a leaked connection string names
+          which service leaked it.</p>
           <h2 id="related">Related</h2>
           <p>ADR-003 (the outbox that feeds <code>IMessageBus</code>; this ADR picks the transport underneath it), ADR-016
           (the MassTransit v8 pin the emulator tier must work within, which is why the custom-clients <code>Host</code>
@@ -462,6 +476,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -7,7 +7,9 @@ both directives; `BlazorCspPolicyProvider` fails closed on an API/Gateway origin
 narrowing `connect-src` to `'self'` while staying enforced, rather than degrading to a permissive
 Report-Only policy; the middleware also substitutes a per-request nonce for a `{nonce}` token in the
 resolved policy).
-
+Revised 2026-09-07 (HSTS and forwarded headers are applied on the UI hosts and not only at the
+gateway, and credential-carrying paths additionally answer `Referrer-Policy: no-referrer` and
+`Cache-Control: no-store`).
 ## Context
 Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
 hardened HTTP response headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
@@ -97,6 +99,34 @@ with `AddCommonSecurityHeaders(configuration?, configure?)` and inserted early w
   the SignalR notification hub. That loud signal is the point (a security header that quietly stops
   being enforced is the worse failure mode), and the cost is that the configuration mistake lands on the
   users of that deployment rather than in a passive report.
+
+## Revision (2026-09-07)
+Two changes from the 2026-09-07 security review.
+
+1. **Credential-carrying paths get a stricter referrer and cache posture.**
+   `SecurityHeadersSettings.CredentialPathPrefixes`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:46`) defaults to
+   `["/reset-password", "/auth/oauth-complete"]`. `SecurityHeadersMiddleware` matches the request
+   path against it (`:175`) and, on a hit, replaces the site-wide
+   `strict-origin-when-cross-origin` with `no-referrer` (`:188`) and writes
+   `Cache-Control: no-store, no-cache, must-revalidate, max-age=0` (`:194`). Both pages carry a
+   single-use secret in the URL: the reset token and the OAuth authorization code. `no-referrer`
+   keeps that URL out of the `Referer` header of every asset and outbound link the page loads, and
+   `no-store` keeps the rendered page out of the browser's back/forward cache and out of any shared
+   proxy. The list is a settings property rather than a constant so an app that mounts these flows on
+   its own routes can name them.
+2. **The UI origin emits its own HSTS.** These headers used to be a gateway responsibility, which
+   left a server-rendered HTML origin behind a different ingress with none (SEC-ADC-18 /
+   SEC-Store-27). ADC's Blazor host registers the middleware
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:111`) and runs `UseForwardedHeaders` with
+   `XForwardedFor | XForwardedProto | XForwardedHost` (`:128-134`) ahead of it, which is what makes
+   `Request.IsHttps` true behind a container ingress that terminates TLS: without that step the host
+   sees plain HTTP on port 8080, `UseHttpsRedirection` (`:153`) is inert and no
+   `Strict-Transport-Security` is emitted (`:137`). The forwarded-headers options mirror the gateway
+   and the service pipeline exactly, so all three hosts agree on what they trust
+   (`:121-122`). Store's storefront host carries the same posture with a conformance test beside it
+   (`MMCA.Store/Tests/Hosts/MMCA.Store.UI.Web.Tests/SecurityHeadersTests.cs`), closing the gap where
+   only the JSON gateway was pinned by a test.
 
 ## Related
 ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022

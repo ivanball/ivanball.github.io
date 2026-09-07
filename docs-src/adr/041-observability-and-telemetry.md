@@ -31,7 +31,9 @@ default) and the metric-drop views that make the two metrics knobs authoritative
 Monitor distro, and to rebase the Aspire service-defaults, CQRS decorator and outbox citations (the
 outbox processor and its metrics now live under `Persistence/Outbox/Processing/`) onto their current
 lines; see the "Amended (2026-09-03): probe telemetry" section at the end.
-
+Revised 2026-09-07 (the Log Analytics daily cap gained a cap-reached alert in both apps, SQL
+auditing and resource diagnostics are deployed in ADC and Store, Store alerts on a security signal,
+and Store scrubbed email addresses out of stored reviewer names).
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
 the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -330,6 +332,36 @@ and the health endpoints ([ADR-025](025-startup-warmup-readiness.md)) instead. A
 toward dropping data** while sampling and the two metrics toggles fail toward keeping it: a host that
 adds a real route below `/health/` has its traces filtered by `IsProbePath`'s prefix match with no
 error and no log line.
+
+## Revision (2026-09-07)
+Telemetry gained the properties that make it usable as evidence, from the 2026-09-07 security review.
+
+1. **The daily ingestion cap is alerted on** (SEC-ADC-47 / SEC-Store-55). A workspace daily cap
+   (`MMCA.ADC/infra/foundation.bicep:15`, applied at `:54`; `MMCA.Store/infra/foundation.bicep:57`)
+   stops ingestion for every table until the next UTC midnight when it is hit, which silently blinds
+   every log-based alert rule in the deployment. Both templates now carry a scheduled query rule that
+   fires on the ingestion status event: ADC at `MMCA.ADC/infra/main.bicep:500` (query at `:510`),
+   Store at `MMCA.Store/infra/main.bicep:571` (query at `:587`, matching both `ApproachingQuota` and
+   `OverQuota` so the warning arrives before the outage). This is a detection outage, not a cost
+   event, which is why it is alerted rather than left to the cost report.
+2. **Control-plane and data-plane access is logged** (SEC-ADC-46 / SEC-Store-21). ADC deploys SQL
+   auditing to the workspace (`MMCA.ADC/infra/main.bicep:790`, with the master-database diagnostic
+   setting that carries the audit category at `:815`) and diagnostic settings on Service Bus
+   (`:1034`), the avatar and key-ring storage account (`:1141`) and Key Vault (`:1330`). Store
+   deploys the same pair (`MMCA.Store/infra/main.bicep:833` and `:819`, rationale at `:798-802`) plus
+   diagnostics on the key-ring blob account (`:1173`) and Key Vault (`:1317`), and Defender for SQL
+   threat protection behind a parameter (`:863`).
+3. **Store alerts on an authentication signal** (SEC-Store-54 / SEC-ADC-51). The failed-request and
+   failed-dependency SLO rules deliberately exclude 401 and 499
+   (`MMCA.Store/infra/main.bicep:276`, `:294`), which meant a credential-stuffing run produced
+   nothing but filtered-out rows. A dedicated rule now watches sustained 401s on the `/Auth` route
+   (`:491`, query at `:501`), with the reasoning for keeping the two separate written above it
+   (`:460-475`).
+4. **Reviewer names no longer carry email addresses.** Store shipped a data migration that scrubs
+   them out of the stored review rows
+   (`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260907112935_ScrubEmailAddressesFromProductReviewerNames.cs`),
+   because the reviewer name is rendered on an anonymous surface and the access token had been
+   putting the address into the name claim it was captured from.
 
 ## Related
 ADR-003 (the outbox whose dead-letter counter and poll-span filtering this defines), ADR-014 (the
