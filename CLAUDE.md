@@ -60,9 +60,9 @@ Single edit points:
 
 ### Site search
 
-Global search lives in a native `<dialog>` stamped into the `site-header` region, so it is on all 126 pages: the magnifier button in the nav, `Ctrl`/`Cmd`+`K` anywhere, or `/` when not already typing. `<dialog>` is deliberate: the focus trap, `Esc`, page inertness and the backdrop come from the platform instead of hand-written JS.
+Global search lives in a native `<dialog>` stamped into the `site-header` region, so it is on all 186 pages: the magnifier button in the nav, `Ctrl`/`Cmd`+`K` anywhere, or `/` when not already typing. `<dialog>` is deliberate: the focus trap, `Esc`, page inertness and the backdrop come from the platform instead of hand-written JS.
 
-- **The index is a real inverted index**, built with **MiniSearch** at build time by `tools/build-docs.mjs` and written to `assets/data/search-index.json` as its serialized form (a few MB raw, about a quarter of that gzipped over the wire: the honest cost of full body text over the whole corpus, paid only by a visitor who opens search). The browser loads a finished index instead of building one, which is the only way a 7.6 MB corpus is searchable client-side at all.
+- **The index is a real inverted index**, built with **MiniSearch** at build time by `tools/build-docs.mjs` and written to `assets/data/search-index.json` as its serialized form (a few MB raw, about a quarter of that gzipped over the wire: the honest cost of full body text over the whole corpus, paid only by a visitor who opens search). The browser loads a finished index instead of building one, which is the only way a 17 MB corpus is searchable client-side at all.
 - **Nothing ships to a visitor who never searches.** `assets/js/search.js` is the only search code on the page until the dialog opens; on FIRST open it injects `assets/js/minisearch.js` (vendored by the build from the `minisearch` dependency, same pattern as `mermaid.min.js`, so no third-party request) and then fetches the index. The library is deliberately **not** in `headAssetsHtml`.
 - **The envelope carries the options**: `{ v, n, o: { fields, storeFields, idField }, i: <index> }`, and the runtime hands `o` straight to `MiniSearch.loadJS(data.i, data.o)`. Never restate the options in `search.js`, and **never customize `tokenize` or `processTerm` on either side**: a function cannot cross JSON, so a custom one would give the browser a different tokenization than the index was built with. Both sides must tokenize identically or the index quietly stops matching.
 - **Indexed fields are `t` (section title), `d` (document title), `i` (identifiers) and `b` (the FULL plain text of the section body)**; `b` is indexed but **not stored**, so the whole body is searchable while only the 180-character display excerpt (`x`) travels back with a result. Stored fields are `u, d, k, t, x, e`, and rendering uses only those.
@@ -104,7 +104,7 @@ The generator also writes into **marked regions of the hand-authored root pages*
 
 | Region | Page | Derived from |
 |---|---|---|
-| `head-assets`, `site-header`, `site-footer` | **all 7 root pages** | `NAV_ITEMS` / `FOOTER_LINKS` in the generator, which also stamp the 119 docs pages |
+| `head-assets`, `site-header`, `site-footer` | **all 7 root pages** | `NAV_ITEMS` / `FOOTER_LINKS` in the generator, which also stamp the 179 docs pages |
 | `subscribe` | `writing.html`, `platform.html` | one `subscribeHtml()`, differing only in the input id |
 | `articles`, `articles-jsonld`, `article-categories` | `writing.html` | `assets/data/articles.js` |
 | `featured-articles` | `index.html` | the three most recently published entries in `assets/data/articles.js`, with their hero art |
