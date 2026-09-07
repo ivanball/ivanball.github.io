@@ -4,6 +4,7 @@ The narrative documentation for the MMCA platform: adoption guides, business spe
 
 ## Framework (MMCA.Common)
 
+- [Capability Catalog](common-CAPABILITIES.md): everything an adopting team gets, section by section (packages, scaffolding, the architectural core, the extraction path, data, messaging, API, identity, caching, UI, hosting, testing, privacy, governance), with the constraints worth reading before sizing a plan.
 - [Getting Started](common-GETTING-STARTED.md): stand up a new application from the `MMCA.Templates` scaffold, in six steps.
 - [Small Apps](common-SMALL-APPS.md): the `--database sqlite --no-aspire` floor (no Docker, no SQL Server, no orchestrator), what is deliberately off in it, and when to flip each switch.
 - [Build MMCA.ECommerce](common-ECOMMERCE-SAMPLE.md): the two-module store sample (Products + Orders) built end to end from the templates, with the minimum hand-written code.
