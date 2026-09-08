@@ -68,14 +68,17 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 | Property | Description |
 |----------|-------------|
 | SKU | Stock-keeping unit identifier (max 50 chars, globally unique, optional) |
-| Price | Unit price as Money (amount + currency, must be non-negative) |
+| Price | LIST unit price as Money (amount + currency, must be non-negative). A discount never rewrites it, so clearing the discount restores the original price with no bookkeeping |
+| Discount | Optional promotional pricing as an owned `VariantDiscount` value object: either a percentage off or a fixed special price, with an optional activation window (inclusive start, exclusive end, either bound open) and an optional storefront label (max 50 chars) |
+| Effective price | Derived, never stored: `GetEffectivePrice(now)` returns the list price with the discount applied when the window covers that instant, and the list price otherwise |
 
 **Relationships:**
 - A Product Variant belongs to exactly one Product
 - A Product Variant has zero or one Inventory Item
 - A Product Variant can appear in Shopping Cart Items and Order Lines
 
-**Source:** `Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs`
+**Source:** `Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs`,
+`Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/VariantDiscount.cs`
 
 ---
 
@@ -121,6 +124,7 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 |----------|-------------|
 | CustomerId | The customer who placed the order |
 | Total | Calculated order total (Money value, sum of all line totals) |
+| TotalSavings | Computed: the sum of every line's Savings, in the order's currency. Zero when nothing on the order was discounted. Derived on read, never persisted |
 | Status | Current lifecycle stage (see state machine below) |
 | StripeSessionId | Payment gateway session reference |
 | StripePaymentIntentId | Payment confirmation reference |
@@ -143,13 +147,17 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 |----------|-------------|
 | ProductVariantId | The product variant ordered |
 | Quantity | Units ordered (must be positive) |
-| UnitPrice | Price per unit at time of order (Money) |
+| UnitPrice | Price per unit actually charged at time of order (Money) |
+| ListPrice | The undiscounted price the charge was struck from (Money), frozen alongside UnitPrice. Equal to UnitPrice when no promotion was in force |
+| PromotionLabel | The storefront name of the promotion that moved the price (max 50 characters), or null when none was in force or the one in force carried no label |
 | LineTotal | Computed: UnitPrice x Quantity |
+| Savings | Computed: (ListPrice - UnitPrice) x Quantity, in the line's currency. Zero when the line was not discounted. Derived on read, never persisted |
 
 **Relationships:**
 - Belongs to exactly one Order
 
-**Source:** `Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs`
+**Source:** `Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs`,
+`Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLinePricing.cs`
 
 ---
 
@@ -342,7 +350,8 @@ Carries no personal data (three identifiers and a date), so it is deliberately n
 
 **Steps:**
 1. Fetch the customer's shopping cart with all items
-2. Retrieve current unit prices for all product variants from the Catalog module (cross-module call)
+2. Retrieve current pricing for all product variants from the Catalog module (cross-module call): the
+   effective price, the list price it was struck from, and the active promotion's label
 3. Fetch inventory items for all product variants
 4. Reject the checkout if any variant is missing from the price map (it was soft-deleted between
    cart-add and checkout), naming the offending variant
@@ -350,7 +359,7 @@ Carries no personal data (three identifiers and a date), so it is deliberately n
    a. Validates the cart is not empty
    b. Validates inventory exists for every item in the cart
    c. Runs a **fail-fast sufficiency check** per item against the loaded snapshot
-   d. Creates Order Lines with current prices (price snapshot at time of purchase)
+   d. Creates Order Lines with the current pricing triple (price snapshot at time of purchase)
    e. Creates the Order with status `PendingPayment`
    f. Transitions the cart to `CheckedOut` status
 6. Commit the write phase inside one explicit transaction: the **atomic conditional inventory
@@ -363,6 +372,13 @@ Carries no personal data (three identifiers and a date), so it is deliberately n
 - All product variants must have corresponding inventory records
 - Sufficient inventory must be available for each item
 - Prices are locked at checkout time (not at cart-add time)
+- The price locked is the **effective** price: Catalog resolves each variant's list price against any
+  active discount at the instant of the call, so the order line, the receipt and the Stripe total all
+  carry the discounted amount and Sales never reasons about promotions
+  ([ADR-112](../adr/112-catalog-owned-effective-pricing.md))
+- The list price and the promotion label are frozen beside the effective price on the same line, so
+  the order can say what it saved later without asking Catalog again. Only the effective price is
+  money owed: the line total, the order total and the Stripe amount all follow from it alone
 - The write phase is atomic, but the command is **deliberately not `ITransactional`**: the handler
   opens the transaction itself so the cross-module price fetch stays outside it and cross-service
   latency never extends lock hold time
@@ -739,6 +755,18 @@ members are only ever appended: `Shipped` is last in the enum even though it sit
 | Rating summary is derived | `Product.RatingSummary` is recomputed (AVG/COUNT) over published, non-deleted reviews on every review change, never adjusted incrementally | `ProductReviewChangedHandler.cs` |
 | Hidden reviews do not count | A hidden review leaves the storefront and drops out of the product's rating summary | `PublishedReviewsSpecification.cs` |
 | Review erasure keeps the rating | Anonymizing a review clears the name, title and body and retains the star rating | `ProductReview.Anonymize()` |
+| Discount percentage range | A percentage discount must be greater than 0 and less than 100 | `VariantDiscount.cs` |
+| Special price is positive | A special price amount must be greater than 0 | `VariantDiscount.cs` |
+| Special price currency matches | A special price must be quoted in the same currency as the list price | `VariantDiscount.cs` |
+| Special price below list price | A special price must sit strictly below the variant's list price | `VariantDiscount.cs`, `ProductVariant.SetDiscount()` |
+| Discount window ordered | When both bounds are given, the end must be after the start; the start is inclusive and the end exclusive, and a null bound leaves that side open | `VariantDiscount.cs` |
+| Discount label max length | Max 50 characters (optional, trimmed at construction) | `VariantDiscount.cs` |
+| Effective price stays positive | Applying a discount must leave an amount greater than zero, so a zero-priced variant cannot carry one | `VariantDiscount.cs` |
+| Percentage rounding | A percentage result is rounded to two decimals, away from zero | `VariantDiscount.ApplyTo()` |
+| Price change re-validates the discount | Changing a discounted variant's list price fails when the stored discount no longer resolves against the new price; the admin clears the discount first | `ProductVariant.cs` |
+| Product-wide discount is all or nothing | A discount applied across a product is validated against every active variant before any variant is touched | `Product.SetDiscountOnAllVariants()` |
+| Product-wide discount needs a variant | A product with no active variant to discount is refused (`Product.NoActiveVariants`, a 400) rather than silently succeeding on an empty set | `ProductInvariants.cs`, `Product.SetDiscountOnAllVariants()` |
+| Discounting is a separate permission | Setting or clearing a discount requires `catalog:pricing:manage`, not the broader variant-management permission | `CatalogPermissions.cs`, `ProductVariantsController.cs` |
 
 ### 5.2 Shopping Cart Rules
 
@@ -759,6 +787,9 @@ members are only ever appended: `Shipped` is last in the enum even though it sit
 | Non-empty order | Orders must contain at least one order line | `OrderInvariants.cs` |
 | Positive line quantity | Order line quantities must be greater than zero | `OrderInvariants.cs` |
 | Non-negative line price | Order line unit prices cannot be negative | `OrderInvariants.cs` |
+| List price not below unit price | An order line's frozen list price cannot be negative and cannot sit below the price actually charged | `OrderInvariants.cs` |
+| List price currency matches | The frozen list price must be quoted in the same currency as the unit price | `OrderInvariants.cs` |
+| Promotion label max length | Max 50 characters, the same bound the Catalog discount label carries; null means no promotion was in force | `OrderInvariants.cs` |
 | Cancellation restriction | Only PendingPayment, PaymentInitiated, or PaymentFailed orders can be cancelled | `OrderInvariants.cs` |
 | Payment initiation restriction | Payment can only be initiated from PendingPayment or PaymentFailed states | `OrderInvariants.cs` |
 | Payment confirmation restriction | Only PaymentInitiated orders can be marked as paid (via webhook) | `OrderInvariants.cs` |
@@ -773,7 +804,8 @@ members are only ever appended: `Shipped` is last in the enum even though it sit
 | Tracking URL only for `Other` | A caller-supplied absolute https tracking URL (max 500) is accepted only for carrier `Other`; every known carrier's link is computed from its template | `ShipmentInvariants.cs`, `CarrierTrackingUrls.cs` |
 | Fulfilment published once | `Order.FulfilledPublishedOn` is stamped in the same unit of work that raises `OrderFulfilled`, so the startup backfill can never re-publish for an order | `Order.cs`, `OrderFulfilledBackfillService.cs` |
 | Inventory restoration | Cancelling an order restores all order line quantities to inventory | `CancelOrderHandler.cs` |
-| Price snapshot | Order lines capture the unit price at checkout time, not current catalog price | `CheckOutDomainService.cs` |
+| Price snapshot | Order lines capture the effective price, the list price it was struck from and the promotion label at checkout time, not the current catalog price | `CheckOutDomainService.cs`, `OrderLinePricing.cs` |
+| Savings are derived | `OrderLine.Savings` and `Order.TotalSavings` are computed from the frozen pair on every read and never stored, so no column can disagree with the prices it restates | `OrderLine.cs`, `Order.cs` |
 
 ### 5.4 Inventory Rules
 
@@ -829,7 +861,7 @@ members are only ever appended: `Shipped` is last in the enum even though it sit
 | Checkout | Customer | Convert shopping cart into an order (reserves inventory) |
 | Initiate payment | Customer | Start Stripe checkout session for a pending order |
 | View my orders | Customer | List all orders belonging to the authenticated customer |
-| View order detail | Customer | See order status, lines, payment information, and the carrier/tracking details once the order ships |
+| View order detail | Customer | See order status, lines, payment information, and the carrier/tracking details once the order ships. A discounted line shows the struck list price and the promotion label, and the order shows a "you saved" total |
 | Read product reviews | Anonymous | See a product's star rating and the published reviews of it |
 | Write a product review | Customer | Rate and review a product from a delivered order (one review per product) |
 | Revise a review | Customer | Change the rating or wording of their own review |
@@ -844,7 +876,8 @@ members are only ever appended: `Shipped` is last in the enum even though it sit
 |----------|-------|-------------|
 | Manage categories | Admin | Create, rename, assign parent, delete categories |
 | Manage products | Admin | Create, rename, update description/brand/category of products |
-| Manage product variants | Admin | Add/remove variants, change SKU and price |
+| Manage product variants | Admin | Add/remove variants, change SKU and list price (the list price is what the variant editor edits; promotional pricing is a separate use case) |
+| Manage discounts | Pricing manager (`catalog:pricing:manage`) | Set or clear promotional pricing on one variant (a percentage off or a special price, with an optional window and label), or apply one discount across every active variant of a product in a single all-or-nothing write |
 | Manage inventory | Admin | Increase, decrease, or set stock levels per variant |
 | Mark order as paid | Admin | Manually override payment for an order |
 | Ship order | Admin | Record the carrier, tracking number and estimated delivery on a paid order; the customer is emailed the tracking link |
@@ -861,57 +894,58 @@ members are only ever appended: `Shipped` is last in the enum even though it sit
 
 ## 7. Domain Events and State Changes
 
+Most mutations raise a single `{Entity}Changed` lifecycle event carrying a `DomainEntityState`
+discriminator (`Added`, `Updated`, `Deleted`) rather than one event per verb
+([ADR-083](../adr/083-crud-lifecycle-event-taxonomy.md)). Those events derive from
+`EntityChangedEvent<TId>`; the remaining ones are business events that name a specific transition and
+derive from `BaseDomainEvent`. The **Kind / State** column below says which is which, and the states
+a given event actually reaches. Every event listed is a real record type under the module's
+`Domain/{Aggregate}/DomainEvents/` folder.
+
 ### Catalog Events
 
-| Event | Trigger | Business Meaning |
-|-------|---------|-----------------|
-| CategoryCreated | Category added to catalog | New product classification available |
-| CategoryDeleted | Category removed (soft delete) | Classification no longer available |
-| CategoryNameChanged | Category renamed (only if name actually differs) | Classification label updated |
-| ProductCreated | New product added | New item available for sale |
-| ProductDeleted | Product removed (soft delete) | Item no longer available |
-| ProductNameChanged | Product renamed (only if name actually differs) | Item label updated |
-| ProductVariantAdded | Variant added to product | New purchasable option available |
-| ProductVariantRemoved | Variant removed (soft delete) | Purchasable option discontinued |
-| ProductVariantSkuChanged | SKU updated (only if actually differs) | Inventory tracking identifier changed |
-| ProductVariantPriceChanged | Price updated (only if actually differs) | Item pricing adjusted |
-| ProductReviewChanged | Review submitted, revised, hidden, unhidden, anonymized or removed | The product's rating summary is recomputed |
+| Event | Kind / State | Trigger | Business Meaning |
+|-------|--------------|---------|-----------------|
+| `CategoryChanged` | Lifecycle: `Added`, `Updated`, `Deleted` | `Category.Create`; `Category.Rename` (only if the name actually differs); `Category.Delete` (soft delete) | A product classification becomes available, is relabelled, or is withdrawn |
+| `ProductChanged` | Lifecycle: `Added`, `Updated`, `Deleted` | `Product.Create`; `Product.Rename` (only if the name actually differs); `Product.Delete` (soft delete) | An item becomes available for sale, is relabelled, or is withdrawn. Description, brand and category reassignment raise no event |
+| `ProductImageChanged` | State-carrying business event: `Added`, `Updated`, `Deleted` (carries the image id, null on a reorder) | `Product.AddProductImage`; `Product.ReorderProductImages` (`Updated`); `Product.RemoveProductImage` | The product's image gallery changed |
+| `ProductReviewChanged` | Lifecycle: `Added`, `Updated`, `Deleted` | `ProductReview.Create`; `Revise`, `Hide`, `Unhide` and `Anonymize` (all `Updated`); `ProductReview.Delete` | `ProductReviewChangedHandler` recomputes the product's rating summary from the published, non-deleted reviews |
+
+Variant-level changes raise no Catalog domain event at all: adding, removing, re-pricing and
+re-SKU-ing a variant all signal through the `ProductVariantChanged` **integration** event described
+below. Setting a variant discount, clearing one, and applying one across a whole product do the same,
+each raising `ProductVariantChanged` with the `Updated` state and the variant's **list** price. The
+event contract does not grow a discount field: its consumers denormalize catalog labels and stock rows
+and none of them price anything, so a consumer that ever needs what a shopper pays asks
+`IProductVariantService.GetUnitPricesAsync`, which answers with the effective price, the list price it
+was struck from and the active promotion's label
+([ADR-112](../adr/112-catalog-owned-effective-pricing.md)).
 
 ### Sales Events
 
-| Event | Trigger | Business Meaning |
-|-------|---------|-----------------|
-| ShoppingCartCreated | First item added by customer | Customer started shopping |
-| ShoppingCartItemAdded | New variant added to cart | Customer interested in a product |
-| ShoppingCartItemQuantityAdjusted | Quantity changed (increase on duplicate add, or explicit change) | Customer adjusted desired quantity |
-| ShoppingCartItemRemoved | Item removed from cart (soft delete) | Customer no longer wants item |
-| ShoppingCartCheckedOut | Checkout completed | Customer committed to purchase |
-| ShoppingCartCleared | All items removed | Customer abandoned selections |
-| ShoppingCartDeleted | Cart soft-deleted | Cart record removed |
-| OrderPlaced | Checkout creates order | Purchase order confirmed |
-| OrderPaymentInitiated | Stripe session created | Customer directed to payment |
-| OrderPaid | Payment confirmed (webhook or manual) | Revenue collected |
-| OrderPaymentFailed | Payment unsuccessful | Payment needs retry or cancellation |
-| OrderShipped | Order leaves with a carrier, and again on every correction to the recorded shipment | Customer is emailed the carrier, tracking number and tracking link |
-| OrderDelivered | Admin marks delivered | Fulfillment completed |
-| OrderCancelled | Order cancelled | Purchase reversed, inventory restored |
-| OrderDeleted | Order soft-deleted | Order record removed |
-| InventoryItemCreated | Stock record created | Variant now trackable |
-| InventoryAdjusted | Stock level changed (only when quantity actually changes) | Available quantity updated |
-| InventoryItemDeleted | Stock record soft-deleted | Variant no longer tracked |
+| Event | Kind / State | Trigger | Business Meaning |
+|-------|--------------|---------|-----------------|
+| `ShoppingCartChanged` | Lifecycle: `Added`, `Updated`, `Deleted` | `ShoppingCart.Create`; `ShoppingCart.Clear` (`Updated`); `ShoppingCart.Delete` (soft delete) | The customer's cart is opened, emptied, or removed |
+| `ShoppingCartItemChanged` | State-carrying business event: `Added`, `Updated`, `Deleted` (carries the old and new quantity) | `AddShoppingCartItem` (`Added` for a new variant, `Updated` when a duplicate add raises the quantity); `ChangeShoppingCartItemQuantity` (`Updated`); `RemoveShoppingCartItem` (soft delete) | Line-level movement in the cart |
+| `ShoppingCartCheckedOut` | Business event | `ShoppingCart.MarkAsCheckedOut` | Customer committed to purchase |
+| `OrderChanged` | Lifecycle: `Added`, `Deleted` (no `Updated` is raised) | `Order.Create` at checkout; `Order.Delete` (soft delete) | A purchase order is recorded or its record is withdrawn |
+| `OrderPaymentInitiated` | Business event (carries the Stripe session id) | `Order.InitiatePayment` | Customer directed to payment |
+| `OrderPaid` | Business event (carries the total, the order's total savings, and a snapshot of every order line including its list price and promotion label) | `Order.MarkAsPaid` (webhook) and `Order.MarkAsPaidManually` | Revenue collected; `OrderPaidHandler` emails the payment confirmation |
+| `OrderPaymentFailed` | Business event | `Order.MarkAsPaymentFailed` | `OrderPaymentFailedSagaHandler` tells the customer the payment needs a retry |
+| `OrderShipped` | Business event (carries carrier, tracking number, tracking link, ship date and estimated delivery date) | `Order.Ship`, and again on `Order.UpdateShipment` for every correction to the recorded shipment | `OrderShippedHandler` emails the carrier, tracking number and tracking link, re-sending on a correction |
+| `OrderDelivered` | Business event | `Order.MarkAsDelivered` | Fulfillment completed; raised alongside the `OrderFulfilled` integration event |
+| `OrderCancelled` | Business event | `Order.MarkAsCancelled` | `OrderCancelledSagaHandler` restores the inventory taken at checkout |
+| `InventoryItemChanged` | Lifecycle: `Added`, `Deleted` (no `Updated` is raised) | `InventoryItem.Create`; `InventoryItem.Delete` (soft delete) | A variant becomes trackable, or stops being tracked |
+| `InventoryAdjusted` | Business event (carries the old and new available quantity) | `InventoryItem.SetInventory`, only when the quantity actually changes; `IncreaseInventory` and `DecreaseInventory` reach it through that method | Available quantity updated |
 
 ### Identity Events
 
-| Event | Trigger | Business Meaning |
-|-------|---------|-----------------|
-| UserRegistered | New account created | New user in the system |
-| UserPasswordChanged | Password updated | Security credentials rotated |
-| UserDeactivated | Account disabled | User can no longer access system |
-| CustomerCreated | Auto-created on registration | Customer profile established |
-| CustomerDeleted | Customer soft-deleted | Profile removed |
-| CustomerNameChanged | Name updated (only if differs) | Profile information changed |
-| CustomerEmailChanged | Email updated (only if differs) | Contact information changed |
-| CustomerAddressChanged | Address updated (only if differs) | Shipping information changed |
+| Event | Kind / State | Trigger | Business Meaning |
+|-------|--------------|---------|-----------------|
+| `UserRegistered` | Business event (carries the email, name, role and address) | `User.Create` | `UserRegisteredHandler` creates the linked `Customer` profile for non-admin accounts |
+| `UserPasswordChanged` | Business event | `User.ChangePassword` | Security credentials rotated. No handler today: the event is an extension point |
+| `UserDeactivated` | Business event | `User.Deactivate` | User can no longer access the system. No handler today |
+| `CustomerChanged` | Lifecycle: `Added`, `Updated`, `Deleted` | `Customer.Create`; `ChangeName`, `ChangeEmail` and `ChangeAddress` (all `Updated`, and only when the value actually differs); `Customer.Delete` (soft delete) | The customer profile is established, corrected, or withdrawn |
 
 ### Integration Events (cross-service)
 
@@ -919,13 +953,15 @@ The events above are in-process domain events. These four cross the service boun
 outbox and the message broker, and each one is a signal for the consumer to create or refresh a
 denormalized copy IT owns, never a prompt to query back into the publisher ([ADR-006](../adr/006-database-per-service.md)).
 Contracts live in the publisher's Shared layer, so a consumer never references the publisher's Domain.
+Their payloads are frozen by `IntegrationEventContractTests` in the architecture test project, which
+fails on any member added, removed or retyped without a new contract version.
 
-| Event | Contract name | Publisher -> Consumer | Business meaning |
-|-------|---------------|-----------------------|------------------|
-| ProductVariantChanged | `Catalog.ProductVariantChanged.v1` | Catalog -> Sales | Variant lifecycle; Sales auto-creates the zero-stock inventory record and refreshes its denormalized SKU/product sort labels |
-| ProductInfoChanged | `Catalog.ProductInfoChanged.v1` | Catalog -> Sales | A product rename or delete fans out to those same labels |
-| OrderFulfilled | `Sales.OrderFulfilled.v1` | Sales -> Catalog | A delivered order, with its line snapshot; Catalog turns it into the verified-purchase entitlements behind product reviews |
-| CustomerErased | `Identity.CustomerErased.v1` | Identity -> Sales **and** Catalog | Sales clears the frozen customer name on retained orders; Catalog anonymizes the customer's reviews, keeping the ratings ([ADR-005](../adr/005-soft-delete-vs-erasure.md)) |
+| Event | Contract name | Payload (frozen) | Publisher -> Consumer | Business meaning |
+|-------|---------------|------------------|-----------------------|------------------|
+| `ProductVariantChanged` | `Catalog.ProductVariantChanged.v1` | `State`, `ProductId`, `ProductVariantId`, `Sku`, `Price`, `ProductName` | Catalog -> Sales: raised by `Product` for `Updated` and `Deleted`, and published by `AddVariantHandler` after the commit for `Added`. Consumer `ProductVariantChangedHandler` | Variant lifecycle; Sales auto-creates the zero-stock inventory record and refreshes its denormalized SKU/product sort labels. `Price` is always the **list** price |
+| `ProductInfoChanged` | `Catalog.ProductInfoChanged.v1` | `State`, `ProductId`, `Name` | Catalog -> Sales: raised by `Product.Rename` and `Product.Delete`. Consumer `ProductInfoChangedHandler` | A product rename or delete fans out to those same labels on every inventory row of the product |
+| `OrderFulfilled` | `Sales.OrderFulfilled.v1` | `OrderId`, `CustomerId`, `DeliveredOn`, `Lines` (variant id and quantity) | Sales -> Catalog: raised by `Order.MarkAsDelivered` and `Order.RepublishFulfillment`. Consumer `OrderFulfilledHandler` | A delivered order, with its line snapshot; Catalog turns it into the verified-purchase entitlements behind product reviews |
+| `CustomerErased` | `Identity.CustomerErased.v1` | `CustomerId` | Identity -> Sales **and** Catalog: raised by `Customer.Anonymize`. Consumers: a `CustomerErasedHandler` in each of Sales and Catalog | Sales clears the frozen customer name on retained orders; Catalog anonymizes the customer's reviews, keeping the ratings ([ADR-005](../adr/005-soft-delete-vs-erasure.md)) |
 
 ---
 
@@ -994,7 +1030,7 @@ The system enforces strict module boundaries. Modules communicate only through s
 
 | Interface | Provider Module | Consumer Module | Purpose |
 |-----------|----------------|-----------------|---------|
-| `IProductVariantService` | Catalog | Sales | Verify variant existence, check SKU uniqueness, fetch unit prices, get ID by SKU |
+| `IProductVariantService` | Catalog | Sales | Verify variant existence, check SKU uniqueness, fetch unit pricing (effective price, list price and promotion label), get ID by SKU |
 | `ICustomerService` | Identity | Sales | Resolve customer contact details for the order notification emails |
 | `IUserSalesExportService` | Sales | Identity | The orders section of the data-subject export document |
 | `IUserCatalogExportService` | Catalog | Identity | The product-reviews section of the same document |
@@ -1042,13 +1078,14 @@ The catalog browse page (`/catalog`) provides:
 - Category filter dropdown
 - Sort by name or price
 - Star rating and review count on each card, read straight off the product's denormalized `RatingSummary` so a grid of cards costs no per-card aggregate query
+- Effective-price range per card, with a sale badge and the struck-through list price when any variant on the card carries an active discount
 - Quick "Add to Cart" buttons per variant
 - "View Details" navigation to product detail page
 
 The product detail page (`/catalog/{id}`) shows:
 - Breadcrumbs (Home > Catalog > Product)
 - Product description, brand, category
-- Variant list with SKU, price, quantity selector, and "Add to Cart"
+- Variant list with SKU, price, quantity selector, and "Add to Cart". A discounted variant shows the effective price beside the struck-through list price and a sale badge, and carries an accessible "Was X, now Y" label so a screen reader hears both numbers rather than the visual strike alone
 - "Buy Now" option (direct Stripe checkout for single variant)
 - A reviews section (anchor `#reviews`) listing the published reviews, plus the review editor for a signed-in customer who is eligible to write or revise one
 
@@ -1125,7 +1162,7 @@ Entity types are routed to data sources via `[UseDataSource]` attribute on EF co
 ## 14. Missing or Unclear Business Logic
 
 ### 14.1 Email Notifications Cover Payment and Shipping Only
-**Observation:** Four handlers send email today: the password-reset request (Section 3.12), `OrderPaidHandler` (payment receipt), `OrderShippedHandler` (carrier, tracking number and tracking link, re-sent on every shipment correction) and `OrderPaymentFailedSagaHandler`. There is still no email at order placement (`OrderPlaced`), at delivery (`OrderDelivered`), or at cancellation.
+**Observation:** Four handlers send email today: the password-reset request (Section 3.12), `OrderPaidHandler` (payment receipt, which prints a struck "Was" amount and the promotion label on a discounted line and a "You saved" total when the order saved anything), `OrderShippedHandler` (carrier, tracking number and tracking link, re-sent on every shipment correction) and `OrderPaymentFailedSagaHandler`. There is still no email at order placement (`OrderChanged` with the `Added` state), at delivery (`OrderDelivered`), or at cancellation (`OrderCancelled`).
 **Recommendation:** Confirm whether an order-confirmation and a delivery-confirmation message are wanted; both would be additional `IDomainEventHandler<T>` registrations on events that already exist, not new plumbing.
 
 ### 14.2 No Return/Refund Workflow

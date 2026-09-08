@@ -57,6 +57,9 @@
 | 51 | Withdraw Product Review | `DELETE /reviews/{id}` | Catalog |
 | 52 | Hide Product Review | `PUT /reviews/{id}/hide` | Catalog |
 | 53 | Unhide Product Review | `PUT /reviews/{id}/unhide` | Catalog |
+| 54 | Set Variant Discount | `PUT /products/{id}/productvariants/{variantId}/discount` | Catalog |
+| 55 | Clear Variant Discount | `DELETE /products/{id}/productvariants/{variantId}/discount` | Catalog |
+| 56 | Discount All Variants | `PUT /products/{id}/discount` | Catalog |
 
 ---
 
@@ -102,7 +105,7 @@ AuthController.RegisterAsync()
 - Creates `User` (Active, with RefreshToken and RefreshTokenExpiry)
 - Creates `Customer` (linked via User.CustomerId)
 
-**Domain Events:** `UserRegistered` -> triggers `CustomerCreated`
+**Domain Events:** `UserRegistered` -> `UserRegisteredHandler` creates the linked `Customer`, which raises `CustomerChanged` with the `Added` state
 
 ---
 
@@ -197,9 +200,9 @@ AuthController.ChangePasswordAsync()
 
 | Workflow | Endpoint | Domain Method | Event |
 |----------|----------|---------------|-------|
-| Change Name | `PUT /customers/{id}/name` | `Customer.ChangeName()` | `CustomerNameChanged` |
-| Change Address | `PUT /customers/{id}/address` | `Customer.ChangeAddress()` | `CustomerAddressChanged` |
-| Change Email | `PUT /customers/{id}/email` | `Customer.ChangeEmail()` | `CustomerEmailChanged` |
+| Change Name | `PUT /customers/{id}/name` | `Customer.ChangeName()` | `CustomerChanged` (`Updated`) |
+| Change Address | `PUT /customers/{id}/address` | `Customer.ChangeAddress()` | `CustomerChanged` (`Updated`) |
+| Change Email | `PUT /customers/{id}/email` | `Customer.ChangeEmail()` | `CustomerChanged` (`Updated`) |
 
 Email change includes uniqueness check across customers.
 
@@ -208,7 +211,7 @@ Email change includes uniqueness check across customers.
 | Workflow | Endpoint | Auth | Notes |
 |----------|----------|------|-------|
 | Create Customer | `POST /customers` | Admin | Idempotent via `[Idempotent]` attribute |
-| Delete Customer | `DELETE /customers/{id}` | Admin | Soft delete (IsDeleted=true), publishes `CustomerDeleted` |
+| Delete Customer | `DELETE /customers/{id}` | Admin | Soft delete (IsDeleted=true), raises `CustomerChanged` with the `Deleted` state |
 | Get Customer | `GET /customers/{id}` | Authenticated | Owner or admin |
 | List Customers | `GET /customers` | Admin | All customers |
 | List Customers (paged) | `GET /customers/paged` | Admin | Paged |
@@ -248,7 +251,7 @@ controller-wide policy ([ADR-005](../adr/005-soft-delete-vs-erasure.md)).
 CategoriesController.CreateAsync()
   -> CreateCategoryHandler
     -> CategoryCreateRequestValidator (name: required, max 255)
-    -> Category.Create(id, name, parentCategoryId?) -> publishes CategoryCreated
+    -> Category.Create(id, name, parentCategoryId?) -> raises CategoryChanged (Added)
     -> Repository.AddAsync() + SaveChangesAsync()
 ```
 
@@ -264,7 +267,7 @@ CategoriesController.RenameAsync()
     -> Validate name (max 255)
     -> Fetch category -> category.Rename(name)
     -> Only updates if name differs (case-insensitive comparison)
-    -> Publishes CategoryNameChanged if changed
+    -> Raises CategoryChanged (Updated) if changed
     -> Cache invalidation
 ```
 
@@ -278,7 +281,7 @@ Sets or clears `ParentCategoryId` to establish hierarchy. No domain event raised
 
 **Entry Point:** `DELETE /categories/{id}`, Admin only
 
-Soft delete (`IsDeleted=true`). Publishes `CategoryDeleted`.
+Soft delete (`IsDeleted=true`). Raises `CategoryChanged` with the `Deleted` state.
 
 #### Query Endpoints
 
@@ -301,7 +304,7 @@ Soft delete (`IsDeleted=true`). Publishes `CategoryDeleted`.
 ProductsController.CreateAsync()
   -> CreateProductHandler
     -> Validate: name (required, max 100), description (max 4000), brand (max 100, no whitespace if provided)
-    -> Product.Create() factory -> publishes ProductCreated
+    -> Product.Create() factory -> raises ProductChanged (Added)
     -> Repository.AddAsync() + SaveChangesAsync()
 ```
 
@@ -309,14 +312,14 @@ ProductsController.CreateAsync()
 
 | Workflow | Endpoint | Validation | Event |
 |----------|----------|-----------|-------|
-| Rename | `PUT /products/{id}/name` | Max 100, required | `ProductNameChanged` |
+| Rename | `PUT /products/{id}/name` | Max 100, required | `ProductChanged` (`Updated`) plus the `ProductInfoChanged` integration event (`Updated`) |
 | Change Description | `PUT /products/{id}/description` | Max 4000, nullable | None |
 | Change Brand | `PUT /products/{id}/brand` | Max 100, no whitespace | None |
 | Assign Category | `PUT /products/{id}/category` | Nullable FK | None |
 
 #### Delete Product
 
-**Entry Point:** `DELETE /products/{id}`, Admin only. Soft delete, publishes `ProductDeleted`.
+**Entry Point:** `DELETE /products/{id}`, Admin only. Soft delete, raises `ProductChanged` with the `Deleted` state plus the `ProductInfoChanged` integration event (`Deleted`).
 
 #### Query Endpoints
 
@@ -344,8 +347,9 @@ ProductVariantsController.CreateAsync()
     -> Fetch Product with variants
     -> product.AddProductVariant(variantId, sku, price)
       -> ProductVariant.Create() validates price not negative
-      -> Publishes ProductVariantAdded
+      -> Raises no Catalog domain event
     -> SaveChangesAsync()
+    -> IEventBus.PublishAsync(ProductVariantChanged, Added) after the commit
 ```
 
 **Cross-Module:** SKU uniqueness checked via `IProductVariantService`
@@ -354,19 +358,75 @@ ProductVariantsController.CreateAsync()
 
 **Entry Point:** `PUT /products/{id}/productvariants/{variantId}/sku`, Admin only
 
-SKU uniqueness verified globally (excluding current variant). Publishes `ProductVariantSkuChanged` if changed.
+SKU uniqueness verified globally (excluding current variant). Raises the `ProductVariantChanged` integration event with the `Updated` state if changed.
 
 #### Change Variant Price
 
 **Entry Point:** `PUT /products/{id}/productvariants/{variantId}/price`, Admin only
 
-Price must be positive. Publishes `ProductVariantPriceChanged` if changed.
+Price must be positive. Raises the `ProductVariantChanged` integration event with the `Updated` state if changed. The price edited here is
+the LIST price. A variant that carries a discount re-validates it against the new price and the
+change is refused when the pair would be inconsistent (a special price no longer below the list
+price, or a percentage leaving nothing), so the discount is cleared first.
+
+#### Set Variant Discount
+
+**Entry Point:** `PUT /products/{id}/productvariants/{variantId}/discount`, `catalog:pricing:manage`
+
+```
+ProductVariantsController.SetDiscountAsync()
+  -> SetProductVariantDiscountCommand (If-Match product ETag + VariantRowVersion in the body)
+    -> VariantDiscountRules validates kind, percentage, special price, window order, label
+    -> ProductVariantSetDiscountRequest.ToDiscount()
+      -> VariantDiscount.CreatePercentage() / CreateSpecialPrice() -> Result<VariantDiscount>
+    -> product.SetProductVariantDiscount(variantId, discount)
+      -> ProductVariant.SetDiscount() runs VariantDiscount.ApplyTo(Price) first
+      -> Publishes ProductVariantChanged (Updated) with the LIST price
+    -> SaveChangesAsync()
+  -> Evicts the catalog:products output-cache tag
+```
+
+Replaces any discount already on the variant. Returns 204; 400 on a broken invariant, 404 on an
+unknown product or variant, 412 on a stale ETag, 428 when `If-Match` is missing
+([ADR-035](../adr/035-optimistic-concurrency.md) two-token rule: the header carries the product's
+ETag, the body carries the variant's row version).
+
+#### Clear Variant Discount
+
+**Entry Point:** `DELETE /products/{id}/productvariants/{variantId}/discount`, `catalog:pricing:manage`
+
+Returns the variant to its list price, which was never rewritten, so there is nothing to restore.
+Clearing a variant that carries no discount changes nothing, so clearing twice is safe. Publishes
+`ProductVariantChanged` (Updated) and evicts the `catalog:products` tag. The body carries only the
+variant's row version; the status codes match the set action.
+
+#### Discount All Variants
+
+**Entry Point:** `PUT /products/{id}/discount`, `catalog:pricing:manage`
+
+```
+ProductsController.SetDiscountAsync()
+  -> SetProductDiscountCommand (If-Match product ETag)
+    -> ProductSetDiscountRequest.ToDiscount() -> Result<VariantDiscount>
+    -> product.SetDiscountOnAllVariants(discount)
+      -> A product with NO active variant is refused first: Product.NoActiveVariants (400)
+      -> ApplyTo() is checked against EVERY active variant's list price FIRST
+      -> All-or-nothing: one refusal leaves the product exactly as it was
+      -> Publishes one ProductVariantChanged (Updated) per variant, each with its LIST price
+    -> SaveChangesAsync()
+  -> Evicts the catalog:products output-cache tag
+```
+
+A product whose variants are priced differently either takes the promotion whole or is left
+untouched, so a half-discounted catalog page is not reachable. A product with nothing to discount,
+because it has no variants yet or every one is soft-deleted, is a 400 rather than a write that
+succeeds over an empty set.
 
 #### Remove Product Variant
 
 **Entry Point:** `DELETE /products/{id}/productvariants/{variantId}`, Admin only
 
-Soft delete on variant. Publishes `ProductVariantRemoved`.
+Soft delete on variant. Raises the `ProductVariantChanged` integration event with the `Deleted` state.
 
 ### 2.4 Product Image Management
 
@@ -502,11 +562,11 @@ ShoppingCartsController.CreateShoppingCartItemAsync()
     -> Validate quantity > 0
     -> IProductVariantService.ExistsAsync() [cross-module: Catalog]
     -> Fetch ShoppingCart by CustomerId
-    -> If no cart exists -> ShoppingCart.Create(customerId) -> ShoppingCartCreated event
+    -> If no cart exists -> ShoppingCart.Create(customerId) -> ShoppingCartChanged (Added)
     -> If cart is CheckedOut -> shoppingCart.Reactivate() (clears items, resets to Active)
     -> shoppingCart.AddShoppingCartItem(variantId, quantity)
-      -> If item already in cart -> IncreaseQuantity -> ShoppingCartItemQuantityAdjusted
-      -> If new item -> ShoppingCartItem.Create() -> ShoppingCartItemAdded
+      -> If item already in cart -> IncreaseQuantity -> ShoppingCartItemChanged (Updated)
+      -> If new item -> ShoppingCartItem.Create() -> ShoppingCartItemChanged (Added)
     -> SaveChangesAsync()
 ```
 
@@ -520,19 +580,19 @@ ShoppingCartsController.CreateShoppingCartItemAsync()
 
 **Entry Point:** `PUT /shoppingcarts/{id}/shoppingcartitems/{variantId}/quantity`
 
-Validates cart is Active, item exists, quantity > 0. Publishes `ShoppingCartItemQuantityAdjusted`.
+Validates cart is Active, item exists, quantity > 0. Raises `ShoppingCartItemChanged` with the `Updated` state, carrying the old and new quantity.
 
 #### Remove Item
 
 **Entry Point:** `DELETE /shoppingcarts/{id}/shoppingcartitems/{variantId}`
 
-Validates cart is Active. Soft-deletes item. Publishes `ShoppingCartItemRemoved`.
+Validates cart is Active. Soft-deletes item. Raises `ShoppingCartItemChanged` with the `Deleted` state.
 
 #### Clear Cart
 
 **Entry Point:** `PUT /shoppingcarts/{id}/clear`
 
-Deletes all items. Publishes `ShoppingCartCleared`.
+Deletes all items. Raises `ShoppingCartChanged` with the `Updated` state.
 
 #### Cart Query Endpoints
 
@@ -569,6 +629,8 @@ ShoppingCartsController.CheckOutAsync()
     -> Fetch ShoppingCart with items (tracking)
     -> Collect productVariantIds from cart items
     -> IProductVariantService.GetUnitPricesAsync(ids) [cross-module: Catalog, OUTSIDE the transaction]
+         each entry is effective price + list price + promotion label (VariantUnitPrice)
+    -> Translate each entry into Sales' own OrderLinePricing at the module boundary
     -> Reject any variant missing from the price map (soft-deleted between add and checkout)
     -> Fetch InventoryItems for all variants
     -> CheckOutDomainService.Execute():
@@ -576,8 +638,8 @@ ShoppingCartsController.CheckOutAsync()
         2. Validate inventory exists for all items
         3. Fail-fast sufficiency check per item against the point-in-time snapshot
            (NOT the oversell guard: that is the atomic decrement below)
-        4. Build order items (variant + price + quantity)
-        5. Order.Create(customerId, items) -> publishes OrderPlaced
+        4. Build order items (variant + pricing triple + quantity)
+        5. Order.Create(customerId, items) -> raises OrderChanged (Added)
         6. shoppingCart.MarkAsCheckedOut() -> publishes ShoppingCartCheckedOut
     -> orderRepository.AddAsync(order)
     -> unitOfWork.ExecuteInTransactionAsync:            <-- the whole write phase, one transaction
@@ -591,9 +653,14 @@ ShoppingCartsController.CheckOutAsync()
 **Business Steps:**
 
 1. Validate cart exists and has items
-2. Fetch current prices from Catalog module, and reject variants that no longer exist
+2. Fetch current pricing from Catalog module, and reject variants that no longer exist
 3. Fail-fast inventory sufficiency check against the loaded snapshot
-4. Create Order aggregate with OrderLines (price snapshot at time of purchase)
+4. Create Order aggregate with OrderLines. Each line freezes the effective price it is charged, the
+   list price that price was struck from and the active promotion's label, so the order can say what
+   it saved without asking Catalog again. Only the effective price is money owed: the line total, the
+   order total and the Stripe amount follow from it alone. `OrderLine.Savings` and
+   `Order.TotalSavings` are computed from the frozen pair on read and never stored
+   ([ADR-112](../adr/112-catalog-owned-effective-pricing.md))
 5. Transition cart to CheckedOut status
 6. Commit the write phase in one explicit transaction: atomic inventory decrements, then the order
    insert and cart transition
@@ -612,7 +679,7 @@ ShoppingCartsController.CheckOutAsync()
 - Decrements `InventoryItem.AvailableQuantity` for each item
 - `ShoppingCart.Status` -> CheckedOut
 
-**Domain Events:** `OrderPlaced`, `ShoppingCartCheckedOut`.
+**Domain Events:** `OrderChanged` (`Added`), `ShoppingCartCheckedOut`.
 
 > **No `InventoryAdjusted` on the checkout path.** The decrement runs as `ExecuteUpdateAsync`, which
 > bypasses the save pipeline (and therefore the audit interceptor and domain-event dispatch) by design:
@@ -703,6 +770,12 @@ PaymentsController.HandleWebhookAsync()
 **Idempotency:** Already-paid or already-failed orders return success without modification.
 
 **Controller behavior:** Returns 400 only for signature verification failures; returns 200 for all other cases (including handler errors) to prevent Stripe retries.
+
+**Receipt email:** `OrderPaidHandler` turns `OrderPaid` into the payment confirmation. The event
+carries the order's total savings and each line's frozen list price and promotion label, so a
+discounted line prints a struck "Was" amount above the price charged with the label (HTML-encoded)
+beneath it, and the order gets a "You saved" total. Each of those appears only when there is a saving
+to show.
 
 #### Manual Admin Payment
 
@@ -863,11 +936,13 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 
 - `/catalog`, Product grid with name search, category filter, name/newest sort, quick "Add to Cart" per variant, and a star rating with review count on each card (read off the product's denormalized `RatingSummary`, so a grid costs no per-card aggregate query)
 - `/catalog/{id}`, Product detail with breadcrumbs, variant list, quantity selector, "Add to Cart" button, "Buy Now" (direct Stripe checkout), and a reviews section (anchor `#reviews`) listing published reviews with the review editor for an eligible signed-in customer
+- A discounted variant reads as a sale on both pages: the card shows a sale badge and an effective-price range, the variant card shows the effective price beside the struck-through list price, and the pair carries a "Was X, now Y" accessible label. The numbers are server-resolved, so a browser clock never decides whether a promotion is running
 
 #### Order Management
 
 - `/orders`, MudDataGrid listing orders with ID, customer, total, status chips (Shipped included), item count; the admin search box also matches tracking numbers
 - `/orders/{id}`, Two-column layout: order summary (status, total, payment/shipping/delivery actions, and the carrier, tracking number and tracking link once the order ships) + order lines. The admin ship and correct-tracking actions open one `ShipOrderDialog`, which serves both endpoints
+- A discounted order line reads the same way the storefront does: the struck list price beside the price charged, a chip carrying the promotion label, and a "Was X, now Y" sentence for assistive tech since the two bare numbers are hidden from it. The order adds a "you saved" row when its total savings are above zero. Every number is the one frozen at checkout, so an order page never re-prices against a promotion that has since ended
 
 ### 4.2 Admin UI Workflows
 
@@ -878,7 +953,7 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 | Category Detail | `/categories/{id}` | View/edit mode, parent link, product list |
 | Products | `/products` | MudDataGrid: name, brand, category, variants |
 | Product Create | `/products/create` | Form: name, description, brand, category |
-| Product Detail | `/products/{id}` | View/edit product, inline variant editor (add/edit/delete) |
+| Product Detail | `/products/{id}` | View/edit product, inline variant editor (add/edit/delete); the variants table adds a Discount column showing the badge and effective price against the struck-through list price, per-row Discount and Clear discount actions opening an inline dialog, and a "Discount all variants" button that applies one discount across the whole product |
 | Reviews | `/reviews` | MudDataGrid: every review whatever its status, search, hide/unhide moderation |
 | Inventory | `/inventory` | MudDataGrid: product name, SKU, quantity, in-stock |
 | Inventory Create | `/inventory/create` | Initialize new inventory item |
@@ -931,7 +1006,7 @@ The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380
 | From -> To | Interface | Methods Used | Context |
 |-----------|-----------|-------------|---------|
 | Sales -> Catalog | `IProductVariantService` | `ExistsAsync()` | Cart item validation, inventory creation |
-| Sales -> Catalog | `IProductVariantService` | `GetUnitPricesAsync()` | Checkout pricing |
+| Sales -> Catalog | `IProductVariantService` | `GetUnitPricesAsync()` | Checkout pricing: effective price, list price and promotion label per variant |
 | Sales -> Catalog | `IProductVariantService` | `SkuExistsAsync()` | SKU uniqueness (Catalog internal) |
 | Sales -> Catalog | `IProductVariantService` | `GetIdBySkuAsync()` | Seed data inventory setup |
 | Sales -> Identity | `ICustomerService` | `GetContactInfoByIdAsync()` | Contact details for the order paid / shipped / payment-failed emails |
@@ -1015,7 +1090,7 @@ publisher ([ADR-006](../adr/006-database-per-service.md)):
 |-------------|----------|----------------|
 | **No refund workflow** | Order can be cancelled only before payment completes (PendingPayment/PaymentInitiated/PaymentFailed); no refund logic for Paid orders | Verify if refunds are handled externally via Stripe dashboard or if a refund workflow is planned |
 | **No order editing** | Once checkout completes, order lines cannot be modified | Confirm if this is intentional or if order amendment is planned |
-| **No order-confirmation or delivery email** | Email handlers exist for payment, shipment and payment failure, but `OrderPlaced`, `OrderDelivered` and `OrderCancelled` have none | Both would be an extra `IDomainEventHandler<T>` on an event that already exists, not new plumbing |
+| **No order-confirmation or delivery email** | Email handlers exist for payment, shipment and payment failure, but `OrderChanged` (`Added`) and `OrderDelivered` have no email handler, and `OrderCancelled` has only the inventory-restoring saga | Both would be an extra `IDomainEventHandler<T>` on an event that already exists, not new plumbing |
 | **No full-text search** | Catalog browse offers a name-contains search box (E2E-covered); there is no full-text/fuzzy search | Consider full-text search for larger catalogs |
 | **Inventory not checked during cart add** | Inventory validation only happens at checkout, not when adding to cart | Could lead to poor UX if items go out of stock between add and checkout |
 | **No post-payment cancellation** | Cancellation allowed from PendingPayment, PaymentInitiated, or PaymentFailed; cannot cancel after payment succeeds | Verify if post-payment cancellation with Stripe refund is needed |

@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-011: Single-Locale by Design (No Internationalization) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Superseded by ADR-027 (2026-06-27). Originally Accepted (2026-06-19). The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/011-single-locale-i18n.html">
+  <title>ADR-112: Catalog Owns Effective Pricing; Sales Snapshots It at Checkout · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-07).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/112-catalog-owned-effective-pricing.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-011: Single-Locale by Design (No Internationalization)">
-  <meta property="og:description" content="Superseded by ADR-027 (2026-06-27). Originally Accepted (2026-06-19). The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/011-single-locale-i18n.html">
+  <meta property="og:title" content="ADR-112: Catalog Owns Effective Pricing; Sales Snapshots It at Checkout">
+  <meta property="og:description" content="Accepted (2026-09-07).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/112-catalog-owned-effective-pricing.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-011: Single-Locale by Design (No Internationalization)">
-  <meta name="twitter:description" content="Superseded by ADR-027 (2026-06-27). Originally Accepted (2026-06-19). The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027…">
+  <meta name="twitter:title" content="ADR-112: Catalog Owns Effective Pricing; Sales Snapshots It at Checkout">
+  <meta name="twitter:description" content="Accepted (2026-09-07).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"011 · Single-Locale by Design (No Internationalization)","item":"https://ivanball.github.io/docs/adr/011-single-locale-i18n.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout","item":"https://ivanball.github.io/docs/adr/112-catalog-owned-effective-pricing.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">011 · Single-Locale by Design (No Internationalization)</span>
+        <span class="current">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -110,7 +110,7 @@
         <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
         <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
         <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
-        <li><a href="011-single-locale-i18n.html" aria-current="page">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
         <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
         <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
         <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
@@ -211,53 +211,170 @@
         <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
         <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
         <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
-        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html" aria-current="page">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
           </ol>
         </nav>
       </details>
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-011-single-locale-by-design-no-internationalization">ADR-011: Single-Locale by Design (No Internationalization)</h1>
+          <h1 id="adr-112-catalog-owns-effective-pricing-sales-snapshots-it-at-checkout">ADR-112: Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</h1>
           <h2 id="status">Status</h2>
-          <p><strong>Superseded by <a href="027-multi-locale-i18n.html">ADR-027</a> (2026-06-27).</strong> Originally Accepted (2026-06-19).
-          The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027 implements; this record is
-          retained for history.</p>
+          <p>Accepted (2026-09-07).</p>
+          <p>Revised 2026-09-07: an order line freezes the list price and the promotion label beside the charged
+          unit price, so an order answers what it saved without asking Catalog again. The two cross-service
+          reply contracts grow additive fields for them; the integration events are untouched.</p>
           <h2 id="context">Context</h2>
-          <p>The MMCA applications (the ADC conference app, the Store) and the <code>MMCA.Common.UI</code> library currently ship
-          a single locale (en-US). The architecture rubric scores Internationalization (§27); rather than leave it
-          at an implicit zero, this ADR records that single-locale is a <strong>deliberate, scoped decision</strong> (not an
-          oversight) and states what re-introducing i18n would entail.</p>
+          <p>MMCA.Store sells product variants, and a variant&#39;s price is one <code>Money</code> on the variant row
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:26</code>).
+          Merchandising wants to run a sale: a percentage off, or a fixed special price, on one variant or
+          across a whole product, optionally bounded by a start and an end.</p>
+          <p>Two things constrain the answer. First, Catalog and Sales are separate services with separate
+          databases (ADR-005, ADR-006), talking over a <code>[ServiceContract]</code> interface whose purity is
+          build-enforced (ADR-007,
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IProductVariantService.cs:34</code>).
+          Any pricing model that needs Sales to understand promotions grows that wire surface and makes the
+          extraction harder to reverse. Second, checkout already freezes a price: <code>CheckOutHandler</code> fetches
+          unit prices from Catalog and <code>CheckOutDomainService</code> copies them onto order lines
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:65-67</code>,
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/CheckOutDomainService.cs:113-121</code>).
+          The cart stores quantities, not money.</p>
+          <p>The tempting shape is a Promotion aggregate with its own lifecycle, targets and precedence rules.
+          That is a pricing engine, and it puts the question &quot;what does this cost&quot; in a third place that both
+          Catalog and Sales would have to consult.</p>
           <h2 id="decision">Decision</h2>
-          <ol>
-          <li><strong>Single-locale (en-US) is an explicit non-goal for now.</strong> User-facing strings are inline in markup;
-          dates/numbers use invariant or fixed formatting where appropriate.</li>
-          <li><strong>The audience is single-locale.</strong> The Atlanta Developers Conference and the Store target a US/English
-          audience; the cost of full i18n (resource extraction, culture-aware formatting, RTL, locale selection)
-          is not justified by current demand.</li>
-          <li><strong>If multi-locale is ever required, it is greenfield work</strong>, scoped as: externalize strings to resource
-          files; culture-aware formatting (dates/numbers/currency/time zones); <code>RequestLocalization</code> middleware +
-          discoverable, persisted locale selection with server/client culture aligned; layout tolerance for text
-          expansion (and RTL where required); and pluralization/interpolation via the i18n mechanism rather than
-          string concatenation.</li>
-          </ol>
+          <p><strong>Promotional pricing is a variant-level owned value object, not an aggregate.</strong> <code>VariantDiscount</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/VariantDiscount.cs:26</code>) is a
+          sealed record deriving from <code>ValueObject</code>: a <code>Kind</code> (percentage or special price), the figure, an
+          optional inclusive-start / exclusive-end window, and an optional label capped at 50 characters. It
+          has no identity, it is replaced wholesale, and it is flattened onto the variant&#39;s row as nullable
+          columns
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:45-93</code>,
+          migration <code>20260907185422_AddProductVariantDiscounts</code>, add-only per ADR-057). Product-level
+          discounting is fan-out over the same value object, all or
+          nothing: <code>Product.SetDiscountOnAllVariants</code> refuses a product that has no active variant to discount
+          (<code>Product.NoActiveVariants</code>, an invariant error surfaced as 400) and otherwise validates the discount
+          against every active variant&#39;s list price before it touches any of them
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:588-597</code>,
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductInvariants.cs:114</code>).</p>
+          <p><strong>The list price is preserved and the effective price is computed in one method.</strong>
+          <code>ProductVariant.Price</code> stays the list price whatever the discount says, so clearing a discount
+          restores the original price with no bookkeeping. <code>ProductVariant.GetEffectivePrice(now)</code> and its
+          static twin <code>ResolveEffectivePrice</code> are the single computation
+          (<code>ProductVariant.cs:164-184</code>): they return the list price when there is no discount, when the window
+          does not cover <code>now</code>, and when the stored pairing no longer resolves. Every caller goes through it:
+          the DTO mapper for the read model
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/DTOs/ProductVariantDTOMapper.cs:40-41</code>)
+          and the cross-module pricing service over its projection
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductVariantService.cs:84-90</code>),
+          both against an injected <code>TimeProvider</code>.</p>
+          <p><strong>Sales re-fetches at checkout, stores no cart price, and freezes the whole answer.</strong>
+          <code>IProductVariantService.GetUnitPricesAsync</code> replies with a <code>VariantUnitPrice</code> triple: the effective
+          price to charge, the list price it was struck from, and the active promotion&#39;s label
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/VariantUnitPrice.cs:32</code>,
+          <code>IProductVariantService.cs:104</code>). The label is resolved only while its discount is in force at the
+          instant asked, so an expired or not-yet-open window names nothing (<code>ProductVariantService.cs:103</code>).
+          <code>CheckOutHandler</code> translates the triple into Sales&#39; own <code>OrderLinePricing</code> record at the module
+          boundary (<code>CheckOutHandler.cs:75</code>, <code>OrderLinePricing.cs:22</code>), which is what keeps <code>Sales.Domain</code> free
+          of any reference to <code>Catalog.Shared</code>. The three values land on <code>OrderLine.UnitPrice</code>,
+          <code>OrderLine.ListPrice</code> and <code>OrderLine.PromotionLabel</code> (<code>OrderLine.cs:30,42,49</code>), guarded by
+          <code>OrderInvariants.EnsureListPriceIsValid</code> (non-negative, same currency, never below the unit price)
+          and <code>EnsurePromotionLabelIsValid</code> (50 characters) (<code>OrderInvariants.cs:38,60,87</code>). Only <code>UnitPrice</code>
+          is money owed: the line total and the Stripe total still follow from it alone.</p>
+          <p><strong>What the order saved is derived, not stored.</strong> <code>OrderLine.Savings</code> and <code>Order.TotalSavings</code> are
+          computed on read from the frozen pair and excluded from the EF mapping (<code>OrderLine.cs:65</code>,
+          <code>Order.cs:72</code>): a stored total could only ever disagree with the two numbers it restates. <code>OrderPaid</code>
+          carries the order&#39;s <code>TotalSavings</code> and each line&#39;s <code>ListPrice</code> and <code>PromotionLabel</code>
+          (<code>Orders/DomainEvents/OrderPaid.cs:21,42</code>), so the receipt email and the order detail page each show
+          a struck &quot;Was&quot; amount, the label (HTML-encoded in the email), an accessible &quot;Was X, now Y&quot; sentence
+          and a &quot;You saved&quot; total, every one only when there is a saving
+          (<code>Orders/DomainEventHandlers/OrderPaidHandler.cs:89,97,111</code>,
+          <code>Sales.UI/Pages/Orders/OrderLinesPanel.razor:56,72,95</code>).</p>
+          <p><strong>The wire contracts grow additive fields; the event contracts do not.</strong> <code>UnitPriceEntry</code> gains
+          <code>list_price = 3</code> and <code>promotion_label = 4</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:106,109</code>) and
+          the data-subject export line gains <code>list_price_amount = 6</code> and <code>promotion_label = 7</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Contracts/Protos/user_sales_export.proto:87,90</code>,
+          <code>UserSalesExportService.cs:70-71</code>): new numbers on existing messages, which a peer built against the
+          previous generation ignores. The <code>ProductVariantChanged</code> integration event keeps carrying the list
+          price and nothing else (<code>Product.cs:544-545</code>), so ADR-010&#39;s schema-version rule is not engaged and
+          ADR-083&#39;s one-lifecycle-event-per-entity taxonomy is unchanged. The two Sales columns land NOT NULL
+          with defaults plus a guarded backfill from the unit price, add-only under ADR-057
+          (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260907232734_AddOrderLineListPrice.cs:60-63</code>).</p>
+          <p><strong>The effective price must stay above zero.</strong> Sales&#39; order-line validator rejects a non-positive unit
+          price
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Validation/OrderLineValidationRules.cs:33</code>),
+          so a discount that resolves to zero would produce a variant that can be added to a cart and never
+          checked out. Catalog refuses that pairing at the write instead: <code>VariantDiscount.ApplyTo</code> fails with
+          <code>EffectivePriceNotPositive</code> (<code>VariantDiscount.cs:61-62,216-218,237-239</code>), which in practice means a
+          zero-priced variant cannot carry a discount at all.</p>
+          <p>The three write endpoints are gated on <code>catalog:pricing:manage</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Authorization/CatalogPermissions.cs:29</code>,
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductVariantsController.cs:150-151,177-178</code>,
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:248-249</code>), a narrower
+          permission than variant management, and follow ADR-035&#39;s two-token rule: the product ETag in
+          <code>If-Match</code>, the variant row version in the body.</p>
           <h2 id="rationale">Rationale</h2>
-          <ul>
-          <li>Recording the decision converts an implicit rubric-zero into a conscious, revisitable choice: the same
-          posture as the single-region DR acceptance in ADR-009.</li>
-          <li>Premature i18n infrastructure adds complexity (resource indirection, culture bugs, layout churn) with no
-          current user to benefit.</li>
-          </ul>
+          <p>A discount that belongs to exactly one variant, is replaced rather than edited, and has no life of
+          its own once the variant is gone is a value object by every test we apply elsewhere
+          (<a href="068-value-objects-as-validated-primitives.html">ADR-068</a>). Making
+          it an aggregate would buy independent identity nobody asked for and an extra join on the hot read
+          path.</p>
+          <p>Keeping the list price is what makes &quot;clear the discount&quot; a one-line operation and what lets the
+          storefront show a struck-through original. A model that overwrote the price would have to store the
+          old one somewhere anyway, which is the same field with worse naming.</p>
+          <p>Putting the computation in the domain, and having the cross-service method return its result, keeps
+          the pricing decision inside the service that owns pricing. Sales asks what a variant costs and gets
+          the number to charge; it never learns what a window or a percentage is, and the two members it gets
+          alongside are an amount and a string for display, not rules to evaluate. That is what keeps the
+          change additive across the module boundary: new proto field numbers, unchanged event contracts, and a
+          Sales domain that still knows nothing about promotions, which is the property ADR-007 protects.</p>
+          <p>Checkout re-fetching rather than trusting a cart price is not new here, it is the existing rule
+          (prices lock at checkout, not at cart-add) and it happens to be exactly what a timed promotion needs:
+          a sale that ends between cart-add and checkout charges the list price, with no reconciliation job.</p>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li>Adding a locale later touches every view plus the formatting paths: a real but bounded effort, accepted.</li>
-          <li>Hard-coded strings make a future extraction larger; mitigated by the component-based UI (strings are
-          localized to components/pages, so extraction is mechanical rather than archaeological).</li>
+          <li><strong>Cached reads lag a window boundary by up to five minutes.</strong> The three write commands implement
+          <code>ICacheInvalidating</code> and their controllers evict the <code>catalog:products</code> output-cache tag, so an
+          admin edit is visible at once. A window that opens or closes on the clock evicts nothing, so a
+          cached storefront read can show the pre-boundary price until the tag&#39;s five-minute TTL expires
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:155</code>). Checkout is never stale
+          because it is a live cross-service call.</li>
+          <li><strong>An order line records the two prices and the promotion&#39;s name, not the promotion itself.</strong> A line
+          answers &quot;struck from 24.99, charged at 19.99, Summer Sale&quot;, which is what the receipt, the order
+          page and the data-subject export render. It does not record the discount&#39;s kind, figure or window,
+          so &quot;was that 20% off or a special price&quot; is still unanswerable from an order after the fact: the
+          label is a string frozen for display, not a reference into a promotion nobody models.</li>
+          <li><strong>No coupon codes, no category-wide or basket-level promotions, no stacking.</strong> One discount per
+          variant, replaced wholesale. A future Promotion aggregate is not foreclosed: it would resolve into
+          the same <code>ResolveEffectivePrice</code> call, which is the one place a price is decided.</li>
+          <li><strong>A discount cannot be applied to a free variant, and a discounted variant&#39;s list price cannot be
+          changed to an inconsistent value.</strong> <code>ChangePrice</code> fails rather than silently dropping the discount
+          (<code>ProductVariant.cs:106-122</code>), so an admin repricing a variant on sale has to clear the discount
+          first. Failing loudly beats repricing a storefront nobody asked to reprice.</li>
+          <li><strong>Two clocks answer the same question.</strong> The DTO&#39;s <code>IsActive</code> flag and the checkout price are both
+          resolved server-side against <code>TimeProvider</code>, but at different instants, so a shopper can see a sale
+          price on a page and be charged list price seconds later at a window boundary. Accepted as the cost
+          of not pinning a promotion into the cart.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <ul>
+          <li><a href="005-soft-delete-vs-erasure.html">ADR-005</a>, <a href="006-database-per-service.html">ADR-006</a>: each service owns
+          its database, and cross-service copies are denormalized rather than joined.</li>
+          <li><a href="007-grpc-extraction.html">ADR-007</a>: <code>[ServiceContract]</code> purity, the rule that keeps the pricing
+          method a contract and not a leak of Catalog&#39;s internals.</li>
+          <li><a href="010-integration-event-schema-versioning.html">ADR-010</a>: the event contract is unchanged, so no
+          version bump and no upcaster.</li>
+          <li><a href="035-optimistic-concurrency.html">ADR-035</a>: the two-token concurrency contract the discount endpoints
+          follow.</li>
+          <li><a href="057-expand-contract-schema-evolution-gate.html">ADR-057</a>: the discount columns are add-only.</li>
+          <li><a href="083-crud-lifecycle-event-taxonomy.html">ADR-083</a>: discount changes reuse <code>ProductVariantChanged</code> with
+          the <code>Updated</code> state rather than minting a new event type.</li>
           </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/011-single-locale-i18n.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/112-catalog-owned-effective-pricing.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">
@@ -269,6 +386,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
             </ul>
           </nav>
         </aside>

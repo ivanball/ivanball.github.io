@@ -596,6 +596,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://ivanball.github.io/docs/adr/112-catalog-owned-effective-pricing.html</loc>
+    <lastmod>2026-09-07</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://ivanball.github.io/docs/onboarding/index.html</loc>
     <lastmod>2026-09-05</lastmod>
     <priority>0.8</priority>
@@ -912,7 +917,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/store-ACCESSIBILITY-SCREENREADER-PASS.html</loc>
-    <lastmod>2026-07-21</lastmod>
+    <lastmod>2026-09-07</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
