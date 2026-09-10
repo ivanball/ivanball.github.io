@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-115: Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-09). Revisits ADR-048 and ADR-085 by adding the capability those records deferred, without migrating anything. ADR-048&#39;s decision…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/115-strongly-typed-identifiers-opt-in.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-115: Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default">
+  <meta property="og:description" content="Accepted (2026-09-09). Revisits ADR-048 and ADR-085 by adding the capability those records deferred, without migrating anything. ADR-048&#39;s decision…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/115-strongly-typed-identifiers-opt-in.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-115: Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default">
+  <meta name="twitter:description" content="Accepted (2026-09-09). Revisits ADR-048 and ADR-085 by adding the capability those records deferred, without migrating anything. ADR-048&#39;s decision…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default","item":"https://ivanball.github.io/docs/adr/115-strongly-typed-identifiers-opt-in.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 117 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html" aria-current="page">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-115-strongly-typed-identifiers-as-an-opt-in-capability-aliases-still-the-default">ADR-115: Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-09-09).
+          <strong>Revisits <a href="048-primitive-identifier-type-aliases.html">ADR-048</a> and
+          <a href="085-identifier-type-aliases-revisited.html">ADR-085</a></strong> by adding the capability those records deferred,
+          without migrating anything. ADR-048&#39;s decision (every entity identity is a primitive named through a
+          per-module <code>global using {Entity}IdentifierType = ...</code> alias) stays in force, and ADR-085&#39;s priced
+          deferral of a workspace-wide migration stays in force. What changes is that the wrapper struct is now
+          a first-class thing the framework supports, rather than a shape a team would have to hand-roll at six
+          boundaries.</p>
+          <h2 id="context">Context</h2>
+          <p>ADR-048 chose primitive identifier aliases over wrapper structs. ADR-085 re-opened that choice on
+          2026-08-18, priced the migration in numbers (44 aliases, 43 of them <code>int</code>, 3,192 occurrences across
+          1,001 files), deferred again, and replaced the open-ended &quot;not now&quot; with three named revisit triggers:
+          a production defect traced to an identifier transposition, a greenfield fifth consumer, or a
+          cross-module identifier count that keeps climbing.</p>
+          <p><strong>None of the three has fired, and this record is not claiming otherwise.</strong> The trigger here is a
+          different one: the 2026-09-09 framework gap analysis of what a .NET application framework is expected
+          to ship. The strongly typed identifier is named in four separate &quot;modern .NET building blocks&quot; lists
+          and is present in five of the surveyed repositories, two of them through Vogen with an ADR of their
+          own. It is the only tactical-DDD building block MMCA.Common still lacks. That is a statement about
+          the framework&#39;s surface, not about the four repositories&#39; identifier model, and the two are answered
+          separately: the framework ships the capability, and the aliases stay the default.</p>
+          <p>This is exactly the posture <a href="104-smart-enums-as-opt-in-capability.html">ADR-104</a> records for
+          smart enumerations. A plain CLR enum is the default there; <code>Enumeration&lt;T&gt;</code> is complete, tested,
+          wired into JSON and EF Core, and adopted by nothing. That record&#39;s own argument applies verbatim
+          here: the default should be the cheap type, the expensive case still needs an answer, and a
+          capability that is ready is what stops the first team that needs it from arriving with a hand-rolled
+          variant, its own JSON shape and its own <code>HasConversion</code> lambda pair.</p>
+          <p>The framework&#39;s generic parameter already admits a wrapper. <code>BaseEntity&lt;TIdentifierType&gt;</code> constrains
+          its identifier only to <code>notnull</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:34-37</code>), and
+          <code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code> and <code>IBaseDTO&lt;TIdentifierType&gt;</code> do the
+          same (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:45</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IBaseDTO.cs:9-10</code>). A <code>readonly record struct</code>
+          satisfies <code>notnull</code>, so nothing in the entity, DTO or controller hierarchy had to change and no
+          shipped signature moved. What was missing was everything around the type: JSON, EF Core mapping,
+          MVC route and query binding, filtering, OpenAPI and object mapping.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>The framework ships strongly typed identifiers as an opt-in capability. The primitive aliases
+          remain the default identifier model, no existing entity, consumer or test migrates, and nothing in
+          the framework pushes a consumer toward a wrapper.</strong></p>
+          <ol>
+          <li><p><strong>The declaration is two lines, and the second one is a factory.</strong>
+          <code>IStronglyTypedId&lt;TSelf, TValue&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:60</code>) is
+          self-referencing (<code>TSelf : struct, IStronglyTypedId&lt;TSelf, TValue&gt;</code>, <code>:61-62</code>) and declares
+          exactly two members: a <code>TValue Value</code> getter (<code>:65</code>) and <code>static abstract TSelf From(TValue)</code>
+          (<code>:72</code>). A wrapper is therefore:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">readonly</span> <span class="hljs-keyword">record</span> <span class="hljs-keyword">struct</span> <span class="hljs-title">OrderId</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> Value</span>) : IStronglyTypedId&lt;OrderId, <span class="hljs-built_in">int</span>&gt;</span>
+{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> OrderId <span class="hljs-title">From</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> <span class="hljs-keyword">value</span></span>)</span> =&gt; <span class="hljs-keyword">new</span>(<span class="hljs-keyword">value</span>);
+}</code></pre>
+          <p>The positional record struct supplies <code>Value</code>, structural equality, <code>GetHashCode</code>, <code>ToString</code> and
+          <code>Deconstruct</code>; the interface supplies the rest.</p>
+          </li>
+          <li><p><strong><code>IParsable&lt;TSelf&gt;</code> comes for free, as an explicit default implementation.</strong> The interface
+          derives from <code>IParsable&lt;TSelf&gt;</code> (<code>:60</code>) and implements both legs by forwarding to the shared
+          helper (<code>:82-83</code>, <code>:94-98</code>). The one visible consequence is that those implementations are
+          EXPLICIT, because that is the only form a default implementation of an inherited static abstract
+          member can take: <code>OrderId.Parse(&quot;42&quot;, null)</code> does not compile against the wrapper, and a caller
+          parses through <code>StronglyTypedId.Parse&lt;OrderId, int&gt;(text, provider)</code> or from any generic context
+          constrained to <code>IParsable&lt;T&gt;</code>. This is documented on the interface (<code>:29-40</code>) and is not a defect;
+          every framework boundary reaches the implementation through the interface.</p>
+          </li>
+          <li><p><strong>Four primitives are supported end to end, and the parse path is built once per primitive.</strong>
+          <code>StronglyTypedId.TryParse&lt;TSelf, TValue&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedId.cs:63</code>) defaults a null
+          provider to <code>CultureInfo.InvariantCulture</code> (<code>:68</code>), because a route segment is never
+          culture-formatted. <code>StronglyTypedIdValueParser&lt;TValue&gt;</code> (<code>:173</code>) builds the parser once per closed
+          primitive in a static initializer (<code>:180</code>): <code>string</code> takes an identity path, since it is the one
+          supported primitive that does not implement <code>IParsable&lt;string&gt;</code> (<code>:188-191</code>), and everything else
+          binds a closed <code>IParsable&lt;T&gt;.TryParse</code> (<code>:193-200</code>). <code>int</code>, <code>long</code>, <code>Guid</code> and <code>string</code> are
+          covered; any other <code>IParsable</code> primitive parses too.</p>
+          </li>
+          <li><p><strong>JSON is the bare primitive, through a factory registered once.</strong>
+          <code>StronglyTypedIdJsonConverterFactory</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdJsonConverterFactory.cs:22</code>)
+          converts only a type that implements the contract for itself, and its nested converter serializes
+          <code>value.Value</code> and reads the primitive back through <code>From</code>. Dictionary keys are covered too, so
+          <code>Dictionary&lt;OrderId, T&gt;</code> serializes exactly like <code>Dictionary&lt;int, T&gt;</code> (<code>:53-70</code>). <code>AddAPI</code> adds
+          the factory to <code>JsonSerializerOptions.Converters</code> beside <code>EnumerationJsonConverterFactory</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:65</code>, rationale at
+          <code>:60-64</code>), for the same reason ADR-104 gives: an attribute would have to be repeated on every
+          wrapper a consumer declares.</p>
+          </li>
+          <li><p><strong>MVC route and query binding goes through a <code>TypeConverter</code>, not through <code>IParsable</code>.</strong> That is
+          the empirical finding this record exists to write down: minimal APIs bind through
+          <code>IParsable&lt;T&gt;</code>, but an MVC <code>[FromRoute]</code> or <code>[FromQuery]</code> scalar binds through
+          <code>TypeDescriptor.GetConverter</code>, so <code>GET /orders/42</code> does not bind without one.
+          <code>StronglyTypedIdTypeConverter&lt;TSelf, TValue&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdTypeConverter.cs:21</code>)
+          converts to and from both text and the primitive, and delegates its text leg to the same
+          <code>IParsable</code> implementation, so both routes parse identically.
+          <code>StronglyTypedIdTypeConverters.Register</code> / <code>.RegisterAll</code> (<code>:89</code>, <code>:108</code>) register it through
+          <code>TypeDescriptor.AddAttributes</code>, so no <code>[TypeConverter]</code> attribute is needed on a consumer&#39;s
+          wrapper.</p>
+          </li>
+          <li><p><strong>One call is the whole opt-in.</strong>
+          <code>services.AddStronglyTypedIds(typeof(OrderId).Assembly)</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:770</code>) scans the named
+          assemblies for wrappers, registers the <code>TypeConverter</code> for each, and registers a
+          <code>StronglyTypedIdRegistry</code> singleton
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:22</code>). A host
+          that never calls it keeps the aliases and sees no behavioural change anywhere.</p>
+          </li>
+          <li><p><strong>EF Core maps a wrapper as a PRE-CONVENTION type mapping, registered once on the base
+          context.</strong> <code>ApplicationDbContext.ConfigureConventions</code> resolves the registry with <code>GetService</code> and
+          applies it
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:333-335</code>);
+          <code>StronglyTypedIdModelConfiguration.Apply</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/StronglyTypedIdModelConfiguration.cs:29</code>)
+          declares <code>configurationBuilder.Properties(identifierType).HaveConversion(converterType, comparerType)</code>
+          for each. Because it is the ONE base context every engine context inherits, SQL Server,
+          PostgreSQL, SQLite and Cosmos all get the mapping with no engine branch, and it reaches every
+          property of that type: keys, cross-module scalar references and owned-type members alike.
+          Pre-convention rather than a model-finalizing convention is load-bearing: a converter attached at
+          finalization arrives after the provider&#39;s value-generation conventions have inspected the
+          property, and a wrapped <code>int</code> key would silently lose its store-generated strategy
+          (<code>StronglyTypedIdModelConfiguration.cs:13-19</code>).</p>
+          </li>
+          <li><p><strong>The column stays the primitive, so adoption is not a migration.</strong>
+          <code>StronglyTypedIdValueConverter&lt;TSelf, TValue&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/StronglyTypedIdValueConverter.cs:28</code>)
+          writes <code>Value</code> and reads through <code>From</code>; both legs go through a static helper rather than an
+          inline lambda body, because a static abstract interface member cannot be invoked inside an
+          expression tree (<code>:22-23</code>, <code>:40-42</code>). <code>NullableStronglyTypedIdValueConverter&lt;TSelf, TValue&gt;</code>
+          (<code>:56</code>) is the explicit optional-property form, and <code>StronglyTypedIdValueComparer&lt;TSelf&gt;</code> (<code>:80</code>)
+          gives snapshot and equality semantics through <code>EqualityComparer&lt;T&gt;.Default</code>, which resolves to the
+          record struct&#39;s compiler-generated <code>IEquatable&lt;T&gt;</code> rather than boxing.</p>
+          </li>
+          <li><p><strong>Filtering, sorting and lookup keep speaking primitives.</strong>
+          <code>StronglyTypedIdFilterStrategy&lt;TSelf, TValue&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/StronglyTypedIdFilterStrategy.cs:24</code>)
+          parses the primitive the client sends, wraps it, and compares wrapper to wrapper so EF&#39;s converter
+          turns both sides into the same column. It supports the equality family only (EQUALS, NOT EQUALS,
+          IN, IS EMPTY, IS NOT EMPTY, <code>:28-31</code>): a record struct declares <code>==</code> and <code>!=</code> and nothing else, so
+          there is no <code>&gt;</code> to build a range predicate from, and an ordering operator on a wrapped column is
+          refused by <code>ValidateFilters</code> as a 400 rather than silently widening the result set.
+          <code>QueryFilterService.ResolveStrategy</code> builds and memoizes the strategy on first use
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:396-407</code>),
+          so a consumer never calls <code>RegisterStrategy</code> per identifier. Sorting is untouched: an <code>ORDER BY</code>
+          over a converted column is the primitive&#39;s ordering
+          (<a href="034-generic-entity-query-layer.html">ADR-034</a> sort keys).</p>
+          </li>
+          <li><p><strong>OpenAPI documents a wrapper as its primitive, in two places.</strong>
+          <code>StronglyTypedIdSchemaTransformer</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/OpenApi/StronglyTypedIdSchemaTransformer.cs:24</code>)
+          rewrites the DTO schema, which the default generator would otherwise emit as an object with a
+          <code>value</code> member. <code>StronglyTypedIdParameterTransformer</code> (<code>:74</code>) does the same for route and query
+          parameters, which a schema transformer never sees: MVC&#39;s API explorer describes a
+          <code>TypeConverter</code>-bound parameter as a plain string. Both are registered by <code>AddCommonOpenApi</code>
+          across every versioned document
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:504-505</code>).</p>
+          </li>
+          <li><p><strong>Mapperly needs nothing in the normal case and one attribute in the other.</strong> A DTO implements
+          <code>IBaseDTO&lt;TIdentifierType&gt;</code> over the SAME identifier type its entity uses, so a wrapper maps to
+          itself as a plain assignment. For a contract that deliberately keeps primitives on the wire,
+          <code>StronglyTypedIdMappings&lt;TSelf, TValue&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdMappings.cs:31</code>) supplies
+          the four conversions (<code>:38</code>, <code>:43</code>, <code>:48</code>, <code>:53</code>) as plain public static methods, reached with
+          <code>[UseStaticMapper(typeof(StronglyTypedIdMappings&lt;OrderId, int&gt;))]</code>. They carry no Mapperly
+          attribute, so the Shared layer takes no dependency on <code>Riok.Mapperly.Abstractions</code>.</p>
+          </li>
+          <li><p><strong>A fitness rule holds the shape, and passes vacuously today.</strong>
+          <code>StronglyTypedIdsAreReadonlyRecordStructs</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.StronglyTypedIds.cs:34</code>)
+          flags a wrapper that is not a struct, is not <code>readonly</code>, is not a record, or declares instance
+          state beyond the wrapped value. It is exposed by <code>StronglyTypedIdTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/StronglyTypedIdTestsBase.cs:9</code>)
+          and subclassed in MMCA.Common&#39;s own architecture tests, where it is satisfied by having nothing
+          to check. It exists to hold the FIRST wrapper any repo declares to the shape the converters,
+          comparer and route binding are written against. The rule is deliberately separate from
+          <code>ValueObjectsAreImmutableSealedInShared</code>: an identifier is not a <code>ValueObject</code> derivative, it has
+          no validation to fail and no <code>Result</code>-returning <code>Create</code> factory, which is the same reasoning
+          ADR-104 records for <code>Enumeration&lt;T&gt;</code> sitting outside that rule.</p>
+          </li>
+          <li><p><strong>Adoption is zero and this record says so.</strong> No production type in MMCA.Common, MMCA.Store,
+          MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample implements <code>IStronglyTypedId&lt;,&gt;</code>. The only
+          implementations anywhere are the fixtures in six of the framework&#39;s own test files. The 44
+          aliases ADR-085 counted are untouched, and no consumer needs a version-bump behaviour change:
+          without a call to <code>AddStronglyTypedIds</code>, every framework site that reads the registry treats its
+          absence as &quot;no wrappers in use&quot;.</p>
+          </li>
+          <li><p><strong>The contract is pinned by 77 executed tests, not by adoption.</strong> Shared: 33 executed cases
+          across <code>StronglyTypedIdTests.cs</code>, <code>StronglyTypedIdSerializationTests.cs</code> and
+          <code>StronglyTypedIdTypeConverterTests.cs</code> (equality, the compile-time separation of two
+          same-primitive identifiers, parsing, JSON round trips including null, nesting, collections and
+          dictionary keys, and the <code>TypeDescriptor</code> registration). Infrastructure: 21 in
+          <code>StronglyTypedIdPersistenceTests.cs</code> (9 facts plus four theories over the three relational
+          engines), including per-engine model assertions for SQLite, SQL Server and PostgreSQL, a SQLite
+          round trip that inserts through a real database and reads a generated wrapped <code>int</code> key back, a
+          raw-column read proving the stored value is the primitive, and filter and sort translated to SQL.
+          Application: 13 across the filter strategy and a Mapperly test mapper that maps both ways in both
+          DTO shapes. API: 5 over a started in-memory host running the real <code>AddAPI</code> + <code>AddCommonOpenApi</code>
+          pipeline (route binding, query binding, the 400 for an unparseable segment, a JSON body, and the
+          OpenAPI document). Architecture: 5, being 4 fixture-driven checks that the rule flags a
+          non-record, a mutable record struct and a wrapper carrying extra state and says nothing about the
+          two compliant shapes, plus the vacuous run of the shared base over the framework&#39;s own
+          assemblies.</p>
+          </li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>The gap was the plumbing, not the type.</strong> A <code>readonly record struct</code> wrapping an <code>int</code> is four
+          lines any team can write. What stops teams is the six boundaries around it: EF mapping and value
+          generation, JSON, MVC binding, OpenAPI, filtering and object mapping. Shipping those once is the
+          whole value, and it is the part a hand-rolled variant gets subtly wrong.</li>
+          <li><strong>Recording an unadopted capability is cheaper than discovering it twice.</strong> ADR-104 made this call
+          for smart enumerations and <a href="037-field-level-encryption-at-rest.html">ADR-037</a> for the encryption
+          converter. The alternative, leaving the code in place with no record, reads as unfinished adoption
+          to the next reader.</li>
+          <li><strong>The aliases are still right for the four repos.</strong> ADR-085&#39;s arithmetic did not change: 3,192
+          occurrences across 1,001 files, no incident traced to a transposition, and a partial migration
+          worse than either endpoint. Nothing here proposes moving any of it.</li>
+          <li><strong>A greenfield consumer now has a first-class path.</strong> ADR-085&#39;s second trigger says a new
+          application on the framework pays none of the migration cost and is the right place to build
+          wrappers first. That path now exists as one DI call rather than as a research project, which is
+          what would have made the trigger expensive to act on.</li>
+          <li><strong>Pre-convention beats a finalizing convention, and the difference is invisible until it bites.</strong>
+          A converter attached at model finalization leaves a wrapped <code>int</code> key with no store-generated
+          strategy, which surfaces as rows inserted with a zero key rather than as an error. Declaring the
+          mapping before EF picks the strategy is what makes a wrapped key behave exactly like the primitive
+          did, and the per-engine tests assert it explicitly.</li>
+          <li><strong>The wire and the schema are unchanged, which is what makes the switch reversible.</strong> JSON is the
+          bare primitive and the column is the primitive, so a property can become a wrapper and go back
+          without a contract change or a migration, exactly as ADR-104 argues for the smart-enum column.</li>
+          </ul>
+          <h3 id="alternatives-considered">Alternatives considered</h3>
+          <ul>
+          <li><strong>Vogen (or another source generator).</strong> Two of the surveyed repositories use it, and it would have
+          removed the <code>From</code> line from the declaration and generated the converters. Declined for two
+          reasons. First, dependency placement: a generator package would sit in <code>MMCA.Common.Shared</code> and
+          therefore in the transitive graph of every consumer&#39;s Domain layer, which is the layer this
+          workspace keeps most deliberately dependency-free. Second, the ergonomic gap is one line: a
+          <code>readonly record struct</code> plus a <code>static abstract</code> factory on the interface gives the same call-site
+          experience, and the framework still has to own the EF, JSON, MVC, OpenAPI and Mapperly wiring,
+          because those are decisions about THIS framework&#39;s boundaries rather than about the wrapper type.
+          Choosing a generator would have added a dependency and kept all of the work.</li>
+          <li><strong>A model-finalizing EF convention instead of a pre-convention type mapping.</strong> It would have
+          discovered wrappers from the model with no registry and no <code>AddStronglyTypedIds</code> call, which is
+          more convenient. Declined because it runs after the provider&#39;s value-generation conventions and
+          silently costs a wrapped <code>int</code> key its store-generated strategy.</li>
+          <li><strong>Making a wrapper a <code>ValueObject</code> derivative.</strong> Declined for the reason ADR-104 gives for
+          <code>Enumeration&lt;T&gt;</code>: the value-object fitness rule requires a sealed record with a <code>Result</code>-returning
+          <code>Create</code> factory, and an identifier has nothing to validate. A wrapper gets its own rule instead.</li>
+          <li><strong>Migrating the aliases.</strong> Out of scope by construction. ADR-085 priced it and deferred it, and
+          none of its three triggers has fired.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Two identifier styles can now coexist in one codebase, and nothing prevents that.</strong> A repo can
+          wrap some identifiers and leave others primitive, and the reader cannot tell from the absence of a
+          compiler error whether a call site is protected. ADR-085 named that as the reason the migration is
+          all-or-nothing; this record does not fix it, it only makes the wrapped half possible. The rule in
+          Decision point 13 (adopt nothing) is prose, not a fitness function.</li>
+          <li><strong>The ADR-085 transposition risk is only closed for adopters.</strong> <code>CheckIn</code>&#39;s five consecutive
+          identifier parameters
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:57-64</code>) are
+          still five <code>int</code>s. Shipping the capability does not retire the risk; it makes retiring it a choice
+          someone can now make cheaply for one aggregate at a time.</li>
+          <li><strong>A capability nobody uses is a capability nobody has stress-tested.</strong> 77 tests against fixtures
+          are not a production module with real migrations, a real wire history and a real query surface.
+          The same honesty ADR-104 applies to <code>Enumeration&lt;T&gt;</code> applies here.</li>
+          <li><strong>The <code>IParsable</code> implementations are explicit, so <code>OrderId.Parse(...)</code> does not compile.</strong> That is
+          the price of the two-line declaration: a default implementation of an inherited static abstract
+          member has no non-explicit form. A wrapper that wants the pair publicly adds two forwarding lines.</li>
+          <li><strong>Ordering filters are unsupported on a wrapped column.</strong> A record struct has no <code>&gt;</code>, so GREATER
+          THAN and BETWEEN are refused with a 400 where the same column as a primitive accepted them. That
+          is a deliberate narrowing, and it is a behaviour difference a client would notice if a column
+          changed type.</li>
+          <li><strong>Public API surface with no consumer.</strong> The 55 declarations these types add across Shared,
+          Infrastructure, API and Testing.Architecture are now in the unshipped baselines and become frozen
+          at the next release under <a href="015-architecture-fitness-functions.html">ADR-015</a>&#39;s RS0016/RS0017 gate.
+          Removing any of it later is a breaking change to the package surface.</li>
+          <li><strong>EF discovery needs the type list up front.</strong> The mapping has to be declared pre-convention, and
+          at <code>ConfigureConventions</code> time no entity type exists yet, so the framework cannot discover wrappers
+          from the model. <code>AddStronglyTypedIds</code> therefore takes assemblies: a host that declares a wrapper in
+          an assembly it forgets to name gets EF&#39;s &quot;the database provider does not support this type&quot; at
+          model build, which is loud but not self-explanatory.</li>
+          <li><strong><code>TypeDescriptor</code> registration is process-global.</strong> <code>StronglyTypedIdTypeConverters.Register</code> calls
+          <code>TypeDescriptor.AddAttributes</code>, which is not scoped to a host. In a process running two hosts (an
+          in-memory test server pair) the registration is shared. It is idempotent, so the practical effect
+          is nil, but it is not per-container state.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="048-primitive-identifier-type-aliases.html">ADR-048</a> (the primitive alias decision this record leaves
+          in force),
+          <a href="085-identifier-type-aliases-revisited.html">ADR-085</a> (the priced deferral and its three revisit
+          triggers, none of which is the trigger here),
+          <a href="104-smart-enums-as-opt-in-capability.html">ADR-104</a> (the posture this record copies exactly:
+          the framework ships the capability, the default does not move, and adoption is zero by design),
+          <a href="006-database-per-service.html">ADR-006</a> (the cross-module scalar reference that concentrates the
+          transposition risk a wrapper closes),
+          <a href="013-result-pattern.html">ADR-013</a> (the <code>Result</code> posture the parse helpers deliberately do NOT follow,
+          because <code>IParsable&lt;T&gt;</code> is a framework contract that throws),
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the public-API baseline that will freeze this
+          surface, and the fitness-function library the new rule joins),
+          <a href="034-generic-entity-query-layer.html">ADR-034</a> (the sort, filter and lookup key contract a wrapped
+          column has to keep speaking),
+          <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a> (the fourth engine the one base-context
+          registration reaches without an engine branch).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/115-strongly-typed-identifiers-opt-in.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -14,6 +14,10 @@ machinery is load-bearing and already in production. Revised 2026-08-29 (v1.170.
 engine the host configures **nowhere** is served from the engine it does configure, so the
 "engines never collapse into each other" rule in Decision item 4 now has one bounded exception. See
 the Revision at the end.
+Revised 2026-09-09: a fourth engine, PostgreSQL, joins the set
+([ADR-113](113-postgresql-as-a-first-class-engine.md)). It takes the same switch arm as SQL Server in
+the engine-aware configuration base, so the `[UseDataSource]` axis grows by one member and no
+Decision item below changes.
 
 ## Context
 ADR-006 (database-per-service) splits storage along the **Name** axis: several physically separate

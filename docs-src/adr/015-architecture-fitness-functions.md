@@ -20,6 +20,10 @@ Revised 2026-09-03: the one accepted namespace cycle changed shape (its middle n
 the dissolved `Settings` folder), the shared rule library and MMCA.Common's own subclasses moved into
 feature folders, and the unshipped-baseline declaration figure is re-counted. See
 Revision (2026-09-03) at the end.
+Revised 2026-09-09: [ADR-115](115-strongly-typed-identifiers-opt-in.md) adds a rule family
+(`StronglyTypedIdsAreReadonlyRecordStructs`, exposed as `StronglyTypedIdTestsBase` and vacuously
+satisfied in every repo today), and the counts `FACTS.md` owns now read **127 test methods across 48
+abstract `*TestsBase` classes**, of which MMCA.Common's own build executes **232**.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-

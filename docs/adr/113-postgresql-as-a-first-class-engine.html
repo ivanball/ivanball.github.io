@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-113: PostgreSQL as a First-Class Engine · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-09). Extends ADR-006 (one sealed context class per engine) and ADR-018 (engine as a routing decision) with a fourth engine.">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-113: PostgreSQL as a First-Class Engine">
+  <meta property="og:description" content="Accepted (2026-09-09). Extends ADR-006 (one sealed context class per engine) and ADR-018 (engine as a routing decision) with a fourth engine.">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-113: PostgreSQL as a First-Class Engine">
+  <meta name="twitter:description" content="Accepted (2026-09-09). Extends ADR-006 (one sealed context class per engine) and ADR-018 (engine as a routing decision) with a fourth engine.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"113 · PostgreSQL as a First-Class Engine","item":"https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">113 · PostgreSQL as a First-Class Engine</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 117 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html" aria-current="page">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-113-postgresql-as-a-first-class-engine">ADR-113: PostgreSQL as a First-Class Engine</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-09-09). Extends <a href="006-database-per-service.html">ADR-006</a> (one sealed context class per
+          engine) and <a href="018-polyglot-persistence.html">ADR-018</a> (engine as a routing decision) with a fourth
+          engine.</p>
+          <h2 id="context">Context</h2>
+          <p>The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
+          and SQLite. Every one of them is reached the same way, because <a href="006-database-per-service.html">ADR-006</a>
+          fixed the shape: <strong>one sealed <code>DbContext</code> class per engine, one instance per physical database</strong>, over
+          the abstract <code>ApplicationDbContext</code>. <a href="018-polyglot-persistence.html">ADR-018</a> then made polyglot
+          persistence a routing decision rather than a rewrite: an entity declares its engine on its
+          configuration base class, and <code>DataSourceResolver</code> / <code>EntityDataSourceRegistry</code> decide which physical
+          database it lands in.</p>
+          <p>PostgreSQL was absent from that list, and its absence is not a technical gap so much as an
+          evaluation one. In the 2026-09-09 framework gap analysis, a survey of ten &quot;top .NET open-source
+          backend&quot; lists used to position this framework, PostgreSQL is named in six and is the default engine
+          in most of the repositories studied. A reader who runs on PostgreSQL, sees SQL Server / Cosmos /
+          SQLite and stops reading has never reached the architecture the framework is actually about. The
+          engine list is the first filter, and the framework was failing it.</p>
+          <p>The one-context-per-engine design is what makes closing that gap contained rather than invasive. A
+          new engine is not a new abstraction: it is a configuration base, a sealed context, a design-time
+          factory, a branch in each place the engine set is enumerated, an AppHost extension and a health
+          check. Nothing in Domain, Application, or any consumer&#39;s handler code has an opinion about it.</p>
+          <p>Three things about PostgreSQL are genuinely different from the engines already supported, and each
+          one produces a runtime failure rather than a compile error:</p>
+          <ol>
+          <li><strong>Identifier quoting inside index predicates.</strong> The framework&#39;s outbox declares three partial
+          indexes whose filters were written as SQL Server literals (<code>[ProcessedOn] IS NULL</code>). SQLite
+          accepts bracketed identifiers for SQL Server compatibility; PostgreSQL rejects them outright, at
+          <code>CREATE INDEX</code>.</li>
+          <li><strong>Boolean comparison.</strong> The soft-delete predicate is <code>IsDeleted = 0</code>. On PostgreSQL the column is
+          a real <code>boolean</code>, and comparing one with an integer is a type error, so the partial unique index
+          that lets a soft-deleted row free its unique slot never gets created at all.</li>
+          <li><strong>Timestamp kinds.</strong> Npgsql maps <code>DateTime</code> to <code>timestamp with time zone</code> and refuses to write a
+          value whose <code>Kind</code> is not <code>Utc</code>. The framework&#39;s own stamps are always UTC (the audit interceptor
+          uses <code>TimeProvider.GetUtcNow().UtcDateTime</code>), but a consumer&#39;s own property, a value deserialized
+          from JSON, or a value read from a legacy row can arrive <code>Unspecified</code>, and that single value
+          throws at save time.</li>
+          </ol>
+          <p>Every one of those builds a perfectly valid EF model. A model-level test cannot see any of them.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>PostgreSQL is added as a fourth first-class engine, mirroring the SQL Server footprint one for one,
+          and differing from it only where the server forces a difference.</strong></p>
+          <ol>
+          <li><p><strong>The engine enum grows by one member, appended.</strong> <code>DataSource.PostgreSQL</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:18-22</code>)
+          is declared last rather than alphabetically. The three existing members are shipped public API
+          with fixed ordinal values (<code>CosmosDB = 0</code>, <code>Sqlite = 1</code>, <code>SQLServer = 2</code>), and renumbering them
+          would break every consumer that persisted or serialized one. The addition is purely additive:
+          no existing public signature changes.</p>
+          </li>
+          <li><p><strong>One sealed context, built like the SQL Server one.</strong> <code>PostgreSQLDbContext</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:23</code>)
+          calls <code>UseNpgsql</code> with the resolved connection string, the per-source migrations assembly, the
+          configured command timeout and the same retry-on-failure posture <code>SQLServerDbContext</code> uses
+          (<code>PostgreSQLDbContext.cs:52-72</code>), and suppresses <code>PendingModelChangesWarning</code> for the same
+          microservice-extraction reason. <code>PhysicalDbContextFactory</code> gains one switch arm
+          (<code>.../DbContexts/Factory/PhysicalDbContextFactory.cs:47</code>) and
+          <code>ApplyConfigurationsForEntitiesInContext</code> one more
+          (<code>.../DbContexts/ApplicationDbContext.cs:831</code>).</p>
+          </li>
+          <li><p><strong>The mapping is the SQL Server mapping, not PostgreSQL house style.</strong>
+          <code>EntityTypeConfigurationPostgreSQL&lt;TEntity, TIdentifierType&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfigurationPostgreSQL.cs:21-22</code>)
+          is a shim carrying <code>[UseDataSource(DataSource.PostgreSQL)]</code>, exactly like its SQL Server and
+          SQLite peers, and the engine-aware base handles PostgreSQL in the SAME switch arm as SQL Server:
+          a table per entity inside the module schema, PascalCase identifiers, an identity key. Moving an
+          entity between the two engines is a base-class change with no configuration-body edits, which is
+          the ADR-018 promise. <strong>No <code>snake_case</code> naming convention is imposed.</strong> A naming-convention plugin
+          is a host-level choice with real migration consequences, and imposing one would make the two
+          engines&#39; schemas diverge for a reason that has nothing to do with either engine&#39;s capabilities.</p>
+          </li>
+          <li><p><strong>The two predicate differences are handled at their single source.</strong> <code>SoftDeleteFilterSql.Build</code>
+          answers <code>&quot;IsDeleted&quot; = false</code> for PostgreSQL and keeps <code>[IsDeleted] = 0</code> for SQL Server
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/SoftDeleteFilterSql.cs:34-47</code>),
+          so the automatic convention and the opt-in <code>HasSoftDeleteFilter</code> extension can never disagree.
+          The outbox filters are built through one <code>QuoteColumn</code> helper
+          (<code>.../DbContexts/ApplicationDbContext.cs:548</code>) that returns the bracketed form for every
+          engine except PostgreSQL, so the literals SQL Server and SQLite have always produced are
+          byte-identical. <code>IncludeColumns</code> (<code>.../DbContexts/ApplicationDbContext.cs:574</code>) picks the
+          provider&#39;s own <code>IncludeProperties</code> overload for the same reason.</p>
+          </li>
+          <li><p><strong>Timestamps are normalized in the model, never with the process-wide switch.</strong>
+          <code>PostgreSQLDbContext.ConfigureConventions</code> maps every <code>DateTime</code> (and, through the same entry,
+          every <code>DateTime?</code>) to <code>timestamp with time zone</code> through <code>UtcDateTimeConverter</code>
+          (<code>PostgreSQLDbContext.cs:95-105</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/UtcDateTimeConverter.cs:25-40</code>).
+          The converter treats <code>Unspecified</code> as already-UTC (the framework&#39;s own convention) and genuinely
+          converts a <code>Local</code> value rather than relabelling it. <strong><code>Npgsql.EnableLegacyTimestampBehavior</code> is
+          deliberately NOT used</strong>: it is an <code>AppContext</code> switch that changes the mapping for every Npgsql
+          connection in the process, including ones the framework does not own, and it stores timestamps
+          without a time zone, which loses the guarantee that a stored audit stamp means UTC.</p>
+          </li>
+          <li><p><strong>A PostgreSQL source migrates only when it names a migrations assembly.</strong>
+          <code>PhysicalDataSource.UsesMigrations</code> answers true for PostgreSQL only when
+          <code>PostgreSQLMigrationsAssembly</code> is set (<code>.../DataSources/PhysicalDataSource.cs:63-70</code>), which is
+          the SQLite rule rather than the SQL Server one. SQL Server always migrates because hosts have
+          depended on that since the first release; PostgreSQL ships with no such host, so a source with
+          nothing to apply is created outright by <code>DatabaseInitializationExtensions</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:70-71</code>)
+          instead of being migrated into an empty schema. <code>DesignTimeDbContextHelper.CreatePostgreSQL</code>
+          (<code>.../DbContexts/Design/DesignTimeDbContextHelper.cs:74</code>) scaffolds the migrations when a host
+          wants them.</p>
+          </li>
+          <li><p><strong>Configuration keys mirror SQL Server&#39;s, per engine.</strong> <code>PostgreSQLConnectionString</code> and
+          <code>PostgreSQLMigrationsAssembly</code> exist on both the top-level <code>ConnectionStrings</code> section and each
+          named <code>DataSources</code> entry, and the resolver reads each engine&#39;s OWN top-level migrations assembly,
+          so a mixed-engine host can never scaffold its PostgreSQL Default source from the SQL Server
+          snapshot. Per-tenant routing takes <code>PostgreSQLConnectionString</code> too. In the resolver&#39;s substitute
+          ordering (which serves the framework&#39;s own SQL-Server-defaulted tables on a single-engine host)
+          PostgreSQL sits between SQL Server and SQLite: a host that configures a server engine means it to
+          carry the outbox, inbox, scheduler and audit-trail tables.</p>
+          </li>
+          <li><p><strong>Readiness and orchestration are peers, not extras.</strong>
+          <code>AddInfrastructureHealthChecks()</code> registers an <code>AddNpgSql</code> check per declared PostgreSQL database
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:580</code>), named <code>postgresql</code> for the
+          first one, and <code>WithPostgreSQLDataSource(database, logicalName)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:513</code>) wires a service
+          project to its own <code>PostgresDatabaseResource</code> with the same reference / <code>WaitFor</code> / environment
+          shape <code>WithSQLServerDataSource</code> uses. <strong>No Aspire client integration is added</strong>
+          (<code>Aspire.Npgsql.EntityFrameworkCore.PostgreSQL</code>), because the SQL Server path does not use one
+          either: the framework owns its own context construction, and taking an Aspire client package for
+          one engine and not the others would make the two paths asymmetric for no gain.</p>
+          </li>
+          <li><p><strong>The engine is proved against a real server, not a model.</strong>
+          <code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests</code> is a Testcontainers project outside
+          <code>MMCA.Common.slnx</code> (the posture <code>Tests/Core/MMCA.Common.Infrastructure.Redis.Tests</code> established:
+          Docker-gated, own CI job, kept out of the fast solution-wide unit loop), run by the
+          <code>postgresql-integration</code> CI job (<code>MMCA.Common/.github/workflows/ci.yml:847</code>). It creates the whole
+          schema, round-trips an auditable entity&#39;s UTC audit stamps, proves a soft-deleted row is hidden AND
+          frees its unique slot, and writes and drains outbox rows for both a local domain event and an
+          integration event. The three failures listed in the Context section are each caught by one of
+          those, and by nothing in the unit tier.</p>
+          </li>
+          </ol>
+          <h3 id="rollout-the-helpdesk-canary-and-the-template-axis">Rollout: the Helpdesk canary and the template axis</h3>
+          <p>Both are follow-ups, deliberately NOT in the PR that introduces the engine: a framework capability
+          lands in a release, and a consumer adopts it after that release, which is the same order every other
+          framework change has taken.</p>
+          <ol>
+          <li><strong>MMCA.Helpdesk canary (one PR after the release).</strong> Helpdesk is the runnable reference app and
+          the CI consumer canary, and it already builds against framework source through its checked-in
+          <code>local.props</code>. A <code>--database postgresql</code> shape of it exercises the whole path end to end: entity
+          configurations on <code>EntityTypeConfigurationPostgreSQL</code>, a
+          <code>MMCA.Helpdesk.Migrations.PostgreSQL.Tickets</code> project scaffolded through
+          <code>DesignTimeDbContextHelper.CreatePostgreSQL</code>, and the AppHost using
+          <code>WithPostgreSQLDataSource</code>. The <code>consumer-source-build</code> CI job&#39;s SQL half (start a server, apply
+          real migrations, assert <code>__EFMigrationsHistory</code> and the framework&#39;s own <code>dbo.OutboxMessages</code>
+          table exist) is the shape to mirror for it.</li>
+          <li><strong>Template axis.</strong> <code>MMCA.Helpdesk/.template.config/template.json</code> already carries a <code>database</code>
+          choice parameter with <code>sqlserver</code> and <code>sqlite</code> and two derived symbols, <code>engineName</code>
+          (<code>SqlServer</code> / <code>Sqlite</code>) and <code>engineNameUpper</code> (<code>SQLServer</code> / <code>Sqlite</code>), that rename the
+          migrations project, the provider package ids, the design-time helper call, the context class, the
+          configuration base and the connection-string settings. The proposal is a third choice,
+          <code>--database postgresql</code>, whose derived values are <code>PostgreSQL</code> for BOTH symbols: the framework
+          spells this engine the same way in both positions, which is the one place the new choice is
+          simpler than the existing two. Cutting it is a template re-pack (<code>templates-vX.Y.Z</code>), so it rides
+          the release after the canary proves the shape.</li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <p>The shape follows from the alternatives that were weighed and declined:</p>
+          <ul>
+          <li><strong>A <code>snake_case</code> naming convention by default.</strong> Rejected. It is the PostgreSQL community norm, but
+          it would make the same entity produce two different schemas depending on engine, break the
+          &quot;change the base class and nothing else&quot; property this framework sells, and force a consumer
+          migrating between engines into a full rename migration. A host that wants it adds a naming plugin;
+          the framework does not decide it.</li>
+          <li><strong><code>Npgsql.EnableLegacyTimestampBehavior = true</code>.</strong> Rejected: a process-wide <code>AppContext</code> switch that
+          reaches connections the framework does not own, and it stores <code>timestamp without time zone</code>, which
+          gives up the guarantee that a stored stamp means UTC. A model-scoped converter has the same effect
+          with none of the blast radius.</li>
+          <li><strong><code>xmin</code> as the concurrency token.</strong> Rejected for now. Npgsql&#39;s <code>UseXminAsConcurrencyToken()</code> is the
+          native answer, but the framework&#39;s <code>RowVersion</code> is a declared <code>byte[]</code> property on
+          <code>AuditableBaseEntity</code>, and mixing a shadow system column with it would make PostgreSQL the one
+          engine whose entity shape differs. PostgreSQL takes the same application-managed concurrency token
+          SQLite already uses (<a href="035-optimistic-concurrency.html">ADR-035</a>).</li>
+          <li><strong>A shared <code>RelationalDbContext</code> base for SQL Server and PostgreSQL.</strong> Rejected:
+          <a href="006-database-per-service.html">ADR-006</a> is explicit that the context class is per ENGINE, and the two
+          contexts differ in provider call, retry API and conventions. A shared base would save a dozen lines
+          and add an inheritance level the extraction story has to reason about.</li>
+          <li><strong>An Aspire client integration (<code>Aspire.Npgsql.EntityFrameworkCore.PostgreSQL</code>).</strong> Rejected for
+          symmetry: the SQL Server path takes no equivalent package, and the framework constructs its own
+          contexts per physical source, which is precisely what the Aspire client integration would try to
+          own.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Every consumer&#39;s package graph gains <code>Npgsql.EntityFrameworkCore.PostgreSQL</code>.</strong> It is referenced
+          unconditionally from <code>MMCA.Common.Infrastructure</code>, exactly as the Cosmos, SQLite and SQL Server
+          providers are: a host that configures no PostgreSQL connection string never builds the context, so
+          the cost is one entry in a lock file. <code>AspNetCore.HealthChecks.NpgSql</code> and a direct <code>Npgsql</code> pin
+          land on <code>MMCA.Common.Aspire</code> for the readiness check, and <code>Aspire.Hosting.PostgreSQL</code> on
+          <code>MMCA.Common.Aspire.Hosting</code> for the resource type.</li>
+          <li><strong>Npgsql versions on its own cadence.</strong> Its package tracks the EF Core MAJOR (10.x) rather than the
+          exact patch the Microsoft-owned providers share, so the dependency sweep must not expect one
+          version across all four providers.</li>
+          <li><strong>The engine set is now enumerated in more places.</strong> Every switch over <code>DataSource</code> that previously
+          listed three members lists four, and IDE0072 makes a missed one a build error rather than a silent
+          default. That is the containment the one-context-per-engine design buys: the compiler names the
+          sites a fifth engine would have to touch.</li>
+          <li><strong>A namespace-cycle constraint surfaced.</strong> Passing the engine into <code>ConfigureScheduler</code>&#39;s model
+          lambda by reading it off the context made that lambda capture <code>this</code>, which the compiler emits as
+          a method ON <code>ApplicationDbContext</code> whose <code>EntityTypeBuilder&lt;ScheduledJobEntry&gt;</code> parameter reflects
+          as a <code>Persistence -&gt; Scheduling</code> reference and widens the one accepted namespace cycle. The engine
+          is read into a local before the lambda instead. The fitness rule
+          (<a href="015-architecture-fitness-functions.html">ADR-015</a>) caught it; the note is recorded so the next
+          engine does not rediscover it.</li>
+          <li><strong>PostgreSQL is not yet exercised by a consumer.</strong> The framework&#39;s own tier proves the provider;
+          no shipped application runs on it. The Helpdesk canary above closes that.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="006-database-per-service.html">ADR-006</a> (one sealed context per engine, one instance per database),
+          <a href="018-polyglot-persistence.html">ADR-018</a> (the engine axis this record adds a member to),
+          <a href="035-optimistic-concurrency.html">ADR-035</a> (the application-managed <code>RowVersion</code> token PostgreSQL takes
+          instead of <code>xmin</code>),
+          <a href="095-soft-delete-unique-indexes.html">ADR-095</a> (the partial unique index whose predicate the boolean
+          comparison broke),
+          <a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a> (the AppHost resource helper this
+          engine gains),
+          <a href="114-internal-commands-durable-job-queue.html">ADR-114</a> (the job-queue table that reuses this record&#39;s
+          <code>QuoteColumn</code> / <code>IncludeColumns</code> helpers),
+          <a href="115-strongly-typed-identifiers-opt-in.html">ADR-115</a> (the one base-context registration that reaches
+          this fourth engine with no engine branch).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/113-postgresql-as-a-first-class-engine.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -10,6 +10,11 @@ shape of the deferral. ADR-048 left the wrapper-struct alternative "considered a
 no condition attached; this record measures what the deferral actually costs today, states the
 migration price in numbers, and replaces an open-ended "not now" with named triggers that would
 re-open it.
+**Revisited by
+[ADR-115](115-strongly-typed-identifiers-opt-in.md) (2026-09-09)**: none of the three triggers has
+fired and this deferral stands. What changed is that the wrapper struct is now a first-class
+framework capability, so acting on the greenfield trigger costs one DI call rather than a research
+project.
 
 ## Context
 [ADR-048](048-primitive-identifier-type-aliases.md) decided that every entity identity is a primitive

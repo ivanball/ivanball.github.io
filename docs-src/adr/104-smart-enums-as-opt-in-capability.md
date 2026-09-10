@@ -2,6 +2,9 @@
 
 ## Status
 Accepted (2026-08-31).
+Revised 2026-09-09: [ADR-115](115-strongly-typed-identifiers-opt-in.md) copies this record's posture verbatim for
+strongly typed identifiers: shipped, tested, wired into JSON, EF Core, MVC binding and OpenAPI, and
+adopted by nothing, with the cheap default left exactly where it is.
 
 ## Context
 A bounded set of named values shows up everywhere in this workspace: the state that triggered a

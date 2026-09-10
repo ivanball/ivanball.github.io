@@ -16,6 +16,10 @@ at startup; and the `OutboxMessages` table stays mapped either way, so the flag 
 Everything below describes the outbox a host that runs it gets, unchanged.
 Revised 2026-09-07 (shared broker and cache resources are namespaced per application by default,
 so an unset `MessageBus:EndpointPrefix` now yields prefixed queue names).
+**Extended by [ADR-114](114-internal-commands-durable-job-queue.md)** (2026-09-09): a second
+per-source table, `InternalCommands`, borrows this record's claim-lease, jittered-backoff and
+dead-letter idiom to carry instructions rather than events. The outbox itself is unchanged, and the
+two processors share an idiom rather than an implementation.
 ## Context
 Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:
 1. In-process dispatch fails (e.g., handler throws): the event is lost if not persisted.

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 112 ADRs</summary>
+        <summary>All 117 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -212,6 +212,11 @@
         <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
         <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
         <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
           </ol>
         </nav>
       </details>
@@ -224,7 +229,10 @@
           Clarified 2026-06-27: the single context class became <strong>one sealed context class per engine</strong> when
           ADR-018 added the orthogonal engine axis (the <code>Name</code>/database axis here is unchanged).
           Updated 2026-09-03: the legacy <code>AtlDevCon</code> archive database no longer exists (dropped 2026-09-02);
-          rollback now restores from a bacpac blob.</p>
+          rollback now restores from a bacpac blob.
+          Revised 2026-09-09: PostgreSQL is a fourth engine
+          (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>), so the per-engine context set is
+          SQL Server / Cosmos / SQLite / PostgreSQL; the one-instance-per-database rule below is unchanged.</p>
           <h2 id="context">Context</h2>
           <p>When the modules were first extracted into independently-deployable services, all services in an
           app still pointed at a <strong>single shared SQL database</strong> with a single <code>OutboxMessages</code> table. That

@@ -6,6 +6,9 @@ Clarified 2026-06-27: the single context class became **one sealed context class
 ADR-018 added the orthogonal engine axis (the `Name`/database axis here is unchanged).
 Updated 2026-09-03: the legacy `AtlDevCon` archive database no longer exists (dropped 2026-09-02);
 rollback now restores from a bacpac blob.
+Revised 2026-09-09: PostgreSQL is a fourth engine
+([ADR-113](113-postgresql-as-a-first-class-engine.md)), so the per-engine context set is
+SQL Server / Cosmos / SQLite / PostgreSQL; the one-instance-per-database rule below is unchanged.
 
 ## Context
 When the modules were first extracted into independently-deployable services, all services in an
