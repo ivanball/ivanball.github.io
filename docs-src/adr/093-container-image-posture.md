@@ -246,8 +246,13 @@ because it has no lock file to check against**: Store's Blazor host and its WebA
 set `<RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>`
 (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/MMCA.Store.UI.Web.csproj:5`,
 `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/MMCA.Store.UI.Web.Client.csproj:8`), and ADC's
-UI image carries the same opt-out. Passing `--locked-mode` there would fail every build rather than
-gate anything, so the flag's absence is the correct configuration and not an unclosed hole.
+pair carries the same opt-out
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/MMCA.ADC.UI.Web.csproj:3`,
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/MMCA.ADC.UI.Web.Client.csproj:8`, with the reason
+stated in the Dockerfile itself at
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile:37`). Passing `--locked-mode` there would fail
+every build rather than gate anything, so the flag's absence is the correct configuration and not an
+unclosed hole.
 
 **The publish restore stays unlocked in every image, in both repos.** ReadyToRun publishes to a
 RID-specific path, which pulls a RID graph the committed lock does not describe, and locked mode

@@ -516,8 +516,13 @@
           set <code>&lt;RestorePackagesWithLockFile&gt;false&lt;/RestorePackagesWithLockFile&gt;</code>
           (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/MMCA.Store.UI.Web.csproj:5</code>,
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/MMCA.Store.UI.Web.Client.csproj:8</code>), and ADC&#39;s
-          UI image carries the same opt-out. Passing <code>--locked-mode</code> there would fail every build rather than
-          gate anything, so the flag&#39;s absence is the correct configuration and not an unclosed hole.</p>
+          pair carries the same opt-out
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/MMCA.ADC.UI.Web.csproj:3</code>,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/MMCA.ADC.UI.Web.Client.csproj:8</code>, with the reason
+          stated in the Dockerfile itself at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile:37</code>). Passing <code>--locked-mode</code> there would fail
+          every build rather than gate anything, so the flag&#39;s absence is the correct configuration and not an
+          unclosed hole.</p>
           <p><strong>The publish restore stays unlocked in every image, in both repos.</strong> ReadyToRun publishes to a
           RID-specific path, which pulls a RID graph the committed lock does not describe, and locked mode
           answers that with NU1004 regardless of whether anything actually drifted. Locking the build restore
