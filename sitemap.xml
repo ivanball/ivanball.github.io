@@ -132,7 +132,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/019-rate-limiting.html</loc>
-    <lastmod>2026-09-07</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -152,7 +152,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/023-security-response-headers.html</loc>
-    <lastmod>2026-09-07</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -202,7 +202,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -237,7 +237,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -327,7 +327,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -342,7 +342,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/061-runtime-secret-management.html</loc>
-    <lastmod>2026-09-07</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -382,7 +382,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/069-shared-data-protection-key-ring.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -437,7 +437,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/080-deploy-rollout-revision-rollback.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -477,7 +477,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html</loc>
-    <lastmod>2026-09-07</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -502,7 +502,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/093-container-image-posture.html</loc>
-    <lastmod>2026-09-07</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -527,7 +527,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -827,7 +827,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/adc-ArchitectureScorecard.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -852,7 +852,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/store-ArchitectureScorecard.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

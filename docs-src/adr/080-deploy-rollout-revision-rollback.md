@@ -11,10 +11,12 @@ refreshed).
 
 ## Context
 Both production apps deploy to Azure Container Apps from a single `deploy.yml` job on push to `main`,
-and every gate runs **before** anything rolls out: the `deploy` job waits on the same ten needs in
-both repos (`changes`, `supply-chain`, `cost-guard`, the three recency gates, the chromium
-`e2e-gate`, `backend-test-gate`, `foundation` and `build-images`:
-`MMCA.Store/.github/workflows/deploy.yml:999`, `MMCA.ADC/.github/workflows/deploy.yml:1054`), and the
+and every gate runs **before** anything rolls out. The `deploy` job waits on eleven needs in Store
+(`MMCA.Store/.github/workflows/deploy.yml:1200`) and twelve in ADC
+(`MMCA.ADC/.github/workflows/deploy.yml:1305`): the shared eleven are `changes`, `supply-chain`,
+`cost-guard`, the four recency gates (`dr-freshness`, `load-freshness`, `cross-service-freshness`,
+`cross-browser-freshness`), the chromium `e2e-gate`, `backend-test-gate`, `foundation` and
+`build-images`, and ADC adds `ai-eval-gate` for its AI session scorer (ADR-111). The
 image matrix pushes to ACR without rolling anything out. The rollout itself is one `azure/arm-deploy`
 step over `infra/main.bicep` (`MMCA.Store/.github/workflows/deploy.yml:1189-1195`,
 `MMCA.ADC/.github/workflows/deploy.yml:1298-1304`).
@@ -179,16 +181,32 @@ verification fails.
   about ten minutes before a single probe is sent; each failing probe then burns up to 12 attempts of
   15-second timeout plus a 10-second sleep, and the probes run sequentially, so a total outage adds
   roughly five minutes per probe before the rollback loop starts, against a `timeout-minutes: 40` job
-  (`MMCA.Store/.github/workflows/deploy.yml:998`, `MMCA.ADC/.github/workflows/deploy.yml:1053`). The
-  two repos bound the activation tier differently: Store polls all five apps inside one 30 x 20s loop,
-  so a fleet-wide failure costs about ten minutes once
-  (`MMCA.Store/.github/workflows/deploy.yml:1281-1299`), while ADC calls `revision_gate` per app
-  sequentially (`MMCA.ADC/.github/workflows/deploy.yml:1385-1396,1400-1405`), so a six-app failure can
-  spend up to about an hour in activation polling alone. A job killed at its timeout never runs the
-  rollback, and on ADC that ceiling is reachable from the activation tier by itself.
+  (`MMCA.Store/.github/workflows/deploy.yml:1199`, `MMCA.ADC/.github/workflows/deploy.yml:1304`). Both
+  repos now bound the activation tier the same way, on one shared budget (see the 2026-09-10
+  revision), so a fleet-wide activation failure costs about ten minutes once in either repo rather
+  than scaling with the app count. The rollback loop is reachable inside the 40-minute job in both.
 - **Only a smoke-gate failure triggers a rollback.** A regression that passes the probes and is found
   minutes later is reverted by hand (a redeploy of the previous commit or a manual `revision copy`);
   there is no alert-driven auto-rollback wired to the SLO alerts (ADR-062).
+
+## Revision (2026-09-10)
+
+**ADC's activation tier is now one shared budget over the whole fleet, matching Store.** The attempt
+loop is the outer loop and the apps are iterated inside it: `for i in $(seq 1 30)` at
+`MMCA.ADC/.github/workflows/deploy.yml:1677` encloses `for app in $APPS` at `:1679`, the pass
+collects a `pending` list and breaks on the first fully-activated sweep (`:1690`), and there is one
+`sleep 20` per pass (`:1692`), the whole gate spanning `:1668-1697`. Store's is the same shape
+(`MMCA.Store/.github/workflows/deploy.yml:1514` outer, `:1516` inner, break at `:1529`, sleep at
+`:1531`).
+
+The arithmetic is the point of the change, not the tidiness. A shared budget is 30 x 20s = about ten
+minutes of activation polling regardless of how many apps are pending, so the ceiling no longer
+scales with the fleet: ADC's six apps used to be able to spend roughly an hour there, against a
+`timeout-minutes: 40` job (`:1304`; Store `:1199`). A job killed at its timeout never reaches its
+rollback loop, so the old shape could turn a failed activation into a deploy with no revert, which is
+the failure this record exists to prevent. Both rollback loops are unchanged and reachable
+(`MMCA.ADC/.github/workflows/deploy.yml:1730-1761`,
+`MMCA.Store/.github/workflows/deploy.yml:1565-1600`).
 
 ## Related
 [ADR-057](057-expand-contract-schema-evolution-gate.md) (built on this model: revision-only rollback

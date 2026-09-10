@@ -440,15 +440,65 @@ Two changes from the 2026-09-07 security review.
    (`UiRateLimitingSettings`, on by default,
    `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/UiRateLimitingSettings.cs:31`, 300
    requests per 60 seconds at `:54` and `:58`, global concurrency 200 at `:68`; registered at
-   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:106` and applied at `:213`) and a
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:107` and applied at `:239`) and a
    `BoundedCircuitHandler`
    (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/BoundedCircuitHandler.cs:37`, registered
-   at `Program.cs:98`) that caps concurrent Blazor circuits at
+   at `Program.cs:99`) that caps concurrent Blazor circuits at
    `BlazorCircuitLimitSettings.MaxActiveCircuits` (200,
    `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:39`), with
    `DisconnectedCircuitMaxRetained` 25 (`:47`) and `DisconnectedCircuitRetentionSeconds` 60 (`:55`).
    A request limiter alone does not bound a server-rendered origin, because the expensive resource is
    the circuit a single page load opens, not the request that opened it.
+
+## Revision (2026-09-10)
+
+**Both public UI hosts now carry the own-host hardening, so item 2 above is no longer a Store-only
+remediation.** ADC's conference UI is externally reachable on its own FQDN, which is the same
+condition that produced SEC-Store-56: a public HTML origin fronted by an ingress the gateway limiter
+never sees.
+
+ADC ships the same trio under
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Hardening/`: `UiRateLimitingExtensions.cs:13` and
+`UiRateLimitingSettings.cs:33` for the per-IP fixed window chained with a replica concurrency
+ceiling, `BoundedCircuitHandler.cs:37` for the active-circuit cap, and
+`BlazorCircuitLimitSettings.cs:17` for its bounds. The limiter is registered at
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:127` and applied at `:197`.
+
+One structural difference is worth naming so it is not read as drift. Store registers the circuit
+handler directly (`Program.cs:99`), while ADC wraps registration and the `CircuitOptions` retention
+callback in one `AddBoundedBlazorCircuits()` helper (`Program.cs:62`, the singleton at
+`Hardening/BlazorCircuitLimitExtensions.cs:58`, the retention callback at `:26-39`, passed into
+`AddInteractiveServerComponents` at `Program.cs:53`). The registered services are the same; only the
+call shape differs.
+
+The tuned numbers differ too, and that is the parameter doing its job rather than a divergence:
+
+| Setting | ADC | Store |
+| --- | --- | --- |
+| `PermitLimit` per window | 1200 (`UiRateLimitingSettings.cs:60`) | 300 (`UiRateLimitingSettings.cs:54`) |
+| `WindowSeconds` | 60 (`:64`) | 60 (`:58`) |
+| `GlobalConcurrencyLimit` | 200 (`:76`) | 200 (`:68`) |
+| `MaxActiveCircuits` | 200 (`BlazorCircuitLimitSettings.cs:40`) | 200 (`BlazorCircuitLimitSettings.cs:39`) |
+| `DisconnectedCircuitMaxRetained` | 25 (`:48`) | 25 (`:47`) |
+| `DisconnectedCircuitRetentionSeconds` | 180 (`:58`) | 60 (`:55`) |
+
+ADC's window is four times Store's because conference-day traffic arrives as a room full of attendees
+behind a handful of shared NAT addresses, where a storefront's per-IP assumption of roughly one
+shopper per address holds. Its 180-second disconnected retention is the ASP.NET Core framework
+default kept rather than tightened, for the same reason: an attendee walking between rooms drops
+Wi-Fi and expects the page to reconnect, and Store's 60 seconds trades that for memory it would rather
+spend elsewhere. ADC restates both in configuration so the shipped value is visible without reading
+the settings class (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:19-24` and `:28-32`).
+
+The shipped values are pinned by tests in the gating tier, so a silent retune fails a pull request:
+`MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/UiRateLimitingTests.cs:16` asserts burst shedding, exempt
+paths, per-IP partitioning and the three limiter values, and `BoundedCircuitHandlerTests.cs:16`
+asserts the ceiling, permit release and the three circuit bounds.
+
+**Still local, still not framework code.** The Decision above records the deliberate reason Store
+declared this hardening in its own host rather than in MMCA.Common. Two near-identical copies now
+exist, which strengthens the case for extraction without settling it: a shared UI-host hardening kit
+would need its own decision, and this revision does not take one.
 
 ## Related
 [ADR-008](008-service-extraction-topology.md) (the record that made the Gateway the only entry point

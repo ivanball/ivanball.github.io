@@ -231,8 +231,10 @@
           that decision 3&#39;s cold-start argument rests on is now uniform across all six ADC apps, so the
           4-vs-2 split that argument cited is gone. See Revision (2026-09-03) at the end.
           Revised 2026-09-07 (base images are digest-pinned, every final stage drops to <code>USER $APP_UID</code>,
-          image builds restore in locked mode, and both consumers scan the built image with Trivy: gating in
-          ADC, report-only for one cycle in Store).</p>
+          image builds restore in locked mode, and both consumers scan the built image with Trivy).
+          Revised 2026-09-10: the locked-mode inventory is restated per image (nine of eleven build-stage
+          restores, the two UI images excluded by design), and the Trivy scan is report-only in <strong>both</strong>
+          consumers, not gating in ADC. See Revision (2026-09-10) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
           MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -382,16 +384,17 @@
           before the entrypoint in every image (ADC <code>Dockerfile:67</code>, Store <code>Dockerfile:65</code>). The variable is
           set by the .NET base image, so the app does not have to invent a uid.</li>
           <li><strong>The image build restores in locked mode</strong> (SEC-Store-44 / SEC-ADC-31). The restore inside the
-          build stage passes <code>--locked-mode</code> (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:37</code>,
-          rationale at <code>:31</code>), which is what makes the shipped artifact&#39;s package graph the one the lock
-          file and the CI vulnerability gate actually saw.</li>
-          <li><strong>The built image is scanned.</strong> ADC&#39;s deploy scans each image with Trivy and <strong>fails the job</strong> on a
-          finding (<code>MMCA.ADC/.github/workflows/deploy.yml:1292</code>, action pinned by SHA at <code>:1294</code>,
-          <code>exit-code: &#39;1&#39;</code> at <code>:1300</code>). Store runs the same scan <strong>report-only for one release cycle</strong>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1154</code>, <code>:1162</code>, <code>exit-code: &#39;0&#39;</code> at <code>:1168</code>), with the
-          flip to gating recorded as a follow-up beside it (<code>:1145-1152</code>) once the baseline is clean or the
-          residue is captured in a <code>.trivyignore</code> with a written justification. <code>ignore-unfixed: true</code> stays
-          either way.</li>
+          build stage passes <code>--locked-mode</code> (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:38</code>,
+          rationale at <code>:31-35</code>), which is what makes the shipped artifact&#39;s package graph the one the lock
+          file and the CI vulnerability gate actually saw. The publish restore is deliberately left unlocked,
+          and one image per repo is unlocked outright: see the 2026-09-10 revision for the current inventory.</li>
+          <li><strong>The built image is scanned, report-only in both.</strong> Each deploy scans every image with Trivy
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1292</code>, action pinned by SHA at <code>:1294</code>;
+          <code>MMCA.Store/.github/workflows/deploy.yml:1154</code>, <code>:1162</code>). Neither gates: both steps carry
+          <code>continue-on-error: true</code> (ADC <code>:1293</code>, Store <code>:1161</code>), so ADC&#39;s <code>exit-code: &#39;1&#39;</code> (<code>:1300</code>) marks
+          the step failed without failing the job, and Store&#39;s <code>exit-code: &#39;0&#39;</code> (<code>:1168</code>) does not even do
+          that. The flip to gating is recorded as a follow-up beside each (ADC <code>:1288-1291</code>, Store
+          <code>:1145-1152</code>), and <code>ignore-unfixed: true</code> stays either way.</li>
           </ol>
           <h2 id="related">Related</h2>
           <p><a href="038-supply-chain-provenance.html">ADR-038</a> (supply-chain provenance: it gates the <strong>package</strong> graph
@@ -427,6 +430,110 @@
           <p>Citations for the two Store <code>build-images</code> anchors in Context and decision 1 are re-pointed to the
           job and its <code>secrets:</code> input (<code>MMCA.Store/.github/workflows/deploy.yml:902,913-927</code> and <code>:966-967</code>);
           the workflow itself is unchanged in substance.</p>
+          <h2 id="revision-2026-09-10">Revision (2026-09-10)</h2>
+          <p><strong>Locked mode is back on Store&#39;s four non-UI images, and the inventory is stated per image rather
+          than by one example.</strong> Decision 3&#39;s anchor pointed at a line that had stopped carrying
+          <code>--locked-mode</code>, so the record claimed a control the command no longer applied. It applies again, and
+          the current state is:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Repo</th>
+          <th>Image</th>
+          <th>Build-stage restore</th>
+          <th>Locked</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Store</td>
+          <td><code>Source/Hosts/MMCA.Store.Gateway/Dockerfile</code></td>
+          <td><code>:41</code></td>
+          <td>yes</td>
+          </tr>
+          <tr>
+          <td>Store</td>
+          <td><code>Source/Services/MMCA.Store.Catalog.Service/Dockerfile</code></td>
+          <td><code>:38</code></td>
+          <td>yes</td>
+          </tr>
+          <tr>
+          <td>Store</td>
+          <td><code>Source/Services/MMCA.Store.Identity.Service/Dockerfile</code></td>
+          <td><code>:38</code></td>
+          <td>yes</td>
+          </tr>
+          <tr>
+          <td>Store</td>
+          <td><code>Source/Services/MMCA.Store.Sales.Service/Dockerfile</code></td>
+          <td><code>:38</code></td>
+          <td>yes</td>
+          </tr>
+          <tr>
+          <td>Store</td>
+          <td><code>Source/Hosts/UI/MMCA.Store.UI.Web/Dockerfile</code></td>
+          <td><code>:46</code></td>
+          <td>no, by design</td>
+          </tr>
+          <tr>
+          <td>ADC</td>
+          <td><code>Source/Hosts/MMCA.ADC.Gateway/Dockerfile</code></td>
+          <td><code>:32</code></td>
+          <td>yes</td>
+          </tr>
+          <tr>
+          <td>ADC</td>
+          <td><code>Source/Services/MMCA.ADC.Conference.Service/Dockerfile</code></td>
+          <td><code>:32</code></td>
+          <td>yes</td>
+          </tr>
+          <tr>
+          <td>ADC</td>
+          <td><code>Source/Services/MMCA.ADC.Engagement.Service/Dockerfile</code></td>
+          <td><code>:32</code></td>
+          <td>yes</td>
+          </tr>
+          <tr>
+          <td>ADC</td>
+          <td><code>Source/Services/MMCA.ADC.Identity.Service/Dockerfile</code></td>
+          <td><code>:32</code></td>
+          <td>yes</td>
+          </tr>
+          <tr>
+          <td>ADC</td>
+          <td><code>Source/Services/MMCA.ADC.Notification.Service/Dockerfile</code></td>
+          <td><code>:32</code></td>
+          <td>yes</td>
+          </tr>
+          <tr>
+          <td>ADC</td>
+          <td><code>Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile</code></td>
+          <td><code>:41</code></td>
+          <td>no, by design</td>
+          </tr>
+          </tbody></table></div>
+          <p>Nine of eleven, and the two exclusions are the same one in each repo. <strong>The UI image is unlocked
+          because it has no lock file to check against</strong>: Store&#39;s Blazor host and its WebAssembly client both
+          set <code>&lt;RestorePackagesWithLockFile&gt;false&lt;/RestorePackagesWithLockFile&gt;</code>
+          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/MMCA.Store.UI.Web.csproj:5</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/MMCA.Store.UI.Web.Client.csproj:8</code>), and ADC&#39;s
+          UI image carries the same opt-out. Passing <code>--locked-mode</code> there would fail every build rather than
+          gate anything, so the flag&#39;s absence is the correct configuration and not an unclosed hole.</p>
+          <p><strong>The publish restore stays unlocked in every image, in both repos.</strong> ReadyToRun publishes to a
+          RID-specific path, which pulls a RID graph the committed lock does not describe, and locked mode
+          answers that with NU1004 regardless of whether anything actually drifted. Locking the build restore
+          is the narrow control that works: it is the restore whose graph the CI vulnerability gate and the
+          committed lock both saw, and it runs before the publish, so a drifted pin still fails the image
+          build. The SEC-Store-44 comment above Store&#39;s Sales restore now says exactly that
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:31-35</code>), which is the property a
+          rationale comment has to have: it describes the command beneath it.</p>
+          <p><strong>Related correction, same revision.</strong> Decision 4 asserted that ADC&#39;s Trivy scan fails the job while
+          Store&#39;s is report-only for one cycle, and the asymmetry does not exist: ADC&#39;s step carries
+          <code>continue-on-error: true</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:1293</code>), so its <code>exit-code: &#39;1&#39;</code>
+          (<code>:1300</code>) marks the step failed and lets the job pass. Both consumers are report-only. ADC&#39;s own
+          comment (<code>:1288-1291</code>) names floating base images as the reason to stay non-gating, and that reason
+          is stale: the base images are digest-pinned (decision 1), so ADC can either flip
+          <code>continue-on-error</code> to <code>false</code> or rewrite the comment to state the real remaining reason. That choice
+          is left open here rather than decided.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -446,6 +553,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
+            <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             </ul>
           </nav>
         </aside>

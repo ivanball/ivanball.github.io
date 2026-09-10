@@ -121,8 +121,8 @@ its way to the same model.
   absent by default (`MMCA.ADC/.github/workflows/deploy.yml:1131-1133`).
 
 **Adoption boundary.** The secret-reference half is shipped and identical in both deployed apps, and
-the configuration-source half is shipped in both with one difference: Store wires its Gateway
-(`MMCA.Store/infra/main.bicep:1426-1427`) while ADC's Gateway carries neither variable. The SQL half
+the configuration-source half is now shipped on every deployable in both (see the 2026-09-10 revision;
+the Gateway difference recorded here is closed). The SQL half
 is staged in both and not flipped in either template default, so with the default parameters every
 app-to-database connection string still carries `User ID` and `Password`
 (`MMCA.ADC/infra/main.bicep:169`, `MMCA.Store/infra/main.bicep:130`). That password is itself a vault
@@ -221,6 +221,27 @@ Two changes from the 2026-09-07 security review.
 
 **Not changed here:** Key Vault purge protection is not enabled by either template as of this
 revision.
+
+## Revision (2026-09-10)
+
+**ADC's Gateway now reads the vault like every other deployable, closing the one adoption difference
+above.** `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:66` calls
+`builder.AddCommonKeyVaultConfiguration()`, matching `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:63`,
+and ADC's template supplies the two variables the call needs on the `gatewayApp` container
+(`MMCA.ADC/infra/main.bicep:2136`): `AZURE_CLIENT_ID` at `:2209` and `KeyVault__Uri` at `:2210`. All
+six ADC apps and all five Store apps now carry both.
+
+The two templates supply them differently and that is presentation, not posture: ADC writes the pair
+inline in each app's env array, while Store spreads shared variables (`keyVaultUriEnv` at
+`MMCA.Store/infra/main.bicep:1355` and `azureClientIdEnv` at `:1365`, used on the gateway at `:1865`
+and `:1866`). The behaviour is identical either way, because the call is gated on `KeyVault:Uri` and
+is inert without it.
+
+Worth restating rather than assuming: this makes the vault a synchronous, hard startup dependency for
+the Gateway too. `AddCommonKeyVaultConfiguration`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Configuration/KeyVaultConfigurationExtensions.cs:78`)
+reads at startup, so a vault outage or a revoked Secrets User grant is now a Gateway crash-loop rather
+than a degraded backend. That is the same trade the other five apps already made, taken deliberately.
 
 ## Related
 ADR-037 (`037-field-level-encryption-at-rest.md:108-110` directs a consumer to keep the

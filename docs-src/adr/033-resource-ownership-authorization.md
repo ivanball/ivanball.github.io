@@ -270,3 +270,39 @@ Behavior changed on both adopters since the 2026-08-01 pass, so this is not an a
    `ValidateOwnershipAsync` (`OrdersController.cs:414`) with its `Error.Forbidden` (`:422`, `:424-428`)
    and `Error.NotFound` (`:431-433`, `:437-439`) branches, and the ADC Engagement registration
    (`DependencyInjection.cs:43`, `:45`, `:54`, `:55`).
+
+## Revision (2026-09-10)
+
+**ADC adopts both enforcement points, so the "Engagement Bookmarks only" framing above is no longer
+the whole inventory.** The Adoption text describes ADC through the action-filter half alone; its
+Conference module carries the row-level half as well, on the canonical shape rather than an inline
+variant of it.
+
+1. **Two Conference controllers resolve the specification through the shared helper.**
+   `EventQuestionAnswersController` overrides `GetExportSpecification()` and resolves it through
+   `OwnershipHelper.GetOwnershipSpecification`
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:85-90`,
+   the call at `:86`), and `SessionQuestionAnswersController` does the same
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:107-112`,
+   the call at `:108`). Both take the two-generic overload in
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:34`, yielding an
+   `OwnedByUserSpecification` for an attendee and `null` for an Organizer. Because
+   `EntityControllerBase.GetReadSpecificationAsync` defaults to `GetExportSpecification`, the override
+   scopes every read on those controllers, not only the export.
+2. **Both fail closed on an unresolvable owner.** Each controller carries the same private
+   `RequireResolvableOwner()` gate Store's row-scoped controllers use
+   (`EventQuestionAnswersController.cs:104-117`, called at `:126`, `:144`, `:155` and `:169`;
+   `SessionQuestionAnswersController.cs:126-139`, called at `:148`, `:166`, `:177` and `:191`). That
+   is the answer to the ambiguous `null` recorded in the 2026-08-31 revision: the helper returns
+   `null` for an Organizer bypass and for a claim-less non-Organizer, and only the first may read
+   unscoped, so the second gets 403 instead of an unscoped read.
+3. **The gate is a per-controller method, not framework code.** `RequireResolvableOwner` exists four
+   times, once per row-scoped controller: `MMCA.Store/.../OrdersController.cs:82`,
+   `MMCA.Store/.../ShoppingCartsController.cs:80`, and ADC's two above. Nothing in MMCA.Common
+   declares it. Four identical copies of a fail-closed authorization gate is the kind of duplication
+   that eventually diverges in one copy, so it is named here as a candidate for extraction rather
+   than as the settled shape.
+4. **One Store site is adjacent, not a fifth adopter.** Catalog's `ReviewsController` uses
+   `OwnershipHelper.IsAdmin` (`MMCA.Store/.../ReviewsController.cs:72`) and scopes through its own
+   `ResolveOwner()` (`:373-374`) rather than through `GetOwnershipSpecification`, so it belongs to the
+   helper's audience without being an instance of the row-level pattern this record describes.
