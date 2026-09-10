@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-114: Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-09). Rides the outbox machinery of ADR-003 without extending it.">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-114: Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery">
+  <meta property="og:description" content="Accepted (2026-09-09). Rides the outbox machinery of ADR-003 without extending it.">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-114: Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery">
+  <meta name="twitter:description" content="Accepted (2026-09-09). Rides the outbox machinery of ADR-003 without extending it.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"114 · Internal Commands, a Job Queue Built on the Outbox's Machinery","item":"https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 117 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html" aria-current="page">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-114-internal-commands-a-job-queue-built-on-the-outboxs-machinery">ADR-114: Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-09-09). Rides the outbox machinery of
+          <a href="003-outbox-dual-dispatch.html">ADR-003</a> without extending it.</p>
+          <h2 id="context">Context</h2>
+          <p>The framework has had two ways to move work off the request thread and neither of them is a job
+          queue.</p>
+          <p>The <strong>transactional outbox</strong> (<a href="003-outbox-dual-dispatch.html">ADR-003</a>) carries <em>events</em>.
+          <code>OutboxMessage</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15</code>) is
+          written by the domain-event interceptor inside the same transaction as the aggregate change, and
+          <code>OutboxProcessor</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56</code>)
+          drains one table per relational source with a claim lease, exponential backoff, dead-lettering and
+          OpenTelemetry instrumentation. It answers &quot;this happened, tell whoever cares&quot;. It does not answer
+          &quot;do this later&quot;, and bending it to do so means expressing an instruction as an event, which is
+          exactly the modelling mistake <a href="007-grpc-extraction.html">ADR-007</a> and
+          <a href="008-service-extraction-topology.html">ADR-008</a> spend their length avoiding.</p>
+          <p>The <strong>recurring scheduler</strong> (<a href="074-recurring-job-scheduler.html">ADR-074</a>) carries <em>cron occurrences</em>.
+          <code>IScheduledJob</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IScheduledJob.cs:36</code>) plus
+          <code>ScheduledJobEntry</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobEntry.cs:20</code>) hold one
+          row per registered job in the <code>Default</code> source only, and a missed occurrence is deliberately not
+          replayed. That is right for &quot;sweep the audit trail nightly&quot; and wrong for &quot;send this one order its
+          receipt&quot;, which is a single unit of work bound to a single aggregate, must not be lost, and must not
+          fire until the order actually commits.</p>
+          <p>So the gap is specific: a handler that wants a side effect to happen <strong>after</strong> its transaction
+          commits has, today, either a fire-and-forget <code>Task</code> (lost on a crash, invisible to operations) or a
+          hand-rolled table per feature. Templated email, outbound webhooks, tenant provisioning, saga
+          timeouts and an operations console all need the same primitive underneath, so building it once and
+          building it on the machinery already proven in production is the cheaper path than five bespoke
+          tables.</p>
+          <p>Three off-the-shelf options were weighed and rejected; the reasoning is in the Rationale below.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>Deferred work is an ordinary CQRS command, scheduled into a per-source <code>InternalCommands</code> table
+          and executed later through the normal decorator pipeline.</strong></p>
+          <p>Five parts carry that.</p>
+          <p><strong>1. The contract is the one that already exists.</strong> <code>IInternalCommand</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/InternalCommands/IInternalCommand.cs:38</code>) is a
+          marker deriving from <code>ICommand&lt;Result&gt;</code> and nothing else. A command that opts in keeps its ordinary
+          <code>ICommandHandler&lt;TCommand, Result&gt;</code>; there is deliberately no second handler contract, because the
+          whole point is that a deferred execution IS the inline execution, run later. <code>InternalCommandDispatcher</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandDispatcher.cs:49</code>)
+          resolves the CLOSED <code>ICommandHandler&lt;TCommand, Result&gt;</code> from the execution scope, so what comes back
+          is already wrapped by Scrutor in the feature gate, the authorization check, logging, cache
+          invalidation, validation, the timeout budget and the transaction
+          (<a href="014-cqrs-decorator-pipeline.html">ADR-014</a>&#39;s order, unchanged).</p>
+          <p><strong>2. Scheduling rides the caller&#39;s unit of work.</strong> <code>IInternalCommandScheduler</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/InternalCommands/IInternalCommandScheduler.cs:16</code>)
+          exposes <code>ScheduleAsync(command, runAt)</code> and a <code>TimeSpan delay</code> overload, both returning
+          <code>Result&lt;Guid&gt;</code>. The implementation
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:69</code>)
+          adds the row to the context handed back by the scope&#39;s own <code>IDbContextFactory</code>, which is the same
+          instance the calling handler&#39;s repositories use. With a transaction active it enrolls the row and
+          stops, so the caller&#39;s commit persists it and a rollback erases it; with no transaction active it
+          saves immediately and signals the processor. That is the outbox&#39;s atomicity guarantee applied to an
+          instruction instead of an event: a transaction that aborts schedules nothing.</p>
+          <p><strong>3. One table per relational source, mapped unconditionally.</strong> <code>InternalCommandMessage</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:21</code>)
+          is configured in <code>ApplicationDbContext.ConfigureInternalCommands</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:673</code>)
+          alongside the outbox and inbox, with three filtered indexes for the poll, the retention sweep and the
+          dead-letter view. It takes the engine the model is being built for and runs its partial-index
+          predicates through the same <code>QuoteColumn</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:548</code>)
+          and <code>IncludeColumns</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:574</code>)
+          helpers <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a> introduced for the outbox, so PostgreSQL
+          gets double-quoted identifiers while every other engine keeps the bracketed literal it has always
+          produced. <code>PostgreSQLDbContext</code> calls <code>base.OnModelCreating</code>, so the fourth engine needs no
+          registration of its own. Cosmos ignores the entity, exactly as it ignores the outbox
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:81</code>).
+          The mapping is NOT gated on <code>InternalCommands:Enabled</code>, unlike the scheduler&#39;s job table: a row must
+          be able to commit in the same transaction as the aggregate change, a transaction does not span
+          databases, and a flag that changed the schema would make enabling the queue a migration rather than a
+          deployment decision.</p>
+          <p><strong>4. Execution restores the caller&#39;s context.</strong> The row captures the scheduling user id, roles,
+          tenant and correlation id. Before resolving the handler the processor sets the tenant, then rebuilds
+          a <code>ClaimsPrincipal</code> carrying the <code>sub</code> claim and one role claim per stored role
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:568</code>)
+          and hands it to <code>ScopedUserOverride</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ScopedUserOverride.cs:23</code>), a scoped
+          carrier read by <code>ImpersonatingCurrentUserService</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ImpersonatingCurrentUserService.cs:20</code>),
+          which decorates whatever <code>ICurrentUserService</code> the host registered
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:243</code>). With no override
+          set every member reads straight through, so an HTTP request behaves exactly as before.</p>
+          <p><strong>5. Failure policy: the outbox&#39;s, with one deliberate divergence.</strong> <code>InternalCommandProcessor</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:50</code>)
+          claims the due prefix of each batch with a lease token
+          (<code>ClaimDueAsync</code>, <code>:366</code>), executes each row in a fresh DI scope, and stamps the outcome through a
+          set-based update guarded by that token (<code>StampAsync</code>, <code>:686</code>) so a replica whose lease expired
+          mid-execution silently drops its stale outcome. A <code>Result.Failure</code> and a thrown exception are the
+          same operational fact and both consume an attempt; the backoff is
+          <code>RetryBackoffBaseSeconds * 2^(attempts-1)</code> with jitter in <code>[0.8, 1.2]</code>, capped at
+          <code>MaxRetryBackoffSeconds</code> (<code>ComputeRetryBackoffSeconds</code>, <code>:712</code>). The divergence: an unresolvable
+          command type and a missing handler registration are terminal on the FIRST attempt, where the outbox
+          retries an unresolvable type once. An outbox row&#39;s type may live in an assembly that has simply not
+          loaded yet; a queue row can only run on a host that registers a handler for it, and a host that
+          cannot name the type has no such handler, so retrying would burn the attempt budget waiting for a
+          fact that will not change.</p>
+          <p>Settings live under <code>InternalCommands</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:15</code>)
+          and mirror <code>OutboxSettings</code> where the semantics match: <code>BatchSize</code> 50 (<code>:31</code>), <code>MaxAttempts</code> 5
+          (<code>:39</code>), <code>LeaseSeconds</code> 300 (<code>:68</code>), <code>RetryBackoffBaseSeconds</code> 10 (<code>:77</code>), <code>RetentionDays</code> 7 (<code>:93</code>),
+          <code>CleanupIntervalHours</code> 6 (<code>:108</code>). Two values deliberately differ. <code>ProcessingDelaySeconds</code> defaults
+          to <code>0</code> rather than the outbox&#39;s 5 (<code>:58</code>), because that delay exists to bound a race with the
+          in-process fast path that dispatches an event before the processor can, and the queue has no such
+          fast path. <code>MaxRetryBackoffSeconds</code> (600, <code>:86</code>) is a separate ceiling rather than the lease, because
+          a job queue wants a long lease for slow handlers and a short ceiling on how long a transient failure
+          parks a command, where the outbox caps its backoff at <code>LeaseSeconds</code> and gets one number for both.</p>
+          <p><code>IInternalCommandAdministration</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/InternalCommands/IInternalCommandAdministration.cs:17</code>)
+          mirrors <code>IOutboxAdministration</code>: count pending, list dead letters, requeue, purge completed. A
+          requeue keeps <code>LastError</code> on purpose, because the reason a command failed is the first thing anyone
+          asks after a requeue.</p>
+          <h2 id="rationale">Rationale</h2>
+          <p>Four alternatives were weighed, and each one gave up the atomicity guarantee or duplicated a
+          vocabulary the framework already owns:</p>
+          <p><strong>Hangfire.</strong> It is the obvious answer and it brings its own storage, its own dashboard and its own
+          serialization. All three are the problem. Its storage is a separate set of tables with its own
+          connection, so a job enqueued inside a handler cannot commit atomically with the aggregate change
+          that justified it, which is precisely the guarantee this record exists to provide. Its dashboard and
+          its <code>IJobFilter</code> pipeline duplicate, in a second vocabulary, the operator surface and the decorator
+          pipeline the framework already has. And it executes a serialized method invocation, not a command,
+          so nothing it runs passes through feature gating, authorization, validation or the transaction
+          decorator without being taught to.</p>
+          <p><strong>Quartz.NET.</strong> A stronger scheduler than the framework&#39;s own (calendars, misfire policies,
+          clustering) and a weaker fit for this problem. It is built around recurring triggers, and the
+          framework already has that shape in <code>IScheduledJob</code>. Its <code>AdoJobStore</code> is again a separate schema
+          with no way to enlist in the caller&#39;s transaction, and adopting it would mean running two schedulers
+          with two configuration surfaces to gain a feature set (cron calendars) nobody has asked for.</p>
+          <p><strong>A cloud queue (Azure Storage Queues, Service Bus).</strong> The right answer once the work must cross a
+          process boundary or survive the database being unavailable, and the wrong first step. It reintroduces
+          the dual-write problem the outbox was adopted to solve, because a message put on a queue cannot roll
+          back with the transaction; the standard fix is to write an outbox row that a processor forwards to
+          the queue, which is this design plus one hop. It also adds an infrastructure dependency and a cost
+          line to every consumer, including MMCA.Helpdesk, whose whole premise is running with nothing but a
+          database.</p>
+          <p><strong>Extending the outbox to carry commands.</strong> Tempting, since the machinery is exactly what is wanted.
+          Rejected because the two rows want different columns (a scheduled instant, an attempt budget, a
+          captured principal), different indexes, different retention and different terminal semantics for an
+          unresolvable type, and because the outbox&#39;s poll predicate is the hottest query the framework issues.
+          Widening it to serve a second workload would have made every outbox change a job-queue change. The
+          duplication is bounded and deliberate: the two processors share an idiom, not an implementation, the
+          same way <code>ScheduledJobRunner</code> already borrows the claim-lease idiom without borrowing the code.</p>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <p><strong>Consumers take one migration per relational data source.</strong> The table is in the model of every
+          relational source (SQL Server, PostgreSQL and SQLite after
+          <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>), so a consumer bumping to this version runs
+          <code>dotnet ef migrations add AddInternalCommands</code> per source and applies it before deploying. That is
+          the cost of the atomicity guarantee, and it is paid once.</p>
+          <p><strong>Execution is at-least-once, and handlers must be idempotent.</strong> A replica that dies after its
+          handler committed and before the row was stamped releases the row when its lease expires and the
+          command runs again. This is the same contract the outbox already places on event handlers, so it is
+          not a new obligation for anyone already using the framework, but it is now an obligation on ordinary
+          commands too, which previously only ever ran once per request.</p>
+          <p><strong>A scheduled command runs with the scheduling user&#39;s authority, not the executing host&#39;s.</strong>
+          That is what makes an <code>IRequiresPermission</code> command schedulable at all, and it means the row is a
+          durable record of an authorization decision. If the user&#39;s roles change between scheduling and
+          execution, the stored roles win. That is deliberate (the decision was taken when the work was
+          requested) and it is why the row is subject to the same retention discipline as the outbox: the
+          sweep (<code>InternalCommandCleanupService</code>) is the retention policy, and the payload can carry personal
+          data (<a href="003-outbox-dual-dispatch.html">ADR-003</a> / <a href="005-soft-delete-vs-erasure.html">ADR-005</a>).</p>
+          <p><strong>A command scheduled inside a transaction waits up to one polling interval.</strong> The enrolled row
+          raises no signal, because a signal before the commit only buys a poll against a transaction that has
+          not committed. <code>InternalCommands:PollingIntervalSeconds</code> therefore defaults to 2 rather than the 300
+          a deployed outbox uses, and a host that raises it to cut idle polling accepts that much latency on
+          transaction-scheduled work.</p>
+          <p><strong>Two poll loops, not one.</strong> A host now runs the outbox processor and the queue processor side by
+          side, each with its own signal instance so a burst of schedules cannot consume the outbox&#39;s single
+          pending wake-up. Both poll spans are suppressed from telemetry export by the same Aspire processor
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:60</code>), and the
+          queue&#39;s metrics land on their own <code>MMCA.Common.InternalCommands</code> meter
+          (<code>.../Persistence/InternalCommands/Processing/InternalCommandMetrics.cs:20</code>).</p>
+          <p><strong>What this unlocks.</strong> Templated email, outbound webhooks with retry, tenant provisioning, saga
+          timeouts and an operations console over deferred work now share one durable substrate with one
+          retry policy, one dead-letter story and one operator surface, instead of a table and a poll loop per
+          feature.</p>
+          <h2 id="related">Related</h2>
+          <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the claim-lease, backoff and dead-letter machinery this
+          record borrows as an idiom),
+          <a href="014-cqrs-decorator-pipeline.html">ADR-014</a> (the decorator chain a deferred command runs through
+          unchanged),
+          <a href="074-recurring-job-scheduler.html">ADR-074</a> (the cron scheduler this record is deliberately not),
+          <a href="052-background-job-execution.html">ADR-052</a> (the background execution posture the processor follows),
+          <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a> (the engine-aware index helpers the table reuses),
+          <a href="100-outbox-opt-in-resolved-from-messaging-mode.html">ADR-100</a> (why an always-mapped table is not a
+          migration decision).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/114-internal-commands-durable-job-queue.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

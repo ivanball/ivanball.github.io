@@ -5,6 +5,10 @@ Accepted (2026-06-25, amended 2026-07-10 and 2026-08-23).
 Revised 2026-09-07 (a fallback policy requiring an authenticated caller is on by default, so
 anonymity has to be declared explicitly, and a fitness base enumerates endpoints that declare
 nothing at all).
+Revised 2026-09-09: [ADR-116](116-identity-completions-opt-in.md) layers OPTIONAL stored grants over the compiled
+registry, through a decorator that unions a `(Role, Permission)` table into it with no deny row and a
+cached per-role snapshot behind the synchronous read, so the compiled map stays the floor and a data
+edit can only widen a role.
 ## Context
 The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
 `[Authorize(Policy = "RequireOrganizer")]` against a named policy that calls `RequireRole(...)`, and a

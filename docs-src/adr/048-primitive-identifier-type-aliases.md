@@ -15,6 +15,10 @@ having been added, and the workspace alias count was recounted; see the Revision
 alternative this record deferred was re-evaluated, priced, and deferred again, now against named
 revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
 (2026-08-18) at the end.
+**Revisited again by
+[ADR-115](115-strongly-typed-identifiers-opt-in.md) (2026-09-09)**: the wrapper struct becomes a
+shipped opt-in framework capability, while the aliases below stay the default, nothing migrates and
+adoption is zero by design. The decision here is unchanged.
 
 ## Context
 Every entity needs an identity type. The framework's base entity is generic over that type:

@@ -329,7 +329,7 @@ The framework ships its own enforcement: adopters subclass, and drift fails the 
 
 ## Governance, versioning, and supply chain
 
-- **112 ADRs.** Every framework pattern is documented as an architecture decision record with context and consequences, published publicly and indexed in one place; adopters inherit the reasoning, not just the code.
+- **117 ADRs.** Every framework pattern is documented as an architecture decision record with context and consequences, published publicly and indexed in one place; adopters inherit the reasoning, not just the code.
 - **Lockstep SemVer with a stated policy.** All 17 packages release at one version from a git tag; consumers bump once per release, no phased rollout ([ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md)). Breaking changes ship as minor bumps inside 1.x with the call site named in the CHANGELOG, and there is no obsolete grace period, so read the entry at bump time.
 - **An upgrade map for every breaking release.** `UPGRADING.md` at the repo root carries one section per breaking release, newest first, with the old-to-new map and the mechanical fix (a namespace move is a `using` rewrite; a constructor change names the parameter to forward), kept identical to the CHANGELOG block so a consumer outside the workspace has the same recipe the in-workspace script applies.
 - **The public API surface is a reviewable diff.** Every packable project declares its shipped surface in `PublicAPI.Shipped.txt`, and the build fails on an undeclared public member or a disappeared declared one, so widening or breaking a package API is caught in review rather than by a consumer after release.
