@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-110: Rubric Version 2, Category Realignment at 34 · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the category, recorded in ADR-111).">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/110-rubric-v2-category-realignment.html">
+  <title>ADR-119: Delete Behavior Is an Explicit Business Rule (Restrict by Default) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-11). Inverts EF Core&#39;s cascading default for every relationship in every repo built on this framework, and stamps each foreign key…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/119-restrict-delete-by-default.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-110: Rubric Version 2, Category Realignment at 34">
-  <meta property="og:description" content="Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the category, recorded in ADR-111).">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/110-rubric-v2-category-realignment.html">
+  <meta property="og:title" content="ADR-119: Delete Behavior Is an Explicit Business Rule (Restrict by Default)">
+  <meta property="og:description" content="Accepted (2026-09-11). Inverts EF Core&#39;s cascading default for every relationship in every repo built on this framework, and stamps each foreign key…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/119-restrict-delete-by-default.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-110: Rubric Version 2, Category Realignment at 34">
-  <meta name="twitter:description" content="Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the category, recorded in ADR-111).">
+  <meta name="twitter:title" content="ADR-119: Delete Behavior Is an Explicit Business Rule (Restrict by Default)">
+  <meta name="twitter:description" content="Accepted (2026-09-11). Inverts EF Core&#39;s cascading default for every relationship in every repo built on this framework, and stamps each foreign key…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"110 · Rubric Version 2, Category Realignment at 34","item":"https://ivanball.github.io/docs/adr/110-rubric-v2-category-realignment.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)","item":"https://ivanball.github.io/docs/adr/119-restrict-delete-by-default.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">110 · Rubric Version 2, Category Realignment at 34</span>
+        <span class="current">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -209,7 +209,7 @@
         <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
         <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
         <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
-        <li><a href="110-rubric-v2-category-realignment.html" aria-current="page">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
         <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
         <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
         <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
@@ -218,122 +218,151 @@
         <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
         <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
-        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="119-restrict-delete-by-default.html" aria-current="page">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
           </ol>
         </nav>
       </details>
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-110-rubric-version-2-category-realignment-at-34">ADR-110: Rubric Version 2, Category Realignment at 34</h1>
+          <h1 id="adr-119-delete-behavior-is-an-explicit-business-rule-restrict-by-default">ADR-119: Delete Behavior Is an Explicit Business Rule (Restrict by Default)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the category,
-          recorded in <a href="111-ai-session-scoring-governance.html">ADR-111</a>).</p>
+          <p>Accepted (2026-09-11). Inverts EF Core&#39;s cascading default for every relationship in every repo built
+          on this framework, and stamps each foreign key with where its delete behavior came from.</p>
           <h2 id="context">Context</h2>
-          <p>The 34-category Architecture Evaluation Criteria
-          (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md</code>) is the only basis on which the
-          three scorecards are scored, and the <code>/update-scorecard</code> workflow reads its category list from each
-          repo&#39;s scorecard rows. A 2026-09-04 review mapped the rubric against a broader enterprise topic map
-          (distributed systems, integration, cloud-native, data, resilience, security, API, delivery,
-          AI-native, and scale). Roughly four fifths of that map was already covered under a different
-          heading. Four gaps were real: nothing scored broker topology, dead-letter handling, or sagas; nothing
-          scored a threat model or service-to-service authentication; nothing scored progressive delivery; and
-          nothing scored a product feature that calls a language model.</p>
-          <p>Two existing categories were also mostly duplication. §10 Cross-Cutting Concerns had five criteria,
-          of which the pipeline behaviors were already in §5 and §6, caching in §12, resilience in §29, and
-          mapping in §9; only startup-validated options was unique. §16 Maintainability &amp; Evolvability was the
-          category §34 was promoted out of, and what remained duplicated §32 (coordinated upgrades), §33
-          (onboarding cost), and §34 (documentation currency); its unique content was the measured-coupling
-          criterion, the shotgun-surgery red flag, and the tech-debt register.</p>
-          <p>Adding categories has a real cost. Every category number is cited by scorecard rows, backlog items
-          (<code>#NN</code>, <code>TD-NN</code> sub-items), ADRs, onboarding chapters, and articles; the workflows carry the literal
-          34 in prompts and in the Part A/B/C dispatch split; and any change to the weight sum breaks the
-          index trend line across cycles.</p>
+          <p>EF Core picks a delete behavior for you. A required relationship gets <code>Cascade</code>, an optional one gets
+          <code>ClientSetNull</code>, and neither choice appears anywhere a reviewer reads. The consequence is a database
+          constraint that deletes rows below the aggregate that owns them: below the invariants the aggregate
+          root exists to enforce, below the soft-delete filter, and below the domain events the rest of the
+          system reacts to.</p>
+          <p>Across the three applications built on this framework, exactly <strong>two</strong> delete behaviors were ever
+          written down. ADC restricts Session to Room
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Sessions/SessionConfiguration.cs:95</code>)
+          and Store cascades Product image data
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Infrastructure/Persistence/EntityConfiguration/ProductImageDataConfiguration.cs:35</code>).
+          Every other foreign key in ADC, Store and Helpdesk took EF&#39;s default: required relationships cascade,
+          optional ones null out on the client. Those defaults are already encoded in the migrations and are
+          already the shape of the deployed schemas.</p>
+          <p>The obvious objection is that this is theoretical, and it is worth stating why it is not. These
+          applications soft-delete: entities set <code>IsDeleted</code> and global query filters exclude them
+          (<a href="005-soft-delete-vs-erasure.html">ADR-005</a>), so at runtime today no cascade ever fires from ordinary
+          application code. The genuine hard deletes are narrow and deliberate: the framework&#39;s own cleanup
+          jobs against leaf tables (audit trail retention at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:169</code>,
+          refresh sessions at <code>.../Persistence/Auth/RefreshSessionCleanupService.cs:124</code>, permission grants at
+          <code>.../Persistence/Auth/EFPermissionGrantStore.cs:124</code>, internal commands at
+          <code>.../Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:227</code>) and ADC&#39;s
+          session-score replacement
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:104</code>).</p>
+          <p>But the FK constraint is not a runtime detail. It is what the migration writes into the database, and
+          it is what would fire the day somebody writes a genuine hard delete, runs a data-repair script, or a
+          DBA cleans a table by hand. A cascade nobody chose is a decision made by a default and discovered by
+          an incident. The question this record answers is not &quot;what happens today&quot; but &quot;what does the schema
+          say we intend&quot;.</p>
           <h2 id="decision">Decision</h2>
-          <p><strong>The rubric is versioned, and version 2 keeps 34 categories with stable numbering by replacing the
-          two overlap-heavy categories in place and adding criteria to eleven others.</strong></p>
+          <p><strong>Restrict is the default delete behavior for every relationship nobody configured, a cascade is an
+          opt-in with a stated reason, and the finished model records which of the two each foreign key is.</strong></p>
           <ol>
-          <li><p><strong>§10 becomes Messaging &amp; Integration Architecture, default weight 3.</strong> Criteria: broker topology
-          decided by ADR (transport, topics vs queues, one publishing boundary per source, local/prod
-          parity); delivery semantics stated per consumer with idempotent handling; dead-letter and
-          poison-message handling with an operational procedure; bounded retention and replay; contract
-          evolution with versioned events and consumer-driven contract tests; long-running processes as
-          sagas with explicit compensation, never distributed transactions; gateway/BFF discipline. §6 keeps
-          the in-process pipeline and the outbox write side; §10 scores what happens once a message leaves
-          the process.</p>
+          <li><p><strong>A model-finalizing convention supplies the default.</strong> <code>RestrictDeleteByDefaultConvention</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/RestrictDeleteByDefaultConvention.cs:41</code>)
+          walks every declared foreign key on the finalized model (<code>:72-79</code>) and, when the delete behavior
+          has no configuration source or has only EF&#39;s own convention as its source (<code>:98</code>), sets
+          <code>DeleteBehavior.Restrict</code> (<code>:100</code>). A behavior anybody configured, fluently or by attribute, is
+          kept exactly as configured: this convention never overrides a decision (<code>:105</code>).</p>
           </li>
-          <li><p><strong>§16 becomes AI-Native Application Architecture, default weight 2, N/A until a product feature
-          calls a model.</strong> Criteria: model calls behind a port; prompt and model versioning; an evaluation
-          suite gating CI; guardrails and PII redaction at the boundary; least-privilege tool calling with a
-          human in the loop for consequential actions; retrieval stores governed as data (§8, §30); LLM
-          observability and cost attribution. Developer-side AI tooling is scored in §33, not here.
-          MMCA.Common and MMCA.Store mark it N/A, which the rubric handles by dropping the weight from both
-          denominators and stating the scope-out in the scorecard&#39;s N/A note. MMCA.ADC scores it: its AI
-          session-scoring feature calls the Anthropic Messages API in production, so the weight-2 category
-          is live in both of its denominators from the 2026-09-04 re-score
-          (<a href="111-ai-session-scoring-governance.html">ADR-111</a>).</p>
+          <li><p><strong>Every foreign key is stamped with where its behavior came from.</strong> The annotation
+          <code>MMCA:DeleteBehaviorSource</code> (<code>:47</code>) carries one of <code>Explicit</code> (<code>:50</code>), <code>Convention</code> (<code>:53</code>) or
+          <code>Ownership</code> (<code>:56</code>), so a finished model can be audited without re-running the convention.</p>
           </li>
-          <li><p><strong>The unique content of the two retired categories moves, not vanishes.</strong> Startup-validated
-          options and the secrets-in-config red flag move to §17. The cache-without-invalidation red flag
-          moves to §12. The single-resilience-mechanism criterion and the per-call-retry red flag move to
-          §29. Measured coupling, the tech-debt register, and the shotgun-surgery red flag move to §34.</p>
+          <li><p><strong>Ownership foreign keys are left alone.</strong> An owned type has no identity apart from its owner and
+          EF requires that cascade rather than offering it, so the convention stamps <code>Ownership</code> and moves
+          on (<code>:89-93</code>).</p>
           </li>
-          <li><p><strong>Eleven categories gain criteria.</strong> §4 a stated tenancy model; §7 Anti-Corruption Layer and
-          Strangler Fig as the named modernization patterns; §8 expand-contract schema change, analytical
-          reads separated from OLTP, polyglot persistence by ADR, and the tenant isolation model; §9 contract
-          tests at the boundary and async contract documentation; §11 a threat model, service-to-service
-          authentication by identity, and tenant-scoped authorization; §12 and §29 as in item 3; §14
-          contract tests at the integration tier; §17 progressive delivery (flags, slots, or canary, or an
-          explicitly accepted single-slot risk with a rehearsed rollback) and trunk-based branching; §33
-          AI-assisted engineering guardrails (enforced hooks, PR-only landing, same CI gates); §34 as in
-          item 3. Multi-tenancy is deliberately criteria, not a category: ADC and Store are single-tenant,
-          and one line in §4, §8, and §11 makes that decision visible without an all-N/A row.</p>
+          <li><p><strong>Cosmos is a no-op.</strong> The provider has no foreign key constraints to restrict, and stamping a
+          delete-behavior decision on a model that cannot enforce one would only make the audit lie
+          (<code>:65-68</code>).</p>
           </li>
-          <li><p><strong>The rubric carries a version line, and each scorecard header records the version it was scored
-          against.</strong> Because the weight sum changes (81 to 80 for MMCA.Common, 80 to 79 for MMCA.ADC and
-          MMCA.Store), the indices on either side of the version boundary are comparable only with that
-          note. The rebase itself moves no score: §10 is carried at its prior scores under the merged-prior
-          rule, re-weighted to 3, until its first re-score against the new criteria; §16 is N/A for
-          MMCA.Common and MMCA.Store. For MMCA.ADC §16 is scored rather than scoped out, so its weight-2
-          row re-enters both denominators and its sum returns to 81.</p>
+          <li><p><strong>It is registered on the one base context, after the other two finalizing conventions.</strong>
+          <code>ApplicationDbContext.ConfigureConventions</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:328</code>)
+          adds it at <code>:349</code>, deliberately last of the three, so it never stamps a relationship the
+          cross-source degrade convention has already removed. Because there is one context class per engine
+          over one abstract base (<a href="006-database-per-service.html">ADR-006</a>), that single registration reaches
+          every module, every database and every repo.</p>
           </li>
-          <li><p><strong>Landing order.</strong> The rubric, the three scorecards, the three backlogs, and this record land in
-          one Website PR, because the workflow reads its category list from the scorecard rows and a rubric
-          that changes ahead of them would score the old §10 row against the new §10 text. A full re-score
-          per repo follows, one PR each, since ten categories gained criteria and §10 needs a first-time
-          score. Onboarding chapters, articles, and the wiki that name the two old titles are refreshed by
-          the governance commands on their next cycle, never by hand.</p>
+          <li><p><strong>Two fitness functions read the stamp back off the finished model.</strong>
+          <code>DeleteBehaviorConventionTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/DeleteBehaviorConventionTestsBase.cs:21</code>)
+          exposes <code>CascadingDeletes_AreExplicitlyOptedIn</code> (<code>:30</code>) and <code>ConventionDeletes_AreRestricted</code>
+          (<code>:33</code>) over the rule bodies in
+          <code>Rules/Domain/ArchitectureRules.DeleteBehavior.cs</code>: any <code>Cascade</code> or <code>ClientCascade</code> must carry
+          source <code>Explicit</code> (<code>:34</code>), and any foreign key sourced <code>Convention</code> must be <code>Restrict</code> (<code>:65</code>). A
+          subclass supplies <code>dbContext.Model</code> from a context built the way the app builds it, so no database
+          server is needed: the model is what is asserted. The base points at relational models only, since
+          a Cosmos model carries no stamps.</p>
+          </li>
+          <li><p><strong>A cascade keeps its reason next to it.</strong> Opting in means writing
+          <code>.OnDelete(DeleteBehavior.Cascade)</code> in the entity configuration with the business reason beside
+          it, which is what turns &quot;the schema happens to cascade here&quot; into a rule somebody can review.</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
-          <p>Replacing in place preserves every <code>#NN</code> citation in the backlogs, every <code>§NN</code> in the ADRs and the
-          scorecard history, the Part A/B/C dispatch split, and the literal 34 in the command, workflow, and
-          agent prompts. The two slots chosen were the two whose criteria were already scored elsewhere, so
-          the information loss is limited to relocating a handful of lines. Messaging earns a weight-3 slot
-          because a MassTransit plus Service Bus system with an outbox has its operational heart in exactly
-          the concerns §6 conflated with in-process dispatch. AI-native earns a slot because an explicit,
-          criteria-backed scope-out is more honest than silence where the category does not apply, and the
-          category is scored the day a feature calls a model, which for MMCA.ADC is the day the rubric shipped
-          (ADR-111). Multi-tenancy stays as criteria because an all-N/A row would cost three
-          scorecard rows for a decision three lines can record.</p>
+          <ul>
+          <li><strong>The safe default is the one that fails loudly.</strong> Restrict turns an unintended parent delete into
+          an error at the point of the delete, where it can be read and fixed. Cascade turns it into missing
+          rows discovered later, with no record of what removed them.</li>
+          <li><strong>Soft delete is a reason to fix this, not a reason to skip it.</strong> Because cascades never fire in
+          normal operation, nothing in testing or production would ever have surfaced them. That is exactly
+          the profile of a latent hazard: invisible until the one script that triggers it.</li>
+          <li><strong>The annotation is what makes the rule auditable.</strong> Asserting &quot;this model does not cascade&quot; is
+          weak; asserting &quot;every cascade in this model was chosen, and everything the convention touched
+          restricts&quot; is the property that actually holds, and it needs the provenance stamp to be checkable
+          at all.</li>
+          <li><strong>One registration on one base context is the whole adoption story.</strong> The per-engine context design
+          (<a href="006-database-per-service.html">ADR-006</a>) is what makes a persistence-wide behavior change a
+          framework change rather than a per-module sweep, the same way a fourth engine was
+          (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>).</li>
+          <li><strong>Never overriding an explicit configuration</strong> keeps the convention additive. The two behaviors
+          that were already written down keep working exactly as written, and are simply stamped <code>Explicit</code>.</li>
+          </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li>The index trend line carries a denominator change. The scorecard headers and the backlog headers
-          record both the old and the new fractions for the cycle where it happened.</li>
-          <li>§10 is scored at carried figures that were earned against different criteria until the first
-          re-score, which the row says explicitly. Store&#39;s §10 sits at implementation 8, so its
-          implementation-band priority rises from 2 to 3 with the weight before any new evidence is read.</li>
-          <li>The former §16 evidence (lockstep pin, evolvability gate, tech-debt ledger) lives on as prose in
-          the retired row and in §32/§33/§34, but nothing re-scores it as its own line.</li>
-          <li>Prose that names the two old titles persists in onboarding, articles, and the wiki until the
-          governance commands refresh it, and the uncommittable drift prompt was edited in place.</li>
-          <li>Every category that gained criteria may move at the next re-score without any code changing,
-          which is the intended effect and must not be read as regression.</li>
+          <li><strong>One migration per service database at the next framework bump.</strong> The FK constraints change, so
+          each database needs a migration: four in ADC, three in Store, one in Helpdesk. MMCA.Common&#39;s own
+          tables (outbox, inbox, internal commands, scheduler, audit trail, refresh sessions, permission
+          grants, notifications) declare no relationships between each other
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/DeleteBehaviorConventionTests.cs:21-26</code>),
+          so nothing flips inside the framework and its own gate passes vacuously today. That is the point of
+          a vacuous gate: the day a framework table gains a relationship, the test decides whether its delete
+          behavior was a decision or an accident, before consumers inherit it in a migration.</li>
+          <li><strong>Optional relationships move too, from <code>ClientSetNull</code> to <code>Restrict</code>.</strong> A client-side null-out is
+          the third behavior nobody chose either, and it silently rewrites a foreign key column in memory. A
+          relationship that genuinely should null out on delete now has to say so.</li>
+          <li><strong>A real cascade becomes more work to add.</strong> Someone who wants one writes a line and a reason
+          instead of inheriting it. That is the intended cost.</li>
+          <li><strong>SQL Server&#39;s multiple-cascade-path limit only bites where a configuration opts in.</strong> Restrict
+          cannot create a cycle, so the error class that most often forces a schema redesign now appears
+          exactly where a human chose a cascade, which is the one place it is diagnosable.</li>
+          <li><strong>The fitness functions assert the model, not the database.</strong> They prove what the next migration
+          will write, not what an already-deployed schema contains. The two converge once each database has
+          taken its migration, and drift in between is the ordinary migrations-pending state.</li>
+          <li><strong>Cosmos-backed entities get no coverage from this rule</strong>, by construction. The audit says nothing
+          about them because the model cannot carry the claim.</li>
           </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="006-database-per-service.html">ADR-006</a> (one context class per engine over one abstract base, which is
+          what makes this a single registration),
+          <a href="005-soft-delete-vs-erasure.html">ADR-005</a> (the soft-delete posture that keeps cascades dormant at
+          runtime and hides them from testing),
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the shared rule library the two new rules join),
+          <a href="018-polyglot-persistence.html">ADR-018</a> and
+          <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a> (the engine axis the convention branches on),
+          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release the migrations ride in
+          on).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/110-rubric-v2-category-realignment.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/119-restrict-delete-by-default.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">
@@ -345,6 +374,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
             </ul>
           </nav>
         </aside>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 117 ADRs</summary>
+        <summary>All 119 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -217,6 +217,8 @@
         <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
         <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
         <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
           </ol>
         </nav>
       </details>
@@ -225,7 +227,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-010-integration-event-schema-versioning--upcaster-policy">ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, <code>OutputCacheEvictionRequested</code>, so the framework&#39;s convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see <a href="090-event-upcaster-registration.html">ADR-090</a>.</p>
+          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, <code>OutputCacheEvictionRequested</code>, so the framework&#39;s convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see <a href="090-event-upcaster-registration.html">ADR-090</a>. Amended 2026-09-11: <strong>payload purity</strong> is now part of the contract and is build-gated, so an integration event may neither ship from outside a <code>*.Shared</code> assembly nor expose a type declared in a <code>*.Domain</code> assembly on its wire shape (see the amendment section at the end).</p>
           <h2 id="context">Context</h2>
           <p>Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
           are resolved by consumers solely by their type string: the outbox serializes the event to JSON keyed
@@ -306,6 +308,51 @@
           (version is a property of the type, not per-instance data), but it means you read it off the concrete
           type/JSON, not by mutating it.</li>
           </ul>
+          <h2 id="amendment-2026-09-11-integration-event-payload-purity">Amendment (2026-09-11): integration-event payload purity</h2>
+          <p>Versioning answers &quot;how may this contract change&quot;. It does not answer &quot;what may be in it in the
+          first place&quot;, and that gap is where the more expensive failure lives. An event whose property is
+          typed as a domain entity or a domain value object exports the producer&#39;s internal model to every
+          consumer: an ordinary internal refactor becomes a cross-service breaking change, and fields the
+          producer never meant to publish ride along on the wire. A <code>SchemaVersion</code> on such an event is a
+          version number attached to something that was never a contract.</p>
+          <p><strong>The rule.</strong> Integration events are the public contract; domain events are not the public API.
+          Therefore:</p>
+          <ol>
+          <li><strong>Every concrete <code>IIntegrationEvent</code> implementor is declared in a <code>*.Shared</code> assembly.</strong> A
+          consuming module may reference only Shared, so an event declared anywhere else is a contract
+          nobody is allowed to reference.</li>
+          <li><strong>No public property on an integration event reaches a type declared in a <code>*.Domain</code> assembly</strong>,
+          directly or through a nested payload record this repo declares. Project the value onto a
+          primitive or onto a contract record in Shared instead.</li>
+          </ol>
+          <p><strong>Enforcement.</strong> <code>IntegrationEventPayloadPurityTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventPayloadPurityTestsBase.cs:33</code>)
+          exposes the two rules as <code>IntegrationEvents_ShouldShipFrom_SharedAssemblies</code> (<code>:38</code>) and
+          <code>IntegrationEventPayloads_ShouldNotExpose_DomainTypes</code> (<code>:41</code>), over the rule bodies in
+          <code>Rules/Contracts/ArchitectureRules.IntegrationEventPurity.cs</code>
+          (<code>IntegrationEventsLiveInSharedAssemblies</code> at <code>:18</code>, <code>IntegrationEventPayloadsAreDomainFree</code> at
+          <code>:56</code>). The payload walk recurses through payload types the repo itself declares, because burying an
+          entity one level down hides the leak without removing it; it stops at framework and BCL types, which
+          are not the repo&#39;s to police, and it unwraps arrays, nullables and generic collection arguments, so
+          <code>IReadOnlyList&lt;OrderLine&gt;</code> is judged on <code>OrderLine</code>
+          (<code>.../ArchitectureRules.IntegrationEventPurity.cs:89</code>). Recursion is bounded by a visited set, so a
+          payload record that refers back to itself terminates. Both rules are vacuous for a module-less map:
+          MMCA.Common is the framework rather than a module, and its own shipped event is governed by the
+          public API baseline instead.</p>
+          <p><strong>Why the type system alone was not enough.</strong> <code>BaseIntegrationEvent</code> still derives from
+          <code>BaseDomainEvent</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:11</code>),
+          which is what lets one outbox row and one dispatcher carry both kinds of event, and <code>IEventBus</code>
+          already accepts only <code>IIntegrationEvent</code> on both of its overloads
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Events/IEventBus.cs:18</code>, <code>:25</code>). Those
+          two facts together stop a domain event from being <em>published</em> outward. What they cannot stop is a
+          domain type travelling <em>inside</em> a properly typed integration event, which is a payload question
+          rather than an envelope question. The compiler gates the envelope; these rules gate the payload.</p>
+          <p><strong>Not in scope: renaming.</strong> Existing event names are unchanged. The <code>XChanged</code> naming is a
+          deliberate decision on its own axis and nothing in this amendment revisits it; a purity fix projects
+          a property onto a contract type, it does not rename the event carrying it. A rename would be the
+          new-type-plus-upcaster migration this record already governs
+          (<a href="090-event-upcaster-registration.html">ADR-090</a>), which is a far larger act than the one this
+          amendment asks for.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -321,6 +368,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#amendment-2026-09-11-integration-event-payload-purity">Amendment (2026-09-11): integration-event payload purity</a></li>
             </ul>
           </nav>
         </aside>
