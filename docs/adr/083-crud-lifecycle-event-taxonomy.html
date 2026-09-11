@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -233,7 +235,12 @@
           Revised 2026-08-31: the lifecycle-event totals were recounted from source (32 across the three
           apps, of which 8 are in Store), the selective-handler example was re-anchored to
           <code>SpeakerDeletedHandler</code> (the previously cited <code>SessionCreatedHandler</code> and its test exist nowhere in
-          MMCA.ADC), and the Sales consumer&#39;s filter citation was re-anchored.</p>
+          MMCA.ADC), and the Sales consumer&#39;s filter citation was re-anchored.
+          Revised 2026-09-11: Store&#39;s <code>ProductReviewChanged</code> was added to both adopter counts (33 lifecycle
+          events across the three apps, 9 of them in Store; 15 records derive the base), the wire
+          discriminator&#39;s type was corrected to Catalog&#39;s own <code>ProductChangeState</code>, the Sales consumer was
+          re-anchored to <code>ProductVariantChangedHandler</code> (which handles <code>Added</code> and <code>Updated</code>), and the
+          <code>Session</code>, <code>OrderPaid</code> and contract-test citations were re-anchored.</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 decides how a domain event <strong>moves</strong>: captured into the outbox inside <code>SaveChangesAsync</code>,
           dispatched in-process after commit, or published to the broker when it is an integration event.
@@ -268,8 +275,8 @@
           <li><strong><code>Added</code> from the factory, <code>Updated</code> from mutators, <code>Deleted</code> from <code>Delete()</code>.</strong> The base&#39;s usage
           note fixes the mapping (<code>EntityChangedEvent.cs:10-13</code>), and <code>Session</code> is the canonical shape: one
           event type, three raise sites, in
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:212</code> (Added, from
-          the static factory), <code>:273</code> (Updated), <code>:294</code> (Deleted, inside the soft delete), all constructing the
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:234</code> (Added, from
+          the static factory), <code>:296</code> (Updated), <code>:317</code> (Deleted, inside the soft delete), all constructing the
           same <code>SessionChanged</code> (<code>.../Sessions/DomainEvents/SessionChanged.cs:13-18</code>).</li>
           <li><strong>Handlers filter on <code>State</code>, or deliberately do not.</strong> <code>SpeakerDeletedHandler</code> subscribes to
           <code>SpeakerChanged</code> and returns immediately unless the state is <code>Deleted</code>
@@ -283,29 +290,35 @@
           generic CRUD and directs events such as <code>OrderPaid</code> and <code>ShoppingCartCheckedOut</code> to inherit
           <code>BaseDomainEvent</code> directly (<code>EntityChangedEvent.cs:16-19</code>), which is what they do: <code>OrderPaid</code> carries
           a customer, a frozen total and an order-line snapshot
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/DomainEvents/OrderPaid.cs:13-18</code>),
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/DomainEvents/OrderPaid.cs:17-22</code>),
           and <code>ShoppingCartCheckedOut</code> names the checkout transition rather than an update
           (<code>.../Sales.Domain/ShoppingCarts/DomainEvents/ShoppingCartCheckedOut.cs:6-8</code>, raised at
           <code>.../ShoppingCarts/ShoppingCart.cs:118</code>). The test is payload plus intent: a transition with a name a
           business person uses and fields no other transition carries gets its own type.</li>
-          <li><strong>The discriminator rides the wire, and it is frozen there.</strong> Store&#39;s one cross-module contract puts
-          <code>DomainEntityState State</code> first on a <code>BaseIntegrationEvent</code>
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:28-34</code>)
+          <li><strong>The discriminator rides the wire, and it is frozen there.</strong> Store&#39;s cross-module Catalog contract
+          puts the discriminator first on a <code>BaseIntegrationEvent</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:34-35</code>)
           and explicitly consolidates four former events, <code>ProductVariantAdded</code>, <code>ProductVariantRemoved</code>,
-          <code>ProductVariantSkuChanged</code> and <code>ProductVariantPriceChanged</code> (<code>:10-11</code>). The Sales consumer filters it
-          to <code>Added</code>
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:46-47</code>).
+          <code>ProductVariantSkuChanged</code> and <code>ProductVariantPriceChanged</code> (<code>:9-10</code>). On the wire the discriminator
+          is not the framework enum but Catalog&#39;s own <code>ProductChangeState</code>, declared with the same member names
+          and ordinals because every type on a public contract has to live in a <code>*.Shared</code> assembly a consumer
+          may reference while <code>DomainEntityState</code> ships from a <code>*.Domain</code> one
+          (<code>.../IntegrationEvents/ProductChangeState.cs:7-12</code>). The Sales consumer takes <code>Added</code> and <code>Updated</code>
+          and stops on <code>Deleted</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantChangedHandler.cs:56-59</code>).
           Because integration-event shapes are snapshot-frozen by an architecture test
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Events.cs:45-58</code>),
-          <code>State:DomainEntityState</code> is a committed line of the wire contract
-          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:11</code>),
+          <code>State:ProductChangeState</code> is a committed line of the wire contract
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/IntegrationEventContractTests.cs:12</code>, and
+          the sibling <code>ProductInfoChanged</code> entry at <code>:11</code> carries it too),
           so retyping or removing the discriminator fails the build and, under ADR-010, requires a new event
           type rather than a silent reshape.</li>
-          <li><strong>The shared base is the convenience; the discriminator shape is the convention.</strong> Fourteen concrete
-          records derive <code>EntityChangedEvent&lt;TId&gt;</code> across the four repos: six in Store (<code>OrderChanged.cs:19</code>,
+          <li><strong>The shared base is the convenience; the discriminator shape is the convention.</strong> Fifteen concrete
+          records derive <code>EntityChangedEvent&lt;TId&gt;</code> across the four repos: seven in Store (<code>OrderChanged.cs:19</code>,
           <code>ShoppingCartChanged.cs:16</code>, <code>InventoryItemChanged.cs:17</code> under <code>Sales.Domain</code>,
           <code>Catalog.Domain/Products/DomainEvents/ProductChanged.cs:23</code>,
           <code>Catalog.Domain/Categories/DomainEvents/CategoryChanged.cs:19</code>,
+          <code>Catalog.Domain/Reviews/DomainEvents/ProductReviewChanged.cs:15-20</code>,
           <code>Identity.Domain/Customers/DomainEvents/CustomerChanged.cs:25</code>), seven in ADC Conference
           (<code>SponsorChanged.cs:16</code>, <code>EventChanged.cs:16</code>, <code>QuestionChanged.cs:16</code>, <code>CategoryChanged.cs:16</code>,
           <code>ActivityChanged.cs:16</code>, <code>SpeakerChanged.cs:21</code>, <code>SessionChanged.cs:18</code>), and one in Helpdesk
@@ -324,8 +337,8 @@
           whose doc cites the same rule as BR-60 at <code>:8-9</code>). Counting the shape rather than the base type, a
           sweep of every <code>DomainEvents/*.cs</code> declaring a <code>DomainEntityState State</code> member finds <strong>23 in ADC</strong>
           (16 Conference, 7 Engagement; Identity&#39;s two events are business-specific and carry no
-          discriminator), <strong>8 in Store</strong> (of eighteen domain events there, the other ten name business
-          transitions) and <strong>1 in Helpdesk</strong>: <strong>32</strong> in total.</li>
+          discriminator), <strong>9 in Store</strong> (of twenty-three domain events there, the other fourteen name
+          business transitions) and <strong>1 in Helpdesk</strong>: <strong>33</strong> in total.</li>
           <li><strong>Nothing enforces the taxonomy.</strong> The shared fitness rules require domain events to be sealed and to
           live in a <code>*.DomainEvents</code> namespace
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Naming.cs:66-75</code>), to
@@ -352,7 +365,7 @@
           <code>MMCA.ECommerce</code> companion sample carries two more adopters on the same pattern
           (<code>MMCA.ECommerce/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/DomainEvents/ProductChanged.cs:15</code>,
           <code>.../Orders/MMCA.ECommerce.Orders.Domain/Orders/DomainEvents/OrderChanged.cs:15</code>), which brings the
-          total number of records deriving the base to <strong>16</strong>.</p>
+          total number of records deriving the base to <strong>17</strong>.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>One type per entity is one subscription surface.</strong> A subscriber declares interest in the entity,
@@ -367,7 +380,7 @@
           <li><strong>The carve-out keeps the model honest.</strong> A CRUD discriminator is the right answer for &quot;a row
           changed&quot; and the wrong answer for &quot;payment cleared&quot;: <code>OrderPaid</code> carries an order-line snapshot
           precisely so downstream handlers do not re-query inside an uncommitted transaction
-          (<code>OrderPaid.cs:10-12</code>). Folding that into a lifecycle base would hang a nullable business payload off
+          (<code>OrderPaid.cs:14-16</code>). Folding that into a lifecycle base would hang a nullable business payload off
           every entity&#39;s event.</li>
           <li><strong>Adding a transition is cheap.</strong> A new lifecycle state is an enum member plus handler branches, not
           a new record, a new registration and a new payload shape.</li>
@@ -388,7 +401,7 @@
           tell the transitions apart
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/LivePolls/DomainEvents/LivePollChanged.cs:9-11,17-22</code>),
           which is a state machine expressed through the CRUD shape rather than as its own events.</li>
-          <li><strong>The base type is optional in practice.</strong> 14 of the 32 lifecycle events across the three apps derive
+          <li><strong>The base type is optional in practice.</strong> 15 of the 33 lifecycle events across the three apps derive
           <code>EntityChangedEvent&lt;TId&gt;</code>; the other 18 re-declare the same two members on <code>BaseDomainEvent</code>.
           Consistency is a review convention, not a fitness function (ADR-015), so a new module can drift
           without a failing test.</li>
@@ -401,7 +414,7 @@
           positively for the state they want are unaffected; a handler written as a two-branch test over
           <code>Added</code> versus everything else would silently treat it as the second branch.</li>
           <li><strong>A wire discriminator is a versioning obligation.</strong> Once <code>State</code> is in the frozen contract
-          (<code>IntegrationEventContractTests.cs:11</code>), the enum&#39;s member values are part of the payload: adding a
+          (<code>IntegrationEventContractTests.cs:12</code>), the enum&#39;s member values are part of the payload: adding a
           member is additive, but renumbering or removing one is a breaking change under ADR-010.</li>
           </ul>
           <h2 id="related">Related</h2>

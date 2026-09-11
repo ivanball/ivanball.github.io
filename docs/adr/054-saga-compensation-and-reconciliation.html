@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -237,11 +239,16 @@
           base class, and the redelivery blast radius is the whole save&#39;s local batch. Amended (2026-09-01):
           an order line whose inventory row is missing is no longer silently skipped, so the best-effort
           trade-off is rewritten around the returned unmatched ids and the handler warning; the
-          <code>RestoreInventory</code> and <code>maxReplicas</code> citations are corrected.</p>
+          <code>RestoreInventory</code> and <code>maxReplicas</code> citations are corrected. Revised (2026-09-11): the
+          reconciliation sweep now runs two passes per cycle, so the sweep bullet records the second one
+          (expiring stranded unpaid orders straight to <code>Cancelled</code> so the existing compensation releases their
+          stock) alongside the Stripe reconciliation it already described; the <code>PaymentReconciliationSettings</code>
+          path, the <code>CheckOutHandler</code> transaction range, the index, <code>appsettings.json</code>, <code>maxReplicas</code> and every
+          <code>PaymentReconciliationService</code> citation are re-anchored.</p>
           <h2 id="context">Context</h2>
           <p>Checkout spans a boundary no transaction covers. <code>CheckOutHandler</code> commits the order insert, the cart
           transition and the atomic conditional stock decrements in one local transaction
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:94-136</code>),
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:121-165</code>),
           but the money moves at Stripe and the confirmation arrives later, as a webhook, from outside the
           database. Two failure shapes follow directly:</p>
           <ul>
@@ -272,9 +279,9 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:184-189</code>), so every one
           opens its own scope through <code>IServiceScopeFactory</code> (<code>OrderCancelledSagaHandler.cs:40</code>,
           <code>OrderPaymentFailedSagaHandler.cs:29</code>,
-          <code>.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:89,132</code>), and the ones that persist
+          <code>.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:201,220,266</code>), and the ones that persist
           resolve their own <code>IUnitOfWork</code> inside it (<code>OrderCancelledSagaHandler.cs:41</code>,
-          <code>PaymentReconciliationService.cs:91,133</code>). <code>OrderPaymentFailedSagaHandler</code> is the exception that
+          <code>PaymentReconciliationService.cs:202,221,267</code>). <code>OrderPaymentFailedSagaHandler</code> is the exception that
           shows the rule: it resolves only <code>ICustomerService</code> and <code>IEmailSender</code>
           (<code>OrderPaymentFailedSagaHandler.cs:30-31</code>) and persists nothing, because its compensation is a
           notification. Compensation that does write therefore commits on its own, after the originating
@@ -310,26 +317,41 @@
           (<code>MMCA.Common/.../DbContexts/ApplicationDbContext.cs:490-521</code>, ADR-035). Two deliveries that both
           pass the marker check carry the same original token into their update: one commits, the other gets
           <code>DbUpdateConcurrencyException</code> and its outbox retry then finds the committed marker and skips.</li>
-          <li><strong>A periodic sweep drives the transitions a lost webhook would have.</strong>
-          <code>PaymentReconciliationService</code> (<code>.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:33-38</code>)
-          is registered as a hosted service by the Sales module&#39;s infrastructure
-          (<code>.../Infrastructure/DependencyInjection.cs:37</code>). Each cycle selects the oldest orders that have
-          sat in <code>PaymentInitiated</code> past a cutoff, ordered, bounded and projected to ids entirely in SQL
-          (<code>PaymentReconciliationService.cs:101-109</code>) over a dedicated filtered index
-          (<code>.../Persistence/EntityConfiguration/OrderConfiguration.cs:53-59</code>), asks Stripe for the session&#39;s
-          authoritative status, and applies the matching transition: paid to <code>MarkAsPaid</code>, expired to
-          <code>MarkAsPaymentFailed</code>, still open to nothing (<code>PaymentReconciliationService.cs:180-202</code>). It is
-          configuration-gated (<code>.../Infrastructure/Settings/PaymentReconciliationSettings.cs:13-36</code>, defaults
-          of a 10-minute interval, a 30-minute stuck age and a 50-order batch, carried in
-          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:66-71</code>).</li>
+          <li><strong>A periodic sweep drives the transitions a lost webhook would have, and expires the orders no
+          webhook will ever speak for.</strong> <code>PaymentReconciliationService</code>
+          (<code>.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:57</code>) is registered as a
+          hosted service by the Sales module&#39;s infrastructure (<code>.../Infrastructure/DependencyInjection.cs:42</code>)
+          and runs two passes per cycle against one age cutoff
+          (<code>PaymentReconciliationService.cs:108-119</code>). Both passes select the oldest matching orders, ordered,
+          bounded and projected to ids entirely in SQL through one shared helper
+          (<code>PaymentReconciliationService.cs:196-212</code>) over a dedicated filtered index
+          (<code>.../Persistence/EntityConfiguration/OrderConfiguration.cs:70-76</code>).
+          The reconciliation pass takes orders sitting in <code>PaymentInitiated</code> with a Stripe session
+          (<code>PaymentReconciliationService.cs:136-141</code>), asks Stripe for the session&#39;s authoritative status, and
+          applies the matching transition: paid to <code>MarkAsPaid</code>, expired to <code>MarkAsPaymentFailed</code>, still open
+          to nothing (<code>PaymentReconciliationService.cs:314-336</code>).
+          The expiry pass takes unpaid orders with no session to ask about, <code>PendingPayment</code> or
+          <code>PaymentFailed</code> past the same cutoff (<code>PaymentReconciliationService.cs:172-176</code>), which hold stock
+          checkout already committed and which nothing else can release. It calls no provider: it drives them
+          to <code>Cancelled</code> through <code>MarkAsCancelled</code> (<code>PaymentReconciliationService.cs:240</code>), the terminal state
+          <code>OrderCancelledSagaHandler</code> already listens on, so the compensation and its marker return the stock
+          exactly once. <code>Cancelled</code> rather than <code>PaymentFailed</code> because <code>PaymentFailed</code> is retryable, so such
+          an order keeps its stock for the whole retry window and loses it only when the window passes without
+          a retry (<code>PaymentReconciliationService.cs:41-49</code>). Expiry runs before reconciliation in the cycle so
+          an order the reconciliation pass just moved into <code>PaymentFailed</code> is not cancelled in the same cycle
+          (<code>PaymentReconciliationService.cs:113-118</code>). The sweep is configuration-gated
+          (<code>.../Payments/Reconciliation/PaymentReconciliationSettings.cs:18</code>, defaults of a 10-minute interval,
+          a 30-minute stuck age and a 50-order batch, carried in
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:85-90</code>).</li>
           <li><strong>The sweep gets no private path into the aggregate, and loses races on purpose.</strong> It calls the same
           guarded transitions as the webhook handler
           (<code>.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:97,128</code>) and the
-          client-initiated check (<code>.../Orders/UseCases/VerifyPayment/VerifyPaymentHandler.cs:64</code>). It reloads
-          each order tracked in its own scope and re-checks the status under the fresh load
-          (<code>PaymentReconciliationService.cs:136-147</code>), and a <code>DbUpdateConcurrencyException</code> from a webhook
-          that won the race is logged and skipped, not retried
-          (<code>PaymentReconciliationService.cs:167-172</code>).</li>
+          client-initiated check (<code>.../Orders/UseCases/VerifyPayment/VerifyPaymentHandler.cs:64</code>). Both passes
+          reload each order tracked in its own scope and re-check the status under the fresh load
+          (<code>PaymentReconciliationService.cs:271-281</code> for reconciliation,
+          <code>PaymentReconciliationService.cs:224-236</code> for expiry), and a <code>DbUpdateConcurrencyException</code> from a
+          webhook or a customer that won the race is logged and skipped, not retried
+          (<code>PaymentReconciliationService.cs:301-305</code>, <code>PaymentReconciliationService.cs:252-257</code>).</li>
           </ul>
           <p>The loop shape is deliberate and shared, and it lives in the framework rather than in the sweep.
           MMCA.Common ships it as an abstract base class, <code>PeriodicBackgroundService</code>
@@ -337,12 +359,12 @@
           whose <code>ExecuteAsync</code> owns the enablement gate, the startup delay, the per-cycle <code>try</code>/<code>catch</code> that
           never kills the loop, and every wait through <code>TimeProvider</code>
           (<code>PeriodicBackgroundService.cs:45-87</code>). <code>PaymentReconciliationService</code> derives from it
-          (<code>PaymentReconciliationService.cs:39</code>) and overrides only the three parts that are its own:
-          <code>Interval</code>, read from configuration (<code>PaymentReconciliationService.cs:46</code>); <code>IsEnabled</code>, which
+          (<code>PaymentReconciliationService.cs:63</code>) and overrides only the three parts that are its own:
+          <code>Interval</code>, read from configuration (<code>PaymentReconciliationService.cs:70</code>); <code>IsEnabled</code>, which
           distinguishes &quot;the toggle is off&quot; from &quot;Stripe is not configured&quot; before refusing to run
-          (<code>PaymentReconciliationService.cs:54-72</code>); and <code>ExecuteCycleAsync</code>, which delegates to the
+          (<code>PaymentReconciliationService.cs:78-96</code>); and <code>ExecuteCycleAsync</code>, which delegates to the
           internally visible <code>ReconcileOnceAsync</code> so one cycle is testable without the timer
-          (<code>PaymentReconciliationService.cs:75-76</code>). It is the base class&#39;s <strong>only</strong> subclass in any of the
+          (<code>PaymentReconciliationService.cs:99-100</code>). It is the base class&#39;s <strong>only</strong> subclass in any of the
           four repos, apart from the test double in <code>PeriodicBackgroundService</code>&#39;s own unit tests
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/PeriodicBackgroundServiceTests.cs:104</code>).</p>
           <p><strong>Adoption is one module.</strong> This pattern lives in MMCA.Store&#39;s Sales module only: the two saga
@@ -381,8 +403,9 @@
           <li><strong>Inconsistency is bounded, not eliminated.</strong> Between the cancellation commit and the compensation
           commit, stock is held against a cancelled order. Between a dropped webhook and the sweep, an order
           sits in <code>PaymentInitiated</code> with stock held for up to the stuck age plus one poll interval (30 plus
-          10 minutes at the shipped defaults). That window is the price of not having a distributed
-          transaction.</li>
+          10 minutes at the shipped defaults), and an order that never reaches Stripe at all holds its stock
+          for the same window before the expiry pass cancels it. That window is the price of not having a
+          distributed transaction.</li>
           <li><strong>Compensation is best-effort per line, and names what it could not restore.</strong> <code>RestoreInventory</code>
           skips an order line whose <code>InventoryItem</code> row is missing
           (<code>InventoryRestorationDomainService.cs:22-27</code>), but the skip is not silent: the unmatched variant
@@ -408,7 +431,7 @@
           swallow its failures itself.</li>
           <li><strong>The sweep is not replica-leased.</strong> The outbox processor claims rows with a lease before working
           them (ADR-003); the sweep takes no such claim, so at the configured <code>maxReplicas: 2</code>
-          (<code>MMCA.Store/infra/main.bicep:1359</code>) two replicas can pick the same stuck order and each spend a
+          (<code>MMCA.Store/infra/main.bicep:1793</code>) two replicas can pick the same stuck order and each spend a
           Stripe status call. Correctness holds through the concurrency token; the duplicated external call
           does not deduplicate.</li>
           <li><strong>Every compensating action needs its own marker.</strong> There is no generic mechanism: the ADR-021

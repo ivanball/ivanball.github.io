@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -228,15 +230,16 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-111-ai-session-scoring-governance">ADR-111: AI Session Scoring Governance</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-04). <strong>Extended by <a href="120-governed-chat-client-boundary.html">ADR-120</a></strong> (2026-09-11): the rules here that belong to <em>calling a model</em> rather than to <em>scoring a session</em> (a bounded call, a versioned and hashed prompt contract, token metering tagged by model and prompt version, the isolation of the provider SDK) ship as the optional framework package <code>MMCA.Common.AI</code>. This record is not superseded: the scoring-specific rules below, the prompt-change protocol, the two evaluation tiers, the input and output guardrails and the budgeted ceiling alert all stand. ADC migrates <code>AnthropicScoringService</code> onto the governed <code>IChatClient</code> at its next MMCA.Common bump, keeping <code>IAiScoringService</code>, <code>PromptVersion</code> and the evaluation gate; the per-service meter <code>MMCA.ADC.Conference.Scoring</code> named in decision 8 is replaced by the framework meter <code>MMCA.Common.AI</code>, so the dashboard and alert queries move with it.</p>
+          <p>Accepted (2026-09-04). <strong>Extended by <a href="120-governed-chat-client-boundary.html">ADR-120</a></strong> (2026-09-11): the rules here that belong to <em>calling a model</em> rather than to <em>scoring a session</em> (a bounded call, a versioned and hashed prompt contract, token metering tagged by model and prompt version, the isolation of the provider SDK) ship as the optional framework package <code>MMCA.Common.AI</code>. This record is not superseded: the scoring-specific rules below, the prompt-change protocol, the two evaluation tiers, the input and output guardrails and the budgeted ceiling alert all stand. <strong>Revised 2026-09-11</strong>: that migration has shipped. <code>AnthropicScoringService</code> is constructed over the governed <code>IChatClient</code> and keeps <code>IAiScoringService</code>, <code>PromptVersion</code> and the evaluation gate, so decisions 1, 2, 7 and 8 below read against the framework client: the service constructs no <code>HttpClient</code>, defines no counters, and token usage is metered by the framework on the <code>MMCA.Common.AI</code> meter, which is what the ceiling alert now queries. Decision 9 changed with it: the hosted drain and the crash-recovery sweep are gone, replaced by the <a href="114-internal-commands-durable-job-queue.html">ADR-114</a> internal-command pipeline, and the trigger endpoint always answers 202.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.ADC ships one product feature that calls a language model. An organizer, looking at the session
           selection dashboard for an event, can trigger an AI scoring pass that rates every non-service session
           of that event on six criteria and a penalty, and the resulting numbers are what the program committee
-          argues over when it accepts or declines a talk. Each scored session is one paid call to the Anthropic
-          Messages API. The key has been a deployed parameter of the Conference container app since 2026-04-04
-          and is injected as <code>Anthropic__ApiKey</code> from Key Vault
-          (<code>MMCA.ADC/infra/main.bicep:1376</code>, secret at <code>:1070</code>, Key Vault reference at <code>:1313</code>).</p>
+          argues over when it accepts or declines a talk. Each scored session is one paid Anthropic call. The
+          key has been a deployed parameter of the Conference container app since 2026-04-04 and is injected as
+          <code>Anthropic__ApiKey</code> from Key Vault (<code>MMCA.ADC/infra/main.bicep:1790</code>, secret at <code>:1456</code>, Key Vault
+          reference at <code>:1719</code>), which the deployed hosts map onto the framework&#39;s <code>Ai:ApiKey</code>
+          (<code>MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:86-90</code>).</p>
           <p>Rubric version 2 (ADR-110) turned section 16 into AI-Native Application Architecture, with criteria
           that a feature calling a model must satisfy: model calls behind a port, prompt and model versioning,
           an evaluation suite gating CI, guardrails and PII redaction at the boundary, and LLM observability
@@ -251,11 +254,12 @@
           the model id was persisted.</li>
           <li>Nothing tested the behavior. Unit tests covered parsing, clamping and failure handling, so a prompt
           edit, a model deprecation or a provider-side contract change would have shipped through a fully
-          green CI leg (<code>MMCA.ADC/.github/workflows/deploy.yml:441-444</code>).</li>
+          green CI leg (<code>MMCA.ADC/.github/workflows/deploy.yml:443-447</code>).</li>
           <li>The user message was <code>Title: ...</code> and <code>Description: ...</code> labelled lines assembled from text a
           stranger typed into a public call-for-papers form. A description could open with its own <code>Title:</code>
-          line and there was nothing in the format that said which one the reviewer should believe
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:226-230</code>).</li>
+          line and there was nothing in the format that said which one the reviewer should believe (the
+          delimited envelope that replaced it is at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:275-284</code>).</li>
           <li>Speaker bios pasted from a resume went to a third-party model with their email addresses and phone
           numbers intact.</li>
           <li>Spend was visible only as a per-session log line. Nothing aggregated tokens, and nothing alerted on
@@ -271,27 +275,34 @@
           <ol>
           <li><p><strong>The model call is behind a port, and the port carries the versions.</strong> <code>IAiScoringService</code>
           (<code>MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:6</code>)
-          exposes <code>ScoreSessionAsync</code> plus <code>ModelId</code> (<code>:16</code>) and <code>PromptVersion</code> (<code>:30</code>). It is declared in
-          Application, so nothing above Infrastructure knows the provider exists. The contract is that the
-          method never throws for a scoring failure: failure is a <code>Success = false</code> result (<code>:9</code>, shape at
-          <code>:54-85</code>). <code>AnthropicScoringService</code> is the only implementation
-          (<code>MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:19</code>), registered
-          as a typed <code>HttpClient</code> against <code>https://api.anthropic.com/</code> with the <code>anthropic-version</code>
-          header pinned to <code>2023-06-01</code>
-          (<code>MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:32-36</code>).</p>
+          exposes <code>ScoreSessionAsync</code> (<code>:11</code>) plus <code>ModelId</code> (<code>:16</code>) and <code>PromptVersion</code> (<code>:30</code>). It is
+          declared in Application, so nothing above Infrastructure knows the provider exists. The contract
+          is that the method never throws for a scoring failure: failure is a <code>Success = false</code> result
+          (shape at <code>:54-85</code>). <code>AnthropicScoringService</code> is the only implementation
+          (<code>MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:30</code>), and it owns
+          no transport: the credential, the base address, the provider SDK, the per-call timeout and the
+          tool gate belong to the framework&#39;s governed <code>IChatClient</code> (ADR-120), configured under the <code>Ai</code>
+          section and registered by the host, so nothing in this module constructs an <code>HttpClient</code> for
+          Anthropic (<code>MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:33-46</code>). The client is
+          resolved with <code>GetService</code> rather than <code>GetRequiredService</code>, because a host with <code>Ai:Enabled</code>
+          false or no key registers no client at all; that null <strong>is</strong> the disabled path, and scoring
+          answers a failed result and calls nothing (<code>DependencyInjection.cs:38-44</code>,
+          <code>AnthropicScoringService.cs:22-33</code>, disabled branch at <code>:86-90</code>).</p>
           </li>
           <li><p><strong>The model id is a constant on the implementation, and changing it is a prompt-contract event.</strong>
-          <code>ModelId</code> is <code>claude-haiku-4-5</code> (<code>AnthropicScoringService.cs:26</code>). It is sent on every request
-          (<code>:57</code>) and tagged onto both cost counters (<code>:356</code>, <code>:359-360</code>). A model swap moves the per-token
+          <code>ModelIdValue</code> is <code>claude-haiku-4-5</code> (<code>AnthropicScoringService.cs:47</code>). It is one of the four
+          components of the module&#39;s single <code>PromptContract</code> (<code>:76-77</code>), so the port&#39;s <code>ModelId</code> reads off
+          that contract (<code>:57</code>), the contract supplies it on every request (<code>:98</code>), and the framework tags
+          it onto every usage measurement (<code>:36-40</code>, <code>:118-120</code>). A model swap moves the per-token
           price and the scores at once, so the rule is the same as for a prompt edit: run the live judge
           against the new model and review the drift case by case before merging, because nothing in the
           golden replay can see a model change (its responses are recorded).</p>
           </li>
           <li><p><strong>The prompt is versioned, the version is persisted, and a hash test enforces the bump.</strong>
           <code>PromptVersion</code> is a dated <code>yyyy-MM-dd.N</code> string, currently <code>2026-09-04.1</code>
-          (<code>AnthropicScoringService.cs:37</code>), and its documented scope is any change to the system prompt,
+          (<code>AnthropicScoringService.cs:216</code>), and its documented scope is any change to the system prompt,
           the user-prompt assembly, the speaker formatting, the redaction rules or the structured-output
-          schema (<code>:29-36</code>, restated on the port at <code>IAiScoringService.cs:18-29</code>). It is stored beside the
+          schema (<code>:59-67</code>, restated on the port at <code>IAiScoringService.cs:18-29</code>). It is stored beside the
           model id on every score: <code>SessionAiScore.ModelUsed</code>
           (<code>MMCA.ADC.Conference.Domain/Sessions/SessionAiScore.cs:43</code>) and <code>SessionAiScore.PromptVersion</code>
           (<code>:52</code>), both required by the factory (<code>:77-88</code>, assignment at <code>:114-115</code>). The column is
@@ -300,15 +311,18 @@
           indistinguishable from a bug
           (<code>MMCA.ADC.Migrations.SqlServer.Conference/Migrations/20260905004525_AddSessionAiScorePromptVersion.cs:13-26</code>).
           <code>AnthropicScoringService.RenderPrompt</code> renders the exact system-plus-user pair the service would
-          send, without calling the API (<code>:277-284</code>), and <code>PromptContractTests</code> hashes it with SHA-256 for
+          send, without calling the model (<code>:321-328</code>), and <code>PromptContractTests</code> hashes it with SHA-256 for
           one canonical proposal fixed in the test file rather than read from the corpus, comparing against
           <code>Golden/prompt-versions.json</code>
-          (<code>MMCA.ADC.Conference.Scoring.Evaluation.Tests/PromptContractTests.cs:37-45</code>, <code>:47-66</code>). Two
-          failures are possible and both are deliberate: the hash for the current version no longer matches
-          (a prompt edit with no bump), or the current version is not in the file (a bump with no recorded
-          hash). Two further tests pin the shape of the version string and the 32-character column limit
-          (<code>:68-76</code>) and assert that both halves of the contract, including the anti-injection paragraph, are
-          in the rendered text (<code>:78-88</code>).</p>
+          (<code>MMCA.ADC.Conference.Scoring.Evaluation.Tests/PromptContractTests.cs:45-64</code>, canonical input at
+          <code>:50</code>, hashing at <code>:98-99</code>). Two failures are possible and both are deliberate: the hash for the
+          current version no longer matches (a prompt edit with no bump), or the current version is not in
+          the file (a bump with no recorded hash). Three further tests pin the shape of the version string
+          and the 32-character column limit (<code>:66-74</code>), assert that both halves of the contract, including
+          the anti-injection paragraph, are in the rendered text (<code>:76</code>), and pin that the framework
+          <code>PromptContract</code> really describes the prompt the service renders, so a prompt edit moves both the
+          recorded hash and the contract hash the framework stamps on every request (<code>:108</code>). Neither test
+          needs a chat client: they construct the service with a null one (<code>:123-125</code>).</p>
           </li>
           <li><p><strong>The prompt change protocol is written down and is five steps.</strong> Bump <code>PromptVersion</code> to today&#39;s
           date; run <code>PromptContractTests</code>, whose failure message carries the new hash; add the
@@ -324,88 +338,96 @@
           (<code>MMCA.ADC.Conference.Scoring.Evaluation.Tests/README.md:8-17</code>) over a corpus of seven cases,
           <code>Golden/case-*.json</code>, each holding a proposal, the exact recorded Anthropic response, and the band
           its overall score must land in (<code>:19-43</code>). <code>GoldenReplayTests</code> replays every case through the real
-          service against a handler that returns that case&#39;s recorded response, asserting both what goes out
-          (the delimited envelope and the untrusted-input brief are on the wire) and what comes back (the
-          response still parses, still succeeds, and still produces the same weighted overall inside the
-          band), with the weighting re-derived in the test from the same recorded sub-scores
-          (<code>GoldenReplayTests.cs:49-83</code>, request assertions at <code>:182-198</code>). A separate test keeps the corpus
-          from silently shrinking below six cases or losing the injection and no-speaker cases (<code>:85-95</code>).
+          service against a stub <code>IChatClient</code> that returns that case&#39;s recorded response, asserting both
+          what goes out (the delimited envelope and the untrusted-input brief are on the request) and what
+          comes back (the response still parses, still succeeds, and still produces the same weighted overall
+          inside the band), with the weighting re-derived in the test from the same recorded sub-scores
+          (<code>GoldenReplayTests.cs:35-70</code>, stub at <code>:136</code>, request assertions at <code>:213-230</code>). A separate test
+          keeps the corpus from silently shrinking below six cases or losing the injection and no-speaker
+          cases (<code>:72-82</code>).
           <code>LiveJudgeTests</code> scores the same proposals through the real API, is trait-gated
           <code>Category=AiEval.Live</code>, and skips itself dynamically when <code>ANTHROPIC_API_KEY</code> is absent so a run
           that judged nothing says so rather than reporting a pass (<code>LiveJudgeTests.cs:29</code>, <code>:51-64</code>). In CI
           the <code>ai-eval-gate</code> job runs the free tier on every code deploy with <code>--minimum-expected-tests 1</code>,
           so a discovery breakage reds the gate instead of reporting a vacuous pass
-          (<code>.github/workflows/deploy.yml:461-463</code>, <code>:486-493</code>), and adds the paid tier only when the
+          (<code>.github/workflows/deploy.yml:470-472</code>, step at <code>:494-502</code>), and adds the paid tier only when the
           <code>changes</code> job&#39;s <code>scoring</code> output is true, which the path filter sets for the scoring
           infrastructure folder, the <code>ScoreEventSessions</code> use-case folder and the evaluation-test project
-          (<code>:68</code>, <code>:147-155</code>, step at <code>:495-506</code>). <code>ai-eval-gate</code> is in <code>deploy.needs</code> and in the <code>deploy</code>
-          job&#39;s <code>if</code> (<code>:1237</code>, <code>:1284</code>).</p>
+          (<code>:68</code>, <code>:154-156</code>, step at <code>:504-515</code>). <code>ai-eval-gate</code> is in <code>deploy.needs</code> and in the <code>deploy</code>
+          job&#39;s <code>if</code> (<code>:1305</code>, <code>:1352</code>).</p>
           </li>
           <li><p><strong>Input guardrails: delimit, escape, instruct, redact.</strong> The user message is an XML-shaped envelope
           rather than labelled lines: <code>&lt;session_proposal&gt;</code> wrapping <code>&lt;session_title&gt;</code>,
           <code>&lt;session_description&gt;</code> and a <code>&lt;speakers&gt;</code> block of <code>&lt;speaker&gt;</code> elements
-          (<code>AnthropicScoringService.cs:231-240</code>, speakers at <code>:242-267</code>). Every submitted value is escaped
+          (<code>AnthropicScoringService.cs:275-284</code>, speakers at <code>:286-311</code>). Every submitted value is escaped
           first, and because angle brackets are the only characters that can forge a delimiter, replacing
           <code>&lt;</code> and <code>&gt;</code> with their entities is the whole containment story: a submitted <code>&lt;/session_title&gt;</code>
-          arrives as text and closes nothing (<code>:292-298</code>). The system brief ends with a named constant,
-          <code>UntrustedInputBrief</code> (<code>:217-224</code>), which declares everything inside the tags to be untrusted data
+          arrives as text and closes nothing (<code>:339-342</code>). The system brief ends with a named constant,
+          <code>UntrustedInputBrief</code> (<code>:261-268</code>), which declares everything inside the tags to be untrusted data
           rather than instructions, says the only instructions the model obeys are the ones in the brief,
           tells it to ignore any role change or claim of authority inside the tags, wires an injection
           attempt straight to the existing 1.0 penalty so the model applies a rule instead of making a
           judgement call, and states that angle brackets inside values are escaped. It is a separate constant
           only so the evaluation suite can assert on it by name; it is concatenated into <code>SystemPrompt</code> and
-          is never sent alone (<code>:204-216</code>, concatenation at <code>:202</code>). Submitted free text is redacted for
-          email addresses and phone numbers before it is escaped (<code>:303-304</code>, patterns at <code>:306-320</code>). A
+          is never sent alone (<code>:220-246</code>, concatenation at <code>:246</code>). Submitted free text is redacted for
+          email addresses and phone numbers before it is escaped (<code>:347-348</code>, patterns at <code>:350-364</code>). A
           speaker&#39;s name is deliberately not redacted: it is the published conference record and the only
-          handle the credibility criterion has on a track record (<code>:253-255</code>). The phone pattern is
+          handle the credibility criterion has on a track record (<code>:296-302</code>). The phone pattern is
           deliberately narrow rather than &quot;any run of digits&quot;, because a bio legitimately contains years,
-          team sizes and throughput figures (<code>:312-315</code>).</p>
+          team sizes and throughput figures (<code>:356-364</code>).</p>
           </li>
           <li><p><strong>Output guardrail: the response is schema-constrained, and anything else is a failure.</strong> The
-          request carries an <code>output_config</code> with a JSON-schema format (<code>:61-64</code>, schema built at
-          <code>:394-425</code>) whose object declares <code>additionalProperties: false</code>, six numeric criteria, a <code>penalty</code>
-          enumerated to 0, 0.5 or 1, and a <code>reasoning</code> string, with all eight required. The parse therefore
-          treats the whole text block as the JSON object, and prose, fences or truncation are a failed call
-          rather than something to salvage (<code>:116-129</code>). A refusal is detected explicitly on
-          <code>stop_reason == &quot;refusal&quot;</code> and returns a failed result (<code>:98-102</code>), as does an empty response
-          (<code>:104-111</code>). A partial object, any of the six sub-scores or the penalty missing, is a failed
-          parse and not a success with defaults clamped up to the minimum, which is why every sub-score is
-          nullable on the response record (<code>:131-147</code>, record at <code>:506-533</code>). The weighted overall is
-          computed in our code from the sub-scores the model returned, never taken from the model
-          (<code>:149-157</code>), and every value is clamped to 1.0 through 10.0 (<code>:364</code>).</p>
+          request sets <code>ChatResponseFormat.ForJsonSchema</code> over the score schema (<code>:100</code>, schema built at
+          <code>:388-419</code>) whose object declares <code>additionalProperties: false</code>, six numeric criteria, a <code>penalty</code>
+          enumerated to 0, 0.5 or 1, and a <code>reasoning</code> string, with all eight required. The output ceiling
+          is a named constant, 256 tokens, which the framework&#39;s <code>Ai:MaxOutputTokens</code> clamps again at its
+          own boundary (<code>:49-54</code>, <code>:99</code>). The parse therefore treats the whole text block as the JSON
+          object, and prose, fences or truncation are a failed call rather than something to salvage
+          (<code>:155-167</code>). A refusal is detected explicitly and returns a failed result, counting both the
+          normalized <code>ContentFilter</code> finish reason and the provider&#39;s raw <code>refusal</code> value so a mapping
+          change on either side cannot turn a refusal into an unparseable answer (<code>:126-130</code>, <code>:142-153</code>),
+          as does an empty response (<code>:132-137</code>). A partial object, any of the six sub-scores or the penalty
+          missing, is a failed parse and not a success with defaults clamped up to the minimum, which is why
+          every sub-score is nullable on the response record (<code>:169-186</code>, record at <code>:429</code>). The weighted
+          overall is computed in our code from the sub-scores the model returned, never taken from the model
+          (<code>:188-201</code>), and every value is clamped to 1.0 through 10.0 (<code>:366</code>).</p>
           </li>
-          <li><p><strong>Cost: two token counters and a budgeted ceiling alert.</strong> <code>scoring.tokens.input</code> and
-          <code>scoring.tokens.output</code> are counters on the meter <code>MMCA.ADC.Conference.Scoring</code>, the same meter
-          the scoring processor already exports, so a host that exports one exports all of them
-          (<code>AnthropicScoringService.cs:343-351</code>, meter name at <code>SessionScoringProcessor.cs:59</code>). Both are
-          tagged <code>model</code> and <code>prompt_version</code> (<code>:328-329</code>, recorded at <code>:354-361</code>), because those are
-          exactly what changes spend: a model swap moves the per-token price, a prompt revision moves the
-          token count (<code>:381-387</code>). They are recorded from the usage block of every response, including the
-          ones that go on to fail (<code>:92-96</code>). In production the counters reach App Insights, where a
-          scheduled query rule sums both over a rolling two-day window (the longest window the rule type
-          evaluates; a 30-day override was rejected at deploy time on 2026-09-05) and fires when the total
-          crosses <code>aiScoringTokenCeiling</code>, defaulted to 2,000,000 tokens, the envelope of one full pass
-          (<code>MMCA.ADC/infra/main.bicep:77-78</code>, rule at <code>:475-516</code>, query at <code>:500</code>). The rule is severity 3,
-          not a page: a budget breach is a cost signal, nothing is down (<code>:482-484</code>). It is deployed only
-          when a key is present (<code>:143</code>, <code>:475</code>), because with no key the feature is inert and the rule
-          could only ever evaluate zero.</p>
+          <li><p><strong>Cost: the framework meters the tokens, and a budgeted ceiling alert watches the total.</strong> The
+          service defines no counters and no meter of its own. Token usage rides the governed pipeline:
+          <code>UsageRecordingChatClient</code> in <code>MMCA.Common.AI</code> records <code>mmca.ai.input_tokens</code> and
+          <code>mmca.ai.output_tokens</code> on the <code>MMCA.Common.AI</code> meter, tagged <code>model</code>, <code>prompt_name</code>,
+          <code>prompt_version</code> and <code>provider</code>, and the prompt contract is what supplies those identity tags, so
+          the spend graph attributes tokens to this prompt rather than to &quot;the Conference service&quot;
+          (<code>AnthropicScoringService.cs:118-120</code>, <code>PromptName</code> at <code>:35-40</code>, contract at <code>:70-77</code>). Those tags
+          are exactly what changes spend: a model swap moves the per-token price, a prompt revision moves
+          the token count. What stays local is per-session forensics, one usage log line per response
+          including the ones that go on to fail (<code>:121-124</code>, message at <code>:424-425</code>). In production the
+          framework counters reach App Insights, where a scheduled query rule sums both over a rolling
+          two-day window (the longest window the rule type evaluates; a 30-day override was rejected at
+          deploy time on 2026-09-05) and fires when the total crosses <code>aiScoringTokenCeiling</code>, defaulted to
+          2,000,000 tokens, the envelope of one full pass (<code>MMCA.ADC/infra/main.bicep:74-78</code>, rule at
+          <code>:552</code>, window at <code>:577-578</code>, query at <code>:583</code>, threshold at <code>:587</code>). The rule is severity 3, not a
+          page: a budget breach is a cost signal, nothing is down (<code>:559-561</code>). It is deployed only when a
+          key is present (<code>:156</code>, <code>:552</code>), because with no key the feature is inert and the rule could only
+          ever evaluate zero.</p>
           </li>
           <li><p><strong>The trigger is human-initiated and permission-gated, and nothing starts unrequested paid work.</strong>
           The only entry point is <code>POST /SessionSelection/score/{eventId}</code>
-          (<code>MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:106-130</code>) on a
-          controller gated by <code>[HasPermission(ConferencePermissions.SessionSelectionManage)]</code> (<code>:29</code>). It
-          enqueues and answers 202, refusing a second request for an event already queued or running with
-          409 rather than starting a second pass, because two concurrent passes would double the spend while
-          racing each other&#39;s writes (<code>:118-129</code>, reasoning at <code>:101-105</code>). The drain is single-reader
-          (<code>SessionScoringProcessor.cs:105-152</code>) and claims the event on a cross-replica
-          <code>IDistributedLock</code> (ADR-108) with a 15-minute time-to-live and a zero wait, so a duplicate trigger
-          on another replica skips rather than queues behind it (<code>:85</code>, <code>:92</code>, key at <code>:101-102</code>, claim at
-          <code>:175-188</code>). A failed run is retried at most three times (<code>:74</code>, <code>:143-147</code>) and then counted as a
-          terminal failure (<code>:96-99</code>, <code>:149-150</code>). The crash-recovery sweep is bounded by the same principle:
-          an event with zero scores is never enqueued, because nobody triggered it and starting a pass the
-          organizer did not ask for would bill every event in the database on the first tick, and a partially
-          scored event is only recovered while its newest score is inside the recovery window
-          (<code>SessionScoringSweepJob.cs:28-43</code>).</p>
+          (<code>MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:108-126</code>) on a
+          controller gated by <code>[HasPermission(ConferencePermissions.SessionSelectionManage)]</code> (<code>:30</code>). It
+          schedules a durable internal command, <code>ScoreEventSessionsInternalCommand</code> (ADR-114), and always
+          answers 202: the pass runs off the request path, and a schedule failure is the only thing that can
+          turn the call into an error (<code>:111-125</code>, reasoning at <code>:97-109</code>). Deduplication belongs to the
+          handler rather than to the endpoint. <code>ScoreEventSessionsInternalCommandHandler</code> claims the event on
+          a cross-replica <code>IDistributedLock</code> (ADR-108) with a 15-minute time-to-live and a zero wait, so a
+          duplicate trigger logs and completes rather than queuing behind the pass already running or paying
+          for the same Anthropic calls twice
+          (<code>MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:15-22</code>,
+          time-to-live at <code>:53</code>, wait at <code>:60</code>, claim at <code>:76</code>, key at <code>:100</code>). Durability, the claim lease
+          and the retry backoff are the framework internal-command processor&#39;s, so the module carries no
+          hosted drain and no crash-recovery sweep of its own
+          (<code>MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:48-52</code>). Nothing else starts a paid
+          pass: no schedule, no event handler, no background heuristic.</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -442,8 +464,13 @@
           <li><strong>Computing the overall ourselves keeps the arithmetic out of the model.</strong> The model returns six
           sub-scores and a penalty; the weighting, subtraction and clamp are C#, so a weighting change is a
           code review and a test failure rather than a prompt edit nobody can diff.</li>
-          <li><strong>Tagging the counters by model and prompt version makes the bill attributable.</strong> An unexplained
-          spend jump resolves to either &quot;the model changed&quot; or &quot;the prompt got longer&quot; without opening a log.</li>
+          <li><strong>Tagging usage by model, prompt name and prompt version makes the bill attributable.</strong> An
+          unexplained spend jump resolves to either &quot;the model changed&quot; or &quot;the prompt got longer&quot; without
+          opening a log, and the prompt name keeps a second AI feature&#39;s spend separate from this one&#39;s.</li>
+          <li><strong>The endpoint returning 202 unconditionally is the honest answer.</strong> The endpoint knows only that
+          the command was written down. Whether a pass is already running is the claim&#39;s answer, minutes
+          later and on another replica, so reporting a conflict at the boundary would be a guess dressed as
+          a status code.</li>
           <li><strong>The human trigger is the real spend control.</strong> No schedule, no event handler and no background
           heuristic starts a paid pass. The ceiling alert is a backstop for a runaway or repeated pass, not
           the primary defence.</li>
@@ -483,21 +510,30 @@
           accumulation across a month does not. A single runaway pass can spend its whole way through the
           envelope inside an hour, and the alert notices on the next evaluation, at most twelve hours later.
           It is a budget guard, not a circuit breaker: nothing stops the calls.</li>
-          <li><strong>Cost visibility depends on the metrics export staying on.</strong> The counters ride the application
-          meter, which the http-client and runtime instrument toggles do not touch (<code>infra/main.bicep:472-474</code>),
-          but an export path that breaks makes the alert evaluate zero and look healthy.</li>
-          <li><strong>One feature, one provider, one model.</strong> Everything here is scoped to session scoring. There is no
-          general model-calling abstraction, no prompt registry, no retrieval store and no tool calling, so a
-          second AI feature inherits the conventions by imitation rather than by construction.</li>
+          <li><strong>Cost visibility depends on the metrics export staying on.</strong> The counters ride an application
+          meter, which the http-client and runtime instrument toggles do not touch
+          (<code>infra/main.bicep:549-551</code>), but an export path that breaks makes the alert evaluate zero and look
+          healthy.</li>
+          <li><strong>A duplicate trigger is invisible to the organizer.</strong> The endpoint answers 202 for every request,
+          so a second click reports acceptance and the skip is visible only in the handler&#39;s log. The spend
+          is protected; the feedback is not.</li>
+          <li><strong>One feature, one model, and the general parts now live elsewhere.</strong> The call, the credential, the
+          metering and the prompt contract are framework surface (ADR-120), but everything above them is
+          scoped to session scoring: one prompt, one model, no prompt registry, no retrieval store and no
+          tool calling, so a second AI feature inherits the scoring-specific conventions by imitation rather
+          than by construction.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="110-rubric-v2-category-realignment.html">ADR-110</a> (the rubric category this record answers: section 16,
           AI-Native Application Architecture, scored for MMCA.ADC because of this feature),
           <a href="061-runtime-secret-management.html">ADR-061</a> (the Key Vault reference plus managed identity path the
           Anthropic key travels on into the Conference container app),
+          <a href="120-governed-chat-client-boundary.html">ADR-120</a> (the governed <code>IChatClient</code> this feature calls
+          through: the transport, the credential, the prompt contract and the token metering),
+          <a href="114-internal-commands-durable-job-queue.html">ADR-114</a> (the durable internal-command pipeline the
+          scoring pass runs on, which replaced this module&#39;s hosted drain and crash-recovery sweep),
           <a href="108-distributed-lock-primitive.html">ADR-108</a> (the cross-replica claim that stops a duplicate trigger
           paying for the same pass twice),
-          <a href="074-recurring-job-scheduler.html">ADR-074</a> (the scheduler the crash-recovery sweep runs on),
           <a href="015-architecture-fitness-functions.html">ADR-015</a> (the gating-test tier the evaluation suite joins as a
           behavioural, rather than structural, gate),
           <a href="013-result-pattern.html">ADR-013</a> (the <code>Result</code> contract the scoring command answers on, and the reason

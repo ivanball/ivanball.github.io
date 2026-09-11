@@ -16,8 +16,14 @@ engine the host configures **nowhere** is served from the engine it does configu
 the Revision at the end.
 Revised 2026-09-09: a fourth engine, PostgreSQL, joins the set
 ([ADR-113](113-postgresql-as-a-first-class-engine.md)). It takes the same switch arm as SQL Server in
-the engine-aware configuration base, so the `[UseDataSource]` axis grows by one member and no
-Decision item below changes.
+the engine-aware configuration base
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:72-73`),
+so the `[UseDataSource]` axis grows by one member.
+Revised 2026-09-11: the Decision below now reads four engines throughout. The 2026-09-09 note also
+claimed no Decision item changed, which was wrong: the engine enum, the context list, the
+connection-string keys and the health-check rule each name PostgreSQL today. ADR-113 owns the
+PostgreSQL specifics (provider, naming conventions, migrations); this record keeps only the shape of
+the engine axis.
 
 ## Context
 ADR-006 (database-per-service) splits storage along the **Name** axis: several physically separate
@@ -38,35 +44,47 @@ routing by engine was a natural extension of the same resolver, registry, and co
 than a separate subsystem.
 
 ## Decision
-Support three storage engines behind one entity model and one set of repository abstractions, selected
+Support four storage engines behind one entity model and one set of repository abstractions, selected
 per entity configuration.
 
 1. **`DataSource` engine enum:** `SQLServer` (full relational JOINs), `CosmosDB` (document store, no
-   cross-container JOINs), `Sqlite` (JOINs within one file). `DataSourceKey(Engine, Name)` identifies a
-   physical source: the **Name** axis is ADR-006, the **Engine** axis is this ADR.
+   cross-container JOINs), `Sqlite` (JOINs within one file), `PostgreSQL` (full relational JOINs,
+   ADR-113). `PostgreSQL` is appended rather than inserted alphabetically, because the three members
+   above it are shipped public API whose ordinal values consumers have persisted
+   (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:6-23`).
+   `DataSourceKey(Engine, Name)` identifies a physical source: the **Name** axis is ADR-006, the
+   **Engine** axis is this ADR.
 2. **Engine is a one-line declaration on the entity's configuration.** A configuration derives from an
-   engine shim base (`EntityTypeConfigurationSQLServer` / `EntityTypeConfigurationCosmos` /
-   `EntityTypeConfigurationSqlite`), or annotates `[UseDataSource(DataSource.X)]` directly. The
+   engine shim base (`EntityTypeConfigurationSQLServer` / `EntityTypeConfigurationPostgreSQL` /
+   `EntityTypeConfigurationCosmos` / `EntityTypeConfigurationSqlite`), or annotates
+   `[UseDataSource(DataSource.X)]` directly
+   (`Source/Core/MMCA.Common.Infrastructure/UseDataSourceAttribute.cs:13`). The
    engine-aware `EntityTypeConfiguration<TEntity, TId>` reads that attribute and applies the matching
-   mapping (table + schema for SQL Server, table for SQLite, container + partition key for Cosmos) plus
+   mapping (table + schema for SQL Server and PostgreSQL, which share one switch arm, table for
+   SQLite, container + partition key for Cosmos) plus
    the right key generation (server identity, vs. client-side `CosmosIntIdValueGenerator`, vs. never).
    The configuration **body is portable**: moving an entity between engines is a single attribute
    change with no body edits.
 3. **One concrete context per engine, one instance per database.** `SQLServerDbContext`,
+   `PostgreSQLDbContext`
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:23`),
    `SqliteDbContext`, and `CosmosDbContext` are sealed contexts over the abstract `ApplicationDbContext`.
    Combined with ADR-006's "one instance per `DataSourceKey`", a host materializes one context instance
    per physical (engine, name) source.
 4. **Configuration drives routing.** `DataSourceResolver` builds a per-engine logical-to-physical map
-   from the engine-specific connection strings (`SQLServerConnectionString` / `CosmosConnectionString` /
-   `SqliteConnectionString`, plus `CosmosDatabaseName` and a per-source migrations assembly for each
-   relational engine, `SQLServerMigrationsAssembly` and `SqliteMigrationsAssembly`), read from either
+   from the engine-specific connection strings (`SQLServerConnectionString` /
+   `PostgreSQLConnectionString` / `CosmosConnectionString` / `SqliteConnectionString`, one switch arm
+   each at `DataSourceResolver.cs:483-499`, plus `CosmosDatabaseName` and a migrations assembly for the
+   two server engines, `SQLServerMigrationsAssembly` and `PostgreSQLMigrationsAssembly`, which SQLite
+   and Cosmos leave empty at the top level (`:247-254`) and which a named entry can override per source
+   (`DataSourceEntrySettings.cs:35`)), read from either
    configuration shape: the top-level `ConnectionStrings` section, or a named entry under `DataSources`.
    Either shape supplies an engine's `Default` source on its own. The top-level value is the first
    answer; where it names nothing for that engine and the named entries declare exactly one distinct
    database on it, that database is the host's single database and becomes `Default`, which is what lets
    a host declare its databases only under `DataSources` and still route the framework-owned tables
    (outbox, inbox, scheduled jobs, audit trail) that resolve to the `Default` name
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:198-233`).
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:202-237`).
    Several distinct databases with no top-level value leave `Default` empty, since there is no single
    answer: a genuinely multi-database host names the one it wants shared by adding a
    `DataSources:Default` entry. Logical names with no entry for an engine collapse onto that engine's
@@ -82,14 +100,16 @@ per entity configuration.
    (`CosmosIntIdValueGenerator`, since a document store has no server identity), and relational-only
    constructs (indexes) are stripped at model-build time.
 7. **The host surface reads the same two shapes.** The Aspire AppHost helpers
-   `With{SQLServer,Cosmos,Sqlite}DataSource` inject the `DataSources__{logicalName}__*` environment
-   variables for the source they attach (`Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:493`,
-   `:522-523`, `:547`). The database health checks enumerate the top-level section and every named
+   `With{SQLServer,PostgreSQL,Cosmos,Sqlite}DataSource` inject the `DataSources__{logicalName}__*`
+   environment variables for the source they attach
+   (`Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:493`, `:523`, `:552-553`, `:577`). The
+   database health checks enumerate the top-level section and every named
    entry, deduplicated by connection string, so each physical database contributes exactly one readiness
    check and the entries that collapse onto one database contribute one between them
-   (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:541-573`). The requirement that a host have a
+   (the per-engine enumeration at `Source/Hosting/MMCA.Common.Aspire/Extensions.cs:606-643`,
+   registered at `:556-587`). The requirement that a host have a
    database at all is engine-agnostic: `AddInfrastructureHealthChecks(requireDatabase)` is satisfied by
-   SQL Server or SQLite, declared in either shape (`:308`, the rule at `:498-511`).
+   SQL Server, PostgreSQL or SQLite, declared in either shape (`:305-309`, the rule at `:565-571`).
 
 ## Rationale
 - **Right store per access pattern, as a configuration decision.** The engine becomes an attribute on a
@@ -124,7 +144,8 @@ per entity configuration.
 ## Related
 ADR-006 (database-per-service: the **Name** axis this ADR's **Engine** axis is orthogonal to; they share
 `DataSourceKey`), ADR-002 (navigation populators bridge the relationships the degrade convention strips
-across sources), ADR-003 (the outbox is the cross-source, and now cross-engine, consistency mechanism).
+across sources), ADR-003 (the outbox is the cross-source, and now cross-engine, consistency mechanism),
+ADR-113 (PostgreSQL as the fourth engine: provider, naming conventions, and migrations).
 
 ## Revision (2026-08-29): engine substitution for a single-engine host
 
@@ -135,31 +156,33 @@ because the engine choice for the framework's own tables is not made by that hos
 literally handed the scheduler, the outbox, the audit trail, the refresh-session store and
 `DbContextFactory`'s transaction coordination a physical source with an empty connection string, and
 the first query each ran failed with "The ConnectionString property has not been initialized"
-(`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:107-115`). The
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:109-119`). The
 host built, started, and reported healthy first.
 
 The rule is now: **a request naming an engine the host configures nowhere is served from the engine the
 host does configure.**
 
 - The resolver records which engines carry a connection string anywhere, top-level or on a named
-  `DataSources` entry, while it builds the per-engine maps (`DataSourceResolver.cs:64-72`, the
-  predicate at `:131-136`; the named-entry half of that rule is what
-  `DataSourceResolverTests.cs:350` exercises).
-- The substitute is the first configured engine in a fixed preference order, `SQLServer` then `Sqlite`
-  then `CosmosDB` (`:26`, selected at `:74-77`). Relational first because every table the framework
-  owns is relational, and SQL Server ahead of SQLite so a host that configures SQL Server at all keeps
-  exactly the routing it had.
+  `DataSources` entry, while it builds the per-engine maps (`DataSourceResolver.cs:68-76`, the
+  predicate at `:135-140`; the named-entry half of that rule is what
+  `DataSourceResolverTests.cs:351-372` exercises).
+- The substitute is the first configured engine in a fixed preference order, `SQLServer`, then
+  `PostgreSQL`, then `Sqlite`, then `CosmosDB` (`:29-30`, selected at `:78-81`). Relational first
+  because every table the framework owns is relational, the two server engines ahead of SQLite because
+  a host that configures one means it to carry those tables, and SQL Server first so a host that
+  configures SQL Server at all keeps exactly the routing it had.
 - `ResolveLogical` maps the requested engine through `SubstituteUnconfiguredEngine` before it looks
-  anything up (`:93`, the substitution at `:124-125`), which returns the request unchanged whenever
+  anything up (`:93`, the substitution at `:128-129`), which returns the request unchanged whenever
   the host configures that engine.
-- A host that configures no database at all substitutes nothing (`:37-42`): there is nothing to
+- A host that configures no database at all substitutes nothing (`:41-46`): there is nothing to
   substitute to, and its startup validation is what fails, not its first query.
 - A substitute other than SQL Server is announced once at startup, naming the engine and the framework
-  tables it now serves (`:79-85`, message at `:468`).
+  tables it now serves (`:83-89`, message at `:501-502`).
 
 **Nothing moves for a host that configures the requested engine**, so a SQL-Server-only host and a
 genuine polyglot host that configures two engines resolve exactly as this record describes; only a
-request that could not have been served at all is redirected (`:116-120`). The pinned tests cover both
+request that could not have been served at all is redirected (`:120-124`, the behavior itself at
+`:128-129`). The pinned tests cover both
 directions (`Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/DataSourceResolverTests.cs`).
 
 The companion change is that startup validation stopped assuming SQL Server. A `[Required]` annotation
@@ -167,8 +190,9 @@ on `SQLServerConnectionString` encoded "SQL Server is the only engine a host can
 SQLite-only host whose every entity resolved to a configured database. It is replaced by
 `ConnectionStringSettingsValidator`
 (`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/ConnectionStringSettingsValidator.cs:30`), registered
-with `ValidateOnStart`, which accepts a connection string for **any** supported engine, either
-top-level or on a named `DataSources` entry (`:50`, `:56-71`). The rule is not weakened for the hosts
+with `ValidateOnStart`, which accepts a connection string for **any** of the four supported engines,
+either top-level or on a named `DataSources` entry (`:51-53`, the two checks at `:57-61` and
+`:68-74`). The rule is not weakened for the hosts
 that do run on SQL Server: a host with no connection string anywhere still fails to start, with a
-message naming both configuration shapes (`:38-43`), because silently booting one trades a clear
+message naming both configuration shapes and every engine key (`:38-44`), because silently booting one trades a clear
 startup failure for a failure on the first query.

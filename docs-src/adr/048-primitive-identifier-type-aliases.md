@@ -11,6 +11,10 @@ Revised 2026-08-14 (Conference's alias file now declares sixteen aliases, `Spons
 been added, and the ADC `User` source citations were re-anchored after an expanded doc comment).
 Revised 2026-08-23 (Conference's alias file now declares seventeen aliases, `ActivityIdentifierType`
 having been added, and the workspace alias count was recounted; see the Revision (2026-08-23) at the end).
+Revised 2026-09-11 (recount): Store Catalog's alias file now declares six aliases, the Reviews aggregate
+having added `ProductReviewIdentifierType` and `VerifiedPurchaseIdentifierType`, so the workspace total is
+**46 aliases across 10 files**; three Decision citations were re-anchored after expanded doc comments moved
+them. See the Revision (2026-09-11) at the end.
 **Revisited by [ADR-085](085-identifier-type-aliases-revisited.md) (2026-08-18)**: the wrapper-struct
 alternative this record deferred was re-evaluated, priced, and deferred again, now against named
 revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
@@ -50,14 +54,14 @@ not as a wrapper struct.
   (`Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31`), and constrains the user
   type parameter of `AuthenticationServiceBase<TUser>`
   (`where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IAuthUser`,
-  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:62`), with each consuming
+  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:85`), with each consuming
   app supplying the concrete `User` entity that satisfies it.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
   ADC Conference with seventeen aliases
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21`),
-  and Store Catalog
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-6`).
+  and Store Catalog with six
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8`).
 - **The alias is the type; there is no wrapping struct.** The right-hand side is a bare primitive.
   Most resolve to `int`; the one deviation in Conference is
   `SpeakerIdentifierType = System.Guid` (line 19), because Sessionize assigns speakers GUIDs while its
@@ -72,7 +76,7 @@ not as a wrapper struct.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain
   entity is `User : AuditableAggregateRootEntity<UserIdentifierType>`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34`); the cross-context
-  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 65); the EF
+  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 78); the EF
   configuration is `EntityTypeConfigurationSQLServer<User, UserIdentifierType>`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13`);
   the repository handle is `GetRepository<User, UserIdentifierType>()`
@@ -80,7 +84,7 @@ not as a wrapper struct.
   the API contract is `UserDTO : IBaseDTO<UserIdentifierType>` with a `UserIdentifierType Id`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/UserDTO.cs:8,11`); and the
   integration event carries `UserIdentifierType UserId`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:26`).
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:37`).
   No converter, serializer shim, or OpenAPI schema mapping appears at any hop: `int` and `Guid` are the
   values on the wire and in the store.
 - **The wrapper-struct alternative is deliberately deferred, not planned.** No wrapper-struct
@@ -130,10 +134,10 @@ deferral it records.
 The last Trade-offs entry above ("Revisiting the trade would be a broad change") described the
 wrapper-struct migration as expensive without ever measuring it, and the Decision's last bullet left
 the alternative "deliberately deferred, not planned" with no condition that would re-open it.
-[ADR-085](085-identifier-type-aliases-revisited.md) closes both gaps: it counts the aliases (44 across
-10 files in the four repositories, 43 of them resolving to `int`), counts the migration surface
-(3,192 occurrences of the alias token across 1,001 `.cs`/`.razor` files in the four `Source` trees,
-tests excluded, `TIdentifierType` generic parameters not counted),
+[ADR-085](085-identifier-type-aliases-revisited.md) closes both gaps: it counts the aliases (the current
+census is the Revision (2026-09-11) below), counts the migration surface in occurrences of the alias token
+across the `.cs`/`.razor` files of the four `Source` trees, tests excluded and `TIdentifierType` generic
+parameters not counted (ADR-085 carries that figure),
 names the concrete failure the deferral leaves open with a live example (ADC's `CheckIn` constructor,
 which takes two different `UserIdentifierType` arguments that can be transposed silently), and records
 three triggers that would re-open the question: a production defect traced to an identifier
@@ -144,7 +148,8 @@ Read the two records together as one position: this record is the decision and i
 is its price and its expiry condition.
 
 ## Revision (2026-08-23)
-No decision and no rationale changed. Two counts did, both because Conference gained an alias.
+No decision and no rationale changed. Two counts did, both because Conference gained an alias. The
+workspace census below is superseded by the Revision (2026-09-11); Conference's seventeen aliases stand.
 
 Conference's alias file declares **seventeen** aliases, `ActivityIdentifierType = int` having been
 added at the head of the list
@@ -171,3 +176,40 @@ and Helpdesk Tickets 2
 (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:6,8`).
 43 of the 44 resolve to `int`; `SpeakerIdentifierType` remains the single `Guid`. The count in the
 Revision (2026-08-18) above is refreshed to those numbers, and ADR-085 carries the same pair.
+
+## Revision (2026-09-11)
+No decision and no rationale changed. The workspace alias count did, because Store Catalog gained the
+Reviews aggregate's two identifiers.
+
+Catalog's alias file declares **six** aliases, `ProductReviewIdentifierType = int` and
+`VerifiedPurchaseIdentifierType = int` joining the original four
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8`).
+The Decision section above is re-anchored to that range.
+
+Recounting every `GlobalUsings.*IdentifierType.cs` file in the four repositories, one
+`global using X = <primitive>;` line counting as one alias, gives **46 aliases across 10 files**: Common
+Domain 1 (`MMCA.Common/Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1`) and Common
+Shared 2 (`MMCA.Common/Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2`);
+ADC Notification 2
+(`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/MMCA.ADC.Notification.GlobalUsings.IdentifierType.cs:1-2`),
+Identity 1
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
+Engagement 10
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:4-13`)
+and Conference 17
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21`);
+Store Catalog 6, Identity 2
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/MMCA.Store.Identity.GlobalUsings.IdentifierType.cs:3-4`)
+and Sales 3
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/MMCA.Store.Sales.GlobalUsings.IdentifierType.cs:5-7`);
+and Helpdesk Tickets 2
+(`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:6,8`).
+45 of the 46 resolve to `int`; `SpeakerIdentifierType = System.Guid` remains the single `Guid`. ADR-085
+carries the same pair.
+
+Three Decision citations moved without their text changing, each pushed down by an expanded XML doc
+comment: the `AuthenticationServiceBase<TUser>` constraint is at
+`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:85`, ADC's
+`SpeakerIdentifierType? LinkedSpeakerId` at `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:78`,
+and the `UserIdentifierType UserId` record parameter at
+`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:37`.

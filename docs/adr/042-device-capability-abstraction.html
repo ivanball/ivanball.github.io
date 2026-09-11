@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -231,7 +233,10 @@
           <p>Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14, 2026-08-29 and 2026-09-03). The
           2026-08-29 amendment adds the <code>UseMmcaMauiErrorHandling</code> last-chance handlers and records the hybrid
           head&#39;s missing ASP.NET Core pipeline as a known constraint. The 2026-09-03 amendment records the push
-          device-token provider as a second native override that sits outside <code>AddMauiDeviceCapabilities</code>.</p>
+          device-token provider as a second native override that sits outside <code>AddMauiDeviceCapabilities</code>.
+          Revised 2026-09-11: <code>IAppLifecycleNotifier</code> joins the shared contract set (24 contracts today), and it
+          is the fourth capability outside <code>AddMauiDeviceCapabilities</code>, fed from the native window through a
+          window-lifecycle extension.</p>
           <h2 id="context">Context</h2>
           <p>The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
           (Android/iOS/MacCatalyst/Windows), Blazor Server SSR, and WebAssembly. Native device capabilities
@@ -257,15 +262,21 @@
           <code>IGeolocationService</code>, <code>IExternalLinkService</code>, <code>ITextToSpeechService</code>, <code>IAccessibilityAnnouncer</code>,
           <code>ILocalNotificationService</code>, <code>IScreenshotService</code>, <code>IDevicePreferences</code>, <code>IBatteryStatusService</code>,
           <code>IBiometricAuthenticator</code>, <code>ISpeechToTextService</code>, <code>IExternalAuthBroker</code>, <code>IDeepLinkDispatcher</code>,
-          <code>IConnectivityStatusService</code>, <code>ILocalCacheStore</code>). Five more have joined since, for 23 today, all
+          <code>IConnectivityStatusService</code>, <code>ILocalCacheStore</code>). Six more have joined since, for 24 today, all
           TryAdd-registered by <code>AddDeviceCapabilityDefaults</code>
-          (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:37-81</code>): the
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:37-85</code>): the
           additions are <code>IGeocodingService</code> (Wave 3), <code>IMediaPickerService</code> (ADR-045), the push pair
-          <code>IPushRegistrationService</code> and <code>IPushDeviceTokenProvider</code> (ADR-044), and <code>IBarcodeScannerService</code>
-          for camera barcode/QR scanning (<code>Capabilities/DependencyInjection.cs:70</code>). <code>AddMauiDeviceCapabilities</code>
+          <code>IPushRegistrationService</code> and <code>IPushDeviceTokenProvider</code> (ADR-044), <code>IBarcodeScannerService</code>
+          for camera barcode/QR scanning (<code>Capabilities/DependencyInjection.cs:70</code>), and
+          <code>IAppLifecycleNotifier</code> for the native window&#39;s background/foreground callbacks
+          (<code>Capabilities/DependencyInjection.cs:82</code>). <code>AddMauiDeviceCapabilities</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:42-78</code>) natively overrides 20 of
-          the 23. Three stay outside it. <code>IDeepLinkDispatcher</code> needs no override because the shared default
-          IS the real implementation. The other two are deliberately opt-in per head:
+          the 24. Four stay outside it. <code>IDeepLinkDispatcher</code> and <code>IAppLifecycleNotifier</code> need no override
+          because the shared default IS the real implementation: the MAUI package feeds the notifier from the
+          native window instead of replacing it, through <code>AttachMmcaAppLifecycle</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/WindowLifecycleExtensions.cs:33</code>), which forwards the
+          window&#39;s <code>Stopped</code> and <code>Resumed</code> events and no-ops when the head registered no notifier
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/App.xaml.cs:32</code>). The other two are deliberately opt-in per head:
           <code>IPushDeviceTokenProvider</code> comes from the platform-conditional <code>AddMauiPushDeviceTokenProvider</code>
           (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:118-126</code>, FCM on Android, APNs on
           iOS/MacCatalyst, nothing on windows, and both providers stay configuration-gated), while
@@ -370,7 +381,7 @@
           (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:61</code>, <code>:62</code>, and the broker scoped
           at <code>:76</code>). The residual trade-off is configuration, not code: <code>MauiExternalAuthBroker</code> registers
           unconditionally but reports <code>IsAvailable == false</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:39</code>)
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:43</code>)
           until the head supplies <code>OAuth:MobileRedirectScheme</code>, so a misconfigured head quietly keeps the web
           anchor flow rather than failing fast.</li>
           </ul>

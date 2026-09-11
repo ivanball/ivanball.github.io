@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -228,7 +230,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-001-manual-dto-mapping-over-automapper">ADR-001: Manual DTO Mapping over AutoMapper</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted. <em>Mechanism clarified 2026-06-26: the per-entity mappers are Riok.Mapperly source-generated (compile-time), not hand-written line by line. The decision to avoid runtime convention/reflection mapping (AutoMapper, Mapster) is unchanged.</em> <em>Mapper count refreshed 2026-08-23: 31 DTO mappers across Store + ADC.</em></p>
+          <p>Accepted. <em>Mechanism clarified 2026-06-26: the per-entity mappers are Riok.Mapperly source-generated (compile-time), not hand-written line by line. The decision to avoid runtime convention/reflection mapping (AutoMapper, Mapster) is unchanged.</em> <em>Mapper count refreshed 2026-08-23: 31 DTO mappers across Store + ADC.</em> <em>Revised 2026-09-11 (recount): 33 DTO mappers across Store + ADC (20 in ADC, 13 in Store).</em></p>
           <h2 id="context">Context</h2>
           <p>Domain entities must be mapped to DTOs for API responses. The two common approaches are:</p>
           <ol>
@@ -247,7 +249,7 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li>More files (31 DTO mappers across Store + ADC: 20 in ADC, 11 in Store, plus the parallel <code>IEntityRequestMapper</code> classes). The interface&#39;s default <code>MapToDTOs</code> implementation is available to remove the batch-mapping boilerplate, though in practice each concrete mapper re-declares the identical one-line projection rather than relying on the default.</li>
+          <li>More files (33 DTO mappers across Store + ADC: 20 in ADC, 13 in Store, plus the parallel <code>IEntityRequestMapper</code> classes). The interface&#39;s default <code>MapToDTOs</code> implementation is available to remove the batch-mapping boilerplate, though in practice each concrete mapper re-declares the identical one-line projection rather than relying on the default.</li>
           <li>Adding a new entity requires creating a mapper class. This is consistent with the project&#39;s explicit-over-implicit philosophy.</li>
           </ul>
           

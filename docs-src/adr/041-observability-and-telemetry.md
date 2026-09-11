@@ -34,6 +34,11 @@ lines; see the "Amended (2026-09-03): probe telemetry" section at the end.
 Revised 2026-09-07 (the Log Analytics daily cap gained a cap-reached alert in both apps, SQL
 auditing and resource diagnostics are deployed in ADC and Store, Store alerts on a security signal,
 and Store scrubbed email addresses out of stored reviewer names).
+Revised 2026-09-11 (the meter subscription block carries eight meters now, the eighth being
+`MMCA.Common.InternalCommands`, which also adds a second trace source and a second poll span the
+poll filter drops; the `MMCA.Common.AI` meter is defined but not subscribed there; and every
+`Extensions.cs` and CQRS-decorator citation is rebased onto its current line. See the Revision
+(2026-09-11) at the end).
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
 the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -55,13 +60,13 @@ Standardize telemetry in the shared Aspire service defaults, add framework-speci
 for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 
 - **One shared telemetry baseline on every host.** `ConfigureOpenTelemetry`
-  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:121`) wires OpenTelemetry logging with formatted
-  messages and scopes (`Extensions.cs:132`-`Extensions.cs:133`), metrics from ASP.NET Core
-  (unconditional, `Extensions.cs:139`) plus `HttpClient` and the runtime (each gated behind a cost
+  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:130`) wires OpenTelemetry logging with formatted
+  messages and scopes (`Extensions.cs:134`-`Extensions.cs:135`), metrics from ASP.NET Core
+  (unconditional, `Extensions.cs:141`) plus `HttpClient` and the runtime (each gated behind a cost
   knob, see below), and tracing from ASP.NET Core and `HttpClient`, added either with the
-  probe-telemetry filters attached (`Extensions.cs:230`-`Extensions.cs:233`) or plain
-  (`Extensions.cs:237`-`Extensions.cs:238`) depending on the knob the Amended (2026-09-03) section
-  records. It is called from `AddServiceDefaults` (`Extensions.cs:41`), so a host opts in once and
+  probe-telemetry filters attached (`Extensions.cs:234`-`Extensions.cs:237`) or plain
+  (`Extensions.cs:241`-`Extensions.cs:242`) depending on the knob the Amended (2026-09-03) section
+  records. It is called from `AddServiceDefaults` (`Extensions.cs:48`), so a host opts in once and
   every project in the Aspire model inherits the same pipeline.
 
 - **Custom RED metrics from the CQRS pipeline.** A single meter `MMCA.Common.Cqrs`
@@ -71,15 +76,15 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   logging decorator routes all three of its exits through a private `RecordDuration` helper, so the
   measurement cannot be skipped. The command helper calls `CqrsMetrics.CommandDuration.Record(...)`
   tagged by `command` and `outcome`
-  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:80`, in the
-  `RecordDuration` helper declared at `:79`) and the query helper does the same for `QueryDuration`
-  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:78`, helper at
-  `:77`).
+  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:85`, in the
+  `RecordDuration` helper declared at `:84`) and the query helper does the same for `QueryDuration`
+  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:83`, helper at
+  `:82`).
   The `outcome` tag takes `completed`, `failed` (a `Result` failure), or `exception`, one call site per
-  path (`LoggingCommandDecorator.cs:49`, `:44`, `:58`; the query equivalents at
-  `LoggingQueryDecorator.cs:46`, `:41`, `:55`), so count gives rate, the tag gives errors, and the
+  path (`LoggingCommandDecorator.cs:54`, `:49`, `:63`; the query equivalents at
+  `LoggingQueryDecorator.cs:51`, `:46`, `:60`), so count gives rate, the tag gives errors, and the
   histogram gives duration. The Aspire host subscribes the meter by literal name
-  (`Extensions.cs:200`).
+  (`Extensions.cs:202`).
 
 - **An outbox dead-letter counter.** The outbox instruments live in their own static type
   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxMetrics.cs:16`), which
@@ -92,7 +97,7 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   reaches `MaxRetries` and drops out of the poll
   (`OutboxProcessor.cs:674`-`OutboxProcessor.cs:677`). The processor's activity source publishes outbox
   spans under the same name (`OutboxProcessor.cs:87`); both the meter and the trace source are
-  registered by literal name in the Aspire defaults (`Extensions.cs:199`, `Extensions.cs:210`).
+  registered by literal name in the Aspire defaults (`Extensions.cs:201`, `Extensions.cs:213`).
 
 - **Correlation-ID middleware ties the request together.** `CorrelationIdMiddleware`
   (`Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:15`) uses the
@@ -102,39 +107,40 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   (`CorrelationIdMiddleware.cs:36`), and echoes it on the response
   (`CorrelationIdMiddleware.cs:39`, inside the `OnStarting` callback registered at
   `CorrelationIdMiddleware.cs:37`). The CQRS logging decorators stamp that same id into every log
-  scope (read at `LoggingCommandDecorator.cs:25`, stamped by `BeginCommandScope` at `:27`), so logs,
+  scope (read at `LoggingCommandDecorator.cs:26`, stamped by `BeginCommandScope` at `:32`), so logs,
   the correlation id, and the trace id line up for one request.
 
 - **Two high-volume metric families gated behind cost knobs, on by default.** ASP.NET Core metrics are
-  always wired (`Extensions.cs:139`), but the two heaviest AppMetrics contributors on a low-traffic
+  always wired (`Extensions.cs:141`), but the two heaviest AppMetrics contributors on a low-traffic
   multi-service deployment are conditional. `HttpClient` connection and request metrics are added only
-  when `Telemetry:DisableHttpClientMetrics` is unset or false (`Extensions.cs:148`, adding
-  instrumentation at `Extensions.cs:168`), and .NET runtime metrics (`dotnet.gc.*`, `jit.*`,
-  `thread_pool.*`) only when `Telemetry:DisableRuntimeMetrics` is unset or false (`Extensions.cs:175`,
-  adding at `Extensions.cs:187`). Skipping the instrumentation is not enough on its own, so each
-  disabled branch also drops the whole meter with a `View` (`Extensions.cs:160`-`Extensions.cs:164` for
-  `System.Net.Http` plus `System.Net.NameResolution`, `Extensions.cs:180`-`Extensions.cs:183` for
+  when `Telemetry:DisableHttpClientMetrics` is unset or false (`Extensions.cs:150`, adding
+  instrumentation at `Extensions.cs:170`), and .NET runtime metrics (`dotnet.gc.*`, `jit.*`,
+  `thread_pool.*`) only when `Telemetry:DisableRuntimeMetrics` is unset or false (`Extensions.cs:177`,
+  adding at `Extensions.cs:189`). Skipping the instrumentation is not enough on its own, so each
+  disabled branch also drops the whole meter with a `View` (`Extensions.cs:162`-`Extensions.cs:166` for
+  `System.Net.Http` plus `System.Net.NameResolution`, `Extensions.cs:182`-`Extensions.cs:185` for
   `System.Runtime`): the Azure Monitor distro adds those meters itself, and a `View` applies to the
   whole `MeterProvider` regardless of which component added them, which is what makes each knob
   authoritative rather than advisory. Both keys are read by `IsInstrumentationDisabled`
-  (`Extensions.cs:471`-`Extensions.cs:472`), which drops the family only when the value parses as boolean `true`; absent,
+  (`Extensions.cs:528`-`Extensions.cs:529`), which drops the family only when the value parses as boolean `true`; absent,
   blank, or unparseable falls back to keeping the instrumentation, so a typo cannot silently blind a
   whole metric family. A deployed host sets one or both to `true` to cut ingestion cost; outbound
   dependency latency is still captured as traces when `HttpClient` metrics are dropped.
 
 - **Head-based sampling as a cost knob, off by default.** `Telemetry:TracesSampleRatio`
-  (`Extensions.cs:261`, parsed by `TryGetTraceSampleRatio` at `Extensions.cs:448`, which reads the
-  key at `Extensions.cs:451`) is unset by default, so a host samples everything and behavior does not
+  (`Extensions.cs:265`, parsed by `TryGetTraceSampleRatio` at `Extensions.cs:505`, which reads the
+  key at `Extensions.cs:508`) is unset by default, so a host samples everything and behavior does not
   change. A deployed host sets a ratio in
   the open interval (0,1) to keep that fraction of traces; the value wraps a `TraceIdRatioBasedSampler`
-  in a `ParentBasedSampler` (`Extensions.cs:262`) so a sampled-in request keeps its whole trace across
+  in a `ParentBasedSampler` (`Extensions.cs:266`) so a sampled-in request keeps its whole trace across
   service boundaries. A key that is absent, unparseable, or outside (0,1) falls back to sample-all
-  (`Extensions.cs:452`-`Extensions.cs:457`), so a typo can never silently drop all telemetry.
+  (`Extensions.cs:509`-`Extensions.cs:514`), so a typo can never silently drop all telemetry.
 
 - **Outbox poll spans are filtered out of export.** `OutboxPollFilterProcessor`
-  (`Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:15`), registered before
-  the exporters (`Extensions.cs:246`), clears the `Recorded` flag on the recurring `OutboxPoll` span
-  and its children (`OutboxPollFilterProcessor.cs:45`). The poll query runs inside that span, opened at
+  (`Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:17`), registered before
+  the exporters (`Extensions.cs:250`), clears the `Recorded` flag on the recurring `OutboxPoll` span
+  and its children (`OutboxPollFilterProcessor.cs:49`), and on the internal-command queue's
+  `InternalCommandPoll` span the same way (`OutboxPollFilterProcessor.cs:60`-`:64`). The poll query runs inside that span, opened at
   the top of `FetchCandidatesAsync` (`OutboxProcessor.cs:413`, span started at `OutboxProcessor.cs:419`,
   named at `OutboxProcessor.cs:75`), so steady-state polling does not flood Application Insights. Real
   outbox work is untouched: each per-message `OutboxProcess` span is started by `StartOutboxActivity`
@@ -144,11 +150,11 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   `OutboxProcessor.cs:787`-`OutboxProcessor.cs:790`, so it is never a child of the poll span.
 
 - **Dual exporters, either or both.** `AddOpenTelemetryExporters` enables OTLP when
-  `OTEL_EXPORTER_OTLP_ENDPOINT` is present (`Extensions.cs:363`-`Extensions.cs:364`, the Aspire dashboard sets it, exporter
-  wired at `Extensions.cs:368`) and Azure Monitor via `UseAzureMonitor` (`Extensions.cs:376`) when
-  `APPLICATIONINSIGHTS_CONNECTION_STRING` is present (read at `Extensions.cs:371`-`Extensions.cs:372`, checked at
-  `Extensions.cs:374`, and set by the cloud deployment). Both can be active at once
-  (`Extensions.cs:359`), so local development ships to the
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is present (`Extensions.cs:379`-`Extensions.cs:380`, the Aspire dashboard sets it, exporter
+  wired at `Extensions.cs:384`) and Azure Monitor via `UseAzureMonitor` (`Extensions.cs:392`) when
+  `APPLICATIONINSIGHTS_CONNECTION_STRING` is present (read at `Extensions.cs:387`-`Extensions.cs:388`, checked at
+  `Extensions.cs:390`, and set by the cloud deployment). Both can be active at once
+  (`Extensions.cs:377`), so local development ships to the
   Aspire dashboard and production ships to workspace-based Application Insights with no code change.
 
 ## Rationale
@@ -172,10 +178,10 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 ## Trade-offs
 - **Custom instrumentation carries a maintenance cost.** The Aspire package has no reference to
   Application or Infrastructure by design, so the meter and activity-source names are duplicated as
-  literals (the meter subscriptions at `Extensions.cs:199`-`Extensions.cs:205` and the trace source at
-  `Extensions.cs:210`, and the sync notes at `CqrsMetrics.cs:8`, `OutboxMetrics.cs:8` and
-  `OutboxPollFilterProcessor.cs:17`). A rename on one side silently stops export until the literal is
-  updated. That is the price of the decoupled package graph.
+  literals (the eight meter subscriptions at `Extensions.cs:201`-`Extensions.cs:208` and the trace
+  sources at `Extensions.cs:212`-`Extensions.cs:214`, and the sync notes at `CqrsMetrics.cs:9`,
+  `OutboxMetrics.cs:9` and `OutboxPollFilterProcessor.cs:19`-`:25`). A rename on one side silently
+  stops export until the literal is updated. That is the price of the decoupled package graph.
 - **Sampling trades trace completeness for cost.** A sampled-out trace is simply gone; deep debugging
   of a specific request can miss it. Metrics and logs are unaffected (sampling is trace-only), so RED
   rates and error counts stay whole even at a low ratio.
@@ -201,15 +207,16 @@ Two meters and one hop.
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/BestEffort.cs:102`, instrument at `:107-115`)
 counts a swallowed fire-and-forget side effect, the helper's whole purpose being that the caller does
 not see the failure. Both are subscribed in the Aspire defaults
-(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:204-205`).
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:206-207`).
 
 **The meter inventory in the Decision above is wrong and has been for a while.** This record names two
 meters, and [ADR-087](087-broker-poison-message-handling.md) called `MMCA.Common.Broker` "a third",
 which was already an undercount. The authoritative list is the subscription block itself
-(`Extensions.cs:199-205`), which now carries **seven**: `MMCA.Common.Outbox`, `MMCA.Common.Cqrs`,
-`MMCA.Common.Idempotency`, `MMCA.Common.Scheduler`, `MMCA.Common.Broker`, `MMCA.Common.OutputCache`,
-`MMCA.Common.BestEffort`. Two of them (`Idempotency`, `Scheduler`) were never recorded here at all.
-Read that block, not this prose, when the question is what the framework exports.
+(`Extensions.cs:201`-`Extensions.cs:208`), which carried **seven** at that point:
+`MMCA.Common.Outbox`, `MMCA.Common.Cqrs`, `MMCA.Common.Idempotency`, `MMCA.Common.Scheduler`,
+`MMCA.Common.Broker`, `MMCA.Common.OutputCache`, `MMCA.Common.BestEffort`. Two of them
+(`Idempotency`, `Scheduler`) were never recorded here at all. Read that block, not this prose, when
+the question is what the framework exports (it carries eight today; see the Revision (2026-09-11)).
 
 **Correlation now starts at the edge.** [ADR-088](088-gateway-edge-responsibilities.md) adds a
 context-free `GatewayCorrelationMiddleware` that ensures `X-Correlation-ID` on the way in and echoes it
@@ -222,12 +229,12 @@ Two costs come with it. **Both new counters are failure-only**, so a healthy sys
 them and a zero is indistinguishable from a host that never wired the feature, which is exactly the
 shape of signal that goes unnoticed until an incident. And neither is wired to an alert or a runbook
 section, joining ADR-087's two counters in the gap [ADR-062](062-slo-alerting-as-code.md) describes.
-The duplicated-literal cost this record already records in Trade-offs now applies to seven names rather
-than two.
+The duplicated-literal cost this record already records in Trade-offs applied to seven names rather
+than two from that point on.
 
 ## Amended (2026-08-31)
 The log side of this record. Until now it named only the OpenTelemetry logging call inside
-`ConfigureOpenTelemetry` (`Extensions.cs:130`); what a host actually WRITES its application log lines
+`ConfigureOpenTelemetry` (`Extensions.cs:132`); what a host actually WRITES its application log lines
 through was undocumented.
 
 **Serilog is registered as ONE additional provider, never through `UseSerilog()`.** `AddCommonSerilog`
@@ -237,8 +244,8 @@ framework's logger configuration, publishes it as the global `Log.Logger`
 `builder.Logging.AddSerilog(Log.Logger, dispose: true)` (`:55`). The alternative is a silent-failure
 trap no code reading surfaces, which is why the rationale lives on the type itself (`:16`-`:20`):
 `UseSerilog()` replaces the whole `ILoggerFactory` and with it every other provider, including the
-OpenTelemetry to Azure Monitor provider `AddServiceDefaults` wires (`Extensions.cs:41`,
-`Extensions.cs:121`). A host that calls it publishes no application log line to Application Insights at
+OpenTelemetry to Azure Monitor provider `AddServiceDefaults` wires (`Extensions.cs:48`,
+`Extensions.cs:130`). A host that calls it publishes no application log line to Application Insights at
 all, while its metrics, traces and health endpoints stay green, so the gap reads as a quiet service
 rather than as a misconfiguration. Ordering carries the same weight in the other direction: the helper
 runs BEFORE `AddServiceDefaults()` in every host that uses it (for example
@@ -292,8 +299,8 @@ the AppDependencies rows. None of it carries end-user signal, and none of it is 
 proportionally.
 
 **A third cost knob, and the only one that defaults to on.** `Telemetry:FilterProbeTelemetry`
-(`Extensions.cs:35`) is read by `IsProbeTelemetryFilterEnabled`
-(`Extensions.cs:483`-`Extensions.cs:484`) at `Extensions.cs:224`. It inverts the fail-safe direction
+(`Extensions.cs:37`) is read by `IsProbeTelemetryFilterEnabled`
+(`Extensions.cs:540`-`Extensions.cs:541`) at `Extensions.cs:228`. It inverts the fail-safe direction
 of the other knobs on purpose: absent, blank or unparseable all mean "filter", and only an explicit
 boolean `false` turns filtering off, for a host debugging its own probes. What a probe path is comes
 from one place, `HealthEndpointPaths.IsProbePath`
@@ -302,8 +309,8 @@ anything below `/health/`, case-insensitively.
 
 **Two instrumentation predicates plus one processor, because probe spans arrive by three routes.**
 With the knob on, the tracing setup attaches both filters to the default-named instrumentation
-options (`Extensions.cs:230`-`Extensions.cs:233`; the unfiltered branch at
-`Extensions.cs:237`-`Extensions.cs:238` is plain `AddAspNetCoreInstrumentation` and
+options (`Extensions.cs:234`-`Extensions.cs:237`; the unfiltered branch at
+`Extensions.cs:241`-`Extensions.cs:242` is plain `AddAspNetCoreInstrumentation` and
 `AddHttpClientInstrumentation`). `ProbeTelemetryFilter.ShouldCollectRequest`
 (`Source/Hosting/MMCA.Common.Aspire/Telemetry/ProbeTelemetryFilter.cs:40`) refuses the inbound probe
 request span and stamps an `mmca.probe` marker tag on it (`ProbeTelemetryFilter.cs:33`, set at
@@ -315,14 +322,14 @@ active checks, both driven by background timers. The descendants are handled by
 `ProbeTelemetryFilterProcessor`
 (`Source/Hosting/MMCA.Common.Aspire/Telemetry/ProbeTelemetryFilterProcessor.cs:20`), registered only
 when the knob is on and, like the outbox poll filter, before the exporters
-(`Extensions.cs:253`): it walks the in-process parent chain (`ProbeTelemetryFilterProcessor.cs:52`),
+(`Extensions.cs:257`): it walks the in-process parent chain (`ProbeTelemetryFilterProcessor.cs:52`),
 matches the marker or a server span whose path, route or display name is a probe (`:66`-`:79`), and
 clears `Recorded` plus `IsAllDataRequested` (`:59`-`:60`) at both `OnStart` (`:29`) and `OnEnd`
 (`:40`), since a client span carries no identifying tag yet when it starts. Unlike the two metrics
 knobs, these filters need no view: configuring the default-named options also covers the
 instrumentation the Azure Monitor distro adds.
 
-Metrics are deliberately untouched (`Extensions.cs:222`-`Extensions.cs:223`):
+Metrics are deliberately untouched (`Extensions.cs:226`-`Extensions.cs:227`):
 `http.server.request.duration`, Kestrel and routing instruments keep flowing, so probe traffic stays
 on dashboards.
 
@@ -363,11 +370,44 @@ Telemetry gained the properties that make it usable as evidence, from the 2026-0
    because the reviewer name is rendered on an anonymous surface and the access token had been
    putting the address into the name claim it was captured from.
 
+## Revision (2026-09-11)
+An eighth meter, a second trace source, a second poll loop kept off the bill, and one meter this
+pipeline does not carry.
+
+**The durable internal-command queue exports through this record's pipeline.**
+`InternalCommandMetrics`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandMetrics.cs:20`)
+owns the meter `MMCA.Common.InternalCommands` and five instruments: processed, failed and
+dead-letter counters (`:38`, `:48`, `:57`) plus a duration and a schedule-lag histogram (`:66`,
+`:75`), the same RED-plus-dead-letter shape the outbox and CQRS paths already publish
+([ADR-114](114-internal-commands-durable-job-queue.md)). The Aspire defaults subscribe it as the
+eighth entry in the meter chain (`Extensions.cs:208`) and add its activity source beside the outbox
+one (`Extensions.cs:214`). The authoritative list stays the block itself
+(`Extensions.cs:201`-`Extensions.cs:208`), which now carries **eight**: the seven the Revision
+(2026-08-18) names plus `MMCA.Common.InternalCommands`.
+
+**The queue's poll loop is filtered like the outbox one.** `OutboxPollFilterProcessor` clears
+`Recorded` on an `InternalCommandPoll` span from the internal-command activity source with the same
+pass it applies to `OutboxPoll` (`OutboxPollFilterProcessor.cs:60`-`:64`), so a second always-on
+poller does not restore the ingestion cost the outbox filter removes. The cost is the same one the
+Trade-offs already accept: whether that poller is alive and looping is a metrics question, not a
+trace one.
+
+**One meter is defined and not subscribed here.** `MMCA.Common.AI`
+(`MMCA.Common/Source/Core/MMCA.Common.AI/Observability/AiUsageMeter.cs:26`) carries the token-usage
+instruments of the governed chat-client boundary
+([ADR-120](120-governed-chat-client-boundary.md)) and is absent from the `AddMeter` chain, so a host
+that takes the AI package exports nothing from it through `AddServiceDefaults` until it subscribes
+the name itself. That is the duplicated-literal cost of the decoupled package graph in its other
+direction, where the miss reads as an absence rather than as a rename.
+
 ## Related
 ADR-003 (the outbox whose dead-letter counter and poll-span filtering this defines), ADR-014 (the
 CQRS decorator pipeline that emits the RED histograms as a byproduct of its logging decorators),
 ADR-009 (resilience and recovery objectives, configured alongside telemetry in the same
 `AddServiceDefaults`; observability is the diagnostic layer under that posture), ADR-025 (startup
 warm-up and readiness gating, whose health-check endpoints are the operational-signal sibling of these
-telemetry signals in the same Aspire defaults), and COST.md (the FinOps companion that records
+telemetry signals in the same Aspire defaults), ADR-114 (the durable internal-command queue whose
+meter, activity source and poll-span filtering this pipeline carries), ADR-120 (the governed chat
+client whose `MMCA.Common.AI` meter these defaults do not subscribe), and COST.md (the FinOps companion that records
 span-filtering and sampling as cost levers).

@@ -30,6 +30,12 @@ files. Nothing in the decision changes.
 Revised 2026-09-07 (health endpoints serve a cached report with single flight while keeping their
 rate-limit bypass, and edge-shaped controls are no longer gateway-only: Store's storefront host
 carries its own limiter and a circuit cap).
+
+**Revised 2026-09-11:** the bypass tiers are **four**, not three. The 2026-09-07 security review added
+a trusted-internal-caller exemption beside the synthetic-traffic one, recorded as a second amendment
+below. Every rate-limiting citation is refreshed against current line numbers, which moved when that
+code landed. Nothing else in the decision changes.
+
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
 three jobs: the route-to-service map, CORS, and forwarding the caller's `Authorization` header. Nothing
@@ -112,9 +118,10 @@ composes with a host that has no DI graph beyond YARP.
 **2. Rate limiting at the edge counts anonymous callers, and chains a global concurrency cap behind
 it.** `AddGatewayRateLimiting` installs a per-client-IP fixed window partitioned on
 `Connection.RemoteIpAddress` with **no authentication exemption of any kind**
-(`.../Gateway/GatewayRateLimitingExtensions.cs:136`, limiter at `:144`), chained through
-`PartitionedRateLimiter.CreateChained` (`:227`) with a process-wide concurrency limiter (`:171-173`),
-rejecting overage with 429 (`:222`). The two answer different failures: the window answers one noisy
+(`ClientIpPartition`, `.../Gateway/GatewayRateLimitingExtensions.cs:185`, the address read at `:197`,
+limiter at `:205`), chained through `PartitionedRateLimiter.CreateChained` (`:288`) with a
+process-wide concurrency limiter (`ConcurrencyPartition`, `:223-238`, the limiter at `:232`),
+rejecting overage with 429 (`:283`). The two answer different failures: the window answers one noisy
 source, and the concurrency cap answers total in-flight work regardless of how many sources produced
 it, which is the failure a per-IP window structurally cannot see. Defaults live in
 `GatewayRateLimitingSettings` (section `"GatewayRateLimiting"`,
@@ -123,19 +130,22 @@ it, which is the failure a per-IP window structurally cannot see. Defaults live 
 
 **The settings are validated twice, because there are two ways in.** The configuration overload binds
 through `AddOptions().Bind(section).ValidateDataAnnotations().ValidateOnStart()`
-(`GatewayRateLimitingExtensions.cs:194-197`), so a host with an out-of-range value refuses to boot,
+(`GatewayRateLimitingExtensions.cs:255-258`), so a host with an out-of-range value refuses to boot,
 which is [ADR-070](070-fail-fast-configuration-contract.md)'s contract exactly. That alone would not be
 enough here: the limiter closes over an eagerly-bound copy rather than resolving `IOptions` per
 request, and a caller can hand settings straight to the object overload without passing through the
 options pipeline at all. So the overload every path funnels into runs
-`Validator.ValidateObject(settings, ..., validateAllProperties: true)` at registration (`:218`, with
-the reasoning stated inline at `:215-217`). The `[Range]` bounds on the three numeric settings
+`Validator.ValidateObject(settings, ..., validateAllProperties: true)` at registration (`:279`, with
+the reasoning stated inline at `:276-278`). The `[Range]` bounds on the three numeric settings
 (`GatewayRateLimitingSettings.cs:58`, `:62`, `:72`) are therefore load-bearing on both paths: an
 invalid `PermitLimit` throws where it is configured, not at the first throttled request.
 
-Bypasses are two-tier as first recorded (a third, secret-gated tier for synthetic traffic was added in the 2026-09-01 amendment below), and the tiers are different kinds of thing. **Infrastructure bypasses are
+Bypasses are two-tier as first recorded, and two secret-gated tiers joined them in the amendments
+below (synthetic traffic on 2026-09-01, a trusted internal caller on 2026-09-07), so four exist
+today. The tiers are different kinds of thing. **Infrastructure bypasses are
 unconditional**: `/health`, `/alive` and `/.well-known` are hard-coded
-(`GatewayRateLimitingExtensions.cs:55`, matched by path segment, case-insensitively, `:75`), because
+(`GatewayRateLimitingExtensions.cs:59`, matched by path segment, case-insensitively, `IsBypassed` at
+`:71-80`, the comparison at `:79`), because
 throttling them takes down probes and token validation (ADR-004's JWKS discovery) as a side effect of
 throttling traffic. **Application bypasses are configuration**, through `BypassPathPrefixes`
 (`GatewayRateLimitingSettings.cs:82`, empty by default), and each consumer sets its own list in the
@@ -152,7 +162,8 @@ negotiate-plus-reconnect storm from one office's shared address is exactly the p
 misreads as abuse ([ADR-039](039-live-channel-push.md)).
 
 **A request with no attributable client IP is not limited.** It gets
-`RateLimitPartition.GetNoLimiter` (`GatewayRateLimitingExtensions.cs:141`) rather than sharing one
+`RateLimitPartition.GetNoLimiter` (`GatewayRateLimitingExtensions.cs:202`, the reasoning inline at
+`:200-201`) rather than sharing one
 bucket with every other unattributable request, which is the same fail-open posture ADR-019 chose for
 `auth-ip` and for the global limiter's fallback key, for the same reason: a shared "unknown" bucket is
 a single tripwire that one misbehaving caller pulls for everyone behind it.
@@ -173,9 +184,10 @@ The framework instead gained a **synthetic-traffic bypass** (v1.180.0): a reques
 configured header (`SyntheticTrafficHeaderName`, default `X-Synthetic-Traffic-Key`,
 `GatewayRateLimitingSettings.cs:91`) whose single value matches the configured secret
 (`SyntheticTrafficSecret`, `:115`) takes the same no-limiter partition as the two tiers above on BOTH
-chained limiters (`GatewayRateLimitingExtensions.cs:131`, `:169`). It is off by default (a null or
-blank secret disables it, `:94-113`), the comparison is constant-time
-(`CryptographicOperations.FixedTimeEquals`, `:113`), exactly one header value is accepted (`:105`),
+chained limiters: `IsSyntheticTraffic` (`GatewayRateLimitingExtensions.cs:98`) feeds the one
+`IsExemptFromLimiters` predicate (`:172-175`) that each partition consults (`:192` and `:230`). It is
+off by default (a null or blank secret disables it, `:148-151`), the comparison is constant-time
+(`CryptographicOperations.FixedTimeEquals`, `:162`), exactly one header value is accepted (`:154`),
 and a configured secret shorter than 32 characters fails at registration under the ADR-070 contract
 (`[StringLength(int.MaxValue, MinimumLength = 32)]`, `GatewayRateLimitingSettings.cs:114`). The secret
 is a deployment concern, never a checked-in setting: each consumer injects
@@ -183,6 +195,29 @@ is a deployment concern, never a checked-in setting: each consumer injects
 the SMTP password, and the k6 workflow sends the header from the matching repository secret. This
 tier is for load and capacity proofs only; a monitoring probe belongs on the always-bypassed
 infrastructure paths, and an application route that needs relief belongs in `BypassPathPrefixes`.
+
+**Amendment (2026-09-07): a fourth tier, the trusted internal caller.** The synthetic-traffic tier
+answers a load runner, and the 2026-09-07 security review found the same mechanism was needed for a
+component the deployment owns. A server-rendered UI host makes every back-end call, token refresh
+above all, from ONE container address on behalf of every signed-in visitor, so the per-IP window
+collapses the whole site into a single partition and starts answering 429 as soon as the site is
+busy: the limiter throttles the application rather than a caller. `TrustedCallerSecret`
+(`GatewayRateLimitingSettings.cs:151`) with `TrustedCallerHeaderName` (default
+`X-Internal-Caller-Key`, `:123`) generalizes the tier above from a load-test runner to any internal
+caller the deployment trusts. The two share one implementation, so the guarantees are identical
+rather than merely similar: `IsTrustedInternalCaller` (`GatewayRateLimitingExtensions.cs:131`) and
+`IsSyntheticTraffic` (`:98`) both call `PresentsSecret` (`:146`), which is off when no secret is
+configured (`:148-151`), rejects a multi-valued header (`:154`) and compares in constant time
+(`:162`), and both reach the limiters through the same `IsExemptFromLimiters` predicate (`:172-175`).
+A configured secret shorter than 32 characters fails at registration
+(`GatewayRateLimitingSettings.cs:150`). The secret is deployment data on both sides of the boundary:
+each consumer injects `GatewayRateLimiting__TrustedCallerSecret` into gateway and UI container alike
+from Key Vault (`MMCA.ADC/infra/main.bicep:2227` and `:2367`, `MMCA.Store/infra/main.bicep:1889` and
+`:2006`), and the client half is framework code, `AddTrustedCallerHeader`
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:87`, attaching
+`TrustedCallerHandler`, `Security/TrustedCallerHandler.cs:35`, at `:122`). It exempts a component you
+deployed, never a browser, so it must never reach client-side code.
+[ADR-019](019-rate-limiting.md) records the same tier from the limiter-policy side.
 
 **3. Readiness reflects the downstreams; liveness does not.**
 `AddGatewayDownstreamHealthChecks(params string[] serviceNames)`
@@ -365,7 +400,7 @@ off and the deployed answer is on.
 
 ## Trade-offs
 - **The limiter closes over an eagerly-bound copy of the settings**
-  (`GatewayRateLimitingExtensions.cs:199-200`, consumed at `:229` and `:231`), so an
+  (`GatewayRateLimitingExtensions.cs:260-261`, consumed at `:290` and `:292`), so an
   `IOptionsMonitor` reload never reaches it. Validation is not the gap (both paths validate, see the
   Decision), but liveness of the value is: changing a limit is a restart, not a config push, which is
   the opposite of what "it is

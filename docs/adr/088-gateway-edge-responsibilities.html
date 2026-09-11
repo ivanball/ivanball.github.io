@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -254,6 +256,10 @@
           Revised 2026-09-07 (health endpoints serve a cached report with single flight while keeping their
           rate-limit bypass, and edge-shaped controls are no longer gateway-only: Store&#39;s storefront host
           carries its own limiter and a circuit cap).</p>
+          <p><strong>Revised 2026-09-11:</strong> the bypass tiers are <strong>four</strong>, not three. The 2026-09-07 security review added
+          a trusted-internal-caller exemption beside the synthetic-traffic one, recorded as a second amendment
+          below. Every rate-limiting citation is refreshed against current line numbers, which moved when that
+          code landed. Nothing else in the decision changes.</p>
           <h2 id="context">Context</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> made the Gateway the only client entry point and gave it
           three jobs: the route-to-service map, CORS, and forwarding the caller&#39;s <code>Authorization</code> header. Nothing
@@ -325,9 +331,10 @@
           <p><strong>2. Rate limiting at the edge counts anonymous callers, and chains a global concurrency cap behind
           it.</strong> <code>AddGatewayRateLimiting</code> installs a per-client-IP fixed window partitioned on
           <code>Connection.RemoteIpAddress</code> with <strong>no authentication exemption of any kind</strong>
-          (<code>.../Gateway/GatewayRateLimitingExtensions.cs:136</code>, limiter at <code>:144</code>), chained through
-          <code>PartitionedRateLimiter.CreateChained</code> (<code>:227</code>) with a process-wide concurrency limiter (<code>:171-173</code>),
-          rejecting overage with 429 (<code>:222</code>). The two answer different failures: the window answers one noisy
+          (<code>ClientIpPartition</code>, <code>.../Gateway/GatewayRateLimitingExtensions.cs:185</code>, the address read at <code>:197</code>,
+          limiter at <code>:205</code>), chained through <code>PartitionedRateLimiter.CreateChained</code> (<code>:288</code>) with a
+          process-wide concurrency limiter (<code>ConcurrencyPartition</code>, <code>:223-238</code>, the limiter at <code>:232</code>),
+          rejecting overage with 429 (<code>:283</code>). The two answer different failures: the window answers one noisy
           source, and the concurrency cap answers total in-flight work regardless of how many sources produced
           it, which is the failure a per-IP window structurally cannot see. Defaults live in
           <code>GatewayRateLimitingSettings</code> (section <code>&quot;GatewayRateLimiting&quot;</code>,
@@ -335,18 +342,21 @@
           (<code>:63</code>), <code>GlobalConcurrencyLimit</code> 200 (<code>:73</code>).</p>
           <p><strong>The settings are validated twice, because there are two ways in.</strong> The configuration overload binds
           through <code>AddOptions().Bind(section).ValidateDataAnnotations().ValidateOnStart()</code>
-          (<code>GatewayRateLimitingExtensions.cs:194-197</code>), so a host with an out-of-range value refuses to boot,
+          (<code>GatewayRateLimitingExtensions.cs:255-258</code>), so a host with an out-of-range value refuses to boot,
           which is <a href="070-fail-fast-configuration-contract.html">ADR-070</a>&#39;s contract exactly. That alone would not be
           enough here: the limiter closes over an eagerly-bound copy rather than resolving <code>IOptions</code> per
           request, and a caller can hand settings straight to the object overload without passing through the
           options pipeline at all. So the overload every path funnels into runs
-          <code>Validator.ValidateObject(settings, ..., validateAllProperties: true)</code> at registration (<code>:218</code>, with
-          the reasoning stated inline at <code>:215-217</code>). The <code>[Range]</code> bounds on the three numeric settings
+          <code>Validator.ValidateObject(settings, ..., validateAllProperties: true)</code> at registration (<code>:279</code>, with
+          the reasoning stated inline at <code>:276-278</code>). The <code>[Range]</code> bounds on the three numeric settings
           (<code>GatewayRateLimitingSettings.cs:58</code>, <code>:62</code>, <code>:72</code>) are therefore load-bearing on both paths: an
           invalid <code>PermitLimit</code> throws where it is configured, not at the first throttled request.</p>
-          <p>Bypasses are two-tier as first recorded (a third, secret-gated tier for synthetic traffic was added in the 2026-09-01 amendment below), and the tiers are different kinds of thing. <strong>Infrastructure bypasses are
+          <p>Bypasses are two-tier as first recorded, and two secret-gated tiers joined them in the amendments
+          below (synthetic traffic on 2026-09-01, a trusted internal caller on 2026-09-07), so four exist
+          today. The tiers are different kinds of thing. <strong>Infrastructure bypasses are
           unconditional</strong>: <code>/health</code>, <code>/alive</code> and <code>/.well-known</code> are hard-coded
-          (<code>GatewayRateLimitingExtensions.cs:55</code>, matched by path segment, case-insensitively, <code>:75</code>), because
+          (<code>GatewayRateLimitingExtensions.cs:59</code>, matched by path segment, case-insensitively, <code>IsBypassed</code> at
+          <code>:71-80</code>, the comparison at <code>:79</code>), because
           throttling them takes down probes and token validation (ADR-004&#39;s JWKS discovery) as a side effect of
           throttling traffic. <strong>Application bypasses are configuration</strong>, through <code>BypassPathPrefixes</code>
           (<code>GatewayRateLimitingSettings.cs:82</code>, empty by default), and each consumer sets its own list in the
@@ -362,7 +372,8 @@
           negotiate-plus-reconnect storm from one office&#39;s shared address is exactly the pattern a per-IP window
           misreads as abuse (<a href="039-live-channel-push.html">ADR-039</a>).</p>
           <p><strong>A request with no attributable client IP is not limited.</strong> It gets
-          <code>RateLimitPartition.GetNoLimiter</code> (<code>GatewayRateLimitingExtensions.cs:141</code>) rather than sharing one
+          <code>RateLimitPartition.GetNoLimiter</code> (<code>GatewayRateLimitingExtensions.cs:202</code>, the reasoning inline at
+          <code>:200-201</code>) rather than sharing one
           bucket with every other unattributable request, which is the same fail-open posture ADR-019 chose for
           <code>auth-ip</code> and for the global limiter&#39;s fallback key, for the same reason: a shared &quot;unknown&quot; bucket is
           a single tripwire that one misbehaving caller pulls for everyone behind it.</p>
@@ -382,9 +393,10 @@
           configured header (<code>SyntheticTrafficHeaderName</code>, default <code>X-Synthetic-Traffic-Key</code>,
           <code>GatewayRateLimitingSettings.cs:91</code>) whose single value matches the configured secret
           (<code>SyntheticTrafficSecret</code>, <code>:115</code>) takes the same no-limiter partition as the two tiers above on BOTH
-          chained limiters (<code>GatewayRateLimitingExtensions.cs:131</code>, <code>:169</code>). It is off by default (a null or
-          blank secret disables it, <code>:94-113</code>), the comparison is constant-time
-          (<code>CryptographicOperations.FixedTimeEquals</code>, <code>:113</code>), exactly one header value is accepted (<code>:105</code>),
+          chained limiters: <code>IsSyntheticTraffic</code> (<code>GatewayRateLimitingExtensions.cs:98</code>) feeds the one
+          <code>IsExemptFromLimiters</code> predicate (<code>:172-175</code>) that each partition consults (<code>:192</code> and <code>:230</code>). It is
+          off by default (a null or blank secret disables it, <code>:148-151</code>), the comparison is constant-time
+          (<code>CryptographicOperations.FixedTimeEquals</code>, <code>:162</code>), exactly one header value is accepted (<code>:154</code>),
           and a configured secret shorter than 32 characters fails at registration under the ADR-070 contract
           (<code>[StringLength(int.MaxValue, MinimumLength = 32)]</code>, <code>GatewayRateLimitingSettings.cs:114</code>). The secret
           is a deployment concern, never a checked-in setting: each consumer injects
@@ -392,6 +404,28 @@
           the SMTP password, and the k6 workflow sends the header from the matching repository secret. This
           tier is for load and capacity proofs only; a monitoring probe belongs on the always-bypassed
           infrastructure paths, and an application route that needs relief belongs in <code>BypassPathPrefixes</code>.</p>
+          <p><strong>Amendment (2026-09-07): a fourth tier, the trusted internal caller.</strong> The synthetic-traffic tier
+          answers a load runner, and the 2026-09-07 security review found the same mechanism was needed for a
+          component the deployment owns. A server-rendered UI host makes every back-end call, token refresh
+          above all, from ONE container address on behalf of every signed-in visitor, so the per-IP window
+          collapses the whole site into a single partition and starts answering 429 as soon as the site is
+          busy: the limiter throttles the application rather than a caller. <code>TrustedCallerSecret</code>
+          (<code>GatewayRateLimitingSettings.cs:151</code>) with <code>TrustedCallerHeaderName</code> (default
+          <code>X-Internal-Caller-Key</code>, <code>:123</code>) generalizes the tier above from a load-test runner to any internal
+          caller the deployment trusts. The two share one implementation, so the guarantees are identical
+          rather than merely similar: <code>IsTrustedInternalCaller</code> (<code>GatewayRateLimitingExtensions.cs:131</code>) and
+          <code>IsSyntheticTraffic</code> (<code>:98</code>) both call <code>PresentsSecret</code> (<code>:146</code>), which is off when no secret is
+          configured (<code>:148-151</code>), rejects a multi-valued header (<code>:154</code>) and compares in constant time
+          (<code>:162</code>), and both reach the limiters through the same <code>IsExemptFromLimiters</code> predicate (<code>:172-175</code>).
+          A configured secret shorter than 32 characters fails at registration
+          (<code>GatewayRateLimitingSettings.cs:150</code>). The secret is deployment data on both sides of the boundary:
+          each consumer injects <code>GatewayRateLimiting__TrustedCallerSecret</code> into gateway and UI container alike
+          from Key Vault (<code>MMCA.ADC/infra/main.bicep:2227</code> and <code>:2367</code>, <code>MMCA.Store/infra/main.bicep:1889</code> and
+          <code>:2006</code>), and the client half is framework code, <code>AddTrustedCallerHeader</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:87</code>, attaching
+          <code>TrustedCallerHandler</code>, <code>Security/TrustedCallerHandler.cs:35</code>, at <code>:122</code>). It exempts a component you
+          deployed, never a browser, so it must never reach client-side code.
+          <a href="019-rate-limiting.html">ADR-019</a> records the same tier from the limiter-policy side.</p>
           <p><strong>3. Readiness reflects the downstreams; liveness does not.</strong>
           <code>AddGatewayDownstreamHealthChecks(params string[] serviceNames)</code>
           (<code>.../Gateway/GatewayHealthCheckExtensions.cs:130</code>) registers one check per named downstream with an
@@ -559,7 +593,7 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The limiter closes over an eagerly-bound copy of the settings</strong>
-          (<code>GatewayRateLimitingExtensions.cs:199-200</code>, consumed at <code>:229</code> and <code>:231</code>), so an
+          (<code>GatewayRateLimitingExtensions.cs:260-261</code>, consumed at <code>:290</code> and <code>:292</code>), so an
           <code>IOptionsMonitor</code> reload never reaches it. Validation is not the gap (both paths validate, see the
           Decision), but liveness of the value is: changing a limit is a restart, not a config push, which is
           the opposite of what &quot;it is

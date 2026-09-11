@@ -5,6 +5,9 @@ Accepted (2026-07-10, amended 2026-07-17, 2026-07-23, 2026-08-14, 2026-08-29 and
 2026-08-29 amendment adds the `UseMmcaMauiErrorHandling` last-chance handlers and records the hybrid
 head's missing ASP.NET Core pipeline as a known constraint. The 2026-09-03 amendment records the push
 device-token provider as a second native override that sits outside `AddMauiDeviceCapabilities`.
+Revised 2026-09-11: `IAppLifecycleNotifier` joins the shared contract set (24 contracts today), and it
+is the fourth capability outside `AddMauiDeviceCapabilities`, fed from the native window through a
+window-lifecycle extension.
 
 ## Context
 The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
@@ -33,15 +36,21 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a dedicated package,
   `IGeolocationService`, `IExternalLinkService`, `ITextToSpeechService`, `IAccessibilityAnnouncer`,
   `ILocalNotificationService`, `IScreenshotService`, `IDevicePreferences`, `IBatteryStatusService`,
   `IBiometricAuthenticator`, `ISpeechToTextService`, `IExternalAuthBroker`, `IDeepLinkDispatcher`,
-  `IConnectivityStatusService`, `ILocalCacheStore`). Five more have joined since, for 23 today, all
+  `IConnectivityStatusService`, `ILocalCacheStore`). Six more have joined since, for 24 today, all
   TryAdd-registered by `AddDeviceCapabilityDefaults`
-  (`Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:37-81`): the
+  (`Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:37-85`): the
   additions are `IGeocodingService` (Wave 3), `IMediaPickerService` (ADR-045), the push pair
-  `IPushRegistrationService` and `IPushDeviceTokenProvider` (ADR-044), and `IBarcodeScannerService`
-  for camera barcode/QR scanning (`Capabilities/DependencyInjection.cs:70`). `AddMauiDeviceCapabilities`
+  `IPushRegistrationService` and `IPushDeviceTokenProvider` (ADR-044), `IBarcodeScannerService`
+  for camera barcode/QR scanning (`Capabilities/DependencyInjection.cs:70`), and
+  `IAppLifecycleNotifier` for the native window's background/foreground callbacks
+  (`Capabilities/DependencyInjection.cs:82`). `AddMauiDeviceCapabilities`
   (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:42-78`) natively overrides 20 of
-  the 23. Three stay outside it. `IDeepLinkDispatcher` needs no override because the shared default
-  IS the real implementation. The other two are deliberately opt-in per head:
+  the 24. Four stay outside it. `IDeepLinkDispatcher` and `IAppLifecycleNotifier` need no override
+  because the shared default IS the real implementation: the MAUI package feeds the notifier from the
+  native window instead of replacing it, through `AttachMmcaAppLifecycle`
+  (`Source/Presentation/MMCA.Common.UI.Maui/WindowLifecycleExtensions.cs:33`), which forwards the
+  window's `Stopped` and `Resumed` events and no-ops when the head registered no notifier
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/App.xaml.cs:32`). The other two are deliberately opt-in per head:
   `IPushDeviceTokenProvider` comes from the platform-conditional `AddMauiPushDeviceTokenProvider`
   (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:118-126`, FCM on Android, APNs on
   iOS/MacCatalyst, nothing on windows, and both providers stay configuration-gated), while
@@ -143,6 +152,6 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a dedicated package,
   (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:61`, `:62`, and the broker scoped
   at `:76`). The residual trade-off is configuration, not code: `MauiExternalAuthBroker` registers
   unconditionally but reports `IsAvailable == false`
-  (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:39`)
+  (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:43`)
   until the head supplies `OAuth:MobileRedirectScheme`, so a misconfigured head quietly keeps the web
   anchor flow rather than failing fast.
