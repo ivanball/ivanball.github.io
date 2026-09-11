@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-111: AI Session Scoring Governance · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-04).">
+  <meta name="description" content="Accepted (2026-09-04). Extended by ADR-120 (2026-09-11): the rules here that belong to calling a model rather than to scoring a session (a bounded…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-111: AI Session Scoring Governance">
-  <meta property="og:description" content="Accepted (2026-09-04).">
+  <meta property="og:description" content="Accepted (2026-09-04). Extended by ADR-120 (2026-09-11): the rules here that belong to calling a model rather than to scoring a session (a bounded…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-111: AI Session Scoring Governance">
-  <meta name="twitter:description" content="Accepted (2026-09-04).">
+  <meta name="twitter:description" content="Accepted (2026-09-04). Extended by ADR-120 (2026-09-11): the rules here that belong to calling a model rather than to scoring a session (a bounded…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"111 · AI Session Scoring Governance","item":"https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 119 ADRs</summary>
+        <summary>All 120 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -219,6 +219,7 @@
         <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
           </ol>
         </nav>
       </details>
@@ -227,7 +228,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-111-ai-session-scoring-governance">ADR-111: AI Session Scoring Governance</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-04).</p>
+          <p>Accepted (2026-09-04). <strong>Extended by <a href="120-governed-chat-client-boundary.html">ADR-120</a></strong> (2026-09-11): the rules here that belong to <em>calling a model</em> rather than to <em>scoring a session</em> (a bounded call, a versioned and hashed prompt contract, token metering tagged by model and prompt version, the isolation of the provider SDK) ship as the optional framework package <code>MMCA.Common.AI</code>. This record is not superseded: the scoring-specific rules below, the prompt-change protocol, the two evaluation tiers, the input and output guardrails and the budgeted ceiling alert all stand. ADC migrates <code>AnthropicScoringService</code> onto the governed <code>IChatClient</code> at its next MMCA.Common bump, keeping <code>IAiScoringService</code>, <code>PromptVersion</code> and the evaluation gate; the per-service meter <code>MMCA.ADC.Conference.Scoring</code> named in decision 8 is replaced by the framework meter <code>MMCA.Common.AI</code>, so the dashboard and alert queries move with it.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.ADC ships one product feature that calls a language model. An organizer, looking at the session
           selection dashboard for an event, can trigger an AI scoring pass that rates every non-service session

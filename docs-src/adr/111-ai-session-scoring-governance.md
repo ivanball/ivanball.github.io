@@ -1,7 +1,7 @@
 # ADR-111: AI Session Scoring Governance
 
 ## Status
-Accepted (2026-09-04).
+Accepted (2026-09-04). **Extended by [ADR-120](120-governed-chat-client-boundary.md)** (2026-09-11): the rules here that belong to *calling a model* rather than to *scoring a session* (a bounded call, a versioned and hashed prompt contract, token metering tagged by model and prompt version, the isolation of the provider SDK) ship as the optional framework package `MMCA.Common.AI`. This record is not superseded: the scoring-specific rules below, the prompt-change protocol, the two evaluation tiers, the input and output guardrails and the budgeted ceiling alert all stand. ADC migrates `AnthropicScoringService` onto the governed `IChatClient` at its next MMCA.Common bump, keeping `IAiScoringService`, `PromptVersion` and the evaluation gate; the per-service meter `MMCA.ADC.Conference.Scoring` named in decision 8 is replaced by the framework meter `MMCA.Common.AI`, so the dashboard and alert queries move with it.
 
 ## Context
 MMCA.ADC ships one product feature that calls a language model. An organizer, looking at the session
