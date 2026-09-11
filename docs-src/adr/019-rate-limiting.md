@@ -215,10 +215,46 @@ carry `auth-ip`, and infrastructure paths are still exempt. Four things below it
    server-rendered UI host's own back-end calls, token refresh above all, otherwise collapse into one
    client-IP partition and throttle every visitor together.
 4. **ADC scopes its tighter gateway policy to the credential-submission routes.** The gateway's
-   `auth-tight` policy (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:49`) is attached to
-   `/Auth/login` (`:68-72`) and `/Auth/register` (`:74-78`) and to nothing else, so `/Auth/refresh`
-   keeps the exemption this record requires for Blazor Server circuits, whose refreshes all leave
-   from the UI host's address.
+   `auth-tight` policy (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:65`) is attached to
+   `identity-auth-login` (`:90-96`, the policy at `:95`) and `identity-auth-register` (`:97-103`, the
+   policy at `:102`) and to nothing else, so `/Auth/refresh` keeps the exemption this record requires
+   for Blazor Server circuits, whose refreshes all leave from the UI host's address.
+
+## Revision (2026-09-10)
+
+**Both gateways now scope `auth-tight` the same way, and the trusted-caller exemption's client half
+ships in the framework.** Two items, both landed.
+
+1. **Store's gateway splits the credential routes out of the `/Auth` catch-all.** Its `auth-tight`
+   policy (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:33`, the block at `:32-39`)
+   is attached to `identity-auth-login` (`:74-80`, the policy at `:79`) and `identity-auth-register`
+   (`:81-87`, the policy at `:86`), and the remaining `identity-auth` route matching
+   `/Auth/{**catch-all}` (`:90-94`) carries no `RateLimiterPolicy` at all, so refresh, logout,
+   forgot-and-reset and the OAuth callbacks sit on the edge global limiter alone. That is the same
+   three-route shape ADC has, and it is what item 4 above requires of any Blazor Server host: a
+   circuit's refreshes all leave from the UI host's single address, so a per-IP cap on `/Auth`
+   throttles every visitor together. The pin moved with it: `CredentialRoutes_CarryTheTightRateLimiterPolicy`
+   (`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/MmcaGatewayTests.cs:150`) asserts both
+   directions, that every credential route carries the policy (`:161-165`) and that the set of routes
+   carrying any policy is exactly that pair (`:169-173`), so re-attaching it to the catch-all fails
+   the build.
+2. **The trusted-caller client half is framework code, not per-app code.** The header a UI host sends
+   so its own back-end calls take the exempt partition is registered by
+   `AddTrustedCallerHeader`, shipped in `MMCA.Common.UI.Web` 1.191.0
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:87`, in the
+   `extension(IServiceCollection services)` block at `:20`). Both UI hosts call it and nothing else
+   does (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:117`,
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:141`). The client reads the same
+   `GatewayRateLimiting` section the gateway side already binds
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingSettings.cs:47`), which
+   is now the one section name in both repos: Store's UI host declares
+   `GatewayRateLimiting:TrustedCallerHeaderName` at
+   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:32-34` and ADC's gateway declares
+   the section at `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:21-33` (the header name at
+   `:32`), with the secret injected as `GatewayRateLimiting__TrustedCallerSecret` by each template
+   (`MMCA.Store/infra/main.bicep:1889` and `:2006`, `MMCA.ADC/infra/main.bicep:2223` and `:2363`).
+   One name on both sides of the boundary is the point: a client sending under one key while the
+   gateway reads another fails open silently, as a plain throttled caller.
 
 ## Related
 ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),

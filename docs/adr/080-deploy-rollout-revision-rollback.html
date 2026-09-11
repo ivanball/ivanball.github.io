@@ -234,10 +234,12 @@
           refreshed).</p>
           <h2 id="context">Context</h2>
           <p>Both production apps deploy to Azure Container Apps from a single <code>deploy.yml</code> job on push to <code>main</code>,
-          and every gate runs <strong>before</strong> anything rolls out: the <code>deploy</code> job waits on the same ten needs in
-          both repos (<code>changes</code>, <code>supply-chain</code>, <code>cost-guard</code>, the three recency gates, the chromium
-          <code>e2e-gate</code>, <code>backend-test-gate</code>, <code>foundation</code> and <code>build-images</code>:
-          <code>MMCA.Store/.github/workflows/deploy.yml:999</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1054</code>), and the
+          and every gate runs <strong>before</strong> anything rolls out. The <code>deploy</code> job waits on eleven needs in Store
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1200</code>) and twelve in ADC
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1305</code>): the shared eleven are <code>changes</code>, <code>supply-chain</code>,
+          <code>cost-guard</code>, the four recency gates (<code>dr-freshness</code>, <code>load-freshness</code>, <code>cross-service-freshness</code>,
+          <code>cross-browser-freshness</code>), the chromium <code>e2e-gate</code>, <code>backend-test-gate</code>, <code>foundation</code> and
+          <code>build-images</code>, and ADC adds <code>ai-eval-gate</code> for its AI session scorer (ADR-111). The
           image matrix pushes to ACR without rolling anything out. The rollout itself is one <code>azure/arm-deploy</code>
           step over <code>infra/main.bicep</code> (<code>MMCA.Store/.github/workflows/deploy.yml:1189-1195</code>,
           <code>MMCA.ADC/.github/workflows/deploy.yml:1298-1304</code>).</p>
@@ -399,17 +401,30 @@
           about ten minutes before a single probe is sent; each failing probe then burns up to 12 attempts of
           15-second timeout plus a 10-second sleep, and the probes run sequentially, so a total outage adds
           roughly five minutes per probe before the rollback loop starts, against a <code>timeout-minutes: 40</code> job
-          (<code>MMCA.Store/.github/workflows/deploy.yml:998</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1053</code>). The
-          two repos bound the activation tier differently: Store polls all five apps inside one 30 x 20s loop,
-          so a fleet-wide failure costs about ten minutes once
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1281-1299</code>), while ADC calls <code>revision_gate</code> per app
-          sequentially (<code>MMCA.ADC/.github/workflows/deploy.yml:1385-1396,1400-1405</code>), so a six-app failure can
-          spend up to about an hour in activation polling alone. A job killed at its timeout never runs the
-          rollback, and on ADC that ceiling is reachable from the activation tier by itself.</li>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1199</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1304</code>). Both
+          repos now bound the activation tier the same way, on one shared budget (see the 2026-09-10
+          revision), so a fleet-wide activation failure costs about ten minutes once in either repo rather
+          than scaling with the app count. The rollback loop is reachable inside the 40-minute job in both.</li>
           <li><strong>Only a smoke-gate failure triggers a rollback.</strong> A regression that passes the probes and is found
           minutes later is reverted by hand (a redeploy of the previous commit or a manual <code>revision copy</code>);
           there is no alert-driven auto-rollback wired to the SLO alerts (ADR-062).</li>
           </ul>
+          <h2 id="revision-2026-09-10">Revision (2026-09-10)</h2>
+          <p><strong>ADC&#39;s activation tier is now one shared budget over the whole fleet, matching Store.</strong> The attempt
+          loop is the outer loop and the apps are iterated inside it: <code>for i in $(seq 1 30)</code> at
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1677</code> encloses <code>for app in $APPS</code> at <code>:1679</code>, the pass
+          collects a <code>pending</code> list and breaks on the first fully-activated sweep (<code>:1690</code>), and there is one
+          <code>sleep 20</code> per pass (<code>:1692</code>), the whole gate spanning <code>:1668-1697</code>. Store&#39;s is the same shape
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1514</code> outer, <code>:1516</code> inner, break at <code>:1529</code>, sleep at
+          <code>:1531</code>).</p>
+          <p>The arithmetic is the point of the change, not the tidiness. A shared budget is 30 x 20s = about ten
+          minutes of activation polling regardless of how many apps are pending, so the ceiling no longer
+          scales with the fleet: ADC&#39;s six apps used to be able to spend roughly an hour there, against a
+          <code>timeout-minutes: 40</code> job (<code>:1304</code>; Store <code>:1199</code>). A job killed at its timeout never reaches its
+          rollback loop, so the old shape could turn a failed activation into a deploy with no revert, which is
+          the failure this record exists to prevent. Both rollback loops are unchanged and reachable
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1730-1761</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1565-1600</code>).</p>
           <h2 id="related">Related</h2>
           <p><a href="057-expand-contract-schema-evolution-gate.html">ADR-057</a> (built on this model: revision-only rollback
           is why every migration must be backward compatible one release back),
@@ -436,6 +451,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

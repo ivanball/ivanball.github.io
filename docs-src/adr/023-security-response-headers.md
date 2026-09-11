@@ -128,6 +128,25 @@ Two changes from the 2026-09-07 security review.
    (`MMCA.Store/Tests/Hosts/MMCA.Store.UI.Web.Tests/SecurityHeadersTests.cs`), closing the gap where
    only the JSON gateway was pinned by a test.
 
+## Revision (2026-09-10)
+
+**Both UI origins are now pinned by a test, not just Store's.** ADC has
+`MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/SecurityHeadersTests.cs:17-18`, a one-line subclass of
+the framework's `SecurityHeadersTestsBase`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/SecurityHeadersTestsBase.cs:16`) over a
+`ConferenceUiHostApplicationFactory` that boots the real Blazor host Production-pinned
+(`MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/ConferenceUiHostApplicationFactory.cs:17`, deriving
+`ProductionHostApplicationFactory<Program>`). Production-pinned is what makes the assertion mean
+anything here, because `Strict-Transport-Security` is emitted on that environment and not in
+Development. The shape matches Store's exactly
+(`MMCA.Store/Tests/Hosts/MMCA.Store.UI.Web.Tests/SecurityHeadersTests.cs:17-18`).
+
+The test project is in the no-database CI filter (`MMCA.ADC/MMCA.ADC.CI.slnf:61`, the same place
+Store's sits at `MMCA.Store/MMCA.Store.CI.slnf:55`), so the guard runs on every pull request rather
+than existing and never being executed. That is the whole difference between a conformance suite that
+is adopted and one that is merely present: item 2 above records the UI origin emitting its own HSTS,
+and a host-level test in the gating tier is what keeps a later pipeline edit from quietly undoing it.
+
 ## Related
 ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022
 (browser session-cookie auth, the other browser-edge security control), ADR-008 (the gateway topology

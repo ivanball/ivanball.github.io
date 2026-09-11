@@ -505,6 +505,41 @@
           and <code>Error.NotFound</code> (<code>:431-433</code>, <code>:437-439</code>) branches, and the ADC Engagement registration
           (<code>DependencyInjection.cs:43</code>, <code>:45</code>, <code>:54</code>, <code>:55</code>).</li>
           </ol>
+          <h2 id="revision-2026-09-10">Revision (2026-09-10)</h2>
+          <p><strong>ADC adopts both enforcement points, so the &quot;Engagement Bookmarks only&quot; framing above is no longer
+          the whole inventory.</strong> The Adoption text describes ADC through the action-filter half alone; its
+          Conference module carries the row-level half as well, on the canonical shape rather than an inline
+          variant of it.</p>
+          <ol>
+          <li><strong>Two Conference controllers resolve the specification through the shared helper.</strong>
+          <code>EventQuestionAnswersController</code> overrides <code>GetExportSpecification()</code> and resolves it through
+          <code>OwnershipHelper.GetOwnershipSpecification</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventQuestionAnswersController.cs:85-90</code>,
+          the call at <code>:86</code>), and <code>SessionQuestionAnswersController</code> does the same
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:107-112</code>,
+          the call at <code>:108</code>). Both take the two-generic overload in
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:34</code>, yielding an
+          <code>OwnedByUserSpecification</code> for an attendee and <code>null</code> for an Organizer. Because
+          <code>EntityControllerBase.GetReadSpecificationAsync</code> defaults to <code>GetExportSpecification</code>, the override
+          scopes every read on those controllers, not only the export.</li>
+          <li><strong>Both fail closed on an unresolvable owner.</strong> Each controller carries the same private
+          <code>RequireResolvableOwner()</code> gate Store&#39;s row-scoped controllers use
+          (<code>EventQuestionAnswersController.cs:104-117</code>, called at <code>:126</code>, <code>:144</code>, <code>:155</code> and <code>:169</code>;
+          <code>SessionQuestionAnswersController.cs:126-139</code>, called at <code>:148</code>, <code>:166</code>, <code>:177</code> and <code>:191</code>). That
+          is the answer to the ambiguous <code>null</code> recorded in the 2026-08-31 revision: the helper returns
+          <code>null</code> for an Organizer bypass and for a claim-less non-Organizer, and only the first may read
+          unscoped, so the second gets 403 instead of an unscoped read.</li>
+          <li><strong>The gate is a per-controller method, not framework code.</strong> <code>RequireResolvableOwner</code> exists four
+          times, once per row-scoped controller: <code>MMCA.Store/.../OrdersController.cs:82</code>,
+          <code>MMCA.Store/.../ShoppingCartsController.cs:80</code>, and ADC&#39;s two above. Nothing in MMCA.Common
+          declares it. Four identical copies of a fail-closed authorization gate is the kind of duplication
+          that eventually diverges in one copy, so it is named here as a candidate for extraction rather
+          than as the settled shape.</li>
+          <li><strong>One Store site is adjacent, not a fifth adopter.</strong> Catalog&#39;s <code>ReviewsController</code> uses
+          <code>OwnershipHelper.IsAdmin</code> (<code>MMCA.Store/.../ReviewsController.cs:72</code>) and scopes through its own
+          <code>ResolveOwner()</code> (<code>:373-374</code>) rather than through <code>GetOwnershipSpecification</code>, so it belongs to the
+          helper&#39;s audience without being an instance of the row-level pattern this record describes.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -524,6 +559,7 @@
             <li><a href="#revision-2026-07-25">Revision (2026-07-25)</a></li>
             <li><a href="#revision-2026-08-01">Revision (2026-08-01)</a></li>
             <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
+            <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             </ul>
           </nav>
         </aside>

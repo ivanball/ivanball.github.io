@@ -352,6 +352,22 @@
           (<code>MMCA.Store/Tests/Hosts/MMCA.Store.UI.Web.Tests/SecurityHeadersTests.cs</code>), closing the gap where
           only the JSON gateway was pinned by a test.</li>
           </ol>
+          <h2 id="revision-2026-09-10">Revision (2026-09-10)</h2>
+          <p><strong>Both UI origins are now pinned by a test, not just Store&#39;s.</strong> ADC has
+          <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/SecurityHeadersTests.cs:17-18</code>, a one-line subclass of
+          the framework&#39;s <code>SecurityHeadersTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/SecurityHeadersTestsBase.cs:16</code>) over a
+          <code>ConferenceUiHostApplicationFactory</code> that boots the real Blazor host Production-pinned
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/ConferenceUiHostApplicationFactory.cs:17</code>, deriving
+          <code>ProductionHostApplicationFactory&lt;Program&gt;</code>). Production-pinned is what makes the assertion mean
+          anything here, because <code>Strict-Transport-Security</code> is emitted on that environment and not in
+          Development. The shape matches Store&#39;s exactly
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.UI.Web.Tests/SecurityHeadersTests.cs:17-18</code>).</p>
+          <p>The test project is in the no-database CI filter (<code>MMCA.ADC/MMCA.ADC.CI.slnf:61</code>, the same place
+          Store&#39;s sits at <code>MMCA.Store/MMCA.Store.CI.slnf:55</code>), so the guard runs on every pull request rather
+          than existing and never being executed. That is the whole difference between a conformance suite that
+          is adopted and one that is merely present: item 2 above records the UI origin emitting its own HSTS,
+          and a host-level test in the gating tier is what keeps a later pipeline edit from quietly undoing it.</p>
           <h2 id="related">Related</h2>
           <p>ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022
           (browser session-cookie auth, the other browser-edge security control), ADR-008 (the gateway topology
@@ -372,6 +388,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
+            <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

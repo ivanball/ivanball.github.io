@@ -348,10 +348,15 @@
           repo, on ADC Conference (<code>ApiVersioningTests.cs:14</code>) and Store Catalog
           (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs:15</code>),
           which is enough to keep the machinery exercised but leaves the other five REST hosts unguarded. The
-          security-headers and graceful-shutdown suites are subclassed <strong>only on the two Gateway hosts</strong>
+          security-headers suite is subclassed on <strong>all four browser-facing hosts</strong>: the two Gateway hosts
           (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:12</code>,
-          <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:12</code>, plus the two
-          <code>GracefulShutdownTests</code> above); no service host asserts either today. The gateway-hardening suite is
+          <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:12</code>) and, since 2026-09-10, both
+          UI web hosts (<code>MMCA.Store/Tests/Hosts/MMCA.Store.UI.Web.Tests/SecurityHeadersTests.cs:17-18</code>,
+          <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/SecurityHeadersTests.cs:17-18</code>, each over a
+          Production-pinned factory: <code>StorefrontHostApplicationFactory</code> and
+          <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/ConferenceUiHostApplicationFactory.cs:17</code>). Graceful
+          shutdown remains Gateway-only (the two <code>GracefulShutdownTests</code> above); no service host asserts it
+          today. The gateway-hardening suite is
           subclassed on both Gateway hosts and nowhere else, which is its whole addressable surface: it asserts
           the shared gateway kit&#39;s edge behavior, and only a gateway adopts that kit
           (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:30</code>,
@@ -417,9 +422,12 @@
           <li><strong>Opt-in per host, exactly like ADR-015.</strong> The framework ships the suites; a host gets the gate only
           once someone writes the subclass. That is the same audit-the-inventory caveat, and the adoption
           inventory above is the current answer to it, not a claim of completeness.</li>
-          <li><strong>Coverage is uneven by suite.</strong> Security headers and graceful shutdown are Gateway-only, versioning
-          is one host per repo, and Helpdesk has only the decorator suite. Problem details is the one suite now
+          <li><strong>Coverage is uneven by suite.</strong> Graceful shutdown is Gateway-only, versioning
+          is one host per repo, and Helpdesk has only the decorator suite. Problem details is the one suite
           subclassed on every REST host in both consumers (ADC Notification closed the last gap on 2026-08-13).
+          Security headers is complete over the hosts it addresses rather than over all of them: both Gateway
+          hosts and both UI web hosts subclass it, which is every host that serves a browser, and the four
+          extracted REST services are reached through a gateway that stamps the headers for them.
           Gateway hardening is Gateway-only by construction rather than by omission: it asserts the shared
           gateway kit, so a service host has nothing for it to check. Every remaining hole is an unguarded host
           for that contract, not a decision that the contract does not apply.</li>
@@ -441,6 +449,21 @@
           package set, so adding one is a framework release plus a consumer sweep (ADR-016), not a local edit
           in the repo that needs the guard.</li>
           </ul>
+          <h2 id="revision-2026-09-10">Revision (2026-09-10)</h2>
+          <p><strong>The security-headers suite reaches both UI web hosts, so the adoption inventory above is no longer
+          Gateway-only for it.</strong> ADC added <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests</code>, whose
+          <code>SecurityHeadersTests.cs:17-18</code> is the one-line subclass and whose
+          <code>ConferenceUiHostApplicationFactory.cs:17</code> derives the framework&#39;s
+          <code>ProductionHostApplicationFactory&lt;Program&gt;</code> so the host boots on the environment that emits HSTS. The
+          project is listed in <code>MMCA.ADC/MMCA.ADC.CI.slnf:61</code>, the no-database tier, matching where Store&#39;s
+          equivalent sits (<code>MMCA.Store/MMCA.Store.CI.slnf:55</code>): adoption here means running on every pull
+          request, not merely existing.</p>
+          <p>That project also carries two ADC-local hardening tests over the same factory, which are not
+          framework-suite subclasses and are counted as neither: <code>UiRateLimitingTests.cs:16</code> (burst shedding at
+          the configured window, exempt paths, per-IP partitioning, and the shipped values) and
+          <code>BoundedCircuitHandlerTests.cs:16</code> (the active-circuit ceiling, permit release, and the retention
+          limits). They belong to ADR-088&#39;s own-host hardening rather than to this record, and they are noted
+          here only so the inventory above is not read as the whole content of that test project.</p>
           <h2 id="related">Related</h2>
           <p>ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, &quot;not
           runtime behavior&quot;, is exactly this ADR&#39;s scope, and the two tiers ship as two separate packages),
@@ -467,6 +490,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

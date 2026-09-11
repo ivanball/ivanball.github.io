@@ -57,8 +57,9 @@ Azure blob so every replica of a host shares one ring
   Crypto User role, because that role assignment is granted out of band and can lag a deployment.
   Folding the second step into the first would turn an optional hardening gap into a total
   authentication outage. The deployment template records the same reasoning as a follow-up
-  (`MMCA.ADC/infra/main.bicep:802-805`), and no deployed app sets `DataProtection__KeyVaultKeyUri`
-  today, so gate 2 is configured nowhere: the key ring is persisted but not encrypted at rest.
+  (`MMCA.ADC/infra/main.bicep:802-805`). Both templates now ship the gate-2 path, default off (see the
+  2026-09-10 revision): whether a given deployment has turned it on is a repository variable and is not
+  determinable from source.
 - **One `DefaultAzureCredential` instance serves both sinks** (`DataProtectionExtensions.cs:68`), so
   they share a single token cache. A deployed host authenticates with its managed identity and a
   developer machine falls back to the local Azure CLI or Visual Studio sign-in; ADC pins **which**
@@ -137,9 +138,12 @@ deliberately left out: it registers no cookie or OAuth scheme, so it mints no ke
   private container and the account-scoped grant, not the specific account.
 
 ## Trade-offs
-- **The key ring is not encrypted at rest today.** Gate 2 is implemented but configured nowhere, so the
-  ring is protected by the container being private and the account grant being narrow, not by a Key
-  Vault key. Closing that needs a Key Vault Crypto User grant plus one environment variable per app.
+- **The key ring is encrypted at rest only where gate 2 was switched on.** Both templates ship the
+  path and both default it off (2026-09-10 revision), so on default parameters the ring is protected
+  by the container being private and the account grant being narrow, not by a Key Vault key. Turning
+  it on is a deployment decision (one repository variable plus the Key Vault Crypto User grant), and
+  the deployed value of that variable is not readable from the repositories, so this record can state
+  what ships and not what is enabled.
 - **Opt-in per host, so adoption must be audited.** A scaled-out host that never calls
   `AddCommonDataProtection` keeps the broken per-replica default and fails intermittently rather than
   loudly, the same audit-the-inventory caveat as ADR-005 / ADR-017 / ADR-021. Store was exactly that
@@ -155,6 +159,43 @@ deliberately left out: it registers no cookie or OAuth scheme, so it mints no ke
 - **Local and deployed behavior differ.** Development runs the in-memory default, so a cross-replica
   decryption bug is by construction not reproducible locally: the deployed configuration is the only
   place the persisted path is exercised.
+
+## Revision (2026-09-10)
+
+**Gate 2 ships in both templates, default off, so "configured nowhere" is retired.** The framework
+side is unchanged: `AddCommonDataProtection`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/DataProtection/DataProtectionExtensions.cs:52`) still
+carries gate 1 at `:59-62` and gate 2 at `:81-85`, and this revision propagated no framework change.
+
+Both consumers now carry the same three pieces, each guarded by a parameter that defaults to `false`
+or empty:
+
+| Piece | ADC | Store |
+| --- | --- | --- |
+| `createDataProtectionKeyVaultKey` param, default `false` | `infra/main.bicep:139` | `infra/main.bicep:100` |
+| `dataprotection-kek` Key Vault key, created only under that flag | `:1339-1341` | `:1228-1230` |
+| `dataProtectionKeyVaultKeyUri` param, default empty | `:142` | `:103` |
+| `DataProtection__KeyVaultKeyUri` env entry | `:1634` (Identity), `:2355` (UI) | `:1999` (UI) |
+| Repository-variable plumbing in `deploy.yml` | `:1395`, `:1575-1576` | `:1290`, `:1417-1418` |
+
+The env inventory differs because the adopting-host inventory differs, not because the posture does:
+ADC mints auth payloads on two hosts (Identity and the UI) and Store on one (the UI, whose Identity
+service registers no cookie or OAuth scheme and so mints no key-ring payload). The workflow half is
+the same shape in both, a `jq` set that runs only when the repository variable is non-empty, which is
+what keeps the default deploy unchanged.
+
+What this does not establish is whether the variable is set in either production, and that stays
+unverifiable from the repositories. The honest reading of the trade-off above is therefore "shipped
+and off by default", not "enabled".
+
+Re-pinned call sites while here: ADC Identity
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:113`), ADC UI
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:46`), Store UI
+(`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:70`, `AddServiceDefaults` at `:64`);
+and on the gate-1 side, Store's `dataProtectionStorageReady` default at
+`MMCA.Store/infra/main.bicep:97`, its production flip at
+`MMCA.Store/.github/workflows/deploy.yml:1324`, and the role-assignment guard
+`grantDataProtectionStorageRole` at `MMCA.Store/infra/main.bicep:94` with the assignment at `:1197`.
 
 ## Related
 ADR-022 (the browser session cookies whose decryption this makes replica-independent, together with

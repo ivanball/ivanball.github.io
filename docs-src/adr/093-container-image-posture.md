@@ -7,8 +7,10 @@ each one carries, not a decision to keep doing it. Revised 2026-09-03: the Conta
 that decision 3's cold-start argument rests on is now uniform across all six ADC apps, so the
 4-vs-2 split that argument cited is gone. See Revision (2026-09-03) at the end.
 Revised 2026-09-07 (base images are digest-pinned, every final stage drops to `USER $APP_UID`,
-image builds restore in locked mode, and both consumers scan the built image with Trivy: gating in
-ADC, report-only for one cycle in Store).
+image builds restore in locked mode, and both consumers scan the built image with Trivy).
+Revised 2026-09-10: the locked-mode inventory is restated per image (nine of eleven build-stage
+restores, the two UI images excluded by design), and the Trivy scan is report-only in **both**
+consumers, not gating in ADC. See Revision (2026-09-10) at the end.
 ## Context
 Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
 MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -166,16 +168,17 @@ review.
    before the entrypoint in every image (ADC `Dockerfile:67`, Store `Dockerfile:65`). The variable is
    set by the .NET base image, so the app does not have to invent a uid.
 3. **The image build restores in locked mode** (SEC-Store-44 / SEC-ADC-31). The restore inside the
-   build stage passes `--locked-mode` (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:37`,
-   rationale at `:31`), which is what makes the shipped artifact's package graph the one the lock
-   file and the CI vulnerability gate actually saw.
-4. **The built image is scanned.** ADC's deploy scans each image with Trivy and **fails the job** on a
-   finding (`MMCA.ADC/.github/workflows/deploy.yml:1292`, action pinned by SHA at `:1294`,
-   `exit-code: '1'` at `:1300`). Store runs the same scan **report-only for one release cycle**
-   (`MMCA.Store/.github/workflows/deploy.yml:1154`, `:1162`, `exit-code: '0'` at `:1168`), with the
-   flip to gating recorded as a follow-up beside it (`:1145-1152`) once the baseline is clean or the
-   residue is captured in a `.trivyignore` with a written justification. `ignore-unfixed: true` stays
-   either way.
+   build stage passes `--locked-mode` (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:38`,
+   rationale at `:31-35`), which is what makes the shipped artifact's package graph the one the lock
+   file and the CI vulnerability gate actually saw. The publish restore is deliberately left unlocked,
+   and one image per repo is unlocked outright: see the 2026-09-10 revision for the current inventory.
+4. **The built image is scanned, report-only in both.** Each deploy scans every image with Trivy
+   (`MMCA.ADC/.github/workflows/deploy.yml:1292`, action pinned by SHA at `:1294`;
+   `MMCA.Store/.github/workflows/deploy.yml:1154`, `:1162`). Neither gates: both steps carry
+   `continue-on-error: true` (ADC `:1293`, Store `:1161`), so ADC's `exit-code: '1'` (`:1300`) marks
+   the step failed without failing the job, and Store's `exit-code: '0'` (`:1168`) does not even do
+   that. The flip to gating is recorded as a follow-up beside each (ADC `:1288-1291`, Store
+   `:1145-1152`), and `ignore-unfixed: true` stays either way.
 
 ## Related
 [ADR-038](038-supply-chain-provenance.md) (supply-chain provenance: it gates the **package** graph
@@ -216,3 +219,55 @@ publish time is work the container no longer has quota to do quickly.
 Citations for the two Store `build-images` anchors in Context and decision 1 are re-pointed to the
 job and its `secrets:` input (`MMCA.Store/.github/workflows/deploy.yml:902,913-927` and `:966-967`);
 the workflow itself is unchanged in substance.
+
+## Revision (2026-09-10)
+
+**Locked mode is back on Store's four non-UI images, and the inventory is stated per image rather
+than by one example.** Decision 3's anchor pointed at a line that had stopped carrying
+`--locked-mode`, so the record claimed a control the command no longer applied. It applies again, and
+the current state is:
+
+| Repo | Image | Build-stage restore | Locked |
+| --- | --- | --- | --- |
+| Store | `Source/Hosts/MMCA.Store.Gateway/Dockerfile` | `:41` | yes |
+| Store | `Source/Services/MMCA.Store.Catalog.Service/Dockerfile` | `:38` | yes |
+| Store | `Source/Services/MMCA.Store.Identity.Service/Dockerfile` | `:38` | yes |
+| Store | `Source/Services/MMCA.Store.Sales.Service/Dockerfile` | `:38` | yes |
+| Store | `Source/Hosts/UI/MMCA.Store.UI.Web/Dockerfile` | `:46` | no, by design |
+| ADC | `Source/Hosts/MMCA.ADC.Gateway/Dockerfile` | `:32` | yes |
+| ADC | `Source/Services/MMCA.ADC.Conference.Service/Dockerfile` | `:32` | yes |
+| ADC | `Source/Services/MMCA.ADC.Engagement.Service/Dockerfile` | `:32` | yes |
+| ADC | `Source/Services/MMCA.ADC.Identity.Service/Dockerfile` | `:32` | yes |
+| ADC | `Source/Services/MMCA.ADC.Notification.Service/Dockerfile` | `:32` | yes |
+| ADC | `Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile` | `:41` | no, by design |
+
+Nine of eleven, and the two exclusions are the same one in each repo. **The UI image is unlocked
+because it has no lock file to check against**: Store's Blazor host and its WebAssembly client both
+set `<RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>`
+(`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/MMCA.Store.UI.Web.csproj:5`,
+`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/MMCA.Store.UI.Web.Client.csproj:8`), and ADC's
+pair carries the same opt-out
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/MMCA.ADC.UI.Web.csproj:3`,
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/MMCA.ADC.UI.Web.Client.csproj:8`, with the reason
+stated in the Dockerfile itself at
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile:37`). Passing `--locked-mode` there would fail
+every build rather than gate anything, so the flag's absence is the correct configuration and not an
+unclosed hole.
+
+**The publish restore stays unlocked in every image, in both repos.** ReadyToRun publishes to a
+RID-specific path, which pulls a RID graph the committed lock does not describe, and locked mode
+answers that with NU1004 regardless of whether anything actually drifted. Locking the build restore
+is the narrow control that works: it is the restore whose graph the CI vulnerability gate and the
+committed lock both saw, and it runs before the publish, so a drifted pin still fails the image
+build. The SEC-Store-44 comment above Store's Sales restore now says exactly that
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:31-35`), which is the property a
+rationale comment has to have: it describes the command beneath it.
+
+**Related correction, same revision.** Decision 4 asserted that ADC's Trivy scan fails the job while
+Store's is report-only for one cycle, and the asymmetry does not exist: ADC's step carries
+`continue-on-error: true` (`MMCA.ADC/.github/workflows/deploy.yml:1293`), so its `exit-code: '1'`
+(`:1300`) marks the step failed and lets the job pass. Both consumers are report-only. ADC's own
+comment (`:1288-1291`) names floating base images as the reason to stay non-gating, and that reason
+is stale: the base images are digest-pinned (decision 1), so ADC can either flip
+`continue-on-error` to `false` or rewrite the comment to state the real remaining reason. That choice
+is left open here rather than decided.

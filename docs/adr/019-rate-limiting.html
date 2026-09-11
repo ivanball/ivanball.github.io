@@ -440,10 +440,45 @@
           server-rendered UI host&#39;s own back-end calls, token refresh above all, otherwise collapse into one
           client-IP partition and throttle every visitor together.</li>
           <li><strong>ADC scopes its tighter gateway policy to the credential-submission routes.</strong> The gateway&#39;s
-          <code>auth-tight</code> policy (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:49</code>) is attached to
-          <code>/Auth/login</code> (<code>:68-72</code>) and <code>/Auth/register</code> (<code>:74-78</code>) and to nothing else, so <code>/Auth/refresh</code>
-          keeps the exemption this record requires for Blazor Server circuits, whose refreshes all leave
-          from the UI host&#39;s address.</li>
+          <code>auth-tight</code> policy (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:65</code>) is attached to
+          <code>identity-auth-login</code> (<code>:90-96</code>, the policy at <code>:95</code>) and <code>identity-auth-register</code> (<code>:97-103</code>, the
+          policy at <code>:102</code>) and to nothing else, so <code>/Auth/refresh</code> keeps the exemption this record requires
+          for Blazor Server circuits, whose refreshes all leave from the UI host&#39;s address.</li>
+          </ol>
+          <h2 id="revision-2026-09-10">Revision (2026-09-10)</h2>
+          <p><strong>Both gateways now scope <code>auth-tight</code> the same way, and the trusted-caller exemption&#39;s client half
+          ships in the framework.</strong> Two items, both landed.</p>
+          <ol>
+          <li><strong>Store&#39;s gateway splits the credential routes out of the <code>/Auth</code> catch-all.</strong> Its <code>auth-tight</code>
+          policy (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:33</code>, the block at <code>:32-39</code>)
+          is attached to <code>identity-auth-login</code> (<code>:74-80</code>, the policy at <code>:79</code>) and <code>identity-auth-register</code>
+          (<code>:81-87</code>, the policy at <code>:86</code>), and the remaining <code>identity-auth</code> route matching
+          <code>/Auth/{**catch-all}</code> (<code>:90-94</code>) carries no <code>RateLimiterPolicy</code> at all, so refresh, logout,
+          forgot-and-reset and the OAuth callbacks sit on the edge global limiter alone. That is the same
+          three-route shape ADC has, and it is what item 4 above requires of any Blazor Server host: a
+          circuit&#39;s refreshes all leave from the UI host&#39;s single address, so a per-IP cap on <code>/Auth</code>
+          throttles every visitor together. The pin moved with it: <code>CredentialRoutes_CarryTheTightRateLimiterPolicy</code>
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/MmcaGatewayTests.cs:150</code>) asserts both
+          directions, that every credential route carries the policy (<code>:161-165</code>) and that the set of routes
+          carrying any policy is exactly that pair (<code>:169-173</code>), so re-attaching it to the catch-all fails
+          the build.</li>
+          <li><strong>The trusted-caller client half is framework code, not per-app code.</strong> The header a UI host sends
+          so its own back-end calls take the exempt partition is registered by
+          <code>AddTrustedCallerHeader</code>, shipped in <code>MMCA.Common.UI.Web</code> 1.191.0
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:87</code>, in the
+          <code>extension(IServiceCollection services)</code> block at <code>:20</code>). Both UI hosts call it and nothing else
+          does (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:117</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:141</code>). The client reads the same
+          <code>GatewayRateLimiting</code> section the gateway side already binds
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingSettings.cs:47</code>), which
+          is now the one section name in both repos: Store&#39;s UI host declares
+          <code>GatewayRateLimiting:TrustedCallerHeaderName</code> at
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:32-34</code> and ADC&#39;s gateway declares
+          the section at <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:21-33</code> (the header name at
+          <code>:32</code>), with the secret injected as <code>GatewayRateLimiting__TrustedCallerSecret</code> by each template
+          (<code>MMCA.Store/infra/main.bicep:1889</code> and <code>:2006</code>, <code>MMCA.ADC/infra/main.bicep:2223</code> and <code>:2363</code>).
+          One name on both sides of the boundary is the point: a client sending under one key while the
+          gateway reads another fails open silently, as a plain throttled caller.</li>
           </ol>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
@@ -472,6 +507,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
+            <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

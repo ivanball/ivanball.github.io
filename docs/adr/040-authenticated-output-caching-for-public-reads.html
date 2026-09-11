@@ -361,8 +361,8 @@
           exactly that: <code>UserSessionBookmarkCacheEvictionHandler</code>
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:43</code>,
           raising the event at <code>:77</code>) with the Conference host consuming it (<code>AddOutputCacheEvictionHandler()</code>
-          at <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:250</code>,
-          <code>RegisterOutputCacheEvictionConsumer()</code> at <code>:353</code>), keeping the short TTL as the backstop for a lost
+          at <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:253</code>,
+          <code>RegisterOutputCacheEvictionConsumer()</code> at <code>:357</code>), keeping the short TTL as the backstop for a lost
           or late event rather than the only defense (<code>BookmarkCountsCache</code>, 60 seconds, <code>Program.cs:244</code>).
           A payload that changes on the clock still has no mutation to evict on, so a short TTL remains its
           whole answer (<code>NowNextCache</code>, 60 seconds, <code>Program.cs:232</code>). When adding a cached endpoint, check
@@ -372,6 +372,41 @@
           exercise the same cache path as anonymous ones.</p>
           </li>
           </ul>
+          <h2 id="revision-2026-09-10">Revision (2026-09-10)</h2>
+          <p><strong>Store now uses the cross-service eviction path too, and the first case is an Application-layer
+          handler rather than a controller.</strong> The trade-off above says to check which process owns every write
+          that can change a cached payload. Store&#39;s anonymous review list failed that check in a way the
+          controller-side eviction could not reach.</p>
+          <p>Catalog&#39;s <code>CustomerErasedHandler</code> consumes Identity&#39;s <code>CustomerErased</code> and clears the reviewer&#39;s
+          name, title and body while keeping the star rating (ADR-005 erasure across a database boundary),
+          looping the reviews at
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/CustomerErasedHandler.cs:89-96</code>
+          and saving at <code>:98</code>. Those three fields are exactly what the cached public list returns
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Reviews/PublicProductReviewDTO.cs:45</code>,
+          <code>:48</code>, <code>:51</code>), so before this change an erasure kept being served under the pre-erasure name for up
+          to the full five-minute TTL, on every replica. Store&#39;s eviction lived entirely in API controllers,
+          and an Application-layer handler has no <code>IOutputCacheStore</code> to call.</p>
+          <p>The answer is the one ADC already uses: publish the eviction rather than perform it. The handler
+          raises <code>OutputCacheEvictionRequested</code> for the <code>catalog:products</code> tag after the save
+          (<code>CustomerErasedHandler.cs:113</code>, the tag constant at <code>:59</code>, inside the publish block at <code>:108-115</code>),
+          wrapped in <code>BestEffort.ExecuteAsync</code> so a broker fault degrades the erasure to TTL-bounded staleness
+          instead of failing the consume and re-delivering it.</p>
+          <p><strong>Both halves are registered, because one alone is silently inert.</strong>
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs</code> calls
+          <code>AddOutputCacheEvictionHandler()</code> at <code>:173</code> and <code>RegisterOutputCacheEvictionConsumer()</code> at <code>:280</code>.
+          The first registers the handler that evicts; the second subscribes the host to the message. A host
+          with only the handler never receives the event, and a host with only the consumer receives it and
+          does nothing, and neither mistake produces an error, only a cache that quietly stops being evicted.
+          The mechanism itself is framework code and needed no change
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:29</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:111</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumerExtensions.cs:108-110</code>).</p>
+          <p><strong>Unchanged and deliberate: Store registers no <code>bypassRoles</code> overload.</strong> Its four public policies take
+          the no-bypass form (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:150-159</code>),
+          which is correct rather than an omission. The bypass exists for a privileged audience that reads the
+          same cached endpoint and needs to see more than it caches; Store has no such audience, because its
+          anonymous review list serves published rows only and moderator visibility is a separate,
+          permission-gated, uncached surface. Adding a bypass would be adding a partition nothing reads.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -387,6 +422,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             </ul>
           </nav>
         </aside>
