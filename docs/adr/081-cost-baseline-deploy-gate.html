@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -238,12 +240,17 @@
           window is no longer about keeping an S0 rollback readable; it is kept so a deliberate bump to S0 does
           not read as drift. Store also gained a <code>backend-test-gate</code>, so the pair of skippable test gates is
           now symmetric across the two repos. Citations re-anchored throughout (both <code>cost-guard.yml</code> files,
-          both Bicep templates, both <code>deploy.yml</code> files); the gate mechanism and the <code>2</code> ceiling are unchanged.</p>
+          both Bicep templates, both <code>deploy.yml</code> files); the gate mechanism and the <code>2</code> ceiling are unchanged.
+          Revised 2026-09-11: the skippable-need lists are no longer symmetric. ADC&#39;s deploy condition tolerates
+          three conditional gates (<code>e2e-gate</code>, <code>backend-test-gate</code> and <code>ai-eval-gate</code>) while Store tolerates two,
+          and both repos now carry a fourth freshness gate (<code>cross-browser-freshness</code>) beside <code>cost-guard</code> in
+          <code>deploy.needs</code>. Citations re-anchored throughout (both Bicep templates, both <code>deploy.yml</code> files); the
+          gate mechanism, the <code>2</code> ceiling and the per-repo SQL tier sets are unchanged.</p>
           <h2 id="context">Context</h2>
           <p>Both deployed apps run a deliberately small production footprint: every Container App is declared with
           <code>maxReplicas: 2</code> and every SQL database with the <code>Basic</code> tier
-          (<code>MMCA.Store/infra/main.bicep:1112,1226,1359,1458,1556</code> and <code>:648-651</code>;
-          <code>MMCA.ADC/infra/main.bicep:1215,1349,1476,1641,1752,1874</code> and <code>:669-672</code>). That
+          (<code>MMCA.Store/infra/main.bicep:1542,1658,1793,1903,2019</code> and <code>:910-913</code>;
+          <code>MMCA.ADC/infra/main.bicep:1682,1824,1955,2128,2261,2401</code> and <code>:878-881</code>). That
           footprint is the cost baseline, and it is what the monthly bill is planned against.</p>
           <p>The footprint is also expected to move temporarily. A conference day, a load test, a slow query under
           real traffic: an operator scales the replica ceiling or the SQL tier up by hand and is supposed to
@@ -251,10 +258,10 @@
           it is silent: nothing breaks, no alert fires on a healthy oversized system, and the app keeps serving
           traffic perfectly while costing several times its baseline.</p>
           <p>The existing control against that was the monthly Azure budget declared in both Bicep templates
-          (<code>MMCA.Store/infra/main.bicep:548-576</code>, <code>MMCA.ADC/infra/main.bicep:563-591</code>), which notifies at 80% of
+          (<code>MMCA.Store/infra/main.bicep:721-749</code>, <code>MMCA.ADC/infra/main.bicep:707-735</code>), which notifies at 80% of
           actual spend and 100% of forecast spend. The Store template names the exact case it is meant to catch
           in its own comment, &quot;a scale-up (manual SQL-tier / replica) silently running for weeks&quot;
-          (<code>MMCA.Store/infra/main.bicep:546</code>). A spend threshold is a lagging indicator: by the time it
+          (<code>MMCA.Store/infra/main.bicep:719</code>). A spend threshold is a lagging indicator: by the time it
           trips, weeks of the overspend have already happened, and the notification says a number, not which
           resource is wrong. What was missing was a check on the <strong>configuration</strong> itself, and a moment at which
           someone would have to look at it.</p>
@@ -292,15 +299,15 @@
           <li><p><strong>The accepted SQL tier differs per repo, deliberately.</strong> ADC accepts <code>Basic</code> and nothing else
           (<code>MMCA.ADC/.github/workflows/cost-guard.yml:76</code>). Store accepts <code>Basic</code> <strong>or</strong> <code>Standard</code>
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:87</code>). Every Store database is Basic today: the live
-          per-service databases are declared Basic (<code>MMCA.Store/infra/main.bicep:648-651</code>) and the legacy
+          per-service databases are declared Basic (<code>MMCA.Store/infra/main.bicep:910-913</code>) and the legacy
           <code>MMCAStore</code> archive that used to sit beside them at S0 is gone, exported on 2026-09-02 to the
           bacpac blob <code>sql-archive/MMCAStore-20260902.bacpac</code> and then dropped
-          (<code>MMCA.Store/infra/main.bicep:620-627</code>). The wider window is kept anyway, and the workflow header
+          (<code>MMCA.Store/infra/main.bicep:882-889</code>). The wider window is kept anyway, and the workflow header
           states why: so that a <strong>deliberate</strong> bump to S0 (the tier a Store database would be raised to under
           real load, or the tier a bacpac restore would land on) does not fail the gate as if it were an
           un-reverted surge, while anything above Standard still does
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:9-13</code>). ADC has no comparable headroom case: its
-          archive was dropped the same day (<code>MMCA.ADC/infra/main.bicep:635-639</code>) and its baseline stayed at
+          archive was dropped the same day (<code>MMCA.ADC/infra/main.bicep:844-853</code>) and its baseline stayed at
           <code>Basic</code> alone. The asymmetry is deliberate in both directions.</p>
           </li>
           <li><p><strong>It never mutates production.</strong> Every Azure call is an <code>az ... list</code> or <code>az ... show</code>; the one
@@ -319,21 +326,24 @@
           (<code>MMCA.Store/.github/workflows/cost-guard.yml:52</code>, <code>MMCA.ADC/.github/workflows/cost-guard.yml:43</code>).</p>
           </li>
           <li><p><strong><code>deploy</code> waits on it by name.</strong> <code>cost-guard</code> is listed in <code>deploy.needs</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:999</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1054</code>), and
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1200</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1305</code>), and
           because the deploy condition runs under <code>always()</code> with explicit per-need results, the condition
           requires <code>needs.cost-guard.result == &#39;success&#39;</code> literally
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1026-1039</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1080-1093</code>). The only needs allowed to be <code>skipped</code> there are
-          the diff-scoped test gates, and both repos now carry the same pair: <code>e2e-gate</code> or
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1228-1242</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1337-1352</code>). The only needs allowed to be <code>skipped</code> there are
+          the diff-scoped gates, and the two lists are not symmetric. Store tolerates one pair, <code>e2e-gate</code> or
           <code>backend-test-gate</code>, whose UI and backend conditions are exact complements, so exactly one of the
-          two runs on every code deploy (<code>MMCA.Store/.github/workflows/deploy.yml:1038-1039</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1092-1093</code>). A cost-guard that fails, errors or is skipped
-          leaves <code>deploy</code> unrun in either repo.</p>
+          two runs on every code deploy (<code>MMCA.Store/.github/workflows/deploy.yml:1241-1242</code>). ADC tolerates
+          that same pair plus <code>ai-eval-gate</code>
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1350-1352</code>), which runs on any code diff, so its <code>skipped</code>
+          arm covers only the docs-only path on which <code>deploy</code> does not run at all
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:1329-1336</code>). Either way a cost-guard that fails, errors or
+          is skipped leaves <code>deploy</code> unrun.</p>
           </li>
           <li><p><strong>Gate on deploys only, never on pull requests.</strong> The calling job carries
           <code>if: github.event_name != &#39;pull_request&#39;</code> and <code>secrets: inherit</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:622-625</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:665-668</code>), because there is no production OIDC on a PR and the
+          (<code>MMCA.Store/.github/workflows/deploy.yml:678-681</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:776-779</code>), because there is no production OIDC on a PR and the
           deploy is PR-skipped anyway. Both repos&#39; CONTRIBUTING files list <code>cost-guard</code> among the push-only
           jobs that must <strong>not</strong> be added to branch protection (<code>MMCA.Store/CONTRIBUTING.md:42,118</code>,
           <code>MMCA.ADC/CONTRIBUTING.md:42,111</code>).</p>
@@ -396,9 +406,9 @@
           Now that <code>cost-guard</code> sits in <code>deploy.needs</code>, any run of <code>deploy.yml</code> re-runs the failing gate and
           leaves <code>deploy</code> unrun, so the Bicep never re-applies. The reset has to happen out of band (portal or
           <code>az</code>) before a deploy can proceed.</li>
-          <li><strong>There is no break-glass for this gate.</strong> The <code>workflow_dispatch</code> inputs cover only the three
+          <li><strong>There is no break-glass for this gate.</strong> The <code>workflow_dispatch</code> inputs cover only the four
           freshness gates (<code>skip_freshness_gates</code> plus <code>skip_justification</code>,
-          <code>MMCA.Store/.github/workflows/deploy.yml:8-20</code>), and <code>cost-guard.yml</code> declares no inputs at all, so
+          <code>MMCA.Store/.github/workflows/deploy.yml:21-33</code>), and <code>cost-guard.yml</code> declares no inputs at all, so
           the ADR-064 escape hatch does not reach it. Getting past a red cost guard means fixing the footprint
           or changing the baseline.</li>
           <li><strong>It reads live Azure state, so it can block a deploy for a non-cost reason.</strong> An Azure control-plane
@@ -421,7 +431,7 @@
           <li><strong>Only two cost dimensions and one name prefix are covered.</strong> Service Bus, Redis, Log Analytics
           retention and everything else in the resource group are invisible to the gate, as is any resource
           whose name does not start with the app prefix or that lives in another resource group. Store&#39;s
-          Service Bus is Standard tier (<code>MMCA.Store/infra/main.bicep:690-692</code>) and would go unchecked if it
+          Service Bus is Standard tier (<code>MMCA.Store/infra/main.bicep:948-955</code>) and would go unchecked if it
           were scaled up.</li>
           <li><strong>The ceiling is an upper bound, not an equality.</strong> Scaling a resource <strong>below</strong> the baseline is not
           drift, so an accidental <code>maxReplicas: 1</code> on a service that needs two, or a downgrade that costs

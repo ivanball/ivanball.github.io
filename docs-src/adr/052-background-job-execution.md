@@ -1,7 +1,12 @@
 # ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain)
 
 ## Status
-Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one)
+Superseded by [ADR-121](121-ephemeral-in-process-work-queue.md) (2026-09-11). The expensive half of
+this decision (`Wait` full mode, in-queue dedup, a 409 refusal, the session-scoring queue and drain)
+moved to durable internal commands ([ADR-114](114-internal-commands-durable-job-queue.md)), while the
+ephemeral half continues unchanged in ADR-121; the body below is left in place as history.
+
+Previously: Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one)
 and 2026-08-31 (three of the four command-handler enqueue sites inherit the save-then-enqueue
 ordering from a shared base class instead of writing it): see the revisions at the end.
 

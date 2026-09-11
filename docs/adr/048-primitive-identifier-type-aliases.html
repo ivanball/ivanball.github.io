@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -238,6 +240,10 @@
           been added, and the ADC <code>User</code> source citations were re-anchored after an expanded doc comment).
           Revised 2026-08-23 (Conference&#39;s alias file now declares seventeen aliases, <code>ActivityIdentifierType</code>
           having been added, and the workspace alias count was recounted; see the Revision (2026-08-23) at the end).
+          Revised 2026-09-11 (recount): Store Catalog&#39;s alias file now declares six aliases, the Reviews aggregate
+          having added <code>ProductReviewIdentifierType</code> and <code>VerifiedPurchaseIdentifierType</code>, so the workspace total is
+          <strong>46 aliases across 10 files</strong>; three Decision citations were re-anchored after expanded doc comments moved
+          them. See the Revision (2026-09-11) at the end.
           <strong>Revisited by <a href="085-identifier-type-aliases-revisited.html">ADR-085</a> (2026-08-18)</strong>: the wrapper-struct
           alternative this record deferred was re-evaluated, priced, and deferred again, now against named
           revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
@@ -275,14 +281,14 @@
           (<code>Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31</code>), and constrains the user
           type parameter of <code>AuthenticationServiceBase&lt;TUser&gt;</code>
           (<code>where TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;, IAuthUser</code>,
-          <code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:62</code>), with each consuming
+          <code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:85</code>), with each consuming
           app supplying the concrete <code>User</code> entity that satisfies it.
           Consumers follow the same pattern: ADC Identity
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2</code>),
           ADC Conference with seventeen aliases
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21</code>),
-          and Store Catalog
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-6</code>).</li>
+          and Store Catalog with six
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8</code>).</li>
           <li><strong>The alias is the type; there is no wrapping struct.</strong> The right-hand side is a bare primitive.
           Most resolve to <code>int</code>; the one deviation in Conference is
           <code>SpeakerIdentifierType = System.Guid</code> (line 19), because Sessionize assigns speakers GUIDs while its
@@ -297,7 +303,7 @@
           <li><strong>The alias flows unchanged through every layer.</strong> Tracing the ADC <code>User</code> aggregate: the domain
           entity is <code>User : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34</code>); the cross-context
-          reference to a speaker is typed <code>SpeakerIdentifierType? LinkedSpeakerId</code> (same file, line 65); the EF
+          reference to a speaker is typed <code>SpeakerIdentifierType? LinkedSpeakerId</code> (same file, line 78); the EF
           configuration is <code>EntityTypeConfigurationSQLServer&lt;User, UserIdentifierType&gt;</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13</code>);
           the repository handle is <code>GetRepository&lt;User, UserIdentifierType&gt;()</code>
@@ -305,7 +311,7 @@
           the API contract is <code>UserDTO : IBaseDTO&lt;UserIdentifierType&gt;</code> with a <code>UserIdentifierType Id</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/UserDTO.cs:8,11</code>); and the
           integration event carries <code>UserIdentifierType UserId</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:26</code>).
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:37</code>).
           No converter, serializer shim, or OpenAPI schema mapping appears at any hop: <code>int</code> and <code>Guid</code> are the
           values on the wire and in the store.</li>
           <li><strong>The wrapper-struct alternative is deliberately deferred, not planned.</strong> No wrapper-struct
@@ -355,10 +361,10 @@
           <p>The last Trade-offs entry above (&quot;Revisiting the trade would be a broad change&quot;) described the
           wrapper-struct migration as expensive without ever measuring it, and the Decision&#39;s last bullet left
           the alternative &quot;deliberately deferred, not planned&quot; with no condition that would re-open it.
-          <a href="085-identifier-type-aliases-revisited.html">ADR-085</a> closes both gaps: it counts the aliases (44 across
-          10 files in the four repositories, 43 of them resolving to <code>int</code>), counts the migration surface
-          (3,192 occurrences of the alias token across 1,001 <code>.cs</code>/<code>.razor</code> files in the four <code>Source</code> trees,
-          tests excluded, <code>TIdentifierType</code> generic parameters not counted),
+          <a href="085-identifier-type-aliases-revisited.html">ADR-085</a> closes both gaps: it counts the aliases (the current
+          census is the Revision (2026-09-11) below), counts the migration surface in occurrences of the alias token
+          across the <code>.cs</code>/<code>.razor</code> files of the four <code>Source</code> trees, tests excluded and <code>TIdentifierType</code> generic
+          parameters not counted (ADR-085 carries that figure),
           names the concrete failure the deferral leaves open with a live example (ADC&#39;s <code>CheckIn</code> constructor,
           which takes two different <code>UserIdentifierType</code> arguments that can be transposed silently), and records
           three triggers that would re-open the question: a production defect traced to an identifier
@@ -367,7 +373,8 @@
           <p>Read the two records together as one position: this record is the decision and its evidence, ADR-085
           is its price and its expiry condition.</p>
           <h2 id="revision-2026-08-23">Revision (2026-08-23)</h2>
-          <p>No decision and no rationale changed. Two counts did, both because Conference gained an alias.</p>
+          <p>No decision and no rationale changed. Two counts did, both because Conference gained an alias. The
+          workspace census below is superseded by the Revision (2026-09-11); Conference&#39;s seventeen aliases stand.</p>
           <p>Conference&#39;s alias file declares <strong>seventeen</strong> aliases, <code>ActivityIdentifierType = int</code> having been
           added at the head of the list
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21</code>),
@@ -392,6 +399,39 @@
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:6,8</code>).
           43 of the 44 resolve to <code>int</code>; <code>SpeakerIdentifierType</code> remains the single <code>Guid</code>. The count in the
           Revision (2026-08-18) above is refreshed to those numbers, and ADR-085 carries the same pair.</p>
+          <h2 id="revision-2026-09-11">Revision (2026-09-11)</h2>
+          <p>No decision and no rationale changed. The workspace alias count did, because Store Catalog gained the
+          Reviews aggregate&#39;s two identifiers.</p>
+          <p>Catalog&#39;s alias file declares <strong>six</strong> aliases, <code>ProductReviewIdentifierType = int</code> and
+          <code>VerifiedPurchaseIdentifierType = int</code> joining the original four
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8</code>).
+          The Decision section above is re-anchored to that range.</p>
+          <p>Recounting every <code>GlobalUsings.*IdentifierType.cs</code> file in the four repositories, one
+          <code>global using X = &lt;primitive&gt;;</code> line counting as one alias, gives <strong>46 aliases across 10 files</strong>: Common
+          Domain 1 (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1</code>) and Common
+          Shared 2 (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2</code>);
+          ADC Notification 2
+          (<code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/MMCA.ADC.Notification.GlobalUsings.IdentifierType.cs:1-2</code>),
+          Identity 1
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2</code>),
+          Engagement 10
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:4-13</code>)
+          and Conference 17
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21</code>);
+          Store Catalog 6, Identity 2
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/MMCA.Store.Identity.GlobalUsings.IdentifierType.cs:3-4</code>)
+          and Sales 3
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/MMCA.Store.Sales.GlobalUsings.IdentifierType.cs:5-7</code>);
+          and Helpdesk Tickets 2
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:6,8</code>).
+          45 of the 46 resolve to <code>int</code>; <code>SpeakerIdentifierType = System.Guid</code> remains the single <code>Guid</code>. ADR-085
+          carries the same pair.</p>
+          <p>Three Decision citations moved without their text changing, each pushed down by an expanded XML doc
+          comment: the <code>AuthenticationServiceBase&lt;TUser&gt;</code> constraint is at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:85</code>, ADC&#39;s
+          <code>SpeakerIdentifierType? LinkedSpeakerId</code> at <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:78</code>,
+          and the <code>UserIdentifierType UserId</code> record parameter at
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:37</code>.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -410,6 +450,7 @@
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-08-23">Revision (2026-08-23)</a></li>
+            <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             </ul>
           </nav>
         </aside>

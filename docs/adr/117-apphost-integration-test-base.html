@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -231,6 +233,9 @@
           <p>Accepted (2026-09-09). Adds the AppHost test tier
           <a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a> left out, as a package rather than a
           per-repo copy.</p>
+          <p>Revised 2026-09-11: both consumer tiers now subclass the package (MMCA.ADC and MMCA.Store), so the
+          consumer passages are recorded as current state rather than as follow-up work; stale line anchors
+          refreshed.</p>
           <h2 id="context">Context</h2>
           <p>The AppHost is the only file that states how a whole stack fits together: which project resources
           exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -246,12 +251,14 @@
           rather than a test failure.</p>
           <p>MMCA.ADC proved both the gap and the shape of the answer. Its
           <code>Tests/Integration/MMCA.ADC.AppHost.SmokeTests</code> project boots the real AppHost through
-          <code>DistributedApplicationTestingBuilder</code> and asks the gateway for one health answer, and it is
-          deliberately outside every <code>.slnx</code> and <code>.slnf</code> so no ordinary build picks it up. What it also proved
-          is how much of that project is not ADC-specific: a startup budget, a readiness budget, a poll
-          interval, a poll loop that treats a connection failure as &quot;not yet&quot;, and a teardown. Roughly a
-          hundred lines of infrastructure guarding a single assertion, which the Store repo would have to
-          copy verbatim to get the same coverage.</p>
+          <code>DistributedApplicationTestingBuilder</code>, and it sits deliberately outside every <code>.slnx</code> and <code>.slnf</code>
+          so no ordinary build picks it up: CI restores and builds it by explicit project path
+          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:221</code>, <code>:264</code>). Before this package existed that
+          project asked the gateway for one health answer, and what it proved is how little of the code around
+          that answer is ADC-specific: a startup budget, a readiness budget, a poll interval, a poll loop that
+          treats a connection failure as &quot;not yet&quot;, and a teardown. Roughly a hundred lines of infrastructure
+          guarding a single assertion, which every other repo with an AppHost would copy verbatim to get the
+          same coverage.</p>
           <p>Two preconditions turned out to be load-bearing, and both were learned the expensive way. The ADC
           nightly ran red from 2026-09-01 and was root-caused on 2026-09-09 (fixed in ADC #189 and Store
           #142), each time to something that presents as a timeout on an unrelated resource:</p>
@@ -283,11 +290,12 @@
           <code>AppHostFixtureBase&lt;TAppHost&gt;</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.Generic.cs</code>)
           builds through <code>DistributedApplicationTestingBuilder.CreateAsync&lt;TAppHost&gt;</code> and the non-generic
-          base (<code>.../Fixtures/AppHostFixtureBase.cs:38-167</code>) owns the lifecycle. Starting an orchestrator is
+          base (<code>.../Fixtures/AppHostFixtureBase.cs:38</code>, <code>InitializeAsync</code> at <code>:102</code>, <code>DisposeAsync</code> at
+          <code>:135</code>) owns the lifecycle. Starting an orchestrator is
           the most expensive thing in any repo per assertion, so it happens once per collection.</p>
           </li>
           <li><p><strong>Readiness is awaited per resource, inside one shared budget.</strong>
-          <code>WaitForResourcesAsync</code> (<code>.../Fixtures/AppHostFixtureBase.cs:242-279</code>) asks
+          <code>WaitForResourcesAsync</code> (<code>.../Fixtures/AppHostFixtureBase.cs:242</code>) asks
           <code>ResourceNotificationService.WaitForResourceHealthyAsync</code> for a resource that carries a
           <code>HealthCheckAnnotation</code> (<code>:264</code>) and <code>WaitForResourceAsync(..., KnownResourceStates.Running)</code> for
           one that carries none (<code>:269</code>), and it says which of the two it did in the failure message. The
@@ -301,7 +309,7 @@
           </li>
           <li><p><strong>Preconditions produce a skip with a reason, never a wedge.</strong>
           <code>AppHostEnvironmentGate.Evaluate</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Preconditions/AppHostEnvironmentGate.cs:38-69</code>)
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Preconditions/AppHostEnvironmentGate.cs:38</code>)
           turns a fixture&#39;s declared requirements into either &quot;go&quot; or one actionable sentence, which the
           fixture exposes as <code>SkipReason</code> / <code>IsAvailable</code> (<code>.../Fixtures/AppHostFixtureBase.cs:53</code>, <code>:56</code>).
           The requirements are an opt-in variable <code>MMCA_APPHOST_TESTS</code> (<code>.../AppHostEnvironmentGate.cs:16</code>),
@@ -347,7 +355,7 @@
           <li><p><strong>The package&#39;s layer ceiling is <code>MMCA.Common.Testing</code>, enforced twice.</strong> It reuses
           <code>JwtTokenGenerator</code> and reaches Application and API only through that one edge. The compile-time
           gate is <code>EnforceTestingAspireLayerBoundary</code>
-          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:137</code>), which judges the references
+          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:164</code>), which judges the references
           this csproj DECLARES (by <code>DefiningProjectName</code>) rather than the transitive closure the SDK folds
           into <code>@(ProjectReference)</code> before <code>ResolveProjectReferences</code>. The runtime gate is
           <code>TestingAspireBoundaryTests</code>
@@ -390,10 +398,10 @@
           <h2 id="rationale">Rationale</h2>
           <p>Six shapes were weighed, and each rejection is a property the package keeps:</p>
           <ul>
-          <li><strong>Leave it as a per-repo copy.</strong> This is the status quo, and it is what produced roughly a hundred
-          lines of budget and poll-loop code in ADC guarding one assertion, with Store owed the same copy. It
-          also leaves the two 2026-09-09 preconditions as tribal knowledge in one workflow file rather than as
-          behavior a fixture carries.</li>
+          <li><strong>Leave it as a per-repo copy.</strong> Rejected: that is what produced roughly a hundred lines of budget
+          and poll-loop code in ADC guarding one assertion, and it puts the same copy in every other repo
+          that wants the tier. It also leaves the two 2026-09-09 preconditions as tribal knowledge in one
+          workflow file rather than as behavior a fixture carries.</li>
           <li><strong>Put the fixture in <code>MMCA.Common.Testing</code>.</strong> Rejected: that package is taken by every integration
           test project in every consumer, and adding <code>Aspire.Hosting</code> plus <code>Aspire.Hosting.Testing</code> to it
           would put the whole AppHost-side application model into the graph of test projects that never boot
@@ -418,17 +426,27 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>A consumer&#39;s smoke tier becomes a subclass.</strong> <code>MMCA.ADC.AppHost.SmokeTests</code> is the first, in a
-          follow-up PR after this package releases; this PR does not touch ADC. The mapping is mechanical:
-          <code>AppHostCompositionSmokeTests</code>&#39;s <code>StartupBudget</code> / <code>ReadinessBudget</code> / <code>PollInterval</code> fields become
-          one <code>Budget</code> override returning an <code>AppHostReadinessBudget</code>; its <code>PollUntilHealthyAsync</code> loop is
-          deleted outright, because the base already waits on each resource&#39;s own health signal instead of
-          polling one endpoint through the gateway; the <code>DistributedApplicationTestingBuilder.CreateAsync</code> /
-          <code>BuildAsync</code> / <code>StartAsync</code> / <code>StopAsync</code> sequence becomes the type parameter
-          <code>AppHostFixtureBase&lt;Projects.MMCA_ADC_AppHost&gt;</code>; and the single <code>/health</code> assertion becomes
-          <code>AssertHealthyAsync(&quot;gateway&quot;)</code> alongside new <code>AssertJwksAsync</code>, <code>AssertH2cAsync</code> and
-          <code>AssertDataSourceAsync</code> calls that the hand-rolled project never made. The workflow job keeps its
-          <code>dotnet dev-certs</code> step and can drop its <code>openssl</code> keypair step, since the fixture mints one.</li>
+          <li><strong>A consumer&#39;s smoke tier is a subclass.</strong> <code>MMCA.ADC.AppHost.SmokeTests</code> is two files. The fixture
+          is <code>AdcAppHostFixture : AppHostFixtureBase&lt;Projects.MMCA_ADC_AppHost&gt;</code>
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostFixture.cs:28</code>), whose whole
+          body is a <code>Budget</code> override (<code>:42</code>, twelve minutes startup and eight readiness, because a cold
+          agent pulls four container images before a process starts) and a <code>ResourcesToAwait</code> override
+          (<code>:52</code>, the four services then the gateway, in dependency order so a failure names the first thing
+          that did not come up). The tests are
+          <code>AdcAppHostSmokeTests : AppHostTestBase&lt;AdcAppHostFixture&gt;</code> (<code>.../AdcAppHostSmokeTests.cs:32</code>). The
+          mapping was mechanical: the old <code>StartupBudget</code> / <code>ReadinessBudget</code> / <code>PollInterval</code> fields are the
+          one <code>Budget</code> override; the <code>PollUntilHealthyAsync</code> loop is gone, because the base waits on each
+          resource&#39;s own health signal instead of polling one endpoint through the gateway; the
+          <code>DistributedApplicationTestingBuilder.CreateAsync</code> / <code>BuildAsync</code> / <code>StartAsync</code> / <code>StopAsync</code>
+          sequence is the type parameter; and the single <code>/health</code> assertion is
+          <code>AssertHealthyAsync(&quot;gateway&quot;)</code> (<code>:80</code>) alongside <code>AssertJwksAsync</code> (<code>:93</code>), <code>AssertH2cAsync</code> over
+          four endpoints (<code>:108</code> for the three REST services, <code>:120</code> for Notification&#39;s dedicated <code>grpc</code>
+          endpoint) and <code>AssertDataSourceAsync</code> over four data sources (<code>:135</code>), none of which the earlier
+          project asserted. The workflow job keeps its <code>dotnet dev-certs</code> step
+          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:271</code>) and runs no <code>openssl</code> keypair step
+          (<code>:278</code>), since the fixture mints one. MMCA.Store&#39;s tier is the same shape
+          (<code>MMCA.Store/Tests/Integration/MMCA.Store.AppHost.SmokeTests/StoreAppHostFixture.cs:23</code>,
+          <code>.../AppHostCompositionSmokeTests.cs:26</code>).</li>
           <li><strong>Cost: this is the slowest tier per assertion, and it is deliberately advisory.</strong> The
           <code>apphost-testing</code> job runs <code>continue-on-error</code>, exactly as ADC&#39;s <code>apphost-smoke</code> does under
           <a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a>, so a flake reds the job for
@@ -440,11 +458,13 @@
           the inherited default and the sample fixture opts OUT of it
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostFixture.cs:42</code>)
           rather than the other way round.</li>
-          <li><strong>The package count moves from 17 to 18</strong> (<code>MMCA.Common/FACTS.md:19</code>), and every <code>MMCA.Common.*</code> pin
+          <li><strong>The framework carries one more package</strong> (<code>MMCA.Common.Testing.Aspire</code>, listed with the current
+          count in <code>MMCA.Common/FACTS.md:19</code>), and every <code>MMCA.Common.*</code> pin
           in each consumer&#39;s <code>Directory.Packages.props</code> moves together at the next release
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>).</li>
           <li><strong>Aspire versions are now coupled in one more place.</strong> <code>Aspire.Hosting.Testing</code> is pinned at the
-          same 13.5.3 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:344</code>), because the
+          same 13.5.3 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:360</code>, against
+          <code>Aspire.Hosting</code> at <code>:351</code>), because the
           testing host builds the application model the AppHost package produces; a version split between
           them is a model mismatch rather than an upgrade.</li>
           </ul>
@@ -453,8 +473,7 @@
           tests without changing),
           <a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a> (the shipped-test-tier-as-a-package pattern
           this record follows),
-          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release the eighteenth package
-          joins),
+          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release this package joins),
           <a href="025-startup-warmup-readiness.html">ADR-025</a> (why a startup gate probes liveness and a test probes
           readiness),
           <a href="012-grpc-host-transport.html">ADR-012</a> (the h2c listener the exact-HTTP/2 probe exists for).</p>

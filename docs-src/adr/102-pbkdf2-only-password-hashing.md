@@ -2,6 +2,10 @@
 
 ## Status
 Accepted (2026-08-31). Supersedes [ADR-032](032-password-hashing.md).
+Revised 2026-09-11: verification now carries a canonical-material length guard (it rejects any stored
+hash or salt that is not exactly `HashSize`/`SaltSize` bytes) and derives to `HashSize` rather than to
+the stored hash length. The record's decision is unchanged (one interface, one implementation, PBKDF2
+only); the Decision and Trade-offs passages describing the read path are rewritten to match.
 
 ## Context
 ADR-032 recorded a hasher with two verification paths: PBKDF2-HMAC-SHA512 for new credentials, and an
@@ -33,8 +37,8 @@ path through it, in both directions.
   has the single implementation `PasswordHasher`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:12`), registered
   with `TryAddSingleton`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:563`) inside the
-  `AddServices` helper that `AddInfrastructure` calls unconditionally (`DependencyInjection.cs:219`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:713`) inside the
+  `AddServices` helper (`:693`) that `AddInfrastructure` (`:72`) calls unconditionally (`:240`).
   `TryAdd` semantics keep a host's own prior registration, so the framework supplies the default
   rather than forcing it, and the type is stateless (three private `const` fields and no instance
   state, `PasswordHasher.cs:15`, `:18`, `:24`), which is what makes the singleton lifetime safe.
@@ -44,19 +48,25 @@ path through it, in both directions.
   `HashAlgorithmName.SHA512` (`:36`) and `HashSize` (`:37`). The parameters are the named constants
   `SaltSize = 32` (`:15`), `HashSize = 64` (`:18`) and `Iterations = 600_000` (`:24`), the iteration
   count tracking OWASP 2023 guidance for this primitive.
-- **Verification has no branch.** `VerifyPassword` (`PasswordHasher.cs:43`) validates its arguments
-  and then unconditionally calls `ComputePbkdf2Hash(password, salt, hash.Length)` (`:49`). There is
-  no inspection of the salt length and no second algorithm to route to: the private helper
-  (`:57-63`) is the only recompute in the type, and it uses the same `Iterations` (`:61`) and
-  `HashAlgorithmName.SHA512` (`:62`) the write path uses.
+- **Verification runs one algorithm, gated by a length check.** `VerifyPassword`
+  (`PasswordHasher.cs:43`) validates its arguments, then rejects any stored material that is not
+  exactly the shape this hasher produces: `if (hash.Length != HashSize || salt.Length != SaltSize)`
+  returns `false` (`:55-58`). That is a canonical-material guard, not an algorithm branch. No second
+  primitive exists to route to and the salt length selects nothing: on the one remaining path the
+  recompute is `ComputePbkdf2Hash(password, salt, HashSize)` (`:60`), deriving to the constant rather
+  than to the stored hash length, and the private helper (`:68-74`) is the only recompute in the
+  type, using the same `Iterations` (`:72`) and `HashAlgorithmName.SHA512` (`:73`) the write path
+  uses. The guard's stated ground (`:49-54`) is that a row holding an empty hash and salt, the shape
+  an external-OAuth account carries under [ADR-036](036-external-oauth-login.md), otherwise derived
+  an empty output and compared two empty spans, which a fixed-time comparison answers `true` for.
 - **The comparison stays constant time.** The recomputed bytes are compared with
-  `CryptographicOperations.FixedTimeEquals` (`PasswordHasher.cs:53`), which always reads the full
+  `CryptographicOperations.FixedTimeEquals` (`PasswordHasher.cs:64`), which always reads the full
   length so verify time does not leak how many leading bytes matched.
 - **The legacy path is gone, not merely unreachable.** `LegacyHmacSaltSize`, `ComputeLegacyHash` and
   every `HMACSHA512` usage are absent from all `Source/` code in the four repos: a workspace-wide
   search for those three identifiers across `*.cs` matches only the test that proves the removal
   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherSecurityTests.cs:105`
-  and `:108`). `PasswordHasher.cs` is 64 lines end to end.
+  and `:108`). `PasswordHasher.cs` is 75 lines end to end.
 - **A test asserts the rejection rather than the acceptance.**
   `VerifyPassword_RejectsALegacyHmacDigest` (`PasswordHasherSecurityTests.cs:105-115`) builds a
   128-byte HMAC key as the salt and the matching single-round `HMACSHA512` digest (`:108-110`) and
@@ -67,7 +77,10 @@ path through it, in both directions.
   `PasswordHasherSecurityTests` recomputes the digest independently with the pinned settings
   (`:28-43`, `:46-66`), proves the work factor participates in verification by rejecting a digest
   derived at 100,000 iterations (`:69-84`), and reads the three private constants by reflection so a
-  lowered or renamed one fails the build (`:88-102`, helper at `:128-136`). At the architecture tier,
+  lowered or renamed one fails the build (`:88-102`, helper at `:164-172`). The same file pins the
+  read-path guard: the empty hash-and-salt pair is rejected (`:117-123`), a `Theory` walks six
+  non-canonical length combinations (`:125-142`), and a round trip proves the guard does not break
+  the real path (`:144-151`). At the architecture tier,
   `PasswordHashingFitnessTests` asserts against compiled IL that the type depends on
   `Rfc2898DeriveBytes` (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PasswordHashingFitnessTests.cs:30-40`)
   and on `CryptographicOperations` (`:43-54`), with a non-vacuity check that the scan actually reaches
@@ -76,13 +89,19 @@ path through it, in both directions.
   holds the PBKDF2 round trips (`PasswordHasherTests.cs:21-27` for the 64-byte digest and 32-byte
   salt, `:50-54` for the correct password, `:57-61` for the wrong one), per-call salt uniqueness
   (`:30-36`) and null/empty argument guards; no legacy-format test remains in it.
-- **All four framework call sites are unchanged by this decision.** Login verification
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:162`) and
-  registration hashing (`:213`) live in the shared base (`:53`, hasher parameter at `:56`);
+- **Every framework call site runs through the one path.** Login verification
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:194`) and
+  registration hashing (`:280`) live in the shared base (`:74`, hasher parameter at `:77`), which
+  also equalizes timing for an unknown account by burning a verification against canonical-shaped
+  dummy material, `VerifyPassword(password, new byte[64], new byte[32])` (`:907`, in
+  `BurnPasswordVerificationCost` at `:898`): that call depends on the guard admitting exactly the
+  64/32 shape, so the burn still costs a full derivation rather than short-circuiting;
   change-password verifies then hashes in `ChangePasswordHandlerBase<TUser, TCommand>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:25`,
-  `:56`, `:62`); reset-password hashes in `ResetPasswordHandlerBase<TUser, TCommand>`
-  (`.../UseCases/ResetPassword/ResetPasswordHandlerBase.cs:31`, hashing at `:80`); and seeding hashes
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:36`,
+  hasher parameter at `:38`, verify at `:79`, hash at `:85`); reset-password hashes in
+  `ResetPasswordHandlerBase<TUser, TCommand>`
+  (`.../UseCases/ResetPassword/ResetPasswordHandlerBase.cs:43`, hasher parameter at `:45`, hashing at
+  `:94`); and seeding hashes
   in `IdentityModuleDbSeederBase<TUser>`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:39`,
   `:104`). No file under either app's `Source/` invokes the hasher: ADC and Store only declare the
@@ -116,26 +135,30 @@ path through it, in both directions.
 - **A legacy-format row that reaches production now fails verification.** Restoring an old backup,
   importing a credential from an external system in the legacy shape, or missing a row in the
   pre-deletion check produces a login that fails with the correct password. The failure is
-  indistinguishable from a wrong password at the call site (`PasswordHasher.cs:49-53` returns a plain
-  `false`), so there is no signal that names the cause; the only remedy is a password reset. Nothing
+  indistinguishable from a wrong password at the call site (a 128-byte legacy salt short-circuits at
+  the length guard, `PasswordHasher.cs:55-58`, returning a bare `false` at `:57`), so there is no
+  signal that names the cause; the only remedy is a password reset. Nothing
   in the code detects or reports such a row.
 - **The work factor is a fixed compile-time constant.** `Iterations = 600_000` (`PasswordHasher.cs:24`)
   is not bound to configuration, so raising it is a framework change and a release rather than an
   appsetting. That keeps the security floor uniform across consumers at the cost of per-deployment
   tuning.
 - **Raising the work factor invalidates every stored credential.** Verification recomputes with the
-  same constant the write path used (`PasswordHasher.cs:61`), and no per-record iteration count is
+  same constant the write path used (`PasswordHasher.cs:72`), and no per-record iteration count is
   stored, so an increase makes existing hashes stop matching. A future hardening therefore needs a
   stored parameter set or a migration strategy, which is exactly the versioning problem this record
   declines to solve by salt-length convention.
 - **The stored format carries no version marker.** The format is implicit in the code, so introducing
   a third scheme later requires adding that marker (or an out-of-band migration) rather than reading
   another data property.
-- **Verification derives to the stored hash length, not to `HashSize`.**
-  `ComputePbkdf2Hash(password, salt, hash.Length)` (`PasswordHasher.cs:49`) means a truncated stored
-  digest is compared against an equally truncated recompute rather than rejected as malformed. The
-  64-byte output is enforced on the write path (`:37`) and pinned by test
-  (`PasswordHasherSecurityTests.cs:100-102`), not on the read path.
+- **The read path admits exactly one material shape.** The guard (`PasswordHasher.cs:55-58`) makes
+  the 64-byte digest and 32-byte salt an invariant of verification as well as of the write path
+  (`:37`, pinned by `PasswordHasherSecurityTests.cs:100-102`), so a truncated, empty or
+  foreign-format row is rejected as malformed instead of being compared against an equally shaped
+  recompute. The cost is the same one the work factor carries: changing `SaltSize` or `HashSize`
+  stops every stored credential from verifying, and any account legitimately holding no credential
+  material (an external-OAuth row under [ADR-036](036-external-oauth-login.md)) must be routed away
+  from password login by the caller, since the hasher answers it with an unexplained `false`.
 
 ## Related
 [ADR-032](032-password-hashing.md) (the superseded record: the same hasher, its parameters and its
@@ -145,6 +168,8 @@ issues the tokens ADR-004 validates across services),
 ADR-005 (soft-delete vs erasure: `EncryptedStringConverter` protects other sensitive columns, the
 at-rest counterpart to hashing credentials),
 ADR-029 (authentication brute-force protection: lockout and throttling wrap the same login path whose
-final credential check is this hasher).
+final credential check is this hasher),
+[ADR-036](036-external-oauth-login.md) (external OAuth login: the credential-free account shape the
+canonical-material guard rejects on the password path).
 The security model summary in `MMCA.Common/SECURITY.md:29-35` stays the reader-facing pointer to this
 record.

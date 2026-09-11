@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html" aria-current="page">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -231,6 +233,9 @@
           <p>Accepted (2026-09-11). Extends <a href="111-ai-session-scoring-governance.html">ADR-111</a>, which keeps every
           scoring-specific rule it states: this record moves the parts that are not about session scoring into
           the framework, as one optional package every future model call composes over.</p>
+          <p>Revised 2026-09-11: ADC&#39;s session scoring runs on the package. The Context, Trade-offs and
+          Consequences describe the adopted state (a constructor-injected <code>IChatClient</code> and <code>PromptContract</code>,
+          framework-owned bounds and one framework meter) instead of a pending migration.</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
           calls a language model: is that dependency governed like any other external system, meaning
@@ -238,19 +243,26 @@
           (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:469</code>, intent at <code>:471</code>, the seven
           criteria at <code>:476-482</code>). The category is N/A until a feature calls a model and is scored the moment
           one does (<code>:473</code>).</p>
-          <p>Exactly one feature does. ADC&#39;s organizer-facing session scoring calls the Anthropic Messages API
-          through a hand-written typed <code>HttpClient</code>, and <a href="111-ai-session-scoring-governance.html">ADR-111</a>
-          records the governance it grew: a port in Application, a pinned model, a dated prompt version, a
-          golden-replay evaluation gate that hashes the rendered prompt per version, delimited and redacted
-          input, a schema-constrained response, and a budgeted spend alert. All of it works. All of it is also
-          <strong>local to one class in one module of one repo</strong>. The model id is a property on the implementation
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:35</code>),
-          the prompt version is another (<code>:46</code>), the output ceiling is a literal in the request body (<code>:67</code>),
-          and the two token counters hang off a meter named for the feature,
-          <code>MMCA.ADC.Conference.Scoring</code> (<code>:32</code>, counters at <code>:352-360</code>). ADR-111 names the consequence in its
-          own trade-offs: one feature, one provider, one model, and no general model-calling abstraction, so a
-          second AI feature inherits the conventions by imitation rather than by construction. ADC scored
-          M2/I5 on section 16 in the 2026-09-04 cycle
+          <p>Exactly one feature does. ADC&#39;s organizer-facing session scoring takes a constructor-injected
+          <code>IChatClient</code> and <code>PromptContract</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:30-33</code>),
+          and <a href="111-ai-session-scoring-governance.html">ADR-111</a> records the governance it grew: a port in
+          Application, a pinned model, a dated prompt version, a golden-replay evaluation gate that hashes the
+          rendered prompt per version, delimited and redacted input, a schema-constrained response, and a
+          budgeted spend alert. What the module owns is what only session scoring knows: the prompt text, the
+          redaction rules and the response schema. What it does not own is the call. The model id (<code>:47</code>) and
+          the 256-token output ceiling (<code>:54</code>) are folded into the prompt contract and clamped again by
+          <code>Ai:MaxOutputTokens</code> at the framework boundary, <code>ModelId</code> (<code>:57</code>) and <code>PromptVersion</code> (<code>:68</code>) read
+          through the injected contract rather than standing as independent literals, nothing in the module
+          constructs an <code>HttpClient</code> for Anthropic
+          (<code>MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:33-46</code>), and Infrastructure is the only
+          layer that names the package (<code>MMCA.ADC.Conference.Infrastructure.csproj:19</code>, reason at <code>:15-18</code>).
+          Token counters come off the framework meter <code>MMCA.Common.AI</code> rather than a meter named for the
+          feature (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:135</code>, meter registration
+          at <code>:137-148</code>). That division is the whole point of this record: ADR-111 names the alternative in
+          its own trade-offs, where one feature, one provider and one model leave no general model-calling
+          abstraction, so a second AI feature inherits the conventions by imitation rather than by
+          construction. ADC scored M2/I5 on section 16 in the 2026-09-04 cycle, before the package existed
           (<code>Website/docs-src/governance/adc-ArchitectureScorecard.md:68</code>); Store and Helpdesk have no feature
           that calls a model, so the category is N/A for them.</p>
           <p>Imitation is the wrong transport for this particular set of rules. Every one of them is a property
@@ -380,15 +392,18 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>ADC carries two implementations until it migrates.</strong> Nothing about <code>AnthropicScoringService</code>
-          changes on the day this package ships. The feature keeps its own <code>HttpClient</code>, its own constants and
-          its own meter until the migration below lands, so for one release the workspace has a governed
-          boundary and a feature that does not use it.</li>
-          <li><strong>The migration moves a dashboard query.</strong> <code>IAiScoringService</code>, the dated <code>PromptVersion</code> and the
-          golden-replay gate all survive, but the per-service meter does not: token counters move from
-          <code>MMCA.ADC.Conference.Scoring</code> to <code>MMCA.Common.AI</code> with different counter names, so the App Insights
-          spend alert and any saved query move with them. That is a deliberate one-time cost of having one
-          name instead of one per feature.</li>
+          <li><strong>Off by absence puts a null on the consumer.</strong> Because nothing is registered when <code>Ai:Enabled</code> is
+          false, a feature resolves the client with <code>GetService</code> and holds a nullable dependency: ADC&#39;s
+          registration does exactly that and its scoring service takes <code>IChatClient?</code>
+          (<code>MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:38-46</code>,
+          <code>AnthropicScoringService.cs:31</code>). The disabled path is a branch the consumer writes, not a flag the
+          framework reads for it.</li>
+          <li><strong>Spend is queried under framework names.</strong> <code>IAiScoringService</code>, the dated <code>PromptVersion</code> and the
+          golden-replay gate are the feature&#39;s, but the meter is not: ADC&#39;s token counters report on
+          <code>MMCA.Common.AI</code> under the framework&#39;s counter names, so the App Insights spend alert and any saved
+          query key on those rather than on a per-service meter
+          (<code>MMCA.ADC.Conference.Service/Program.cs:137-148</code>). That is the standing cost of having one name
+          instead of one per feature.</li>
           <li><strong>The input budget is an estimate, and says so.</strong> It reads message text plus instructions only, so
           images, tool schemas, provider-side additions and non-Latin scripts are under-counted
           (<code>BoundedChatClient.cs:37-44</code>). It is a runaway guardrail with headroom, never a billing figure.
@@ -410,16 +425,17 @@
           </ul>
           <h2 id="consequences">Consequences</h2>
           <ul>
-          <li><strong>ADC migrates <code>AnthropicScoringService</code> to <code>IChatClient</code> in its next MMCA.Common bump.</strong> The port
-          <code>IAiScoringService</code> stays, <code>PromptVersion</code> stays and keeps being persisted with every score, and
-          the two-tier evaluation gate stays. What goes is the hand-written request, the local constants and
-          the per-service meter.</li>
+          <li><strong>ADC&#39;s <code>AnthropicScoringService</code> runs on <code>IChatClient</code></strong> (<code>AnthropicScoringService.cs:30-33</code>). The
+          port <code>IAiScoringService</code> stays, <code>PromptVersion</code> stays and keeps being persisted with every score,
+          and the two-tier evaluation gate stays. The module holds no hand-written provider request, no
+          free-standing model or ceiling literal and no per-service meter.</li>
           <li><strong>Store and Helpdesk adopt nothing.</strong> Section 16 remains N/A for both until a product feature of
           theirs calls a model.</li>
-          <li><strong>Section 16 re-scoring is expected to move ADC on &quot;observed&quot; and &quot;bounded&quot;</strong> once the migration
-          lands: token usage, model id and prompt version on every trace through one shared source, and a
-          per-call ceiling that exists as configuration rather than as a literal in a request body. The
-          criteria this record does not touch (evaluation, guardrails, retrieval) are unchanged.</li>
+          <li><strong>Section 16 re-scoring is open for ADC on &quot;observed&quot; and &quot;bounded&quot;.</strong> Token usage, model id and
+          prompt version reach telemetry through one shared source, and the per-call ceiling is
+          configuration rather than a literal in a request body, so the next scorecard cycle scores those
+          two criteria against the framework pipeline. The criteria this record does not touch (evaluation,
+          guardrails, retrieval) are unchanged.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="111-ai-session-scoring-governance.html">ADR-111</a> (the record this one extends: every scoring-specific
@@ -436,7 +452,7 @@
           <a href="061-runtime-secret-management.html">ADR-061</a> (the Key Vault path <code>Ai:ApiKey</code> binds from in
           production),
           <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release the package ships in and
-          the consumer bump ADC&#39;s migration rides).</p>
+          the consumer bump that carries ADC onto it).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

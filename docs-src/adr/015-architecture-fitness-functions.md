@@ -11,7 +11,7 @@ recorded. See the second section, Revision (2026-08-18): Section B rule families
 against the released framework v1.154.0: MMCA.Common's own build then executed **99** of the 104 methods
 and the public-API baselines then held **5,150 declarations**. Revised 2026-08-23: the method and base
 counts moved again and are no longer restated in this record's live text, since `MMCA.Common/FACTS.md`
-owns them (`:46`, `:49`) and is drift-gated in CI; the Decision's `--minimum-expected-tests` figure is
+owns them (`:48`, `:51`) and is drift-gated in CI; the Decision's `--minimum-expected-tests` figure is
 corrected to the floor CI actually applies. See Revision (2026-08-23) at the end. Revised 2026-09-01:
 the public-API gate's file, declaration and coverage figures are corrected in place (sixteen baseline
 pairs, one per published package except `MMCA.Common.UI.Maui`, with the package count left to
@@ -22,8 +22,13 @@ feature folders, and the unshipped-baseline declaration figure is re-counted. Se
 Revision (2026-09-03) at the end.
 Revised 2026-09-09: [ADR-115](115-strongly-typed-identifiers-opt-in.md) adds a rule family
 (`StronglyTypedIdsAreReadonlyRecordStructs`, exposed as `StronglyTypedIdTestsBase` and vacuously
-satisfied in every repo today), and the counts `FACTS.md` owns now read **127 test methods across 48
-abstract `*TestsBase` classes**, of which MMCA.Common's own build executes **232**.
+satisfied in every repo today). Revised 2026-09-11: the method, base and executed counts that entry
+restated are removed from this record's live text, because
+[FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) owns them (`FACTS.md:48`,
+`:51`), is generated from source by `FactsGenerator` and is drift-gated in CI, so a figure transcribed
+here goes stale between audits while the generated one cannot. What this record states instead is the
+structure the figures describe: one shared rule library of abstract `*TestsBase` classes, subclassed
+per repo. Six citations that moved are re-anchored. See Revision (2026-09-11) at the end.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -55,7 +60,7 @@ Enforce architectural invariants as **automated checks that gate the build**, in
 
 These tests run inside the normal `dotnet test` / CI tier, so a violated invariant fails CI like any
 other test (the whole-solution run that carries them is additionally floored at
-`--minimum-expected-tests 2000`, `.github/workflows/ci.yml:144`, so a discovery or filter regression
+`--minimum-expected-tests 2000`, `.github/workflows/ci.yml:183`, so a discovery or filter regression
 that silently drops the suite fails the job instead of passing green on a handful of tests). Centralizing the rules in a package, rather than copying them per repo, means a new
 invariant is written once and inherited by every consumer.
 
@@ -86,11 +91,12 @@ across 34 abstract `*TestsBase` classes**, of which MMCA.Common's own build exec
 regardless of how many data rows it runs: they are not test-case counts.
 
 **Both new families are required merge gates, not advisory.** They live in
-`Tests/Architecture/MMCA.Common.Architecture.Tests`, which is inside `MMCA.Common.slnx` (`:52`) and
-therefore runs in the `build-and-test` job (`.github/workflows/ci.yml:135-144`), and the public API
-gate fails that same job's build step (`ci.yml:106-108`); `build-and-test` is one of the eight required
+`Tests/Architecture/MMCA.Common.Architecture.Tests`, which is inside `MMCA.Common.slnx` (`:56`) and
+therefore runs in the `build-and-test` job (`.github/workflows/ci.yml:87`, whole-solution test step at
+`:175-183`), and the public API gate fails that same job's build step (`ci.yml:131-133`);
+`build-and-test` is one of the eight required
 gates on `main` (`CONTRIBUTING.md:60-61`). One caveat: a docs-only PR skips restore, build and test by
-path filter (`ci.yml:103,107,136`) while still reporting green, so none of this fires on a
+path filter (`ci.yml:121,132,175`) while still reporting green, so none of this fires on a
 documentation change.
 
 ### `ArchitectureRules.Cycles`: namespace dependency cycles
@@ -178,7 +184,7 @@ exemption records a genuine blind spot in the rule rather than an accepted defec
 This is the structural change to the Decision above, which framed enforcement as two layers (an MSBuild
 project-reference guard and a NetArchTest suite). The gate is neither: it is a **compile-time analyzer
 with a committed baseline**, `Microsoft.CodeAnalysis.PublicApiAnalyzers` 5.6.0
-(`MMCA.Common/Directory.Packages.props:199`), applied to every `Source` project through one
+(`MMCA.Common/Directory.Packages.props:226`), applied to every `Source` project through one
 `Directory.Build.props` ItemGroup rather than per csproj (`:86-93`), with `PublicAPI.Shipped.txt` and
 `PublicAPI.Unshipped.txt` added as `AdditionalFiles` (`:91-92`). Sixteen projects carry the pair, one
 for every published package except the single exclusion below.
@@ -206,8 +212,8 @@ were re-counted on 2026-09-03), so they cover the Section A additions this
 revision described plus every wave that followed, not a frozen picture of one release. The
 start version is no longer uncited: the gate shipped in v1.153.0, whose changelog entry names
 `Microsoft.CodeAnalysis.PublicApiAnalyzers` on every in-slnx Source project with committed baselines as
-one of three new build gates (`MMCA.Common/CHANGELOG.md:1480-1486`, the analyzer named on `:1484`,
-under the v1.153.0 heading at `:1425`). The discipline therefore begins with
+one of three new build gates (`MMCA.Common/CHANGELOG.md:2004-2010`, the analyzer named on `:2008`,
+under the v1.153.0 heading at `:1949`). The discipline therefore begins with
 v1.153.0 rather than applying retroactively.
 
 Three rules from the same analyzer are off, each with the reason recorded rather than silently
@@ -350,9 +356,11 @@ idempotency rule needs a consumer's controllers); it simply cannot be measured b
 
 **The Decision's test-count floor was wrong and is corrected in place.** The architecture tests have no
 floor of their own: they run inside the whole-solution step of `build-and-test`, which is floored at
-`--minimum-expected-tests 2000` against a suite of roughly 2,254 (`.github/workflows/ci.yml:141-144`).
+`--minimum-expected-tests 2000` against a suite of roughly 2,254 (`.github/workflows/ci.yml:175-183`;
+the floor value is live at `:183`, while the suite size is the step comment's own estimate and is not
+verifiable from a static read).
 The value 1 belongs to a different job entirely, the `ui-e2e` matrix, which runs the out-of-slnx
-`MMCA.Common.UI.E2E.Tests` project by path (`ci.yml:301`). The correction makes the guard weaker than
+`MMCA.Common.UI.E2E.Tests` project by path (`ci.yml:346`). The correction makes the guard weaker than
 the Decision claimed in one specific way worth naming: a floor of 2,000 over a 2,254-test suite would
 not notice the architecture suite disappearing on its own, only a collapse of the whole run. A
 per-project floor is only available to a job that runs one project by path, which is what the `ui-e2e`
@@ -360,7 +368,7 @@ job does and the solution-wide run cannot.
 
 **One citation was re-anchored, not rewritten.** The v1.153.0 changelog bullet naming
 `Microsoft.CodeAnalysis.PublicApiAnalyzers` is verbatim unchanged but has moved to
-`MMCA.Common/CHANGELOG.md:1480-1486` (its release heading at `:1425`) as newer releases were prepended
+`MMCA.Common/CHANGELOG.md:2004-2010` (its release heading at `:1949`) as newer releases were prepended
 above it. Line-anchored citations into an append-at-top file are a known cost of citing this precisely;
 the alternative, citing nothing, is worse. The anchors above are the current ones and are re-anchored
 in place on each audit, since a pointer that has drifted is broken rather than merely superseded.
@@ -391,12 +399,13 @@ why the sentence around them points at `FACTS.md:14` for the release they descri
 
 **Three citations were re-anchored, not rewritten.** The `Microsoft.CodeAnalysis.PublicApiAnalyzers`
 `PackageVersion` moved to `MMCA.Common/Directory.Packages.props:199` (a `Meziantou.Analyzer` entry was
-inserted above it in the Analyzers block); the v1.153.0 changelog bullet moved to
-`MMCA.Common/CHANGELOG.md:1480-1486` under its heading at `:1425`, the append-at-top cost the
+inserted above it in the Analyzers block, and it has since moved on to `:226`); the v1.153.0 changelog
+bullet moved to
+`MMCA.Common/CHANGELOG.md:2004-2010` under its heading at `:1949`, the append-at-top cost the
 2026-08-23 entry above predicted; and the proto fixture pair's citation now names the test class and
 its five cases (`ProtoContractFitnessTests.cs:14`, `:20-22`, `:44`, `:52`, `:66`, `:76`, `:89`) rather
 than a line inside that file's XML doc comment. The two `FACTS.md` pointers in the Status block moved
-from `:44` / `:47` to `:46` / `:49` as that generated file grew; the dated readings inside the
+from `:44` / `:47` to `:46` / `:49` as that generated file grew (they are `:48` / `:51` today); the dated readings inside the
 revisions above keep their own anchors, since re-pointing a historical number at a line that now says
 something else would be worse than leaving it dated.
 
@@ -437,8 +446,8 @@ audits while the shipped side holds is the gate behaving as designed: surface ad
 was last written lands in the unshipped file and stays there until a release rolls it over.
 
 **The other re-anchored citations.** The architecture test project's entry in `MMCA.Common.slnx` moved
-from `:46` to `:52`. The v1.153.0 changelog bullet moved a second time, to
-`MMCA.Common/CHANGELOG.md:1480-1486` (the analyzer named on `:1484`) under its heading at `:1425`; that
+from `:46` to `:52`, and is at `:56` today. The v1.153.0 changelog bullet moved a second time, to
+`MMCA.Common/CHANGELOG.md:2004-2010` (the analyzer named on `:2008`) under its heading at `:1949`; that
 is the append-at-top cost the 2026-08-23 entry predicted, now on its second occurrence, and it is
 re-anchored in the two revision entries that cite it as well as in the live text. The three
 `.editorconfig` blocks for the public API gate are `:888-890` (the intent), `:893-902` (the three rules
@@ -451,10 +460,43 @@ surrounding XML doc prose uses.
 
 **One known-broken pointer is left broken on purpose.** The dated `FACTS.md` readings inside the
 revisions above keep their original anchors under the convention the 2026-09-01 entry set, so
-`FACTS.md:44` and `:47` as cited there no longer point at the lines those numbers were read from. The
-live pointers in the Status block, `FACTS.md:46` and `:49`, do still resolve to the method and executed
-counts. Re-pointing a historical reading at a line that now says something else would be worse than
+`FACTS.md:44` and `:47` as cited there no longer point at the lines those numbers were read from.
+Re-pointing a historical reading at a line that now says something else would be worse than
 leaving it dated, but a reader following one of those anchors should expect to land on unrelated text.
+The live pointers in the Status block are re-anchored on each audit and read `FACTS.md:48` and `:51`
+today (see Revision (2026-09-11)).
+
+## Revision (2026-09-11): the restated counts come out, six citations move
+No rule family joined or left the library in this entry and no decision changed. It removes the one
+kind of number this record keeps failing to keep current and re-anchors the pointers that drifted since
+2026-09-03.
+
+**The 2026-09-09 entry restated three `FACTS.md` figures, and restating them was the mistake.** That
+entry recorded the method, base and executed counts inline while `MMCA.Common/FACTS.md` was already the
+generated, CI-gated owner of all three, and they went stale with the next release exactly as the
+2026-08-23 entry warned. The Status block now carries a link to
+[FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) and the structural statement the
+figures were standing in for: the shared library ships abstract `*TestsBase` classes, each repo
+subclasses them, and MMCA.Common's own build additionally runs its Common-only direct tests, which is
+why the executed figure is not a subset of the shipped method count (`FACTS.md:48`, `:51`). The
+ADR-115 rule family the 2026-09-09 entry added is unchanged and still vacuously satisfied everywhere.
+The dated figures inside the earlier revisions stay as they are, under the convention this record has
+used since 2026-09-01.
+
+**Six anchors moved and are re-anchored in place.** The whole-solution test step that carries the
+architecture suite is `.github/workflows/ci.yml:175-183` (the `--minimum-expected-tests 2000` floor on
+`:183`), where the Decision cited `:144` and the 2026-08-23 entry cited `:141-144`; the build step the
+public API gate fails is `ci.yml:131-133`, where `:106-108` now falls inside the `setup-dotnet` cache
+configuration; the docs-only path-filter conditions on restore, build and test are `ci.yml:121`, `:132`
+and `:175`; the `ui-e2e` project-by-path run is `ci.yml:346`; the `PublicApiAnalyzers` `PackageVersion`
+is `Directory.Packages.props:226`; the architecture test project's `MMCA.Common.slnx` entry is `:56`;
+and the v1.153.0 changelog bullet is `CHANGELOG.md:2004-2010` (analyzer on `:2008`) under its heading at
+`:1949`, its third move, which is the append-at-top cost the 2026-08-23 entry named and now measures
+about 520 lines per audit cycle.
+
+**One figure stays unverified rather than corrected.** The "roughly 2,254" suite size beside the 2,000
+floor is the CI step's own comment, not something a static read can confirm, and it is left as the
+estimate it always was. The floor itself is live.
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

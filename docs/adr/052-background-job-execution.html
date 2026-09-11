@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one) and 2026-08-31 (three of the four command-handler…">
+  <meta name="description" content="Superseded by ADR-121 (2026-09-11). The expensive half of this decision (Wait full mode, in-queue dedup, a 409 refusal, the session-scoring queue and…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/052-background-job-execution.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain)">
-  <meta property="og:description" content="Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one) and 2026-08-31 (three of the four command-handler…">
+  <meta property="og:description" content="Superseded by ADR-121 (2026-09-11). The expensive half of this decision (Wait full mode, in-queue dedup, a 409 refusal, the session-scoring queue and…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/052-background-job-execution.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain)">
-  <meta name="twitter:description" content="Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one) and 2026-08-31 (three of the four command-handler…">
+  <meta name="twitter:description" content="Superseded by ADR-121 (2026-09-11). The expensive half of this decision (Wait full mode, in-queue dedup, a 409 refusal, the session-scoring queue and…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"052 · Background Job Execution (Bounded Queue plus Hosted Drain)","item":"https://ivanball.github.io/docs/adr/052-background-job-execution.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -228,7 +230,11 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-052-background-job-execution-bounded-queue-plus-hosted-drain">ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one)
+          <p>Superseded by <a href="121-ephemeral-in-process-work-queue.html">ADR-121</a> (2026-09-11). The expensive half of
+          this decision (<code>Wait</code> full mode, in-queue dedup, a 409 refusal, the session-scoring queue and drain)
+          moved to durable internal commands (<a href="114-internal-commands-durable-job-queue.html">ADR-114</a>), while the
+          ephemeral half continues unchanged in ADR-121; the body below is left in place as history.</p>
+          <p>Previously: Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one)
           and 2026-08-31 (three of the four command-handler enqueue sites inherit the save-then-enqueue
           ordering from a shared base class instead of writing it): see the revisions at the end.</p>
           <h2 id="context">Context</h2>

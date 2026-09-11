@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 120 ADRs</summary>
+        <summary>All 122 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -220,6 +220,8 @@
         <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
           </ol>
         </nav>
       </details>
@@ -242,11 +244,12 @@
           <code>MapAppAssociationEndpoints</code>
           (<code>Source/Presentation/MMCA.Common.API/Startup/Endpoints/AppAssociationEndpointExtensions.cs:35</code>, with
           <code>AppAssociationOptions</code> alongside), and the MAUI <code>MauiExternalAuthBroker</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:19</code>). The ADC
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20</code>). The ADC
           consumer&#39;s deep-link wave has shipped: <code>MMCA.ADC.UI.Web</code> serves the two well-known association
           documents through the shared helper
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:181</code>), the Identity service allow-lists the
-          <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:56-58</code>), and
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:273</code>), the Identity service allow-lists the
+          <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:79-81</code>, the
+          entry at <code>:80</code>), and
           the native heads register the callback: iOS carries both the custom-scheme URL type
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Info.plist:16</code>) and the associated-domains
           entitlement (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Entitlements.plist:11</code>), while
@@ -255,15 +258,15 @@
           Android&#39;s <code>AutoVerify</code> https App Links intent filter is in place too, declared as a C# attribute on
           <code>MainActivity</code> rather than in XML
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:26-31</code>, with the public web
-          host constant at <code>:39</code> and the verified link reduced to path plus query and published to
-          <code>IDeepLinkDispatcher</code> at <code>:78-79</code>). The checked-in
+          host constant at <code>:39</code> and the verified link reduced to path plus query at <code>:78</code>, shape-checked at
+          <code>:92</code> and published to <code>IDeepLinkDispatcher</code> at <code>:97</code>). The checked-in
           <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/AndroidManifest.xml</code> carries nine
           <code>uses-permission</code> entries (<code>:4-26</code>) above the package-visibility <code>queries</code> block (<code>:29-42</code>);
           activities and their intent filters are attributes in code, which .NET for Android merges into the
           generated manifest at build time. The SERVED fingerprint has landed as well:
           <code>AppAssociation:AndroidCertFingerprints</code> now carries the production Play App Signing SHA-256
-          fingerprint (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:34-36</code>, the single value at
-          <code>:35</code>) in place of the former
+          fingerprint (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:52-54</code>, the single value at
+          <code>:53</code>, inside the <code>AppAssociation</code> section at <code>:50-56</code>) in place of the former
           <code>REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT</code> placeholder, and the helper copies that array
           verbatim into the document&#39;s <code>sha256_cert_fingerprints</code>
           (<code>Source/Presentation/MMCA.Common.API/Startup/Endpoints/AppAssociationEndpointExtensions.cs:63</code>), so the
@@ -271,7 +274,10 @@
           repo. MMCA.Store has not adopted the wave: no association endpoints, allowlist config, or platform
           callback registrations exist there yet.
           Revised 2026-09-07 (the dispatcher rejects any route that is not app-relative, so the guard is
-          shape-based and covers an explicit intent that never passed an intent filter).</p>
+          shape-based and covers an explicit intent that never passed an intent filter). Revised 2026-09-11
+          (anchors re-pinned across MMCA.Common and MMCA.ADC after <code>Program.cs</code> and <code>AuthUIService.cs</code> grew,
+          and the ADC-side guard is corrected: no <code>DeepLinkRouteGuard</code> type exists, the Android head calls the
+          shared <code>DeepLinkDispatcher.IsAppRelativeRoute</code> directly; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>Three mobile flows all need a URL to leave the web world and land inside the MAUI app:</p>
           <ol>
@@ -304,16 +310,18 @@
           <li><strong>Client flow.</strong> The MAUI head calls
           <code>WebAuthenticator</code> with <code>{gateway}/auth/oauth/{provider}?returnUrl={scheme}://oauth-complete</code> and
           captures <code>code</code> from the custom-scheme callback
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:71-76</code>), then
-          hands the code to the shared <code>/auth/oauth-complete</code> page by navigating to it (<code>:80</code>). That page
+          (the <code>WebAuthenticator</code> call at
+          <code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:75-81</code>, the
+          <code>code</code> read out of <code>result.Properties</code> at <code>:84</code>), then
+          hands the code to the shared <code>/auth/oauth-complete</code> page by navigating to it (<code>:97-98</code>). That page
           owns the rest, exactly as it does on web heads:
-          <code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:65</code> calls
+          <code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:84</code> calls
           <code>IAuthUIService.ExchangeOAuthCodeAsync</code>, which returns <code>Result&lt;AuthenticationResponse&gt;</code> so the
-          page branches on <code>result.IsFailure</code> (<code>:66</code>) rather than on an exception. The service&#39;s
+          page branches on <code>result.IsFailure</code> (<code>:85</code>) rather than on an exception. The service&#39;s
           <code>ExchangeOAuthCodeAsync</code>
-          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:68</code>) POSTs the existing
-          anonymous <code>auth/oauth/exchange</code> through the shared <code>AuthenticateAsync</code> helper (<code>:76</code>, the helper
-          itself at <code>:262</code>), which stores the pair via <code>ITokenStorageService</code> (<code>:290</code>), so the
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:76</code>) POSTs the existing
+          anonymous <code>auth/oauth/exchange</code> through the shared <code>AuthenticateAsync</code> helper (<code>:84</code>, the helper
+          itself at <code>:272</code>), which stores the pair via <code>ITokenStorageService</code> (<code>:300</code>), so the
           single-use-code contract lives in exactly one place. This rides behind the <code>IExternalAuthBroker</code>
           contract
           (ADR-042); the default broker is unavailable, which keeps the shared Login page on its anchor
@@ -371,15 +379,16 @@
           with <code>AutoVerify = true</code>, <code>DataScheme = &quot;https&quot;</code>, and <code>DataHost</code> bound to the public web host
           constant (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:26-31</code>,
           constant at <code>:39</code>), and a verified link arrives through <code>OnCreate</code> / <code>OnNewIntent</code>, is reduced to
-          path plus query, and is published to <code>IDeepLinkDispatcher</code> (<code>:78-79</code>, inside <code>PublishDeepLink</code> at
-          <code>:65-80</code>). The checked-in manifest
+          path plus query, and is published to <code>IDeepLinkDispatcher</code> (<code>:78</code> and <code>:97</code>, inside
+          <code>PublishDeepLink</code> at <code>:65-98</code>; the shape check between them arrived with the 2026-09-07 entry).
+          The checked-in manifest
           carries more than package visibility as well: nine <code>uses-permission</code> entries (<code>:4-26</code>) sit above
           the <code>queries</code> block (<code>:29-42</code>). (This entry counted seven permissions when it was written; the
           count is now nine, see the 2026-08-31 entry.)</li>
           <li><strong>What is outstanding is the served fingerprint, not the platform registration.</strong>
           <code>AppAssociation:AndroidCertFingerprints</code> still holds the literal
           <code>&quot;REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT&quot;</code>
-          (the key now sits at <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:34</code>), and the mapper serializes that
+          (the key now sits at <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:52</code>), and the mapper serializes that
           array straight into <code>sha256_cert_fingerprints</code>
           (<code>Source/Presentation/MMCA.Common.API/Startup/Endpoints/AppAssociationEndpointExtensions.cs:63</code>). No other
           setting of that key exists in the ADC repo; the only other mention is the rotation procedure in
@@ -390,11 +399,11 @@
           <li><strong>The completion page performs the exchange, not the broker.</strong> The Decision&#39;s client-flow bullet
           read as if the MAUI broker POSTed the exchange and stored the tokens. The broker captures the
           code from the <code>WebAuthenticator</code> result
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:71-76</code>) and then
-          navigates to <code>/auth/oauth-complete?code=...</code> (<code>:80</code>); <code>OAuthComplete.razor:65</code> calls
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:84</code>) and then
+          navigates to <code>/auth/oauth-complete?code=...</code> (<code>:97-98</code>); <code>OAuthComplete.razor:84</code> calls
           <code>IAuthUIService.ExchangeOAuthCodeAsync</code>, declared at
-          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:68</code>, the POST at <code>:76</code>) and
-          calls <code>ITokenStorageService.SetTokensAsync</code> (<code>:290</code>). The net effect is what the ADR described; the
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:76</code>, the POST at <code>:84</code>) and
+          calls <code>ITokenStorageService.SetTokensAsync</code> (<code>:300</code>). The net effect is what the ADR described; the
           division of labor is not, and it matters because the native path reuses the web completion page
           rather than duplicating it.</li>
           <li><strong>Anchor and tense maintenance.</strong> <code>MapAppAssociationEndpoints</code> is called at
@@ -403,8 +412,8 @@
           the 2026-08-01, 2026-08-07, and 2026-08-31 entries). The Context statement about
           <code>CompleteAsync</code> redirecting only to <code>OAuth:UIBaseUrl</code> is now past tense, since the decision
           shipped: <code>BuildSuccessRedirectUrl</code> targets the allow-listed native URL whenever one is in play
-          (<code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:137-140</code>, called from
-          the success path at <code>:134</code>).</li>
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:154</code>, called from
+          the success path at <code>:145</code>).</li>
           </ol>
           <h2 id="revision-2026-08-01">Revision (2026-08-01)</h2>
           <p>Status pass from an ADR audit. No decision and no behavior changed; the one item the previous
@@ -412,7 +421,7 @@
           <ol>
           <li><strong>The served fingerprint is no longer a placeholder.</strong>
           <code>AppAssociation:AndroidCertFingerprints</code> now holds the production Play App Signing SHA-256
-          fingerprint (now <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:34-36</code>), set by MMCA.ADC
+          fingerprint (now <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:52-54</code>), set by MMCA.ADC
           commit <code>d5fd0e9</code> (PR #80, merged 2026-07-28), which landed after the previous revision was
           written on the same day. The mapper still serializes that array straight into
           <code>sha256_cert_fingerprints</code>
@@ -465,12 +474,12 @@
           ADR-043 block comment. Every citation of those anchors is updated above.</li>
           <li><strong>The MMCA.Common exchange call returns a <code>Result</code>.</strong> <code>IAuthUIService.ExchangeOAuthCodeAsync</code>
           returns <code>Result&lt;AuthenticationResponse&gt;</code>
-          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:68</code>), so the shared
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:76</code>), so the shared
           completion page branches on <code>result.IsFailure</code>
-          (<code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:65-66</code>) instead of relying on
+          (<code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:84-85</code>) instead of relying on
           the surrounding <code>try</code>/<code>catch</code> alone. Inside the service the POST to <code>auth/oauth/exchange</code> goes
-          through the shared <code>AuthenticateAsync</code> helper (<code>:76</code>, the helper itself at <code>:262</code>), which is
-          also where <code>ITokenStorageService.SetTokensAsync</code> is called (<code>:290</code>). The division of labor the
+          through the shared <code>AuthenticateAsync</code> helper (<code>:84</code>, the helper itself at <code>:272</code>), which is
+          also where <code>ITokenStorageService.SetTokensAsync</code> is called (<code>:300</code>). The division of labor the
           2026-07-28 entry corrected is unchanged: the page still owns the exchange, the broker still only
           hands over the code.</li>
           <li><strong>The Android manifest carries nine permissions, not seven.</strong> The 2026-07-28 count is stale:
@@ -490,13 +499,13 @@
           <li><strong>Remaining ADC anchor drift.</strong> The MAUI head&#39;s <code>appsettings.json</code> is compiled in as an
           <code>EmbeddedResource</code> at <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:130</code> (the only
           <code>EmbeddedResource</code> in that file), the Identity service&#39;s OAuth allowlist section is at
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:56-58</code> with the <code>atldevcon</code>
-          entry at <code>:57</code>, the served fingerprint key is at
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:34-36</code>, the Android intent filter is
-          at <code>Platforms/Android/MainActivity.cs:26-31</code> with <code>PublishDeepLink</code> at <code>:65-80</code>, and
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:79-81</code> with the <code>atldevcon</code>
+          entry at <code>:80</code>, the served fingerprint key is at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:52-54</code>, the Android intent filter is
+          at <code>Platforms/Android/MainActivity.cs:26-31</code> with <code>PublishDeepLink</code> at <code>:65-98</code>, and
           <code>BuildSuccessRedirectUrl</code> is defined at
-          <code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:137-140</code> and called at
-          <code>:134</code>. The rotation procedure in <code>MMCA.ADC/Docs/MobileReleaseRunbook.md:32</code> still calls the
+          <code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:154</code> and called at
+          <code>:145</code>. The rotation procedure in <code>MMCA.ADC/Docs/MobileReleaseRunbook.md:32</code> still calls the
           checked-in fingerprint a placeholder, so that documentation lag from the 2026-08-01 entry is
           still open.</li>
           </ol>
@@ -516,8 +525,52 @@
           the web view resolves it against the app origin&#39;s scheme. Checking the shape at the one point every
           platform funnels through covers both. ADC&#39;s Android head publishes through that path from both
           entry points (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:46</code> on launch
-          and <code>:59-61</code> on a new intent), with its own route allow-list behind it
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/DeepLinkRouteGuard.cs:34</code>).</p>
+          and <code>:59-61</code> on a new intent), and asks the shared rule itself before publishing (<code>:92</code>), so a
+          hostile route is dropped silently rather than crossing a platform callback as an exception.</p>
+          <h2 id="revision-2026-09-11">Revision (2026-09-11)</h2>
+          <p>Anchor and correction pass from an ADR audit. No decision and no behavior changed. One citation
+          pointed at a file that does not exist.</p>
+          <ol>
+          <li><strong>There is no <code>DeepLinkRouteGuard</code> in ADC.</strong> The 2026-09-07 entry credited the Android head with
+          &quot;its own route allow-list behind&quot; the dispatcher, citing
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/DeepLinkRouteGuard.cs:34</code>. No such file exists;
+          <code>MMCA.ADC.UI/Services/</code> holds <code>AppActionRouteMap.cs</code> and <code>AppActionsInitializer.cs</code> only, and
+          neither guards an incoming URI. What actually guards the route is the shared shape rule, called
+          directly: <code>PublishDeepLink</code> reduces the intent data to path plus query
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:78</code>), calls
+          <code>DeepLinkDispatcher.IsAppRelativeRoute(route)</code> and returns without publishing when it is false
+          (<code>:92-95</code>), and only then publishes (<code>:97</code>). The in-code comment at <code>:80-91</code> records why the head
+          asks instead of letting <code>Publish</code> throw: this activity is exported and <code>MainLauncher</code>, so any app
+          can reach it with an explicit <code>ACTION_VIEW</code> intent (the app&#39;s own widget uses that path), and a
+          route arriving from a platform callback must be dropped silently. The framework rule is
+          unchanged and still the single definition
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs:45</code>,
+          enforced inside <code>Publish</code> at <code>:100</code> and <code>:104</code>). The correction is to the ADR&#39;s description of
+          ADC, not to the decision: ADC has no second allow-list, it reuses the shared one.</li>
+          <li><strong>MMCA.Common anchors moved.</strong> <code>ExchangeOAuthCodeAsync</code> is declared at
+          <code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:76</code>, its POST to
+          <code>auth/oauth/exchange</code> is at <code>:84</code>, the private <code>AuthenticateAsync</code> helper at <code>:272</code> and
+          <code>ITokenStorageService.SetTokensAsync</code> at <code>:300</code>. The completion page calls the service at
+          <code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:84</code> and branches at <code>:85</code>. In
+          the MAUI broker the <code>WebAuthenticator</code> call is at
+          <code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:75-81</code>, the
+          <code>code</code> is read from <code>result.Properties</code> at <code>:84</code>, the navigation to <code>/auth/oauth-complete</code> at
+          <code>:97-98</code>, and the class declaration at <code>:20</code>. <code>BuildSuccessRedirectUrl</code> is defined at
+          <code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:154</code> and called at
+          <code>:145</code>. Every citation of these is updated above, the ones inside the earlier revisions included.</li>
+          <li><strong>The ADC association block moved about ninety lines.</strong> In
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs</code>, <code>GetSection(&quot;AppAssociation&quot;)</code> is at
+          <code>:272</code> and <code>app.MapAppAssociationEndpoints(new AppAssociationOptions</code> at <code>:273</code>, under the
+          ADR-043 block comment at <code>:266-271</code>; the four-line package-id comment from the 2026-08-01 entry
+          is at <code>:275-278</code>, <code>AndroidPackageName</code> at <code>:279</code>, <code>AndroidCertFingerprints</code> at <code>:280</code>, and
+          <code>AppleAppId</code> plus <code>AppleAppLinkComponents</code> at <code>:281-282</code>.</li>
+          <li><strong>Two ADC config anchors moved.</strong> The served fingerprint sits in the <code>AppAssociation</code> section at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:50-56</code>, with
+          <code>AndroidCertFingerprints</code> at <code>:52-54</code> and its single SHA-256 value at <code>:53</code>; it is still a real
+          Play App Signing fingerprint, not the former placeholder. The Identity service&#39;s <code>OAuth</code> section
+          is at <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:79-81</code>, with
+          <code>&quot;AllowedReturnUrlSchemes&quot;: [ &quot;atldevcon&quot; ]</code> at <code>:80</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -538,6 +591,7 @@
             <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
             <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
+            <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             </ul>
           </nav>
         </aside>
