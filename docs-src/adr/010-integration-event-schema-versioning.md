@@ -1,7 +1,7 @@
 # ADR-010: Integration-Event Schema Versioning & Upcaster Policy
 
 ## Status
-Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, `OutputCacheEvictionRequested`, so the framework's convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see [ADR-090](090-event-upcaster-registration.md).
+Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, `OutputCacheEvictionRequested`, so the framework's convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see [ADR-090](090-event-upcaster-registration.md). Amended 2026-09-11: **payload purity** is now part of the contract and is build-gated, so an integration event may neither ship from outside a `*.Shared` assembly nor expose a type declared in a `*.Domain` assembly on its wire shape (see the amendment section at the end).
 
 ## Context
 Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
@@ -80,3 +80,53 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
 - A get-only `SchemaVersion` is informational on the wire (it round-trips out, not back in): intentional
   (version is a property of the type, not per-instance data), but it means you read it off the concrete
   type/JSON, not by mutating it.
+
+## Amendment (2026-09-11): integration-event payload purity
+
+Versioning answers "how may this contract change". It does not answer "what may be in it in the
+first place", and that gap is where the more expensive failure lives. An event whose property is
+typed as a domain entity or a domain value object exports the producer's internal model to every
+consumer: an ordinary internal refactor becomes a cross-service breaking change, and fields the
+producer never meant to publish ride along on the wire. A `SchemaVersion` on such an event is a
+version number attached to something that was never a contract.
+
+**The rule.** Integration events are the public contract; domain events are not the public API.
+Therefore:
+
+1. **Every concrete `IIntegrationEvent` implementor is declared in a `*.Shared` assembly.** A
+   consuming module may reference only Shared, so an event declared anywhere else is a contract
+   nobody is allowed to reference.
+2. **No public property on an integration event reaches a type declared in a `*.Domain` assembly**,
+   directly or through a nested payload record this repo declares. Project the value onto a
+   primitive or onto a contract record in Shared instead.
+
+**Enforcement.** `IntegrationEventPayloadPurityTestsBase`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventPayloadPurityTestsBase.cs:33`)
+exposes the two rules as `IntegrationEvents_ShouldShipFrom_SharedAssemblies` (`:38`) and
+`IntegrationEventPayloads_ShouldNotExpose_DomainTypes` (`:41`), over the rule bodies in
+`Rules/Contracts/ArchitectureRules.IntegrationEventPurity.cs`
+(`IntegrationEventsLiveInSharedAssemblies` at `:18`, `IntegrationEventPayloadsAreDomainFree` at
+`:56`). The payload walk recurses through payload types the repo itself declares, because burying an
+entity one level down hides the leak without removing it; it stops at framework and BCL types, which
+are not the repo's to police, and it unwraps arrays, nullables and generic collection arguments, so
+`IReadOnlyList<OrderLine>` is judged on `OrderLine`
+(`.../ArchitectureRules.IntegrationEventPurity.cs:89`). Recursion is bounded by a visited set, so a
+payload record that refers back to itself terminates. Both rules are vacuous for a module-less map:
+MMCA.Common is the framework rather than a module, and its own shipped event is governed by the
+public API baseline instead.
+
+**Why the type system alone was not enough.** `BaseIntegrationEvent` still derives from
+`BaseDomainEvent` (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:11`),
+which is what lets one outbox row and one dispatcher carry both kinds of event, and `IEventBus`
+already accepts only `IIntegrationEvent` on both of its overloads
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Events/IEventBus.cs:18`, `:25`). Those
+two facts together stop a domain event from being *published* outward. What they cannot stop is a
+domain type travelling *inside* a properly typed integration event, which is a payload question
+rather than an envelope question. The compiler gates the envelope; these rules gate the payload.
+
+**Not in scope: renaming.** Existing event names are unchanged. The `XChanged` naming is a
+deliberate decision on its own axis and nothing in this amendment revisits it; a purity fix projects
+a property onto a contract type, it does not rename the event carrying it. A rename would be the
+new-type-plus-upcaster migration this record already governs
+([ADR-090](090-event-upcaster-registration.md)), which is a far larger act than the one this
+amendment asks for.

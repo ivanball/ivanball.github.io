@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-109: Feature-by-Folder Layout as an Enforced Convention · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-03).">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/109-feature-by-folder-convention.html">
+  <title>ADR-118: Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-11). Promotes the MassTransit clause inside ADR-016 into a decision of its own: ADR-016 owns the release policy that the pin is…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/118-message-transport-library-policy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-109: Feature-by-Folder Layout as an Enforced Convention">
-  <meta property="og:description" content="Accepted (2026-09-03).">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/109-feature-by-folder-convention.html">
+  <meta property="og:title" content="ADR-118: Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)">
+  <meta property="og:description" content="Accepted (2026-09-11). Promotes the MassTransit clause inside ADR-016 into a decision of its own: ADR-016 owns the release policy that the pin is…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/118-message-transport-library-policy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-109: Feature-by-Folder Layout as an Enforced Convention">
-  <meta name="twitter:description" content="Accepted (2026-09-03).">
+  <meta name="twitter:title" content="ADR-118: Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)">
+  <meta name="twitter:description" content="Accepted (2026-09-11). Promotes the MassTransit clause inside ADR-016 into a decision of its own: ADR-016 owns the release policy that the pin is…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"109 · Feature-by-Folder Layout as an Enforced Convention","item":"https://ivanball.github.io/docs/adr/109-feature-by-folder-convention.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)","item":"https://ivanball.github.io/docs/adr/118-message-transport-library-policy.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">109 · Feature-by-Folder Layout as an Enforced Convention</span>
+        <span class="current">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -208,7 +208,7 @@
         <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
         <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
         <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
-        <li><a href="109-feature-by-folder-convention.html" aria-current="page">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
         <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
         <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
         <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
@@ -217,7 +217,7 @@
         <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
         <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
         <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
-        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="118-message-transport-library-policy.html" aria-current="page">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
         <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
           </ol>
@@ -226,192 +226,176 @@
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-109-feature-by-folder-layout-as-an-enforced-convention">ADR-109: Feature-by-Folder Layout as an Enforced Convention</h1>
+          <h1 id="adr-118-message-transport-library-policy-masstransit-v8-pin-and-exit-strategy">ADR-118: Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-03).</p>
+          <p>Accepted (2026-09-11). Promotes the MassTransit clause inside
+          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> into a decision of its own: ADR-016 owns the
+          release policy that the pin is enforced under, this record owns the choice of transport library, the
+          conditions that end it, and the ordered list of what replaces it.</p>
           <h2 id="context">Context</h2>
-          <p>The rubric&#39;s section 5 asks that &quot;code is organized by feature/capability, so a change touches one
-          cohesive slice&quot;, with features &quot;grouped by use case ..., not by horizontal technical folders&quot;
-          (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:195</code>, <code>:197</code>, <code>:200</code>). ADR-015
-          already gates the <em>contents</em> of a slice: <code>SliceCohesionTestsBase</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/SliceCohesionTestsBase.cs</code>)
-          fails a build when a handler is stranded from its command or query contract.</p>
-          <p>Nothing gated the <em>shape of the tree</em> until 2026-09-02, when a folder-width fitness function and a
-          repo-wide reorganization shipped together (<code>MMCA.Common/CHANGELOG.md:88-93</code>, <code>:123-127</code>). That
-          reorganization, and a second pass the next day (<code>:29-37</code>), were both marked <strong>Breaking</strong>, because in
-          this workspace namespaces follow folders: moving a file renames a namespace, and a namespace is
-          public API on a package family released in lockstep (ADR-016). Two of the last three MMCA.Common
-          releases were therefore layout releases, and they are what forced <code>UPGRADING.md</code> into existence
-          (<code>MMCA.Common/CHANGELOG.md:78-79</code>).</p>
-          <p>The convention itself is written down only in the workspace <code>CLAUDE.md</code> and in the rubric text
-          above. The bill it produces (public namespace renames, a scripted consumer sweep, an UPGRADING
-          protocol, and doc citations that rot underneath it) is recorded nowhere as a decision. This record
-          states it.</p>
+          <p>MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.10 across
+          all three of its packages (<code>MMCA.Common/Directory.Packages.props:106-108</code>). The pin is a policy
+          rather than a lag: v9 was announced in April 2025 and shipped in January 2026 as a commercial,
+          source-available product with a runtime licence key. A v9 bus fails its startup licence check and
+          every broker-enabled service host crashes, which is a failure mode a build cannot see because CI
+          never starts a broker. That is why the ceiling is a fitness function rather than a comment:
+          <code>MassTransit_MustNotExceed_MajorVersion8</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:25</code>)
+          parses <code>Directory.Packages.props</code> and fails the build at an exclusive major ceiling of 9 (<code>:31</code>),
+          and MMCA.Common subclasses it
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9</code>).
+          A blanket package update bumped the version to 9.1.2 once before and reintroduced the crash.</p>
+          <p>A pin with no horizon is a decision that expires quietly, so the real question is not &quot;which version&quot;
+          but &quot;what does this workspace actually owe MassTransit, and what would it cost to leave&quot;. The answer
+          is narrower than the usual framework-lock-in story, because the durable parts of the messaging design
+          are not MassTransit&#39;s:</p>
+          <ul>
+          <li><strong>The outbox is ours.</strong> <code>OutboxMessage</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs</code>) is a
+          plain EF entity holding the serialized <code>Payload</code> (<code>:41</code>) keyed by <code>EventType</code> (<code>:38</code>), with the
+          claim lease (<code>LockedUntil</code> <code>:58</code>, <code>LockToken</code> <code>:65</code>), the retry counter (<code>:50</code>), the propagated
+          <code>TraceId</code> / <code>SpanId</code> (<code>:71</code>, <code>:74</code>) and the optional <code>OrderingKey</code> (<code>:86</code>). None of those columns
+          is a broker concept (<a href="003-outbox-dual-dispatch.html">ADR-003</a>).</li>
+          <li><strong>The inbox is ours.</strong> <code>IInboxStore</code> (<code>.../Persistence/Inbox/IInboxStore.cs:16</code>), <code>InboxMessage</code>
+          (keyed on <code>MessageId</code>, <code>.../Persistence/Inbox/InboxMessage.cs:14</code>) and <code>EfInboxStore</code> dedup
+          redeliveries in the consumer&#39;s own database, and <code>TryBeginAsync</code>
+          (<code>.../Persistence/Inbox/IInboxStore.cs:38</code>) stages the row into the handler&#39;s own unit of work
+          (<a href="021-consumer-inbox-idempotency.html">ADR-021</a>). A broker supplies the redelivery; nothing else here
+          is the broker&#39;s.</li>
+          <li><strong>The publish and consume leg is the only part MassTransit owns.</strong> <code>OutboxProcessor</code> resolves
+          <code>IMessageBus</code> per scope
+          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:272</code>) and routes every integration event
+          through it (<code>:589</code>), and only the broker hop is wrapped in the circuit breaker
+          (<a href="087-broker-poison-message-handling.html">ADR-087</a>).</li>
+          </ul>
+          <p>The abstractions that stand between application code and the library are already in place and are
+          this workspace&#39;s own types: <code>IMessageBus</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28</code>) and <code>IEventBus</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Events/IEventBus.cs:11</code>). <code>BrokerMessageBus</code>
+          implements the first over a MassTransit <code>IPublishEndpoint</code>
+          (<code>.../Infrastructure/Messaging/BrokerMessageBus.cs:24</code>); <code>BrokerEventBus</code> implements the second and
+          does not reference MassTransit at all (<code>.../Infrastructure/Messaging/BrokerEventBus.cs:31</code>), because
+          in broker mode its whole job is to write the outbox row and signal the processor. The whole
+          <code>using MassTransit</code> surface is <strong>eight files</strong>: seven inside <code>MMCA.Common.Infrastructure</code>
+          (<code>DependencyInjection.cs</code>, <code>Messaging/BrokerMessageBus.cs</code>, <code>Messaging/ServiceBusEmulatorSupport.cs</code>
+          and the four consumer files under <code>Messaging/Consumers/</code>) plus the emulator test fixture
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs</code>. Domain,
+          Application and Shared hold the interfaces alone, and that is build-gated:
+          <code>MicroserviceExtractionTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/MicroserviceExtractionTestsBase.cs:13</code>)
+          bans MassTransit, gRPC and Protobuf outside API and Infrastructure in every repo.</p>
+          <p>The comparison landscape is also public rather than internal: the August 2025 Visual Studio Magazine
+          article &quot;Messaging Made Simple: Choosing the Right Framework for .NET&quot; surveys the same shift, and
+          the two candidates below are the ones that survive this workspace&#39;s constraints.</p>
           <h2 id="decision">Decision</h2>
-          <p><strong>Folder structure is a governed architectural property, not a matter of taste: an aggregate or
-          feature names a folder, a folder holds at most twelve direct code files, namespaces follow folders,
-          and a layout change ships as a breaking release with a migration map.</strong></p>
+          <p><strong>Stay on MassTransit v8 behind <code>IMessageBus</code>, and keep the outbox and inbox custom precisely because
+          that is what keeps a transport swap cheap. Record the exit triggers now, and the replacement order,
+          so the pin is a dated decision rather than an open-ended hold.</strong></p>
           <ol>
-          <li><p><strong>The aggregate names the first folder level in Domain, Application and Shared.</strong> MMCA.ADC&#39;s
-          Conference module carries <code>Activities</code>, <code>Categories</code>, <code>Events</code>, <code>Questions</code>, <code>Sessions</code>,
-          <code>Speakers</code> and <code>Sponsors</code> directly under
-          <code>Source/Modules/Conference/MMCA.ADC.Conference.Domain/</code>, and the same names under
-          <code>.Application/</code> and <code>.Shared/</code>. MMCA.Helpdesk&#39;s single-module seed shows the minimal case: one
-          <code>Tickets</code> folder under <code>Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/</code>, <code>.Application/</code>
-          and <code>.Shared/</code>.</p>
+          <li><p><strong>The pin stands and stays build-gated.</strong> MassTransit remains at 8.5.10 on all three packages, and
+          <code>DependencyVersionTestsBase</code> remains the enforcement point. The ceiling is the major version only:
+          v8 patch and minor updates are ordinary dependency work.</p>
           </li>
-          <li><p><strong>In UI, API and Infrastructure the first level is a technical root and the aggregate sits
-          beneath it.</strong> The roots in use are <code>Pages/</code>, <code>Services/</code> and <code>Components/</code>
-          (<code>MMCA.ADC.Conference.UI/</code>), <code>Controllers/</code> (<code>MMCA.ADC.Conference.API/</code>) and <code>Persistence/</code>
-          (<code>MMCA.ADC.Conference.Infrastructure/</code>), with the aggregate folders one level down:
-          <code>UI/Pages/Speakers</code>, <code>UI/Services/Speakers</code>, <code>API/Controllers/Speakers</code>,
-          <code>Infrastructure/Persistence/EntityConfiguration/Speakers</code>.</p>
+          <li><p><strong>No durable messaging mechanism may move into the library.</strong> The outbox, the inbox, the claim
+          lease, the retry and dead-letter policy, the ordering key and the trace propagation columns stay
+          framework code on framework tables. MassTransit&#39;s own transactional-outbox feature is not adopted,
+          and adopting it later would be a reversal of this clause, not a refactor.</p>
           </li>
-          <li><p><strong>The aggregate carries the same plural name in every project of the module.</strong> <code>Speakers</code> appears
-          in the Conference module&#39;s Domain, Application, Shared, <code>UI/Pages</code>, <code>UI/Services</code>,
-          <code>API/Controllers</code> and <code>Infrastructure/Persistence/EntityConfiguration</code> trees, so a reader who
-          knows the aggregate knows the path in every layer.</p>
+          <li><p><strong>The exit triggers are named.</strong> Any one of these opens the replacement work, and none of them is
+          a version number on its own:</p>
+          <ul>
+          <li>a security advisory against MassTransit v8 with no patched v8 release;</li>
+          <li>a .NET major version (11 and onward) that v8 does not support;</li>
+          <li>the close of the v8 maintenance window (community support for the v8 line is stated to end at
+          the end of 2026).</li>
+          </ul>
           </li>
-          <li><p><strong>No folder holds more than twelve direct code files.</strong> <code>FolderWidthTestsBase.MaxDirectFiles</code>
-          defaults to 12
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/FolderWidthTestsBase.cs:23</code>,
-          test method at <code>:31-33</code>) and the rule body is
-          <code>ArchitectureRules.FoldersStayNarrow(repoRoot, maxDirectFiles, exemptFolderSuffixes)</code>
-          (<code>Rules/Governance/ArchitectureRules.FolderWidth.cs:34</code>), whose failure message tells the author
-          to &quot;split it by feature or aggregate&quot; (<code>:69-70</code>). It walks the filesystem rather than IL,
-          &quot;because the defect is a layout one&quot; (<code>:9-11</code>), over both the <code>Source/</code> and <code>Tests/</code> trees
-          (<code>:42</code>).</p>
+          <li><p><strong>The replacement order is decided in advance.</strong> Both candidates implement the existing
+          <code>IMessageBus</code> and neither touches a consumer:</p>
+          <ul>
+          <li><strong>First: Wolverine</strong> (Apache 2.0). Message handling is plain methods rather than a consumer
+          class per message, and its transports cover the two this workspace runs (RabbitMQ, Azure Service
+          Bus) plus SQS and Kafka. Its own durable-inbox and outbox features would be left off, because
+          decision 2 already owns that layer.</li>
+          <li><strong>Second: a raw-SDK adapter.</strong> <code>RabbitMQ.Client</code> plus <code>Azure.Messaging.ServiceBus</code>, the latter
+          already pinned at 7.20.2 for the Service Bus emulator test tier
+          (<code>MMCA.Common/Directory.Packages.props:113</code>). This is the floor option: no third-party
+          abstraction at all, at the cost of hand-writing consumer dispatch, retry and delayed redelivery.</li>
+          </ul>
           </li>
-          <li><p><strong>The counting rules are part of the decision.</strong> Only files directly in a folder count
-          (<code>:91</code>, <code>:98</code>). A <code>.razor</code> component counts once and its co-located <code>X.razor.cs</code> counts with it
-          (<code>:105-120</code>, the pairing at <code>:117-119</code>); a <code>.resx</code> never counts, since only <code>.razor</code> and <code>.cs</code>
-          files are code units (<code>:107-112</code>); generated files (<code>*.g.cs</code>, <code>*.generated.cs</code>, <code>*.Designer.cs</code>)
-          never count (<code>:123-126</code>). Whole trees whose shape nobody chose are skipped by path segment:
-          <code>bin</code>, <code>obj</code>, <code>Migrations</code>, <code>Platforms</code>, <code>Resources</code>, <code>node_modules</code>, <code>wwwroot</code> and <code>.git</code>
-          (<code>:78-82</code>).</p>
+          <li><p><strong>Two options are rejected outright, and recorded so they are not re-proposed.</strong></p>
+          <ul>
+          <li><strong>MassTransit v9.</strong> Commercial with a runtime licence key. Buying it retires the gate rather
+          than answering it, at a recurring cost, and leaves the transport decision where it is today.</li>
+          <li><strong>MediatR.</strong> Not used anywhere in this workspace (the CQRS pipeline is the framework&#39;s own
+          <code>ICommandHandler</code> / <code>IQueryHandler</code> chain, <a href="014-cqrs-decorator-pipeline.html">ADR-014</a>), and
+          commercial since 2025 for the same reason. It is named here only because it is the library most
+          often suggested in the same breath, and it would be a new dependency rather than a replacement.</li>
+          </ul>
           </li>
-          <li><p><strong>All four repos run the gate, and every exemption is code.</strong> <code>FolderWidthTests</code> subclasses the
-          base in MMCA.Common
-          (<code>Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/FolderWidthTests.cs:18</code>), MMCA.ADC
-          (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/FolderWidthTests.cs:10</code>), MMCA.Store
-          (<code>Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/FolderWidthTests.cs:9</code>) and
-          MMCA.Helpdesk (<code>Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/FolderWidthTests.cs:8</code>), each
-          supplying only its <code>RepoRoot</code>. Only MMCA.Common overrides <code>ExemptFolderSuffixes</code>, with three
-          one-concept folders: <code>MMCA.Common.Application/UseCases/Decorators</code>, its test twin, and
-          <code>MMCA.Common.Domain/Interfaces</code> (<code>FolderWidthTests.cs:28-33</code>). ADC, Store and Helpdesk run
-          against the empty default (<code>FolderWidthTestsBase.cs:29</code>). The base is public API and is baselined
-          under the ADR-015 gate (<code>Testing.Architecture/PublicAPI.Unshipped.txt:94-100</code>).</p>
-          </li>
-          <li><p><strong>Namespaces follow folders, so a folder move is a compile error until every namespace moves with
-          it.</strong> The shared analyzer baseline sets <code>dotnet_style_namespace_match_folder = true:warning</code>
-          (<code>MMCA.Common/.editorconfig:90</code>) and <code>TreatWarningsAsErrors</code> is on repo-wide
-          (<code>MMCA.Common/Directory.Build.props:7</code>), so IDE0130 fails the build. The exceptions are named per
-          path: six in MMCA.Common for the flat public surfaces consumers subclass and two Aspire extension
-          folders (<code>.editorconfig:858-866</code> for the reasons, globs at <code>:867</code>, <code>:870</code>, <code>:873</code>, <code>:876</code>,
-          <code>:879</code>, <code>:882</code>), and one each in ADC and Store for the MAUI head&#39;s per-TFM <code>Platforms/</code> bootstrap
-          files (<code>MMCA.ADC/.editorconfig:848-857</code>, <code>MMCA.Store/.editorconfig:837-846</code>).</p>
-          </li>
-          <li><p><strong>A folder inside a module project is never named <code>Domain</code>, <code>Application</code>, <code>Infrastructure</code>,
-          <code>API</code> or <code>UI</code>.</strong> <code>ModuleNameConventions.GetModuleName</code> derives the owning module from the
-          namespace, taking the segment before the first layer segment
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Conventions/ModuleNameConventions.cs:38-51</code>):
-          <code>Domain</code> matches at any index from 1 up (<code>:41-43</code>) and the other four match only at index 3 or
-          later (<code>:17</code>, <code>:48-50</code>). A sub-folder carrying one of those names therefore shifts the derived
-          module. That name is load-bearing: it is the SQL Server schema
-          (<code>Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:66</code>),
-          the Cosmos container (<code>:87</code>), the logical data-source name for unit-of-work routing
-          (<code>Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:181</code>) and the module tag on
-          every CQRS log line (<code>Application/UseCases/Decorators/LoggingCommandDecorator.cs:77</code>,
-          <code>LoggingQueryDecorator.cs:75</code>). The derivation is locked by
-          <code>Tests/Core/MMCA.Common.Shared.Tests/Conventions/ModuleNameConventionsTests.cs</code>. This half of the
-          convention is enforced by review only: no fitness rule checks folder names.</p>
-          </li>
-          <li><p><strong>The move is scripted, not hand-edited.</strong> <code>Tools/Scripts/move-namespace.ps1</code> rewrites namespaces
-          and usings repo-wide and across the consumers, and <code>Tools/Scripts/auto-add-usings.py</code> plus
-          <code>Tools/Scripts/fix-build-usings.py</code> settle the usings the compiler then reports. The framework&#39;s
-          own changelog names the script as the consumer sweep (<code>MMCA.Common/CHANGELOG.md:34-36</code>,
-          <code>:92-93</code>).</p>
-          </li>
-          <li><p><strong>A layout change ships as a breaking minor release with an old-to-new map.</strong> v1.183.0 dissolved
-          <code>MMCA.Common.Infrastructure.Services</code> and <code>.Settings</code> into the features they implement and split
-          the UI capability, service and component grab-bags (<code>CHANGELOG.md:88-114</code>), and added the
-          folder-width rule (<code>:123-127</code>). v1.184.0 split the eight remaining flat public namespaces
-          (<code>:29-37</code>, <code>:41-74</code>) and added <code>UPGRADING.md</code> (<code>:78-79</code>). There is no dual-namespace grace
-          release and no <code>[Obsolete]</code> shim, because C# cannot forward a type across namespaces inside one
-          assembly (<code>MMCA.Common/UPGRADING.md:9-11</code>); the first-party consumers are swept in the same
-          release (<code>UPGRADING.md:34-36</code>).</p>
+          <li><p><strong>A trial ships beside the incumbent.</strong> The trial point is an additive arm in the
+          <code>MessageBusProvider</code> switch inside <code>ConfigureBrokerTransport</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:1189</code>, beside the
+          RabbitMQ arm at <code>:1196</code> and the Azure Service Bus arm at <code>:1226</code>), so a candidate is exercised by
+          configuration without removing anything, and ADC&#39;s advisory nightly Service Bus emulator smoke is
+          where it runs first.</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>A wide folder has stopped naming a feature.</strong> The rule&#39;s own statement of intent is that a
-          folder &quot;that accumulates dozens of direct code files has stopped naming a feature and started
-          naming a technical bucket, which is exactly the horizontal layout vertical slicing exists to
-          avoid&quot; (<code>ArchitectureRules.FolderWidth.cs:6-9</code>). A count is a cheap proxy that a reviewer will not
-          forget to apply.</li>
-          <li><strong>Filesystem checks are cheap and exact.</strong> The rule reads directories instead of reflecting over
-          assemblies (<code>:9-11</code>), so it costs nothing at test time and reports a repo-relative path an author
-          can act on (<code>:61</code>, <code>:74-75</code>).</li>
-          <li><strong>Written once, inherited four times.</strong> The base plus per-repo subclass shape is the ADR-015
-          pattern, so the cap, the counting rules and the skip list move for every repo in one framework
-          release.</li>
-          <li><strong>Namespace-follows-folder is what makes layout enforceable at all.</strong> Without IDE0130 at warning
-          under <code>TreatWarningsAsErrors</code>, &quot;the folder names the feature&quot; would be a review convention that
-          decays silently. With it, the compiler holds the tree and the namespace in agreement.</li>
-          <li><strong>Exemptions belong in code.</strong> A deliberately flat folder is listed as a string in the repo&#39;s own
-          subclass with a documented reason (<code>FolderWidthTests.cs:22-33</code>), so the exception is reviewable in
-          a diff rather than being an unwritten habit.</li>
+          <li><strong>The pin is enforceable, so it is honest.</strong> A comment beside a version number is a hope; a fitness
+          function that parses <code>Directory.Packages.props</code> is the reason the v9 crash was reintroduced exactly
+          once. Making the ceiling a build gate is the same invariant-over-discipline posture as the layer
+          rules (<a href="015-architecture-fitness-functions.html">ADR-015</a>).</li>
+          <li><strong>Custom durable machinery is what makes the transport replaceable.</strong> A library that owned the
+          outbox would own the lease semantics, the ordering guarantee, the dead-letter retention window and
+          the replay API, and every one of those would have to be re-earned against a new library&#39;s model.
+          Owning them means a swap is a publish-and-consume adapter, which is the eight-file surface above.</li>
+          <li><strong>Wolverine ahead of raw SDKs</strong> because it keeps retry, delayed redelivery and consumer dispatch as
+          library concerns on both transports this workspace runs, which is precisely the part the raw-SDK
+          option hand-writes. It is ordered first on licence and transport coverage, not on a benchmark run
+          here: neither candidate has been evaluated against a running broker in this workspace.</li>
+          <li><strong>Rejecting v9 is a licence decision, not a quality one.</strong> The v9 line is a reasonable product; a
+          per-deployment runtime key across seven service hosts plus every test tier is the cost that does
+          not fit.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Layout changes are public API breaks on a lockstep package family.</strong> Because the namespace is
-          the folder, a reorganization is a breaking release for every consumer (ADR-016), with no
-          deprecation window: the old namespaces stop existing in the release that introduces the new ones
-          (<code>UPGRADING.md:9-11</code>). Two consecutive framework releases, v1.183.0 and v1.184.0, were exactly
-          that.</li>
-          <li><strong>Documentation citations rot underneath the moves, and they did.</strong> The 2026-09-03 ADR audit
-          classified 56 of its 84 needs-edit records as citation-only drift, almost all of it a folder segment
-          the v1.183.0 to v1.185.0 moves introduced (<code>Rules/</code>, <code>Bases/Governance/</code>, <code>Messaging/</code>, <code>Auth/</code>,
-          <code>Services/Api/</code>, <code>Startup/Pipeline/</code>) that the cited path no longer carried, and the MMCA.Common
-          scorecard&#39;s section 5 row still cites the pre-move <code>ArchitectureRules.Slices.cs</code>
-          (<code>governance/common-ArchitectureScorecard.md:77</code>). Every one of those is a path-only break with
-          the behavior unchanged, which is precisely what makes it easy to miss.</li>
-          <li><strong>The gate counts; it does not read names.</strong> Nothing verifies that a folder is named after an
-          aggregate, that the plural name matches across projects, or that no sub-folder is called <code>Domain</code>.
-          A repo can satisfy the twelve-file cap with twelve technical buckets, and Decision point 8 is
-          carried by review.</li>
-          <li><strong>The cap is a round number and the exemption match is loose.</strong> Twelve is a <code>virtual</code> default with
-          no derivation (<code>FolderWidthTestsBase.cs:23</code>), and an exemption matches by
-          <code>relativeFolder.EndsWith(suffix)</code> (<code>ArchitectureRules.FolderWidth.cs:85-86</code>), so a short suffix
-          can exempt more folders than its author intended.</li>
-          <li><strong>The skip list hides real trees.</strong> <code>Resources</code> and <code>wwwroot</code> are skipped outright by segment
-          (<code>:78-82</code>), so a localization or asset folder can grow without bound even when its shape is
-          authored rather than generated.</li>
-          <li><strong>The exemption prose drifts from the exemption list.</strong> MMCA.Common&#39;s <code>FolderWidthTests</code> class
-          summary still describes the pre-v1.184.0 set (application contracts, CQRS primitives, shared auth
-          contracts, API startup extensions, the integration-test package root:
-          <code>FolderWidthTests.cs:9-16</code>), while the live list holds three entries (<code>:28-33</code>), and the
-          folder-width gate is not mentioned at all in the scorecard row that summary points at.</li>
-          <li><strong>Namespace-follows-folder is not universal.</strong> Eight documented IDE0130 exclusions
-          (<code>MMCA.Common/.editorconfig:867-883</code>, <code>MMCA.ADC/.editorconfig:856-857</code>,
-          <code>MMCA.Store/.editorconfig:845-846</code>) mean that in those trees a folder move renames nothing, so the
-          property a reader relies on holds almost everywhere rather than everywhere.</li>
+          <li><strong>The workspace sits on a library version with a finite support horizon.</strong> Nothing forces a move
+          today, and the exit triggers above are what convert &quot;we should look at this sometime&quot; into a dated
+          check. The cost of being wrong about the horizon is a rushed adapter rather than a rewrite, which
+          is the whole point of decision 2.</li>
+          <li><strong>A v8 security advisory has no patch path but the exit.</strong> There is no commercial support contract
+          on the v8 line, so an advisory with no community patch moves straight to the replacement list.</li>
+          <li><strong>An adapter spike is a Common-only change.</strong> No consumer handler, module or contract changes, and
+          no consumer repo gains a dependency, because the candidate ships behind <code>IMessageBus</code> and the ban
+          in <code>MicroserviceExtractionTestsBase</code> already guarantees no consumer references the library. The
+          cost lands in one package and one release, swept under
+          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>&#39;s lockstep policy.</li>
+          <li><strong>The emulator test tier is coupled to the choice.</strong> <code>ServiceBusEmulatorFixtureBase</code> uses the
+          MassTransit v8 custom-clients <code>Host()</code> overload, so a transport swap re-writes that fixture and
+          re-checks the <code>Azure.Messaging.ServiceBus</code> 7.20.2 pin it exists for.</li>
+          <li><strong>Ordering the candidates without running them is deliberate but partial.</strong> The list narrows what a
+          spike has to evaluate; it does not stand in for the spike.</li>
           </ul>
           <h2 id="related">Related</h2>
-          <p><a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function tier this rule joins, and the
-          public-API baseline that records <code>FolderWidthTestsBase</code>),
-          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (lockstep versioning: a layout change lands in
-          every package at one version and every consumer bumps in one pass),
-          <a href="059-module-contract-and-composition.html">ADR-059</a> (the module contract whose project-per-layer shape
-          is the level above &quot;feature by folder&quot;),
-          <a href="106-extension-members-as-public-di-surface.html">ADR-106</a> (the other convention whose cost is paid in
-          the public API surface of a lockstep-released package family),
-          <a href="053-dual-registry-package-publishing.html">ADR-053</a> (the dual-registry publish that carries a renamed
-          namespace to consumers outside this workspace).</p>
+          <p><a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release policy this pin is
+          enforced under; its 2026-08-28 amendment first sketched exit options, and this record takes ownership
+          of that list),
+          <a href="066-broker-transport-selection.html">ADR-066</a> (which broker runs where, the axis orthogonal to which
+          library talks to it),
+          <a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox this record refuses to hand to a library),
+          <a href="021-consumer-inbox-idempotency.html">ADR-021</a> (the inbox, for the same reason),
+          <a href="087-broker-poison-message-handling.html">ADR-087</a> (the circuit breaker on the one leg the library
+          owns),
+          <a href="010-integration-event-schema-versioning.html">ADR-010</a> and
+          <a href="090-event-upcaster-registration.html">ADR-090</a> (the contract and upcaster rules a transport swap must
+          not disturb),
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the gate the pin is enforced by).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/109-feature-by-folder-convention.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/118-message-transport-library-policy.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">

@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-120: Governed Language-Model Boundary (MMCA.Common.AI) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-11). Extends ADR-111, which keeps every scoring-specific rule it states: this record moves the parts that are not about session…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-120: Governed Language-Model Boundary (MMCA.Common.AI)">
+  <meta property="og:description" content="Accepted (2026-09-11). Extends ADR-111, which keeps every scoring-specific rule it states: this record moves the parts that are not about session…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-120: Governed Language-Model Boundary (MMCA.Common.AI)">
+  <meta name="twitter:description" content="Accepted (2026-09-11). Extends ADR-111, which keeps every scoring-specific rule it states: this record moves the parts that are not about session…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"120 · Governed Language-Model Boundary (MMCA.Common.AI)","item":"https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">120 · Governed Language-Model Boundary (MMCA.Common.AI)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 120 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="120-governed-chat-client-boundary.html" aria-current="page">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-120-governed-language-model-boundary-mmcacommonai">ADR-120: Governed Language-Model Boundary (MMCA.Common.AI)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-09-11). Extends <a href="111-ai-session-scoring-governance.html">ADR-111</a>, which keeps every
+          scoring-specific rule it states: this record moves the parts that are not about session scoring into
+          the framework, as one optional package every future model call composes over.</p>
+          <h2 id="context">Context</h2>
+          <p>Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
+          calls a language model: is that dependency governed like any other external system, meaning
+          isolated, versioned, evaluated, observed and bounded in what it may do
+          (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:469</code>, intent at <code>:471</code>, the seven
+          criteria at <code>:476-482</code>). The category is N/A until a feature calls a model and is scored the moment
+          one does (<code>:473</code>).</p>
+          <p>Exactly one feature does. ADC&#39;s organizer-facing session scoring calls the Anthropic Messages API
+          through a hand-written typed <code>HttpClient</code>, and <a href="111-ai-session-scoring-governance.html">ADR-111</a>
+          records the governance it grew: a port in Application, a pinned model, a dated prompt version, a
+          golden-replay evaluation gate that hashes the rendered prompt per version, delimited and redacted
+          input, a schema-constrained response, and a budgeted spend alert. All of it works. All of it is also
+          <strong>local to one class in one module of one repo</strong>. The model id is a property on the implementation
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:35</code>),
+          the prompt version is another (<code>:46</code>), the output ceiling is a literal in the request body (<code>:67</code>),
+          and the two token counters hang off a meter named for the feature,
+          <code>MMCA.ADC.Conference.Scoring</code> (<code>:32</code>, counters at <code>:352-360</code>). ADR-111 names the consequence in its
+          own trade-offs: one feature, one provider, one model, and no general model-calling abstraction, so a
+          second AI feature inherits the conventions by imitation rather than by construction. ADC scored
+          M2/I5 on section 16 in the 2026-09-04 cycle
+          (<code>Website/docs-src/governance/adc-ArchitectureScorecard.md:68</code>); Store and Helpdesk have no feature
+          that calls a model, so the category is N/A for them.</p>
+          <p>Imitation is the wrong transport for this particular set of rules. Every one of them is a property
+          of <em>calling a model</em>, not a property of <em>scoring a session</em>: an output-token ceiling, a wall-clock
+          budget, a tool-use gate, a prompt whose identity is hashed, a token counter tagged by model and
+          prompt version. Written per feature, each is a fresh chance to forget one, and the forgetting is
+          invisible until a bill or an incident. Written once, they are what a second feature gets for free.</p>
+          <p>The external landscape had already converged on the shape. Microsoft&#39;s October 2024 eShopSupport
+          sample (&quot;eShop infused with AI&quot;) demonstrated the <code>Microsoft.Extensions.AI</code> abstractions precisely so
+          that a provider swap does not touch business logic, and the October 2025 Microsoft Agent Framework
+          orchestration post made OpenTelemetry instrumentation the default expectation for a production agent
+          rather than an afterthought. Both point at the same conclusion this workspace reached from its own
+          rubric: the interesting artifact is not the provider client, it is the governed pipeline around it.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>The framework owns the language-model boundary as one optional package, <code>MMCA.Common.AI</code>. The
+          provider half is the official SDK&#39;s own <code>IChatClient</code> adapter, the governance half is a pipeline of
+          delegating clients, prompts are versioned contracts the framework hashes, and tools are off until a
+          host turns them on.</strong></p>
+          <ol>
+          <li><p><strong>One package, with no MMCA project reference.</strong> <code>MMCA.Common.AI</code> takes a <code>FrameworkReference</code> on
+          <code>Microsoft.AspNetCore.App</code> (<code>MMCA.Common/Source/Core/MMCA.Common.AI/MMCA.Common.AI.csproj:11</code>) for
+          the hosting environment, the distributed cache, the configuration binder and the options
+          validation pipeline, plus exactly two runtime packages: <code>Microsoft.Extensions.AI</code> (<code>:29</code>), pinned
+          at 10.10.0 (<code>MMCA.Common/Directory.Packages.props:108</code>), and <code>Anthropic</code> (<code>:30</code>), the official
+          Anthropic .NET SDK, pinned at 12.47.0 (<code>Directory.Packages.props:115</code>). The csproj states the
+          reason in place (<code>MMCA.Common.AI.csproj:15-28</code>): everything the package governs is expressed in
+          <code>Microsoft.Extensions.AI</code> primitives, so it needs nothing from Domain, Application or
+          Infrastructure and must stay installable by a host that has taken none of them.</p>
+          </li>
+          <li><p><strong>The dependency direction is build-gated in both directions.</strong> <code>EnforceAiLayerBoundary</code>
+          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:86-100</code>) fails the build if the
+          package ever takes a <code>ProjectReference</code> on Domain, Application, Infrastructure, API, Grpc or UI.
+          The other direction is a runtime fitness function: <code>AiDependencyIsolationTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/AiDependencyIsolationTestsBase.cs:19</code>)
+          asserts that no layer outside a <code>*.Infrastructure</code> assembly or the package itself names
+          <code>Anthropic</code>, <code>Microsoft.Extensions.AI</code>, <code>OpenAI</code> or <code>Azure.AI</code>
+          (<code>Rules/Layering/ArchitectureRules.Ai.cs:26-32</code>, rule at <code>:38</code>), and that nothing outside
+          Infrastructure references <code>MMCA.Common.AI</code> at all (<code>:63</code>, prefix at <code>:13</code>, classification at
+          <code>:87-95</code>). A prompt or a bound must not become a type Domain or Application depends on.</p>
+          </li>
+          <li><p><strong>The provider adapter is the SDK&#39;s, not ours.</strong> <code>CreateProviderChatClient</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:138</code>) constructs an
+          <code>AnthropicClient</code> and calls the SDK&#39;s own <code>AsIChatClient</code> extension with the configured model and
+          output ceiling (<code>:149-153</code>). Nothing in the framework hand-rolls a Messages API request, and a
+          provider the package does not know is supplied through the factory overload of
+          <code>AddMmcaChatClient</code> (<code>:74</code>) rather than by adding a second vendor dependency here.</p>
+          </li>
+          <li><p><strong>Governance is a pipeline of delegating clients, ordered outermost first.</strong>
+          <code>AddMmcaChatClient(IConfiguration)</code> (<code>:59</code>) builds <code>BoundedChatClient</code> -&gt;
+          <code>UsageRecordingChatClient</code> -&gt; optional <code>DistributedCache</code> -&gt; <code>OpenTelemetry</code> -&gt; <code>Logging</code> -&gt;
+          provider (registration at <code>:100-123</code>, order documented at <code>:22-36</code>). Bounds are outermost so a
+          call the configuration forbids is refused before it is logged, cached or counted. Telemetry rides
+          the same name as the meter (<code>:120-122</code>), and prompt and completion text reach traces only on a
+          host positively identified as Development (<code>:117</code>, gate at <code>:172-176</code>), which fails closed.</p>
+          </li>
+          <li><p><strong>What a call may do is configuration, and the outermost client enforces it.</strong> <code>BoundedChatClient</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Chat/BoundedChatClient.cs:51</code>) clamps <code>MaxOutputTokens</code>
+          down to <code>Ai:MaxOutputTokens</code> while leaving a smaller caller number alone (<code>:151-153</code>), runs every
+          call under a token linked to the caller&#39;s own and cancelled after <code>Ai:Timeout</code> (<code>:164-169</code>, the
+          streaming path covered for the whole stream at <code>:104-112</code>), strips tools and the tool mode while
+          <code>Ai:AllowTools</code> is false (<code>:155-159</code>), and refuses a request whose ESTIMATED input exceeds
+          <code>Ai:PerCallInputTokenBudget</code> before it reaches the provider (<code>:171-186</code>). The estimate asks the
+          pipeline for an <code>IAiTokenEstimator</code> (<code>Chat/IAiTokenEstimator.cs:14</code>) and otherwise counts four
+          characters to the token (<code>:144</code>). Caller options are cloned, never mutated (<code>:149</code>).</p>
+          </li>
+          <li><p><strong>The configuration surface is one section, validated, and the switch is the registration.</strong>
+          <code>AiSettings</code> (<code>MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:31</code>) binds <code>Ai</code> (<code>:34</code>) and
+          carries <code>Enabled</code> (<code>:48</code>), <code>Provider</code> (<code>:51</code>), <code>Model</code> (<code>:59</code>), <code>ApiKey</code> (<code>:70</code>),
+          <code>MaxOutputTokens</code> (<code>:77</code>, default 1024 at <code>:37</code>), <code>Timeout</code> (<code>:83</code>, default 30 seconds at <code>:40</code>),
+          <code>AllowTools</code> (<code>:90</code>), <code>EnableCache</code> (<code>:96</code>) and <code>PerCallInputTokenBudget</code> (<code>:104</code>). <code>Model</code> and
+          <code>ApiKey</code> are required only once <code>Enabled</code> is true (<code>:113-141</code>), so the section ships in every
+          appsettings file. When <code>Ai:Enabled</code> is false <strong>nothing is registered</strong>
+          (<code>DependencyInjection.cs:90-93</code>): a consumer gates on <code>GetService&lt;IChatClient&gt;()</code> being present,
+          not on a flag it has to read, so a feature with no key in a given environment is off by
+          construction.</p>
+          </li>
+          <li><p><strong>A prompt is a versioned contract, and the framework computes its identity.</strong> <code>PromptContract</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/PromptContract.cs:23</code>) is a record of name, version,
+          model and system prompt whose <code>Hash</code> (<code>:46</code>) is the lowercase hex SHA-256 of those four joined,
+          each with its line endings normalized to LF first (<code>:90-103</code>), so the same prompt hashes
+          identically on Windows and Linux and <code>core.autocrlf</code> cannot trip a CI gate. The hash is computed
+          on each read rather than cached, because a record&#39;s copy constructor would carry a cached hash
+          through a <code>with</code> expression and describe the prompt the copy came from (<code>:40-45</code>). <code>ToChatOptions</code>
+          (<code>:53</code>) and <code>Apply</code> (<code>:62</code>) stamp <code>mmca.prompt.name</code>, <code>mmca.prompt.version</code> and <code>mmca.prompt.hash</code>
+          onto the request (<code>:26</code>, <code>:29</code>, <code>:32</code>), which is how the identity reaches telemetry.</p>
+          </li>
+          <li><p><strong>Spend is metered once, framework-wide.</strong> <code>AiUsageMeter</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Observability/AiUsageMeter.cs:20</code>) publishes
+          <code>mmca.ai.input_tokens</code> (<code>:29</code>) and <code>mmca.ai.output_tokens</code> (<code>:32</code>) on the meter <code>MMCA.Common.AI</code>
+          (<code>:26</code>), each tagged <code>model</code>, <code>prompt_name</code>, <code>prompt_version</code> and <code>provider</code> (<code>:86-92</code>).
+          <code>UsageRecordingChatClient</code> (<code>Chat/UsageRecordingChatClient.cs:21</code>) records the provider&#39;s own
+          reported numbers rather than an estimate, on the buffered path (<code>:46-51</code>) and on the streaming
+          path from the <code>UsageContent</code> item the provider delivers (<code>:57-83</code>). The <code>Meter</code> is created through
+          <code>IMeterFactory</code> and deliberately neither retained nor disposed (<code>AiUsageMeter.cs:49-62</code>), because
+          disposing a factory-owned meter kills the instrument for every other holder of the same name. A
+          usage the provider did not report records nothing (<code>:81-84</code>): an absent number must not read as a
+          zero on a spend dashboard.</p>
+          </li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>These rules belong to the call, not to the feature.</strong> An output ceiling, a timeout, a tool gate
+          and a token counter are true of every model call anybody will ever write here. Shipping them as a
+          package makes the second feature cheaper than the first, which is the opposite of what imitation
+          produces.</li>
+          <li><strong>A default is a suggestion and a bound is not.</strong> The provider client is handed the model and the
+          ceiling as its defaults, and <code>BoundedChatClient</code> still clamps per call
+          (<code>DependencyInjection.cs:146-148</code>). A governance layer that can be talked out of its limits by a
+          caller argument is documentation.</li>
+          <li><strong>Off by absence beats off by flag.</strong> Registering nothing when <code>Ai:Enabled</code> is false means a
+          feature cannot half-run against a missing key: the dependency is either resolvable or the code path
+          does not exist. A boolean everyone has to remember to check is the version of this that fails.</li>
+          <li><strong>Hashing the prompt is what makes a model dependency evaluable at all.</strong> Recorded golden answers
+          are valid for one exact combination of name, version, model and text. Deriving the identity from
+          all four means an edit without a version bump still moves the hash, so the evaluation cannot be
+          skipped by forgetting, which is exactly the property ADR-111&#39;s <code>PromptContractTests</code> proved worth
+          having.</li>
+          <li><strong>Tools off by default is the cheap half of least privilege.</strong> Stripping tools from the request is
+          the difference between telling a model not to act and being unable to hand it the means. The rubric
+          asks for explicit, authorized, confirmable tools (<code>ArchitectureEvaluationCriteria.md:480</code>); until a
+          feature needs any, the honest answer is that none exist.</li>
+          <li><strong>One meter name across every app is what makes a dashboard portable.</strong> A per-feature meter means a
+          per-feature query, and the spend question is asked across services, not within one.</li>
+          <li><strong>Taking the official SDK for its adapter, and nothing else.</strong> The value in the <code>Anthropic</code> package
+          here is <code>AsIChatClient</code>. Anything else this package needed from a vendor would be a sign the
+          boundary is in the wrong place.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>ADC carries two implementations until it migrates.</strong> Nothing about <code>AnthropicScoringService</code>
+          changes on the day this package ships. The feature keeps its own <code>HttpClient</code>, its own constants and
+          its own meter until the migration below lands, so for one release the workspace has a governed
+          boundary and a feature that does not use it.</li>
+          <li><strong>The migration moves a dashboard query.</strong> <code>IAiScoringService</code>, the dated <code>PromptVersion</code> and the
+          golden-replay gate all survive, but the per-service meter does not: token counters move from
+          <code>MMCA.ADC.Conference.Scoring</code> to <code>MMCA.Common.AI</code> with different counter names, so the App Insights
+          spend alert and any saved query move with them. That is a deliberate one-time cost of having one
+          name instead of one per feature.</li>
+          <li><strong>The input budget is an estimate, and says so.</strong> It reads message text plus instructions only, so
+          images, tool schemas, provider-side additions and non-Latin scripts are under-counted
+          (<code>BoundedChatClient.cs:37-44</code>). It is a runaway guardrail with headroom, never a billing figure.
+          The authoritative numbers arrive after the call.</li>
+          <li><strong>A cache hit still records usage.</strong> <code>UsageRecordingChatClient</code> sits inside the optional response
+          cache, so a hit counts what the call would have cost rather than what was billed
+          (<code>DependencyInjection.cs:30-36</code>). The provider span is absent on a hit, so the two are
+          distinguishable, but a spend graph read without that context over-reports.</li>
+          <li><strong>The package governs the call, not the prompt&#39;s content.</strong> Delimiting untrusted input, escaping it,
+          redacting PII and constraining the response schema stay where ADR-111 put them: in the feature that
+          knows what its input is. This record does not turn those into framework code, and a second feature
+          still has to make those decisions for itself.</li>
+          <li><strong>One provider is built in.</strong> Anything other than Anthropic goes through the factory overload
+          (<code>DependencyInjection.cs:74</code>) and an unrecognized provider throws with that instruction
+          (<code>:154-156</code>). The pipeline is provider-agnostic; the convenience is not.</li>
+          <li><strong>An optional package nobody installs governs nothing.</strong> Store and Helpdesk adopt none of this until
+          a feature of theirs calls a model, which is the correct answer and also means the rules are proven
+          by exactly one consumer for now.</li>
+          </ul>
+          <h2 id="consequences">Consequences</h2>
+          <ul>
+          <li><strong>ADC migrates <code>AnthropicScoringService</code> to <code>IChatClient</code> in its next MMCA.Common bump.</strong> The port
+          <code>IAiScoringService</code> stays, <code>PromptVersion</code> stays and keeps being persisted with every score, and
+          the two-tier evaluation gate stays. What goes is the hand-written request, the local constants and
+          the per-service meter.</li>
+          <li><strong>Store and Helpdesk adopt nothing.</strong> Section 16 remains N/A for both until a product feature of
+          theirs calls a model.</li>
+          <li><strong>Section 16 re-scoring is expected to move ADC on &quot;observed&quot; and &quot;bounded&quot;</strong> once the migration
+          lands: token usage, model id and prompt version on every trace through one shared source, and a
+          per-call ceiling that exists as configuration rather than as a literal in a request body. The
+          criteria this record does not touch (evaluation, guardrails, retrieval) are unchanged.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="111-ai-session-scoring-governance.html">ADR-111</a> (the record this one extends: every scoring-specific
+          rule, the prompt-change protocol, the golden and live evaluation tiers, the input and output
+          guardrails and the budgeted ceiling alert stay there and are not superseded),
+          <a href="041-observability-and-telemetry.html">ADR-041</a> (the telemetry posture the meter and the
+          <code>ActivitySource</code> join, and the reason both share one name),
+          <a href="110-rubric-v2-category-realignment.html">ADR-110</a> (the rubric revision that created section 16),
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the shared rule library
+          <code>AiDependencyIsolationTestsBase</code> ships in),
+          <a href="101-common-metapackage.html">ADR-101</a> (why an optional package stays out of the metapackage),
+          <a href="070-fail-fast-configuration-contract.html">ADR-070</a> (the bind-validate-on-start contract <code>AiSettings</code>
+          follows),
+          <a href="061-runtime-secret-management.html">ADR-061</a> (the Key Vault path <code>Ai:ApiKey</code> binds from in
+          production),
+          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release the package ships in and
+          the consumer bump ADC&#39;s migration rides).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/120-governed-chat-client-boundary.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
