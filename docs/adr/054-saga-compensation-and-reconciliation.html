@@ -244,11 +244,17 @@
           (expiring stranded unpaid orders straight to <code>Cancelled</code> so the existing compensation releases their
           stock) alongside the Stripe reconciliation it already described; the <code>PaymentReconciliationSettings</code>
           path, the <code>CheckOutHandler</code> transaction range, the index, <code>appsettings.json</code>, <code>maxReplicas</code> and every
-          <code>PaymentReconciliationService</code> citation are re-anchored.</p>
+          <code>PaymentReconciliationService</code> citation are re-anchored. Revised again (2026-09-11): unpaid-order
+          expiry is now armed per order at checkout, so the sweep bullet, the &quot;no new infrastructure&quot; rationale
+          and the bounded-inconsistency trade-off record the scheduled <code>Sales.ExpireUnpaidOrder</code> deadline that
+          runs ahead of the sweep, and the sweep&#39;s expiry pass is described as the backstop it now is; every
+          <code>PaymentReconciliationService</code>, <code>CheckOutHandler</code> and <code>OrderPaymentFailedSagaHandler</code> citation is
+          re-anchored, and the two sentences describing that saga handler as an inline notification are
+          corrected. See the Revision below.</p>
           <h2 id="context">Context</h2>
           <p>Checkout spans a boundary no transaction covers. <code>CheckOutHandler</code> commits the order insert, the cart
           transition and the atomic conditional stock decrements in one local transaction
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:121-165</code>),
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:135-188</code>),
           but the money moves at Stripe and the confirmation arrives later, as a webhook, from outside the
           database. Two failure shapes follow directly:</p>
           <ul>
@@ -278,13 +284,14 @@
           <li><strong>Each handler runs in its own DI scope.</strong> Domain-event handlers are registered as singletons
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:184-189</code>), so every one
           opens its own scope through <code>IServiceScopeFactory</code> (<code>OrderCancelledSagaHandler.cs:40</code>,
-          <code>OrderPaymentFailedSagaHandler.cs:29</code>,
-          <code>.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:201,220,266</code>), and the ones that persist
+          <code>OrderPaymentFailedSagaHandler.cs:31</code>,
+          <code>.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:212,231,277</code>), and the ones that persist
           resolve their own <code>IUnitOfWork</code> inside it (<code>OrderCancelledSagaHandler.cs:41</code>,
-          <code>PaymentReconciliationService.cs:202,221,267</code>). <code>OrderPaymentFailedSagaHandler</code> is the exception that
-          shows the rule: it resolves only <code>ICustomerService</code> and <code>IEmailSender</code>
-          (<code>OrderPaymentFailedSagaHandler.cs:30-31</code>) and persists nothing, because its compensation is a
-          notification. Compensation that does write therefore commits on its own, after the originating
+          <code>PaymentReconciliationService.cs:213,232,278</code>). <code>OrderPaymentFailedSagaHandler</code> is the exception that
+          shows the rule: it resolves the internal-command scheduler and little else in its scope
+          (<code>OrderPaymentFailedSagaHandler.cs:32</code>) and writes no aggregate of its own, because both halves of
+          its compensation (the &quot;your payment did not go through&quot; notification and the re-armed payment
+          deadline) are queue rows the scheduler persists. Compensation that does write therefore commits on its own, after the originating
           save, rather than joining the transaction it is compensating for.</li>
           <li><strong>Idempotency is a persisted marker committed by the SAME <code>SaveChanges</code> as the compensating
           writes.</strong> <code>Order.InventoryRestored</code> (<code>.../Domain/Orders/Order.cs:61-67</code>) is the marker;
@@ -307,51 +314,55 @@
           the log line, not a swallow. No production handler in the four repos derives from it today: its
           only subclass is the test double in its own unit tests
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DomainEvents/SafeDomainEventHandlerTests.cs:124</code>).
-          A handler whose work is a pure side effect and must not force a redelivery therefore writes the
-          catch by hand and owns that decision alone: <code>OrderPaymentFailedSagaHandler</code> implements
-          <code>IDomainEventHandler&lt;OrderPaymentFailed&gt;</code> directly (<code>OrderPaymentFailedSagaHandler.cs:20-22</code>) and
-          swallows everything except cancellation into an Error log (<code>OrderPaymentFailedSagaHandler.cs:52-55</code>).</li>
+          A handler whose work is a pure side effect and must not force a redelivery therefore owns that
+          decision alone: <code>OrderPaymentFailedSagaHandler</code> implements
+          <code>IDomainEventHandler&lt;OrderPaymentFailed&gt;</code> directly (<code>OrderPaymentFailedSagaHandler.cs:22-24</code>) and
+          turns each of its two failure modes into a log line rather than a throw: an Error when the
+          notification could not be scheduled (<code>OrderPaymentFailedSagaHandler.cs:38-41</code>, message at
+          <code>OrderPaymentFailedSagaHandler.cs:100-103</code>) and a Warning when the payment deadline could not be
+          re-armed (<code>OrderPaymentFailedSagaHandler.cs:86-90</code>, message at
+          <code>OrderPaymentFailedSagaHandler.cs:108-111</code>).</li>
           <li><strong>Concurrent redeliveries are serialized by the <code>RowVersion</code> concurrency token.</strong> Every auditable
           entity carries one (<code>MMCA.Common/.../Entities/AuditableBaseEntity.cs:53</code>), configured as a
           concurrency token on every non-owned auditable type
           (<code>MMCA.Common/.../DbContexts/ApplicationDbContext.cs:490-521</code>, ADR-035). Two deliveries that both
           pass the marker check carry the same original token into their update: one commits, the other gets
           <code>DbUpdateConcurrencyException</code> and its outbox retry then finds the committed marker and skips.</li>
-          <li><strong>A periodic sweep drives the transitions a lost webhook would have, and expires the orders no
+          <li><strong>A periodic sweep drives the transitions a lost webhook would have, and backstops the orders no
           webhook will ever speak for.</strong> <code>PaymentReconciliationService</code>
-          (<code>.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:57</code>) is registered as a
+          (<code>.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:68</code>) is registered as a
           hosted service by the Sales module&#39;s infrastructure (<code>.../Infrastructure/DependencyInjection.cs:42</code>)
           and runs two passes per cycle against one age cutoff
-          (<code>PaymentReconciliationService.cs:108-119</code>). Both passes select the oldest matching orders, ordered,
+          (<code>PaymentReconciliationService.cs:119-130</code>). Both passes select the oldest matching orders, ordered,
           bounded and projected to ids entirely in SQL through one shared helper
-          (<code>PaymentReconciliationService.cs:196-212</code>) over a dedicated filtered index
+          (<code>PaymentReconciliationService.cs:207-223</code>) over a dedicated filtered index
           (<code>.../Persistence/EntityConfiguration/OrderConfiguration.cs:70-76</code>).
           The reconciliation pass takes orders sitting in <code>PaymentInitiated</code> with a Stripe session
-          (<code>PaymentReconciliationService.cs:136-141</code>), asks Stripe for the session&#39;s authoritative status, and
+          (<code>PaymentReconciliationService.cs:136-152</code>), asks Stripe for the session&#39;s authoritative status, and
           applies the matching transition: paid to <code>MarkAsPaid</code>, expired to <code>MarkAsPaymentFailed</code>, still open
-          to nothing (<code>PaymentReconciliationService.cs:314-336</code>).
+          to nothing (<code>PaymentReconciliationService.cs:325-343</code>).
           The expiry pass takes unpaid orders with no session to ask about, <code>PendingPayment</code> or
-          <code>PaymentFailed</code> past the same cutoff (<code>PaymentReconciliationService.cs:172-176</code>), which hold stock
+          <code>PaymentFailed</code> past the same cutoff (<code>PaymentReconciliationService.cs:178-187</code>), which hold stock
           checkout already committed and which nothing else can release. It calls no provider: it drives them
-          to <code>Cancelled</code> through <code>MarkAsCancelled</code> (<code>PaymentReconciliationService.cs:240</code>), the terminal state
+          to <code>Cancelled</code> through <code>MarkAsCancelled</code> (<code>PaymentReconciliationService.cs:251</code>), the terminal state
           <code>OrderCancelledSagaHandler</code> already listens on, so the compensation and its marker return the stock
           exactly once. <code>Cancelled</code> rather than <code>PaymentFailed</code> because <code>PaymentFailed</code> is retryable, so such
           an order keeps its stock for the whole retry window and loses it only when the window passes without
-          a retry (<code>PaymentReconciliationService.cs:41-49</code>). Expiry runs before reconciliation in the cycle so
+          a retry (<code>PaymentReconciliationService.cs:42-48</code>). Expiry runs before reconciliation in the cycle so
           an order the reconciliation pass just moved into <code>PaymentFailed</code> is not cancelled in the same cycle
-          (<code>PaymentReconciliationService.cs:113-118</code>). The sweep is configuration-gated
-          (<code>.../Payments/Reconciliation/PaymentReconciliationSettings.cs:18</code>, defaults of a 10-minute interval,
+          (<code>PaymentReconciliationService.cs:124-129</code>). The sweep is configuration-gated
+          (<code>.../Payments/Reconciliation/PaymentReconciliationSettings.cs:30</code>, defaults of a 10-minute interval,
           a 30-minute stuck age and a 50-order batch, carried in
-          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:85-90</code>).</li>
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:90-95</code>).</li>
           <li><strong>The sweep gets no private path into the aggregate, and loses races on purpose.</strong> It calls the same
           guarded transitions as the webhook handler
           (<code>.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:97,128</code>) and the
           client-initiated check (<code>.../Orders/UseCases/VerifyPayment/VerifyPaymentHandler.cs:64</code>). Both passes
           reload each order tracked in its own scope and re-check the status under the fresh load
-          (<code>PaymentReconciliationService.cs:271-281</code> for reconciliation,
-          <code>PaymentReconciliationService.cs:224-236</code> for expiry), and a <code>DbUpdateConcurrencyException</code> from a
+          (<code>PaymentReconciliationService.cs:288-292</code> for reconciliation,
+          <code>PaymentReconciliationService.cs:241-247</code> for expiry), and a <code>DbUpdateConcurrencyException</code> from a
           webhook or a customer that won the race is logged and skipped, not retried
-          (<code>PaymentReconciliationService.cs:301-305</code>, <code>PaymentReconciliationService.cs:252-257</code>).</li>
+          (<code>PaymentReconciliationService.cs:312-317</code>, <code>PaymentReconciliationService.cs:263-268</code>).</li>
           </ul>
           <p>The loop shape is deliberate and shared, and it lives in the framework rather than in the sweep.
           MMCA.Common ships it as an abstract base class, <code>PeriodicBackgroundService</code>
@@ -359,14 +370,14 @@
           whose <code>ExecuteAsync</code> owns the enablement gate, the startup delay, the per-cycle <code>try</code>/<code>catch</code> that
           never kills the loop, and every wait through <code>TimeProvider</code>
           (<code>PeriodicBackgroundService.cs:45-87</code>). <code>PaymentReconciliationService</code> derives from it
-          (<code>PaymentReconciliationService.cs:63</code>) and overrides only the three parts that are its own:
-          <code>Interval</code>, read from configuration (<code>PaymentReconciliationService.cs:70</code>); <code>IsEnabled</code>, which
+          (<code>PaymentReconciliationService.cs:74</code>) and overrides only the three parts that are its own:
+          <code>Interval</code>, read from configuration (<code>PaymentReconciliationService.cs:81</code>); <code>IsEnabled</code>, which
           distinguishes &quot;the toggle is off&quot; from &quot;Stripe is not configured&quot; before refusing to run
-          (<code>PaymentReconciliationService.cs:78-96</code>); and <code>ExecuteCycleAsync</code>, which delegates to the
+          (<code>PaymentReconciliationService.cs:89-107</code>); and <code>ExecuteCycleAsync</code>, which delegates to the
           internally visible <code>ReconcileOnceAsync</code> so one cycle is testable without the timer
-          (<code>PaymentReconciliationService.cs:99-100</code>). It is the base class&#39;s <strong>only</strong> subclass in any of the
+          (<code>PaymentReconciliationService.cs:110-111</code>). It is the base class&#39;s <strong>only</strong> subclass in any of the
           four repos, apart from the test double in <code>PeriodicBackgroundService</code>&#39;s own unit tests
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/PeriodicBackgroundServiceTests.cs:104</code>).</p>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Scheduling/PeriodicBackgroundServiceTests.cs:104</code>).</p>
           <p><strong>Adoption is one module.</strong> This pattern lives in MMCA.Store&#39;s Sales module only: the two saga
           handlers and the one reconciliation sweep above. MMCA.ADC and MMCA.Helpdesk have no compensating saga
           handler and no reconciliation sweep today. The record exists because the mechanism (compensate, mark,
@@ -392,9 +403,12 @@
           the &quot;retried via the outbox&quot; promise false. A handler that reported success had its outbox row
           marked processed, so nothing retried and the side effect was lost with only a log line to show for
           it. Opting out of redelivery is therefore an explicit, per-handler <code>catch</code>, not a base class.</li>
-          <li><strong>The sweep needs no new infrastructure.</strong> The authoritative answer already lives at the provider,
-          so a bounded, indexed poll plus the existing guarded transitions is enough: no timer message, no
-          scheduler, no saga-timeout store.</li>
+          <li><strong>The Stripe pass needs no new infrastructure; expiry has earned some.</strong> For an order stuck in
+          <code>PaymentInitiated</code> the authoritative answer already lives at the provider, so a bounded, indexed
+          poll plus the existing guarded transitions is enough there: no timer message, no saga-timeout store.
+          Expiry is a different question, because nothing outside the database has to be asked, and it is now
+          armed per order on ADR-114&#39;s internal-command queue rather than waited for by a scan (see the
+          Revision below). The sweep keeps running both passes, one as the primary path and one as a backstop.</li>
           <li><strong>Reusing the domain transitions keeps one state machine.</strong> The sweep cannot reach a state the
           webhook could not, because it goes through the same <code>Result</code>-returning methods (ADR-013).</li>
           </ul>
@@ -403,8 +417,9 @@
           <li><strong>Inconsistency is bounded, not eliminated.</strong> Between the cancellation commit and the compensation
           commit, stock is held against a cancelled order. Between a dropped webhook and the sweep, an order
           sits in <code>PaymentInitiated</code> with stock held for up to the stuck age plus one poll interval (30 plus
-          10 minutes at the shipped defaults), and an order that never reaches Stripe at all holds its stock
-          for the same window before the expiry pass cancels it. That window is the price of not having a
+          10 minutes at the shipped defaults), and an order that never reaches Stripe at all is cancelled by
+          its own scheduled deadline as the window closes, or by the expiry pass up to one poll interval
+          later when that deadline was never written. That window is the price of not having a
           distributed transaction.</li>
           <li><strong>Compensation is best-effort per line, and names what it could not restore.</strong> <code>RestoreInventory</code>
           skips an order line whose <code>InventoryItem</code> row is missing
@@ -438,6 +453,66 @@
           inbox dedups broker messages between services, not in-process handler re-runs. A second compensating
           action means a second persisted marker or a naturally idempotent operation, decided by the author.</li>
           </ul>
+          <h2 id="revision-2026-09-11-the-unpaid-order-deadline-moves-onto-the-order-and-the-sweep-becomes-its-backstop">Revision (2026-09-11): the unpaid-order deadline moves onto the order, and the sweep becomes its backstop</h2>
+          <p>Expiring an unpaid order is no longer something a scan notices. Every order now arms its own
+          deadline, and the sweep&#39;s expiry pass stays exactly where it was, underneath.</p>
+          <p><code>CheckOutHandler</code> schedules one <code>ExpireUnpaidOrderInternalCommand(orderId)</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/ExpireUnpaidOrderInternalCommand.cs:23-24</code>)
+          to run at <code>now</code> plus <code>UnpaidOrderExpirySettings.Minutes</code>, through <code>IInternalCommandScheduler</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/InternalCommands/IInternalCommandScheduler.cs:16</code>,
+          ADR-114&#39;s queue), from inside the same transaction that inserts the order and commits the stock
+          (<code>.../ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:178-184,226-229</code>). Inside, not after:
+          &quot;there is an order&quot; and &quot;there is a deadline for it&quot; have to be one fact, or a crash between two
+          commits leaves stock held with nothing scheduled to release it. The arming happens after the save
+          within the delegate, because the order id is store-generated, and it is followed by a second
+          <code>SaveChangesAsync</code> (<code>CheckOutHandler.cs:237-240</code>), because <code>ExecuteInTransactionAsync</code> commits
+          without flushing pending changes first: the scheduler only enrolled its row on the enlisted context,
+          so without that save the deadline would be discarded at commit. A scheduling failure is a Warning and
+          nothing further (<code>CheckOutHandler.cs:231-235</code>, message at <code>CheckOutHandler.cs:205-208</code>); it never
+          fails the checkout, because the deadline is an optimization over a sweep that still runs, and losing
+          a completed checkout over an unwritten queue row would trade a slow stock release for a lost sale.</p>
+          <p><code>OrderPaymentFailedSagaHandler</code> re-arms the same command from now after every failed payment attempt
+          (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:67-93</code>, the schedule at <code>:81-84</code>), so a customer
+          whose card was declined gets the whole window again rather than the remainder of the old one. The
+          earlier row armed at checkout stays in the queue and runs as a no-op, because the due instant is
+          re-derived rather than trusted.</p>
+          <p><code>ExpireUnpaidOrderInternalCommandHandler</code> is where that re-derivation lives
+          (<code>.../Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs:41-98</code>). It reloads the
+          order and returns success untouched if the order is gone or has left <code>PendingPayment</code>/<code>PaymentFailed</code>
+          (<code>:55-65</code>), then recomputes the deadline as <code>(LastModifiedOn ?? CreatedOn)</code> plus <code>Minutes</code> and does
+          nothing if that instant is still in the future (<code>:67-74</code>). That is the sweep&#39;s own rule applied to a
+          single order, and it is why the payload is the order id alone: a row armed half an hour ago says
+          nothing about what the order is doing now, so what is stored decides. When the order is genuinely due
+          the handler calls the same guarded <code>MarkAsCancelled</code> the sweep calls (<code>:78-83</code>), and
+          <code>OrderCancelledSagaHandler</code> returns the stock through the marker this record already describes. A
+          concurrency conflict on the save is a lost race to a webhook that moved the order between the load
+          and the save, so the row completes successfully rather than retrying into the same conflict
+          (<code>:85-93</code>), and the provider exception is classified through <code>IConcurrencyConflictDetector</code> because
+          the Application layer references no data provider.</p>
+          <p>Both paths are configuration-gated and are meant to agree. <code>UnpaidOrderExpirySettings</code>
+          (<code>.../Orders/UnpaidOrderExpirySettings.cs:25-43</code>, <code>Enabled</code> defaulting to true and <code>Minutes</code> to 30)
+          is bound and validated on start beside the sweep&#39;s own settings
+          (<code>.../MMCA.Store.Sales.API/SalesModule.cs:59-67</code>), and <code>PaymentReconciliation:StuckAgeMinutes</code> carries
+          the same 30 (<code>PaymentReconciliationSettings.cs:48</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:86-95</code>). Turning <code>Enabled</code> off
+          falls back to the sweep alone, which is slower and still correct.</p>
+          <p><strong>The sweep stays, and its expiry pass is unchanged.</strong> A deadline is a row, and a row can fail to be
+          written (a scheduling failure at checkout is logged, never fatal), can be dead-lettered by the
+          internal-command processor, or can simply never have existed for an order created before the
+          mechanism did. Those cases are rare, which is precisely the argument for a backstop rather than
+          against one: one bounded, indexed query per cycle covers all three without anyone having to decide in
+          advance which one occurred. The Stripe half of the sweep is untouched and could not become a deadline
+          anyway, because its work is a live provider call whose answer is only knowable at the moment it is
+          made, and the failure it exists for (a prolonged webhook outage) strands a backlog, which is the
+          shape batching is right for (<code>PaymentReconciliationService.cs:50-59</code>). Both paths converge on the
+          same guarded transition and the same <code>OrderCancelled</code> compensation, so whichever arrives first wins
+          and the other finds nothing to do.</p>
+          <p><strong>What the deadline buys is timing, and a quieter sweep.</strong> An unpaid order is now cancelled as its
+          window closes rather than up to one poll interval later (10 minutes at the shipped defaults), which
+          is the difference between holding a basket for 30 minutes and holding it for 30 minutes give or take
+          the next cycle. The common case also stops doing work: the expiry pass still runs on its interval,
+          but on a healthy system it now selects nothing, because the orders it used to collect have already
+          cancelled themselves.</p>
           <h2 id="related">Related</h2>
           <p>ADR-003 (the outbox delivery and retry this leans on for compensation redelivery; this record says
           what the redelivered handler must do), ADR-006 (which accepts &quot;no cross-database transaction&quot; as a
@@ -446,8 +521,9 @@
           ADR-035 (the <code>RowVersion</code> token that serializes concurrent compensations and lets the sweep lose a
           race to a webhook), ADR-014 (the command pipeline whose commit compensation runs after), ADR-052
           (in-process background work, the hosted-service family this sweep belongs to, with a fixed-interval
-          poll instead of a queue drain), ADR-013 (the <code>Result</code>-returning guarded transitions the sweep reuses
-          rather than bypassing), <a href="086-process-manager-deferred.html">ADR-086</a> (the orchestrated alternative to
+          poll instead of a queue drain), ADR-013 (the <code>Result</code>-returning guarded transitions both the sweep and the
+          per-order deadline reuse rather than bypassing), ADR-114 (the durable internal-command queue the
+          per-order unpaid-order deadline is scheduled on), <a href="086-process-manager-deferred.html">ADR-086</a> (the orchestrated alternative to
           the choreography decided here: deferred, with the shape it would take and the trigger that would build
           it, and with this record&#39;s reconciliation sweep remaining underneath it).</p>
           
@@ -465,6 +541,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-11-the-unpaid-order-deadline-moves-onto-the-order-and-the-sweep-becomes-its-backstop">Revision (2026-09-11): the unpaid-order deadline moves onto the order, and the sweep becomes its backstop</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

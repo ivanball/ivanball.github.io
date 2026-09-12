@@ -235,6 +235,11 @@
           last Trade-offs entry is narrowed accordingly. See the Revision (2026-08-18) at the end). Revised
           2026-08-31 (the targeting identifier is the JWT <code>sub</code> claim read through <code>FindUserIdValue()</code>, not a
           <code>user_id</code> claim; the Revision section is corrected accordingly).</p>
+          <p>Revised 2026-09-11 (the flag-debt trade-off is closed on the framework side: <code>[FeatureFlag]</code> declares a
+          flag&#39;s lifetime, removal date and owner, <code>FeatureFlagRegistry</code> reports a host&#39;s own inventory, and two
+          fitness rules behind <code>FeatureFlagLifecycleTestsBase</code> fail the build for an undeclared flag or a
+          temporary one past its date; adoption is per repo, like every other fitness base. See the Revision
+          (2026-09-11) at the end.)</p>
           <h2 id="context">Context</h2>
           <p>The apps need to decouple <em>release</em> from <em>deploy</em>: ship code dark, flip a kill switch, or roll a feature
           out to a percentage of users without a redeploy. A flag has to be enforceable at <strong>two</strong> different points
@@ -282,8 +287,10 @@
           <li><strong>The two enforcement points must agree.</strong> A flag gated on the controller but not the handler (or vice
           versa) is a half-protected feature; no fitness rule asserts both are wired, so coherence is a
           convention/audit concern.</li>
-          <li><strong>Flag debt.</strong> Every flag is a branch that must eventually be removed; the framework provides no expiry
-          or staleness check.</li>
+          <li><strong>Flag debt.</strong> Every flag is a branch that must eventually be removed. The framework now ships the
+          expiry check it used to lack (<code>[FeatureFlag]</code> plus two fitness rules; see the Revision (2026-09-11)),
+          but the gate is adopted per repo: a repo that has not subclassed <code>FeatureFlagLifecycleTestsBase</code>
+          still carries its flag debt uncounted.</li>
           <li><strong>Per-service configuration.</strong> The same flag name must be present in each service that enforces it. A
           missing key resolves to <strong>disabled</strong> (<code>IsEnabledAsync</code>&#39;s default): fail-safe for a kill switch, but it
           will silently hide a feature you meant to ship if the key is forgotten.</li>
@@ -329,6 +336,44 @@
           permission guards it), ADR-013 (the <code>Result</code> / <code>Error</code> and ProblemDetails edge the disabled responses
           reuse), ADR-019 / ADR-020 / ADR-021 / ADR-026 (the other opt-in, audit-the-inventory capabilities),
           ADR-020 (the role vocabulary the targeting accessor reads as <code>Groups</code>).</p>
+          <h2 id="revision-2026-09-11">Revision (2026-09-11)</h2>
+          <p><strong>The expiry gap the Trade-offs recorded is closed.</strong> &quot;The framework provides no expiry or staleness
+          check&quot; was true from this record&#39;s acceptance until now. What it cost was never the flag itself but
+          the branch behind it: once a rollout finishes, the losing branch is unreachable code that no test, no
+          coverage report and no reviewer is prompted to notice.</p>
+          <p><strong>A flag declares its lifecycle on the constant.</strong> <code>[FeatureFlag]</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/FeatureFlags/FeatureFlagAttribute.cs:32</code>) takes a
+          <code>FeatureFlagLifetime</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/FeatureFlags/FeatureFlagLifetime.cs:9</code>,
+          <code>Permanent</code> at <code>:15</code>, <code>Temporary</code> at <code>:21</code>) and carries an optional <code>Owner</code>
+          (<code>FeatureFlagAttribute.cs:52</code>) and a <code>RemoveBy</code> written as ISO <code>yyyy-MM-dd</code> (<code>:46</code>, the format constant
+          at <code>:35</code>, the parser at <code>:60</code>). <code>RemoveBy</code> is required on a temporary flag and forbidden on a permanent
+          one, which is what keeps a removal date meaningful rather than decorative.</p>
+          <p><strong>The inventory is readable at runtime.</strong> <code>FeatureFlagRegistry</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/FeatureFlags/FeatureFlagRegistry.cs:35</code>) describes the
+          <code>public const string</code> fields of every static <code>*Features</code> class in an assembly (<code>:46</code>, <code>:64</code>, the class
+          test at <code>:77</code>, the field selection at <code>:91</code>) as <code>FeatureFlagDescriptor</code> records (<code>:17</code>) carrying field
+          name, flag name, lifetime, removal date and owner, so an administration surface reporting a host&#39;s
+          flags does not have to re-derive the <code>*Features</code> convention for itself.</p>
+          <p><strong>Two fitness rules make it a build gate.</strong> <code>ArchitectureRules.FeatureFlagsDeclareLifetime</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.FeatureFlags.cs:28</code>)
+          fails for a constant with no attribute (<code>:42</code>), for a permanent flag that sets <code>RemoveBy</code> (<code>:46</code>), and
+          for a temporary flag whose date is missing or unparseable (<code>:51</code>).
+          <code>TemporaryFeatureFlagsAreNotPastRemoveBy</code> (<code>:70</code>) fails for any temporary flag whose date has passed
+          (<code>:77</code>), naming the flag, the date and the owner. The second rule is the dead-toggle detector: the red
+          build is what tells you the rollout finished and the branch it chose between can go. Both are exposed
+          as facts on <code>FeatureFlagLifecycleTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/FeatureFlagLifecycleTestsBase.cs:10</code>,
+          the two facts at <code>:20</code>-<code>:25</code>, the architecture map at <code>:12</code>), whose <code>Today</code> is a <code>protected virtual</code>
+          property (<code>:18</code>) so a repo can pin the judgement date rather than let the build&#39;s clock decide when a
+          toggle goes red.</p>
+          <p><strong>Adoption is per repo, and the framework annotates its own flags.</strong> Like every fitness base
+          (<a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a>), the gate exists only where a repo subclasses it,
+          so this closes the trade-off for an adopting repo and leaves it open for one that changes nothing; it
+          is additive, and a consumer that adopts none of it keeps building exactly as before. The framework&#39;s
+          own two flags are annotated <code>Permanent</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Notifications/NotificationFeatures.cs:11</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/PrivacyFeatures.cs:11</code>). The fix for a flag that
+          goes red is to delete the flag and the branch it no longer chooses between, not to push the date out.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -346,6 +391,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             </ul>
           </nav>
         </aside>

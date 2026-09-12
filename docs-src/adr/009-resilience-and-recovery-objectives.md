@@ -7,6 +7,11 @@ outbox's broker publish, which gains a circuit breaker. The database posture is 
 unchanged and a per-query database breaker is recorded as rejected. See the Revision (2026-08-18)
 below.
 
+Revised 2026-09-11 (two amendments: the standard handler's runtime behaviour is observable for the
+first time, through the `Polly` meter the Aspire defaults now subscribe
+([ADR-041](041-observability-and-telemetry.md)); and `Smtp:TimeoutSeconds` bounds the one framework
+outbound client that is not an `HttpClient`. See the Revision (2026-09-11) at the end.)
+
 ## Context
 The framework already supplies the *mechanisms* for surviving partial failure: a standard Polly
 resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -106,3 +111,51 @@ restore, and graceful degradation is still the default posture. The first point 
 is the Trade-offs entry above about test coverage: the breaker's parameters are asserted nowhere, so
 like the HTTP handler it is registration and review that carry them, and the broker breaker has no
 equivalent of the gRPC fault-injection test.
+
+## Revision (2026-09-11)
+Two amendments, both about parts of this posture the record could not previously see or reach.
+
+**(a) The standard handler is now observable.** Decision point 1 makes the resilience handler an
+invariant, and the Trade-offs note that the named gate asserts registration rather than runtime
+behaviour. Until now the runtime behaviour was also invisible in production: the handler is wired for
+every `HttpClient` and every gRPC typed client
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:83`, `:93`-`:98`, values from
+`HttpResilienceDefaults`), but the meter Polly emits through was never subscribed, so a retry storm or
+an open circuit left the process as nothing but latency. `AddServiceDefaults` now subscribes the
+`Polly` meter (`Extensions.cs:596`, the literal at `:49`), which makes
+`resilience.polly.strategy.events` (`:57`) the operational signal for this record's Decision:
+`OnRetry`, `OnCircuitOpened`, `OnCircuitClosed` and `OnTimeout`, tagged by pipeline and strategy.
+Polly's two duration histograms stay dropped unless a host sets
+`Telemetry:EnablePollyDurationMetrics=true` (`:598`-`:610`), because they re-measure what the
+HttpClient request duration already reports.
+[ADR-041](041-observability-and-telemetry.md) carries the detail; what belongs here is that
+"resilience is a framework invariant" is now checkable at runtime and not only at registration.
+
+**(b) The one outbound client the handler does not cover is now bounded.** `SmtpEmailSender` builds a
+`System.Net.Mail.SmtpClient` per send. It is not an `HttpClient`, so it never saw the standard handler
+and it sat at the .NET default timeout of 100 seconds, which is longer than any caller in front of it
+is willing to wait: a relay that accepts the TCP connection and then stops answering held a request
+thread for the full 100 seconds, one per message in a notification burst. `SmtpSettings.TimeoutSeconds`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Mail/SmtpSettings.cs:59`, `[Range(1, 600)]` at
+`:58`, default 30) is applied to the per-send client
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Mail/SmtpEmailSender.cs:107`). It is validated
+with the rest of the `Smtp` section at startup
+([ADR-070](070-fail-fast-configuration-contract.md)), so a zero or a typo is a startup failure rather
+than either an instant abort or an unbounded wait. This is a bound, not a retry policy: redelivery
+stays with the outbox and the notification pipeline.
+
+**The consumer-side companion: one retry owner per outbound dependency.** The same reasoning reaches an
+SDK-owned client in a consuming app, where the SDK ships its own retry loop and the consumer has
+already built one. MMCA.Store's Stripe integration is the live example. `StripePaymentService` builds
+an explicit Polly pipeline, a retry with exponential backoff over transient `StripeException` and raw
+`HttpRequestException`, then a circuit breaker
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:69`-`:95`,
+attempts and delay from
+`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeSettings.cs:40`,
+`:44`), while the SDK client underneath is constructed with nothing but the secret key
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeClientFactory.cs:20`),
+which leaves Stripe.net's own network retries and its own timeout at their defaults underneath a
+pipeline that already retries. The intended shape is one retry owner: zero SDK retries and an explicit
+SDK timeout, with Store's pipeline doing the retrying. That configuration is **not** in MMCA.Store's
+`main` as this revision is written; the framework half, the meter and the SMTP bound, is what this
+record can currently claim.

@@ -235,6 +235,10 @@
           outbox&#39;s broker publish, which gains a circuit breaker. The database posture is deliberately
           unchanged and a per-query database breaker is recorded as rejected. See the Revision (2026-08-18)
           below.</p>
+          <p>Revised 2026-09-11 (two amendments: the standard handler&#39;s runtime behaviour is observable for the
+          first time, through the <code>Polly</code> meter the Aspire defaults now subscribe
+          (<a href="041-observability-and-telemetry.html">ADR-041</a>); and <code>Smtp:TimeoutSeconds</code> bounds the one framework
+          outbound client that is not an <code>HttpClient</code>. See the Revision (2026-09-11) at the end.)</p>
           <h2 id="context">Context</h2>
           <p>The framework already supplies the <em>mechanisms</em> for surviving partial failure: a standard Polly
           resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -354,6 +358,50 @@
           is the Trade-offs entry above about test coverage: the breaker&#39;s parameters are asserted nowhere, so
           like the HTTP handler it is registration and review that carry them, and the broker breaker has no
           equivalent of the gRPC fault-injection test.</p>
+          <h2 id="revision-2026-09-11">Revision (2026-09-11)</h2>
+          <p>Two amendments, both about parts of this posture the record could not previously see or reach.</p>
+          <p><strong>(a) The standard handler is now observable.</strong> Decision point 1 makes the resilience handler an
+          invariant, and the Trade-offs note that the named gate asserts registration rather than runtime
+          behaviour. Until now the runtime behaviour was also invisible in production: the handler is wired for
+          every <code>HttpClient</code> and every gRPC typed client
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:83</code>, <code>:93</code>-<code>:98</code>, values from
+          <code>HttpResilienceDefaults</code>), but the meter Polly emits through was never subscribed, so a retry storm or
+          an open circuit left the process as nothing but latency. <code>AddServiceDefaults</code> now subscribes the
+          <code>Polly</code> meter (<code>Extensions.cs:596</code>, the literal at <code>:49</code>), which makes
+          <code>resilience.polly.strategy.events</code> (<code>:57</code>) the operational signal for this record&#39;s Decision:
+          <code>OnRetry</code>, <code>OnCircuitOpened</code>, <code>OnCircuitClosed</code> and <code>OnTimeout</code>, tagged by pipeline and strategy.
+          Polly&#39;s two duration histograms stay dropped unless a host sets
+          <code>Telemetry:EnablePollyDurationMetrics=true</code> (<code>:598</code>-<code>:610</code>), because they re-measure what the
+          HttpClient request duration already reports.
+          <a href="041-observability-and-telemetry.html">ADR-041</a> carries the detail; what belongs here is that
+          &quot;resilience is a framework invariant&quot; is now checkable at runtime and not only at registration.</p>
+          <p><strong>(b) The one outbound client the handler does not cover is now bounded.</strong> <code>SmtpEmailSender</code> builds a
+          <code>System.Net.Mail.SmtpClient</code> per send. It is not an <code>HttpClient</code>, so it never saw the standard handler
+          and it sat at the .NET default timeout of 100 seconds, which is longer than any caller in front of it
+          is willing to wait: a relay that accepts the TCP connection and then stops answering held a request
+          thread for the full 100 seconds, one per message in a notification burst. <code>SmtpSettings.TimeoutSeconds</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Mail/SmtpSettings.cs:59</code>, <code>[Range(1, 600)]</code> at
+          <code>:58</code>, default 30) is applied to the per-send client
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Mail/SmtpEmailSender.cs:107</code>). It is validated
+          with the rest of the <code>Smtp</code> section at startup
+          (<a href="070-fail-fast-configuration-contract.html">ADR-070</a>), so a zero or a typo is a startup failure rather
+          than either an instant abort or an unbounded wait. This is a bound, not a retry policy: redelivery
+          stays with the outbox and the notification pipeline.</p>
+          <p><strong>The consumer-side companion: one retry owner per outbound dependency.</strong> The same reasoning reaches an
+          SDK-owned client in a consuming app, where the SDK ships its own retry loop and the consumer has
+          already built one. MMCA.Store&#39;s Stripe integration is the live example. <code>StripePaymentService</code> builds
+          an explicit Polly pipeline, a retry with exponential backoff over transient <code>StripeException</code> and raw
+          <code>HttpRequestException</code>, then a circuit breaker
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripePaymentService.cs:69</code>-<code>:95</code>,
+          attempts and delay from
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeSettings.cs:40</code>,
+          <code>:44</code>), while the SDK client underneath is constructed with nothing but the secret key
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeClientFactory.cs:20</code>),
+          which leaves Stripe.net&#39;s own network retries and its own timeout at their defaults underneath a
+          pipeline that already retries. The intended shape is one retry owner: zero SDK retries and an explicit
+          SDK timeout, with Store&#39;s pipeline doing the retrying. That configuration is <strong>not</strong> in MMCA.Store&#39;s
+          <code>main</code> as this revision is written; the framework half, the meter and the SMTP bound, is what this
+          record can currently claim.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -370,6 +418,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
+            <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             </ul>
           </nav>
         </aside>

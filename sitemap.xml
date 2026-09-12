@@ -37,7 +37,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-09-11</lastmod>
+    <lastmod>2026-09-12</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -52,7 +52,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html</loc>
-    <lastmod>2026-09-10</lastmod>
+    <lastmod>2026-09-12</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -82,7 +82,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-12</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -107,7 +107,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html</loc>
-    <lastmod>2026-09-07</lastmod>
+    <lastmod>2026-09-12</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -142,7 +142,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html</loc>
-    <lastmod>2026-09-07</lastmod>
+    <lastmod>2026-09-12</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -192,7 +192,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/031-feature-flag-management.html</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-09-12</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -242,7 +242,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html</loc>
-    <lastmod>2026-09-11</lastmod>
+    <lastmod>2026-09-12</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -307,7 +307,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html</loc>
-    <lastmod>2026-09-11</lastmod>
+    <lastmod>2026-09-12</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -402,7 +402,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html</loc>
-    <lastmod>2026-09-04</lastmod>
+    <lastmod>2026-09-12</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -467,7 +467,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/086-process-manager-deferred.html</loc>
-    <lastmod>2026-08-31</lastmod>
+    <lastmod>2026-09-12</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

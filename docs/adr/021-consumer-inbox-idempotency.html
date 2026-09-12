@@ -243,7 +243,11 @@
           and resolves from the transport the same way <code>EnableInbox</code> does here, so the two settings now read
           identically. Nothing about the inbox contract changes.
           Revised 2026-09-07 (queue and endpoint names are prefixed per application by default, so a
-          consumer either pins its pre-upgrade prefix or drains its old queues on cutover).</p>
+          consumer either pins its pre-upgrade prefix or drains its old queues on cutover).
+          Revised 2026-09-11 (a broker-delivered event now restores the publisher&#39;s tenant, principal and
+          correlation id from <code>MMCA-*</code> message headers <strong>before</strong> the inbox is touched, because the inbox store
+          resolves its context through the same scope; a message carrying no headers leaves the consumer&#39;s
+          defaults untouched; see the Revision (2026-09-11) at the end).</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 makes integration-event delivery <strong>at-least-once</strong>: the outbox guarantees a published event
           is not lost, and the MassTransit broker redelivers on consumer failure. At-least-once means a
@@ -499,6 +503,50 @@
           consumer&#39;s own database, the unique index is the concurrency guard, retention rides
           <code>OutboxCleanupService</code>, and handlers must stay idempotent: the crash window is closed only for a
           handler whose own save carried the row.</p>
+          <h2 id="revision-2026-09-11">Revision (2026-09-11)</h2>
+          <p>Dedup semantics are unchanged: same <code>MessageId</code> key, same <code>TryBeginAsync</code> to handlers to
+          <code>CompleteAsync</code> path, same staged row, same unique index as the race guard. What changed is what the
+          scope looks like while that path runs, and the answer used to be &quot;nothing&quot;: a broker-delivered event
+          was consumed with no principal, no tenant and no correlation id, so the consumer half of the hop lost
+          the same context the producer half did (see <a href="003-outbox-dual-dispatch.html">ADR-003</a>&#39;s Revision
+          (2026-09-11)).</p>
+          <p><strong>The publisher stamps four headers.</strong> <code>BrokerMessageBus</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerMessageBus.cs:43</code>) captures the
+          ambient context once per publish (<code>:54</code>, capture at <code>:88</code>) and writes <code>MMCA-Tenant-Id</code> (<code>:94</code>),
+          <code>MMCA-User-Id</code> (<code>:100</code>), <code>MMCA-User-Roles</code> (<code>:107</code>) and <code>MMCA-Correlation-Id</code> (<code>:112</code>) onto the send
+          context (<code>:123</code>). The names are constants on the public <code>MessageHeaders</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Messaging/MessageHeaders.cs:25</code>, <code>:28</code>, <code>:31</code>, <code>:34</code>), so
+          a consumer outside this framework can read them without re-deriving the strings. Only values that are
+          present are written.</p>
+          <p><strong>The consumer restores them before the inbox check, not after.</strong> <code>IntegrationEventConsumer&lt;TEvent&gt;</code>
+          calls <code>ConsumerOriginRestore.Apply</code> as its first act
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:62</code>-<code>:64</code>,
+          the reason stated at <code>:58</code>), ahead of the inbox name resolution at <code>:70</code> and the <code>TryBeginAsync</code> call
+          at <code>:81</code>. The order is load-bearing rather than cosmetic: under database-per-tenant
+          (<a href="073-multi-tenancy-model.html">ADR-073</a>) the inbox store resolves its context through the same scope,
+          so a tenant restored after the inbox check would have the dedup row read and written in the wrong
+          database. <code>UpcastingIntegrationEventConsumer&lt;TEvent&gt;</code> does the same in the same position
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/UpcastingIntegrationEventConsumer.cs:67</code>,
+          ahead of its own inbox path at <code>:75</code>), so a message arriving on a retired contract
+          (<a href="090-event-upcaster-registration.html">ADR-090</a>) is restored exactly like one arriving on the current
+          contract.</p>
+          <p><strong>What the restore does.</strong> <code>ConsumerOriginRestore.Apply</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/ConsumerOriginRestore.cs:34</code>)
+          reads the four headers and hands them to the shared <code>AmbientOrigin.Restore</code> (<code>:49</code>-<code>:55</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:127</code>), which rebuilds the
+          captured principal onto the scope and sets the correlation id, stamping the identity with the
+          authentication type <code>IntegrationEvent</code> (<code>IntegrationEventConsumer.cs:49</code>). The user id is transported
+          as text and parsed back rather than read as a typed header (<code>ConsumerOriginRestore.cs:41</code>-<code>:47</code>),
+          because a broker is free to widen an integer header and a parse of the canonical form is the one
+          reading that behaves the same on every transport; a malformed value yields no identity rather than
+          failing the consume. The tenant is set only when the scope has not already resolved a different one
+          (<code>AmbientOrigin.cs:137</code>-<code>:143</code>), the same single-valued-scope rule the outbox restore obeys.</p>
+          <p><strong>An older publisher keeps working.</strong> A message carrying none of these headers leaves the consuming
+          scope&#39;s defaults untouched, so an event published by a service still on an earlier package is
+          consumed exactly as it is today. On the type level both consumer constructors gained one optional
+          <code>IServiceProvider</code> parameter (<code>IntegrationEventConsumer.cs:42</code>); omitting it restores nothing, which
+          is the pre-upgrade behaviour, and the container fills it in for a host that registers the consumers
+          the normal way.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -518,6 +566,7 @@
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-08-26">Revision (2026-08-26)</a></li>
+            <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             </ul>
           </nav>
         </aside>

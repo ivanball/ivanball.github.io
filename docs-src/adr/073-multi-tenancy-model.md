@@ -25,6 +25,12 @@ Revised 2026-08-31: the named-filter exclusion now runs at **eight** call sites 
 `DependencyInjection` and `DesignTimeDbContextHelper`, and the outbox per-tenant scope and claim-lease
 anchors were all re-anchored to current source.
 
+Revised 2026-09-11: the tenant now crosses the broker. This record never listed the gap, but a
+consumer service could not resolve the tenant of an integration event: the outbox row and the broker
+message both arrived untenanted, so the delivery ran in the system context. The row now stores the
+tenant it was written under and the consumer restores `MMCA-Tenant-Id` before anything reads the
+scope; see the Revision (2026-09-11) at the end.
+
 ## Context
 MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
 **source name** (every entity resolves to a `DataSourceKey(Engine, Name)`, each module or service owning
@@ -256,3 +262,48 @@ key, invalidation prefix, and stripe lock), [ADR-048](048-primitive-identifier-t
 read-side bypass), [ADR-030](030-startup-sole-migrator.md) (who applies migrations, now once per tenant per
 overridden source), [ADR-070](070-fail-fast-configuration-contract.md) (the validating settings chain
 `TenancySettings` binds through, extended with a check that every override names a known source).
+
+## Revision (2026-09-11)
+**The gap this closes was never written down here.** Everything above is about the tenant inside a
+request: the middleware resolves it, the named filter composes on it, the write interceptor stamps and
+refuses on it, the outbox is drained once per source and tenant pair, and the caching decorators
+prefix on it. What no section covered is an event leaving one service and arriving in another. The
+outbox row carried no tenant and the broker message carried no tenant, so the delivery ran in the
+system context, which this record's own Trade-offs already name as "a privileged mode with no second
+gate": on a shared-schema host that delivery read across tenants, and on a database-per-tenant host it
+had no way to pick a database at all.
+
+**The tenant is now part of both hops, through one helper.** On the producer side the scoped context
+factory captures `ITenantContext.TenantId` into the row's origin
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:149`-`:153`),
+`OutboxMessage.TenantId` stores it
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:93`, mapped
+as `varchar(64)` at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:652`),
+and the processor restores it before the row is dispatched
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:607`-`:613`).
+Across the broker, `BrokerMessageBus` stamps `MMCA-Tenant-Id`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerMessageBus.cs:94`, the constant at
+`MMCA.Common/Source/Core/MMCA.Common.Shared/Messaging/MessageHeaders.cs:25`) and the consuming side
+reads it back
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/ConsumerOriginRestore.cs:53`)
+before the inbox is touched
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:62`-`:64`),
+which matters here specifically: under database-per-tenant the inbox store resolves its context
+through the same scope, so restoring the tenant afterwards would put the dedup row in the wrong
+database ([ADR-021](021-consumer-inbox-idempotency.md)).
+
+**The restore respects the one-scope-one-tenant rule this record set.** `AmbientOrigin.Restore` sets
+the tenant only when the scope has not already resolved a different one
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:137`-`:143`), and it is
+restored first, before any repository or context is resolved on that scope, because the tenant routes
+the context factory and every query filter afterwards reads from it (`:135`-`:136`). A host running
+database per tenant is unaffected by the guard, since its work is already one scope per tenant.
+
+**What is still on discipline.** A message published by a service that has not upgraded carries no
+tenant header, and a row written before the migration reads back as null, so those deliveries run
+untenanted in the system context, exactly as every delivery did before. Nothing fails a build or a
+startup to say that one publisher in the mesh is still behind: the signal is an absent tenant, which
+looks the same as a legitimately system-raised event. Adoption is also unchanged, and it is why this
+closes a hole rather than fixing an outage: ADC and Store are single-tenant, and Helpdesk remains the
+reference adopter.
