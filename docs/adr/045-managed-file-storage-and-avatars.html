@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 122 ADRs</summary>
+        <summary>All 123 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -222,6 +222,7 @@
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
+        <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
           </ol>
         </nav>
       </details>
@@ -234,7 +235,10 @@
           by two new framework extension points. The framework legs are implemented; each consumer provisions its
           own storage account and wires the upload endpoints.
           Revised 2026-09-07 (a decoded-pixel and dimension ceiling is checked from the image header before
-          any frame buffer is allocated, beside the existing compressed-size cap).</p>
+          any frame buffer is allocated, beside the existing compressed-size cap).
+          Revised 2026-09-12 (the extension points here carry DOCUMENT uploads as well as images; the
+          avatar-only scope statement below is superseded by
+          <a href="123-speaker-session-assets.html">ADR-123</a>).</p>
           <h2 id="context">Context</h2>
           <p>The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
           BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -294,6 +298,38 @@
           one because a long thin image can stay under the area limit and still be pathological for the
           resampler (<code>:30</code>). The decoded frame is re-checked after decoding, so a header that under-reports
           does not get through.</p>
+          <h2 id="revision-2026-09-12">Revision (2026-09-12)</h2>
+          <p>This record scoped managed uploads to avatars and said so: &quot;no other managed uploads exist&quot;. That
+          statement is superseded by <a href="123-speaker-session-assets.html">ADR-123</a>, which publishes speaker session
+          materials (decks, handouts, archives, links) through the same <code>IFileStorageService</code>. The framework
+          extension points here grew three pieces to carry it, and every one of them is document-shaped rather
+          than avatar-shaped:</p>
+          <ul>
+          <li><strong><code>DocumentContentSniffer</code></strong>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/DocumentContentSniffer.cs:49</code>),
+          the sibling of <code>ImageContentSniffer</code>. It accepts pdf, pptx, docx, xlsx, zip, txt and md, and only
+          when the real bytes and the file-name extension agree (<code>Detect</code>, <code>:91</code>); the client-declared
+          content type is never consulted. It exists because the avatar boundary does NOT transfer: an image
+          is safe because it is re-encoded pixel by pixel, and a document is stored exactly as uploaded, so
+          the defence has to be a gate at the door. Office Open XML is decided by opening the package and
+          looking for a <code>[Content_Types].xml</code> entry BY NAME, never by reading an entry stream, with a
+          4096-entry bail-out for zip bombs (<code>:153-188</code>).</li>
+          <li><strong><code>BlobNames.SanitizeFileName</code></strong>
+          (<code>.../Storage/BlobNames.cs:33</code>), because a user-supplied file name reaches a blob name and
+          therefore a URL. Avatars never needed it: their blob name is composed entirely of a user id and a
+          random suffix.</li>
+          <li><strong><code>FileUploadOptions</code></strong> (<code>.../Storage/FileUploadOptions.cs:13</code>) with <code>Attachment</code> (<code>:48</code>) and
+          <code>Inline</code> (<code>:59</code>), carrying the <code>Content-Disposition</code> and <code>Cache-Control</code> headers stored on the
+          blob. The options-carrying <code>UploadAsync</code> overload is a <strong>default interface member</strong>
+          (<code>.../Storage/IFileStorageService.cs:42-43</code>), so adding it broke no existing implementation;
+          <code>AzureBlobFileStorageService</code> overrides it and writes both headers
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs:27</code>,
+          <code>:38-43</code>).</li>
+          </ul>
+          <p>The public-read container trade-off recorded above for avatars is taken again for documents, on the
+          same terms and for the same reason, with unguessability supplied by a server-minted GUID inside the
+          blob path instead of a random suffix. See ADR-123 for the aggregate, the authorization rule and the
+          per-consumer contract (ADC BR-116b).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -309,6 +345,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
+            <li><a href="#revision-2026-09-12">Revision (2026-09-12)</a></li>
             </ul>
           </nav>
         </aside>

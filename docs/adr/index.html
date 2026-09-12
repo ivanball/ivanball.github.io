@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 122 ADRs</summary>
+        <summary>All 123 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -221,6 +221,7 @@
         <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
+        <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
           </ol>
         </nav>
       </details>
@@ -847,6 +848,11 @@
           <td><a href="122-dev-only-relaxations-fail-closed.html">122</a></td>
           <td>Dev-only relaxations are environment-gated and fail closed</td>
           <td>A relaxation applies only when the environment is positively identified as Development; an absent or unparseable environment yields the production posture. <code>SensitiveDataLoggingGate</code>, <code>SmtpTransportSecurity</code> and the AI telemetry gate fail closed on a null environment; CORS, cookie <code>Secure</code>, HSTS, CSP and the pseudo-locale are plain <code>IsDevelopment()</code> checks.</td>
+          </tr>
+          <tr>
+          <td><a href="123-speaker-session-assets.html">123</a></td>
+          <td>Speaker-published session materials</td>
+          <td>Speakers publish decks, handouts and links against their own sessions and anyone downloads them from the public session page. <code>SessionAsset</code> is its own Conference aggregate (not a child of the Sessionize-synced <code>Session</code>), with a server-minted GUID id because that id is a path segment of a public blob name. Authorization is capability OR ownership: <code>conference:session-assets:manage</code> (Organizer/Admin/ContentEditor) or the caller&#39;s <code>speaker_id</code> claim among the session&#39;s speakers, decided in the handlers through <code>SessionAssetAccessService</code> because half the rule is data; the anonymous list applies the BR-49/BR-108 public-session rule and answers an EMPTY list, never 404. Extends <a href="045-managed-file-storage-and-avatars.html">ADR-045</a> from images to documents with three framework additions: <code>DocumentContentSniffer</code> (pdf/pptx/docx/xlsx/zip/txt/md, accepted only when BYTES and extension agree, Office Open XML proven by a <code>[Content_Types].xml</code> entry read by name with a 4096-entry bail-out), <code>BlobNames.SanitizeFileName</code>, and <code>FileUploadOptions.Attachment</code>/<code>Inline</code> stored as the blob&#39;s <code>Content-Disposition</code> plus an immutable <code>Cache-Control</code> through an <code>UploadAsync</code> overload that is a default interface member. Storage is a public-read <code>session-assets</code> container on the existing account under <code>{eventId}/{sessionId}/{assetId}/{file}</code>, downloaded straight from blob with no proxy; Defender for Storage on-upload scanning is a bicep param defaulting to false. Blob removal is the post-commit internal command <code>Conference.DeleteSessionAssetBlob.v1</code> (<a href="114-internal-commands-durable-job-queue.html">ADR-114</a>) from four paths (asset, session, event cascade, failed-commit upload). Limits: 50 MB per file, 10 assets per session, and a path-scoped gateway body raise for <code>/SessionAssets/file</code> only. Assets are visible as soon as the session is; a per-event embargo and a &quot;materials posted&quot; notification are deferred.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

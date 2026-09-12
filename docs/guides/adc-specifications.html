@@ -294,7 +294,7 @@
           </tr>
           <tr>
           <td>ResourceLinks</td>
-          <td>Free-text field for speakers to share supplementary links (slides, code repos, blog posts). Optional. Displayed to attendees alongside session details.</td>
+          <td>Free-text field for speakers to share supplementary links (slides, code repos, blog posts). Optional. Imported from Sessionize and displayed to attendees alongside session details, unchanged. Structured materials are <strong>not</strong> stored here: uploaded files and curated links live in the separate SessionAssets list (BR-116b, ADR-123), rendered beneath this field on the public session page.</td>
           </tr>
           <tr>
           <td>Duration</td>
@@ -1120,11 +1120,15 @@
           </tr>
           <tr>
           <td>BR-116</td>
-          <td><strong>Image hosting (amended 2026-07-11, ADR-045):</strong> Speaker profile pictures (<code>ProfilePicture</code>) and venue maps (<code>VenueMapUrl</code>) remain <strong>externally hosted URLs</strong> (speaker images imported from Sessionize). The former blanket &quot;no managed file upload service&quot; rule is superseded for USER AVATARS by BR-116a; no other managed uploads exist.</td>
+          <td><strong>Image hosting (amended 2026-07-11, ADR-045):</strong> Speaker profile pictures (<code>ProfilePicture</code>) and venue maps (<code>VenueMapUrl</code>) remain <strong>externally hosted URLs</strong> (speaker images imported from Sessionize). The former blanket &quot;no managed file upload service&quot; rule is superseded for USER AVATARS by BR-116a and, since 2026-09-12, for SESSION MATERIALS by BR-116b. Those two are the only managed uploads.</td>
           </tr>
           <tr>
           <td>BR-116a</td>
           <td><strong>User avatar photos (added 2026-07-11, ADR-045):</strong> an authenticated user may set ONE avatar photo on their own account via <code>POST /Users/me/avatar</code> (multipart, max 2 MB; jpeg/png/webp accepted by magic-byte sniffing) and remove it via <code>DELETE /Users/me/avatar</code> (idempotent). The server re-encodes every upload to a 256x256 JPEG (EXIF and all metadata stripped; the original is never stored) and stores it in the public-read <code>avatars</code> blob container under <code>{userId}-{random8}.jpg</code>; a replacement deletes the previous blob. <code>User.AvatarUrl</code> is PII: exported in the GDPR data export, nulled on anonymize with the blob deleted.</td>
+          </tr>
+          <tr>
+          <td>BR-116b</td>
+          <td><strong>Session materials (added 2026-09-12, ADR-123):</strong> a session&#39;s own speakers (matched by the caller&#39;s <code>speaker_id</code> claim against the session&#39;s current speaker list) OR a caller holding <code>conference:session-assets:manage</code> (<code>Organizer</code>, <code>Admin</code>, <code>ContentEditor</code>) may publish materials against that session: <code>POST /SessionAssets/file</code> (multipart, <strong>50 MB</strong> maximum per file; <code>.pdf</code>, <code>.pptx</code>, <code>.docx</code>, <code>.xlsx</code>, <code>.zip</code>, <code>.txt</code>, <code>.md</code> accepted only when the real bytes and the file-name extension AGREE, the client-declared content type is ignored) and <code>POST /SessionAssets/link</code> (an absolute <code>https</code> URL), updated via <code>PUT /SessionAssets/{id}</code> (a conditional write: <code>If-Match</code> required, ADR-035, as on every other Conference write controller) and removed via <code>DELETE /SessionAssets/{id}</code>. At most <strong>10 live assets per session</strong>. <code>GET /SessionAssets?sessionId={id}</code> is anonymous and output-cached: it applies the same public-session projection as the agenda (BR-49 plus the BR-108 published-event rule) and returns an <strong>empty list, not 404</strong>, for a session the caller cannot see, so a guessed id cannot confirm that an unannounced talk has materials. Uploaded files are stored in the public-read <code>session-assets</code> blob container under <code>{eventId}/{sessionId}/{assetId}/{sanitized-file-name}</code> where <code>assetId</code> is a server-minted GUID (the URL is therefore unguessable), and are served with a stored <code>Content-Disposition</code> (<code>inline</code> for PDF, <code>attachment</code> for every other format) and an immutable <code>Cache-Control</code>; downloads go directly to blob storage, never through the API. Deleting an asset, its session (BR-55) or its event (BR-127) soft-deletes the row and schedules the blob for removal on the durable internal-command queue (<code>Conference.DeleteSessionAssetBlob.v1</code>, ADR-114). Materials are visible as soon as the session itself is publicly visible: there is no embargo and no separate publish step.</td>
           </tr>
           <tr>
           <td>BR-120</td>
@@ -3009,7 +3013,7 @@
           </tr>
           <tr>
           <td><strong>Model</strong></td>
-          <td>Image fields (<code>Speaker.ProfilePicture</code>, <code>Event.VenueMapUrl</code>) store <strong>externally hosted URLs</strong>. The system does not provide a managed file upload service.</td>
+          <td>Image fields (<code>Speaker.ProfilePicture</code>, <code>Event.VenueMapUrl</code>) store <strong>externally hosted URLs</strong>. The system DOES provide a managed file upload service for two surfaces only: user avatars (BR-116a, ADR-045) and session materials (BR-116b, ADR-123). Neither of those paths touches the image fields above.</td>
           </tr>
           <tr>
           <td><strong>Speaker images</strong></td>
@@ -4327,6 +4331,51 @@
           <td>Queues AI scoring; returns <strong>202 Accepted</strong>, or <strong>409</strong> when a run is already queued or in progress for that event (UC-27)</td>
           </tr>
           </tbody></table></div>
+          <h3 id="1113-session-materials-br-116b">11.13 Session Materials (BR-116b)</h3>
+          <p>The decks, handouts and links a speaker publishes against their own session. The authorization rule
+          is unlike the rest of Conference: a write is allowed to a caller holding
+          <code>conference:session-assets:manage</code> (<code>Organizer</code>, <code>Admin</code>, <code>ContentEditor</code>) <strong>or</strong> to a speaker of
+          that session, matched from the <code>speaker_id</code> claim. The controller carries a plain <code>[Authorize]</code> and
+          every handler re-decides it, because half the rule is data rather than a capability.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>GET /SessionAssets?sessionId={id}</code></td>
+          <td>Anonymous</td>
+          <td>One session&#39;s materials, ordered by sort order then by creation. Output-cached under the sessions policy. Scoped by the public-session projection (BR-49 + BR-108): a session the caller cannot see answers an <strong>empty list</strong>, not 404. A speaker&#39;s or privileged reader&#39;s response is kept out of the shared cache entry</td>
+          </tr>
+          <tr>
+          <td><code>POST /SessionAssets/link</code></td>
+          <td>Speaker of the session, or <code>conference:session-assets:manage</code></td>
+          <td>Adds a link to externally hosted material. Requires an absolute <code>https</code> URL. Idempotency-Key honored</td>
+          </tr>
+          <tr>
+          <td><code>POST /SessionAssets/file</code></td>
+          <td>Same</td>
+          <td>Multipart upload of one file, <strong>50 MB</strong> maximum; format admitted only when the bytes and the extension agree. Idempotency-Key honored. The gateway raises its body-size cap for this path only</td>
+          </tr>
+          <tr>
+          <td><code>PUT /SessionAssets/{id}</code></td>
+          <td>Same</td>
+          <td>Updates title and sort order, and the URL of a <strong>link</strong> asset. A file asset&#39;s URL is the blob it was stored as and is not editable. Conditional: <code>If-Match</code> required</td>
+          </tr>
+          <tr>
+          <td><code>DELETE /SessionAssets/{id}</code></td>
+          <td>Same</td>
+          <td>Soft-deletes the asset and schedules its blob for removal (ADR-114)</td>
+          </tr>
+          </tbody></table></div>
+          <p>Storage, content sniffing and the stored response headers follow
+          <a href="../adr/123-speaker-session-assets.html">ADR-123</a> on top of
+          <a href="../adr/045-managed-file-storage-and-avatars.html">ADR-045</a>. There is no by-id read endpoint: an asset
+          is only ever fetched as part of its session&#39;s list, so the filtered list is the <code>Location</code> a create
+          returns.</p>
           <hr>
           <h2 id="12-authentication--identity-architecture">12. Authentication &amp; Identity Architecture</h2>
           <p>This section defines the authentication mechanism for both the Web UI (Blazor) and MAUI (mobile) clients, which share a common Razor class library. It replaces the device-based identity model with an email + password model and introduces speaker-user linking.</p>

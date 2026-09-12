@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-123: Speaker-Published Session Materials · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-12). Extends ADR-045 from images to documents: the framework gains a document content sniffer, a blob-name sanitizer and stored…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/123-speaker-session-assets.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-123: Speaker-Published Session Materials">
+  <meta property="og:description" content="Accepted (2026-09-12). Extends ADR-045 from images to documents: the framework gains a document content sniffer, a blob-name sanitizer and stored…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/123-speaker-session-assets.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-123: Speaker-Published Session Materials">
+  <meta name="twitter:description" content="Accepted (2026-09-12). Extends ADR-045 from images to documents: the framework gains a document content sniffer, a blob-name sanitizer and stored…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"123 · Speaker-Published Session Materials","item":"https://ivanball.github.io/docs/adr/123-speaker-session-assets.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">123 · Speaker-Published Session Materials</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 123 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
+        <li><a href="123-speaker-session-assets.html" aria-current="page">123 · Speaker-Published Session Materials</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-123-speaker-published-session-materials">ADR-123: Speaker-Published Session Materials</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-09-12). Extends <a href="045-managed-file-storage-and-avatars.html">ADR-045</a> from images to
+          documents: the framework gains a document content sniffer, a blob-name sanitizer and stored response
+          headers, and ADC gains a <code>SessionAsset</code> aggregate that uses them. ADR-045&#39;s avatar-only scope
+          statement (&quot;no other managed uploads exist&quot;) is superseded by this record.</p>
+          <h2 id="context">Context</h2>
+          <p>A speaker finishes a talk and forty people want the deck. Until now ADC&#39;s only answer was
+          <code>Session.ResourceLinks</code>, a free-text field imported from Sessionize: the speaker types URLs into
+          Sessionize, a refresh overwrites whatever was there (BR-48), and an attendee gets an unordered,
+          unvalidated paragraph rendered as plain text. Nothing is hosted, nothing is ordered, nothing
+          survives a link rotting, and a speaker who has a PDF rather than a public URL has nowhere to put it.</p>
+          <p><a href="045-managed-file-storage-and-avatars.html">ADR-045</a> already built managed blob storage, so the
+          storage half of the problem looks solved. It is not, and the reason is the part of that record that
+          does the security work. An avatar is safe because it is <strong>re-encoded pixel by pixel</strong>: decode,
+          strip all metadata, write a fresh JPEG, so only pixels survive and a polyglot or an EXIF payload
+          dies in the transcode. A slide deck cannot be treated that way. A <code>.pptx</code> that comes out of a
+          re-encoder is either byte-identical to what went in or it is a broken file, so the bytes are stored
+          as the user supplied them and the defence has to be a <strong>gate at the door</strong> instead of a transform.
+          There was no such gate in the framework: <code>ImageContentSniffer</code> knows image signatures and nothing
+          else.</p>
+          <p>Two smaller gaps came with it. A user-supplied file name is part of a blob name and therefore part
+          of a URL, and nothing in the framework reduced one to a safe segment. And <code>IFileStorageService</code>
+          stored bytes plus a content type, which is all an avatar needs, but a document also needs the
+          response headers that decide whether the browser renders it or saves it, and under what name.</p>
+          <p>On the ADC side the modelling question was where the material hangs. <code>Session</code> is the most
+          re-imported entity in the system and already owns three child collections (<code>SessionSpeakers</code>,
+          <code>SessionQuestionAnswers</code>, <code>SessionCategoryItems</code>). The authorization question was newer: every
+          other Conference write is either anonymous-read or capability-gated, and neither shape can express
+          &quot;the speaker of this session, and only that session&quot;.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>Session materials are a separate Conference aggregate, written by the session&#39;s own speakers or by
+          an organizer, stored in a public-read container under an unguessable blob name, and admitted only by
+          a framework-level content gate that reads the real bytes.</strong> Six parts carry that.</p>
+          <p><strong>1. <code>SessionAsset</code> is its own aggregate, not a child of <code>Session</code>.</strong>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/SessionAssets/SessionAsset.cs:23</code>,
+          reasoning at <code>:9-21</code>.) It carries <code>EventId</code> and <code>SessionId</code> as plain foreign keys with <strong>no
+          navigation properties</strong> (<code>:31</code>, <code>:34</code>; the relationships are declared without navigations at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionAssets/SessionAssetConfiguration.cs:60-68</code>),
+          so a Sessionize refresh walking <code>Session</code> cannot see them and cannot overwrite them. One aggregate
+          covers both kinds, <code>File</code> and <code>Link</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/SessionAssets/SessionAssetKind.cs:13</code>),
+          because the public page renders them as one ordered list and they differ only in which optional
+          columns carry a value; the pairing rule (a file must carry a blob name, a link must not) is a domain
+          invariant (<code>.../SessionAssetInvariants.cs:62-83</code>). The identifier is a <strong>server-minted GUID</strong> rather
+          than the module&#39;s usual database integer
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:16</code>,
+          minted at <code>SessionAsset.cs:301</code>), because the id is a path segment of a public blob name and a
+          sequential one would let anyone who downloaded a single asset walk the container. The asset URL is
+          validated as an absolute <code>https</code> URL in the domain (<code>SessionAssetInvariants.cs:128-147</code>), so a
+          <code>javascript:</code> or <code>data:</code> value is refused once rather than sanitized at each render site.</p>
+          <p><strong>2. Authorization is capability OR ownership, decided in the handlers.</strong> A caller may manage a
+          session&#39;s materials if they hold <code>conference:session-assets:manage</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:44</code>,
+          granted to Organizer and Admin through the full Conference set at <code>:58</code> and to ContentEditor through
+          the ContentManagement set at <code>:73</code>; the grants are wired at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43-44</code> and <code>:54</code>)
+          <strong>or</strong> if
+          their token&#39;s <code>speaker_id</code> claim is among the session&#39;s current, non-deleted speakers. The second
+          leg is data, not a capability, so no attribute can express it: the controller&#39;s write actions carry a
+          plain <code>[Authorize]</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionAssets/SessionAssetsController.cs:50</code>)
+          and every handler re-asks <code>SessionAssetAccessService</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/SessionAssetAccessService.cs:22</code>,
+          the decision at <code>:47</code>), which reads the session&#39;s own <code>SessionSpeakers</code> rows (<code>:132-134</code>). Reading
+          the speaker list rather than the asset&#39;s <code>UploadedBySpeakerId</code> is deliberate: a co-speaker can fix a
+          colleague&#39;s typo, and a speaker removed from the session loses the right immediately without any row
+          being rewritten.</p>
+          <p><strong>3. The anonymous read applies the public-session rule and answers empty, not 404.</strong> The list
+          action is <code>[AllowAnonymous]</code> and output-cached under the sessions policy
+          (<code>SessionAssetsController.cs:76-78</code>), because it is part of the public session page. A caller who
+          cannot see the session gets an <strong>empty list</strong>
+          (<code>.../SessionAssets/UseCases/GetBySession/GetSessionAssetsHandler.cs:44-47</code>), so a guessed session id
+          cannot confirm that an unannounced talk has materials. Visibility reuses the same BR-49 status
+          allow-list every other public read uses, plus BR-108&#39;s published-event rule
+          (<code>SessionAssetAccessService.cs:118-130</code>). A speaker or a privileged reader sees more than the public
+          projection, so their response is kept out of the shared cache entry by turning cache storage off for
+          that request (<code>SessionAssetsController.cs:90-93</code>).</p>
+          <p><strong>4. Document safety is a framework gate, not an ADC one.</strong> Three additions to MMCA.Common, all
+          under <code>MMCA.Common.Application/Interfaces/Infrastructure/Storage/</code>:</p>
+          <ul>
+          <li><strong><code>DocumentContentSniffer</code></strong> (<code>DocumentContentSniffer.cs:49</code>) accepts pdf, pptx, docx, xlsx, zip,
+          txt and md, and only when the <strong>bytes and the extension agree</strong> (<code>Detect</code>, <code>:91</code>); the
+          client-declared content type is never consulted, so a <code>.pdf</code> name over zip bytes and an executable
+          renamed to <code>.docx</code> are both refused. Office Open XML is the interesting case, because every one of
+          those three formats is a zip: the sniffer requires the zip signature <strong>and</strong> a <code>[Content_Types].xml</code>
+          entry at the package root (<code>:153-188</code>), reads <strong>entry names only</strong> (<code>:176-177</code>, opening an entry
+          stream is what a zip bomb waits for), and bails out of an archive declaring more than 4096 entries
+          (<code>:61</code>, <code>:170-173</code>). Text formats must decode as NUL-free UTF-8 (<code>:197-211</code>). The canonical MIME
+          type the sniffer returns is what gets stored, so the type a browser is later served is derived from
+          the bytes.</li>
+          <li><strong><code>BlobNames.SanitizeFileName</code></strong> (<code>BlobNames.cs:33</code>) reduces a user-supplied name to
+          <code>A-Z a-z 0-9 . _ -</code>, collapses runs of dots so no <code>..</code> can appear, trims leading and trailing
+          separators, lower-cases the extension and bounds the length, falling back to <code>file</code> when nothing
+          survives.</li>
+          <li><strong><code>FileUploadOptions</code></strong> (<code>FileUploadOptions.cs:13</code>) carries the <code>Content-Disposition</code> and
+          <code>Cache-Control</code> headers stored <strong>with the blob</strong>, built by <code>Attachment</code> (<code>:48</code>) or <code>Inline</code> (<code>:59</code>)
+          with RFC 6266 / RFC 5987 encoding of the user-facing file name. They are delivered through a new
+          <code>UploadAsync</code> overload that is a <strong>default interface member</strong>
+          (<code>IFileStorageService.cs:42-43</code>), forwarding to the three-argument contract, so the addition breaks
+          no existing implementation; <code>AzureBlobFileStorageService</code> overrides it and writes the headers onto
+          <code>BlobHttpHeaders</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs:27</code>,
+          <code>:38-43</code>).</li>
+          </ul>
+          <p>ADC&#39;s upload handler sniffs first and stores the canonical type
+          (<code>.../SessionAssets/UseCases/UploadFile/UploadSessionAssetHandler.cs:64-71</code>), and picks the
+          disposition by format: a PDF is <code>inline</code>, so it opens in the browser&#39;s own viewer, and everything
+          else is <code>attachment</code> (<code>:151-153</code>), both with an immutable one-year <code>Cache-Control</code> (<code>:45</code>) that is
+          safe precisely because a blob name carries a fresh asset id and therefore never changes content.</p>
+          <p><strong>5. Storage reuses ADR-045 with its own container, and downloads go straight to the blob.</strong> The
+          Conference service registers the same <code>AddAzureBlobFileStorage</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:330</code>) against a new <strong>public-read
+          <code>session-assets</code> container</strong> on the existing storage account (<code>MMCA.ADC/infra/main.bicep:1182-1188</code>,
+          container name injected at <code>:1852</code>); the account-scoped data-plane grant already covers it, so no
+          second role assignment (<code>:1205-1210</code>). The blob name is
+          <code>{eventId}/{sessionId}/{assetId}/{sanitized-file-name}</code>
+          (<code>UploadSessionAssetHandler.cs:88-92</code>), which is what makes a public container acceptable: the GUID
+          segment is unguessable, so holding one asset URL reveals nothing about any other. Attendees download
+          from blob storage directly, as they already do for avatars, with no API proxy and no CDN in front.
+          Where storage is not configured, the null default stands and an upload fails with
+          <code>SessionAsset.StorageNotConfigured</code> while links keep working (<code>:54-60</code>), which is the local-dev
+          posture. Optional on-upload malware scanning (Microsoft Defender for Storage) is available behind the
+          bicep parameter <code>enableSessionAssetMalwareScanning</code>, <strong>defaulting to false</strong>
+          (<code>MMCA.ADC/infra/main.bicep:136</code>, resource at <code>:1234-1250</code>), for the same two reasons
+          <code>grantAvatarStorageRole</code> is guarded: the write may exceed what the deploy identity is permitted to
+          do, and it is billed per GB scanned. It is defence in depth behind the content gate, not the primary
+          control.</p>
+          <p><strong>6. Blob removal is a post-commit internal command.</strong> Deleting the row and deleting the bytes are
+          two different systems, so the second is scheduled as the durable internal command
+          <code>Conference.DeleteSessionAssetBlob.v1</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/UseCases/DeleteSessionAssetBlob/DeleteSessionAssetBlobInternalCommand.cs:16-17</code>)
+          on <a href="114-internal-commands-durable-job-queue.html">ADR-114</a>&#39;s queue, mirroring what Identity already
+          does for avatars. Four paths schedule it: an asset delete
+          (<code>.../SessionAssets/UseCases/Delete/DeleteSessionAssetHandler.cs:63-73</code>), a session delete
+          (<code>.../Sessions/UseCases/Delete/DeleteSessionHandler.cs:71-95</code> soft-deletes the assets in the same
+          save, <code>:41-62</code> schedules the blobs after it commits), an event delete
+          (<code>.../Events/UseCases/Delete/DeleteEventHandler.cs:72-87</code>, cascading through
+          <code>EventCascadeDeletionDomainService.CascadeDelete</code> which now takes the event&#39;s assets as a fifth
+          collection, <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventCascadeDeletionDomainService.cs:18-23</code>),
+          and an upload whose row failed to commit after the bytes had already landed
+          (<code>UploadSessionAssetHandler.cs:112</code>, <code>:129</code>). Every one of them schedules <strong>after</strong> the commit, so a
+          rolled-back delete never removes a file its row still points at, and a storage outage or a crash in
+          that tail defers the cleanup instead of losing it.</p>
+          <p><strong>Limits.</strong> 50 MB per file and at most 10 live assets per session, both stated once on
+          <code>SessionAssetLimits</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/SessionAssets/SessionAssetLimits.cs:11</code>,
+          <code>:27</code>), alongside the accepted-extension allow-list (<code>:34-43</code>) that the browser file picker and the
+          server share; the per-session cap is enforced by a grouped count at
+          <code>SessionAssetAccessService.cs:60-83</code>. The transport cap is the file size plus 64 KB
+          of multipart headroom (<code>SessionAssetLimits.cs:20</code>), because a file at exactly the limit is otherwise
+          refused by Kestrel with a bare 413 before the friendly validation error can run; the controller
+          applies it with <code>[RequestSizeLimit]</code> (<code>SessionAssetsController.cs:151-153</code>). The YARP gateway
+          terminates the request before the service sees it and has no endpoint to hang an attribute on, so the
+          body-size raise there is <strong>path-scoped to <code>/SessionAssets/file</code> alone</strong>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:194-213</code>), not global: every other route keeps
+          its default budget. The gateway&#39;s forwarding route itself is anonymous, as every gateway route is
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:211-215</code>).</p>
+          <p><strong>UI (UI slice).</strong> Speakers and organizers manage a session&#39;s materials through
+          <code>Conference.UI/Pages/SessionAssets/SessionAssetsPanel.razor</code>, hosted on both the speaker dashboard
+          and the organizer session detail page; attendees see them through
+          <code>SessionAssetsDownloadList.razor</code>, rendered on
+          <code>Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor</code> beneath the existing resource links.
+          Both components are marked as a UI slice here because they land separately from the API and domain
+          work this record describes.</p>
+          <p><strong>Visibility is immediate.</strong> An asset appears as soon as its session is publicly visible; there is no
+          embargo, no separate publish step and no &quot;materials posted&quot; notification. A speaker who uploads
+          early is publishing early, which is the behaviour speakers asked for and the one that needs no state
+          machine.</p>
+          <p><strong><code>Session.ResourceLinks</code> stays.</strong> It is Sessionize-sourced, it is rendered exactly as before, and
+          assets are a separate ordered list beneath it (BR-116b). Migrating free text into structured rows
+          would mean parsing prose that a refresh can rewrite at any time.</p>
+          <h2 id="rationale">Rationale</h2>
+          <p>Four alternatives were weighed.</p>
+          <p><strong>A child collection on <code>Session</code>.</strong> The obvious DDD answer, and wrong for this entity. <code>Session</code> is
+          imported from Sessionize and re-imported on every refresh, which overwrites matched entities (BR-48),
+          so material authored here would sit inside the one aggregate in the module that a sync is licensed to
+          rewrite. It already owns three collections, so a fourth would be loaded by every handler that touches
+          a session for any reason. Making assets their own aggregate costs two denormalized foreign keys and
+          an explicit cascade in the delete handlers, and buys immunity from the refresh plus a read path that
+          touches one table.</p>
+          <p><strong>Proxying downloads through the API.</strong> A controller action that streams the blob would let the
+          server re-check authorization per download and hide the storage URL. Rejected on both halves: there
+          is <strong>no authorization requirement on reads</strong> (a public session&#39;s materials are public by definition,
+          which is the whole point of publishing them), so the check it would perform is one that always
+          passes, and every megabyte would then be paid for twice, once out of storage and once out of the
+          container app, with the app&#39;s request timeout and memory now sitting in the path of a 50 MB transfer
+          on conference-venue wifi. The unguessable blob name is what protects a not-yet-public asset, and it
+          protects it without a hop.</p>
+          <p><strong>An ADC-local sniffer, skipping a Common release.</strong> Tempting, because the feature is ADC&#39;s and a
+          framework release is a heavier step than a module file. Rejected because the thing being written is a
+          <strong>security gate</strong>, and a security gate that lives in one consumer is a security gate the next
+          consumer writes again, slightly differently. Store has document-shaped uploads ahead of it (invoices,
+          product manuals) and MMCA.Helpdesk&#39;s ticket attachments are the same problem verbatim. One sniffer,
+          one test suite, one place to fix a format quirk, and the extension cost is bounded: the sniffer,
+          <code>BlobNames</code> and <code>FileUploadOptions</code> are dependency-free static types, and the <code>UploadAsync</code> overload
+          is a default interface member so no existing implementation breaks.</p>
+          <p><strong>Embargo until the session ends (deferred, not rejected).</strong> Holding materials back until a talk
+          finishes is a real request from organizers who do not want the deck read instead of the talk
+          attended. It is deferred rather than decided: it needs a per-event policy, a clock the public read
+          consults, and an answer for what a speaker sees in the meantime, which is a state machine this
+          feature does not need to exist. The current rule is the simple one, assets follow the session&#39;s own
+          visibility, and the embargo can be added later as a filter on a read that is already centralized in
+          one access service.</p>
+          <p>Two further follow-ups are recorded as deferred, not decided: a per-event embargo window (above) and
+          an attendee &quot;materials posted&quot; notification on a bookmarked session.</p>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The container is public-read, so a URL is a credential.</strong> Anyone holding a blob URL can fetch it,
+          forever, with no session and no referrer check. That is accepted for the same reason ADR-045
+          accepted it for avatars: this content exists to be downloaded by anonymous visitors. The
+          unguessability lives entirely in the GUID path segment, so anything that leaks a URL (a speaker
+          pasting it into a public chat before the session is announced) leaks the file.</li>
+          <li><strong>Bytes are stored as uploaded, so the gate is the only defence.</strong> Unlike an avatar, nothing about
+          a stored deck has been transformed, so a payload the sniffer&#39;s format rules admit is a payload the
+          container serves. The sniffer bounds the format, not the content; Defender for Storage exists for
+          exactly that residue and is off by default, which means the shipped posture is format-checked but
+          not malware-scanned.</li>
+          <li><strong>Blob cleanup is eventually consistent.</strong> Every delete path schedules the blob removal after its
+          commit, so between the commit and the queue&#39;s next tick the file is still fetchable by anyone
+          holding its URL. A row that fails to schedule is logged as an orphan that needs a manual sweep;
+          there is no reconciler that walks the container looking for blobs with no row.</li>
+          <li><strong>The gateway carries a duplicated literal.</strong> The Gateway references no Conference assembly, so its
+          50 MB plus 64 KB body limit is a literal rather than <code>SessionAssetLimits.MaxRequestBytes</code>. The
+          route is pinned by <code>RouteMapTests</code> and the real enforcement is the service-side attribute, but the
+          two numbers have to be changed together.</li>
+          <li><strong>Two authorization shapes now live in one module.</strong> Every other Conference controller is readable
+          from its attributes; this one is not, because half its rule is data. The handlers are the authority
+          and the controller only stamps the claim, which is correct and is also the kind of thing a reviewer
+          scanning attributes will miss. The architecture test that pins the anonymous surface names the list
+          action explicitly for that reason.</li>
+          <li><strong>A speaker can publish to the public web with no review.</strong> The capability model deliberately gives
+          a session&#39;s speakers the same authority an organizer has over that session. The counterweights are
+          the format gate, the size and count caps, and soft-delete, which lets an organizer take material
+          down without losing the record that it existed.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="045-managed-file-storage-and-avatars.html">ADR-045</a> (the storage abstraction, the image path this
+          record is the document sibling of, and the avatar-only scope statement this supersedes),
+          <a href="114-internal-commands-durable-job-queue.html">ADR-114</a> (the durable queue the blob deletions ride),
+          <a href="119-restrict-delete-by-default.html">ADR-119</a> (why the two foreign keys do not cascade in the
+          database, leaving the cascade to the delete handlers),
+          <a href="020-permission-based-authorization.html">ADR-020</a> (the capability registry the manage permission joins),
+          <a href="035-optimistic-concurrency.html">ADR-035</a> (the <code>If-Match</code> contract the asset update honors),
+          <a href="005-soft-delete-vs-erasure.html">ADR-005</a> (the soft-delete lifecycle the asset rows follow),
+          <a href="109-feature-by-folder-convention.html">ADR-109</a> (the aggregate-per-folder layout the new files follow).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/123-speaker-session-assets.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

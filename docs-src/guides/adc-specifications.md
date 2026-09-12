@@ -90,7 +90,7 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 | LiveUrl | URL to a live stream for the session (optional). Allows attendees to watch the session remotely. Displayed alongside session details when present. |
 | RecordingUrl | URL to a recording of the session (optional). Typically populated after the session concludes. Displayed alongside session details when present. |
 | AccessibilityInfo | Description of accessibility accommodations for this session (optional, e.g., "Live captioning provided", "Sign language interpreter available"). Informational: displayed to attendees for planning. |
-| ResourceLinks | Free-text field for speakers to share supplementary links (slides, code repos, blog posts). Optional. Displayed to attendees alongside session details. |
+| ResourceLinks | Free-text field for speakers to share supplementary links (slides, code repos, blog posts). Optional. Imported from Sessionize and displayed to attendees alongside session details, unchanged. Structured materials are **not** stored here: uploaded files and curated links live in the separate SessionAssets list (BR-116b, ADR-123), rendered beneath this field on the public session page. |
 | Duration | Computed: `EndsAt - StartsAt` when both are non-null, null otherwise. Read-only, no database column. Serialized in DTOs as total minutes (e.g., `60`). Cannot be used for database-level filtering or sorting. |
 
 **Relationships:**
@@ -483,8 +483,9 @@ Every entity in the system tracks:
 | BR-255 | **Room.Name must be unique within its parent Event** (case-insensitive), among active (non-deleted) rooms. Enforced at the domain layer on add, rename, and Sessionize restore (duplicate attempts return the `Event.Room.Duplicate` validation error), and backstopped by a unique filtered database index on `(EventId, Name)` scoped to non-deleted rows. A soft-deleted room's name may be reused. Added 2026-08-13 (BugHunt H23): the domain check previously existed for add only and never fired because the aggregate was loaded without its rooms; the rule now names the invariant the code always intended, mirroring the BR-138 CategoryItem precedent. |
 | BR-112 | `Session.AccessibilityInfo` is an optional free-text field describing accessibility accommodations (e.g., "Live captioning provided, sign language interpreter available"). Displayed to attendees alongside session details. Informational only. |
 | BR-114 | `Session.Duration` is a **read-only computed property**: calculated as the difference between `EndsAt` and `StartsAt` in total minutes (e.g., `60`). Returns null when either `StartsAt` or `EndsAt` is null. Serialized in DTOs but has no database column. Cannot be used for database-level filtering or sorting. |
-| BR-116 | **Image hosting (amended 2026-07-11, ADR-045):** Speaker profile pictures (`ProfilePicture`) and venue maps (`VenueMapUrl`) remain **externally hosted URLs** (speaker images imported from Sessionize). The former blanket "no managed file upload service" rule is superseded for USER AVATARS by BR-116a; no other managed uploads exist. |
+| BR-116 | **Image hosting (amended 2026-07-11, ADR-045):** Speaker profile pictures (`ProfilePicture`) and venue maps (`VenueMapUrl`) remain **externally hosted URLs** (speaker images imported from Sessionize). The former blanket "no managed file upload service" rule is superseded for USER AVATARS by BR-116a and, since 2026-09-12, for SESSION MATERIALS by BR-116b. Those two are the only managed uploads. |
 | BR-116a | **User avatar photos (added 2026-07-11, ADR-045):** an authenticated user may set ONE avatar photo on their own account via `POST /Users/me/avatar` (multipart, max 2 MB; jpeg/png/webp accepted by magic-byte sniffing) and remove it via `DELETE /Users/me/avatar` (idempotent). The server re-encodes every upload to a 256x256 JPEG (EXIF and all metadata stripped; the original is never stored) and stores it in the public-read `avatars` blob container under `{userId}-{random8}.jpg`; a replacement deletes the previous blob. `User.AvatarUrl` is PII: exported in the GDPR data export, nulled on anonymize with the blob deleted. |
+| BR-116b | **Session materials (added 2026-09-12, ADR-123):** a session's own speakers (matched by the caller's `speaker_id` claim against the session's current speaker list) OR a caller holding `conference:session-assets:manage` (`Organizer`, `Admin`, `ContentEditor`) may publish materials against that session: `POST /SessionAssets/file` (multipart, **50 MB** maximum per file; `.pdf`, `.pptx`, `.docx`, `.xlsx`, `.zip`, `.txt`, `.md` accepted only when the real bytes and the file-name extension AGREE, the client-declared content type is ignored) and `POST /SessionAssets/link` (an absolute `https` URL), updated via `PUT /SessionAssets/{id}` (a conditional write: `If-Match` required, ADR-035, as on every other Conference write controller) and removed via `DELETE /SessionAssets/{id}`. At most **10 live assets per session**. `GET /SessionAssets?sessionId={id}` is anonymous and output-cached: it applies the same public-session projection as the agenda (BR-49 plus the BR-108 published-event rule) and returns an **empty list, not 404**, for a session the caller cannot see, so a guessed id cannot confirm that an unannounced talk has materials. Uploaded files are stored in the public-read `session-assets` blob container under `{eventId}/{sessionId}/{assetId}/{sanitized-file-name}` where `assetId` is a server-minted GUID (the URL is therefore unguessable), and are served with a stored `Content-Disposition` (`inline` for PDF, `attachment` for every other format) and an immutable `Cache-Control`; downloads go directly to blob storage, never through the API. Deleting an asset, its session (BR-55) or its event (BR-127) soft-deletes the row and schedules the blob for removal on the durable internal-command queue (`Conference.DeleteSessionAssetBlob.v1`, ADR-114). Materials are visible as soon as the session itself is publicly visible: there is no embargo and no separate publish step. |
 | BR-120 | **Organizer action traceability:** Sensitive organizer actions (session status changes, event status changes, Sessionize refresh) are traceable via the auditable fields (`CreatedBy`, `CreatedOn`, `LastModifiedBy`, `LastModifiedOn`) on affected entities. Sessionize refresh timing is tracked via `Event.LastSessionizeRefreshOn` and `Event.LastSessionizeRefreshBy`. |
 | BR-121 | **Sponsor/expo support** is out of scope for the current system. |
 | BR-122 | **Session duration validation:** When a Session's `StartsAt` and `EndsAt` are both non-null, `EndsAt` must be **strictly greater than** `StartsAt` (not equal). A zero-duration session is invalid. **Two-tier enforcement:** (1) **API create/update**: enforced as a hard constraint; requests with `EndsAt <= StartsAt` are rejected with HTTP 422. (2) **Sessionize import**: validation is relaxed; sessions violating this constraint are stored as-is but flagged with a warning in the import response (import is not blocked: the organizer can correct the times manually). This two-tier approach exists because Sessionize is the source of truth and its data cannot be rejected without breaking the sync. |
@@ -1310,7 +1311,7 @@ Domain events are raised during entity mutations and dispatched asynchronously a
 | Aspect | Detail |
 |---|---|
 | **Purpose** | Clarify how profile pictures, venue maps, and other images are handled |
-| **Model** | Image fields (`Speaker.ProfilePicture`, `Event.VenueMapUrl`) store **externally hosted URLs**. The system does not provide a managed file upload service. |
+| **Model** | Image fields (`Speaker.ProfilePicture`, `Event.VenueMapUrl`) store **externally hosted URLs**. The system DOES provide a managed file upload service for two surfaces only: user avatars (BR-116a, ADR-045) and session materials (BR-116b, ADR-123). Neither of those paths touches the image fields above. |
 | **Speaker images** | Imported from Sessionize during refresh. Sessionize hosts speaker profile pictures and provides URLs. |
 | **Venue maps** | Organizers provide a URL to an externally hosted map or floor plan image. |
 
@@ -2019,6 +2020,28 @@ Organizer-only endpoints that support the accept/decline decision on submitted s
 | `GET /api/sessionselection/speaker-overlap/{eventId}` | Speakers with more than one submitted session |
 | `GET /api/sessionselection/content-similarity/{eventId}` | Pairs of sessions with similar content |
 | `POST /api/sessionselection/score/{eventId}` | Queues AI scoring; returns **202 Accepted**, or **409** when a run is already queued or in progress for that event (UC-27) |
+
+### 11.13 Session Materials (BR-116b)
+
+The decks, handouts and links a speaker publishes against their own session. The authorization rule
+is unlike the rest of Conference: a write is allowed to a caller holding
+`conference:session-assets:manage` (`Organizer`, `Admin`, `ContentEditor`) **or** to a speaker of
+that session, matched from the `speaker_id` claim. The controller carries a plain `[Authorize]` and
+every handler re-decides it, because half the rule is data rather than a capability.
+
+| Endpoint | Auth | Notes |
+|----------|------|-------|
+| `GET /SessionAssets?sessionId={id}` | Anonymous | One session's materials, ordered by sort order then by creation. Output-cached under the sessions policy. Scoped by the public-session projection (BR-49 + BR-108): a session the caller cannot see answers an **empty list**, not 404. A speaker's or privileged reader's response is kept out of the shared cache entry |
+| `POST /SessionAssets/link` | Speaker of the session, or `conference:session-assets:manage` | Adds a link to externally hosted material. Requires an absolute `https` URL. Idempotency-Key honored |
+| `POST /SessionAssets/file` | Same | Multipart upload of one file, **50 MB** maximum; format admitted only when the bytes and the extension agree. Idempotency-Key honored. The gateway raises its body-size cap for this path only |
+| `PUT /SessionAssets/{id}` | Same | Updates title and sort order, and the URL of a **link** asset. A file asset's URL is the blob it was stored as and is not editable. Conditional: `If-Match` required |
+| `DELETE /SessionAssets/{id}` | Same | Soft-deletes the asset and schedules its blob for removal (ADR-114) |
+
+Storage, content sniffing and the stored response headers follow
+[ADR-123](../adr/123-speaker-session-assets.md) on top of
+[ADR-045](../adr/045-managed-file-storage-and-avatars.md). There is no by-id read endpoint: an asset
+is only ever fetched as part of its session's list, so the filtered list is the `Location` a create
+returns.
 
 ---
 

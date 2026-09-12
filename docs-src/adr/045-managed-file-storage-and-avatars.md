@@ -6,6 +6,9 @@ by two new framework extension points. The framework legs are implemented; each 
 own storage account and wires the upload endpoints.
 Revised 2026-09-07 (a decoded-pixel and dimension ceiling is checked from the image header before
 any frame buffer is allocated, beside the existing compressed-size cap).
+Revised 2026-09-12 (the extension points here carry DOCUMENT uploads as well as images; the
+avatar-only scope statement below is superseded by
+[ADR-123](123-speaker-session-assets.md)).
 ## Context
 The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
 BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -66,3 +69,36 @@ as `Image.TooLarge`, using the predicate at `:112-114`. The dimension ceiling ex
 one because a long thin image can stay under the area limit and still be pathological for the
 resampler (`:30`). The decoded frame is re-checked after decoding, so a header that under-reports
 does not get through.
+
+## Revision (2026-09-12)
+This record scoped managed uploads to avatars and said so: "no other managed uploads exist". That
+statement is superseded by [ADR-123](123-speaker-session-assets.md), which publishes speaker session
+materials (decks, handouts, archives, links) through the same `IFileStorageService`. The framework
+extension points here grew three pieces to carry it, and every one of them is document-shaped rather
+than avatar-shaped:
+
+- **`DocumentContentSniffer`**
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/DocumentContentSniffer.cs:49`),
+  the sibling of `ImageContentSniffer`. It accepts pdf, pptx, docx, xlsx, zip, txt and md, and only
+  when the real bytes and the file-name extension agree (`Detect`, `:91`); the client-declared
+  content type is never consulted. It exists because the avatar boundary does NOT transfer: an image
+  is safe because it is re-encoded pixel by pixel, and a document is stored exactly as uploaded, so
+  the defence has to be a gate at the door. Office Open XML is decided by opening the package and
+  looking for a `[Content_Types].xml` entry BY NAME, never by reading an entry stream, with a
+  4096-entry bail-out for zip bombs (`:153-188`).
+- **`BlobNames.SanitizeFileName`**
+  (`.../Storage/BlobNames.cs:33`), because a user-supplied file name reaches a blob name and
+  therefore a URL. Avatars never needed it: their blob name is composed entirely of a user id and a
+  random suffix.
+- **`FileUploadOptions`** (`.../Storage/FileUploadOptions.cs:13`) with `Attachment` (`:48`) and
+  `Inline` (`:59`), carrying the `Content-Disposition` and `Cache-Control` headers stored on the
+  blob. The options-carrying `UploadAsync` overload is a **default interface member**
+  (`.../Storage/IFileStorageService.cs:42-43`), so adding it broke no existing implementation;
+  `AzureBlobFileStorageService` overrides it and writes both headers
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs:27`,
+  `:38-43`).
+
+The public-read container trade-off recorded above for avatars is taken again for documents, on the
+same terms and for the same reason, with unguessability supplied by a server-minted GUID inside the
+blob path instead of a random suffix. See ADR-123 for the aggregate, the authorization rule and the
+per-consumer contract (ADC BR-116b).
