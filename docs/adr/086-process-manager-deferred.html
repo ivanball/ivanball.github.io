@@ -233,7 +233,10 @@
           <p>Accepted (2026-08-18) <strong>as a documented deferral</strong>. Nothing ships with this record: no state machine,
           no correlation store, no new package. What ships is the shape the coordinator would take, the
           constraint that limits the technology choice, and the single condition that would start the work.
-          <a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> remains the accepted mechanism until then.</p>
+          <a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> remains the accepted mechanism until then.
+          Revised (2026-09-11): the first per-instance scheduled deadline now exists in MMCA.Store, built on
+          ADR-114&#39;s internal-command queue rather than on a state machine, which retires one of the three
+          absent properties without meeting this record&#39;s trigger; the deferral stands. See the Revision below.</p>
           <h2 id="context">Context</h2>
           <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> decided how this workspace achieves
           cross-boundary consistency without two-phase commit: <strong>choreography</strong>. Each step of a workflow raises
@@ -246,22 +249,24 @@
           records. The rationale is conditional on the workflow, and the condition is not stated as permanent.</p>
           <p>What ADR-054 does not answer is what happens to that reasoning when a workflow&#39;s state stops fitting
           on one aggregate in one database. Three properties of a multi-step workflow break the choreography
-          argument, and none of them is present today:</p>
+          argument. Two of them are still absent, and the third has since arrived on its own terms:</p>
           <ul>
           <li><strong>State that belongs to no aggregate.</strong> &quot;Step 2 of 4 completed, step 3 awaiting a reply, deadline at
           14:05&quot; is workflow state, not order state. Choreography needs somewhere to put it, and today the
           answer is a status column on the aggregate that happens to have one.</li>
-          <li><strong>A timeout that is not a poll.</strong> ADR-054&#39;s sweep is a fixed-interval scan for rows that have sat
-          too long (<code>PaymentReconciliationService</code>, a 10-minute interval and a 30-minute stuck age at the
-          shipped defaults). That is a perfectly good backstop for one known-shape wait. It is not a
-          per-instance scheduled deadline, and a workflow with several different waits would need a sweep per
-          wait.</li>
+          <li><strong>A timeout that is not a poll.</strong> This one is no longer absent, and it arrived without a
+          coordinator: since 2026-09-11 every unpaid order in MMCA.Store arms its own durable deadline on
+          ADR-114&#39;s internal-command queue, and ADR-054&#39;s fixed-interval sweep
+          (<code>PaymentReconciliationService</code>, a 10-minute interval and a 30-minute stuck age at the shipped
+          defaults) is the backstop behind it rather than the mechanism. What is still absent is a workflow
+          instance with several different waits, which is what would need either a sweep per wait or a
+          coordinator that owns them all. See the Revision below.</li>
           <li><strong>Compensation that must unwind in order.</strong> ADR-054&#39;s compensating handlers are independent: cancel
           restores stock, payment failure notifies the customer, and neither depends on the other having run.
           A four-step workflow that must undo steps 3, 2 and 1 in that order has an ordering requirement no
           set of independent handlers expresses.</li>
           </ul>
-          <p>Nothing in the four repositories has these properties. A content sweep of the <code>Source</code> trees for
+          <p>Nothing in the four repositories has all three properties. A content sweep of the <code>Source</code> trees for
           <code>MassTransitStateMachine</code>, <code>SagaStateMachineInstance</code>, <code>ISaga</code> and <code>InMemorySagaRepository</code> returns
           <strong>no match in any repo</strong>, which is the verifiable form of &quot;no orchestrated workflow exists&quot;.
           <code>PaymentReconciliationService</code> in MMCA.Store&#39;s Sales module is still the only reconciliation sweep,
@@ -289,8 +294,11 @@
           which keeps the coordinator inside one transactional boundary with the data it coordinates and adds
           no shared store to race on.</li>
           <li><strong>Timeouts as scheduled messages, not as a sweep.</strong> A state machine expresses a deadline per
-          instance rather than as a periodic scan for stale rows. That is the property ADR-054&#39;s sweep cannot
-          express and the main functional reason to reach for one.</li>
+          instance rather than as a periodic scan for stale rows. ADR-054&#39;s sweep cannot express that, but a
+          state machine is no longer the only thing that can: Store schedules one deadline per unpaid order
+          on ADR-114&#39;s internal-command queue, so a single wait against a single aggregate needs no
+          coordinator. What a coordinator adds is several deadlines per workflow instance, each interpreted
+          against instance state that lives nowhere else.</li>
           <li><strong>Compensation hooks folding into ADR-054&#39;s backstop, not replacing it.</strong> A state machine&#39;s
           compensating transitions would call the same guarded, <code>Result</code>-returning domain transitions
           ADR-054 already insists on (&quot;the sweep gets no private path into the aggregate&quot;). The
@@ -355,6 +363,39 @@
           mechanisms rather than one replacing the other. This record&#39;s benefit is a narrower job for the
           sweep, not its retirement.</li>
           </ul>
+          <h2 id="revision-2026-09-11-the-first-per-instance-deadline-exists-and-it-is-not-a-state-machine">Revision (2026-09-11): the first per-instance deadline exists, and it is not a state machine</h2>
+          <p>One of the three properties this record listed as absent has arrived, from an unexpected direction.
+          MMCA.Store now gives every unpaid order its own scheduled deadline: <code>CheckOutHandler</code> arms an
+          <code>ExpireUnpaidOrderInternalCommand</code> for <code>now</code> plus <code>UnpaidOrderExpiry:Minutes</code> inside the checkout
+          transaction
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:178-184,226-229</code>),
+          <code>OrderPaymentFailedSagaHandler</code> re-arms it after a failed payment attempt
+          (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:81-84</code>), and its handler cancels the order only
+          when it is still unpaid and its window has genuinely elapsed
+          (<code>.../Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs:61-74</code>). That is a timeout
+          which is not a poll: per instance, durable, and exact.</p>
+          <p>It was built on ADR-114&#39;s internal-command queue, not on a state machine
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/InternalCommands/IInternalCommandScheduler.cs:16</code>).
+          A scheduled row carrying a due time and one aggregate id is sufficient when the state the deadline
+          acts on already lives on that aggregate: the handler re-reads the order and decides against what is
+          stored, so there is nothing to correlate and no second copy of the workflow&#39;s state to keep in step.
+          This is worth recording precisely because it is the cheap answer this record predicted would be
+          reached for, and here it was the right one.</p>
+          <p><strong>It does not meet the trigger, and the deferral stands unchanged.</strong> The condition this record names
+          is three properties together, and the other two remain absent. There is no workflow state outside an
+          aggregate: the deadline&#39;s payload is an order id, and <code>Order.Status</code> plus <code>Order.InventoryRestored</code>
+          are still the saga state. And there is no compensation that must unwind in order: cancelling an
+          expired order runs the one independent <code>OrderCancelled</code> handler, exactly as ADR-054 describes. A
+          sweep per wait is likewise still hypothetical, because there is exactly one wait. What has changed is
+          the balance of reasons: a per-instance timeout on its own no longer argues for a coordinator, so the
+          argument that remains for one is correlation state and ordered compensation.</p>
+          <p>The absence evidence is re-verified rather than assumed. A content sweep of the four repositories&#39;
+          <code>Source</code> trees for <code>MassTransitStateMachine</code>, <code>SagaStateMachineInstance</code>, <code>ISaga</code> and
+          <code>InMemorySagaRepository</code> still returns no match in any repo,
+          <code>PaymentReconciliationService</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:68</code>)
+          is still the only reconciliation sweep, and <code>PeriodicBackgroundService</code> still has exactly one
+          production subclass (<code>PaymentReconciliationService.cs:74</code>).</p>
           <h2 id="related">Related</h2>
           <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> (the accepted mechanism this record defers an
           alternative to: choreographed compensation, the persisted aggregate marker, and the reconciliation
@@ -369,7 +410,9 @@
           as a handler does), <a href="052-background-job-execution.html">ADR-052</a> (the hosted-service family the
           reconciliation sweep belongs to, and the in-process alternative a per-instance deadline is not),
           <a href="084-stripe-webhook-ingress.html">ADR-084</a> (the third-party ingress whose unreliability is the specific
-          thing no coordinator can fix).</p>
+          thing no coordinator can fix), <a href="114-internal-commands-durable-job-queue.html">ADR-114</a> (the durable internal-command
+          queue that carries the first per-instance deadline, one aggregate id at a time, without a
+          coordinator).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -385,6 +428,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-09-11-the-first-per-instance-deadline-exists-and-it-is-not-a-state-machine">Revision (2026-09-11): the first per-instance deadline exists, and it is not a state machine</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
