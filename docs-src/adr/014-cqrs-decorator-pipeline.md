@@ -13,6 +13,11 @@ validator and union the failures, they do not stop at the first registration; th
 path is the shipped idiom in all seven production service hosts; citations refreshed).
 Revised 2026-09-07 (the caching decorator's key carries the calling user for a query that declares
 itself caller-scoped, with an explicit opt-out marker).
+Revised 2026-09-11 (an unhandled exception is logged once, at the boundary: both logging decorators
+record the exception outcome at Warning and without the exception object, and the single Error row
+with the full stack belongs to the handler that actually handles it; the duration histograms and
+their `outcome=exception` tag are unchanged; see the Revision (2026-09-11) at the end).
+
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
 logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -288,3 +293,41 @@ pipeline-side surface beside the `[HasPermission]` controller attribute), ADR-04
 a disabled feature does not reveal which permission guards it), ADR-026 (the caching substrate the
 Authorization decorator is deliberately placed outside of), ADR-058 (the runtime conformance suites a
 consumer subclasses; the decorator-order base is one of them).
+
+## Revision (2026-09-11)
+One decorator behaviour changed on both chains, and it is a logging decision rather than a pipeline
+one: the order, the markers, the sealing rule and the short-circuit currency are all unchanged.
+
+**Two Error rows per failure became one.** `LoggingCommandDecorator` catches a thrown exception,
+records the duration against the exception outcome and rethrows untouched
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:59`-`:70`).
+Its own line is now Warning and carries no exception object (`:117`-`:118`, the reason stated at
+`:114`-`:116`); the message names what happened and where the stack will be, rather than repeating the
+stack. `LoggingQueryDecorator` is identical
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:56`-`:60`,
+the line at `:106`). Every unhandled exception previously produced two Error rows and two stacks,
+which doubled the ingestion cost of the noisiest events in the system and made an operator counting
+Errors count each failure twice.
+
+**The boundary keeps the single Error and the single stack.** The exception travels on to whichever
+boundary actually handles it: `GlobalExceptionHandler`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:67`) or
+`DbUpdateExceptionHandler`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:31`) for a
+request, and `InternalCommandProcessor` for a deferred command, whose dead-letter and cycle-failure
+lines are Error
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:759`,
+`:762`, `:765`, `:741`, `:744`). That is the place that also decided what the caller sees, which is why
+it owns the record of the failure.
+
+**Nothing about the metrics moved.** Both decorators still record their duration histogram through the
+per-path helper with the outcome tag intact
+(`LoggingCommandDecorator.cs:97`-`:101`, `LoggingQueryDecorator.cs:91`-`:95`), so the RED signal
+[ADR-041](041-observability-and-telemetry.md) defines keeps the same shape and `outcome=exception`
+still counts the same events. The decorator line and the boundary line carry the same correlation id
+through the logging scope, so they still join.
+
+**The cost.** Anything alerting on the decorator's Error level sees nothing now and has to alert on
+the boundary's instead. A caller that invokes a handler outside any of those boundaries and swallows
+the exception itself is left with a Warning and no stack, which is the trade this makes deliberately:
+the stack belongs to the code that handles the failure.

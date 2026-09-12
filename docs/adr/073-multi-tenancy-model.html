@@ -253,6 +253,11 @@
           <code>ApplicationDbContext</code> filter and interceptor anchors, the interceptor registrations in
           <code>DependencyInjection</code> and <code>DesignTimeDbContextHelper</code>, and the outbox per-tenant scope and claim-lease
           anchors were all re-anchored to current source.</p>
+          <p>Revised 2026-09-11: the tenant now crosses the broker. This record never listed the gap, but a
+          consumer service could not resolve the tenant of an integration event: the outbox row and the broker
+          message both arrived untenanted, so the delivery ran in the system context. The row now stores the
+          tenant it was written under and the consumer restores <code>MMCA-Tenant-Id</code> before anything reads the
+          scope; see the Revision (2026-09-11) at the end.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
           <strong>source name</strong> (every entity resolves to a <code>DataSourceKey(Engine, Name)</code>, each module or service owning
@@ -468,6 +473,47 @@
           read-side bypass), <a href="030-startup-sole-migrator.html">ADR-030</a> (who applies migrations, now once per tenant per
           overridden source), <a href="070-fail-fast-configuration-contract.html">ADR-070</a> (the validating settings chain
           <code>TenancySettings</code> binds through, extended with a check that every override names a known source).</p>
+          <h2 id="revision-2026-09-11">Revision (2026-09-11)</h2>
+          <p><strong>The gap this closes was never written down here.</strong> Everything above is about the tenant inside a
+          request: the middleware resolves it, the named filter composes on it, the write interceptor stamps and
+          refuses on it, the outbox is drained once per source and tenant pair, and the caching decorators
+          prefix on it. What no section covered is an event leaving one service and arriving in another. The
+          outbox row carried no tenant and the broker message carried no tenant, so the delivery ran in the
+          system context, which this record&#39;s own Trade-offs already name as &quot;a privileged mode with no second
+          gate&quot;: on a shared-schema host that delivery read across tenants, and on a database-per-tenant host it
+          had no way to pick a database at all.</p>
+          <p><strong>The tenant is now part of both hops, through one helper.</strong> On the producer side the scoped context
+          factory captures <code>ITenantContext.TenantId</code> into the row&#39;s origin
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:149</code>-<code>:153</code>),
+          <code>OutboxMessage.TenantId</code> stores it
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:93</code>, mapped
+          as <code>varchar(64)</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:652</code>),
+          and the processor restores it before the row is dispatched
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:607</code>-<code>:613</code>).
+          Across the broker, <code>BrokerMessageBus</code> stamps <code>MMCA-Tenant-Id</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerMessageBus.cs:94</code>, the constant at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Messaging/MessageHeaders.cs:25</code>) and the consuming side
+          reads it back
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/ConsumerOriginRestore.cs:53</code>)
+          before the inbox is touched
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:62</code>-<code>:64</code>),
+          which matters here specifically: under database-per-tenant the inbox store resolves its context
+          through the same scope, so restoring the tenant afterwards would put the dedup row in the wrong
+          database (<a href="021-consumer-inbox-idempotency.html">ADR-021</a>).</p>
+          <p><strong>The restore respects the one-scope-one-tenant rule this record set.</strong> <code>AmbientOrigin.Restore</code> sets
+          the tenant only when the scope has not already resolved a different one
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:137</code>-<code>:143</code>), and it is
+          restored first, before any repository or context is resolved on that scope, because the tenant routes
+          the context factory and every query filter afterwards reads from it (<code>:135</code>-<code>:136</code>). A host running
+          database per tenant is unaffected by the guard, since its work is already one scope per tenant.</p>
+          <p><strong>What is still on discipline.</strong> A message published by a service that has not upgraded carries no
+          tenant header, and a row written before the migration reads back as null, so those deliveries run
+          untenanted in the system context, exactly as every delivery did before. Nothing fails a build or a
+          startup to say that one publisher in the mesh is still behind: the signal is an absent tenant, which
+          looks the same as a legitimately system-raised event. Adoption is also unchanged, and it is why this
+          closes a hole rather than fixing an outage: ADC and Store are single-tenant, and Helpdesk remains the
+          reference adopter.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -484,6 +530,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             </ul>
           </nav>
         </aside>

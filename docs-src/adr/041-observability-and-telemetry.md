@@ -39,6 +39,14 @@ Revised 2026-09-11 (the meter subscription block carries eight meters now, the e
 poll filter drops; the `MMCA.Common.AI` meter is defined but not subscribed there; and every
 `Extensions.cs` and CQRS-decorator citation is rebased onto its current line. See the Revision
 (2026-09-11) at the end).
+Amended again (2026-09-11) to record a ninth subscribed meter, `Polly`, with the
+`Telemetry:EnablePollyDurationMetrics` cost knob that keeps its two duration histograms off by
+default, and to record that the CQRS logging decorators now log a thrown exception at Warning without
+the exception object while their duration histograms and outcome tags stay exactly as this record
+describes them. The eight-meter count in the entry above is superseded, and the metrics configuration
+moved into its own `ConfigureMetrics` method, so the subscription block no longer sits at the lines
+the earlier entries cite. See the "Amended (2026-09-11): the Polly meter" section at the end.
+
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
 the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -178,8 +186,9 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 ## Trade-offs
 - **Custom instrumentation carries a maintenance cost.** The Aspire package has no reference to
   Application or Infrastructure by design, so the meter and activity-source names are duplicated as
-  literals (the eight meter subscriptions at `Extensions.cs:201`-`Extensions.cs:208` and the trace
-  sources at `Extensions.cs:212`-`Extensions.cs:214`, and the sync notes at `CqrsMetrics.cs:9`,
+  literals (the nine meter subscriptions at `Extensions.cs:582`-`Extensions.cs:589` and
+  `Extensions.cs:596`, the trace sources at `Extensions.cs:169`-`Extensions.cs:171`, and the sync
+  notes at `CqrsMetrics.cs:9`,
   `OutboxMetrics.cs:9` and `OutboxPollFilterProcessor.cs:19`-`:25`). A rename on one side silently
   stops export until the literal is updated. That is the price of the decoupled package graph.
 - **Sampling trades trace completeness for cost.** A sampled-out trace is simply gone; deep debugging
@@ -411,3 +420,52 @@ telemetry signals in the same Aspire defaults), ADR-114 (the durable internal-co
 meter, activity source and poll-span filtering this pipeline carries), ADR-120 (the governed chat
 client whose `MMCA.Common.AI` meter these defaults do not subscribe), and COST.md (the FinOps companion that records
 span-filtering and sampling as cost levers).
+
+## Amended (2026-09-11): the Polly meter
+A ninth meter, one cost knob, and one log level.
+
+**Polly's meter is subscribed.** `AddServiceDefaults` puts the standard resilience handler on every
+`HttpClient` and every gRPC typed client
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:83`, `:93`-`:98`,
+[ADR-009](009-resilience-and-recovery-objectives.md)), so Polly is the component that decides whether
+an inter-service call is retried, timed out, or refused by an open circuit. None of that left the
+process: the subscription block carried the eight `MMCA.Common.*` meters and never the one named
+`Polly`, so a backend brownout looked, from a dashboard, exactly like latency.
+`metrics.AddMeter(PollyMeterName)` (`Extensions.cs:596`, the literal at `:49`) makes it the ninth.
+
+**`resilience.polly.strategy.events` is always exported** (`Extensions.cs:57`). It is a counter tagged
+with the pipeline name, the strategy name, the event name (`OnRetry`, `OnCircuitOpened`,
+`OnCircuitClosed`, `OnTimeout`), the event severity and the exception type, and it is the only
+production signal that a client is retrying or that a circuit opened. It is low volume and low
+cardinality, so it sits behind no knob.
+
+**The two duration histograms are dropped unless a host asks for them.**
+`resilience.polly.strategy.attempt.duration` (`Extensions.cs:60`) and
+`resilience.polly.pipeline.duration` (`:63`) are removed by a metrics `View` unless
+`Telemetry:EnablePollyDurationMetrics` parses as boolean `true` (`:598`-`:610`, the key at `:43`, read
+through `IsInstrumentationEnabled` at `:490`). They are per-bucket streams on a pipeline that runs on
+every outbound call and they re-measure what `http.client.request.duration` already reports, so they
+stay off until someone is actually debugging a retry storm (rubric section 31). This knob is the
+mirror image of `Telemetry:DisableHttpClientMetrics`: it is off by default and must be turned on, and
+anything other than a parseable `true` leaves the histograms dropped.
+
+**Where the block lives now.** The metrics configuration moved out of the `WithMetrics` lambda into a
+dedicated `ConfigureMetrics` method (`Extensions.cs:520`, called at `:166`). The `MMCA.Common.*` meter
+chain is at `Extensions.cs:582`-`:589`, the Polly subscription at `:596`, and the trace sources at
+`:169`-`:171`. The earlier entries in this record cite the pre-move lines; the Trade-offs bullet above
+is corrected to the current ones. The authoritative list is still the block itself, and it now carries
+**nine**.
+
+**The CQRS decorators log a thrown exception once.** `LoggingCommandDecorator` and
+`LoggingQueryDecorator` still record the duration of a failed execution and still tag it
+`outcome=exception`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:97`-`:101`,
+`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:91`-`:95`),
+so the RED signal this record defines is unchanged in shape and in volume. What changed is the level
+and the payload of the decorator's own log line: Warning, without the exception object
+(`LoggingCommandDecorator.cs:117`-`:118`, `LoggingQueryDecorator.cs:106`), because the single Error row
+with the full stack belongs to the boundary that handles the exception
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:67`,
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:31`). Both
+lines carry the same correlation id, so they still join; an alert built on the decorator's Error level
+moves to the boundary's ([ADR-014](014-cqrs-decorator-pipeline.md)).

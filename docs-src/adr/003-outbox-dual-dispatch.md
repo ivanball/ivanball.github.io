@@ -20,6 +20,11 @@ so an unset `MessageBus:EndpointPrefix` now yields prefixed queue names).
 per-source table, `InternalCommands`, borrows this record's claim-lease, jittered-backoff and
 dead-letter idiom to carry instructions rather than events. The outbox itself is unchanged, and the
 two processors share an idiom rather than an implementation.
+Revised 2026-09-11 (an outbox row now captures the ambient request context when it is written,
+`TenantId`, `UserId`, `UserRoles` and `CorrelationId`, and the processor restores that context onto
+the cycle's scope before each row is dispatched; a consumer with a relational outbox source adds one
+expand-only migration; see the Revision (2026-09-11) at the end).
+
 ## Context
 Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:
 1. In-process dispatch fails (e.g., handler throws): the event is lost if not persisted.
@@ -264,3 +269,62 @@ consumer that must keep its current names pins the pre-upgrade values explicitly
 `Application:Namespace`, or the individual prefix keys) **before** upgrading; a consumer that takes
 the new names drains the old broker queues on cutover, because in-flight messages sit under the old
 endpoint name and nothing reads it afterwards.
+
+## Revision (2026-09-11)
+The dispatch model is unchanged: same table, same claim lease, same dual dispatch, same retry and
+dead-letter policy. What changed is what a row carries, because the hop was dropping the thing that
+made the delivered work attributable.
+
+**The hole the columns close.** An event written inside a request was delivered one poll cycle later
+on a background scope that had no principal, no tenant and no correlation id. A handler reading
+`ICurrentUserService` saw nobody, its own writes were stamped with the audit sentinel, a host running
+the shared-schema tenant filter ([ADR-073](073-multi-tenancy-model.md)) read across tenants, and
+nothing in the logs joined the delivery back to the request that produced it. The deferred-command
+queue ([ADR-114](114-internal-commands-durable-job-queue.md)) had already solved exactly this on its
+own row; the outbox now does it through the same helper, so the two hops cannot drift.
+
+**Four nullable columns, captured at write time.** `OutboxMessage` gains `TenantId`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:93`),
+`UserId` (`:100`), `UserRoles` (`:106`) and `CorrelationId` (`:113`), filled from an `OutboxOrigin`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxOrigin.cs:29`) by
+`FromDomainEvent(IDomainEvent domainEvent, OutboxOrigin origin = default)` (`OutboxMessage.cs:131`,
+assignments at `:144`-`:147`). The origin is produced once per save by an accessor the scoped context
+factory attaches
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:149`-`:153`)
+and read through `ApplicationDbContext.CurrentOutboxOrigin`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:146`,
+backing property at `:140`), so the role flattening costs one pass per save rather than one per row.
+All three write paths take it from there: the domain-event interceptor
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:247`,
+`:251`), `InProcessEventBus`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:89`, `:93`) and
+`BrokerEventBus`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:81`, `:85`). Roles
+are flattened to a comma-separated list truncated to the column width by the shared helper
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:41`, the 512-character
+cap at `:25`). The mapping mirrors the `InternalCommands` columns deliberately: `varchar(64)` tenant,
+`varchar(512)` roles, `varchar(64)` correlation id (`ApplicationDbContext.cs:652`-`:654`).
+
+**Restored per row, overwritten per row.** `OutboxProcessor` calls `AmbientOrigin.Restore` on the
+cycle's scope before the row is deserialized, published or dispatched
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:607`-`:613`),
+stamping the rebuilt identity with the authentication type `Outbox` (`:81`), which is what makes it
+read as authenticated and names the hop it came back from. The restore overwrites rather than
+accumulates: the principal is set or cleared on every call (`AmbientOrigin.cs:145`-`:156`) and the
+correlation id is overwritten whenever the row carries one (`:158`-`:161`), so one row's identity can
+never answer for the next row of the same batch. The tenant is the one value that is not overwritten.
+It is set only when the scope has not already resolved a different tenant
+(`AmbientOrigin.cs:137`-`:143`), because `ITenantContext` is single-valued for the life of a scope by
+contract and a scope whose tenant changed mid-flight has already read rows under the previous one.
+
+**The consumer-visible cost: one expand-only migration per relational outbox source.** Every column is
+nullable, nothing is renamed and nothing is dropped, so this is an expand-only change
+([ADR-057](057-expand-contract-schema-evolution-gate.md)) and the migration and the package can be
+deployed in either order. A row written before the upgrade reads back as "nothing was captured",
+which is exactly what it is, and the one-argument `FromDomainEvent(domainEvent)` still compiles and
+still stores four nulls. Cosmos sources need nothing, because `CosmosDbContext` does not map the
+outbox.
+
+The broker half of the same hop is recorded in [ADR-021](021-consumer-inbox-idempotency.md): the same
+four values travel as `MMCA-*` message headers and are restored on the consuming scope before the
+inbox is touched.

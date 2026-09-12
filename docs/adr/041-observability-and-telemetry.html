@@ -267,7 +267,14 @@
           <code>MMCA.Common.InternalCommands</code>, which also adds a second trace source and a second poll span the
           poll filter drops; the <code>MMCA.Common.AI</code> meter is defined but not subscribed there; and every
           <code>Extensions.cs</code> and CQRS-decorator citation is rebased onto its current line. See the Revision
-          (2026-09-11) at the end).</p>
+          (2026-09-11) at the end).
+          Amended again (2026-09-11) to record a ninth subscribed meter, <code>Polly</code>, with the
+          <code>Telemetry:EnablePollyDurationMetrics</code> cost knob that keeps its two duration histograms off by
+          default, and to record that the CQRS logging decorators now log a thrown exception at Warning without
+          the exception object while their duration histograms and outcome tags stay exactly as this record
+          describes them. The eight-meter count in the entry above is superseded, and the metrics configuration
+          moved into its own <code>ConfigureMetrics</code> method, so the subscription block no longer sits at the lines
+          the earlier entries cite. See the &quot;Amended (2026-09-11): the Polly meter&quot; section at the end.</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -408,8 +415,9 @@
           <ul>
           <li><strong>Custom instrumentation carries a maintenance cost.</strong> The Aspire package has no reference to
           Application or Infrastructure by design, so the meter and activity-source names are duplicated as
-          literals (the eight meter subscriptions at <code>Extensions.cs:201</code>-<code>Extensions.cs:208</code> and the trace
-          sources at <code>Extensions.cs:212</code>-<code>Extensions.cs:214</code>, and the sync notes at <code>CqrsMetrics.cs:9</code>,
+          literals (the nine meter subscriptions at <code>Extensions.cs:582</code>-<code>Extensions.cs:589</code> and
+          <code>Extensions.cs:596</code>, the trace sources at <code>Extensions.cs:169</code>-<code>Extensions.cs:171</code>, and the sync
+          notes at <code>CqrsMetrics.cs:9</code>,
           <code>OutboxMetrics.cs:9</code> and <code>OutboxPollFilterProcessor.cs:19</code>-<code>:25</code>). A rename on one side silently
           stops export until the literal is updated. That is the price of the decoupled package graph.</li>
           <li><strong>Sampling trades trace completeness for cost.</strong> A sampled-out trace is simply gone; deep debugging
@@ -621,6 +629,49 @@
           meter, activity source and poll-span filtering this pipeline carries), ADR-120 (the governed chat
           client whose <code>MMCA.Common.AI</code> meter these defaults do not subscribe), and COST.md (the FinOps companion that records
           span-filtering and sampling as cost levers).</p>
+          <h2 id="amended-2026-09-11-the-polly-meter">Amended (2026-09-11): the Polly meter</h2>
+          <p>A ninth meter, one cost knob, and one log level.</p>
+          <p><strong>Polly&#39;s meter is subscribed.</strong> <code>AddServiceDefaults</code> puts the standard resilience handler on every
+          <code>HttpClient</code> and every gRPC typed client
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:83</code>, <code>:93</code>-<code>:98</code>,
+          <a href="009-resilience-and-recovery-objectives.html">ADR-009</a>), so Polly is the component that decides whether
+          an inter-service call is retried, timed out, or refused by an open circuit. None of that left the
+          process: the subscription block carried the eight <code>MMCA.Common.*</code> meters and never the one named
+          <code>Polly</code>, so a backend brownout looked, from a dashboard, exactly like latency.
+          <code>metrics.AddMeter(PollyMeterName)</code> (<code>Extensions.cs:596</code>, the literal at <code>:49</code>) makes it the ninth.</p>
+          <p><strong><code>resilience.polly.strategy.events</code> is always exported</strong> (<code>Extensions.cs:57</code>). It is a counter tagged
+          with the pipeline name, the strategy name, the event name (<code>OnRetry</code>, <code>OnCircuitOpened</code>,
+          <code>OnCircuitClosed</code>, <code>OnTimeout</code>), the event severity and the exception type, and it is the only
+          production signal that a client is retrying or that a circuit opened. It is low volume and low
+          cardinality, so it sits behind no knob.</p>
+          <p><strong>The two duration histograms are dropped unless a host asks for them.</strong>
+          <code>resilience.polly.strategy.attempt.duration</code> (<code>Extensions.cs:60</code>) and
+          <code>resilience.polly.pipeline.duration</code> (<code>:63</code>) are removed by a metrics <code>View</code> unless
+          <code>Telemetry:EnablePollyDurationMetrics</code> parses as boolean <code>true</code> (<code>:598</code>-<code>:610</code>, the key at <code>:43</code>, read
+          through <code>IsInstrumentationEnabled</code> at <code>:490</code>). They are per-bucket streams on a pipeline that runs on
+          every outbound call and they re-measure what <code>http.client.request.duration</code> already reports, so they
+          stay off until someone is actually debugging a retry storm (rubric section 31). This knob is the
+          mirror image of <code>Telemetry:DisableHttpClientMetrics</code>: it is off by default and must be turned on, and
+          anything other than a parseable <code>true</code> leaves the histograms dropped.</p>
+          <p><strong>Where the block lives now.</strong> The metrics configuration moved out of the <code>WithMetrics</code> lambda into a
+          dedicated <code>ConfigureMetrics</code> method (<code>Extensions.cs:520</code>, called at <code>:166</code>). The <code>MMCA.Common.*</code> meter
+          chain is at <code>Extensions.cs:582</code>-<code>:589</code>, the Polly subscription at <code>:596</code>, and the trace sources at
+          <code>:169</code>-<code>:171</code>. The earlier entries in this record cite the pre-move lines; the Trade-offs bullet above
+          is corrected to the current ones. The authoritative list is still the block itself, and it now carries
+          <strong>nine</strong>.</p>
+          <p><strong>The CQRS decorators log a thrown exception once.</strong> <code>LoggingCommandDecorator</code> and
+          <code>LoggingQueryDecorator</code> still record the duration of a failed execution and still tag it
+          <code>outcome=exception</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:97</code>-<code>:101</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:91</code>-<code>:95</code>),
+          so the RED signal this record defines is unchanged in shape and in volume. What changed is the level
+          and the payload of the decorator&#39;s own log line: Warning, without the exception object
+          (<code>LoggingCommandDecorator.cs:117</code>-<code>:118</code>, <code>LoggingQueryDecorator.cs:106</code>), because the single Error row
+          with the full stack belongs to the boundary that handles the exception
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:67</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:31</code>). Both
+          lines carry the same correlation id, so they still join; an alert built on the decorator&#39;s Error level
+          moves to the boundary&#39;s (<a href="014-cqrs-decorator-pipeline.html">ADR-014</a>).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -642,6 +693,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#amended-2026-09-11-the-polly-meter">Amended (2026-09-11): the Polly meter</a></li>
             </ul>
           </nav>
         </aside>
