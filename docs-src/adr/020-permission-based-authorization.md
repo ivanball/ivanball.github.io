@@ -71,7 +71,7 @@ categories, sponsors, activities) granted to the app's own `ContentEditor` role 
 (`engagement:live:manage` gating the conference-day live-poll management endpoints,
 `engagement:checkin:manage` gating QR badge check-in and the attendance rollup, and
 `engagement:points:view-overview` gating the organizer points rollup, at
-`EngagementPermissions.cs:16`, `:23`, `:30`), each granted to `Organizer` and `Admin`; and its
+`EngagementPermissions.cs:16`, `:23`, `:30`), each granted to `Organizer`; and its
 Identity module defines `identity:users:read`. MMCA.Store defines nine of its own across three
 modules: four in Catalog (`CatalogPermissions.cs:12-21`), three in Sales
 (`SalesPermissions.cs:12-18`) and two in Identity (`IdentityPermissions.cs:12-15`), each module
