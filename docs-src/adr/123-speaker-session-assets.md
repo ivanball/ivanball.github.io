@@ -54,7 +54,7 @@ than the module's usual database integer
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:16`,
 minted at `SessionAsset.cs:301`), because the id is a path segment of a public blob name and a
 sequential one would let anyone who downloaded a single asset walk the container. The asset URL is
-validated as an absolute `https` URL in the domain (`SessionAssetInvariants.cs:128-147`), so a
+validated as an absolute `http` or `https` URL in the domain (`SessionAssetInvariants.cs:128-147`), so a
 `javascript:` or `data:` value is refused once rather than sanitized at each render site.
 
 **2. Authorization is capability OR ownership, decided in the handlers.** A caller may manage a

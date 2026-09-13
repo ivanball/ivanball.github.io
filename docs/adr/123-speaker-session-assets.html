@@ -278,7 +278,7 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:16</code>,
           minted at <code>SessionAsset.cs:301</code>), because the id is a path segment of a public blob name and a
           sequential one would let anyone who downloaded a single asset walk the container. The asset URL is
-          validated as an absolute <code>https</code> URL in the domain (<code>SessionAssetInvariants.cs:128-147</code>), so a
+          validated as an absolute <code>http</code> or <code>https</code> URL in the domain (<code>SessionAssetInvariants.cs:128-147</code>), so a
           <code>javascript:</code> or <code>data:</code> value is refused once rather than sanitized at each render site.</p>
           <p><strong>2. Authorization is capability OR ownership, decided in the handlers.</strong> A caller may manage a
           session&#39;s materials if they hold <code>conference:session-assets:manage</code>
