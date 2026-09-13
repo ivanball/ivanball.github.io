@@ -66,7 +66,7 @@ one authorization model. Nothing is pre-registered per role name.
 Adoption is asymmetric and that is intentional: a module declares as many capabilities as its own
 surface needs. ADC's Conference module defines nine (`ConferencePermissions.cs:12-36`, enumerated in
 `All` at `:39-50`), including a curation subset (`ContentManagement` at `:57-64`: sessions, speakers,
-categories, sponsors, activities) granted to `RoleNames.ContentEditor`
+categories, sponsors, activities) granted to the app's own `ContentEditor` role constant
 (`MMCA.ADC.Conference.API/DependencyInjection.cs:50`); its Engagement module defines three
 (`engagement:live:manage` gating the conference-day live-poll management endpoints,
 `engagement:checkin:manage` gating QR badge check-in and the attendance rollup, and
@@ -75,11 +75,45 @@ categories, sponsors, activities) granted to `RoleNames.ContentEditor`
 Identity module defines `identity:users:read`. MMCA.Store defines nine of its own across three
 modules: four in Catalog (`CatalogPermissions.cs:12-21`), three in Sales
 (`SalesPermissions.cs:12-18`) and two in Identity (`IdentityPermissions.cs:12-15`), each module
-granting its whole set to `RoleNames.Admin` from its own `AddPermissions(...)` call
+granting its whole set to its own `Admin` role constant from its own `AddPermissions(...)` call
 (`MMCA.Store.Catalog.API/DependencyInjection.cs:41`, `MMCA.Store.Sales.API/DependencyInjection.cs:40`,
 `MMCA.Store.Identity.API/DependencyInjection.cs:42`). The registry, handler and policy provider are
 covered by framework tests, and the ADC grant tables (Conference and Engagement) by dedicated grant
 tests.
+
+**Role vocabulary is the app's, not the framework's.** MMCA.Common declares no role names at all: the
+only place a role string appears in framework code is as the key a host hands to
+`AddPermissions(...)`, and every framework-owned gate names a capability instead. The framework's own
+navigation entries gate on `NavItem.RequiredPermission`
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20`, matched against the
+`permission` claim at `.../UI/Layout/NavMenu.razor:223-225`), the notification entry on
+`NotificationPermissions.Manage`
+(`.../UI/Notifications/NotificationUIModule.cs:20`), the owner-or-admin bypass role is required
+configuration a host supplies ([ADR-033](033-resource-ownership-authorization.md)), and the UI test
+helper takes the role as an argument
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/TestPrincipal.cs:41`). So each app
+owns its `RoleNames` constants in its Identity module's Shared project and each module's grants map
+those constants to that module's permissions.
+
+**Access tokens carry the capabilities, and both gates honour them.** `TokenService` resolves the
+host's `IPermissionRegistry`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:66`) and writes one
+`permission` claim (`AuthClaimTypes.Permission`,
+`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:24`) per permission granted to the
+token's role, ordinally ordered and never duplicating a claim the caller already supplied
+(`TokenService.cs:128-131`); stored grants ([ADR-116](116-identity-completions-opt-in.md)) ride along
+because the registry it resolves is the layered one. The HTTP policy handler evaluates the same
+capability through the registry, and the CQRS `AuthorizationGate` passes a request whose permission
+the registry grants to the caller's roles OR that the principal carries as a claim
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/AuthorizationGate.cs:46-48`,
+over `ClaimsPrincipalExtensions.HasPermissionClaim`, `.../Shared/Auth/ClaimsPrincipalExtensions.cs:94`).
+
+That claim is what makes the model work when the modules run as separate services. The host that mints
+tokens (the Identity service) has to register every module's compiled grants, so a token carries the
+full permission set rather than only the Identity module's; stored grants live in that one host and
+reach the other services through the claims alone. A module therefore declares its role-to-permission
+grants in its own Shared project and registers them twice: in its own host, and in the Identity host.
+A permission change is visible after the next sign-in, exactly like a role change.
 
 ## Rationale
 - **Capabilities decouple endpoints from roles.** A route says what it *does*

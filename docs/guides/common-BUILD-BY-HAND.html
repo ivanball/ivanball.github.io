@@ -1040,10 +1040,22 @@ app.UseCommonMiddlewarePipeline();
 [
     <span class="hljs-keyword">new</span>(<span class="hljs-string">&quot;Nav.Orders&quot;</span>, OrdersRoutePaths.Orders, Icons.Material.Filled.Receipt, <span class="hljs-keyword">typeof</span>(OrdersUIModule)),
     <span class="hljs-keyword">new</span>(<span class="hljs-string">&quot;Nav.Admin&quot;</span>, OrdersRoutePaths.Admin, Icons.Material.Filled.Settings, <span class="hljs-keyword">typeof</span>(OrdersUIModule),
-        RoleNames.Admin, Section: NavSection.Admin),
+        RequiredPermission: OrdersPermissions.Manage, Section: NavSection.Admin),
 ];</code></pre>
           <p>A key the resource type does not declare renders as the raw string, which keeps a not-yet-translated
           entry legible instead of blank.</p>
+          <p>Gate the admin entry on a capability, not on a role name. <code>OrdersPermissions.Manage</code> above is a
+          <code>const string</code> your own module declares (<code>&quot;orders:manage&quot;</code>) and grants to a role in its
+          <code>AddPermissions(...)</code> call, the <a href="../adr/020-permission-based-authorization.html">ADR-020</a> model.
+          <code>RequiredPermission</code> is matched against the
+          caller&#39;s <code>permission</code> claims
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor:223-225</code>), which the access token
+          carries, one per permission your registry grants the token&#39;s role
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:128-131</code>). The framework
+          declares no role vocabulary, so <code>RequiredRole</code> would name one of your own <code>RoleNames</code> constants and
+          would then have to change every time you re-cut the grants; <code>RequiredPermission</code> states what the entry
+          needs and leaves who gets it to the <code>AddPermissions(...)</code> call in your module registration.</p>
           <h3 id="the-aspire-apphost">The Aspire AppHost</h3>
           <p><code>Source/Hosting/Contoso.Support.AppHost</code> orchestrates the local stack. For the monolith it is small:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">using</span> MMCA.Common.Aspire.Hosting;

@@ -1045,12 +1045,25 @@ public IReadOnlyList<NavItem> NavItems { get; } =
 [
     new("Nav.Orders", OrdersRoutePaths.Orders, Icons.Material.Filled.Receipt, typeof(OrdersUIModule)),
     new("Nav.Admin", OrdersRoutePaths.Admin, Icons.Material.Filled.Settings, typeof(OrdersUIModule),
-        RoleNames.Admin, Section: NavSection.Admin),
+        RequiredPermission: OrdersPermissions.Manage, Section: NavSection.Admin),
 ];
 ```
 
 A key the resource type does not declare renders as the raw string, which keeps a not-yet-translated
 entry legible instead of blank.
+
+Gate the admin entry on a capability, not on a role name. `OrdersPermissions.Manage` above is a
+`const string` your own module declares (`"orders:manage"`) and grants to a role in its
+`AddPermissions(...)` call, the [ADR-020](../adr/020-permission-based-authorization.md) model.
+`RequiredPermission` is matched against the
+caller's `permission` claims
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20`,
+`MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor:223-225`), which the access token
+carries, one per permission your registry grants the token's role
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:128-131`). The framework
+declares no role vocabulary, so `RequiredRole` would name one of your own `RoleNames` constants and
+would then have to change every time you re-cut the grants; `RequiredPermission` states what the entry
+needs and leaves who gets it to the `AddPermissions(...)` call in your module registration.
 
 ### The Aspire AppHost
 

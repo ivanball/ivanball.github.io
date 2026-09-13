@@ -33,11 +33,14 @@ bypass role (`Admin` by default).
   `IAsyncActionFilter` whose primary constructor takes `ICurrentUserService` and
   `IOptions<OwnerOrAdminFilterOptions>`. Its ownership vocabulary comes from
   `OwnerOrAdminFilterOptions`
-  (`Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:11`), whose defaults
-  reproduce the original hard-coded behavior: `OwnerClaimType` `"customer_id"`
-  (`OwnerOrAdminFilterOptions.cs:14`), `BypassRole` `"Admin"` (`OwnerOrAdminFilterOptions.cs:17`), and
-  `OwnerParameterName` `"id"` (`OwnerOrAdminFilterOptions.cs:24`), so a host that configures nothing
-  behaves exactly as before. It short-circuits to the action for the bypass role
+  (`Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:13`). The two
+  parameter names keep the framework's conventional defaults: `OwnerClaimType` `"customer_id"`
+  (`OwnerOrAdminFilterOptions.cs:16`) and `OwnerParameterName` `"id"`
+  (`OwnerOrAdminFilterOptions.cs:31`). `BypassRole` has no default and is `[Required]`
+  (`OwnerOrAdminFilterOptions.cs:23-24`), validated by data annotations on first resolve, because the
+  framework knows no role names: a host that applies the filter without naming a role from its own
+  role constants fails loudly instead of silently bypassing for nobody. It short-circuits to the
+  action for the bypass role
   (`OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)`, `OwnerOrAdminFilter.cs:43`);
   otherwise it reads the caller's owner claim via `GetClaimValue<int>(settings.OwnerClaimType)`
   (`OwnerOrAdminFilter.cs:49`) and returns `ForbidResult` (HTTP 403) if the claim is missing
@@ -130,13 +133,14 @@ trade-off below: claim-less Customer tokens are issuable in practice, because cu
 registration can fail without failing the registration itself, so "no claim" is treated as deny rather
 than as no scoping.
 
-MMCA.ADC's Engagement module is the first host to configure the filter's vocabulary rather than take
-the defaults. `AddModuleEngagementAPI`
+Every host that applies the filter configures its vocabulary, because the bypass role is required
+configuration rather than a framework default. MMCA.ADC's Engagement module is the worked example.
+`AddModuleEngagementAPI`
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:43`) calls
 `services.Configure<OwnerOrAdminFilterOptions>(...)` (`DependencyInjection.cs:45`) to point the shared
 filter at ADC's own ownership terms: `ClaimTypes.NameIdentifier` as the owner claim
-(`DependencyInjection.cs:53`), the `Organizer` bypass role (`RoleNames.Organizer`,
-`Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:15`, `DependencyInjection.cs:54`), and the `userId`
+(`DependencyInjection.cs:53`), its own `Organizer` role constant as the bypass role
+(`DependencyInjection.cs:54`), and the `userId`
 query argument its Bookmarks list endpoints bind (`DependencyInjection.cs:55`). ADC's token carries the
 user id in `sub` alone; the JWT bearer handler maps inbound `sub` onto `ClaimTypes.NameIdentifier`, so
 that is the type the principal the filter inspects actually carries (`DependencyInjection.cs:47-52`).

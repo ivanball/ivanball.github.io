@@ -137,7 +137,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/020-permission-based-authorization.html</loc>
-    <lastmod>2026-09-10</lastmod>
+    <lastmod>2026-09-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -202,7 +202,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html</loc>
-    <lastmod>2026-09-11</lastmod>
+    <lastmod>2026-09-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -617,7 +617,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html</loc>
-    <lastmod>2026-09-10</lastmod>
+    <lastmod>2026-09-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -922,7 +922,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-BUILD-BY-HAND.html</loc>
-    <lastmod>2026-08-30</lastmod>
+    <lastmod>2026-09-13</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
