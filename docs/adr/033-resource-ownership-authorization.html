@@ -260,11 +260,14 @@
           <code>IAsyncActionFilter</code> whose primary constructor takes <code>ICurrentUserService</code> and
           <code>IOptions&lt;OwnerOrAdminFilterOptions&gt;</code>. Its ownership vocabulary comes from
           <code>OwnerOrAdminFilterOptions</code>
-          (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:11</code>), whose defaults
-          reproduce the original hard-coded behavior: <code>OwnerClaimType</code> <code>&quot;customer_id&quot;</code>
-          (<code>OwnerOrAdminFilterOptions.cs:14</code>), <code>BypassRole</code> <code>&quot;Admin&quot;</code> (<code>OwnerOrAdminFilterOptions.cs:17</code>), and
-          <code>OwnerParameterName</code> <code>&quot;id&quot;</code> (<code>OwnerOrAdminFilterOptions.cs:24</code>), so a host that configures nothing
-          behaves exactly as before. It short-circuits to the action for the bypass role
+          (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:13</code>). The two
+          parameter names keep the framework&#39;s conventional defaults: <code>OwnerClaimType</code> <code>&quot;customer_id&quot;</code>
+          (<code>OwnerOrAdminFilterOptions.cs:16</code>) and <code>OwnerParameterName</code> <code>&quot;id&quot;</code>
+          (<code>OwnerOrAdminFilterOptions.cs:31</code>). <code>BypassRole</code> has no default and is <code>[Required]</code>
+          (<code>OwnerOrAdminFilterOptions.cs:23-24</code>), validated by data annotations on first resolve, because the
+          framework knows no role names: a host that applies the filter without naming a role from its own
+          role constants fails loudly instead of silently bypassing for nobody. It short-circuits to the
+          action for the bypass role
           (<code>OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)</code>, <code>OwnerOrAdminFilter.cs:43</code>);
           otherwise it reads the caller&#39;s owner claim via <code>GetClaimValue&lt;int&gt;(settings.OwnerClaimType)</code>
           (<code>OwnerOrAdminFilter.cs:49</code>) and returns <code>ForbidResult</code> (HTTP 403) if the claim is missing
@@ -354,13 +357,14 @@
           trade-off below: claim-less Customer tokens are issuable in practice, because customer linking on
           registration can fail without failing the registration itself, so &quot;no claim&quot; is treated as deny rather
           than as no scoping.</p>
-          <p>MMCA.ADC&#39;s Engagement module is the first host to configure the filter&#39;s vocabulary rather than take
-          the defaults. <code>AddModuleEngagementAPI</code>
+          <p>Every host that applies the filter configures its vocabulary, because the bypass role is required
+          configuration rather than a framework default. MMCA.ADC&#39;s Engagement module is the worked example.
+          <code>AddModuleEngagementAPI</code>
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:43</code>) calls
           <code>services.Configure&lt;OwnerOrAdminFilterOptions&gt;(...)</code> (<code>DependencyInjection.cs:45</code>) to point the shared
           filter at ADC&#39;s own ownership terms: <code>ClaimTypes.NameIdentifier</code> as the owner claim
-          (<code>DependencyInjection.cs:53</code>), the <code>Organizer</code> bypass role (<code>RoleNames.Organizer</code>,
-          <code>Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:15</code>, <code>DependencyInjection.cs:54</code>), and the <code>userId</code>
+          (<code>DependencyInjection.cs:53</code>), its own <code>Organizer</code> role constant as the bypass role
+          (<code>DependencyInjection.cs:54</code>), and the <code>userId</code>
           query argument its Bookmarks list endpoints bind (<code>DependencyInjection.cs:55</code>). ADC&#39;s token carries the
           user id in <code>sub</code> alone; the JWT bearer handler maps inbound <code>sub</code> onto <code>ClaimTypes.NameIdentifier</code>, so
           that is the type the principal the filter inspects actually carries (<code>DependencyInjection.cs:47-52</code>).

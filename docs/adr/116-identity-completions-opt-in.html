@@ -320,8 +320,18 @@
           </li>
           <li><p><strong>Stored grants union with the compiled registry and can never deny.</strong> <code>PermissionGrant</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/PermissionGrant.cs:24</code>) is a flat
-          <code>(Role, Permission)</code> row with no soft-delete flag, mapped only where a consumer opts in
-          (<code>.../Infrastructure/Persistence/Auth/PermissionGrantModelBuilderExtensions.cs:30</code>).
+          <code>(Role, Permission)</code> row with no soft-delete flag
+          (<code>.../Infrastructure/Persistence/Auth/PermissionGrantModelBuilderExtensions.cs:30</code>). The DI call is
+          the whole opt-in: <code>AddStoredPermissionGrants(configuration)</code> registers the marker
+          <code>PermissionGrantModelGate</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/PermissionGrantModelGate.cs:19</code>,
+          <code>.../Infrastructure/DependencyInjection.cs:543</code>), and <code>ApplicationDbContext</code> resolves that marker
+          with <code>GetService</code> and maps the table only when it is present AND this context instance targets the
+          physical source named by <code>Authentication:PermissionGrants:DataSourceName</code>
+          (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:910-915</code>). No consumer calls the model-builder
+          extension by hand, a host that never opts in keeps a byte-identical model, and the other databases
+          in an opted-in host stay unchanged because one database owns the rows (the refresh-session
+          precedent).
           <code>LayeredPermissionRegistry</code> (<code>.../Auth/Permissions/LayeredPermissionRegistry.cs:30</code>) decorates
           whatever <code>IPermissionRegistry</code> the host already registered and adds the stored set to the compiled
           one. There is no deny row: a stored edit can only widen a role, so the effective permission set
@@ -351,7 +361,15 @@
           <code>.../Controllers/Administration/RolesAdminControllerBase.cs:43</code>), against
           <code>AdministrationPermissions.ManageUsers</code> / <code>ManageRoles</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:18</code>,
-          <code>:21</code>).</p>
+          <code>:21</code>). The roles base serves three reads and one write, the third read being the catalog an editor
+          draws from: <code>GetCatalogAsync</code> on the literal route <code>catalog</code>, which takes precedence over the
+          <code>{role}</code> template so no role named &quot;catalog&quot; can shadow it
+          (<code>.../Controllers/Administration/RolesAdminControllerBase.cs:98</code>, <code>:102</code>), returning
+          <code>PermissionCatalogResponse</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Responses/PermissionCatalogResponse.cs:22</code>) over
+          <code>IRoleAdministrationService.GetCatalogAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Administration/IRoleAdministrationService.cs:58</code>).
+          A consumer routes its subclass at <code>Admin/Roles</code>, so the catalog read is <code>GET Admin/Roles/catalog</code>.</p>
           </li>
           <li><p><strong>Three separate DI calls, none of them in <code>AddInfrastructure</code>.</strong>
           <code>AddTwoFactorAuthentication(config)</code>
@@ -370,9 +388,63 @@
           <code>.../Auth/TwoFactor/TotpTwoFactorService.cs:35</code>); Application, Domain and Shared stay
           dependency-free, matching the <code>Cronos</code> precedent.</p>
           </li>
-          <li><p><strong>Pages stay with the consumers.</strong> No enrollment page, no confirmation page and no administration
-          page ships in <code>MMCA.Common.UI</code>. The rule for promoting one is the rule the framework already
-          applies to shared components: two consumers wanting the same page, not one consumer wanting a page.</p>
+          <li><p><strong>Pages stay with the consumers; the administration surface ships as routeless components.</strong> No
+          enrollment page and no confirmation page ships in <code>MMCA.Common.UI</code>, and nothing the framework
+          ships carries an <code>@page</code> directive: <code>RoleAdminList</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/RoleAdminList.razor.cs:27</code>)
+          and <code>RoleAdminEdit</code> (<code>.../Pages/Administration/RoleAdminEdit.razor.cs:35</code>) are components the app
+          routes, authorizes and links for itself (<code>RoleAdminList.razor.cs:12-13</code>). They were promoted under
+          the rule the framework already applies to shared components, two consumers wanting the same one,
+          and they qualify because roles and permissions are strings the framework already owns, so there is
+          no app DTO to name (<code>.../Presentation/MMCA.Common.UI/DependencyInjection.cs:227-228</code>). They talk
+          to the controller base through <code>IRoleAdminUIService</code>
+          (<code>.../UI/Services/Administration/IRoleAdminUIService.cs:41</code>) and its typed-client implementation
+          <code>RoleAdminService</code> (<code>.../UI/Services/Administration/RoleAdminService.cs:50-51</code>), registered by
+          <code>AddRoleAdministrationUI()</code> (<code>.../UI/DependencyInjection.cs:234</code>). An app that serves no
+          role-administration endpoints registers nothing and renders neither component.</p>
+          </li>
+          <li><p><strong>The editor draws a closed catalog, and the surface cannot be locked out from inside it.</strong>
+          <code>IPermissionCatalog</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/IPermissionCatalog.cs:24</code>) is the
+          compiled universe an administration screen may offer: every role the registry grants something to
+          and every permission its code can grant, both sorted ordinally. It is implemented explicitly by
+          <code>PermissionRegistry</code>
+          (<code>.../Shared/Auth/Permissions/PermissionRegistry.cs:16</code>, <code>:55</code>, <code>:58</code>), so the same frozen map
+          answers both questions while the hot authorization path keeps a registry that deliberately cannot
+          enumerate; <code>AddPermissions</code> registers the one instance under both contracts
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:134</code>),
+          and an unconfigured host falls back to <code>UnconfiguredPermissionRegistry</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/UnconfiguredPermissionRegistry.cs:21</code>,
+          registered at <code>.../Application/DependencyInjection.cs:132</code>). <code>SetStoredPermissionsAsync</code> refuses
+          two things against that list
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs:139-143</code>,
+          <code>:149-157</code>): <code>AdministrationPermissions.ManageRoles</code>, outright, because granting the key to this
+          surface from a row would make access to role administration a matter of data and deleting the row
+          would lock every operator out of the screen that could restore it; and any permission outside the
+          catalog, because a stored row no endpoint checks is a typo rather than a silently inert grant.</p>
+          </li>
+          <li><p><strong>The token carries the permissions, so a service that never sees the grants still honours them.</strong>
+          <code>TokenService</code> takes the host&#39;s <code>IPermissionRegistry</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:66</code>) and emits one
+          <code>AuthClaimTypes.Permission</code> claim (<code>permission</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:24</code>) per permission granted to
+          the token&#39;s role, ordinally ordered and de-duplicated against claims the caller already supplied
+          (<code>TokenService.cs:128-131</code>); because the registry it resolves is the layered one, stored grants are
+          baked in alongside the compiled ones. Both authorization paths accept that claim: the CQRS
+          <code>AuthorizationGate</code> passes a request whose permission the registry grants to the caller&#39;s roles OR
+          that the principal carries as a claim
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/AuthorizationGate.cs:46-48</code>,
+          over <code>ClaimsPrincipalExtensions.HasPermissionClaim</code>,
+          <code>.../Shared/Auth/ClaimsPrincipalExtensions.cs:94</code>), and the UI gates a navigation entry on
+          <code>NavItem.RequiredPermission</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20</code>,
+          <code>.../UI/Layout/NavMenu.razor:223-225</code>). The deployment consequence is a design rule, not framework
+          code: where modules run as separate services, the host that mints tokens (the Identity service)
+          registers every module&#39;s compiled grants so a token carries the full permission set, and the
+          stored grants live only in that host, reaching the other services through the claims alone.
+          Consumers therefore declare each module&#39;s role-to-permission grants in that module&#39;s Shared
+          project and register them in both the module&#39;s own host and the Identity host. A permission change
+          takes effect on the next sign-in, exactly like a role change.</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -422,8 +494,14 @@
           fitness rule against the packages have to add the type to their own <code>AllowedHardDeleteTypes</code> when
           they upgrade.</li>
           <li>Adopting the <code>PermissionGrants</code> table is a migration in the consumer&#39;s Identity database, as
-          <code>RefreshSessions</code> was. Nothing maps it automatically, so a consumer that never calls
-          <code>ApplyPermissionGrantConfiguration</code> gets no table in any of its databases.</li>
+          <code>RefreshSessions</code> was. <code>AddStoredPermissionGrants(configuration)</code> is what maps it, and only in the
+          context whose physical source <code>Authentication:PermissionGrants:DataSourceName</code> names
+          (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:910-915</code>), so a host that never opts in gets no
+          table in any of its databases and an opted-in host gets it in exactly one.</li>
+          <li>A permission granted by a stored row reaches another service only through a token claim, so it lands
+          on the holder&#39;s next sign-in rather than within <code>CacheSeconds</code>. That is the same latency a role
+          change has always had, and it is the price of keeping the grant table in one host instead of
+          replicating it.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="020-permission-based-authorization.html">ADR-020</a> (the compiled role-to-permission registry stored
