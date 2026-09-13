@@ -60,7 +60,7 @@ validated as an absolute `http` or `https` URL in the domain (`SessionAssetInvar
 **2. Authorization is capability OR ownership, decided in the handlers.** A caller may manage a
 session's materials if they hold `conference:session-assets:manage`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:44`,
-granted to Organizer and Admin through the full Conference set at `:58` and to ContentEditor through
+granted to Organizer through the full Conference set at `:58` and to ContentEditor through
 the ContentManagement set at `:73`; the grants are wired at
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43-44` and `:54`)
 **or** if
