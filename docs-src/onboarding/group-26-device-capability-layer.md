@@ -11,7 +11,7 @@ talks to all of that hardware without ever naming a platform type. It is a set o
 single-capability interface **contracts** (biometrics, geolocation and geocoding, speech, push
 registration, media pick, barcode scanning, clipboard, screenshot, haptics, share, external links,
 external OAuth, local cache, local notifications, connectivity, battery, accessibility announcements,
-deep links) plus three families of **adapters** that implement each contract per host: MAUI-native,
+app lifecycle, deep links) plus three families of **adapters** that implement each contract per host: MAUI-native,
 browser-JS-interop, and inert fallback. The head chooses which family it resolves at DI composition
 time. This is the `[Rubric §18, UI Architecture]` and `[Rubric §22, Responsive/Cross-Browser]` story
 in miniature, and the design is
@@ -49,7 +49,7 @@ calls `AddDeviceCapabilityDefaults`
 (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:37`), which `TryAdd`-registers a
 neutral implementation for **every** contract, so any shared component can resolve any capability on
 any head and get a well-defined no-op rather than a missing-service exception
-(`DependencyInjection.cs:40-78`). That method is public for a second reason spelled out on it: a
+(`DependencyInjection.cs:40-82`). That method is public for a second reason spelled out on it: a
 consumer's bUnit test base registers the same set the production host gets instead of mirroring the
 list by hand, because a hand-mirrored list rots the moment a new contract ships and the component
 test fails with a DI resolution error rather than a useful one (`DependencyInjection.cs:30-35`,
@@ -57,7 +57,7 @@ test fails with a DI resolution error rather than a useful one (`DependencyInjec
 plain `Add` calls, and because the last single-service registration wins, those override the
 defaults, a rule spelled out on both DI classes (`DependencyInjection.cs:15-22`,
 `MMCA.Common.UI.Maui/DependencyInjection.cs:25-31`). Browser heads call
-`AddBrowserDeviceCapabilities` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:91`);
+`AddBrowserDeviceCapabilities` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:95`);
 native heads call `AddMauiDeviceCapabilities` (`MMCA.Common.UI.Maui/DependencyInjection.cs:42`), which
 ships in the separate MAUI-TFM package `MMCA.Common.UI.Maui`, the one package built outside
 `MMCA.Common.slnx`
@@ -66,7 +66,7 @@ classes use the C# `extension(IServiceCollection)` member idiom this codebase fa
 registration (`DependencyInjection.cs:34`, `MMCA.Common.UI.Maui/DependencyInjection.cs:34`; see the
 [primer](00-primer.md#c-extensiont-types-read-this-once)). The lifetime choices are deliberate and
 commented in place: the browser services are `Scoped`, one per Blazor circuit, so per-user state
-never leaks across circuits (`DependencyInjection.cs:102-112`), while the MAUI services are `Singleton`
+never leaks across circuits (`DependencyInjection.cs:98-107`), while the MAUI services are `Singleton`
 because a native head is single-user and its stateful services (connectivity, battery) wrap
 app-global platform events (`MMCA.Common.UI.Maui/DependencyInjection.cs:44-62`).
 
@@ -113,7 +113,7 @@ it never calls `IJSRuntime` directly. Every browser service depends on
 (`MMCA.Common.UI/Services/Capabilities/CapabilitiesJsModule.cs:12`), a lazy accessor built
 over [LazyJsModule](group-15-common-ui-framework.md#lazyjsmodule) for the single
 `./_content/MMCA.Common.UI/capabilities-interop.js` module (`CapabilitiesJsModule.cs:14,19`)
-registered once per circuit (`DependencyInjection.cs:103`). Its `InvokeOrDefaultAsync<T>`
+registered once per circuit (`DependencyInjection.cs:98`). Its `InvokeOrDefaultAsync<T>`
 (`CapabilitiesJsModule.cs:26`) is the degradation contract that makes browser capabilities usable
 during server-side prerender: it wraps the import-and-invoke in a `try` that swallows the entire
 JS-unavailable exception family (`InvalidOperationException` for an un-hydrated prerender,
@@ -192,13 +192,23 @@ from a buffer after first render (`IDeepLinkDispatcher.cs:22`). The default
 [DeepLinkDispatcher](#deeplinkdispatcher)
 (`MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs:9`) is registered as a singleton
 (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:78`) because native callers publish
-into it from outside any scope, and it solves the cold-start race: `Publish` reads the handler and
+into it from outside any scope, and it does two jobs. First it validates the shape of the route:
+`Publish` throws unless `IsAppRelativeRoute` passes, meaning exactly one leading slash followed by a
+non-slash character, no backslash, no control character, and no scheme
+(`DeepLinkDispatcher.cs:45-68,100-109`). That check is a security boundary, not tidiness: an exported
+Android activity is reachable by an *explicit* intent from any app on the device, and an explicit
+intent bypasses the manifest filter's scheme and host constraints, so a hostile caller can hand over
+a path like `//attacker.example/p` that resolves protocol-relative against the WebView base and
+leaves the app origin entirely (`DeepLinkDispatcher.cs:29-43`, SEC-Common-88 / SEC-ADC-65,
+`[Rubric §26, Front-End Security]`). The check is deliberately on the shape and never on the
+originating host, because a home-screen widget's host is a placeholder by design
+(`DeepLinkDispatcher.cs:38-43`). Second it solves the cold-start race: `Publish` reads the handler and
 writes the single-entry, last-write-wins buffer inside one `Lock`, because doing the two as separate
 steps allowed an interleaving that dropped the route entirely on a warm-boot deep link, where the
 native callback thread and the first render are genuinely concurrent
-(`DeepLinkDispatcher.cs:11,22-45`); the listener drains it via `TryConsumePending` under the same
-lock once it renders (`DeepLinkDispatcher.cs:48-57`), and the handler is invoked outside the lock so
-a listener that navigates on the callback never runs under it (`DeepLinkDispatcher.cs:43-44`). The
+(`DeepLinkDispatcher.cs:11,111-130`); the listener drains it via `TryConsumePending` under the same
+lock once it renders (`DeepLinkDispatcher.cs:137-146`), and the handler is invoked outside the lock so
+a listener that navigates on the callback never runs under it (`DeepLinkDispatcher.cs:132-133`). The
 event payload is [DeepLinkRouteEventArgs](#deeplinkrouteeventargs), a one-property `EventArgs`
 carrying the app-relative route (`MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkRouteEventArgs.cs:4-10`).
 On MAUI the bridge is wired by [DeviceCapabilitiesInitializer](#devicecapabilitiesinitializer)
@@ -260,10 +270,10 @@ after calling it (`MMCA.Common.UI.Maui/Capabilities/Notifications/FcmPushDeviceT
 [IExternalAuthBroker](#iexternalauthbroker)
 (`MMCA.Common.UI/Services/Capabilities/Auth/IExternalAuthBroker.cs:10`) defaults to
 [UnavailableExternalAuthBroker](#unavailableexternalauthbroker) so web heads keep their existing
-anchor-href OAuth flow (`DependencyInjection.cs:64`), and
+anchor-href OAuth flow (`DependencyInjection.cs:55`), and
 [MauiExternalAuthBroker](#mauiexternalauthbroker) reports `IsAvailable == false` until the head
 configures `OAuth:MobileRedirectScheme`
-(`MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:35,39`), which is also why it is the one
+(`MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:39,43`), which is also why it is the one
 `Scoped` registration in the native bundle: it navigates through the circuit's `NavigationManager`
 after the system-browser round trip (`MMCA.Common.UI.Maui/DependencyInjection.cs:73-76`). Media
 picking is the same shape read the other way: [IMediaPickerService](#imediapickerservice) exposes
@@ -271,12 +281,51 @@ picking is the same shape read the other way: [IMediaPickerService](#imediapicke
 a plain `InputFile` instead, "the affordance switch, not a degraded path"
 (`IMediaPickerService.cs:6-7`,
 [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)). Biometrics
-stay on their null default until the app-lock wave lands (see the
-[DevicePreferenceKeys](#devicepreferencekeys) `AppLockEnabled` key,
-`MMCA.Common.UI/Services/Capabilities/DeviceStorage/DevicePreferenceKeys.cs:9-10`). This "contract present,
+are the same shape resolved: web heads keep [NullBiometricAuthenticator](#nullbiometricauthenticator),
+which reports unavailable so the app-lock toggle stays hidden
+(`MMCA.Common.UI/Services/Capabilities/Auth/NullBiometricAuthenticator.cs:3-4`), while native heads
+register [MauiBiometricAuthenticator](#mauibiometricauthenticator)
+(`MMCA.Common.UI.Maui/DependencyInjection.cs:61`) and the feature stays behind the opt-in
+[DevicePreferenceKeys](#devicepreferencekeys) `AppLockEnabled` preference
+(`MMCA.Common.UI/Services/Capabilities/DeviceStorage/DevicePreferenceKeys.cs:9-10`). This "contract present,
 behavior inert" pattern is what lets shared components be written against the full capability surface
 today while the platform work ships incrementally; each null default is a truthful
 `IsAvailable == false` that hides its affordance rather than a stub that lies.
+
+**App lifecycle: the contract that re-arms the app lock.**
+[IAppLifecycleNotifier](#iapplifecyclenotifier)
+(`MMCA.Common.UI/Services/Capabilities/DeviceStatus/IAppLifecycleNotifier.cs:13`) reports the app
+leaving the foreground and coming back: one `Resumed` event and the two signals a native host calls,
+`NotifyEnteredBackground` and `NotifyResumed` (`IAppLifecycleNotifier.cs:16,19,25`). It exists because
+a hybrid head keeps its Blazor render tree alive across a background/foreground cycle, so a gate that
+engages only at first render stays open for whoever picks the device up next; web heads never raise
+these events, which is the correct answer there because there is no app lock on the web
+(`IAppLifecycleNotifier.cs:6-11`). The default [AppLifecycleNotifier](#applifecyclenotifier)
+(`MMCA.Common.UI/Services/Capabilities/DeviceStatus/AppLifecycleNotifier.cs:9`) is TryAdd-registered
+as a singleton for the same reason the deep-link dispatcher is, the native callbacks run outside any
+scope (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:80-82`). It timestamps the
+background entry under a `Lock` against an injectable `TimeProvider` that defaults to the system
+clock, so the interval is testable rather than wall-clock bound (`AppLifecycleNotifier.cs:9,11-12,20-26`),
+then raises `Resumed` with the elapsed time, falling back to `TimeSpan.Zero` for a resume with no
+matching pause and clamping a negative interval to zero (`AppLifecycleNotifier.cs:29-41`). The payload
+[AppResumedEventArgs](#appresumedeventargs)
+(`MMCA.Common.UI/Services/Capabilities/DeviceStatus/AppResumedEventArgs.cs:8`) is one property,
+`BackgroundDuration` (`AppResumedEventArgs.cs:11`). The native end is
+[WindowLifecycleExtensions](#windowlifecycleextensions)
+(`MMCA.Common.UI.Maui/WindowLifecycleExtensions.cs:22`), an `extension(Window)` member whose
+`AttachMmcaAppLifecycle` forwards the MAUI window's `Stopped` and `Resumed` events into the notifier
+(`WindowLifecycleExtensions.cs:24,33,44-45`); it resolves the notifier with `GetService` and returns
+the window untouched when a head registered none, so calling it is safe on any host
+(`WindowLifecycleExtensions.cs:38-42`), and the doc comment carries the one-call recipe for a head's
+`App.CreateWindow` override (`WindowLifecycleExtensions.cs:11-19`). The consumer that closes the loop
+is the shared [BiometricGate](group-15-common-ui-framework.md#biometricgate) component, which
+subscribes on initialize and unsubscribes on dispose
+(`MMCA.Common.UI/Components/Capabilities/BiometricGate.razor:10`,
+`MMCA.Common.UI/Components/Capabilities/BiometricGate.razor.cs:54,76,93`) and re-locks only when the
+app was away longer than its `ReLockAfter` threshold, 30 seconds by default
+(`BiometricGate.razor.cs:25,95-99`). That threshold is why the event carries a duration at all: a
+lock that fired on every task-switch flicker would train users to defeat it. `[Rubric §26, Front-End
+Security]` and `[Rubric §11, Security]`.
 
 **Device preferences and the per-head lifetime split.** [IDevicePreferences](#idevicepreferences)
 (`MMCA.Common.UI/Services/Capabilities/DeviceStorage/IDevicePreferences.cs:11`) stores per-device settings
@@ -291,12 +340,39 @@ to native `Preferences.Default` under an `mmca.devicePrefs.` prefix
 through the shared JS module
 (`MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserDevicePreferences.cs:12,27-28`), and
 [InMemoryDevicePreferences](#inmemorydevicepreferences) is registered `Scoped`
-(`DependencyInjection.cs:83`) so the Blazor Server fallback holds per-circuit state in a
+(`DependencyInjection.cs:74`) so the Blazor Server fallback holds per-circuit state in a
 `ConcurrentDictionary` and reports `IsPersistent == false`
 (`MMCA.Common.UI/Services/Capabilities/DeviceStorage/InMemoryDevicePreferences.cs:12,15`). Never storing
 secrets here is a documented rule, tokens belong in platform secure storage
 (`IDevicePreferences.cs:7`), which ties this into `[Rubric §26, Front-End Security]` and
 `[Rubric §11, Security]`.
+
+**The offline cache and why sign-out has to wipe it.** [ILocalCacheStore](#ilocalcachestore)
+(`MMCA.Common.UI/Services/Capabilities/DeviceStorage/ILocalCacheStore.cs:9`) is the second storage
+contract, a small JSON document cache holding last-known-good UI state for offline rendering
+(an offline schedule snapshot, for instance) rather than secrets or query results
+(`ILocalCacheStore.cs:3-8`). It is four members plus an `IsAvailable` flag: `SetAsync`, `GetAsync`,
+`RemoveAsync` and `ClearAsync` (`ILocalCacheStore.cs:12,16,20,23,36`). `ClearAsync` carries the
+security rule on its face and is what sign-out calls: snapshots are written in plaintext, survive
+process restarts, and their keys identify a *surface* rather than a user, so leaving them in place
+hands the next account on the device the previous account's rows the first time the network is
+unavailable; it ships with a no-op default implementation so an existing custom store still compiles,
+and every store that actually persists must override it
+(`ILocalCacheStore.cs:25-36`, `[Rubric §26, Front-End Security]`). All three adapters are here.
+[NullLocalCacheStore](#nulllocalcachestore) is the TryAdd default, unavailable with reads returning
+`default` (`MMCA.Common.UI/Services/Capabilities/DeviceStorage/NullLocalCacheStore.cs:4,7,14-15`,
+registered at `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:56`), which is the right
+answer on Blazor Server where SSR always has the live API. [BrowserLocalCacheStore](#browserlocalcachestore)
+puts the documents in `localStorage` under an `mmca.localCache.` prefix through the shared JS module
+(`MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserLocalCacheStore.cs:10,12,29`) and clears
+by prefix rather than wiping the origin's storage (`BrowserLocalCacheStore.cs:67-70`), registered
+`Scoped` for browser heads (`DependencyInjection.cs:106`). [MauiLocalCacheStore](#mauilocalcachestore)
+writes one JSON file per key into an `mmca-cache` folder under the app data directory, mapping keys
+to file names through a conservative character filter because keys are code-controlled rather than
+user input, and every IO path is best-effort: a failed write only means a colder next launch, and a
+failed or corrupt read returns `default`
+(`MMCA.Common.UI.Maui/Capabilities/DeviceStorage/MauiLocalCacheStore.cs:6-14,27-34,53-64`), registered
+as a singleton in the native bundle (`MMCA.Common.UI.Maui/DependencyInjection.cs:60`).
 
 **The native shell pieces that ship beside the contracts.** Several members of this group are not
 capability contracts at all but the MAUI-side plumbing that ships with them. The token pipeline is
@@ -442,10 +518,10 @@ file storage and avatars, the backing for the media-picker capability).
   [WebFormFactor](#webformfactor) (Blazor Server), and [MauiFormFactor](#mauiformfactor) (native).
   Each head registers exactly one of them as a singleton in its composition root, and each registration
   helper's doc comment points at the other two so a host author cannot pick the wrong one
-  (`MMCA.Common.UI/DependencyInjection.cs:180-185`, `MMCA.Common.UI.Web/DependencyInjection.cs:42-46`,
+  (`MMCA.Common.UI/DependencyInjection.cs:185-190`, `MMCA.Common.UI.Web/DependencyInjection.cs:46-50`,
   `MMCA.Common.UI.Maui/DependencyInjection.cs:137-142`). The ADC WASM client calls
   `AddWasmFormFactor()` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:82`), the
-  Blazor Server head `AddCommonWebFormFactor()` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:96`),
+  Blazor Server head `AddCommonWebFormFactor()` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:149`),
   and the MAUI head `AddMauiFormFactor()` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:169`).
   Store wires the same three (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:63`,
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:132`,
@@ -485,7 +561,7 @@ file storage and avatars, the backing for the media-picker capability).
   [`NullAccessibilityAnnouncer`](#nullaccessibilityannouncer), TryAdd-registered as a singleton in
   `AddDeviceCapabilityDefaults` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:49`); web
   heads override it with [`BrowserAccessibilityAnnouncer`](#browseraccessibilityannouncer) in
-  `AddBrowserDeviceCapabilities` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:99`), and
+  `AddBrowserDeviceCapabilities` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:103`), and
   the native [`MauiAccessibilityAnnouncer`](#mauiaccessibilityannouncer) ships in the
   `MMCA.Common.UI.Maui` package. Called by live-update components in the head apps.
 
@@ -571,10 +647,10 @@ file storage and avatars, the backing for the media-picker capability).
   It lives in `MMCA.Common.UI` rather than in a WASM-specific package because it needs no
   WASM-specific reference: BCL only. That is what makes the registration helper
   `AddWasmFormFactor()` a plain singleton registration in the shared package
-  (`MMCA.Common.UI/DependencyInjection.cs:186-187`), and the surrounding doc comment is where the
-  three-way choice is documented for host authors (`MMCA.Common.UI/DependencyInjection.cs:180-185`).
+  (`MMCA.Common.UI/DependencyInjection.cs:191-192`), and the surrounding doc comment is where the
+  three-way choice is documented for host authors (`MMCA.Common.UI/DependencyInjection.cs:185-190`).
 - **Where it's used**: registered by `AddWasmFormFactor()`
-  (`MMCA.Common.UI/DependencyInjection.cs:186`) from the `.Client` WASM host only
+  (`MMCA.Common.UI/DependencyInjection.cs:191`) from the `.Client` WASM host only
   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:82`,
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:63`). Covered by
   `WasmFormFactorTests`, which asserts the singleton lifetime, that exactly one `IFormFactor`
@@ -590,7 +666,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `[Rubric §21, Accessibility]` assesses whether non-visual users receive the information sighted users get. This default is the *absence* of that channel, which is why both real heads implement it: [`BrowserAccessibilityAnnouncer`](#browseraccessibilityannouncer) writes into an `aria-live` region and [`MauiAccessibilityAnnouncer`](#mauiaccessibilityannouncer) pushes to the OS screen reader. A head that keeps this default silently loses live-region announcements.
 - **Walkthrough**: one member. `AnnounceAsync(string message, CancellationToken)` (`NullAccessibilityAnnouncer.cs:7`) ignores both arguments and returns `Task.CompletedTask`.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). Call sites stay unconditional: a component announces a change without first checking whether an assistive channel exists, and the container decides whether that announcement goes anywhere.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:58`); overridden on web heads (`DependencyInjection.cs:108`) and on native heads (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:56`), so in practice only a head that calls neither override keeps it. Asserted non-throwing in [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:161`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:58`); overridden on web heads (`DependencyInjection.cs:108`) and on native heads (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:56`), so in practice only a head that calls neither override keeps it. Asserted non-throwing in [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:161`).
 
 ### MainPageBase
 
@@ -633,7 +709,21 @@ file storage and avatars, the backing for the media-picker capability).
 - **Concept introduced**: the **live region** as the web's equivalent of a screen-reader announce call. The JS side (`MMCA.Common.UI/wwwroot/capabilities-interop.js:52-71`) creates one `div` on first use with `aria-live="polite"` and `role="status"` (`:57-58`), styled inline (absolute, 1px, `clip-path: inset(50%)`, `:59-67`) so it is invisible but not hidden from assistive tech, and appended to `document.body` (`:68`). `announce` clears the region's text before setting it after a 50 ms timeout (`:77-80`) so that repeating the same message is re-announced rather than ignored as an unchanged node. `[Rubric §21, Accessibility]` assesses whether non-visual users receive information a sighted user gets from a purely visual change; this is the single mechanism the whole web head uses for that. `[Rubric §18, UI Architecture]` applies because the live region is created by the capability layer rather than by each page's markup, so no component has to remember to render one.
 - **Walkthrough**: the constructor captures the shared module into `_module` (`MMCA.Common.UI/Services/Capabilities/Accessibility/BrowserAccessibilityAnnouncer.cs:10`, `:13`). `AnnounceAsync(string message, CancellationToken = default)` (`:16-19`) is one awaited `InvokeOrDefaultAsync<bool?>("announce", [message], cancellationToken)` whose result is discarded: the contract returns `Task`, and there is no useful caller response to "the announcement did not land".
 - **Why it's built this way**: routing through [`CapabilitiesJsModule`](#capabilitiesjsmodule) means an announcement fired during prerender (before any DOM exists) is a silent no-op instead of an exception, which matters because announcements are typically triggered from lifecycle methods that also run server-side. Creating the region lazily in JS keeps the RCL free of any required markup or stylesheet (`MMCA.Common.UI/wwwroot/capabilities-interop.js:47-48`).
-- **Where it's used**: registered scoped as `IAccessibilityAnnouncer` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:99`); siblings are [`MauiAccessibilityAnnouncer`](#mauiaccessibilityannouncer) and [`NullAccessibilityAnnouncer`](#nullaccessibilityannouncer). Consumed by components announcing live updates.
+- **Where it's used**: registered scoped as `IAccessibilityAnnouncer` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:103`); siblings are [`MauiAccessibilityAnnouncer`](#mauiaccessibilityannouncer) and [`NullAccessibilityAnnouncer`](#nullaccessibilityannouncer). Consumed by components announcing live updates.
+
+### WindowLifecycleExtensions
+
+> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui` · `MMCA.Common.UI.Maui/WindowLifecycleExtensions.cs:22` · Level 2 · class (static)
+
+- **What it is**: a one-method extension over MAUI's `Window` that wires the window's `Stopped` and `Resumed` events to the app's `IAppLifecycleNotifier`, so a head opts into background/foreground notification with a single call instead of subscribing both events itself (`WindowLifecycleExtensions.cs:29-51`).
+- **Depends on**: `IAppLifecycleNotifier` (resolved from the supplied service provider, `WindowLifecycleExtensions.cs:41`). Externals: MAUI `Window` as the extended type, and `IServiceProvider`/`IServiceCollection`-style `GetService<T>()`.
+- **Concept introduced**: an extension member over a MAUI platform type rather than over `IServiceCollection`. Everywhere else in this group `extension(...)` blocks target `IServiceCollection` or `MauiAppBuilder` (see [DependencyInjection](#dependencyinjection-1), [HostingDependencyInjection](#hostingdependencyinjection)); here the same C# preview syntax targets `Window` itself, because window lifecycle events are only reachable once a `Window` instance exists, which is later than either service registration point. The method is also a deliberate no-op when unwired: a host that registered no `IAppLifecycleNotifier` still gets a valid window back untouched (`WindowLifecycleExtensions.cs:41-45`).
+  - `[Rubric §1, SOLID]` assesses dependency inversion. The window depends on the resolved `IAppLifecycleNotifier` abstraction, never on a concrete notifier, so a head can supply any implementation or none.
+  - `[Rubric §15, Best Practices & Code Quality]` assesses ceremony a developer pays for correct adoption. Two event subscriptions collapse into `window.AttachMmcaAppLifecycle(services)`, so a head cannot forget to forward one of the two lifecycle events while wiring the other.
+- **Walkthrough**: `AttachMmcaAppLifecycle(IServiceProvider services)` (`WindowLifecycleExtensions.cs:36`) null-guards both the extended `window` and `services` (`:38-39`), resolves `IAppLifecycleNotifier` with `GetService` rather than `GetRequiredService` (`:41`), and returns the window unchanged when none is registered (`:42-45`). When a notifier is present it subscribes `window.Stopped` to call `notifier.NotifyEnteredBackground()` and `window.Resumed` to call `notifier.NotifyResumed()` (`:47-48`), then returns the same window for chaining (`:50`).
+- **Why it's built this way**: using `GetService` instead of `GetRequiredService` keeps the extension safe to call unconditionally from every head's window-creation path, whether or not that head cares about app-lifecycle notifications; the alternative would force every head to guard the call itself.
+- **Where it's used**: not called from any first-party `.cs` file outside its own definition in this unit's source. Not determinable from source in this unit: whether ADC or Store invoke `AttachMmcaAppLifecycle` from their `Window`-creation path today.
+- **ADRs**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) (device capability abstraction) governs the layer this class ships in.
 
 ### DependencyInjection
 
@@ -685,6 +775,26 @@ file storage and avatars, the backing for the media-picker capability).
 - **Why it's built this way**: the class doc pins the ordering constraint, call this **after** `AddUIShared` in `MauiProgram.CreateMauiApp` (`HostingDependencyInjection.cs:12-13`), because [DependencyInjection](#dependencyinjection) uses plain `Add` to override the shared TryAdd defaults. The culture fold-in is explained in an inline comment as a deliberate cross-ADR decision (`HostingDependencyInjection.cs:36-40`): culture belongs to ADR-027 rather than ADR-042, but a hybrid head that skips it ends up with a culture switcher that navigates to a server endpoint it does not host and renders the not-found page, so wiring it here means no head can be left half-configured, while `UseMauiCulture()` stays public for a head that composes by hand. Barcode scanning is deliberately **not** folded in (`HostingDependencyInjection.cs:85-87`): a head that never scans should ship neither the camera handler nor a camera permission declaration, and the head still declares the platform permission itself, Android `CAMERA` and iOS `NSCameraUsageDescription` (`HostingDependencyInjection.cs:96-100`). One step the wrapper cannot take at all is the MauiCommunityToolkit registration: speech-to-text ([MauiSpeechToTextService](#mauispeechtotextservice)) depends on it, and the toolkit's MCT001 analyzer requires `.UseMauiCommunityToolkit()` to appear in the app's own `UseMauiApp<T>()` chain, so the doc states the requirement rather than hiding it (`HostingDependencyInjection.cs:23-28`).
 - **Where it's used**: called per MAUI head in `MauiProgram.CreateMauiApp`. ADC calls `UseMauiDeviceCapabilities()` right after `AddUIShared` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:101,106`), `UseMmcaMauiErrorHandling()` with no callback (`:111`), and the barcode scanner with resource lookups, placed after the UI module that owns the check-in surface so the plain `Add` is the last registration to run (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:153-155`). Store calls `UseMauiDeviceCapabilities()` (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:66`) and `UseMmcaMauiErrorHandling()` (`:74`) but registers no scanner. Both heads chain `.UseMauiCommunityToolkit()` themselves (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:60`, `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:45`).
 - **Caveats / not-in-source**: the head keeps obligations this wrapper cannot fulfill: chaining `.UseMauiCommunityToolkit()`, declaring the camera permission when it scans, and supplying the per-capability configuration each inert service needs (push credentials, `OAuth:MobileRedirectScheme`). The error handler covers managed exceptions only; a native crash, a stack overflow or a fail-fast tears the process down below the runtime and no handler here runs (`HostingDependencyInjection.cs:53-60`). Not determinable from source in this unit: the scan page ZXing builds at runtime, covered with [MauiBarcodeScannerService](#mauibarcodescannerservice) elsewhere in this group.
+
+### AppResumedEventArgs
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.DeviceStatus` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStatus/AppResumedEventArgs.cs:8` · Level 0 · class (sealed)
+
+- **What it is**: the event args for [`IAppLifecycleNotifier`](#iapplifecyclenotifier)'s `Resumed` event,
+  carrying how long the app was in the background before it came back to the foreground
+  (`AppResumedEventArgs.cs:8-12`).
+- **Depends on**: BCL only (`System.EventArgs`, `System.TimeSpan`).
+- **Concept, a primary-constructor event-args type.** The whole class is a primary constructor and one
+  readonly property; there is no logic here, only a data carrier for the resume signal.
+- **Walkthrough**
+  - `BackgroundDuration` (`AppResumedEventArgs.cs:11`): set once from the constructor argument and never
+    mutated.
+- **Why it's built this way**: a primary constructor keeps a pure data-carrier args type to a single
+  line, matching the shape .NET event args normally take.
+- **Where it's used**: raised by [`AppLifecycleNotifier`](#applifecyclenotifier)`.NotifyResumed()`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStatus/AppLifecycleNotifier.cs:114`);
+  read by `BiometricGate`'s `OnResumed` handler, which re-locks the app when the background gap meets or
+  exceeds its re-lock threshold
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Capabilities/BiometricGate.razor.cs:93-99`).
 
 ### IBatteryStatusService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.DeviceStatus` · `MMCA.Common.UI/Services/Capabilities/DeviceStatus/IBatteryStatusService.cs:8` · Level 0 · interface
@@ -740,7 +850,7 @@ file storage and avatars, the backing for the media-picker capability).
   the inert [`NullBiometricAuthenticator`](#nullbiometricauthenticator), the TryAdd default
   (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:53`); consumed by the auto-login
   app-lock gate, and faked in component tests by
-  [`FakeBiometricAuthenticator`](group-27-testing-infrastructure.md#fakebiometricauthenticator).
+  [`FakeBiometricAuthenticator`](group-28-testing-infrastructure.md#fakebiometricauthenticator).
 - **Caveats / not-in-source**: the actual token store and auto-login flow live in the head apps and
   the Identity layer; this contract only decides "is the user present".
 
@@ -771,11 +881,11 @@ file storage and avatars, the backing for the media-picker capability).
   (JS interop is unavailable during prerender).
 - **Where it's used**: implemented by [`MauiConnectivityStatusService`](#mauiconnectivitystatusservice),
   [`BrowserConnectivityStatusService`](#browserconnectivitystatusservice) (the scoped browser override,
-  `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:100`), and the framework default
+  `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:104`), and the framework default
   [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice)
   (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:40`); consumed by the offline banner and
   request-skipping guards, and faked in component tests by
-  [`FakeConnectivityService`](group-27-testing-infrastructure.md#fakeconnectivityservice).
+  [`FakeConnectivityService`](group-28-testing-infrastructure.md#fakeconnectivityservice).
 
 ### IExternalAuthBroker
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Auth` · `MMCA.Common.UI/Services/Capabilities/Auth/IExternalAuthBroker.cs:10` · Level 0 · interface
@@ -843,7 +953,40 @@ file storage and avatars, the backing for the media-picker capability).
   - `IsOnline` (`AlwaysOnlineConnectivityStatusService.cs:24`): a constant `true`.
   - `InitializeAsync(CancellationToken)` (`AlwaysOnlineConnectivityStatusService.cs:27`): returns `ValueTask.CompletedTask`. The contract asks callers to invoke this from `OnAfterRenderAsync` and promises it is a safe repeat call on every implementation (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStatus/IConnectivityStatusService.cs:18-22`); here there is nothing to start.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). On Blazor Server the render tree lives on the server, so "the device went offline" is not a state the UI can render: the circuit drops and the framework reconnect overlay takes over. Reporting a fabricated offline state would double up on that overlay, so the honest answer for this host is a constant `true`.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:49`); overridden by [`BrowserConnectivityStatusService`](#browserconnectivitystatusservice) in `AddBrowserDeviceCapabilities()` (`DependencyInjection.cs:109`) and by [`MauiConnectivityStatusService`](#mauiconnectivitystatusservice) on native heads (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:46`). The visible consumer is the shared `OfflineBanner` component, which renders nothing while `IsOnline` is true (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Capabilities/OfflineBanner.razor:12-17`, `:27-28`). MMCA.Common's bUnit base registers it explicitly so component tests get a deterministic online state (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:37`), ADC's Conference bUnit base gets it through `AddDeviceCapabilityDefaults()` instead of a hand-mirrored list (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:26`), and [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) asserts `IsOnline` stays true across `InitializeAsync` (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Capabilities/CapabilityFallbackTests.cs:69-77`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:49`); overridden by [`BrowserConnectivityStatusService`](#browserconnectivitystatusservice) in `AddBrowserDeviceCapabilities()` (`DependencyInjection.cs:109`) and by [`MauiConnectivityStatusService`](#mauiconnectivitystatusservice) on native heads (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:46`). The visible consumer is the shared `OfflineBanner` component, which renders nothing while `IsOnline` is true (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Capabilities/OfflineBanner.razor:12-17`, `:27-28`). MMCA.Common's bUnit base registers it explicitly so component tests get a deterministic online state (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:37`), ADC's Conference bUnit base gets it through `AddDeviceCapabilityDefaults()` instead of a hand-mirrored list (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:30`), and [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) asserts `IsOnline` stays true across `InitializeAsync` (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Capabilities/CapabilityFallbackTests.cs:69-77`).
+
+### IAppLifecycleNotifier
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.DeviceStatus` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStatus/IAppLifecycleNotifier.cs:13` · Level 1 · interface
+
+- **What it is**: the contract the native host calls to record when the app leaves and returns to the
+  foreground, and the event shared components subscribe to for the return
+  (`IAppLifecycleNotifier.cs:13-26`).
+- **Depends on**: [`AppResumedEventArgs`](#appresumedeventargs) (`IAppLifecycleNotifier.cs:17`); BCL
+  `EventHandler<T>`.
+- **Concept, a two-call background/foreground protocol.** Unlike the property-plus-event contracts
+  elsewhere in this group ([`IBatteryStatusService`](#ibatterystatusservice),
+  [`IConnectivityStatusService`](#iconnectivitystatusservice)), this contract has no state to read: it is
+  purely a pair of notification methods plus the event the second one raises. The host owns calling both
+  methods; nothing in the interface can be polled.
+- **Walkthrough**
+  - `Resumed` (`IAppLifecycleNotifier.cs:16`): raised when the app returns to the foreground, carrying an
+    [`AppResumedEventArgs`](#appresumedeventargs).
+  - `NotifyEnteredBackground()` (`IAppLifecycleNotifier.cs:19`): called by the native host when the app
+    leaves the foreground; records the timestamp.
+  - `NotifyResumed()` (`IAppLifecycleNotifier.cs:25`): called by the native host on return to the
+    foreground; computes the elapsed background time and raises `Resumed`.
+- **Why it's built this way**: splitting "entered background" and "resumed" into two host-driven calls
+  (rather than a single toggle) lets the implementation compute an accurate elapsed duration instead of
+  the host having to track and pass a timestamp itself.
+- **Where it's used**: implemented by [`AppLifecycleNotifier`](#applifecyclenotifier), registered as a
+  singleton in `AddDeviceCapabilities()`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs`); driven
+  by `WindowLifecycleExtensions`, which wires the MAUI `Window.Resumed`/`Deactivated` events to
+  `NotifyResumed()`/`NotifyEnteredBackground()`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/WindowLifecycleExtensions.cs`), and set up from
+  ADC's `App.xaml.cs` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/App.xaml.cs`); consumed by `BiometricGate`
+  to re-lock after a long enough absence.
+- **ADRs**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html).
 
 ### NullBatteryStatusService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.DeviceStatus` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStatus/NullBatteryStatusService.cs:4` · Level 1 · class (sealed)
@@ -856,7 +999,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `EnergySaverChanged` (`NullBatteryStatusService.cs:7-18`): explicit empty `add`/`remove`, documented as never raised because there is no battery state on this host.
   - `IsEnergySaverOn` (`NullBatteryStatusService.cs:21`): constant `false`.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). A live feature asks this before deciding to poll or auto-join a real-time channel; on a host with no power constraint the honest answer is "not conserving", so the feature runs at full fidelity.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:61`); [`MauiBatteryStatusService`](#mauibatterystatusservice) is the native override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:47`), and `AddBrowserDeviceCapabilities()` registers no battery implementation (`DependencyInjection.cs:100-115`), so web heads keep this default. Covered in [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:154`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:61`); [`MauiBatteryStatusService`](#mauibatterystatusservice) is the native override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:47`), and `AddBrowserDeviceCapabilities()` registers no battery implementation (`DependencyInjection.cs:100-115`), so web heads keep this default. Covered in [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:154`).
 
 ### NullBiometricAuthenticator
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Auth` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Auth/NullBiometricAuthenticator.cs:4` · Level 1 · class (sealed)
@@ -870,7 +1013,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `IsAvailableAsync(CancellationToken)` (`NullBiometricAuthenticator.cs:7-8`): `Task.FromResult(false)`; the UI hides the app-lock setting.
   - `AuthenticateAsync(string reason, CancellationToken)` (`NullBiometricAuthenticator.cs:11-12`): `Task.FromResult(false)`, ignoring the reason string that a real prompt would display.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). App lock is a native-only affordance, and web heads already sit behind the normal auth pipeline, so the framework does not simulate a biometric prompt in a browser.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:62`); [`MauiBiometricAuthenticator`](#mauibiometricauthenticator) is the only override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:61`). Both members are asserted false in [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:149-150`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:62`); [`MauiBiometricAuthenticator`](#mauibiometricauthenticator) is the only override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:61`). Both members are asserted false in [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:149-150`).
 
 ### NullHapticFeedbackService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.DeviceStatus` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStatus/NullHapticFeedbackService.cs:4` · Level 1 · class (sealed)
@@ -883,7 +1026,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `IsSupported` (`NullHapticFeedbackService.cs:7`): constant `false`, so a settings page can hide a haptics toggle.
   - `Click()` (`NullHapticFeedbackService.cs:10-13`), `LongPress()` (`:16-19`) and `Vibrate(TimeSpan duration)` (`:22-25`): three empty bodies, each carrying the explanatory comment "No haptics on this host" so the emptiness reads as deliberate rather than unfinished.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). Haptics are pure enhancement, never the carrier of information, so silently doing nothing is a complete implementation of the contract on a host without a vibrator.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:52`); [`MauiHapticFeedbackService`](#mauihapticfeedbackservice) is the native override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:50`) and `AddBrowserDeviceCapabilities()` registers no haptics implementation (`DependencyInjection.cs:100-115`), so web heads keep this. ADC registers it explicitly in a bUnit test so the live-channel page renders without hardware (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Pages/LiveChannelJoinTests.cs:59-60`), and [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) asserts all three calls are silent and non-throwing (`CapabilityFallbackTests.cs:36-49`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:52`); [`MauiHapticFeedbackService`](#mauihapticfeedbackservice) is the native override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:50`) and `AddBrowserDeviceCapabilities()` registers no haptics implementation (`DependencyInjection.cs:100-115`), so web heads keep this. ADC registers it explicitly in a bUnit test so the live-channel page renders without hardware (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Pages/LiveChannelJoinTests.cs:59-60`), and [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) asserts all three calls are silent and non-throwing (`CapabilityFallbackTests.cs:36-49`).
 
 ### UnavailableExternalAuthBroker
 
@@ -898,7 +1041,39 @@ file storage and avatars, the backing for the media-picker capability).
   - [Rubric §2 - Design Patterns] §2 assesses pattern fit; structurally this is the same Null Object shape taught at [`NullGeocodingService`](#nullgeocodingservice) below, here applied to a two-member contract.
 - **Walkthrough** - `sealed class` implementing the interface (`UnavailableExternalAuthBroker.cs:7`). `IsAvailable => false` (`UnavailableExternalAuthBroker.cs:10`) is the probe the login page reads to decide whether to draw a brokered button at all. `SignInAsync(string provider, CancellationToken cancellationToken = default)` (`UnavailableExternalAuthBroker.cs:13-14`) ignores both arguments and returns `Task.FromResult(false)`, an already-completed task, so a caller that skips the probe and calls anyway gets a clean "not authenticated" answer instead of an exception. `false` from `SignInAsync` means exactly what the contract says it means: the user did not end up authenticated (`MMCA.Common.UI/Services/Capabilities/Auth/IExternalAuthBroker.cs:15-20`).
 - **Why it's built this way** - [ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html) (mobile deep links and native OAuth callback) governs the native path, and [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) governs the per-head selection. One Login page has to serve three heads; giving it a resolved broker with an availability probe means it never needs to know which head it is on, and this default makes the web behavior the zero-configuration one.
-- **Where it's used** - `TryAdd`-registered as a singleton by `AddDeviceCapabilityDefaults` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:55`), and resolved by the shared Login page, which injects the broker (`MMCA.Common.UI/Pages/Auth/Login.razor:17`), gates each provider button on `ExternalAuthBroker.IsAvailable` (`Login.razor:88,109,130`), and calls `SignInAsync(provider)` from `SignInWithBrokerAsync` (`Login.razor:182,188`). With this default resolved, all three buttons stay hidden and the anchor-href path is the only one rendered. The MAUI head overrides it with [`MauiExternalAuthBroker`](#mauiexternalauthbroker), registered `AddScoped` (`MMCA.Common.UI.Maui/DependencyInjection.cs:76`); web and Server heads keep this default, since `AddBrowserDeviceCapabilities` contains no broker override (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:91-106`). The framework's own bUnit base registers this exact pair by hand so shared-page tests exercise the production web default (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:32-36`).
+- **Where it's used** - `TryAdd`-registered as a singleton by `AddDeviceCapabilityDefaults` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:55`), and resolved by the shared Login page, which injects the broker (`MMCA.Common.UI/Pages/Auth/Login.razor:17`), gates each provider button on `ExternalAuthBroker.IsAvailable` (`Login.razor:88,109,130`), and calls `SignInAsync(provider)` from `SignInWithBrokerAsync` (`Login.razor:182,188`). With this default resolved, all three buttons stay hidden and the anchor-href path is the only one rendered. The MAUI head overrides it with [`MauiExternalAuthBroker`](#mauiexternalauthbroker), registered `AddScoped` (`MMCA.Common.UI.Maui/DependencyInjection.cs:76`); web and Server heads keep this default, since `AddBrowserDeviceCapabilities` contains no broker override (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:95-110`). The framework's own bUnit base registers this exact pair by hand so shared-page tests exercise the production web default (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:32-36`).
+
+### AppLifecycleNotifier
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.DeviceStatus` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DeviceStatus/AppLifecycleNotifier.cs:9` · Level 2 · class (sealed)
+
+- **What it is**: the sole implementation of [`IAppLifecycleNotifier`](#iapplifecyclenotifier). It
+  tracks the timestamp an app entered the background and computes the elapsed away-time when it resumes,
+  raising `Resumed` with that duration (`AppLifecycleNotifier.cs:9-116`).
+- **Depends on**: [`IAppLifecycleNotifier`](#iapplifecyclenotifier), [`AppResumedEventArgs`](#appresumedeventargs);
+  `System.Threading.TimeProvider` (optional constructor parameter, defaults to `TimeProvider.System`) and
+  `System.Threading.Lock`.
+- **Concept, `TimeProvider` for testable elapsed-time math.** The constructor accepts an optional
+  `TimeProvider` (`AppLifecycleNotifier.cs:9`) instead of calling `DateTimeOffset.UtcNow` directly, so
+  tests can inject a fake clock and assert an exact `BackgroundDuration` without a real sleep. A
+  `Lock` (`AppLifecycleNotifier.cs:12`) guards the single mutable field, `_backgroundedAt`, because the
+  host can call `NotifyEnteredBackground()`/`NotifyResumed()` from platform lifecycle callbacks that are
+  not guaranteed to run on one thread.
+- **Walkthrough**
+  - `NotifyEnteredBackground()` (`AppLifecycleNotifier.cs:93-99`): stamps `_backgroundedAt` with
+    `_timeProvider.GetUtcNow()` under the lock.
+  - `NotifyResumed()` (`AppLifecycleNotifier.cs:102-115`): computes `away` as now minus `_backgroundedAt`
+    if a value was recorded, else `TimeSpan.Zero` (`:108-110`); clears `_backgroundedAt` back to `null`
+    (`:111`); then raises `Resumed` outside the lock with a duration clamped to never go negative
+    (`:114`).
+- **Why it's built this way**: computing the elapsed time inside `NotifyResumed()` (rather than making
+  the host pass a duration) keeps the host's job to two parameterless calls; clamping a negative `away`
+  to zero guards against a `TimeProvider` that is not monotonic.
+- **Where it's used**: registered as the [`IAppLifecycleNotifier`](#iapplifecyclenotifier) singleton in
+  `AddDeviceCapabilities()`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs`);
+  exercised with a fake `TimeProvider` in
+  [`BiometricGateTests`](group-28-testing-infrastructure.md#biometricgatetests)
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Components/Capabilities/BiometricGateTests.cs`).
 
 ### BrowserConnectivityStatusService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.DeviceStatus` · `MMCA.Common.UI/Services/Capabilities/DeviceStatus/BrowserConnectivityStatusService.cs:11` · Level 2 · class (sealed, `IAsyncDisposable`)
@@ -914,7 +1089,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `DisposeAsync()` (`:54-63`): calls `unwatchOnline` only when it actually subscribed, with `CancellationToken.None` (teardown must not be cancelled, `:58`), then disposes and nulls `_selfReference` (`:61-62`).
   - `UpdateStatus(bool isOnline)` (`:65-74`): the single mutation path. It returns early when the value is unchanged (`:67-70`), so the event fires only on a real transition, then sets `IsOnline` and raises `ConnectivityChanged` (`:72-73`).
 - **Why it's built this way**: the class doc instructs callers to invoke `InitializeAsync` from `OnAfterRenderAsync` (`MMCA.Common.UI/Services/Capabilities/DeviceStatus/BrowserConnectivityStatusService.cs:8-9`), which is the first lifecycle point where JS is guaranteed available; the `null`-means-retry path is what makes a call from a too-early lifecycle method harmless rather than permanently broken. `watchOnline` itself calls `unwatchOnline` first (`MMCA.Common.UI/wwwroot/capabilities-interop.js:93`), so a double subscribe cannot stack listeners. The change-only event contract keeps the offline banner from re-rendering on every duplicate browser event.
-- **Where it's used**: registered scoped as `IConnectivityStatusService` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:100`); siblings are [`MauiConnectivityStatusService`](#mauiconnectivitystatusservice) and the Server default [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
+- **Where it's used**: registered scoped as `IConnectivityStatusService` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:104`); siblings are [`MauiConnectivityStatusService`](#mauiconnectivitystatusservice) and the Server default [`AlwaysOnlineConnectivityStatusService`](#alwaysonlineconnectivitystatusservice).
 - **Caveats / not-in-source**: `navigator.onLine` reports link-layer connectivity, not gateway reachability, so a captive-portal network reads as online here. Note also that the JS `catch` arm returns `true` (`MMCA.Common.UI/wwwroot/capabilities-interop.js:105-109`), so a browser that refuses `addEventListener` still latches `_watching` and reports online without ever pushing a change.
 
 ### DevicePreferenceKeys
@@ -1004,14 +1179,14 @@ file storage and avatars, the backing for the media-picker capability).
   writes keep a cosmetic preference from ever throwing into a render path.
 - **Where it's used**: implemented by [`MauiDevicePreferences`](#mauidevicepreferences),
   [`BrowserDevicePreferences`](#browserdevicepreferences)
-  (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:101`), and the
+  (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:105`), and the
   [`InMemoryDevicePreferences`](#inmemorydevicepreferences) fallback. This is the one capability whose
   default is registered `TryAddScoped` rather than `TryAddSingleton`
   (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:74`), because the in-memory Blazor
   Server fallback must hold per-circuit (per-user) state and never cross-user state
   (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:72-73`). Read and written by
   device-settings screens and the app-lock gate, and faked in component tests by
-  [`FakeDevicePreferences`](group-27-testing-infrastructure.md#fakedevicepreferences).
+  [`FakeDevicePreferences`](group-28-testing-infrastructure.md#fakedevicepreferences).
 
 ### ILocalCacheStore
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.DeviceStorage` · `MMCA.Common.UI/Services/Capabilities/DeviceStorage/ILocalCacheStore.cs:9` · Level 0 · interface
@@ -1033,12 +1208,19 @@ file storage and avatars, the backing for the media-picker capability).
     deserializes, or returns `default` (`ILocalCacheStore.cs:18`).
   - `RemoveAsync(string key, CancellationToken = default)` (`ILocalCacheStore.cs:23`): removes an entry;
     unknown keys are ignored (`ILocalCacheStore.cs:22`).
+  - `ClearAsync(CancellationToken = default)` (`ILocalCacheStore.cs:36`): removes every entry the store
+    holds; defaults to `Task.CompletedTask` so an existing custom store still compiles, but the doc
+    comment marks it SECURITY and requires any store that actually persists something to override it,
+    because this is what sign-out calls (`ILocalCacheStore.cs:26-32`). Snapshots are plaintext and keyed
+    by surface rather than by user, so leaving them in place on sign-out hands the next account on the
+    device the previous account's rows the first time the network is unavailable.
 - **Why it's built this way**: a generic serialize/deserialize contract keeps callers from touching
   platform storage APIs, and `IsAvailable` lets a component skip offline-snapshot writes entirely on the
-  Server head where they would be pointless.
+  Server head where they would be pointless. `ClearAsync` ships as a default-interface no-op rather than a
+  required override so it could be added without breaking a third-party `ILocalCacheStore` implementation.
 - **Where it's used**: implemented by [`MauiLocalCacheStore`](#mauilocalcachestore),
   [`BrowserLocalCacheStore`](#browserlocalcachestore)
-  (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:102`), and the unavailable
+  (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:106`), and the unavailable
   [`NullLocalCacheStore`](#nulllocalcachestore) default
   (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:56`); consumed by offline-schedule
   components.
@@ -1060,7 +1242,7 @@ file storage and avatars, the backing for the media-picker capability).
   address-shaped domain data and avoids a geocoding round-trip.
 - **Where it's used**: implemented by [`MauiMapNavigationService`](#mauimapnavigationservice),
   [`BrowserMapNavigationService`](#browsermapnavigationservice)
-  (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:103`), and the default
+  (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:107`), and the default
   [`NullMapNavigationService`](#nullmapnavigationservice)
   (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:44`); consumed by venue and location
   components.
@@ -1102,7 +1284,7 @@ file storage and avatars, the backing for the media-picker capability).
   - The constructor (`:18-19`) is an expression body capturing the injected [`IExternalLinkService`](#iexternallinkservice) into `_externalLinkService` (`:15`).
   - `OpenAddressAsync(string address, string? label, CancellationToken = default)` (`:22`): guards with `ArgumentException.ThrowIfNullOrWhiteSpace(address)` (`:24`), appends `Uri.EscapeDataString(address)` to the constant to build the `Uri` (`:26`), awaits `_externalLinkService.OpenAsync(uri, cancellationToken)` (`:27`), and returns `true` (`:28`). The `label` parameter is accepted for contract parity and is unused here.
 - **Why it's built this way**: the web has no address-to-map handoff of its own, so a search URL is the honest equivalent; escaping the address is what keeps a street name containing `&` or `#` from truncating the query. Delegating the open (rather than calling `window.open` directly) keeps the `noopener,noreferrer` hardening in one place ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
-- **Where it's used**: registered scoped as `IMapNavigationService` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:103`); its siblings are [`MauiMapNavigationService`](#mauimapnavigationservice) and [`NullMapNavigationService`](#nullmapnavigationservice). Consumed by venue and location components.
+- **Where it's used**: registered scoped as `IMapNavigationService` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:107`); its siblings are [`MauiMapNavigationService`](#mauimapnavigationservice) and [`NullMapNavigationService`](#nullmapnavigationservice). Consumed by venue and location components.
 - **Caveats / not-in-source**: the `true` return is unconditional. Because `OpenAsync` returns `Task` (not a success flag) and the underlying `window.open` result is discarded by [`CapabilitiesJsModule`](#capabilitiesjsmodule), a popup blocked by the browser still reports success to the caller. Not determinable from source: whether any consumer branches on that `bool` today.
 
 ### InMemoryDevicePreferences
@@ -1122,7 +1304,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `RemoveAsync(string key, CancellationToken)` (`InMemoryDevicePreferences.cs:37`): guards the key and calls `TryRemove` with a discard, so an unknown key is silently ignored as the contract requires (`:39-42`).
   - Every method is synchronous under an async signature: the interface is `Task`-shaped because the persistent implementations do real I/O, and this one satisfies it with already-completed tasks rather than an offloaded call.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). Device preferences describe *this device* and deliberately never roam, which is why they are separate from the server-side per-user preferences (`IDevicePreferences.cs:4-6`). A Blazor Server circuit is not a device and has no durable per-device store, so the truthful default is a volatile one plus a flag that lets the UI adapt (`IDevicePreferences.cs:13-17`).
-- **Where it's used**: `TryAddScoped` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:83`); overridden by [`BrowserDevicePreferences`](#browserdevicepreferences) (localStorage) in `AddBrowserDeviceCapabilities()` (`DependencyInjection.cs:110`) and by [`MauiDevicePreferences`](#mauidevicepreferences) on native heads (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:59`). ADC's Engagement UI tests instantiate it as the preferences double for [`SessionReminderCoordinator`](group-22-engagement-module.md#sessionremindercoordinator) and [`SessionBookmarkUIService`](group-22-engagement-module.md#sessionbookmarkuiservice) (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Services/HappeningNow/SessionReminderCoordinatorTests.cs:24`, `.../SessionBookmarkUIServiceTests.cs:128`), and [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) covers the round trip plus the not-persistent flag (`CapabilityFallbackTests.cs:95-108`).
+- **Where it's used**: `TryAddScoped` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:83`); overridden by [`BrowserDevicePreferences`](#browserdevicepreferences) (localStorage) in `AddBrowserDeviceCapabilities()` (`DependencyInjection.cs:110`) and by [`MauiDevicePreferences`](#mauidevicepreferences) on native heads (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:59`). ADC's Engagement UI tests instantiate it as the preferences double for [`SessionReminderCoordinator`](group-22-engagement-module.md#sessionremindercoordinator) and [`SessionBookmarkUIService`](group-22-engagement-module.md#sessionbookmarkuiservice) (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Services/HappeningNow/SessionReminderCoordinatorTests.cs:24`, `.../SessionBookmarkUIServiceTests.cs:128`), and [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) covers the round trip plus the not-persistent flag (`CapabilityFallbackTests.cs:95-108`).
 - **Caveats / not-in-source**: values are stored boxed as `object?`, so a `GetAsync<int>` against a key written as `string` returns the fallback rather than reporting a type mismatch (`InMemoryDevicePreferences.cs:22`). The interface enumerates the supported value types (`IDevicePreferences.cs:8-9`); nothing in this class enforces that list.
 
 ### NullLocalCacheStore
@@ -1138,8 +1320,9 @@ file storage and avatars, the backing for the media-picker capability).
   - `SetAsync<T>(string key, T value, CancellationToken)` (`NullLocalCacheStore.cs:10-11`): returns `Task.CompletedTask`, discarding the value.
   - `GetAsync<T>(string key, CancellationToken)` (`NullLocalCacheStore.cs:14-15`): returns `Task.FromResult<T?>(default)`, so reference types read back as `null` and value types as zero.
   - `RemoveAsync(string key, CancellationToken)` (`NullLocalCacheStore.cs:18`): `Task.CompletedTask`.
+  - `ClearAsync(CancellationToken)` (`NullLocalCacheStore.cs:21-22`): `Task.CompletedTask`, an explicit override rather than relying on the interface's default no-op.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). Offline caching is a per-head capability (browser `localStorage`, native file or preference storage), and a Blazor Server circuit has no client-side store it can reach without JavaScript, so the default is the empty cache.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:65`); overridden by [`BrowserLocalCacheStore`](#browserlocalcachestore) (`DependencyInjection.cs:111`) and [`MauiLocalCacheStore`](#mauilocalcachestore) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:60`). [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) writes then reads back `null` to pin the behavior (`CapabilityFallbackTests.cs:110-118`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:65`); overridden by [`BrowserLocalCacheStore`](#browserlocalcachestore) (`DependencyInjection.cs:111`) and [`MauiLocalCacheStore`](#mauilocalcachestore) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:60`). [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) writes then reads back `null` to pin the behavior (`CapabilityFallbackTests.cs:110-118`).
 
 ### NullMapNavigationService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Geo` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Geo/NullMapNavigationService.cs:4` · Level 1 · class (sealed)
@@ -1149,7 +1332,7 @@ file storage and avatars, the backing for the media-picker capability).
 - **Concept**: an outcome-returning fallback in the same shape as [`NullClipboardService`](#nullclipboardservice), with no `IsSupported` probe. A `false` answer is the component's cue to leave the address as plain text rather than a tappable "open in maps" affordance.
 - **Walkthrough**: one member. `OpenAddressAsync(string address, string? label, CancellationToken)` (`NullMapNavigationService.cs:7-8`) returns `Task.FromResult(false)`, ignoring both the address and the optional pin label.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). Launching a map is a platform handoff (a native maps app, or a maps URL in a new tab), and a head that has neither should not fabricate one.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:53`); overridden by [`BrowserMapNavigationService`](#browsermapnavigationservice) (`DependencyInjection.cs:112`) and [`MauiMapNavigationService`](#mauimapnavigationservice) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:51`). Covered in [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:148`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:53`); overridden by [`BrowserMapNavigationService`](#browsermapnavigationservice) (`DependencyInjection.cs:112`) and [`MauiMapNavigationService`](#mauimapnavigationservice) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:51`). Covered in [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:148`).
 
 ### BrowserDevicePreferences
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.DeviceStorage` · `MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserDevicePreferences.cs:10` · Level 2 · class (sealed)
@@ -1164,7 +1347,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `SetAsync<T>(string key, T value, CancellationToken = default)` (`:47-55`): guards the key (`:49`), serializes to JSON (`:51`), and invokes `storageSet` with the prefixed key (`:52-54`); the `bool?` result is discarded.
   - `RemoveAsync(string key, CancellationToken = default)` (`:58-65`): guards (`:60`) and invokes `storageRemove` (`:62-64`).
 - **Why it's built this way**: `ArgumentException.ThrowIfNullOrWhiteSpace(key)` is the one place this class does throw, because an empty key is a programming error, not an environment condition. Everything environmental (Safari Private Browsing, an iframe with storage disabled, a corrupt value) degrades to the caller's `fallback`, so a preferences read can never break a render path (`:5-8`). Discarding the write result is consistent: there is no useful UI response to "the browser refused to persist your preference".
-- **Where it's used**: registered scoped as `IDevicePreferences` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:101`); siblings are [`MauiDevicePreferences`](#mauidevicepreferences) and the in-memory Server default [`InMemoryDevicePreferences`](#inmemorydevicepreferences), which is `TryAddScoped` precisely so a Blazor Server circuit holds per-user rather than cross-user state (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:72-74`). Keys come from [`DevicePreferenceKeys`](#devicepreferencekeys).
+- **Where it's used**: registered scoped as `IDevicePreferences` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:105`); siblings are [`MauiDevicePreferences`](#mauidevicepreferences) and the in-memory Server default [`InMemoryDevicePreferences`](#inmemorydevicepreferences), which is `TryAddScoped` precisely so a Blazor Server circuit holds per-user rather than cross-user state (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:72-74`). Keys come from [`DevicePreferenceKeys`](#devicepreferencekeys).
 
 ### BrowserLocalCacheStore
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.DeviceStorage` · `MMCA.Common.UI/Services/Capabilities/DeviceStorage/BrowserLocalCacheStore.cs:10` · Level 2 · class (sealed)
@@ -1177,8 +1360,9 @@ file storage and avatars, the backing for the media-picker capability).
   - `SetAsync<T>(...)` (`:23-31`): guards the key (`:25`), `JsonSerializer.Serialize` (`:27`), invokes `storageSet` (`:28-30`), discards the result. A failed write only means a colder next visit.
   - `GetAsync<T>(...)` (`:34-54`): guards the key (`:36`), reads the raw string (`:38-40`), returns `default` when it is `null` (`:41-44`), and deserializes inside a `try` that maps `JsonException` to `default` (`:46-53`). The `JsonException` arm is what makes a schema change survivable: a document written by an older version of the app that no longer deserializes is treated as a cache miss, not an error.
   - `RemoveAsync(...)` (`:57-64`): guards (`:59`) and invokes `storageRemove` (`:61-63`).
-- **Why it's built this way**: `default` on every failure means a cache miss and a corrupt entry are the same event to the caller: fetch live. Storing pre-serialized strings from C# (the JS helpers deliberately treat values as opaque raw strings, `MMCA.Common.UI/wwwroot/capabilities-interop.js:127-128`) keeps all typing on the .NET side, so the same `T` round-trips identically on every head.
-- **Where it's used**: registered scoped as `ILocalCacheStore` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:102`); siblings are [`MauiLocalCacheStore`](#mauilocalcachestore) (file-per-key on disk) and the unavailable [`NullLocalCacheStore`](#nulllocalcachestore).
+  - `ClearAsync(CancellationToken = default)` (`:66-69`): invokes `storageClearPrefix` with `KeyPrefix`, removing every `mmca.localCache.*` entry in one call rather than the caller tracking and removing keys one at a time.
+- **Why it's built this way**: `default` on every failure means a cache miss and a corrupt entry are the same event to the caller: fetch live. Storing pre-serialized strings from C# (the JS helpers deliberately treat values as opaque raw strings, `MMCA.Common.UI/wwwroot/capabilities-interop.js:127-128`) keeps all typing on the .NET side, so the same `T` round-trips identically on every head. `ClearAsync` is the store's half of sign-out cleanup: a prefix-scoped wipe leaves `mmca.devicePrefs.*` untouched so device preferences survive across accounts on a shared device while cached snapshots do not.
+- **Where it's used**: registered scoped as `ILocalCacheStore` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:106`); siblings are [`MauiLocalCacheStore`](#mauilocalcachestore) (file-per-key on disk) and the unavailable [`NullLocalCacheStore`](#nulllocalcachestore).
 - **Caveats / not-in-source**: nothing here evicts or expires entries, and `IsAvailable` is a constant rather than a probe, so a quota-exhausted profile still reports available and simply fails each write.
 
 ### NullGeocodingService
@@ -1204,7 +1388,7 @@ file storage and avatars, the backing for the media-picker capability).
 - **Concept introduced** - none new. This is the sibling of [`NullGeocodingService`](#nullgeocodingservice) for the "where is *this device*" half of the location story (geocoding turns an address into a point, geolocation reads the device's own point). The same [Rubric §1 - SOLID], [Rubric §2 - Design Patterns], and [Rubric §22 - Responsive / Cross-Browser] notes apply.
 - **Walkthrough** - `sealed class` (`NullGeolocationService.cs:4`). `IsSupported => false` (`NullGeolocationService.cs:7`). `GetCurrentOrLastKnownAsync` returns `Task.FromResult<GeoPoint?>(null)` (`NullGeolocationService.cs:10-11`); because it never touches the platform it also never fires the OS permission prompt the real contract warns about (`MMCA.Common.UI/Services/Capabilities/Geo/IGeolocationService.cs:13-18`), which is the desired behavior on a head that could not honor a grant anyway.
 - **Why it's built this way** - [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). Location is soft and best-effort by contract: permission denial, timeout, or any platform failure already yields `null` (`MMCA.Common.UI/Services/Capabilities/Geo/IGeolocationService.cs:3-6,14-16`), so a head with no location provider is just the permanent version of that same "no fix" outcome, and no caller needs a second code path for it.
-- **Where it's used** - registered by `AddDeviceCapabilityDefaults` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:45`); consumed alongside the geocoder by ADC's public event detail page (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Events/PublicEventDetail.razor.cs:26,214`). The MAUI head overrides it with [`MauiGeolocationService`](#mauigeolocationservice) (`MMCA.Common.UI.Maui/DependencyInjection.cs:52`); web and Server heads keep this default, since `AddBrowserDeviceCapabilities` registers no geolocation implementation (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:91-106`).
+- **Where it's used** - registered by `AddDeviceCapabilityDefaults` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:45`); consumed alongside the geocoder by ADC's public event detail page (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Events/PublicEventDetail.razor.cs:26,214`). The MAUI head overrides it with [`MauiGeolocationService`](#mauigeolocationservice) (`MMCA.Common.UI.Maui/DependencyInjection.cs:52`); web and Server heads keep this default, since `AddBrowserDeviceCapabilities` registers no geolocation implementation (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:95-110`).
 
 ### IClipboardService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Interop` · `MMCA.Common.UI/Services/Capabilities/Interop/IClipboardService.cs:7` · Level 0 · interface
@@ -1223,7 +1407,7 @@ file storage and avatars, the backing for the media-picker capability).
   return.
 - **Where it's used**: implemented by [`MauiClipboardService`](#mauiclipboardservice),
   [`BrowserClipboardService`](#browserclipboardservice) (registered per scope in
-  `AddBrowserDeviceCapabilities`, `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:97`), and
+  `AddBrowserDeviceCapabilities`, `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:101`), and
   the default [`NullClipboardService`](#nullclipboardservice)
   (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:42`); it is the copy-link fallback path
   of [`IShareService`](#ishareservice).
@@ -1249,11 +1433,11 @@ file storage and avatars, the backing for the media-picker capability).
   semantics (middle-click, open-in-new-tab) while only WebView heads pay the interop cost ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
 - **Where it's used**: implemented by [`MauiExternalLinkService`](#mauiexternallinkservice),
   [`BrowserExternalLinkService`](#browserexternallinkservice)
-  (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:98`), and the default
+  (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:102`), and the default
   [`NullExternalLinkService`](#nullexternallinkservice)
   (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:47`); consumed by the `ExternalLink`
   component (its fake counterpart
-  [`FakeExternalLinkService`](group-27-testing-infrastructure.md#fakeexternallinkservice) backs the
+  [`FakeExternalLinkService`](group-28-testing-infrastructure.md#fakeexternallinkservice) backs the
   component tests) and composed over by [`BrowserMapNavigationService`](#browsermapnavigationservice).
 
 ### IScreenshotService
@@ -1303,7 +1487,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `[Rubric §24, Forms / Validation / UX Safety]` assesses whether the UI tells the truth about what happened. Reporting the failure keeps the user informed rather than silently discarding their action.
 - **Walkthrough**: one member. `SetTextAsync(string text, CancellationToken)` (`NullClipboardService.cs:7-8`) returns `Task.FromResult(false)`.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). Clipboard write is permission-gated and can fail on real hosts too (a non-secure browser context, for example), so the contract already has a failure path and the null default simply takes it always.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:51`); overridden by [`BrowserClipboardService`](#browserclipboardservice) (`DependencyInjection.cs:106`) and [`MauiClipboardService`](#mauiclipboardservice) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:49`). Covered in [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:32-34`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:51`); overridden by [`BrowserClipboardService`](#browserclipboardservice) (`DependencyInjection.cs:106`) and [`MauiClipboardService`](#mauiclipboardservice) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:49`). Covered in [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:32-34`).
 
 ### NullExternalLinkService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Interop` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Interop/NullExternalLinkService.cs:7` · Level 1 · class (sealed)
@@ -1317,7 +1501,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `InterceptsLinks` (`NullExternalLinkService.cs:10`): constant `false`, the "let the anchor do its job" answer.
   - `OpenAsync(Uri uri, CancellationToken)` (`NullExternalLinkService.cs:13`): returns `Task.CompletedTask`, dropping the URI. Reached only if a caller ignores `InterceptsLinks` and calls it anyway.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). The framework routes every external link through one component so the WebView problem is solved once; on hosts without that problem the cheapest correct behavior is the browser's own.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:56`); overridden by [`BrowserExternalLinkService`](#browserexternallinkservice) (`DependencyInjection.cs:107`) and by [`MauiExternalLinkService`](#mauiexternallinkservice) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:54`), which is the implementation that actually sets `InterceptsLinks` to true. [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) asserts the flag is false and `OpenAsync` does not throw (`CapabilityFallbackTests.cs:156`, `:156`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:56`); overridden by [`BrowserExternalLinkService`](#browserexternallinkservice) (`DependencyInjection.cs:107`) and by [`MauiExternalLinkService`](#mauiexternallinkservice) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:54`), which is the implementation that actually sets `InterceptsLinks` to true. [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) asserts the flag is false and `OpenAsync` does not throw (`CapabilityFallbackTests.cs:156`, `:156`).
 
 ### NullScreenshotService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Interop` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Interop/NullScreenshotService.cs:4` · Level 1 · class (sealed)
@@ -1329,7 +1513,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `IsSupported` (`NullScreenshotService.cs:7`): constant `false`.
   - `CaptureToFileAsync(CancellationToken)` (`NullScreenshotService.cs:10-11`): returns `Task.FromResult<string?>(null)`.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). Capturing the screen is a native-only operation with privacy weight, and there is no browser equivalent the framework wires, so this default is what every web head runs.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:60`); [`MauiScreenshotService`](#mauiscreenshotservice) is the only override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:58`). Covered in [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:151`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:60`); [`MauiScreenshotService`](#mauiscreenshotservice) is the only override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:58`). Covered in [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:151`).
 
 ### NullShareService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Interop` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Interop/NullShareService.cs:4` · Level 1 · class (sealed)
@@ -1342,7 +1526,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `ShareLinkAsync(string title, Uri uri, CancellationToken)` (`NullShareService.cs:7-8`): `Task.FromResult(false)`.
   - `ShareFileAsync(string title, string filePath, string contentType, CancellationToken)` (`NullShareService.cs:11-12`): `Task.FromResult(false)`. Note it takes a path plus a MIME type rather than a stream, so the null implementation owns no resource and has nothing to dispose.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). `navigator.share` is not universally available even in browsers, so the contract already had to model "sharing did not happen" as an ordinary outcome; the null default is that outcome, always.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:50`); overridden by [`BrowserShareService`](#browsershareservice) (`DependencyInjection.cs:105`) and [`MauiShareService`](#mauishareservice) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:48`). Both members are asserted false in [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:20-27`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:50`); overridden by [`BrowserShareService`](#browsershareservice) (`DependencyInjection.cs:105`) and [`MauiShareService`](#mauishareservice) (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:48`). Both members are asserted false in [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:20-27`).
 
 ### BrowserClipboardService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Interop` · `MMCA.Common.UI/Services/Capabilities/Interop/BrowserClipboardService.cs:4` · Level 2 · class (sealed)
@@ -1352,7 +1536,7 @@ file storage and avatars, the backing for the media-picker capability).
 - **Concept introduced**: the group's **tri-state to bool collapse**, worth stating once because several adapters repeat it. [`CapabilitiesJsModule`](#capabilitiesjsmodule) returns `bool?`: `true` (the browser did it), `false` (the browser refused), or `null` (JS never ran). Adapters whose contract returns `bool` collapse the last two with `== true`, so "not attempted" and "attempted and failed" are equally honest answers to "did the copy land". `[Rubric §18, UI Architecture]` assesses whether the UI can tell the user the truth about what happened; the boolean is what lets a caller show a "copied" snackbar only on a real success.
 - **Walkthrough**: the constructor captures the module (`MMCA.Common.UI/Services/Capabilities/Interop/BrowserClipboardService.cs:9`). `SetTextAsync(string text, CancellationToken = default)` (`:12-18`) invokes `copyText` with the text (`:14-16`) and returns `copied == true` (`:17`). On the JS side, `copyText` returns `false` up front when `navigator.clipboard` is absent (an insecure context or an older browser) and catches a rejected `writeText` (a denied permission) to `false` (`MMCA.Common.UI/wwwroot/capabilities-interop.js:26-34`).
 - **Why it's built this way**: the Clipboard API is permission-gated and unavailable over plain HTTP, so a `bool` return rather than a throw lets the copy-link affordance simply do nothing visible where it is unsupported.
-- **Where it's used**: registered scoped as `IClipboardService` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:97`); siblings are [`MauiClipboardService`](#mauiclipboardservice) and [`NullClipboardService`](#nullclipboardservice). It is the copy-link fallback for [`IShareService`](#ishareservice) callers, usually paired with [`IPublicLinkBuilder`](group-15-common-ui-framework.md#ipubliclinkbuilder) to produce the URL.
+- **Where it's used**: registered scoped as `IClipboardService` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:101`); siblings are [`MauiClipboardService`](#mauiclipboardservice) and [`NullClipboardService`](#nullclipboardservice). It is the copy-link fallback for [`IShareService`](#ishareservice) callers, usually paired with [`IPublicLinkBuilder`](group-15-common-ui-framework.md#ipubliclinkbuilder) to produce the URL.
 
 ### BrowserExternalLinkService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Interop` · `MMCA.Common.UI/Services/Capabilities/Interop/BrowserExternalLinkService.cs:8` · Level 2 · class (sealed)
@@ -1362,7 +1546,7 @@ file storage and avatars, the backing for the media-picker capability).
 - **Concept introduced**: the `InterceptsLinks` **capability flag**, the group's answer to "should the component render a plain anchor or route through the service". A native head inside a `BlazorWebView` must intercept, because `target="_blank"` dead-ends there; a browser head must not, because intercepting would replace working native anchor behavior (middle-click, open-in-new-tab, the browser's own popup policy) with a worse imitation (`:3-6`). `[Rubric §25, Navigation & IA]` assesses whether navigation is coherent and predictable across the app; one flag lets a single shared link component be correct on both heads. `[Rubric §26, Front-End Security]` applies to the JS side: `window.open(url, '_blank', 'noopener,noreferrer')` (`MMCA.Common.UI/wwwroot/capabilities-interop.js:39`) prevents the opened page from reaching back through `window.opener` and strips the referrer.
 - **Walkthrough**: the constructor captures the module (`MMCA.Common.UI/Services/Capabilities/Interop/BrowserExternalLinkService.cs:13`). `InterceptsLinks => false` (`:16`). `OpenAsync(Uri uri, CancellationToken = default)` (`:19-26`) null-guards `uri` (`:21`) and invokes `openExternal` with `uri.ToString()` (`:23-25`), discarding the result because the contract returns `Task`.
 - **Why it's built this way**: leaving anchors alone on the web is the cheaper and more correct default; the programmatic path exists only for callers like [`BrowserMapNavigationService`](#browsermapnavigationservice) that have no anchor to click.
-- **Where it's used**: registered scoped as `IExternalLinkService` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:98`); siblings are [`MauiExternalLinkService`](#mauiexternallinkservice) and [`NullExternalLinkService`](#nullexternallinkservice). Consumed by the shared external-link component and by [`BrowserMapNavigationService`](#browsermapnavigationservice).
+- **Where it's used**: registered scoped as `IExternalLinkService` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:102`); siblings are [`MauiExternalLinkService`](#mauiexternallinkservice) and [`NullExternalLinkService`](#nullexternallinkservice). Consumed by the shared external-link component and by [`BrowserMapNavigationService`](#browsermapnavigationservice).
 - **Caveats / not-in-source**: a popup blocker can make `window.open` return `null` while the JS still reports `true` (`MMCA.Common.UI/wwwroot/capabilities-interop.js:37-44` only catches a throw), so an open silently blocked by the browser is not detected.
 
 ### BrowserShareService
@@ -1376,7 +1560,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `ShareLinkAsync(string title, Uri uri, CancellationToken = default)` (`:16-24`): null-guards `uri` (`:18`), invokes `shareLink` with the title and the URI string (`:20-22`), and returns `shared == true` (`:23`). On the JS side, `shareLink` returns `false` when `navigator.share` is absent and catches the dismissal and permission rejections (`AbortError`, `NotAllowedError`) to `false` (`MMCA.Common.UI/wwwroot/capabilities-interop.js:13-22`), so a user who closes the share sheet is reported as "not shared".
   - `ShareFileAsync(string title, string filePath, string contentType, CancellationToken = default)` (`:27-28`): `Task.FromResult(false)`, unconditionally. A browser has no local file path to share.
 - **Why it's built this way**: collapsing "user dismissed" into `false` alongside "unsupported" is the same simplification the clipboard adapter makes, and it is right here because both outcomes mean the link was not shared. Returning a constant `false` for files, rather than throwing `NotSupportedException`, keeps the contract uniform so callers branch on a value instead of catching.
-- **Where it's used**: registered scoped as `IShareService` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:96`); siblings are [`MauiShareService`](#mauishareservice) and [`NullShareService`](#nullshareservice), with [`IClipboardService`](#iclipboardservice) as the fallback path and [`IPublicLinkBuilder`](group-15-common-ui-framework.md#ipubliclinkbuilder) supplying the URL.
+- **Where it's used**: registered scoped as `IShareService` by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:100`); siblings are [`MauiShareService`](#mauishareservice) and [`NullShareService`](#nullshareservice), with [`IClipboardService`](#iclipboardservice) as the fallback path and [`IPublicLinkBuilder`](group-15-common-ui-framework.md#ipubliclinkbuilder) supplying the URL.
 
 ### IBarcodeScannerService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Media` · `MMCA.Common.UI/Services/Capabilities/Media/IBarcodeScannerService.cs:11` · Level 0 · interface
@@ -1504,7 +1688,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `IsSupported` (`NullBarcodeScannerService.cs:12`): constant `false`; components hide the affordance.
   - `ScanAsync(CancellationToken)` (`NullBarcodeScannerService.cs:15-16`): returns `Task.FromResult<string?>(null)`, ignoring the token. That is deliberate and pinned by a test: even a pre-cancelled token must come back as a plain `null` rather than an `OperationCanceledException`, because the contract is that the scan affordance is simply absent, not that a scan was interrupted (`CapabilityFallbackTests.cs:129-143`).
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). A cancelled-token exception would force every caller into a `try`/`catch` for a case that is not an error, so the null result carries both "no camera" and "no scan happened" uniformly.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:79`), registered last among the singletons and under its own explanatory comment; the opt-in native override is [`MauiBarcodeScannerService`](#mauibarcodescannerservice). Covered in [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:129-143`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:79`), registered last among the singletons and under its own explanatory comment; the opt-in native override is [`MauiBarcodeScannerService`](#mauibarcodescannerservice). Covered in [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) (`CapabilityFallbackTests.cs:129-143`).
 
 ### NullSpeechToTextService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Media` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Media/NullSpeechToTextService.cs:6` · Level 1 · class (sealed)
@@ -1517,7 +1701,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `IsSupported` (`NullSpeechToTextService.cs:9`): constant `false`.
   - `ListenAsync(CultureInfo culture, IProgress<string>? partialResults, CancellationToken)` (`NullSpeechToTextService.cs:12-16`): returns `Task.FromResult<string?>(null)`, ignoring the requested recognition culture and never calling back into `partialResults`.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). Speech recognition is a platform service with a microphone permission attached, so an unavailable recognizer must be an ordinary, prompt-free `null` rather than an exception a form has to handle.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:63`); [`MauiSpeechToTextService`](#mauispeechtotextservice) is the native override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:62`). ADC registers it explicitly in a bUnit test so the live-channel page renders without a recognizer (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Pages/LiveChannelJoinTests.cs:61-62`), and [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) pins the `null` result (`CapabilityFallbackTests.cs:152-153`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:63`); [`MauiSpeechToTextService`](#mauispeechtotextservice) is the native override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:62`). ADC registers it explicitly in a bUnit test so the live-channel page renders without a recognizer (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Pages/LiveChannelJoinTests.cs:61-62`), and [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) pins the `null` result (`CapabilityFallbackTests.cs:152-153`).
 
 ### NullTextToSpeechService
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Media` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Media/NullTextToSpeechService.cs:4` · Level 1 · class (sealed)
@@ -1531,7 +1715,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `SpeakAsync(string text, CancellationToken)` (`NullTextToSpeechService.cs:10`): `Task.CompletedTask`, discarding the text.
   - `StopAsync()` (`NullTextToSpeechService.cs:13`): `Task.CompletedTask`. It takes no cancellation token, matching the contract: stopping is itself the cancellation.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html). Synthesis is a platform service with no framework-wired browser equivalent, and the affordance is an enhancement, so the inert default costs the feature nothing but the button.
-- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:57`); [`MauiTextToSpeechService`](#mauitexttospeechservice) is the native override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:55`). [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests) asserts `IsSupported` is false and that both calls are non-throwing (`CapabilityFallbackTests.cs:155`, `:153-154`).
+- **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:57`); [`MauiTextToSpeechService`](#mauitexttospeechservice) is the native override (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:55`). [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests) asserts `IsSupported` is false and that both calls are non-throwing (`CapabilityFallbackTests.cs:155`, `:153-154`).
 
 ### NullMediaPickerService
 
@@ -1745,22 +1929,22 @@ file storage and avatars, the backing for the media-picker capability).
   - `UnregisterAsync(CancellationToken)` (`NullPushRegistrationService.cs:16`): `Task.CompletedTask`. Unregistering something that was never registered is a success, not a failure, which is why the two members differ in return shape.
 - **Why it's built this way**: [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html), cited in the class summary (`NullPushRegistrationService.cs:4`). Native push delivery is an additional channel layered on the existing hub, so the absence of a device registration must never be treated as the absence of notifications.
 - **Where it's used**: `TryAddSingleton` in `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:70`), directly beside its token-provider counterpart (`:55`); [`MauiPushRegistrationService`](#mauipushregistrationservice) is the native override.
-- **Caveats / not-in-source**: unlike its siblings this class has no case in [`CapabilityFallbackTests`](group-27-testing-infrastructure.md#capabilityfallbacktests); its behavior is covered only through the DI defaults and the native override's own tests.
+- **Caveats / not-in-source**: unlike its siblings this class has no case in [`CapabilityFallbackTests`](group-28-testing-infrastructure.md#capabilityfallbacktests); its behavior is covered only through the DI defaults and the native override's own tests.
 
 ### MauiExternalAuthBroker
-> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui.Capabilities.Auth` · `MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:19` · Level 2 · class (sealed)
+> MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui.Capabilities.Auth` · `MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20` · Level 2 · class (sealed)
 
-- **What it is**: the MAUI adapter for [`IExternalAuthBroker`](#iexternalauthbroker) ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)), running an external OAuth sign-in through the platform `WebAuthenticator` in the system browser and handing the captured completion code to the shared `/auth/oauth-complete` page.
-- **Depends on**: [`IExternalAuthBroker`](#iexternalauthbroker); `NavigationManager`, `IOptions<T>` over [`ApiSettings`](group-15-common-ui-framework.md#apisettings), and `IConfiguration`; MAUI Essentials `WebAuthenticator`. This is the only type in the unit that composes over app configuration and navigation rather than a single platform static, which is also why it is the only one registered scoped rather than singleton (see below).
-- **Concept**: native OAuth callback capture, introduced at [`IExternalAuthBroker`](#iexternalauthbroker). `[Rubric §11, Security]` assesses how credentials and identity flows are handled: identity providers reject embedded WebViews, so the flow runs in the system browser and only a single-use code (never a token) returns over the app's custom scheme. `[Rubric §26, Front-End Security]` assesses the browser-side half of the same concern: the shared completion page owns the code-to-token exchange and token storage, so the sensitive step exists in exactly one place across all heads ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)).
+- **What it is**: the MAUI adapter for [`IExternalAuthBroker`](#iexternalauthbroker) ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)), running an external OAuth sign-in through the platform `WebAuthenticator` in the system browser and handing the captured completion code, plus a round-tripped anti-CSRF state value, to the shared `/auth/oauth-complete` page.
+- **Depends on**: [`IExternalAuthBroker`](#iexternalauthbroker); `NavigationManager`, `IOptions<T>` over [`ApiSettings`](group-15-common-ui-framework.md#apisettings), `OAuthFlowStateStore`, and `IConfiguration`; MAUI Essentials `WebAuthenticator`. This is the only type in the unit that composes over app configuration and navigation rather than a single platform static, which is also why it is the only one registered scoped rather than singleton (see below).
+- **Concept**: native OAuth callback capture, introduced at [`IExternalAuthBroker`](#iexternalauthbroker). `[Rubric §11, Security]` assesses how credentials and identity flows are handled: identity providers reject embedded WebViews, so the flow runs in the system browser and only a single-use code (never a token) returns over the app's custom scheme; a per-attempt state value from `OAuthFlowStateStore` is round-tripped through the authorize URL and back so the completion page can reject a code that was not started on this device (`MauiExternalAuthBroker.cs:63-65`). `[Rubric §26, Front-End Security]` assesses the browser-side half of the same concern: the shared completion page owns the code-to-token exchange and token storage, so the sensitive step exists in exactly one place across all heads ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)).
 - **Walkthrough**
-  - Three readonly fields (`MauiExternalAuthBroker.cs:21-23`): the `NavigationManager`, the `IOptions<ApiSettings>`, and the nullable callback scheme.
-  - The constructor (`MauiExternalAuthBroker.cs:26`) null-guards `configuration` (`:31`), stores the first two dependencies, and reads the callback scheme from `configuration["OAuth:MobileRedirectScheme"]` (`:35`).
-  - `IsAvailable` (`MauiExternalAuthBroker.cs:39`): true only when the callback scheme is a non-blank string, so an unconfigured head keeps the web anchor flow.
-  - `SignInAsync(string provider, CancellationToken = default)` (`MauiExternalAuthBroker.cs:42`): guards `provider` (`:44`); returns `false` when unavailable (`:46-49`) or when the configured API endpoint is missing (`:51-55`); builds `{scheme}://oauth-complete` as the callback and `{apiBase}/auth/oauth/{provider}?returnUrl=...` as the authorize URL, URL-escaping both the provider and the return URL (`:57-59`); calls `WebAuthenticator.Default.AuthenticateAsync` with those two URLs and the caller's token (`:63-69`); returns `false` if no non-blank `code` property comes back (`:71-76`); otherwise navigates to `/auth/oauth-complete?code=...` and returns `true` (`:80-81`). `TaskCanceledException` (the user dismissed the browser) and `FeatureNotSupportedException` both return `false` (`:83-91`).
-- **Why it's built this way**: an unavailable default when the scheme is unset lets a single login page attempt native brokering and cleanly fall back to the web anchor flow. Delegating the exchange to the existing `/auth/oauth-complete` page means the single-use-code contract, token storage, and auth-state refresh live in one place for every head (`MauiExternalAuthBroker.cs:78-79`, [ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)).
+  - Four readonly fields (`MauiExternalAuthBroker.cs:22-26`): the `NavigationManager`, the `IOptions<ApiSettings>`, the `OAuthFlowStateStore`, and the nullable callback scheme.
+  - The constructor (`MauiExternalAuthBroker.cs:29`) null-guards `configuration` (`:34`), stores the first three dependencies, and reads the callback scheme from `configuration["OAuth:MobileRedirectScheme"]` (`:39`).
+  - `IsAvailable` (`MauiExternalAuthBroker.cs:47`): true only when the callback scheme is a non-blank string, so an unconfigured head keeps the web anchor flow.
+  - `SignInAsync(string provider, CancellationToken = default)` (`MauiExternalAuthBroker.cs:50`): guards `provider` (`:52`); returns `false` when unavailable (`:54-57`) or when the configured API endpoint is missing (`:59-63`); builds `{scheme}://oauth-complete` as the callback (`:65`), then starts a flow via `_flowState.BeginAsync` and appends its returned state as `&state=...` to the authorize URL only when non-empty (`:66-72`); builds `{apiBase}/auth/oauth/{provider}?returnUrl=...{stateQuery}` as the authorize URL, URL-escaping the provider and the return URL (`:73-74`); calls `WebAuthenticator.Default.AuthenticateAsync` with those two URLs and the caller's token (`:78-84`); returns `false` if no non-blank `code` property comes back (`:86-91`); otherwise reads back the `state` property (`:93`), reappends it as `&state=...` to the completion URL when non-empty, and navigates to `/auth/oauth-complete?code=...` returning `true` (`:95-101`). `TaskCanceledException` (the user dismissed the browser) and `FeatureNotSupportedException` both return `false` (`:103-111`).
+- **Why it's built this way**: an unavailable default when the scheme is unset lets a single login page attempt native brokering and cleanly fall back to the web anchor flow. Delegating the exchange to the existing `/auth/oauth-complete` page means the single-use-code contract, token storage, and auth-state refresh live in one place for every head. The state round-trip through `OAuthFlowStateStore` exists because a deep link carrying someone else's authorization code would otherwise sign the app in as them; starting a flow on this device and requiring its value to come back closes that gap (`MauiExternalAuthBroker.cs:63-65`, [ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)).
 - **Where it's used**: registered **scoped**, not singleton, by `AddMauiDeviceCapabilities()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:76`) because it navigates through the circuit's `NavigationManager` after the system-browser round trip (`MMCA.Common.UI.Maui/DependencyInjection.cs:73-75`). The default it overrides is the singleton [`UnavailableExternalAuthBroker`](#unavailableexternalauthbroker) (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:55`). Consumed by the login page's external-provider buttons.
-- **Caveats / not-in-source**: the code-to-token exchange, token storage, and auth-state refresh are not in this class; they live in the shared `/auth/oauth-complete` page it navigates to. The class doc also records two out-of-code prerequisites: a server-side allow-list entry (`OAuth:AllowedReturnUrlSchemes`) and the platform callback registrations (`MauiExternalAuthBroker.cs:14-17`).
+- **Caveats / not-in-source**: the code-to-token exchange, token storage, and auth-state refresh are not in this class; they live in the shared `/auth/oauth-complete` page it navigates to, which is also where the returned `state` is validated against the value `OAuthFlowStateStore` recorded. The class doc also records two out-of-code prerequisites: a server-side allow-list entry (`OAuth:AllowedReturnUrlSchemes`) and the platform callback registrations.
 
 ### NullLocalNotificationService
 
@@ -1812,7 +1996,7 @@ file storage and avatars, the backing for the media-picker capability).
   - The constructor (`:24-33`): null-guards the configuration (`:26`), reads the key (`:28`), and **throws `InvalidOperationException` when it is missing or blank** (`:29-31`), a fail-fast that stops a misconfigured build from silently emitting broken share links. Otherwise it parses the value as an absolute `Uri` into the readonly `_baseUrl` field (`:19`, `:32`).
   - `BuildAbsolute(string relativePath)` (`:36-41`): guards with `ArgumentException.ThrowIfNullOrWhiteSpace(relativePath)` (`:38`), then combines the path onto the base via the `Uri(baseUri, relative)` constructor (`:40`).
 - **Why it's built this way**: `UriKind.Absolute` at construction plus the blank check means a bad `PublicSite:BaseUrl` fails once, at container build, rather than producing a plausible but wrong link on every share. The class doc notes the value is pinned by the same mechanism as the head's gateway endpoint (`:8-10`), so one embedded configuration file defines both where the app talks and what it links to.
-- **Where it's used**: registered scoped as `IPublicLinkBuilder` by `AddCommonMauiPublicLinkBuilder()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:134-135`), which replaces the `TryAddScoped` default [`NavigationPublicLinkBuilder`](group-15-common-ui-framework.md#navigationpubliclinkbuilder) installed by `AddUIShared` (`MMCA.Common.UI/DependencyInjection.cs:131`). Consumed by the share, copy-link and QR affordances that pair with [`IShareService`](#ishareservice) and [`IClipboardService`](#iclipboardservice).
+- **Where it's used**: registered scoped as `IPublicLinkBuilder` by `AddCommonMauiPublicLinkBuilder()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:134-135`), which replaces the `TryAddScoped` default [`NavigationPublicLinkBuilder`](group-15-common-ui-framework.md#navigationpubliclinkbuilder) installed by `AddUIShared` (`MMCA.Common.UI/DependencyInjection.cs:136`). Consumed by the share, copy-link and QR affordances that pair with [`IShareService`](#ishareservice) and [`IClipboardService`](#iclipboardservice).
 
 ### MauiSecureTokenStore
 > MMCA.Common.UI.Maui · `MMCA.Common.UI.Maui.Services` · `MMCA.Common.UI.Maui/Services/MauiSecureTokenStore.cs:22` · Level 1 · class (sealed)
@@ -1905,8 +2089,9 @@ file storage and avatars, the backing for the media-picker capability).
   - `SetAsync<T>(string key, T value, CancellationToken = default)` (`MauiLocalCacheStore.cs:17`): guards the key (`:19`), resolves the path creating the directory (`:23`), serializes (`:24`), and `File.WriteAllTextAsync`s (`:25`), catching `IOException` and `UnauthorizedAccessException` because a failed write only means a colder next launch (`:27-34`).
   - `GetAsync<T>(string key, CancellationToken = default)` (`MauiLocalCacheStore.cs:38`): guards the key (`:40`), returns `default` when the file does not exist (`:45-48`), otherwise reads and deserializes (`:50-51`), collapsing `IOException`, `UnauthorizedAccessException` and `JsonException` to `default` (`:53-64`).
   - `RemoveAsync(string key, CancellationToken = default)` (`MauiLocalCacheStore.cs:68`): deletes the file (`:74`), swallowing the same IO failures (`:76-83`), and returns a completed task (`:85`).
-  - `GetPath(string key, bool ensureDirectory)` (`MauiLocalCacheStore.cs:88`): builds `mmca-cache` under `FileSystem.AppDataDirectory` (`:90`), optionally creates it (`:91-94`), and maps the key to a file name through a conservative character filter that keeps ASCII letters, digits, `-` and `.` and replaces everything else with `_`, then appends `.json` (`:96-97`). The class doc notes keys are code-controlled, not user input (`:8-9`).
-- **Why it's built this way**: file-per-key JSON keeps the store dependency-free (no embedded database to ship or migrate), and best-effort IO with `default` returns means a cache miss or a corrupt file degrades to a live fetch rather than surfacing an error to the user.
+  - `ClearAsync(CancellationToken = default)` (`MauiLocalCacheStore.cs:151`): deletes the whole `mmca-cache` directory recursively when it exists (`:155-159`), swallowing the same `IOException`/`UnauthorizedAccessException` pair as the other members (`:161-168`), and returns a completed task (`:170`).
+  - `GetPath(string key, bool ensureDirectory)` (`MauiLocalCacheStore.cs:173`): builds `mmca-cache` under `FileSystem.AppDataDirectory` (`:175`), optionally creates it (`:176-179`), and maps the key to a file name through a conservative character filter that keeps ASCII letters, digits, `-` and `.` and replaces everything else with `_`, then appends `.json` (`:181-182`). The class doc notes keys are code-controlled, not user input (`:8-9`).
+- **Why it's built this way**: file-per-key JSON keeps the store dependency-free (no embedded database to ship or migrate), and best-effort IO with `default` returns means a cache miss or a corrupt file degrades to a live fetch rather than surfacing an error to the user; `ClearAsync` reuses the same best-effort disposition so a full-cache wipe cannot itself throw.
 - **Where it's used**: registered as a singleton by `AddMauiDeviceCapabilities()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:60`); siblings are [BrowserLocalCacheStore](#browserlocalcachestore) and the permanently unavailable [NullLocalCacheStore](#nulllocalcachestore) (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:56`). Consumed by offline-capable list and schedule components.
 - **Caveats / not-in-source**: the filter maps distinct keys onto the same file name when they differ only in filtered characters. Nothing in this class detects that collision; the doc comment's "keys are code-controlled" is the mitigation.
 
@@ -2024,7 +2209,7 @@ file storage and avatars, the backing for the media-picker capability).
   - Constructor `DeepLinkRouteEventArgs(string route)` (`:7`): assigns the route.
   - `Route` (`:10`): the app-relative route to navigate to (for example `/happening-now`).
 - **Why it's built this way**: a small dedicated `EventArgs` type keeps the dispatcher's event strongly typed and lets the listener component read the route without casting, part of the single-funnel deep-link design ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
-- **Where it's used**: declared as the payload of `IDeepLinkDispatcher.RouteRequested` (`MMCA.Common.UI/Services/Capabilities/Navigation/IDeepLinkDispatcher.cs:13`), constructed inside [DeepLinkDispatcher](#deeplinkdispatcher)`.Publish` (`MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs:44`), and read by the `DeepLinkListener` component's handler (`MMCA.Common.UI/Components/Capabilities/DeepLinkListener.razor:32-36`).
+- **Where it's used**: declared as the payload of `IDeepLinkDispatcher.RouteRequested` (`MMCA.Common.UI/Services/Capabilities/Navigation/IDeepLinkDispatcher.cs:13`), constructed inside [DeepLinkDispatcher](#deeplinkdispatcher)`.Publish` (`MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs:133`), and read by the `DeepLinkListener` component's handler (`MMCA.Common.UI/Components/Capabilities/DeepLinkListener.razor:32-36`).
 
 ### CapabilitiesJsModule
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities` · `MMCA.Common.UI/Services/Capabilities/CapabilitiesJsModule.cs:12` · Level 1 · class (sealed, `IAsyncDisposable`)
@@ -2033,7 +2218,7 @@ file storage and avatars, the backing for the media-picker capability).
 - **Depends on**: `IJSRuntime` and the `JSDisconnectedException`/`JSException` pair (`Microsoft.JSInterop`, `MMCA.Common.UI/Services/Capabilities/CapabilitiesJsModule.cs:1`); [`LazyJsModule`](group-15-common-ui-framework.md#lazyjsmodule), the framework's import-once helper it wraps (`:16`, `:19`); BCL `ValueTask`. Its consumers are the seven JS-backed adapters below.
 - **Concept introduced**: this is the type that makes the whole browser leg of the capability layer safe, and it teaches two ideas at once.
   - **Prerender-safe JS interop**. A Blazor component's first render can happen on the server with no browser attached (SSR prerender) and a Server circuit can be torn down mid-call. Calling into JS in either state throws. Rather than making every adapter (and every component) test for it, this class catches the whole JS-unavailable family and returns `default`, so a capability call during prerender is simply a no-op that yields `null` or `false`.
-  - **Import once per scope**. An ES-module import is a network fetch plus an evaluation; doing it per capability call would be wasteful and would race. [`LazyJsModule`](group-15-common-ui-framework.md#lazyjsmodule) caches the imported `IJSObjectReference`, and registering this class **scoped** (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:94`) makes that cache per-circuit.
+  - **Import once per scope**. An ES-module import is a network fetch plus an evaluation; doing it per capability call would be wasteful and would race. [`LazyJsModule`](group-15-common-ui-framework.md#lazyjsmodule) caches the imported `IJSObjectReference`, and registering this class **scoped** (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:98`) makes that cache per-circuit.
 
   `[Rubric §23, Front-End Performance]` assesses whether the client avoids redundant work on the critical path; one shared module import instead of eight is exactly that. `[Rubric §29, Resilience & Business Continuity]` assesses graceful degradation; a disconnected circuit degrades a capability call to a silent `default` rather than an unhandled exception in a render path. `[Rubric §12, Performance & Scalability]` applies because this is the single place the degradation policy is written, instead of eight copies of the same try/catch.
 - **Walkthrough**
@@ -2042,7 +2227,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `InvokeOrDefaultAsync<T>(string identifier, object?[] args, CancellationToken)` (`:26-49`): the single entry point. It awaits `GetOrImportAsync(cancellationToken)` (`:33`, where the import happens on first use) and then `module.InvokeAsync<T>(identifier, cancellationToken, args)` (`:34`). Three catch arms return `default`: `InvalidOperationException` for interop not yet available (SSR prerender before hydration, `:36-40`), `JSDisconnectedException` for a torn-down circuit (`:41-44`), and `JSException` for a browser API that itself threw (`:45-48`).
   - `DisposeAsync()` (`:52`) forwards to the inner module's disposal, releasing the `IJSObjectReference` when the scope ends.
 - **Why it's built this way**: the nullable-returning signature is the load-bearing choice. Because every export is invoked as `InvokeOrDefaultAsync<bool?>` or `<string?>`, adapters can distinguish "JS said no" (`false`) from "JS never ran" (`null`), which is how [`BrowserConnectivityStatusService`](#browserconnectivitystatusservice) knows to retry its subscription after hydration. The class doc records that this mirrors [`MauiBackNavigationBridge`](group-15-common-ui-framework.md#mauibacknavigationbridge)'s degradation contract (`:5-11`), so both interop boundaries behave identically ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
-- **Where it's used**: registered scoped by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:94`) and injected into [`BrowserShareService`](#browsershareservice), [`BrowserClipboardService`](#browserclipboardservice), [`BrowserExternalLinkService`](#browserexternallinkservice), [`BrowserAccessibilityAnnouncer`](#browseraccessibilityannouncer), [`BrowserConnectivityStatusService`](#browserconnectivitystatusservice), [`BrowserDevicePreferences`](#browserdevicepreferences), and [`BrowserLocalCacheStore`](#browserlocalcachestore).
+- **Where it's used**: registered scoped by `AddBrowserDeviceCapabilities()` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:98`) and injected into [`BrowserShareService`](#browsershareservice), [`BrowserClipboardService`](#browserclipboardservice), [`BrowserExternalLinkService`](#browserexternallinkservice), [`BrowserAccessibilityAnnouncer`](#browseraccessibilityannouncer), [`BrowserConnectivityStatusService`](#browserconnectivitystatusservice), [`BrowserDevicePreferences`](#browserdevicepreferences), and [`BrowserLocalCacheStore`](#browserlocalcachestore).
 - **Caveats / not-in-source**: it swallows the JS failure without logging (it takes no `ILogger`), so a genuinely broken export is indistinguishable at runtime from an unsupported browser API.
 
 ### WebFormFactor
@@ -2056,7 +2241,7 @@ file storage and avatars, the backing for the media-picker capability).
   - `[Rubric §22, Responsive / Cross-Browser]` §22 assesses how the app adapts to device and environment. `GetFormFactor()` is the coarse signal a component branches on when server-rendered behavior must differ from WASM or native.
 - **Walkthrough**: the class is `sealed` and stateless, with no fields and no constructor (`WebFormFactor.cs:12-19`). `GetFormFactor()` is an expression-bodied member returning the constant `"Web"` (`WebFormFactor.cs:15`); it is a constant rather than a probe because Blazor Server always executes this code server-side, so there is nothing to detect. `GetPlatform()` returns `Environment.OSVersion.ToString()` (`WebFormFactor.cs:18`), the server OS description. Both members carry `<inheritdoc/>` (`WebFormFactor.cs:14,17`), so the documented vocabulary for the return values lives once on the interface (`MMCA.Common.UI/Services/IFormFactor.cs:9,12`).
 - **Why it's built this way**: prerender and interactive Server render both run on the server, so no reliable client-device signal exists at this layer; answering `"Web"` plus the server OS is the honest answer for this host rather than a guess about the browser. Keeping the type stateless and app-neutral is what allowed it to move up into `MMCA.Common.UI.Web` and be shared by every Blazor Web host ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
-- **Where it's used**: registered by the Blazor Server host through `AddCommonWebFormFactor()`, which binds [`IFormFactor`](#iformfactor) to this class as a singleton (`MMCA.Common.UI.Web/DependencyInjection.cs:47-48`); the same XML doc points the WASM client at `AddWasmFormFactor()` from MMCA.Common.UI instead (`MMCA.Common.UI.Web/DependencyInjection.cs:43-45`). Both server heads call it once at startup: ADC at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:96` and Store at `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:132`. Resolved by any shared component that injects [`IFormFactor`](#iformfactor) to branch on the current host.
+- **Where it's used**: registered by the Blazor Server host through `AddCommonWebFormFactor()`, which binds [`IFormFactor`](#iformfactor) to this class as a singleton (`MMCA.Common.UI.Web/DependencyInjection.cs:51-52`); the same XML doc points the WASM client at `AddWasmFormFactor()` from MMCA.Common.UI instead (`MMCA.Common.UI.Web/DependencyInjection.cs:47-49`). Both server heads call it once at startup: ADC at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:149` and Store at `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:132`. Resolved by any shared component that injects [`IFormFactor`](#iformfactor) to branch on the current host.
 - **Caveats / not-in-source**: `GetPlatform()` reports the *server* OS, not the browser or the client device, so it must not be read as a client fingerprint. Because the registration is a plain `AddSingleton`, a head that also called `AddWasmFormFactor()` in the same container would end up with two `IFormFactor` descriptors and last-registration-wins resolution; nothing in this type guards against that.
 
 ### MauiLocalNotificationService
@@ -2118,45 +2303,49 @@ file storage and avatars, the backing for the media-picker capability).
 ### DeepLinkDispatcher
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities.Navigation` · `MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs:9` · Level 3 · class
 
-- **What it is**: the default [IDeepLinkDispatcher](#ideeplinkdispatcher). It raises `RouteRequested` when a listener is attached, otherwise buffers the most recent route (capacity one) so a cold-start tap survives until the Blazor router renders (`DeepLinkDispatcher.cs:3-8`). Registered as a singleton so native callers can resolve it from the MAUI root provider.
+- **What it is**: the default [IDeepLinkDispatcher](#ideeplinkdispatcher). It raises `RouteRequested` when a listener is attached, otherwise buffers the most recent route (capacity one) so a cold-start tap survives until the Blazor router renders (`DeepLinkDispatcher.cs:111-120`). `Publish` now also rejects any route that is not app-relative before it does either (`:100-109`). Registered as a singleton so native callers can resolve it from the MAUI root provider.
 - **Depends on**: [IDeepLinkDispatcher](#ideeplinkdispatcher), the contract it implements, and [DeepLinkRouteEventArgs](#deeplinkrouteeventargs), what it raises; the BCL `System.Threading.Lock` type for its gate.
-- **Concept introduced**: **reading the event handler inside the lock**, and with it the modern `System.Threading.Lock`. The obvious implementation snapshots `RouteRequested` into a local, then takes a lock only to write the buffer. The source rejects that explicitly, and the comment records the interleaving it loses (`DeepLinkDispatcher.cs:22-31`): `Publish` sees no handler, the listener then subscribes, the listener drains an empty buffer, and only afterwards does `Publish` write into a buffer nobody will read again, so the route is dropped. That race is real on a native head, where the callback thread and the first render are genuinely concurrent (the warm-boot deep link). Reading the handler and writing the buffer as one step under the same gate leaves only two orders: either the subscription was visible and the event fires, or it was not and the buffer write completes before the lock releases, so the listener's `TryConsumePending`, which must take the same lock, finds the route. The invoke itself still happens outside the lock (`:44`) because a listener that navigates on that callback must not run under it.
-  - `[Rubric §19, State Management]` §19 assesses safe transient state. The single-slot `_pendingRoute` (`:12`) is read and cleared atomically in `TryConsumePending` (`:50-54`), so a buffered route is delivered exactly once.
+- **Concept introduced**: **reading the event handler inside the lock**, and with it the modern `System.Threading.Lock`. The obvious implementation snapshots `RouteRequested` into a local, then takes a lock only to write the buffer. The source rejects that explicitly, and the comment records the interleaving it loses (`DeepLinkDispatcher.cs:111-120`): `Publish` sees no handler, the listener then subscribes, the listener drains an empty buffer, and only afterwards does `Publish` write into a buffer nobody will read again, so the route is dropped. That race is real on a native head, where the callback thread and the first render are genuinely concurrent (the warm-boot deep link). Reading the handler and writing the buffer as one step under the same gate leaves only two orders: either the subscription was visible and the event fires, or it was not and the buffer write completes before the lock releases, so the listener's `TryConsumePending`, which must take the same lock, finds the route. The invoke itself still happens outside the lock (`:133`) because a listener that navigates on that callback must not run under it.
+  - `[Rubric §19, State Management]` §19 assesses safe transient state. The single-slot `_pendingRoute` (`:12`) is read and cleared atomically in `TryConsumePending` (`:139-143`), so a buffered route is delivered exactly once.
   - `[Rubric §12, Performance & Scalability]` §12 assesses lock discipline. The critical section is a field read and a field assignment; the handler invocation, which can trigger navigation and a render, is deliberately outside it.
   - `[Rubric §15, Best Practices & Code Quality]` §15 assesses whether non-obvious code explains itself. The nine-line comment above the lock states the exact dropped-route interleaving, which is the kind of reasoning that is otherwise lost the first time someone "simplifies" the method.
-- **Walkthrough**: fields, then the event, then two methods.
-  - `_gate` (`DeepLinkDispatcher.cs:11`): a `Lock` instance, the typed C# 13 lock rather than locking on a plain `object`. `_pendingRoute` (`:12`): the single-slot buffer.
+  - `[Rubric §11, Security]` §11 assesses input validation at a trust boundary. `IsAppRelativeRoute` (`:45-68`) is the SEC-Common-88 / SEC-ADC-65 fix: an exported Android activity is reachable by an explicit intent from any app on the device, which bypasses the manifest filter's scheme and host constraints, so a hostile caller can hand `Publish` a route like `//attacker.example/p` that resolves protocol-relative against the WebView base and leaves the app origin. The check is on the route's shape only (a single leading slash, no backslash, no control character, no scheme), never on the originating host, because a legitimate deep link (a home-screen widget) may have a placeholder host. A shape violation now makes `Publish` throw `ArgumentException` (`:100-109`) instead of forwarding the route to navigation.
+- **Walkthrough**: static validation helpers, then fields, the event, and two instance methods.
+  - `IsAppRelativeRoute(string?)` (`DeepLinkDispatcher.cs:45-68`): `false` for null or whitespace (`:47-50`); `false` for any backslash or control character (`:52-59`); `false` when `StartsWithScheme` matches (`:61-64`); otherwise `true` only when the route starts with exactly one `/` followed by a non-slash character (`:67`).
+  - `StartsWithScheme(string)` (`:74-92`): a private RFC 3986 scheme check, `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ) ":"`, used only by `IsAppRelativeRoute`.
+  - `_gate` (`:11`): a `Lock` instance, the typed C# 13 lock rather than locking on a plain `object`. `_pendingRoute` (`:12`): the single-slot buffer.
   - `RouteRequested` event (`:15`): the implemented event.
-  - `Publish(string)` (`:18-45`): validates with `ArgumentException.ThrowIfNullOrWhiteSpace` (`:20`), then inside `lock (_gate)` reads the handler (`:35`) and, when it is `null`, stores the route and returns while still holding the gate (`:37-40`). With a handler present it falls through and invokes it outside the lock with a new [DeepLinkRouteEventArgs](#deeplinkrouteeventargs) (`:44`).
-  - `TryConsumePending(out string?)` (`:48-57`): takes and clears the pending route under the lock (`:50-54`) and returns whether one was present (`:56`).
-- **Why it's built this way**: native taps can arrive on any thread and either before or after the listener attaches, so the dispatcher must be both thread-safe and cold-start-safe. A singleton with a locked single-slot buffer is the minimal design that satisfies both ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
-- **Where it's used**: registered as the singleton [IDeepLinkDispatcher](#ideeplinkdispatcher) in `AddDeviceCapabilityDefaults` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:78`); published into by the MAUI notification-tap bridge (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:30-40`); consumed by the `DeepLinkListener` component; exercised by `DeepLinkDispatcherTests` and `DeepLinkListenerTests` (see [Group 27](group-27-testing-infrastructure.md#deeplinkdispatchertests)).
+  - `Publish(string)` (`:100-133`): validates non-null/whitespace with `ArgumentException.ThrowIfNullOrWhiteSpace` (`:102`), then throws `ArgumentException` when `IsAppRelativeRoute` rejects the route (`:104-109`); inside `lock (_gate)` it reads the handler (`:124`) and, when it is `null`, stores the route and returns while still holding the gate (`:126-129`). With a handler present it falls through and invokes it outside the lock with a new [DeepLinkRouteEventArgs](#deeplinkrouteeventargs) (`:133`).
+  - `TryConsumePending(out string?)` (`:136-146`): takes and clears the pending route under the lock (`:139-143`) and returns whether one was present (`:145`).
+- **Why it's built this way**: native taps can arrive on any thread and either before or after the listener attaches, so the dispatcher must be both thread-safe and cold-start-safe. A singleton with a locked single-slot buffer is the minimal design that satisfies both ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). The route-shape check sits in `Publish` rather than at each platform head because that is the one boundary every untrusted platform callback crosses (SEC-Common-88 / SEC-ADC-65).
+- **Where it's used**: registered as the singleton [IDeepLinkDispatcher](#ideeplinkdispatcher) in `AddDeviceCapabilityDefaults` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:78`); published into by the MAUI notification-tap bridge (`MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:30-40`); consumed by the `DeepLinkListener` component; exercised by `DeepLinkDispatcherTests`, `DeepLinkRouteShapeTests`, and `DeepLinkListenerTests` (see [Group 27](group-28-testing-infrastructure.md#deeplinkdispatchertests)).
 
 ### DependencyInjection
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Capabilities` · `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:23` · Level 4 · class (static, `extension(IServiceCollection)` block)
 
 - **What it is**: the composition root for this entire group. One static class holding two registration helpers: `AddDeviceCapabilityDefaults()` fills the container with a safe default for every capability contract, and `AddBrowserDeviceCapabilities()` overrides the subset a browser can really do (`DependencyInjection.cs:15-22`).
 - **Depends on**: every contract in this chapter, plus the `Fallbacks` namespace for the null defaults (`DependencyInjection.cs:4`) and the `Browser` namespace for the JS-interop implementations (`:3`); `Microsoft.Extensions.DependencyInjection` and its `Extensions` namespace for the `TryAdd*` helpers (`:1-2`).
-- **Concept introduced**: **two-phase, last-registration-wins capability selection**. This is the mechanism every other section in this chapter refers back to, so read the two phases as one story. Phase one: `AddUIShared` calls `AddDeviceCapabilityDefaults()` (`MMCA.Common.UI/DependencyInjection.cs:143`, under a comment stating the rule at `:137-138`), which `TryAdd`-registers a null or neutral implementation for every contract (`DependencyInjection.cs:40-78`). `TryAdd` is what makes this idempotent: a host that calls `AddUIShared` twice does not double-register, and an app that pre-registered its own implementation before `AddUIShared` keeps it (`DependencyInjection.cs:16-20`). Phase two: the head calls its own override helper after `AddUIShared`, using a plain `Add` rather than `TryAdd`, and because .NET DI resolves the last registration for a single-service request, the real implementation wins (`DependencyInjection.cs:18-20`). Browser overrides live in this same file; native overrides ship separately in the `MMCA.Common.UI.Maui` package as `AddMauiDeviceCapabilities` (`DependencyInjection.cs:20-21`), which is what keeps `MMCA.Common.UI` free of any MAUI reference.
+- **Concept introduced**: **two-phase, last-registration-wins capability selection**. This is the mechanism every other section in this chapter refers back to, so read the two phases as one story. Phase one: `AddUIShared` calls `AddDeviceCapabilityDefaults()` (`MMCA.Common.UI/DependencyInjection.cs:148`, under a comment stating the rule at `:137-138`), which `TryAdd`-registers a null or neutral implementation for every contract (`DependencyInjection.cs:40-82`). `TryAdd` is what makes this idempotent: a host that calls `AddUIShared` twice does not double-register, and an app that pre-registered its own implementation before `AddUIShared` keeps it (`DependencyInjection.cs:16-20`). Phase two: the head calls its own override helper after `AddUIShared`, using a plain `Add` rather than `TryAdd`, and because .NET DI resolves the last registration for a single-service request, the real implementation wins (`DependencyInjection.cs:18-20`). Browser overrides live in this same file; native overrides ship separately in the `MMCA.Common.UI.Maui` package as `AddMauiDeviceCapabilities` (`DependencyInjection.cs:20-21`), which is what keeps `MMCA.Common.UI` free of any MAUI reference.
   - `[Rubric §1, SOLID]` §1 assesses SOLID adherence. Open/Closed shows up concretely: adding a fourth head means adding a new `AddXDeviceCapabilities()` helper, not editing shared components or this defaults table.
   - `[Rubric §2, Design Patterns]` §2 assesses whether classic patterns earn their keep. This is Strategy selected by the container, with Null Object as the default strategy (see [NullGeocodingService](#nullgeocodingservice) for the null-object shape taught in full).
-  - `[Rubric §22, Responsive / Cross-Browser]` §22 assesses graceful behavior across heads. The point of the defaults table is that no shared component can ever fail to resolve a capability, whichever head it renders in, including during prerender before JS exists (`:80-82`).
+  - `[Rubric §22, Responsive / Cross-Browser]` §22 assesses graceful behavior across heads. The point of the defaults table is that no shared component can ever fail to resolve a capability, whichever head it renders in, including during prerender before JS exists.
   - `[Rubric §14, Testability]` §14 assesses how easily the production wiring can be reproduced in a test. `AddDeviceCapabilityDefaults()` is public precisely so a consumer's bUnit base can register the same set the host gets, instead of hand-mirroring a list that rots the moment a new contract ships here (`DependencyInjection.cs:28-35`).
   - `[Rubric §33, Developer Experience]` §33 assesses how obvious the right thing is to do. The ordering rule (overrides after `AddUIShared`) is stated in the class XML doc rather than left to be discovered, and each non-obvious lifetime choice carries an inline comment at its registration.
 - **Walkthrough**
-  - `public static class DependencyInjection` (`DependencyInjection.cs:23`) with a single `extension(IServiceCollection services)` block (`:18`), the C# extension-member syntax this workspace uses for DI registration throughout.
-  - `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:37`) is public, and the XML doc says why (`:21-28`): consumer bUnit test bases call it directly, which they do at `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:26`, `MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.UI.Tests/BunitTestBase.cs:18`, and `MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Components/ComponentsSnapshotTests.cs:67`. Production hosts still get it through `AddUIShared`. The body is grouped by lifetime and rationale:
+  - `public static class DependencyInjection` (`DependencyInjection.cs:23`) with a single `extension(IServiceCollection services)` block (`:25`), the C# extension-member syntax this workspace uses for DI registration throughout.
+  - `AddDeviceCapabilityDefaults()` (`DependencyInjection.cs:37`) is public, and the XML doc says why (`:30-35`): consumer bUnit test bases call it directly, which they do at `MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:30`, `MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.UI.Tests/BunitTestBase.cs:18`, and `MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Components/ComponentsSnapshotTests.cs:67`. Production hosts still get it through `AddUIShared`. The body is grouped by lifetime and rationale:
     - Stateless no-op singletons, seventeen `TryAddSingleton` calls (`DependencyInjection.cs:40-56`), covering connectivity, share, clipboard, haptics, map navigation, geolocation, geocoding, external links, text-to-speech, accessibility announcements, local notifications, screenshots, battery, biometrics, speech-to-text, the external auth broker, and the local cache store.
-    - Push (ADR-044): [IPushRegistrationService](#ipushregistrationservice) and [IPushDeviceTokenProvider](#ipushdevicetokenprovider) both default to inert (`:54-55`), with the comment recording the deliberate split, UI.Maui overrides the registration service while the app overrides the token provider once real FCM or APNs credentials exist (`:51-53`).
-    - Media picking (ADR-045): [IMediaPickerService](#imediapickerservice) defaults to null because web heads render `InputFile` instead (`:57-58`).
-    - Barcode scanning: `IBarcodeScannerService` defaults to null because there is no browser primitive, and the native override is opt-in (`UseCommonBarcodeScanner` in UI.Maui), so even a MAUI head keeps the default until it asks for the camera (`:60-63`).
-    - `IDevicePreferences` is the one `TryAddScoped` (`:67`), and the comment says why: on Blazor Server the in-memory fallback must hold per-circuit (per-user) state, never cross-user state (`:65-66`).
-    - [IDeepLinkDispatcher](#ideeplinkdispatcher) is a singleton by contract (`:71`) because native code publishes into it from outside any scope; web heads have no native publishers, so the shared buffer is simply inert there (`:69-70`).
-  - `AddBrowserDeviceCapabilities()` (`DependencyInjection.cs:91`) is what a Blazor Server or WebAssembly host calls after `AddUIShared`. It registers [CapabilitiesJsModule](#capabilitiesjsmodule) scoped first so all browser services share one JS module import per scope or circuit (`:86-87`), then overrides eight contracts with `AddScoped` (`:89-96`): share, clipboard, external links, accessibility announcer, connectivity, device preferences, local cache store, and map navigation. Everything else keeps its null default, which is why web heads have no geolocation, geocoding, speech, media picker, or local notifications.
+    - Push (ADR-044): [IPushRegistrationService](#ipushregistrationservice) and [IPushDeviceTokenProvider](#ipushdevicetokenprovider) both default to inert (`:61-62`), with the comment recording the deliberate split, UI.Maui overrides the registration service while the app overrides the token provider once real FCM or APNs credentials exist (`:58-60`).
+    - Media picking (ADR-045): [IMediaPickerService](#imediapickerservice) defaults to null because web heads render `InputFile` instead (`:64-65`).
+    - Barcode scanning: `IBarcodeScannerService` defaults to null because there is no browser primitive, and the native override is opt-in (`UseCommonBarcodeScanner` in UI.Maui), so even a MAUI head keeps the default until it asks for the camera (`:67-70`).
+    - `IDevicePreferences` is the one `TryAddScoped` (`:74`), and the comment says why: on Blazor Server the in-memory fallback must hold per-circuit (per-user) state, never cross-user state (`:72-73`).
+    - [IDeepLinkDispatcher](#ideeplinkdispatcher) is a singleton by contract (`:78`) because native code publishes into it from outside any scope; web heads have no native publishers, so the shared buffer is simply inert there (`:76-77`).
+    - [IAppLifecycleNotifier](#iapplifecyclenotifier) is registered singleton for the same reason (`:82`), stated by a comment reusing the deep-link dispatcher's rationale: the native window's background/foreground callbacks run outside any scope, and the app-lock overlay listens for them so it can re-arm (`:80-81`).
+  - `AddBrowserDeviceCapabilities()` (`DependencyInjection.cs:95`) is what a Blazor Server or WebAssembly host calls after `AddUIShared`. It registers [CapabilitiesJsModule](#capabilitiesjsmodule) scoped first so all browser services share one JS module import per scope or circuit (`:97-98`), then overrides eight contracts with `AddScoped` (`:100-107`): share, clipboard, external links, accessibility announcer, connectivity, device preferences, local cache store, and map navigation. Everything else keeps its null default, which is why web heads have no geolocation, geocoding, speech, media picker, or local notifications.
 - **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) is cited on the class itself (`DependencyInjection.cs:16`), with [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html) and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html) cited inline for the push and media groups. The `TryAdd`-then-`Add` ordering is what lets one shared component tree run on three heads with zero host-detection code, and the scoped-versus-singleton split is driven by one question asked per contract: does this hold per-user state on a Blazor Server circuit?
-- **Where it's used**: called by `AddUIShared` (`MMCA.Common.UI/DependencyInjection.cs:143`). The public browser helper is called by both web heads in each app: ADC at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:61` and `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:49`, Store at `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:99` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:39`.
+- **Where it's used**: called by `AddUIShared` (`MMCA.Common.UI/DependencyInjection.cs:148`). The public browser helper is called by both web heads in each app: ADC at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:75` and `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:49`, Store at `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:99` and `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:39`.
 - **Caveats / not-in-source**: the MAUI-side helper (`AddMauiDeviceCapabilities`) is not in this file; it ships in the `MMCA.Common.UI.Maui` package, which is deliberately outside `MMCA.Common.slnx` and built by dedicated windows jobs ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
 
 
 ---
-[⬅ ADC Application Host, UI Shell & Cross-Module Composition](group-25-adc-host-composition.md)  •  [Index](00-index.md)  •  [Testing & Quality Infrastructure ➡](group-27-testing-infrastructure.md)
+[⬅ ADC Application Host, UI Shell & Cross-Module Composition](group-25-adc-host-composition.md)  •  [Index](00-index.md)  •  [Common AI Integration ➡](group-27-common-ai-integration.md)

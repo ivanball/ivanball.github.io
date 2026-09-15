@@ -150,7 +150,7 @@ sponsor logo, website, and LinkedIn URLs
 `:64`, `:82`), speaker LinkedIn and GitHub URLs
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/Validation/SpeakerValidationRules.cs:65`,
 `:84`), and the event sponsorship-packet and ticketing URLs
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:85`,
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:87`,
 `:105`). `[Rubric §11, Security]` assesses whether untrusted input is constrained at the boundary
 before it reaches a rendering surface; this rule is where that happens for URLs.
 
@@ -183,17 +183,17 @@ the whole `IEnumerable<IValidator<TRequest>>` from the container, de-duplicates 
 an assembly scanned twice does not report each failure twice, and attaches each one with
 `RuleFor(c => c.Request).SetValidator(validator)` (`CommandRequestValidator.cs:33-41`). The wiring is
 reflective and lives in the module scan: `ScanModuleApplicationServices`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:181`) first calls
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:187`) first calls
 FluentValidation's `AddValidatorsFromAssembly` to pick up every hand-written validator by convention
-(`DependencyInjection.cs:252`), then walks the assembly for types implementing
+(`DependencyInjection.cs:258`), then walks the assembly for types implementing
 `ICommandWithRequest<>`, constructs the closed `CommandRequestValidator<TCommand, TRequest>`, and
 registers it as `IValidator<TCommand>` with **`TryAddTransient`**, so an explicitly authored command
-validator always wins (`DependencyInjection.cs:254-270`). Common's own validators are registered
+validator always wins (`DependencyInjection.cs:260-276`). Common's own validators are registered
 separately in `AddApplication` via `AddValidatorsFromAssemblyContaining<ClassReference>()`, because
 the per-module scan only sees the module's own assembly (`DependencyInjection.cs:48-51`); that call
 is what puts [`AddressValidator`](#addressvalidator) in the container. For a command the reflective
 scan cannot see, for example a closed generic constructed at registration time,
-`AddCommandRequestValidator<TCommand, TRequest>()` (`DependencyInjection.cs:477-480`) is the explicit
+`AddCommandRequestValidator<TCommand, TRequest>()` (`DependencyInjection.cs:483-486`) is the explicit
 form of the same registration, with the same `TryAdd` precedence. `[Rubric §2, Design Patterns]`
 (convention over configuration, plus the Decorator pattern the gate itself rides on) and
 `[Rubric §15, Best Practices & Code Quality]` (a new command inherits validation without a registration line) both
@@ -216,7 +216,7 @@ and `"Points.Forbidden"` in the two points handlers, for example
 Adopting it moved those codes out of the modules and into framework arguments, which is visible in
 governance: ADC's error-catalog fitness test lowered its scanned-code floor to 57 to account for
 codes the scanner can no longer see as module literals
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:88-106`). That is
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:89-107`). That is
 `[Rubric §34, Architecture Governance and Documentation]` at work: a shared abstraction is not
 adopted until the tests that measure the codebase are updated to match.
 
@@ -404,7 +404,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   Whichever validator wins, it is invoked by
   [`ValidatingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#validatingcommanddecoratortcommand-tresult)
   before the handler runs. Behavior is pinned by `CommonValidationRulesTests` in
-  [group-27](group-27-testing-infrastructure.md#commonvalidationrulestests), which exercises both the
+  [group-27](group-28-testing-infrastructure.md#commonvalidationrulestests), which exercises both the
   message and the optional-code path for each fragment
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:440-538`).
 
@@ -449,17 +449,17 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
     twice (a module assembly scanned twice, say) reports each failure once rather than in duplicate.
   - An **empty** collection is not an error: the loop simply adds no rule, and the bridge is a no-op for
     a request with no rules (the same point is made at
-    `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:477-478`).
+    `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:483-484`).
 
 - **Why it's built this way**: it removes the most common piece of validation boilerplate (restating
   request rules at the command level) while staying overridable. Registration is by `TryAdd`, so the
   convention never blocks a bespoke case. Two registration paths exist, both using `TryAddTransient`:
   the reflection scan in `ScanModuleApplicationServices` walks the module assembly for commands
   implementing `ICommandWithRequest<>`, builds the closed generic and registers it
-  (`DependencyInjection.cs:254-270`, `TryAddTransient` at `:267`) after
+  (`DependencyInjection.cs:260-276`, `TryAddTransient` at `:267`) after
   `services.AddValidatorsFromAssembly(moduleAssembly)` has already picked up every hand-written
   validator (`:250`); and the explicit helper `AddCommandRequestValidator<TCommand, TRequest>()`
-  (`DependencyInjection.cs:477-481`) does the same thing for one pair, which is how the generic
+  (`DependencyInjection.cs:483-487`) does the same thing for one pair, which is how the generic
   create/update/delete registration helpers wire their commands (`:349`, `:405`, `:454`). Because the
   explicit `IValidator<TCommand>` is registered first, it always wins.
 
@@ -471,7 +471,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   in turn (`:73`), accumulating failures through
   [`ValidationFailureExtensions.ToErrors`](#validationfailureextensions) (`:82`). Covered by
   `CommandRequestValidatorTests` in
-  [group-27](group-27-testing-infrastructure.md#commandrequestvalidatortests).
+  [group-27](group-28-testing-infrastructure.md#commandrequestvalidatortests).
 
 ### AddressLine1Rules<T>, AddressLine2Rules<T>, CityRules<T>, CountryRules<T>
 
@@ -540,7 +540,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   [`AddressValidator`](#addressvalidator), which includes each of them bound to the corresponding
   `Address` property (`AddressValidationRules.cs:17-19`, `:22`). They are covered directly by
   `AddressValidationRulesTests` in
-  [group-27](group-27-testing-infrastructure.md#addressvalidationrulestests)
+  [group-27](group-28-testing-infrastructure.md#addressvalidationrulestests)
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:19`,
   `:55`, `:82`, `:130`).
 
@@ -593,7 +593,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
 - **Where it's used**: composed into [`AddressValidator`](#addressvalidator) at
   `AddressValidationRules.cs:20`, and available for direct `Include(...)` by any module request
   validator whose DTO carries loose address fields. It is exercised directly by
-  [`AddressValidationRulesTests`](group-27-testing-infrastructure.md#addressvalidationrulestests)
+  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#addressvalidationrulestests)
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:98`),
   which builds `new StateRules<TestAddressModel>(p => p.State)` against a model type unrelated to
   `Address` and is therefore a live demonstration that the fragment is genuinely parent-agnostic.
@@ -624,7 +624,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   constant.
 - **Where it's used**: included by [`AddressValidator`](#addressvalidator) at
   `AddressValidationRules.cs:21`, and covered in isolation by
-  [`AddressValidationRulesTests`](group-27-testing-infrastructure.md#addressvalidationrulestests)
+  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#addressvalidationrulestests)
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:114`),
   which asserts a failure at `ZipCodeMaxLength + 1` characters rather than at a hard-coded 21, so the
   test moves with the constant.
@@ -654,7 +654,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   the class doc calls out explicitly at `AddressValidationRules.cs:8-12`).
   `[Rubric §14, Testability]`: because each field's rule is a separate type, a test can construct one
   fragment over a throwaway model, which is what
-  [`AddressValidationRulesTests`](group-27-testing-infrastructure.md#addressvalidationrulestests) does
+  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#addressvalidationrulestests) does
   before also exercising the assembled composite
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:10`
   holds the shared `AddressValidator` instance; `:144` is the all-fields-valid case).
@@ -777,9 +777,9 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   [`ActivityVenueUrlRules<T>`](group-18-conference-application.md#activityvenueurlrulest)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Activities/Validation/ActivityValidationRules.cs:71`),
   and [`EventSponsorshipPacketUrlRules<T>`](group-18-conference-application.md#eventsponsorshippacketurlrulest)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:85`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:87`).
   Each wrapper supplies its own module max-length constant. Direct coverage lives in
-  [`CommonValidationRulesTests`](group-27-testing-infrastructure.md#commonvalidationrulestests)
+  [`CommonValidationRulesTests`](group-28-testing-infrastructure.md#commonvalidationrulestests)
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:565`
   for the passing shapes, `:580` for rejected schemes, `:592` for the length bound, and `:604` for the
   supplied-error-code path).
@@ -849,10 +849,10 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   every broken rule in one response instead of one per round trip. The remaining three call sites are in
   [`AuthenticationServiceBase<TUser>`](group-08-auth.md#authenticationservicebasetuser), which validates
   its request before touching the user store and passes the method name as `source`:
-  `nameof(LoginAsync)` (`MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:130`),
+  `nameof(LoginAsync)` (`MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:165`),
   `nameof(RegisterAsync)` (`:193`), and `nameof(RefreshTokenAsync)` (`:273`), each wrapping the result in
   `Result.Failure<AuthenticationResponse>(...)`. Covered by
-  [`ValidationFailureExtensionsTests`](group-27-testing-infrastructure.md#validationfailureextensionstests).
+  [`ValidationFailureExtensionsTests`](group-28-testing-infrastructure.md#validationfailureextensionstests).
 
 - **Caveats / not-in-source**: the failure's `ErrorCode` is FluentValidation's per-rule code (for example
   `"NotEmptyValidator"`) unless a validator overrides it with `.WithErrorCode(...)`; this extension passes
@@ -927,7 +927,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   `"Points.Forbidden"` out of module-side `Error` factory calls and into arguments of this framework
   member made them invisible to the IL literal scan that counts ADC's error codes, which is part of why
   `ErrorCatalogTests.MinimumErrorCodes` sits at 57
-  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:95-106`). The codes ship
+  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ErrorCatalogTests.cs:96-107`). The codes ship
   unchanged; only the scanner's visibility of them changed.
 
 - **Where it's used**: six ADC Engagement handlers call it as their first statement after the null guard,
@@ -948,7 +948,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   [`GetMyPointsHandler`](group-22-engagement-module.md#getmypointshandler)
   (`.../Points/UseCases/GetMyPoints/GetMyPointsHandler.cs:40`) passing `"Points.Forbidden"`. All of them
   take the defaults, so every one reports `"Access denied."` with `ErrorType.Forbidden`. Behavior is pinned
-  by [`CurrentUserServiceExtensionsTests`](group-27-testing-infrastructure.md#currentuserserviceextensionstests),
+  by [`CurrentUserServiceExtensionsTests`](group-28-testing-infrastructure.md#currentuserserviceextensionstests),
   which asserts the success value, the default forbidden failure, the fully-overridden failure, the
   `ArgumentNullException` on a null service, and that `AccessDeniedMessage` still equals `"Access denied."`
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Extensions/CurrentUserServiceExtensionsTests.cs:16-72`).

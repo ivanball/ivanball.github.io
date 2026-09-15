@@ -8,7 +8,12 @@ into running applications, and composes every conference module into one shell. 
 shapes are built from the same component set: a **Blazor Web** app (Server prerender plus a
 WebAssembly client) and a **.NET MAUI Blazor Hybrid** native app for Android, iOS, macOS (Catalyst),
 and Windows. The types this group owns are deliberately thin: the two
-[`ADCHomePageContent`](#adchomepagecontent) home-content adapters (one per head), the MAUI-only
+[`ADCHomePageContent`](#adchomepagecontent) home-content adapters (one per head), the Blazor host's
+own edge-hardening set ([`UiRateLimitingSettings`](#uiratelimitingsettings),
+[`UiRateLimitingExtensions`](#uiratelimitingextensions),
+[`BlazorCircuitLimitSettings`](#blazorcircuitlimitsettings),
+[`BlazorCircuitLimitExtensions`](#blazorcircuitlimitextensions), and
+[`BoundedCircuitHandler`](#boundedcircuithandler)), the MAUI-only
 services ([`AppActionRouteMap`](#appactionroutemap), [`AppActionsInitializer`](#appactionsinitializer)),
 the MAUI-head composition and native entry surfaces ([`DeviceUIModule`](#deviceuimodule),
 [`WebAuthenticatorCallbackActivity`](#webauthenticatorcallbackactivity),
@@ -31,7 +36,7 @@ by every host without per-platform reimplementation. There are three host projec
 interactive Server circuit), `MMCA.ADC.UI.Web.Client` (the Blazor **WebAssembly** client, compiled
 to run in the browser), and `MMCA.ADC.UI` (the **.NET MAUI** host, which packages the same
 components into a native app and renders them in a `BlazorWebView`). Read the three composition
-roots side by side (`MMCA.ADC.UI.Web/Program.cs:31-103`, `MMCA.ADC.UI.Web.Client/Program.cs:23-82`,
+roots side by side (`MMCA.ADC.UI.Web/Program.cs:34-163`, `MMCA.ADC.UI.Web.Client/Program.cs:23-82`,
 `MMCA.ADC.UI/MauiProgram.cs:53-198`) and the family resemblance is obvious: the same MudBlazor
 registration, the same `AddUIShared(builder.Configuration)`, the same four conditional module
 registrations, then a short tail of host-specific adapters. `[Rubric §18, UI Architecture]` assesses
@@ -51,25 +56,25 @@ library defines the contracts, the host supplies the adapters, and the framework
 host-specific. **Home-page content**:
 [`IHomePageContent`](group-15-common-ui-framework.md#ihomepagecontent) lets the shared `/` route
 render an app-specific landing page, and each head registers its own
-[`ADCHomePageContent`](#adchomepagecontent) (web `MMCA.ADC.UI.Web/Program.cs:63` and
+[`ADCHomePageContent`](#adchomepagecontent) (web `MMCA.ADC.UI.Web/Program.cs:77` and
 `MMCA.ADC.UI.Web.Client/Program.cs:51`, MAUI `MMCA.ADC.UI/MauiProgram.cs:124`). **Token storage**:
 [`ITokenStorageService`](group-15-common-ui-framework.md#itokenstorageservice) abstracts where JWTs
 live, and each head picks its implementation in one line: `AddCommonMauiTokenStorage()` on MAUI
 (`MMCA.ADC.UI/MauiProgram.cs:163`, backed by the framework's
 [`MauiTokenStorageService`](group-26-device-capability-layer.md#mauitokenstorageservice)),
-`AddCommonServerTokenStorage()` on the Server head (`MMCA.ADC.UI.Web/Program.cs:76`, backed by
+`AddCommonServerTokenStorage()` on the Server head (`MMCA.ADC.UI.Web/Program.cs:129`, backed by
 [`ServerTokenStorageService`](group-15-common-ui-framework.md#servertokenstorageservice)), and an
 explicit [`WasmTokenStorageService`](group-15-common-ui-framework.md#wasmtokenstorageservice)
 registration in the browser client (`MMCA.ADC.UI.Web.Client/Program.cs:54`). The refresher behind
 [`ITokenRefresher`](group-15-common-ui-framework.md#itokenrefresher) splits the same way: the two
 browser heads use
 [`SameOriginProxyTokenRefresher`](group-15-common-ui-framework.md#sameoriginproxytokenrefresher)
-(`MMCA.ADC.UI.Web/Program.cs:77`, `MMCA.ADC.UI.Web.Client/Program.cs:55`) while MAUI, which has no
+(`MMCA.ADC.UI.Web/Program.cs:130`, `MMCA.ADC.UI.Web.Client/Program.cs:55`) while MAUI, which has no
 same-origin proxy to lean on, uses
 [`DirectApiTokenRefresher`](group-15-common-ui-framework.md#directapitokenrefresher)
 (`MMCA.ADC.UI/MauiProgram.cs:164`). **Form factor** is the same story in three registration lines:
 `AddCommonWebFormFactor()`, `AddWasmFormFactor()`, and `AddMauiFormFactor()`
-(`MMCA.ADC.UI.Web/Program.cs:96`, `MMCA.ADC.UI.Web.Client/Program.cs:82`,
+(`MMCA.ADC.UI.Web/Program.cs:149`, `MMCA.ADC.UI.Web.Client/Program.cs:82`,
 `MMCA.ADC.UI/MauiProgram.cs:169`), all satisfying the same
 [`IFormFactor`](group-26-device-capability-layer.md#iformfactor) contract. OAuth button availability
 ([`IOAuthUISettings`](group-15-common-ui-framework.md#ioauthuisettings), satisfied by
@@ -89,14 +94,14 @@ above the registration sequence, so the per-call comments can stay short
 [`IOAuthUISettings`](group-15-common-ui-framework.md#ioauthuisettings) is registered **before**
 `AddUIShared` on every head, because a `TryAdd` already satisfied by an earlier plain `Add` is a
 no-op, and that is what makes the head's implementation win and the social-login buttons appear
-(`MMCA.ADC.UI/MauiProgram.cs:99,101`, `MMCA.ADC.UI.Web/Program.cs:55-56`,
+(`MMCA.ADC.UI/MauiProgram.cs:99,101`, `MMCA.ADC.UI.Web/Program.cs:69-70`,
 `MMCA.ADC.UI.Web.Client/Program.cs:44-45`). Direction two: everything that overrides a shared
 null/neutral default goes **after** it, which covers `UseMauiDeviceCapabilities()`
 (`MauiProgram.cs:104`), the push token providers `AddMauiPushDeviceTokenProvider()`
 ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html),
 `MauiProgram.cs:120`), `UseCommonBarcodeScanner(...)` for badge-check-in QR scanning
 (`MauiProgram.cs:151-153`), and `AddBrowserDeviceCapabilities()` on the web heads
-(`MMCA.ADC.UI.Web/Program.cs:61`, `MMCA.ADC.UI.Web.Client/Program.cs:49`). Direction three: a module
+(`MMCA.ADC.UI.Web/Program.cs:75`, `MMCA.ADC.UI.Web.Client/Program.cs:49`). Direction three: a module
 that registers its own default with a plain `Add` must be beaten the same way, which is why
 `AddCommonMauiPublicLinkBuilder()` (the framework's MAUI
 [`IPublicLinkBuilder`](group-15-common-ui-framework.md#ipubliclinkbuilder), so a copied link points
@@ -105,7 +110,7 @@ at the public web site rather than at the WebView origin) stays after every modu
 provider: `AddCommonBlazorCsp()`, backed by
 [`BlazorCspPolicyProvider`](group-15-common-ui-framework.md#blazorcsppolicyprovider), is registered
 *before* `AddCommonSecurityHeaders(...)` so it wins over the static default
-(`MMCA.ADC.UI.Web/Program.cs:102-103`), feeding the framework's
+(`MMCA.ADC.UI.Web/Program.cs:162-163`), feeding the framework's
 [`SecurityHeadersMiddleware`](group-16-aspire-orchestration.md#securityheadersmiddleware) over the
 [`ICspPolicyProvider`](group-16-aspire-orchestration.md#icsppolicyprovider) boundary. The MAUI
 comment block also records the one ordering-insensitive call in the sequence,
@@ -117,7 +122,7 @@ an uncaught managed exception is logged rather than silently killing the app: a 
 **Which modules are in the build is configuration, not code.** All three heads gate every module UI
 behind
 [`UIModuleConfiguration`](group-15-common-ui-framework.md#uimoduleconfiguration)`.IsModuleEnabled`
-(`MMCA.ADC.UI/MauiProgram.cs:127-137`, `MMCA.ADC.UI.Web/Program.cs:82-92`,
+(`MMCA.ADC.UI/MauiProgram.cs:127-137`, `MMCA.ADC.UI.Web/Program.cs:135-145`,
 `MMCA.ADC.UI.Web.Client/Program.cs:61-71`), reading the `Modules` section (all four enabled in the
 MAUI head's embedded settings, `MMCA.ADC.UI/appsettings.json:8-13`), so a deployment can ship
 Conference-only, or Conference plus Engagement, without touching source. That is the client-side
@@ -127,7 +132,7 @@ and the shell composes nav items, routable assemblies, and layout components fro
 registered. On the web host the composition is explicit at the end of `Program.cs`: every registered
 `IUIModule`'s `Assembly` is concatenated with the three shared UI assemblies, deduplicated, and
 handed to `MapRazorComponents<App>().AddAdditionalAssemblies(...)`
-(`MMCA.ADC.UI.Web/Program.cs:198-212`). This is the group's cleanest
+(`MMCA.ADC.UI.Web/Program.cs:293-307`). This is the group's cleanest
 `[Rubric §15, Best Practices & Code Quality]` and `[Rubric §25, Navigation, Routing & IA]` moment: routes and
 navigation are *discovered* from the enabled module set rather than maintained in a central list.
 
@@ -174,7 +179,15 @@ contributing the Device settings [`NavItem`](group-15-common-ui-framework.md#nav
 layout components (`MauiProgram.cs:157`, `MMCA.ADC.UI/DeviceUIModule.cs:23-33`), and
 [`AppActionsInitializer`](#appactionsinitializer) as an `IMauiInitializeService` that sets localized
 home-screen quick actions after build (`MauiProgram.cs:158`). The cross-platform [`App`](#app)
-(`MMCA.ADC.UI/App.xaml.cs:11`) creates the single window hosting [`MainPage`](#mainpage), and
+(`MMCA.ADC.UI/App.xaml.cs:9`) creates the single window hosting [`MainPage`](#mainpage)
+(`App.xaml.cs:14-16`) and, before returning it, attaches that window to the framework's shared
+app-lifecycle notifier (`App.xaml.cs:29-33`). That forwarding is what lets the app-lock overlay
+re-arm: a hybrid head keeps its Blazor render tree alive across a background and foreground cycle,
+so without it the biometric gate engages once at first render and never again, and anyone handed the
+unlocked device reopens straight into the signed-in session (`App.xaml.cs:18-24`). The service
+lookup is written defensively, the handler's `MauiContext` first and `IPlatformApplication.Current`
+as the fallback, so a window created before the app handler exists cannot take the whole head down
+over a lock that would simply stay armed (`App.xaml.cs:26-33`). And
 `MainPage` (`MMCA.ADC.UI/MainPage.xaml.cs:12`) is a two-member class: `InitializeComponent()` and a
 `HostWebView` override returning the XAML-declared `BlazorWebView`
 (`MMCA.ADC.UI/MainPage.xaml.cs:14,17`). Everything about the platform back gesture lives in the
@@ -198,7 +211,16 @@ the same in-app navigation the WebView already runs. [`MainActivity`](#mainactiv
 `MainActivity.cs:26-31,39`) plus a second filter for the Essentials app-action intent
 (`MainActivity.cs:32-34`), and publishes the incoming URL's path plus query to
 [`IDeepLinkDispatcher`](group-26-device-capability-layer.md#ideeplinkdispatcher) from both `OnCreate`
-and `OnNewIntent` through one private helper (`MainActivity.cs:42-46,58-63,65-80`); its `OnResume`
+and `OnNewIntent` through one private helper (`MainActivity.cs:42-46,57-63,65-98`). That helper
+first asks
+[`DeepLinkDispatcher`](group-26-device-capability-layer.md#deeplinkdispatcher)`.IsAppRelativeRoute`
+and drops anything it rejects (`MainActivity.cs:92-97`): the activity is exported and
+`MainLauncher`, so any app on the device can hand it an explicit `ACTION_VIEW` intent that bypasses
+the manifest filter's scheme and host constraints, and a route such as `//attacker.example/p`
+resolves protocol-relative in the WebView. The check is asked rather than letting `Publish` throw,
+because a hostile route reaching a platform callback must be dropped silently rather than crossing
+it as an exception, and it tests the route's *shape* only, since a host check would break the app's
+own widget (`MainActivity.cs:80-91`). Its `OnResume`
 and `OnNewIntent` overrides also forward to `EssentialsPlatform` so a cold-start shortcut tap
 actually raises `OnAppAction` (`MainActivity.cs:49-55,61`). [`AppDelegate`](#appdelegate) does the
 equivalent for iOS Universal Links in `ContinueUserActivity`
@@ -230,7 +252,7 @@ failure (`NowNextWidgetProvider.cs:57-62`), which with the widget's own 8-second
 (`NowNextWidgetProvider.cs:119`) is a compact `[Rubric §29, Resilience]` statement about an optional
 surface. The web side of the link association is served by the Blazor host, which maps the App Links
 and Universal Links association documents from configuration
-(`MMCA.ADC.UI.Web/Program.cs:180-191`), and the applinks components mirror the same Blazor routes
+(`MMCA.ADC.UI.Web/Program.cs:272-283`), and the applinks components mirror the same Blazor routes
 the app uses: identical URLs on web and device, no route translation table.
 
 **Testability of a head that has no test project.** No MAUI target framework in this workspace has a
@@ -253,12 +275,12 @@ logic out of an untestable host so it can be asserted where a test runner exists
 **Host security: platform-appropriate token handling.** The token-storage choices are a compact
 study in secret handling matched to the threat model. On the browser heads the high-value *refresh*
 token is never exposed to JavaScript: it stays in an HttpOnly cookie and is exchanged through a
-same-origin proxy refresher (`MMCA.ADC.UI.Web/Program.cs:77`,
+same-origin proxy refresher (`MMCA.ADC.UI.Web/Program.cs:130`,
 `MMCA.ADC.UI.Web.Client/Program.cs:55`), and the Server head additionally runs a cookie-backed SSR
 authentication scheme,
 [`SessionCookieAuthenticationHandler`](group-08-auth.md#sessioncookieauthenticationhandler), plus an
 SSR validate-or-refresh step ahead of authentication, so `[Authorize]` component routes survive F5
-and open-in-new-tab (`MMCA.ADC.UI.Web/Program.cs:69-74,141-144`). On MAUI, which has no DOM and
+and open-in-new-tab (`MMCA.ADC.UI.Web/Program.cs:83-88,228-231`). On MAUI, which has no DOM and
 therefore no XSS surface, the framework's
 [`MauiTokenStorageService`](group-26-device-capability-layer.md#mauitokenstorageservice) stores both
 tokens in OS SecureStorage, the platform secure enclave (Android Keystore, iOS Keychain, Windows
@@ -273,12 +295,79 @@ second `AddHttpClient("APIClient")` call only appends a primary-handler factory,
 90-second request budget registered by `AddUIShared` survives the override
 (`MauiProgram.cs:180-185`).
 
+**Hardening the UI's own front door
+([ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html)).** The
+Blazor host is a *separate* externally reachable origin from the YARP Gateway, with its own
+Container Apps FQDN, so the Gateway's edge rate limiter never sees a single request to the page a
+browser actually loads (`MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:10-17`). Two ceilings
+close that gap, both owned by this group and both declared in the host rather than taken from
+`MMCA.Common.Gateway`: that package is the reverse-proxy kit, and a conference site is not a reverse
+proxy (`UiRateLimitingSettings.cs:18-25`). The first is an edge rate limiter.
+[`UiRateLimitingExtensions`](#uiratelimitingextensions) chains a per-client-IP fixed window with a
+replica-wide concurrency ceiling so a request must satisfy both, and rejects with `429` without
+queuing (`MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:148-164`). The numbers live in
+[`UiRateLimitingSettings`](#uiratelimitingsettings) and are tuned for this app specifically: 1200
+requests per IP per 60-second window, four times the storefront's figure, because on conference day
+the whole venue sits behind one NAT and presents to the limiter as a *single* client IP
+(`UiRateLimitingSettings.cs:45-64`), plus 200 requests in flight per replica
+(`UiRateLimitingSettings.cs:66-76`). Both counts are per process, so the effective allowance is
+multiplied by the replica count, the same deliberate trade the Gateway kit documents: an edge
+limiter answers on every request and a shared counter would put a network round trip in front of the
+whole site (`UiRateLimitingSettings.cs:26-31`). The section is bound, data-annotation validated, and
+validated on start (`UiRateLimitingExtensions.cs:137-140`, values in
+`MMCA.ADC.UI.Web/appsettings.json:19-24,28-32`). The exemptions are the interesting part: the
+liveness and readiness probes, `/_framework`, `/_content`, `/hubs`, and any path whose last segment
+carries a file extension all take the no-limiter partition, so the dozens of static assets a single
+page load pulls never throttle the first attendee, while `/_blazor` is deliberately left unexempt
+because the negotiate endpoint is exactly what opens a circuit
+(`UiRateLimitingExtensions.cs:24-35,42-60`); an unresolvable client IP fails open rather than
+collapsing every unattributable request into one shared bucket
+(`UiRateLimitingExtensions.cs:81-87`). In the pipeline the middleware sits after
+`UseForwardedHeaders`, so the partition key is the caller's address and not the ingress's, and
+before anything that renders a page or opens a circuit (`MMCA.ADC.UI.Web/Program.cs:186,194-197`).
+
+**Bounding circuits, not just arrival rate.** The second ceiling bounds resident *state*. Because
+the app renders Interactive Auto, every first page load opens a Blazor Server circuit, and a circuit
+stays resident for as long as the connection lives, so a caller who opens circuits slowly enough to
+stay inside the rate window still accumulates them; `CircuitOptions` cannot express the limit,
+because its `DisconnectedCircuit*` settings bound only circuits that have already dropped their
+connection (`MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:9-16`).
+[`BoundedCircuitHandler`](#boundedcircuithandler) is therefore a framework `CircuitHandler` that
+counts opens and closes and refuses anything past
+[`BlazorCircuitLimitSettings`](#blazorcircuitlimitsettings)`.MaxActiveCircuits`, 200 per replica,
+derived from the 0.25 vCPU / 0.5 GiB container this host runs in and explicitly an abuse ceiling
+rather than a capacity plan: the busiest measured conference day peaked near 67 concurrent users
+against 76 accounts (`BlazorCircuitLimitSettings.cs:22-40`). It increments first and rolls back on
+refusal, so two simultaneous opens cannot both observe the last free slot, and it returns a faulted
+task because `OnCircuitOpenedAsync` has no "refuse" return value: the one place in this codebase
+where the [Result pattern](00-primer.md#2-architectural-styles-this-codebase-commits-to) gives way
+to an exception, because the contract being implemented belongs to the framework
+(`MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:53-71`, rationale at
+`BoundedCircuitHandler.cs:21-28`). Closes floor at zero, so a teardown that was never counted cannot
+hand out permits forever (`BoundedCircuitHandler.cs:74-86`), and the refusal is logged at warning
+through a source-generated `LoggerMessage` (`BoundedCircuitHandler.cs:88-91`).
+[`BlazorCircuitLimitExtensions`](#blazorcircuitlimitextensions) wires both halves from that one
+configuration section, deliberately as two calls because they attach to different builders:
+`RetentionFrom(...)` supplies the `CircuitOptions` callback for `AddInteractiveServerComponents`
+(25 retained disconnected circuits against the framework's 100, retention left at the framework's
+three minutes because a venue's shared wifi drops connections for far longer than an office network
+does), while `AddBoundedBlazorCircuits()` registers the handler as a **singleton**, since circuit
+handlers resolve from each circuit's own scope and a scoped registration would count to one and cap
+nothing (`MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:26-39,49-59`, host wiring at
+`MMCA.ADC.UI.Web/Program.cs:52-62`). Unlike the MAUI head, this host *does* have a test project, and
+both ceilings are asserted there against the real composition root
+(`MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/BoundedCircuitHandlerTests.cs:20,33,50,66,81,97`,
+`MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/UiRateLimitingTests.cs:27,47,78,109,118,135,153`).
+`[Rubric §11, Security]` and `[Rubric §29, Resilience]` both read on this pair: the availability of
+the one origin a user actually types is a security property, and shedding load is how a 0.25 vCPU
+container survives a flood instead of OOM-restarting under it.
+
 **Localization and theming of the shell
 ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) /
 [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)).** All three heads share one
 localization stance and each implements its own half of it. The Blazor Server host sets
 `CurrentUICulture` from the culture cookie *before* SSR prerender and exposes a culture-switch
-endpoint (`MMCA.ADC.UI.Web/Program.cs:127,172`); the WASM client mirrors the same cookie into the
+endpoint (`MMCA.ADC.UI.Web/Program.cs:214,264`); the WASM client mirrors the same cookie into the
 browser thread culture through
 [`MmcaCultureBootstrap`](group-15-common-ui-framework.md#mmcaculturebootstrap) before the app runs,
 so there is no locale flash or prerender/hydration mismatch
@@ -300,7 +389,9 @@ instead of tracking the OS independently (`DeviceUIModule.cs:28-33`), and `MainP
 pre-paint native page background to the light and dark surface colors with an `AppThemeBinding` so
 nothing flashes white before the WebView renders (`MMCA.ADC.UI/MainPage.xaml:8,10-15`).
 
-**How it all fits at runtime.** A request to the Blazor Web host renders the shared layout from
+**How it all fits at runtime.** A request to the Blazor Web host passes forwarded headers, the
+shared security-header middleware and this origin's own edge limiter
+(`MMCA.ADC.UI.Web/Program.cs:186,192,197`), then renders the shared layout from
 [`MMCA.Common.UI`](group-15-common-ui-framework.md); the navbar is composed from each enabled
 module's `IUIModule` descriptor, and `/` renders the Conference landing page through
 [`ADCHomePageContent`](#adchomepagecontent). After prerender, the interactive Server circuit or the
@@ -309,7 +400,7 @@ downloaded WASM runtime takes over; auth state flows through
 reading whichever [`ITokenStorageService`](group-15-common-ui-framework.md#itokenstorageservice) the
 host registered, and the WASM client discovers its API endpoint at startup from the Server host's
 `/client-config` endpoint instead of having it baked into the static bundle
-(`MMCA.ADC.UI.Web/Program.cs:148-167`, `MMCA.ADC.UI.Web.Client/Program.cs:31-37`), with exactly one
+(`MMCA.ADC.UI.Web/Program.cs:235-259`, `MMCA.ADC.UI.Web.Client/Program.cs:31-37`), with exactly one
 retry on a cold start and a loud failure after that (`MMCA.ADC.UI.Web.Client/Program.cs:127-139`)
 and a discarded token-hydration warm-up overlapping first render
 (`MMCA.ADC.UI.Web.Client/Program.cs:95,104-121`). On MAUI the same component tree runs inside a
@@ -335,25 +426,6 @@ pushed behind a Common interface.**
 - **Walkthrough**: the positional record (`MMCA.ADC.UI/Platforms/Android/NowNextWidgetProvider.cs:134`) is consumed only by `FormatRow` (`:100-107`), which formats `StartsAtLocal` as `HH:mm` under `CultureInfo.InvariantCulture` (`:102`), appends the room in parentheses when it is non-blank (`:103`), and adds a `+N` suffix when more than one session shares the slot (`:104`).
 - **Why it's built this way**: keeping the widget's dependency surface to the BCL plus the Android SDK avoids pulling a module-shared contract assembly into a `BroadcastReceiver` that runs in a minimal process. The property-name coupling to the server DTO is the trade-off, documented inline rather than left implicit.
 - **Where it's used**: the `Now` and `Next` lists on [NowNextSnapshot](#nownextsnapshot); read by `NowNextWidgetProvider.BuildViews` and `FormatRow`.
-
-### ADCHomePageContent
-
-> MMCA.ADC.UI.Web.Client · `MMCA.ADC.UI.Web.Client.Pages` · `MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:11` · Level 1 · class (sealed)
-> MMCA.ADC.UI · `MMCA.ADC.UI.Pages` · `MMCA.ADC.UI/Pages/ADCHomePageContent.cs:8` · Level 10 · class (sealed)
-
-Two same-named classes, one per head family, both implementing [IHomePageContent](group-15-common-ui-framework.md#ihomepagecontent) with the identical two-property shape. They are taught together because the shape *is* the lesson; the only difference is which component each one points the shared shell at.
-
-| Type | File:Line | Notes (what differs) |
-|------|-----------|----------------------|
-| `ADCHomePageContent` (web heads) | `MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:11` | `ComponentType` is the shared Conference.UI landing page itself, reached through the `SharedADCHome` using-alias (`:2`, `:13`). |
-| `ADCHomePageContent` (MAUI head) | `MMCA.ADC.UI/Pages/ADCHomePageContent.cs:8` | `ComponentType` is the head-local `MMCA.ADC.UI.Pages.ADCHome` razor wrapper (`:10`), which renders the same shared component one level down (`MMCA.ADC.UI/Pages/ADCHome.razor:6`). |
-
-- **What it is**: each head's binding of the framework's home-page extension point. It tells the shared `Home.razor` shell which component to render as the landing page and what title to show.
-- **Depends on**: [IHomePageContent](group-15-common-ui-framework.md#ihomepagecontent) (implemented by both, `MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:1`, `MMCA.ADC.UI/Pages/ADCHomePageContent.cs:1`) and [ADCHome](group-21-conference-ui.md#adchome) from `MMCA.ADC.Conference.UI`, reached directly on the web side and through the local wrapper on the MAUI side.
-- **Concept introduced, app-supplied content for a shared shell.** The framework ships one generic home shell; each host app registers a single `IHomePageContent` that hands the shell a `ComponentType` and a `PageTitle`. The dependency is inverted: the shared shell never references an ADC page. [Rubric §18, UI Architecture] assesses how a reusable shell is specialized per app, and here the entire specialization is two properties. [Rubric §2, Design Patterns] applies as well, since this is a minimal strategy/adapter sitting at a UI boundary.
-- **Walkthrough**: both classes are two expression-bodied properties and no state. `ComponentType` selects the landing component (`MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:13`, `MMCA.ADC.UI/Pages/ADCHomePageContent.cs:10`); `PageTitle => "Atlanta Developers Conference"` is identical on both (`:15` and `:12` respectively) and carries an explicit `i18n: allow` marker because the conference brand name is deliberately not localized. The web class summary notes that the shared component's default image base path already matches the web head's site-root assets (`MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:6-10`), so no parameters are passed. The MAUI wrapper exists for the mirror-image reason: its comment records that both heads serve speaker images from their own site root, the MAUI head carrying its copy under `wwwroot/images/speakers`, and that the shared component carries the Web head's countdown fence (the self-ticking `HomeCountdown` child) for both heads, so no base-path override is needed there either (`MMCA.ADC.UI/Pages/ADCHome.razor:1-5`).
-- **Why it's built this way**: pointing at the Conference module's component instead of duplicating a landing page means the web and MAUI heads render the same marketing surface, and a change to the conference home lands everywhere at once. The MAUI head keeps its one-line wrapper so head-specific editorial assets stay in ADC rather than migrating into the shared `MMCA.Common.UI` RCL.
-- **Where it's used**: registered as a singleton `IHomePageContent` by all three heads: the WebAssembly client (`MMCA.ADC.UI.Web.Client/Program.cs:51`), the Blazor Server host (`MMCA.ADC.UI.Web/Program.cs:63`), and [MauiProgram](#mauiprogram) (`MMCA.ADC.UI/MauiProgram.cs:124`, resolving the `MMCA.ADC.UI.Pages` class imported at `:20`).
 
 ### NowNextSnapshot
 
@@ -392,53 +464,24 @@ Two same-named classes, one per head family, both implementing [IHomePageContent
 
 ### App
 
-> MMCA.ADC.UI · `MMCA.ADC.UI` · `MMCA.ADC.UI/App.xaml.cs:7` · Level 4 · class (partial)
+> MMCA.ADC.UI · `MMCA.ADC.UI` · `MMCA.ADC.UI/App.xaml.cs:9` · Level 4 · class (partial)
 
-- **What it is**: the cross-platform MAUI `Application` root. It creates the single window that hosts [MainPage](#mainpage), and therefore the Blazor WebView. (The Windows head has its own separate `App` class deriving from `MauiWinUIApplication` at `MMCA.ADC.UI/Platforms/Windows/App.xaml.cs:8`, which forwards to `MauiProgram.CreateMauiApp()` at `:16`.)
-- **Depends on**: [MainPage](#mainpage); MAUI's `Application`, `Window`, and `IActivationState`.
-- **Concept introduced, the MAUI application object.** One `App` per process owns the window graph. Here `CreateWindow` (`MMCA.ADC.UI/App.xaml.cs:11`) returns a single `Window` wrapping a fresh `MainPage`, titled `"MMCA.ADC.UI"`. Contrast this with the per-platform entry points ([AppDelegate](#appdelegate), [MainApplication](#mainapplication), [Program](#program)), which boot the framework and then defer to this shared class.
-- **Walkthrough**: two members only. The constructor (`MMCA.ADC.UI/App.xaml.cs:9`) calls `InitializeComponent()` from the XAML-generated partial, and `CreateWindow(IActivationState?)` (`:11`) is the sole override. There are no lifecycle hooks and no DI wiring; that all lives in [MauiProgram](#mauiprogram).
-- **Why it's built this way**: keeping `App` to a single-window factory concentrates composition in `MauiProgram` and navigation in `MainPage`, so the application root stays trivial and platform-agnostic.
+- **What it is**: the cross-platform MAUI `Application` root. It creates the single window that hosts [MainPage](#mainpage), and therefore the Blazor WebView, and wires that window's background/foreground callbacks into the shared app-lock lifecycle. (The Windows head has its own separate `App` class deriving from `MauiWinUIApplication` at `MMCA.ADC.UI/Platforms/Windows/App.xaml.cs:8`, which forwards to `MauiProgram.CreateMauiApp()` at `:16`.)
+- **Depends on**: [MainPage](#mainpage); MAUI's `Application`, `Window`, `IActivationState`, and `Handler.MauiContext.Services`/`IPlatformApplication.Current.Services` (`MMCA.ADC.UI/App.xaml.cs:29`) to reach the DI-registered `IAppLifecycleNotifier` behind `AttachMmcaAppLifecycle`.
+- **Concept introduced, the MAUI application object.** One `App` per process owns the window graph. Here `CreateWindow` (`MMCA.ADC.UI/App.xaml.cs:14`) builds a single `Window` wrapping a fresh `MainPage`, titled `"MMCA.ADC.UI"` (`:16`), then arms the app-lock overlay on it. Contrast this with the per-platform entry points ([AppDelegate](#appdelegate), [MainApplication](#mainapplication), [Program](#program)), which boot the framework and then defer to this shared class.
+- **Walkthrough**: two members. The constructor (`MMCA.ADC.UI/App.xaml.cs:11`) calls `InitializeComponent()` from the XAML-generated partial. `CreateWindow(IActivationState?)` (`:14-36`) is the sole override: it creates the `Window` (`:16`), then forwards the window's background/foreground callbacks to the shared `IAppLifecycleNotifier` via `window.AttachMmcaAppLifecycle(services)` (SEC-ADC-67, `:18-33`), which is what lets the app-lock overlay re-arm. A hybrid head keeps its Blazor render tree alive across a background/foreground cycle, so without this the biometric gate engaged once at first render and never again, letting anyone handed an unlocked device reopen it straight into the signed-in session; `ReLockAfter` is left at the framework default of 30 seconds. The services lookup falls back from `Handler?.MauiContext?.Services` to `IPlatformApplication.Current?.Services` (`:29`) and is guarded with `if (services is not null)` (`:30-33`), because a window created before the app handler exists must not take the whole head down over a lock that would simply stay armed. There are no other lifecycle hooks and no DI registration here; that all lives in [MauiProgram](#mauiprogram).
+- **Why it's built this way**: keeping `App` to a single-window factory concentrates composition in `MauiProgram` and navigation in `MainPage`, so the application root stays otherwise trivial and platform-agnostic; the app-lock wiring is attached defensively here because `CreateWindow` is the one place that owns the window instance the lifecycle notifier needs to observe.
 - **Where it's used**: named as the app type in `builder.UseMauiApp<App>()` (`MMCA.ADC.UI/MauiProgram.cs:57`); the MAUI framework instantiates it after each platform head calls `CreateMauiApp()`.
-
-### AppActionRouteMap
-
-> MMCA.ADC.UI · `MMCA.ADC.UI.Services` · `MMCA.ADC.UI/Services/AppActionRouteMap.cs:22` · Level 6 · class (internal, static)
-
-- **What it is**: the pure lookup from a home-screen quick-action id (the long-press app-icon shortcuts, [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 2) to the app-relative route that activation should navigate to. It holds the three action-id constants, one literal route, and a single `RouteFor` switch.
-- **Depends on**: [EngagementRoutePaths](group-22-engagement-module.md#engagementroutepaths) and [NotificationRoutePaths](group-15-common-ui-framework.md#notificationroutepaths) for the route constants (`MMCA.ADC.UI/Services/AppActionRouteMap.cs:1-2`). Nothing else: no BCL beyond `string`, and pointedly no `Microsoft.Maui.*` type at all.
-- **Concept introduced, extracting the testable core out of a platform-bound file.** The MAUI head multi-targets the platform TFMs and has no test project in this workspace (`MMCA.Common`'s own `UI.Maui` package sets the same precedent). Rather than leave the id-to-route decision untested inside a MAUI-only class, the decision is isolated into a type that references **no** MAUI API, so it compiles under a plain `net10.0` target and can be pulled into an existing test project as a linked compile item. That is exactly what happens: `MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/MMCA.ADC.Engagement.UI.Tests.csproj:28` declares `<Compile Include="...\AppActionRouteMap.cs" Link="Linked\AppActionRouteMap.cs" />`, and `MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Services/AppActionRouteMapTests.cs:20` asserts every branch including the unknown-id and blank-id cases (`:44`, `:52`). [Rubric §14, Testability] assesses whether logic is reachable by a test without its hosting infrastructure: this file is the textbook move, an untestable TFM forced a boundary and the boundary turned out to be the right design anyway. [Rubric §1, SOLID] applies through the single responsibility, mapping and nothing else. [Rubric §25, Navigation & IA] applies because these three ids are OS-level jump points into deep in-app routes.
-- **Walkthrough**
-  - The three id constants (`MMCA.ADC.UI/Services/AppActionRouteMap.cs:25`, `:28`, `:31`) are `happening_now`, `my_schedule`, and `notifications`, the ids the platform reports back on activation.
-  - `MyScheduleRoute` (`:38`) is `"/conference/sessions?mine=true"`, a literal rather than a `ConferenceRoutePaths` constant. The doc comment (`:33-37`) explains why: it is the session-list route carrying a filter, not a route of its own.
-  - `RouteFor(string? actionId)` (`:49-63`) returns `null` for a null, empty, or whitespace id (`:51-54`), then switches to [EngagementRoutePaths](group-22-engagement-module.md#engagementroutepaths)`.HappeningNow` (which resolves to `/happening-now`, `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/EngagementRoutePaths.cs:11`), `MyScheduleRoute`, or [NotificationRoutePaths](group-15-common-ui-framework.md#notificationroutepaths)`.NotificationInbox` (`/notifications/inbox`, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NotificationRoutePaths.cs:12`), with `_ => null` for anything unrecognized (`:56-62`). The parameter is nullable and whitespace-tolerant on purpose: the value crosses a platform boundary, so it is never assumed to be well formed (`:44-47`).
-- **Why it's built this way**: the file-level comment (`:9-20`) states the contract for future edits directly: keep every MAUI dependency (`AppActions.Current`, the localized titles, the dispatcher lookup) on the caller side in [AppActionsInitializer](#appactionsinitializer) and [MauiProgram](#mauiprogram) so this file stays linkable. It even explains why those two callers are named in prose instead of by `cref`: this file also compiles inside the test project, where the MAUI-bound types are absent and a `cref` would not resolve.
-- **Where it's used**: called by `MauiProgram.HandleAppAction` on activation (`MMCA.ADC.UI/MauiProgram.cs:217`), and its id constants are re-exported by [AppActionsInitializer](#appactionsinitializer) (`MMCA.ADC.UI/Services/AppActionsInitializer.cs:20-22`) so the registration side and the activation side cannot drift apart.
-
-### AppActionsInitializer
-
-> MMCA.ADC.UI · `MMCA.ADC.UI.Services` · `MMCA.ADC.UI/Services/AppActionsInitializer.cs:18` · Level 7 · class (sealed)
-
-- **What it is**: a MAUI startup service that publishes the three home-screen quick actions once the app is built, with titles resolved from the co-located resx pair. It is the *registration* half of the quick-action feature; the *activation* half lives in [MauiProgram](#mauiprogram), and the id-to-route decision both halves depend on lives in [AppActionRouteMap](#appactionroutemap).
-- **Depends on**: `IMauiInitializeService` (the MAUI hosting contract it implements, `MMCA.ADC.UI/Services/AppActionsInitializer.cs:18`), `IStringLocalizer<AppActionsInitializer>` (`:1`, `:34`), MAUI Essentials' `AppActions`/`AppAction`/`FeatureNotSupportedException`, [AppActionRouteMap](#appactionroutemap) for the ids (`:20-22`), and [IDeepLinkDispatcher](group-26-device-capability-layer.md#ideeplinkdispatcher) indirectly, as the destination the resolved routes are published into (`:2`, class summary at `:8-11`).
-- **Concept introduced, native quick actions as a navigation entry point.** [Rubric §25, Navigation & IA] assesses whether an app exposes coherent first-class entry points: the three shortcuts are OS-level jump points into deep routes, reachable without opening the app first. [Rubric §27, i18n] applies because the shortcut labels are resolved from `MMCA.ADC.UI/Services/AppActionsInitializer.resx` (and its `.es.resx` sibling) through the injected localizer at registration time (`:47-49`), so they follow the selected language rather than shipping as English literals. [Rubric §29, Resilience & Business Continuity] is touched lightly: every failure mode here degrades to "no shortcuts appear" rather than to a broken launch.
-- **Walkthrough**
-  - The three `internal const` ids (`MMCA.ADC.UI/Services/AppActionsInitializer.cs:20-22`) are aliases of the [AppActionRouteMap](#appactionroutemap) constants, not independent literals, so registration and routing cannot fall out of sync.
-  - `Initialize(IServiceProvider services)` (`:25-39`): null-guards the provider (`:27`), returns immediately when `AppActions.Current.IsSupported` is false (`:29-32`), resolves the localizer (`:34`), then starts `SetActionsAsync` **fire-and-forget** with a discard (`:38`) so a slow or failing shortcut registration can never block or fail app startup. The inline comment states that intent at `:36-37`.
-  - `SetActionsAsync(IStringLocalizer<AppActionsInitializer>)` (`:41-58`): builds the three `AppAction`s with localized titles and the `appicon` icon (`:45-50`), awaits `AppActions.Current.SetAsync` (`:51`), and catches `FeatureNotSupportedException` (`:53-57`) because some launchers report support and then reject the call at runtime, in which case the shortcuts simply do not appear.
-- **Why it's built this way**: registration and activation are deliberately split. This initializer sets the shortcuts and their titles; [MauiProgram](#mauiprogram) wires `ConfigureEssentials(essentials => essentials.OnAppAction(HandleAppAction))` (`MMCA.ADC.UI/MauiProgram.cs:65`) to the activation path. Both ends resolve the same route table and publish into the [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) deep-link dispatcher, which buffers a cold-start activation until the shared `DeepLinkListener` renders (class summary, `MMCA.ADC.UI/Services/AppActionsInitializer.cs:8-11`). The class summary also records why the mapping was moved out (`:12-16`): what remains here is only the part that genuinely needs the platform.
-- **Where it's used**: registered as a singleton `IMauiInitializeService` in [MauiProgram](#mauiprogram) (`MMCA.ADC.UI/MauiProgram.cs:160`), which is what makes MAUI run `Initialize` during `Build()`.
-- **Caveats / not-in-source**: whether a given launcher actually surfaces the shortcuts is runtime platform behavior, not determinable from source; the code only handles the explicit rejection case.
 
 ### MainActivity
 
 > MMCA.ADC.UI · `MMCA.ADC.UI` · `MMCA.ADC.UI/Platforms/Android/MainActivity.cs:35` · Level 9 · class
 
 - **What it is**: the Android launcher activity for the MAUI host. It does three jobs: declare which configuration changes it handles in-process (so Android does not restart the activity and tear down the Blazor WebView), receive verified https App Links ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)) and publish their route to the shared deep-link dispatcher, and forward the MAUI app-action intent to Essentials so quick-action taps actually raise `OnAppAction`.
-- **Depends on**: [IDeepLinkDispatcher](group-26-device-capability-layer.md#ideeplinkdispatcher) (resolved from `IPlatformApplication.Current.Services`, `MMCA.ADC.UI/Platforms/Android/MainActivity.cs:4`, `:79`), MAUI's `MauiAppCompatActivity` and the `Microsoft.Maui.ApplicationModel.Platform` Essentials helper aliased as `EssentialsPlatform` (`:5`), and the Android intent/activity SDK.
-- **Concept introduced, `ConfigurationChanges` and WebView preservation.** By default Android destroys and recreates an activity on orientation, theme, or density changes; for a `BlazorWebView` that destruction tears down the hosted component tree and loses UI state. The `[Activity(... ConfigurationChanges = ScreenSize | Orientation | UiMode | ScreenLayout | SmallestScreenSize | Density)]` attribute (`MMCA.ADC.UI/Platforms/Android/MainActivity.cs:21-25`) tells Android the activity handles those events itself, so no recreation happens. The second concept is **verified App Links**: the first `[IntentFilter]` (`:26-31`) claims `https` URLs on `PublicWebHost` with `AutoVerify = true`, which only takes effect if a live `assetlinks.json` carrying the Play App Signing fingerprint is served from that host (class summary, `:17-19`). The third is the **app-action intent filter** (`:32-34`) paired with the `OnResume`/`OnNewIntent` forwarding: without both, a launcher shortcut tap resolves to nothing (`:14-17`). [Rubric §25, Navigation & IA] applies because deep links and shortcuts both land the user on the right in-app route; [Rubric §22, Responsive/Cross-Browser] applies because the config-change handling is what keeps the single WebView UI stable across rotations and theme switches.
-- **Walkthrough**: `PublicWebHost` (`MMCA.ADC.UI/Platforms/Android/MainActivity.cs:39`) is a compile-time constant naming the production UI container-app host, and it must match `PublicSite:BaseUrl` in the embedded `appsettings.json` (`MMCA.ADC.UI/appsettings.json:21-22`), so a custom-domain cutover touches only those two spots (comment at `:37-38`). `OnCreate` (`:42-46`) calls `PublishDeepLink(Intent)` after the base call, covering cold start. `OnResume` (`:49-55`) calls `EssentialsPlatform.OnResume(this)` so Essentials can process a pending app-action intent on a cold-start shortcut launch (`:53`). `OnNewIntent` (`:58-63`) forwards to `EssentialsPlatform.OnNewIntent(intent)` and then publishes any deep link, covering warm re-entry. `PublishDeepLink` (`:65-80`) ignores anything that is not an `ActionView` intent carrying data (`:67-70`), ignores a blank path (`:72-76`), reassembles `path` plus optional `?query` (`:78`), and publishes the route through [IDeepLinkDispatcher](group-26-device-capability-layer.md#ideeplinkdispatcher) (`:79`), which buffers one route across a cold start until the shared `DeepLinkListener` drains it.
-- **Why it's built this way**: the config-changes list is not boilerplate; dropping any entry silently reintroduces an activity restart that only shows up on a physical device rotation or theme switch. Routing both intent callbacks through one helper keeps cold-start and warm-start deep links behaviorally identical, and the Essentials forwarding is required plumbing rather than a choice.
+- **Depends on**: [IDeepLinkDispatcher](group-26-device-capability-layer.md#ideeplinkdispatcher) and its `DeepLinkDispatcher.IsAppRelativeRoute` static shape check (resolved from `IPlatformApplication.Current.Services`, `MMCA.ADC.UI/Platforms/Android/MainActivity.cs:4`, `:97`; check at `:92`), MAUI's `MauiAppCompatActivity` and the `Microsoft.Maui.ApplicationModel.Platform` Essentials helper aliased as `EssentialsPlatform` (`:5`), and the Android intent/activity SDK.
+- **Concept introduced, `ConfigurationChanges` and WebView preservation.** By default Android destroys and recreates an activity on orientation, theme, or density changes; for a `BlazorWebView` that destruction tears down the hosted component tree and loses UI state. The `[Activity(... ConfigurationChanges = ScreenSize | Orientation | UiMode | ScreenLayout | SmallestScreenSize | Density)]` attribute (`MMCA.ADC.UI/Platforms/Android/MainActivity.cs:21-25`) tells Android the activity handles those events itself, so no recreation happens. The second concept is **verified App Links**: the first `[IntentFilter]` (`:26-31`) claims `https` URLs on `PublicWebHost` with `AutoVerify = true`, which only takes effect if a live `assetlinks.json` carrying the Play App Signing fingerprint is served from that host (class summary, `:17-19`). The third is the **app-action intent filter** (`:32-34`) paired with the `OnResume`/`OnNewIntent` forwarding: without both, a launcher shortcut tap resolves to nothing (`:14-17`). The fourth is **route shape validation before publish**: this activity is exported and `MainLauncher = true`, so any app on the device can reach it with an explicit `ACTION_VIEW` intent, bypassing the manifest intent filter's scheme/host constraints by Android design (the app's own widget relies on exactly that path, SEC-ADC-65/SEC-Common-88, `:80-91`); without a shape check, data like `https://x//attacker.example/p` yields the path `//attacker.example/p`, which resolves protocol-relative in the WebView and opens an external site. [Rubric §25, Navigation & IA] applies because deep links and shortcuts both land the user on the right in-app route; [Rubric §22, Responsive/Cross-Browser] applies because the config-change handling is what keeps the single WebView UI stable across rotations and theme switches.
+- **Walkthrough**: `PublicWebHost` (`MMCA.ADC.UI/Platforms/Android/MainActivity.cs:39`) is a compile-time constant naming the production UI container-app host, and it must match `PublicSite:BaseUrl` in the embedded `appsettings.json` (`MMCA.ADC.UI/appsettings.json:21-22`), so a custom-domain cutover touches only those two spots (comment at `:37-38`). `OnCreate` (`:42-46`) calls `PublishDeepLink(Intent)` after the base call, covering cold start. `OnResume` (`:49-55`) calls `EssentialsPlatform.OnResume(this)` so Essentials can process a pending app-action intent on a cold-start shortcut launch (`:54`). `OnNewIntent` (`:58-63`) forwards to `EssentialsPlatform.OnNewIntent(intent)` and then publishes any deep link, covering warm re-entry. `PublishDeepLink` (`:65-98`) ignores anything that is not an `ActionView` intent carrying data (`:67-70`), ignores a blank path (`:72-76`), reassembles `path` plus optional `?query` (`:78`), rejects the reassembled route if `DeepLinkDispatcher.IsAppRelativeRoute(route)` is false (`:92-95`), dropping it silently rather than letting `Publish` throw because the explicit-intent path is reached from a platform callback, and only then publishes the route through [IDeepLinkDispatcher](group-26-device-capability-layer.md#ideeplinkdispatcher) (`:97`), which buffers one route across a cold start until the shared `DeepLinkListener` drains it. The shape rule checks the route's form only (a host check would break the widget, whose host is a placeholder).
+- **Why it's built this way**: the config-changes list is not boilerplate; dropping any entry silently reintroduces an activity restart that only shows up on a physical device rotation or theme switch. Routing both intent callbacks through one helper keeps cold-start and warm-start deep links behaviorally identical, and the Essentials forwarding is required plumbing rather than a choice. The framework, not this activity, owns the route-shape rule: `DeepLinkDispatcher.IsAppRelativeRoute` is the same check `Publish` enforces, exposed statically so this callback can ask first instead of catching an exception from a hostile explicit intent.
 - **Where it's used**: the Android launcher (`MainLauncher = true`, `MMCA.ADC.UI/Platforms/Android/MainActivity.cs:23`); it is also the explicit target of the widget's tap `PendingIntent` in [NowNextWidgetProvider](#nownextwidgetprovider) (`MMCA.ADC.UI/Platforms/Android/NowNextWidgetProvider.cs:89`).
 - **Caveats / not-in-source**: whether Android has actually verified the App Link association depends on the live `assetlinks.json` on the production host, which is an operational fact outside this repo (the class summary points at `Docs/MobileReleaseRunbook.md`, `:18-19`).
 
@@ -524,6 +567,83 @@ Two same-named classes, one per head family, both implementing [IHomePageContent
 - **Why it's built this way**: the MAUI iOS template requires an explicit `Main` that names the `AppDelegate`; there is nothing app-specific to customize here.
 - **Where it's used**: the iOS process entry point; it never runs on the other platform heads. The MacCatalyst head has its own parallel `Program`/`AppDelegate` pair under `MMCA.ADC.UI/Platforms/MacCatalyst/`.
 
+### BlazorCircuitLimitSettings
+
+> MMCA.ADC.UI.Web · `MMCA.ADC.UI.Web.Hardening` · `MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:17` · Level 0 · class (internal, sealed)
+
+- **What it is**: the bound options type for the Blazor Server host's circuit hardening, three numbers under the `BlazorCircuitLimits` configuration section: a ceiling on concurrently active circuits, a ceiling on disconnected circuits retained for reconnect, and how long a disconnected circuit is retained.
+- **Depends on**: nothing first-party; `System.ComponentModel.DataAnnotations.RangeAttribute` on all three properties (`MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:47`, `:55`, `:65`) is what makes the settings self-validating.
+- **Concept introduced, sizing an abuse ceiling from the container rather than from traffic.** The doc comment on `MaxActiveCircuits` (`:30-46`) derives 200 from the container this host actually runs in (0.25 vCPU, 0.5 GiB, up to two replicas), not from measured demand: the app renders Interactive Auto so a returning attendee's session moves off the circuit to WebAssembly after the first render, and the busiest measured conference day peaked near 67 concurrent users against 76 accounts (`:40-44`), so two replicas' 400-circuit ceiling sits far above real load and is explicitly an abuse ceiling, not a capacity plan. [Rubric §29, Resilience & Business Continuity] assesses exactly this: a documented, container-derived ceiling rather than an arbitrary round number. [Rubric §11, Validation] applies through the `[Range]` attributes that fail startup on an out-of-range value (see [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)).
+- **Walkthrough**
+  - `SectionName => "BlazorCircuitLimits"` (`:28`) is the configuration section this type binds from.
+  - `MaxActiveCircuits` (`:47-48`), `[Range(1, 100_000)]`, defaults to `200`.
+  - `DisconnectedCircuitMaxRetained` (`:55-56`), `[Range(0, 10_000)]`, defaults to `25`, tighter than the Blazor framework default of 100 because a retained circuit holds the same state an active one does while serving nobody (`:51-53`).
+  - `DisconnectedCircuitRetentionSeconds` (`:65-66`), `[Range(5, 3600)]`, defaults to `180`, deliberately left at the framework's three minutes: a conference venue's shared wifi drops connections for far longer than a home or office network, and an attendee walking between rooms should come back to the session they left (`:59-63`).
+- **Why it's built this way**: the three numbers are kept in one bound, validated options type instead of inline literals so the ceiling can be tuned per environment through configuration without a code change, and so an out-of-range value fails fast at startup via [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)'s `ValidateOnStart()` rather than silently at runtime. See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html) for the edge-hardening posture this settings type is part of.
+- **Where it's used**: bound and registered by [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)'s `AddBoundedBlazorCircuits()`; read by [BoundedCircuitHandler](#boundedcircuithandler) for the active-circuit ceiling and by `BlazorCircuitLimitExtensions.RetentionFrom` for the disconnected-circuit settings.
+
+### UiRateLimitingSettings
+
+> MMCA.ADC.UI.Web · `MMCA.ADC.UI.Web.Hardening` · `MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:33` · Level 0 · class (internal, sealed)
+
+- **What it is**: the bound options type for the Blazor Server host's edge rate limiting, under the `UiRateLimiting` configuration section: an on/off switch, a per-client-IP request budget and window, and a replica-wide concurrency ceiling.
+- **Depends on**: nothing first-party; `RangeAttribute` on `PermitLimit`, `WindowSeconds`, and `GlobalConcurrencyLimit` (`MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:113`, `:117`, `:129`).
+- **Concept introduced, tuning a per-IP limiter for a single-venue audience.** The doc comment on `PermitLimit` (`:102-112`) states the whole tuning story: at 1200 requests per minute it is four times the storefront app's equivalent figure, because a conference audience sits physically in one venue behind one NAT, so the busiest measured event (76 accounts, about 67 peak concurrent users) presents to this limiter as a single client IP rather than 67 of them. [Rubric §29, Resilience & Business Continuity] and [Rubric §11, Validation] apply as with [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings): a documented, traffic-shape-derived number behind `[Range]` validation.
+- **Walkthrough**
+  - `SectionName => "UiRateLimiting"` (`:90`).
+  - `Enabled` (`:97`), default `true`; the doc comment (`:93-96`) calls out its escape hatch use, a load or capacity proof driven from one runner IP that the per-IP window cannot tell from a flood.
+  - `PermitLimit` (`:113-114`), `[Range(1, 1_000_000)]`, default `1200`.
+  - `WindowSeconds` (`:117-118`), `[Range(1, 3600)]`, default `60`.
+  - `GlobalConcurrencyLimit` (`:129-130`), `[Range(1, 1_000_000)]`, default `200`: a ceiling rather than a rate, guarding against a slow downstream backing up threads on this replica; excess requests are rejected with 429 immediately rather than queued (`:120-128`), and unlike the per-IP window it needs no conference-day widening because in-flight concurrency is bounded by what the 0.25 vCPU can render, not by how many attendees share the venue's address.
+- **Why it's built this way**: same rationale as [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings), a bound, validated, environment-tunable options type rather than inline literals in [UiRateLimitingExtensions](#uiratelimitingextensions). See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html).
+- **Where it's used**: bound and read by [UiRateLimitingExtensions](#uiratelimitingextensions)'s `AddUiRateLimiting()`, which closes over a resolved instance rather than `IOptions<T>` per request (see that section).
+
+### BoundedCircuitHandler
+
+> MMCA.ADC.UI.Web · `MMCA.ADC.UI.Web.Hardening` · `MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:37` · Level 1 · class (internal, sealed, partial)
+
+- **What it is**: a MAUI/Blazor `CircuitHandler` that refuses a new circuit once this replica already holds [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings)`.MaxActiveCircuits` active circuits, and counts circuits back down as they close.
+- **Depends on**: `CircuitHandler` (base class), `IOptions<BlazorCircuitLimitSettings>` and `ILogger<BoundedCircuitHandler>` (primary-constructor parameters, `MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:37-39`).
+- **Concept introduced, a singleton counter guarding a per-circuit-scoped hook.** [Rubric §29, Resilience & Business Continuity] assesses this directly: an explicit admission-control decision at the point circuits are opened, rather than letting an unbounded flood of circuits exhaust a replica's memory. [Rubric §14, Testability] applies through `ActiveCircuits` (`:158`), an internal read-only counter exposed specifically so `BoundedCircuitHandlerTests` can assert the increment/decrement/floor behavior without inspecting private state.
+- **Walkthrough**
+  - `_activeCircuits` (`:155`) and `ActiveCircuits => Volatile.Read(ref _activeCircuits)` (`:158`): the live count, read with `Volatile.Read` because it is written from `Interlocked` calls on possibly-concurrent circuit-open/close callbacks.
+  - `Order => int.MaxValue` (`:164`): runs LAST among registered handlers on the way in, so a refusal happens after cheaper handlers have already done their work rather than in the middle of it (`:160-163`).
+  - `OnCircuitOpenedAsync` (`:167-185`): increments first, then rolls back on refusal (`:171-172`) rather than checking-then-incrementing, because two simultaneous opens could otherwise both observe the last free slot and both take it; over the ceiling it decrements, logs via `LogCircuitRefused`, and returns a faulted `Task` carrying an `InvalidOperationException` telling the caller to retry (`:174-182`).
+  - `OnCircuitClosedAsync` (`:188-200`): decrements, then floors at zero (`:194-197`) rather than trusting the open/close pairing, because a circuit torn down before this handler ran would otherwise drive the count negative and hand out permits forever.
+  - `LogCircuitRefused` (`:202-205`): a `[LoggerMessage]`-generated warning logger, partial method paired with the `partial class` declaration.
+- **Why it's built this way**: see [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) for why 200 is the number; this handler is the enforcement point for that ceiling. See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html).
+- **Where it's used**: registered as a singleton `CircuitHandler` by [BlazorCircuitLimitExtensions](#blazorcircuitlimitextensions)'s `AddBoundedBlazorCircuits()`, called from `MMCA.ADC.UI.Web/Program.cs:1` in the Blazor Server host's composition.
+
+### UiRateLimitingExtensions
+
+> MMCA.ADC.UI.Web · `MMCA.ADC.UI.Web.Hardening` · `MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:13` · Level 1 · class (internal, static)
+
+- **What it is**: the registration and pipeline wiring for the Blazor Server host's edge rate limiter, an `IServiceCollection` extension that builds a chained per-IP-and-global limiter from [UiRateLimitingSettings](#uiratelimitingsettings), and an `IApplicationBuilder` extension that adds it to the pipeline.
+- **Depends on**: [UiRateLimitingSettings](#uiratelimitingsettings); `System.Threading.RateLimiting` (`RateLimitPartition`, `FixedWindowRateLimiterOptions`, `ConcurrencyLimiterOptions`, `PartitionedRateLimiter`); ASP.NET Core's `IServiceCollection`/`AddRateLimiter` and `IApplicationBuilder`/`UseRateLimiter`.
+- **Concept introduced, exempting probes and static assets from a per-IP window.** `IsExempt` (`MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:264-273`) matches two things: a fixed prefix list (`/health`, `/alive`, `/_framework`, `/_content`, `/hubs`, `:248`) matched on whole segments so `/healthz` is not caught by `/health`, and any path whose last segment carries a file extension. The doc comment (`:237-247`) explains the `/hubs` entry mirrors the Gateway's own `GatewayRateLimiting:BypassPathPrefixes` bypass for long-lived SignalR traffic, stated here by declaration even though nothing under `/hubs` is served by this host today. [Rubric §29, Resilience & Business Continuity] applies to the chained limiter design; [Rubric §1, SOLID] applies to `IsExempt` being the single decision both partitions delegate to, so the exemption rule cannot drift between the two limiters.
+- **Walkthrough**
+  - `ExemptPartitionKey`, `UnknownIpPartitionKey`, `ConcurrencyPartitionKey` (`:229-235`): the three partition keys the limiter buckets requests into.
+  - `ExemptPrefixes` (`:248`) and `IsExempt(PathString)` (`:264-273`): the shared exemption rule, detailed above.
+  - `ClientIpPartition(HttpContext, UiRateLimitingSettings)` (`:282-310`): no limiter for exempt paths, no limiter for an unresolvable client IP (fail open, `:295-299`, so an in-process `TestServer` is never collapsed into one shared bucket), otherwise a `FixedWindowRateLimiter` keyed on the client IP with `QueueLimit = 0` (rejected immediately, not queued).
+  - `ConcurrencyPartition(HttpContext, UiRateLimitingSettings)` (`:319-334`): the replica-wide `ConcurrencyLimiter`, one bucket for the whole process, exempt for the same paths.
+  - `AddUiRateLimiting(IConfiguration)` (`:345-378`), an `IServiceCollection` extension: binds and validates `UiRateLimitingSettings` (`:350-353`), then resolves a plain instance from configuration to close over in the partition callbacks (`:358-359`) rather than resolving `IOptions<T>` per request, because the partition callback runs on the hot path of every request and an out-of-range value has already failed `ValidateOnStart()`. `RejectionStatusCode` is set to 429 (`:363`); when `Enabled` is false the method returns early with no `GlobalLimiter` configured (`:365-368`); otherwise it chains the client-IP and concurrency partitions with `PartitionedRateLimiter.CreateChained` (`:372-376`), so a request must satisfy both.
+  - `UseUiRateLimiting()` (`:387-391`), an `IApplicationBuilder` extension: calls the framework's `UseRateLimiter()`.
+- **Why it's built this way**: see [UiRateLimitingSettings](#uiratelimitingsettings) for the tuning rationale. See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html) for the edge-hardening split between this host and the Gateway.
+- **Where it's used**: `AddUiRateLimiting` and `UseUiRateLimiting` are called from the Blazor Server host's composition (`MMCA.ADC.UI.Web/Program.cs`); the extension methods live on the `IServiceCollection`/`IApplicationBuilder` extension blocks (`:336`, `:381`).
+
+### BlazorCircuitLimitExtensions
+
+> MMCA.ADC.UI.Web · `MMCA.ADC.UI.Web.Hardening` · `MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:17` · Level 2 · class (internal, static)
+
+- **What it is**: the registration wiring for [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) and [BoundedCircuitHandler](#boundedcircuithandler): an `IServiceCollection` extension that registers the bounded-circuit handler, and a factory method that builds the `CircuitOptions` retention callback from configuration.
+- **Depends on**: [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings), [BoundedCircuitHandler](#boundedcircuithandler); ASP.NET Core's `IServiceCollection`, `IConfiguration`, and Blazor's `CircuitOptions`/`CircuitHandler`.
+- **Concept introduced, a singleton handler counting a state that is really per-circuit.** The doc comment on `AddBoundedBlazorCircuits` (`MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:439-443`) states why the registration is `AddSingleton` and not scoped: circuit handlers are resolved from each circuit's own scope, so a scoped registration would count to one and cap nothing. [Rubric §29, Resilience & Business Continuity] applies to the retention tightening below; [Rubric §1, SOLID] applies to keeping registration wiring separate from both the settings type and the handler's own logic.
+- **Walkthrough**
+  - `RetentionFrom(IConfiguration)` (`:422-435`): reads [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) from configuration (falling back to `new BlazorCircuitLimitSettings()` if the section is absent), and returns an `Action<CircuitOptions>` that copies `DisconnectedCircuitMaxRetained` and converts `DisconnectedCircuitRetentionSeconds` to a `TimeSpan` for `DisconnectedCircuitRetentionPeriod` (`:431-433`). Tighter than the Blazor framework defaults (100 retained circuits) because a retained circuit holds the same state an active one does while serving nobody (`:417-419`).
+  - `AddBoundedBlazorCircuits()` (`:445-455`), an `IServiceCollection` extension: binds and validates [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings) (`:449-452`), then registers [BoundedCircuitHandler](#boundedcircuithandler) as a singleton `CircuitHandler` (`:454`).
+- **Why it's built this way**: keeps circuit-limit registration next to the retention-callback factory, both consumers of the same [BlazorCircuitLimitSettings](#blazorcircuitlimitsettings), while the enforcement logic itself stays in [BoundedCircuitHandler](#boundedcircuithandler). See [ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html).
+- **Where it's used**: `AddBoundedBlazorCircuits()` and `RetentionFrom` are both called from the Blazor Server host's composition (`MMCA.ADC.UI.Web/Program.cs:1`).
+
 ### App
 > MMCA.ADC.UI · `MMCA.ADC.UI.WinUI` · `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Windows/App.xaml.cs:8` · Level 12 · class (partial)
 
@@ -538,6 +658,54 @@ Two same-named classes, one per head family, both implementing [IHomePageContent
 - **Why it's built this way**: the Windows App SDK requires a XAML-declared `Application` subclass as the packaged/unpackaged app object, so this file cannot be avoided; keeping it to a constructor plus a one-line override means the Windows head adds zero divergent composition. Every service registration, configuration read, and module wiring stays in [MauiProgram](#mauiprogram), which is what keeps the [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) capability layer (native overrides on device, fallbacks elsewhere) a single composition point rather than four. The surrounding project settings are what make the Windows leg optional and desktop-shaped: `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:8` appends `net10.0-windows10.0.19041.0` to `TargetFrameworks` only under `$([MSBuild]::IsOSPlatform('windows'))`, so on any other OS this file is not compiled at all; `:36` sets `WindowsPackageType` to `None` (unpackaged, plain `.exe` distribution); and `:41-42` pin the supported and minimum Windows platform to `10.0.17763.0`. The two side-car manifests complete the Windows identity: `Platforms/Windows/app.manifest:11-14` declares PerMonitorV2 DPI awareness and long-path awareness, and `Platforms/Windows/Package.appxmanifest` carries the still-templated packaged identity (`:9`, `maui-package-name-placeholder`, publisher `CN=User Name`) with the `runFullTrust` restricted capability (`:43`).
 - **Where it's used**: never from managed application code. The WinUI runtime instantiates it as the process application object on the Windows head; it is the Windows counterpart of [MainApplication](#mainapplication) on Android and [AppDelegate](#appdelegate) on iOS. Nothing in the repository references `MMCA.ADC.UI.WinUI` outside the three Windows platform files themselves (`App.xaml.cs:4`, `App.xaml:2,6`, `app.manifest:3`).
 - **Caveats / not-in-source**: `InitializeComponent()` and the WinUI-generated `Main` are emitted by the XAML compiler from `App.xaml` at build time and are not present in the repository, so the exact startup sequence between process start and the `App` constructor is not determinable from source. The `Package.appxmanifest` values are the unmodified MAUI template placeholders; because `WindowsPackageType` is `None` (`MMCA.ADC.UI.csproj:36`) that manifest is not the shipping identity for the current unpackaged build, but whether a packaged Windows artifact is ever produced is not determinable from this project file alone.
+
+### AppActionRouteMap
+
+> MMCA.ADC.UI · `MMCA.ADC.UI.Services` · `MMCA.ADC.UI/Services/AppActionRouteMap.cs:22` · Level 6 · class (internal, static)
+
+- **What it is**: the pure lookup from a home-screen quick-action id (the long-press app-icon shortcuts, [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 2) to the app-relative route that activation should navigate to. It holds the three action-id constants, one literal route, and a single `RouteFor` switch.
+- **Depends on**: [EngagementRoutePaths](group-22-engagement-module.md#engagementroutepaths) and [NotificationRoutePaths](group-15-common-ui-framework.md#notificationroutepaths) for the route constants (`MMCA.ADC.UI/Services/AppActionRouteMap.cs:1-2`). Nothing else: no BCL beyond `string`, and pointedly no `Microsoft.Maui.*` type at all.
+- **Concept introduced, extracting the testable core out of a platform-bound file.** The MAUI head multi-targets the platform TFMs and has no test project in this workspace (`MMCA.Common`'s own `UI.Maui` package sets the same precedent). Rather than leave the id-to-route decision untested inside a MAUI-only class, the decision is isolated into a type that references **no** MAUI API, so it compiles under a plain `net10.0` target and can be pulled into an existing test project as a linked compile item. That is exactly what happens: `MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/MMCA.ADC.Engagement.UI.Tests.csproj:28` declares `<Compile Include="...\AppActionRouteMap.cs" Link="Linked\AppActionRouteMap.cs" />`, and `MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Services/AppActionRouteMapTests.cs:20` asserts every branch including the unknown-id and blank-id cases (`:44`, `:52`). [Rubric §14, Testability] assesses whether logic is reachable by a test without its hosting infrastructure: this file is the textbook move, an untestable TFM forced a boundary and the boundary turned out to be the right design anyway. [Rubric §1, SOLID] applies through the single responsibility, mapping and nothing else. [Rubric §25, Navigation & IA] applies because these three ids are OS-level jump points into deep in-app routes.
+- **Walkthrough**
+  - The three id constants (`MMCA.ADC.UI/Services/AppActionRouteMap.cs:25`, `:28`, `:31`) are `happening_now`, `my_schedule`, and `notifications`, the ids the platform reports back on activation.
+  - `MyScheduleRoute` (`:38`) is `"/conference/sessions?mine=true"`, a literal rather than a `ConferenceRoutePaths` constant. The doc comment (`:33-37`) explains why: it is the session-list route carrying a filter, not a route of its own.
+  - `RouteFor(string? actionId)` (`:49-63`) returns `null` for a null, empty, or whitespace id (`:51-54`), then switches to [EngagementRoutePaths](group-22-engagement-module.md#engagementroutepaths)`.HappeningNow` (which resolves to `/happening-now`, `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/EngagementRoutePaths.cs:11`), `MyScheduleRoute`, or [NotificationRoutePaths](group-15-common-ui-framework.md#notificationroutepaths)`.NotificationInbox` (`/notifications/inbox`, `MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NotificationRoutePaths.cs:12`), with `_ => null` for anything unrecognized (`:56-62`). The parameter is nullable and whitespace-tolerant on purpose: the value crosses a platform boundary, so it is never assumed to be well formed (`:44-47`).
+- **Why it's built this way**: the file-level comment (`:9-20`) states the contract for future edits directly: keep every MAUI dependency (`AppActions.Current`, the localized titles, the dispatcher lookup) on the caller side in [AppActionsInitializer](#appactionsinitializer) and [MauiProgram](#mauiprogram) so this file stays linkable. It even explains why those two callers are named in prose instead of by `cref`: this file also compiles inside the test project, where the MAUI-bound types are absent and a `cref` would not resolve.
+- **Where it's used**: called by `MauiProgram.HandleAppAction` on activation (`MMCA.ADC.UI/MauiProgram.cs:217`), and its id constants are re-exported by [AppActionsInitializer](#appactionsinitializer) (`MMCA.ADC.UI/Services/AppActionsInitializer.cs:20-22`) so the registration side and the activation side cannot drift apart.
+
+### AppActionsInitializer
+
+> MMCA.ADC.UI · `MMCA.ADC.UI.Services` · `MMCA.ADC.UI/Services/AppActionsInitializer.cs:18` · Level 7 · class (sealed)
+
+- **What it is**: a MAUI startup service that publishes the three home-screen quick actions once the app is built, with titles resolved from the co-located resx pair. It is the *registration* half of the quick-action feature; the *activation* half lives in [MauiProgram](#mauiprogram), and the id-to-route decision both halves depend on lives in [AppActionRouteMap](#appactionroutemap).
+- **Depends on**: `IMauiInitializeService` (the MAUI hosting contract it implements, `MMCA.ADC.UI/Services/AppActionsInitializer.cs:18`), `IStringLocalizer<AppActionsInitializer>` (`:1`, `:34`), MAUI Essentials' `AppActions`/`AppAction`/`FeatureNotSupportedException`, [AppActionRouteMap](#appactionroutemap) for the ids (`:20-22`), and [IDeepLinkDispatcher](group-26-device-capability-layer.md#ideeplinkdispatcher) indirectly, as the destination the resolved routes are published into (`:2`, class summary at `:8-11`).
+- **Concept introduced, native quick actions as a navigation entry point.** [Rubric §25, Navigation & IA] assesses whether an app exposes coherent first-class entry points: the three shortcuts are OS-level jump points into deep routes, reachable without opening the app first. [Rubric §27, i18n] applies because the shortcut labels are resolved from `MMCA.ADC.UI/Services/AppActionsInitializer.resx` (and its `.es.resx` sibling) through the injected localizer at registration time (`:47-49`), so they follow the selected language rather than shipping as English literals. [Rubric §29, Resilience & Business Continuity] is touched lightly: every failure mode here degrades to "no shortcuts appear" rather than to a broken launch.
+- **Walkthrough**
+  - The three `internal const` ids (`MMCA.ADC.UI/Services/AppActionsInitializer.cs:20-22`) are aliases of the [AppActionRouteMap](#appactionroutemap) constants, not independent literals, so registration and routing cannot fall out of sync.
+  - `Initialize(IServiceProvider services)` (`:25-39`): null-guards the provider (`:27`), returns immediately when `AppActions.Current.IsSupported` is false (`:29-32`), resolves the localizer (`:34`), then starts `SetActionsAsync` **fire-and-forget** with a discard (`:38`) so a slow or failing shortcut registration can never block or fail app startup. The inline comment states that intent at `:36-37`.
+  - `SetActionsAsync(IStringLocalizer<AppActionsInitializer>)` (`:41-58`): builds the three `AppAction`s with localized titles and the `appicon` icon (`:45-50`), awaits `AppActions.Current.SetAsync` (`:51`), and catches `FeatureNotSupportedException` (`:53-57`) because some launchers report support and then reject the call at runtime, in which case the shortcuts simply do not appear.
+- **Why it's built this way**: registration and activation are deliberately split. This initializer sets the shortcuts and their titles; [MauiProgram](#mauiprogram) wires `ConfigureEssentials(essentials => essentials.OnAppAction(HandleAppAction))` (`MMCA.ADC.UI/MauiProgram.cs:65`) to the activation path. Both ends resolve the same route table and publish into the [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) deep-link dispatcher, which buffers a cold-start activation until the shared `DeepLinkListener` renders (class summary, `MMCA.ADC.UI/Services/AppActionsInitializer.cs:8-11`). The class summary also records why the mapping was moved out (`:12-16`): what remains here is only the part that genuinely needs the platform.
+- **Where it's used**: registered as a singleton `IMauiInitializeService` in [MauiProgram](#mauiprogram) (`MMCA.ADC.UI/MauiProgram.cs:160`), which is what makes MAUI run `Initialize` during `Build()`.
+- **Caveats / not-in-source**: whether a given launcher actually surfaces the shortcuts is runtime platform behavior, not determinable from source; the code only handles the explicit rejection case.
+
+### ADCHomePageContent
+
+> MMCA.ADC.UI.Web.Client · `MMCA.ADC.UI.Web.Client.Pages` · `MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:11` · Level 1 · class (sealed)
+> MMCA.ADC.UI · `MMCA.ADC.UI.Pages` · `MMCA.ADC.UI/Pages/ADCHomePageContent.cs:8` · Level 10 · class (sealed)
+
+Two same-named classes, one per head family, both implementing [IHomePageContent](group-15-common-ui-framework.md#ihomepagecontent) with the identical two-property shape. They are taught together because the shape *is* the lesson; the only difference is which component each one points the shared shell at.
+
+| Type | File:Line | Notes (what differs) |
+|------|-----------|----------------------|
+| `ADCHomePageContent` (web heads) | `MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:11` | `ComponentType` is the shared Conference.UI landing page itself, reached through the `SharedADCHome` using-alias (`:2`, `:13`). |
+| `ADCHomePageContent` (MAUI head) | `MMCA.ADC.UI/Pages/ADCHomePageContent.cs:8` | `ComponentType` is the head-local `MMCA.ADC.UI.Pages.ADCHome` razor wrapper (`:10`), which renders the same shared component one level down (`MMCA.ADC.UI/Pages/ADCHome.razor:6`). |
+
+- **What it is**: each head's binding of the framework's home-page extension point. It tells the shared `Home.razor` shell which component to render as the landing page and what title to show.
+- **Depends on**: [IHomePageContent](group-15-common-ui-framework.md#ihomepagecontent) (implemented by both, `MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:1`, `MMCA.ADC.UI/Pages/ADCHomePageContent.cs:1`) and [ADCHome](group-21-conference-ui.md#adchome) from `MMCA.ADC.Conference.UI`, reached directly on the web side and through the local wrapper on the MAUI side.
+- **Concept introduced, app-supplied content for a shared shell.** The framework ships one generic home shell; each host app registers a single `IHomePageContent` that hands the shell a `ComponentType` and a `PageTitle`. The dependency is inverted: the shared shell never references an ADC page. [Rubric §18, UI Architecture] assesses how a reusable shell is specialized per app, and here the entire specialization is two properties. [Rubric §2, Design Patterns] applies as well, since this is a minimal strategy/adapter sitting at a UI boundary.
+- **Walkthrough**: both classes are two expression-bodied properties and no state. `ComponentType` selects the landing component (`MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:13`, `MMCA.ADC.UI/Pages/ADCHomePageContent.cs:10`); `PageTitle => "Atlanta Developers Conference"` is identical on both (`:15` and `:12` respectively) and carries an explicit `i18n: allow` marker because the conference brand name is deliberately not localized. The web class summary notes that the shared component's default image base path already matches the web head's site-root assets (`MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:6-10`), so no parameters are passed. The MAUI wrapper exists for the mirror-image reason: its comment records that both heads serve speaker images from their own site root, the MAUI head carrying its copy under `wwwroot/images/speakers`, and that the shared component carries the Web head's countdown fence (the self-ticking `HomeCountdown` child) for both heads, so no base-path override is needed there either (`MMCA.ADC.UI/Pages/ADCHome.razor:1-5`).
+- **Why it's built this way**: pointing at the Conference module's component instead of duplicating a landing page means the web and MAUI heads render the same marketing surface, and a change to the conference home lands everywhere at once. The MAUI head keeps its one-line wrapper so head-specific editorial assets stay in ADC rather than migrating into the shared `MMCA.Common.UI` RCL.
+- **Where it's used**: registered as a singleton `IHomePageContent` by all three heads: the WebAssembly client (`MMCA.ADC.UI.Web.Client/Program.cs:51`), the Blazor Server host (`MMCA.ADC.UI.Web/Program.cs:77`), and [MauiProgram](#mauiprogram) (`MMCA.ADC.UI/MauiProgram.cs:124`, resolving the `MMCA.ADC.UI.Pages` class imported at `:20`).
 
 
 ---

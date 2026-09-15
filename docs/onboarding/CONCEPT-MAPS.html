@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>MMCA Concept &amp; Pattern Maps · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 27 group chapters). Each diagram captures a…">
+  <meta name="description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 28 group chapters). Each diagram captures a…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/CONCEPT-MAPS.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="MMCA Concept &amp; Pattern Maps">
-  <meta property="og:description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 27 group chapters). Each diagram captures a…">
+  <meta property="og:description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 28 group chapters). Each diagram captures a…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/CONCEPT-MAPS.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MMCA Concept &amp; Pattern Maps">
-  <meta name="twitter:description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 27 group chapters). Each diagram captures a…">
+  <meta name="twitter:description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 28 group chapters). Each diagram captures a…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"MMCA Concept & Pattern Maps","item":"https://ivanball.github.io/docs/onboarding/CONCEPT-MAPS.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -130,7 +130,8 @@
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
-        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
+        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -146,15 +147,15 @@
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="mmca-concept--pattern-maps">MMCA Concept &amp; Pattern Maps</h1>
           <p>Mermaid diagrams distilled from the <a href="index.html">Onboarding guide</a> (primer, group taxonomy,
-          dependency manifest, and the 27 group chapters). Each diagram captures a <em>relationship</em> between the
-          concepts the guide teaches: the layering, the 27 functional groups, the cross-cutting patterns, and
+          dependency manifest, and the 28 group chapters). Each diagram captures a <em>relationship</em> between the
+          concepts the guide teaches: the layering, the 28 functional groups, the cross-cutting patterns, and
           the ADRs (see <code>Website/docs-src/adr/README.md</code> for the canonical range) / rubric categories that explain the &quot;why&quot;.</p>
           <p>Diagrams are grounded in:
           <a href="00-primer.html"><code>00-primer.md</code></a> · <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a> ·
           <a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a> · the <code>group-NN-*.md</code> chapters.</p>
           <hr>
-          <h2 id="1-system-context-two-codebases--the-17-packages">1. System context, two codebases + the 17 packages</h2>
-          <p><code>MMCA.Common</code> is a framework published as seventeen NuGet packages in lockstep, to nuget.org <strong>and</strong>
+          <h2 id="1-system-context-two-codebases--the-19-packages">1. System context, two codebases + the 19 packages</h2>
+          <p><code>MMCA.Common</code> is a framework published as nineteen NuGet packages in lockstep, to nuget.org <strong>and</strong>
           GitHub Packages from one tag (<a href="https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html" target="_blank" rel="noopener">ADR-053</a>);
           <code>MMCA.ADC</code> and <code>MMCA.Store</code> consume them. <code>MMCA.Common/FACTS.md</code> owns the count and the list (link
           there, do not recount). The framework depends on neither consumer (that one-way arrow is why the
@@ -167,9 +168,13 @@
           (<a href="https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html" target="_blank" rel="noopener">ADR-088</a>). <code>UI.Maui</code>
           is the one MAUI-TFM package: it lives outside <code>MMCA.Common.slnx</code> and is built and packed by
           dedicated windows CI jobs
-          (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>).</p>
+          (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>). Two more
+          stand apart from the layer chain: <code>MMCA.Common.AI</code> is the governed language-model boundary
+          (<a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener">ADR-120</a>, taught as its
+          own chapter group), and <code>MMCA.Common.Testing.Aspire</code> ships the AppHost integration-test base
+          (<a href="https://ivanball.github.io/docs/adr/117-apphost-integration-test-base.html" target="_blank" rel="noopener">ADR-117</a>).</p>
           <pre class="mermaid">flowchart TD
-    subgraph COMMON[&quot;MMCA.Common: framework, 17 NuGet packages (lockstep versioned)&quot;]
+    subgraph COMMON[&quot;MMCA.Common: framework, 19 NuGet packages (lockstep versioned)&quot;]
         direction TB
         subgraph CORE[&quot;Core (4)&quot;]
             SH[&quot;Shared&quot;]
@@ -189,12 +194,14 @@
             ASPH[&quot;Aspire.Hosting&quot;]
             GWPK[&quot;Gateway&lt;br/&gt;(YARP edge kit, ADR-088)&quot;]
         end
-        subgraph TEST[&quot;Testing (4)&quot;]
+        subgraph TEST[&quot;Testing (5)&quot;]
             T1[&quot;Testing&quot;]
             T2[&quot;Testing.E2E&quot;]
             T3[&quot;Testing.UI&quot;]
             T4[&quot;Testing.Architecture&quot;]
+            T5[&quot;Testing.Aspire&lt;br/&gt;(AppHost test base, ADR-117)&quot;]
         end
+        AIPK[&quot;AI&lt;br/&gt;(governed chat boundary, ADR-120)&quot;]
         META[&quot;MMCA.Common&lt;br/&gt;(metapackage, no assembly:&lt;br/&gt;the Core 6, ADR-101)&quot;]
     end
 
@@ -206,7 +213,7 @@
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef con fill:#e6f4ea,stroke:#34a853,color:#111
-    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,META fw
+    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,T5,AIPK,META fw
     class ADC,STORE con</pre>
           <hr>
           <h2 id="2-clean-architecture-the-layered-dependency-rule">2. Clean Architecture, the layered dependency rule</h2>
@@ -254,12 +261,12 @@
     class UIL,GRPCL,ASPL,UIMA,UIWB,GWL exc
     class ENF note</pre>
           <hr>
-          <h2 id="3-the-27-functional-groups-dependency--build-order">3. The 27 functional groups, dependency / build order</h2>
-          <p>The primary axis of the guide: every type lives in exactly one of 27 chapter groups, ordered roughly
+          <h2 id="3-the-28-functional-groups-dependency--build-order">3. The 28 functional groups, dependency / build order</h2>
+          <p>The primary axis of the guide: every type lives in exactly one of 28 chapter groups, ordered roughly
           <strong>topologically</strong>. Foundational, widely-depended-on concerns first (Result → domain blocks →
           querying → events → CQRS → …), then the ASP.NET/UI/Aspire edges, then the ADC business modules, then
-          the late-added Common device-capability layer and the test infrastructure. Arrows show the dominant
-          &quot;builds on&quot; direction (charters + levels).</p>
+          the late-added Common device-capability layer, the Common AI integration and the test infrastructure.
+          Arrows show the dominant &quot;builds on&quot; direction (charters + levels).</p>
           <pre class="mermaid">flowchart TD
     G01[&quot;G01 Result &amp;amp; Error&quot;]
     G02[&quot;G02 Domain Building Blocks&quot;]
@@ -292,7 +299,8 @@
     end
 
     G26[&quot;G26 Device Capability Layer&lt;br/&gt;(MMCA.Common, appended after the modules)&quot;]
-    G27[&quot;G27 Testing &amp;amp; Quality Infrastructure&quot;]
+    G27[&quot;G27 Common AI Integration&lt;br/&gt;(MMCA.Common, self-contained: no first-party group deps)&quot;]
+    G28[&quot;G28 Testing &amp;amp; Quality Infrastructure&quot;]
 
     %% framework backbone
     G01 --&gt; G02 --&gt; G03
@@ -347,16 +355,17 @@
     G26 --&gt; G25
 
     %% everything is tested
-    ADCMOD --&gt; G27
-    G16 --&gt; G27
-    G26 --&gt; G27
+    ADCMOD --&gt; G28
+    G16 --&gt; G28
+    G26 --&gt; G28
+    G27 --&gt; G28
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef adc fill:#e6f4ea,stroke:#34a853,color:#111
     classDef test fill:#f3e8fd,stroke:#a142f4,color:#111
-    class G01,G02,G03,G04,G05,G06,G07,G08,G09,G10,G11,G12,G13,G14,G15,G16,G26 fw
+    class G01,G02,G03,G04,G05,G06,G07,G08,G09,G10,G11,G12,G13,G14,G15,G16,G26,G27 fw
     class G17,G18,G19,G20,G21,G22,G23,G24,G25 adc
-    class G27 test</pre>
+    class G28 test</pre>
           <hr>
           <h2 id="4-core-framework-patterns-how-the-building-blocks-compose">4. Core framework patterns, how the building blocks compose</h2>
           <p>The pattern-level view of the same backbone: the ideas the primer commits to and how they feed each
@@ -771,9 +780,9 @@
           <h2 id="13-the-adrs-grouped-by-theme">13. The ADRs, grouped by theme</h2>
           <p>Every accepted ADR in <code>Website/docs-src/adr/</code>, clustered by the concern it governs. That directory&#39;s
           <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener"><code>README.md</code></a> is the canonical index and owns the count and
-          range; this map only regroups it. (Three are struck through there: 011 superseded by 027, 032 by
-          102, and 050 by 097. They stay on this map because the records they replaced still explain the
-          shape of the code that followed.)</p>
+          range; this map only regroups it. (Four are struck through there: 011 superseded by 027, 032 by
+          102, 050 by 097, and 052 by 121. They stay on this map because the records they replaced still
+          explain the shape of the code that followed.)</p>
           <pre class="mermaid">mindmap
   root((&quot;ADRs by theme&quot;))
     Domain and errors
@@ -796,7 +805,7 @@
       083 CRUD lifecycle event taxonomy
       054 Saga compensation and reconciliation
       086 Process manager deferred
-      052 Background job execution
+      052 Background job execution superseded by 121
       074 Recurring job scheduler
     Notifications and real time
       024 Two-channel notifications
@@ -943,12 +952,13 @@
           <pre class="mermaid">flowchart TD
     PRIMER[&quot;Primer: cross-cutting concepts, stack, conventions, rubric (taught once)&quot;]
 
-    subgraph AXIS1[&quot;Primary axis: functional groups (G01→G27)&quot;]
+    subgraph AXIS1[&quot;Primary axis: functional groups (G01→G28)&quot;]
         FW[&quot;Framework groups G01-G16 (MMCA.Common)&quot;]
         ADCG[&quot;ADC module groups G17-G25&quot;]
         CAPG[&quot;Device capability layer G26 (MMCA.Common, appended late)&quot;]
-        TESTG[&quot;Testing G27&quot;]
-        FW --&gt; ADCG --&gt; CAPG --&gt; TESTG
+        AIG[&quot;Common AI integration G27 (MMCA.Common, appended late)&quot;]
+        TESTG[&quot;Testing G28&quot;]
+        FW --&gt; ADCG --&gt; CAPG --&gt; AIG --&gt; TESTG
     end
 
     AXIS2[&quot;Secondary axis: dependency Level within each group&lt;br/&gt;(meet a type only after its first-party deps)&quot;]
@@ -962,7 +972,7 @@
     AXIS1 --&gt; DEVOPS
 
     classDef m fill:#e8f0fe,stroke:#4285f4,color:#111
-    class PRIMER,FW,ADCG,CAPG,TESTG,AXIS2,LENS,DEVOPS m</pre>
+    class PRIMER,FW,ADCG,CAPG,AIG,TESTG,AXIS2,LENS,DEVOPS m</pre>
           <hr>
           <h3 id="notes-on-fidelity">Notes on fidelity</h3>
           <ul>
@@ -972,8 +982,8 @@
           <li><strong>GNN here is the chapter number</strong> (<code>group-NN-*.md</code>), the numbering the index and the reading paths
           use. <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a> still carries the original classification ids
           for the chapters inserted later (its G26 is the live layer, chapter 23; its G27 is the device
-          capability layer, chapter 26; its G25 is testing, chapter 27), so match that table by chapter
-          filename rather than by its id.</li>
+          capability layer, chapter 26; its G28 is Common AI integration, chapter 27; its G25 is testing,
+          chapter 28), so match that table by chapter filename rather than by its id.</li>
           <li>Pattern diagrams (§4-§12) reflect the mechanisms as taught in the corresponding <code>group-NN-*.md</code>
           chapters and the ADRs named in <a href="00-primer.html"><code>00-primer.md</code></a>.</li>
           <li>The 36 dependency cycles (SCCs) listed in the manifest are kept whole inside a single group
@@ -990,9 +1000,9 @@
           <nav class="doc-toc" aria-label="On this page">
             <p class="doc-toc-title">On this page</p>
             <ul>
-            <li><a href="#1-system-context-two-codebases--the-17-packages">1. System context, two codebases + the 17 packages</a></li>
+            <li><a href="#1-system-context-two-codebases--the-19-packages">1. System context, two codebases + the 19 packages</a></li>
             <li><a href="#2-clean-architecture-the-layered-dependency-rule">2. Clean Architecture, the layered dependency rule</a></li>
-            <li><a href="#3-the-27-functional-groups-dependency--build-order">3. The 27 functional groups, dependency / build order</a></li>
+            <li><a href="#3-the-28-functional-groups-dependency--build-order">3. The 28 functional groups, dependency / build order</a></li>
             <li><a href="#4-core-framework-patterns-how-the-building-blocks-compose">4. Core framework patterns, how the building blocks compose</a></li>
             <li><a href="#5-request-lifecycle-the-cqrs-decorator-pipeline-adr-014">5. Request lifecycle, the CQRS decorator pipeline (ADR-014)</a></li>
             <li><a href="#6-event-driven-integration-outbox-dual-dispatch-adr-003--010--021--100">6. Event-driven integration, outbox dual-dispatch (ADR-003 / 010 / 021 / 100)</a></li>

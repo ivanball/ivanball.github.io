@@ -130,7 +130,8 @@
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
-        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
+        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -247,10 +248,10 @@
           (<code>OAUTH_GITHUB_CLIENT_ID</code>, <code>OAUTH_GITHUB_CLIENT_SECRET</code>, <code>ANTHROPIC_API_KEY</code>, <code>SMTP_PASSWORD</code>) and
           optional variables (<code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_FROM</code>, <code>SMTP_USERNAME</code>). There is no HS256
           fallback signing key in that list: RS256 is the only signing path, which is why both RSA PEMs are
-          listed as required and <code>deploy.yml:1143-1149</code> fails the run when either is missing.</p>
+          listed as required and <code>deploy.yml:1409-1412</code> fails the run when either is missing.</p>
           <p><strong>One gap to know about before your first deploy.</strong> The checklist never mentions <code>ALERT_EMAIL</code>, but
           <code>main.bicep:115-117</code> declares <code>alertEmailAddress</code> as a required parameter with <code>@minLength(3)</code> and
-          no default (alerts that notify nobody are silent failures), and <code>deploy.yml:1138-1141</code> refuses the
+          no default (alerts that notify nobody are silent failures), and <code>deploy.yml:1401-1404</code> refuses the
           run with an actionable error when <code>vars.ALERT_EMAIL</code> is unset. Follow the printed checklist exactly
           and the first deploy stops there. Set <code>ALERT_EMAIL</code> as well.</p>
           <hr>
@@ -388,19 +389,19 @@
           are created and visible in Azure Monitor even without the variable, &quot;they just don&#39;t email&quot;. That
           state is no longer reachable: <code>alertEmailAddress</code> is a required parameter with <code>@minLength(3)</code> and
           no default (<code>main.bicep:115-117</code>), the action group&#39;s email receiver is unconditional
-          (<code>main.bicep:269-286</code>), and <code>deploy.yml:1138-1141</code> fails the deploy before bicep validation when
+          (<code>main.bicep:269-286</code>), and <code>deploy.yml:1401-1404</code> fails the deploy before bicep validation when
           <code>vars.ALERT_EMAIL</code> is unset. An alert that notifies nobody is now impossible in a deployed
           environment by construction, which is the stronger version of what the runbook was aiming at.</p>
           <p><strong>Deploy rollback description (<code>DISASTER-RECOVERY.md:113-115</code>).</strong> The runbook describes the
           post-deploy smoke gate as Gateway <code>/health</code> plus <code>/.well-known/jwks.json</code> plus the UI root. The live
           gate is broader in both dimensions: a revision-activation gate that requires the newest revision of
           every app to report Healthy, Running and 100% traffic weight, followed by six probes that reach
-          every service through the Gateway (<code>deploy.yml:1318-1339</code> for the reasoning,
-          <code>deploy.yml:1407-1418</code> for the probes). The activation gate exists because the HTTP probes alone
+          every service through the Gateway (<code>deploy.yml:1600-1621</code> for the reasoning,
+          <code>deploy.yml:1700-1710</code> for the probes). The activation gate exists because the HTTP probes alone
           cannot prove the new code is serving: a healthy Gateway keeps answering from the previous backend
           revision when the new one never goes ready, which is exactly how a readiness regression stayed
-          hidden for four days (<code>deploy.yml:1326-1330</code>). The rollback mechanism the runbook names,
-          <code>az containerapp revision copy</code>, is still what runs (<code>deploy.yml:1462</code>).</p>
+          hidden for four days (<code>deploy.yml:1609-1612</code>). The rollback mechanism the runbook names,
+          <code>az containerapp revision copy</code>, is still what runs (<code>deploy.yml:1754</code>).</p>
           <h3 id="recovery-objectives">Recovery objectives</h3>
           <p>The DR file targets three failure scenarios (<code>DISASTER-RECOVERY.md:10-14</code>):</p>
           <div class="table-wrap"><table>
@@ -541,12 +542,12 @@
           (<code>DISASTER-RECOVERY.md:154-156</code>) records that rows naming <code>AtlDevCon</code> are kept as history now that
           the archive is gone, rather than being edited out.</p>
           <p>The ledger stays honest because it is gated, not remembered: <code>dr-freshness</code> fails a deploy when the
-          newest successful <code>dr-drill.yml</code> run is older than 8 days (<code>deploy.yml:707</code>,
+          newest successful <code>dr-drill.yml</code> run is older than 8 days (<code>deploy.yml:818</code>,
           <code>DISASTER-RECOVERY.md:170-172</code>). The rotation itself is prose here but arithmetic in the workflow,
           which is the source of truth. The next section walks it.</p>
           <hr>
           <h2 id="dr-drillyml-and-dr-restore-drillps1-the-adr-009-restore-drill">dr-drill.yml and dr-restore-drill.ps1, the ADR-009 restore drill</h2>
-          <p><strong>Files:</strong> <code>MMCA.ADC/.github/workflows/dr-drill.yml</code> (81 lines),
+          <p><strong>Files:</strong> <code>MMCA.ADC/.github/workflows/dr-drill.yml</code> (88 lines),
           <code>MMCA.ADC/scripts/dr-restore-drill.ps1</code> (101 lines)</p>
           <p><strong>What it is.</strong> The automation behind the drill requirement above: the workflow picks a target
           database and logs in to Azure via OIDC, the PowerShell script does the restore, the timing, the
@@ -563,13 +564,38 @@
           </ul>
           <p>The job holds <code>id-token: write</code> plus <code>contents: read</code> and nothing else (<code>dr-drill.yml:35-37</code>), which
           is the least privilege an OIDC login needs, and it logs in with the same three <code>AZURE_*</code> secrets
-          <code>azure-setup.sh</code> printed (<code>dr-drill.yml:46-51</code>).</p>
+          <code>azure-setup.sh</code> printed (<code>dr-drill.yml:46-51</code>). Both third-party actions it uses are pinned to a
+          full commit SHA with the human-readable version parked in a trailing comment:
+          <code>actions/checkout@3d3c42e5...</code> (<code>dr-drill.yml:44</code>) and <code>azure/login@7ddb5af1...</code>
+          (<code>dr-drill.yml:47</code>).</p>
+          <p>[Rubric §32, Dependency &amp; Supply-Chain] assesses whether third-party dependencies are pinned,
+          scanned, and cannot change underfoot. A Git tag is mutable, so <code>@v3</code> in a job that mints an Azure
+          OIDC token means a repointed tag could run new code with production credentials; the SHA pin removes
+          that path, and the <code># v7.0.1</code> / <code># v3.0.2</code> comments keep the pin readable and updatable.</p>
           <p>Scheduled runs <strong>rotate</strong> across the four live per-service databases by ISO week number modulo 4
           (<code>dr-drill.yml:53-72</code>, the arithmetic at <code>dr-drill.yml:65-68</code>), so each live database gets a recovery
           proof roughly monthly. Which branch runs is decided purely by whether the dispatch input is present
           (<code>dr-drill.yml:59</code>), which is what lets one job serve both triggers. The chosen database is echoed
           into the step summary before the drill starts (<code>dr-drill.yml:72</code>), so a reader of a failed run knows
-          immediately which database was under test.</p>
+          immediately which database was under test. Note how the input is read: the step declares
+          <code>DISPATCH_DATABASE: ${{ inputs.source_database }}</code> as an environment variable
+          (<code>dr-drill.yml:55-56</code>) and the shell tests <code>&quot;${DISPATCH_DATABASE:-}&quot;</code> (<code>dr-drill.yml:59</code>) instead of
+          expanding the <code>${{ }}</code> expression inline, and the whole script runs under <code>set -euo pipefail</code>
+          (<code>dr-drill.yml:58</code>) so an unset variable or a failed <code>az</code> call stops the step rather than silently
+          rotating to the wrong database.</p>
+          <p><strong>How the inputs reach the PowerShell script.</strong> The final step sets three variables in its own <code>env</code>
+          block, <code>DRILL_RESOURCE_GROUP</code> from <code>vars.AZURE_RESOURCE_GROUP</code>, <code>DRILL_SOURCE_DATABASE</code> from the
+          rotation step&#39;s output, and <code>DRILL_RESTORE_POINT_MINUTES_AGO</code> from the dispatch input with a literal
+          <code>&#39;10&#39;</code> fallback for scheduled runs (<code>dr-drill.yml:78-81</code>), then passes those variables to the script
+          (<code>dr-drill.yml:82-88</code>). The workflow&#39;s own comment states the reason (<code>dr-drill.yml:76-77</code>): values
+          reach the script through the environment rather than being interpolated into the command line, so a
+          dispatch input cannot inject extra PowerShell arguments. This matters more here than in most jobs,
+          because the step runs with an Azure session that holds Contributor on the production resource group.</p>
+          <p>[Rubric §11, Security] assesses credential handling and injection resistance. Workflow expression
+          interpolation is textual substitution into the shell command before the shell ever sees it, so a
+          hostile input value becomes code; routing every input through <code>env</code> and quoting it turns the same
+          value back into data. The <code>type: choice</code> input (<code>dr-drill.yml:20-26</code>) already constrains the database
+          name to four options, so this is defence in depth rather than the only control.</p>
           <p><strong><code>AtlDevCon</code> is gone from both ends of this pair.</strong> The dispatch <code>choice</code> input now offers only the
           four live databases (<code>dr-drill.yml:22-26</code>), and the script&#39;s own <code>-SourceDatabase</code> default moved from
           <code>AtlDevCon</code> to <code>ADC_Identity</code> (<code>dr-restore-drill.ps1:26</code>). Both files record why: the archive was
@@ -583,9 +609,10 @@
           <h3 id="walkthrough-of-the-script">Walkthrough of the script</h3>
           <p><strong>Parameters (<code>dr-restore-drill.ps1:23-30</code>).</strong> <code>-ResourceGroup</code> (default <code>acc-rg</code>),
           <code>-SourceDatabase</code> (default <code>ADC_Identity</code>), <code>-RestorePointMinutesAgo</code> (default 10), <code>-KeepCopy</code>, and
-          <code>-SummaryPath</code> (the workflow passes <code>$env:GITHUB_STEP_SUMMARY</code>, <code>dr-drill.yml:74-81</code>). The workflow
-          never leans on the default: it always passes an explicit <code>-SourceDatabase</code> from the rotation step, so
-          the default only matters to a local CLI run.</p>
+          <code>-SummaryPath</code> (the workflow passes <code>$env:GITHUB_STEP_SUMMARY</code>, <code>dr-drill.yml:74-88</code>). The workflow
+          never leans on a default: it passes an explicit <code>-SourceDatabase</code> from the rotation step and an
+          explicit <code>-ResourceGroup</code> from <code>vars.AZURE_RESOURCE_GROUP</code> (<code>dr-drill.yml:79-80</code>), so the script&#39;s
+          own defaults only matter to a local CLI run.</p>
           <p><strong>Server discovery (<code>dr-restore-drill.ps1:40-44</code>).</strong> Queries by name prefix (<code>adc-prod-sql-*</code>) rather
           than hard-coding the resource-token suffix, and throws a clear &quot;Did you run &#39;az login&#39;?&quot; error when
           nothing matches. Resolving from live Azure state is what lets the same script work against a rebuilt
@@ -612,18 +639,20 @@
           <h3 id="what-it-does-not-do-and-the-gate-that-makes-it-matter">What it does not do, and the gate that makes it matter</h3>
           <p>The drill never touches a live database and it does not gate production directly. The link to
           production is the age of its newest successful run: <code>deploy.yml</code>&#39;s <code>dr-freshness</code> job
-          (<code>deploy.yml:699-749</code>) reads the Actions API for the latest successful <code>dr-drill.yml</code> run
-          (<code>deploy.yml:734-736</code>) and fails the deploy when that run is older than the 8-day window
-          (<code>deploy.yml:707</code>, compared at <code>deploy.yml:745-748</code>), or when there is no successful run at all
-          (<code>deploy.yml:737-740</code>). The comment at <code>deploy.yml:732-733</code> records why the gate can trust the run
+          (<code>deploy.yml:810-861</code>) reads the Actions API for the latest successful <code>dr-drill.yml</code> run
+          (<code>deploy.yml:846-848</code>) and fails the deploy when that run is older than the 8-day window
+          (<code>deploy.yml:818</code>, compared at <code>deploy.yml:857-860</code>), or when there is no successful run at all
+          (<code>deploy.yml:849-852</code>). The comment at <code>deploy.yml:844-845</code> records why the gate can trust the run
           list at face value: <code>dr-drill.yml</code> has no skip-if-unchanged guard, so every successful run really
-          performed a PITR restore.</p>
-          <p><code>dr-freshness</code> sits in <code>deploy.needs</code> alongside <code>load-freshness</code> and <code>cross-service-freshness</code>
-          (<code>deploy.yml:1054</code>), and the deploy&#39;s condition requires all three to have concluded <code>success</code>
-          (<code>deploy.yml:1087-1089</code>). Break-glass exists but is deliberately expensive to use: the
-          <code>skip_freshness_gates</code> input is honored only with a non-empty <code>skip_justification</code>, and the run
-          refuses without one (<code>deploy.yml:717-721</code>), then writes the justification into the step summary and
-          raises a workflow warning (<code>deploy.yml:722-729</code>).</p>
+          performed a PITR restore. The job itself asks for only <code>actions: read</code> plus <code>contents: read</code>
+          (<code>deploy.yml:814-816</code>) and runs on a 5-minute timeout (<code>deploy.yml:812</code>), because it is one API read
+          and no restore cost per deploy.</p>
+          <p><code>dr-freshness</code> sits in <code>deploy.needs</code> alongside <code>load-freshness</code>, <code>cross-service-freshness</code> and
+          <code>cross-browser-freshness</code> (<code>deploy.yml:1305</code>), and the deploy&#39;s condition requires all four to have
+          concluded <code>success</code> (<code>deploy.yml:1344-1347</code>). Break-glass exists but is deliberately expensive to
+          use: the <code>skip_freshness_gates</code> input is honored only with a non-empty <code>skip_justification</code>, and the
+          run refuses without one (<code>deploy.yml:829-833</code>), then writes the justification into the step summary
+          and raises a workflow warning (<code>deploy.yml:834-841</code>).</p>
           <p>The operational consequence for an on-call reader: <strong>a red or skipped weekly drill blocks the next
           production deploy.</strong> If a deploy fails on <code>dr-freshness</code>, the fix is to re-run <code>dr-drill.yml</code> (and
           fix it first if it genuinely failed), not to bypass it. The gate&#39;s full mechanics, the break-glass
@@ -749,16 +778,17 @@
           two things to lean on: the alert&#39;s own description, which names the first triage step (check
           <code>/health/ready</code> on the named app, an untagged infrastructure health check gating readiness being the
           usual cause, <code>main.bicep:417</code>), and the deploy-side story, the activation gate and rollback at
-          <code>deploy.yml:1318-1339</code>, described in the <a href="devops-cicd.html">CI/CD chapter</a>.</p>
+          <code>deploy.yml:1600-1621</code>, described in the <a href="devops-cicd.html">CI/CD chapter</a>.</p>
           <h3 id="recovery-moves">Recovery moves</h3>
           <p><code>OPERATIONS.md:150-163</code> is the fast reference: roll a bad revision back with <code>az containerapp revision list</code> and <code>revision copy</code>, follow <code>DISASTER-RECOVERY.md</code> for a database restore, re-run the
           referenced workflow when a freshness gate blocks a deploy, and revert a conference-day surge when
           <code>cost-guard.yml</code> fails. Its freshness quick-reference (<code>OPERATIONS.md:158-161</code>) names all three
           windows, and each one matches the workflow that enforces it: <code>dr-freshness</code> 8 days
-          (<code>deploy.yml:707</code>), <code>load-freshness</code> 35 days (<code>deploy.yml:764</code>), <code>cross-service-freshness</code> 5 days
-          (<code>deploy.yml:825</code>). Those numbers live in two places, so treat the workflow as the source of truth
-          and re-check the runbook line whenever a window moves: the cross-service window was widened from 3 to
-          5 days when that suite went weekday-nightly (<code>deploy.yml:823-824</code>), and the runbook text followed
+          (<code>deploy.yml:818</code>), <code>load-freshness</code> 35 days (<code>deploy.yml:876</code>), <code>cross-service-freshness</code> 5 days
+          (<code>deploy.yml:938</code>). Those numbers live in two places, so treat the workflow as the source of truth
+          and re-check the runbook line whenever a window moves: <code>deploy.yml</code> now enforces a fourth window the
+          runbook&#39;s quick reference does not name, <code>cross-browser-freshness</code> at 10 days (<code>deploy.yml:1043</code>),
+          which is the drift this pairing produces whenever a gate is added and the prose is updated
           separately.</p>
           <h3 id="why-there-is-no-aspire-dashboard-in-production">Why there is no Aspire dashboard in production</h3>
           <p><code>OPERATIONS.md:176-207</code> closes the file by answering the question every new operator asks. The
@@ -793,8 +823,8 @@
           <p>[Rubric §11, Security] assesses credential hardening. <strong>All three stages have been run in ADC
           production.</strong> The template default is still <code>false</code> (<code>main.bicep:36</code>), because that is what makes a
           fresh environment start on password auth and each stage independently deployable, but the deployed
-          value comes from a repository variable, not the default: <code>deploy.yml:1133</code> reads
-          <code>vars.USE_MANAGED_IDENTITY_SQL</code> and <code>deploy.yml:1293-1296</code> rewrites the parameter to a literal JSON
+          value comes from a repository variable, not the default: <code>deploy.yml:1393</code> reads
+          <code>vars.USE_MANAGED_IDENTITY_SQL</code> and <code>deploy.yml:1562-1565</code> rewrites the parameter to a literal JSON
           <code>true</code> when it is set. All three variables are set in <code>ivanball/ADC</code> (<code>USE_MANAGED_IDENTITY_SQL</code>,
           <code>SQL_AAD_ADMIN_LOGIN</code> and <code>SQL_AAD_ADMIN_OID</code>, all dated 2026-06-28), so the deployed apps use
           passwordless <code>Active Directory Managed Identity</code> connection strings. The ADC scorecard records the
@@ -816,7 +846,7 @@
           is independently deployable and reversible.</p>
           <ol>
           <li><strong>Stage 1, add the Entra admin</strong> (<code>SQL-MANAGED-IDENTITY.md:50-54</code>). Set the <code>SQL_AAD_ADMIN_LOGIN</code>
-          and <code>SQL_AAD_ADMIN_OID</code> repository variables; <code>deploy.yml:1282-1289</code> folds them into the bicep
+          and <code>SQL_AAD_ADMIN_OID</code> repository variables; <code>deploy.yml:1554-1560</code> folds them into the bicep
           parameter file, and <code>main.bicep:624-633</code> provisions the AAD admin only when the object id is
           non-empty. Additive, zero app impact.</li>
           <li><strong>Stage 2, grant the identity in each database</strong> (<code>SQL-MANAGED-IDENTITY.md:56-68</code>). Connect to
@@ -1110,8 +1140,8 @@
           <li><a href="devops-iac.html">IaC chapter</a>: <code>infra/main.bicep</code> provisions the four <code>ADC_*</code> databases, the LTR
           policies, the SLO alerts and workbook, and the Service Bus namespace.</li>
           <li><a href="devops-cicd.html">CI/CD chapter</a>: <code>deploy.yml</code> carries the revision-activation and smoke gates, the
-          rollback, and the three recency gates (<code>dr-freshness</code>, <code>load-freshness</code>,
-          <code>cross-service-freshness</code>).</li>
+          rollback, and the four recency gates (<code>dr-freshness</code>, <code>load-freshness</code>,
+          <code>cross-service-freshness</code>, <code>cross-browser-freshness</code>, <code>deploy.yml:1305</code>).</li>
           <li><a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, the decision to adopt database-per-service, its trade-offs, and the
           <code>CrossDataSourceDegradeConvention</code> that removes cross-database FKs.</li>
           <li><a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>, the resilience and recovery objectives framework, including the requirement
@@ -1140,7 +1170,7 @@
           </tr>
           <tr>
           <td>§11 Security</td>
-          <td><code>azure-setup.sh</code> (UAMI / OIDC / least privilege), <code>DISASTER-RECOVERY.md</code> (managed identity, Key Vault), <code>SQL-MANAGED-IDENTITY.md</code> (staged passwordless SQL, accepted public-network risk)</td>
+          <td><code>azure-setup.sh</code> (UAMI / OIDC / least privilege), <code>dr-drill.yml</code> (least-privilege token scopes, dispatch inputs passed through <code>env</code> instead of command-line interpolation), <code>DISASTER-RECOVERY.md</code> (managed identity, Key Vault), <code>SQL-MANAGED-IDENTITY.md</code> (staged passwordless SQL, accepted public-network risk)</td>
           </tr>
           <tr>
           <td>§13 Observability</td>
@@ -1163,6 +1193,10 @@
           <td><code>POST-CUTOVER-atldevcon-downgrade.md</code> (S0 to Basic, then archive-and-drop on a measured 0 DTU); the 2026-09-02 alert-cadence changes (<code>main.bicep:345-349</code>, <code>:464-469</code>); the thinned telemetry stream documented in <code>OPERATIONS.md:176-207</code></td>
           </tr>
           <tr>
+          <td>§32 Dependency &amp; Supply-Chain</td>
+          <td><code>dr-drill.yml</code> (<code>actions/checkout</code> and <code>azure/login</code> pinned to full commit SHAs with the version in a trailing comment, <code>dr-drill.yml:44</code>, <code>:47</code>)</td>
+          </tr>
+          <tr>
           <td>§34 Architecture Governance</td>
           <td>The deliberate deletion of the spent one-time cutover tooling, and then of the archive database itself once it was measurably idle; <code>OPERATIONS.md:165-171</code>, which states exactly which alerts the pairing gate does and does not cover</td>
           </tr>
@@ -1174,9 +1208,9 @@
           (<code>DISASTER-RECOVERY.md:158-165</code>), but <code>dr-drill.yml</code> runs every Monday and a run reaches the ledger
           only when an operator pastes the printed row back into <code>DISASTER-RECOVERY.md</code>. Any drill newer than
           the last ledger row exists only in the Actions history, which is exactly what <code>dr-freshness</code> queries
-          (<code>deploy.yml:734-736</code>); it cannot be read from the repository.</li>
+          (<code>deploy.yml:846-848</code>); it cannot be read from the repository.</li>
           <li><strong>The live values of the three SQL managed-identity repository variables</strong>: <code>main.bicep:36</code> shows
-          the safe default (<code>false</code>) and <code>deploy.yml:1133</code> shows that the deployed value comes from
+          the safe default (<code>false</code>) and <code>deploy.yml:1393</code> shows that the deployed value comes from
           <code>vars.USE_MANAGED_IDENTITY_SQL</code>. The variable&#39;s current value is repository configuration, not
           source. Check Settings, then Secrets and variables, then Actions.</li>
           <li><strong>Whether the archive bacpac is still present and readable</strong>: the blob path and storage account are

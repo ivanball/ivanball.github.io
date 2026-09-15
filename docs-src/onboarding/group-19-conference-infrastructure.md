@@ -2,19 +2,18 @@
 
 **What this chapter covers.** This is the **adapter** layer of the Conference module, the place where
 the engine-agnostic domain meets concrete technology. Three concerns live here: (1) **persistence
-mapping**, the 17 EF Core entity configurations that turn plain domain classes into SQL Server tables,
+mapping**, the 18 EF Core entity configurations that turn plain domain classes into SQL Server tables,
 the abstract `DbContext` that declares the module's `DbSet`s, and the seeder that puts the real
-conference events and feedback questions into a fresh database; (2) **outbound integration and
-background work**, the HTTP clients that talk to **Sessionize** (the conference's session-submission
-platform) and to the **Anthropic Claude API** (the AI session scorer), the hosted worker that drains
-the scoring queue off the request path, and the cron job that re-queues a scoring pass a crash cut in
-half; and (3) the **DI wiring** that registers those services with the right resilience policy. It is
-the per-module realization of Clean Architecture's ports and adapters idea: the
+conference events and feedback questions into a fresh database; (2) **outbound integration**, the typed
+`HttpClient` that talks to **Sessionize** (the conference's session-submission platform) and the AI
+session scorer that runs one proposal through the framework's governed chat client; and (3) the **DI
+wiring** that registers those services, plus the one small output-cache adapter the durable scoring pass
+calls back into. It is the per-module realization of Clean Architecture's ports and adapters idea: the
 [Application](group-18-conference-application.md) layer declares the ports
 ([`ISessionizeService`](group-18-conference-application.md#isessionizeservice),
 [`IAiScoringService`](group-18-conference-application.md#iaiscoringservice),
-[`SessionScoringQueue`](group-18-conference-application.md#sessionscoringqueue)), and this
-Infrastructure layer supplies the adapters and the runners. `[Rubric §3, Clean Architecture]` assesses
+[`ISessionScoresCacheEvictor`](group-18-conference-application.md#isessionscorescacheevictor)), and this
+Infrastructure layer supplies the adapters. `[Rubric §3, Clean Architecture]` assesses
 whether dependencies point inward and the domain stays framework-free; here every EF, HTTP, and
 Anthropic concern is quarantined in Infrastructure, so the domain entities in
 [Group 17](group-17-conference-domain.md) carry no persistence or transport attribute at all.
@@ -26,11 +25,11 @@ engine each entity uses is decided here, not in the domain.** A Conference domai
 [`Session`](group-17-conference-domain.md#session), [`Speaker`](group-17-conference-domain.md#speaker),
 [`Event`](group-17-conference-domain.md#event), [`Sponsor`](group-17-conference-domain.md#sponsor),
 [`Activity`](group-17-conference-domain.md#activity), the join entities, is a plain class. The *only*
-thing that binds it to SQL Server is which base class its configuration inherits from. All 17 configs in
+thing that binds it to SQL Server is which base class its configuration inherits from. All 18 configs in
 this group ([`SessionConfiguration`](#sessionconfiguration),
 [`SpeakerConfiguration`](#speakerconfiguration), [`EventConfiguration`](#eventconfiguration),
-[`SponsorConfiguration`](#sponsorconfiguration), [`ActivityConfiguration`](#activityconfiguration), and
-the rest) derive from
+[`SponsorConfiguration`](#sponsorconfiguration), [`ActivityConfiguration`](#activityconfiguration),
+[`SessionAssetConfiguration`](#sessionassetconfiguration), and the rest) derive from
 [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype)
 (for example `MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Sessions/SessionConfiguration.cs:12-13`
 and `MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Activities/ActivityConfiguration.cs:11-12`),
@@ -57,8 +56,14 @@ re-states. The per-entity bodies then declare what is unique: column lengths sou
 invariant constants (`SessionInvariants.TitleMaxLength` at `SessionConfiguration.cs:20-22`,
 `EventInvariants.NameMaxLength` at `EventConfiguration.cs:20-22`, `SponsorInvariants.NameMaxLength` at
 `SponsorConfiguration.cs:19-21`, `ActivityInvariants.NameMaxLength` at `ActivityConfiguration.cs:19-21`),
-required and optional flags, computed properties excluded with `builder.Ignore(...)` (`Session.Duration`
-at `SessionConfiguration.cs:67`, `Speaker.FullName` at `SpeakerConfiguration.cs:68`), value conversions
+required and optional flags, derived values resolved one way or the other (`Speaker.FullName` is left out
+of the model with `builder.Ignore(...)` at `SpeakerConfiguration.cs:68`, while `Session.Duration` is
+mapped as a **stored computed column**,
+`HasComputedColumnSql("DATEDIFF(minute, [StartsAt], [EndsAt])", stored: true)` at
+`SessionConfiguration.cs:74-75`, because the sessions grid sorts on it and an `ORDER BY` needs a real
+column: dynamic LINQ cannot express a date difference and the provider does not translate `DateTime`
+subtraction, so the value has to live in the database where no writer can set it to anything else,
+`SessionConfiguration.cs:66-73`), value conversions
 (`Speaker.Email` round-trips through
 [`NullableEmailValueConverter`](group-07-persistence-ef-core.md#nullableemailvalueconverter) at
 `SpeakerConfiguration.cs:42-45`, and `Sponsor.Tier` is stored as its underlying `int` with
@@ -87,13 +92,18 @@ through
 [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions)`.HasSoftDeleteFilter()`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/IndexBuilderExtensions.cs:20-29`),
 which replaces the old literal `HasFilter("[IsDeleted] = 0")` by reading the column name from the model
-and the quoting from the engine. Five lookup indexes here take that opt-in: `Session.EventId`
-(`SessionConfiguration.cs:77-78`), `Sponsor.EventId` (`SponsorConfiguration.cs:67-68`),
-`EventQuestionAnswer.EventId` (`EventQuestionAnswerConfiguration.cs:35-36`), and both of
+and the quoting from the engine. Seven lookup indexes here take that opt-in: `Session.EventId`
+(`SessionConfiguration.cs:85-86`), `Sponsor.EventId` (`SponsorConfiguration.cs:67-68`),
+`EventQuestionAnswer.EventId` (`EventQuestionAnswerConfiguration.cs:35-36`), both of
 [`ActivityConfiguration`](#activityconfiguration)'s, the plain `EventId` lookup
 (`ActivityConfiguration.cs:58-59`) and the composite (EventId, StartTime, SortOrder) that serves the
 public activities page's ordering directly instead of sorting an event slice in memory
-(`ActivityConfiguration.cs:61-64`). Several unique indexes also call it explicitly for readability even
+(`ActivityConfiguration.cs:61-64`), and both of
+[`SessionAssetConfiguration`](#sessionassetconfiguration)'s, the composite (SessionId, SortOrder) that
+serves the only read shape the table has, one session's assets in sort order
+(`SessionAssetConfiguration.cs:70-74`), and the `EventId` lookup the event-level cascade delete uses to
+select every asset of one event in a single read (`SessionAssetConfiguration.cs:76-78`). Several unique
+indexes also call it explicitly for readability even
 though the convention would supply it: [`SessionSpeakerConfiguration`](#sessionspeakerconfiguration)'s
 (SessionId, SpeakerId) pair (`SessionSpeakerConfiguration.cs:30-32`), the one-score-per-session index on
 [`SessionAiScoreConfiguration`](#sessionaiscoreconfiguration) (`SessionAiScoreConfiguration.cs:66-68`),
@@ -125,8 +135,13 @@ is indexed only where present (`EventConfiguration.cs:42-43`). Two further quirk
 `ToTable("Category", "Conference")` explicitly (`ConferenceCategoryConfiguration.cs:22-24`) so the
 Conference `Category` table cannot collide with another module's `Category`, and
 [`SessionConfiguration`](#sessionconfiguration) maps the Session-to-Room relationship with
-`OnDelete(DeleteBehavior.Restrict)` (`SessionConfiguration.cs:83-87`) so deleting a room can never
-cascade sessions away. Two configs declare no index at all and map columns only,
+`OnDelete(DeleteBehavior.Restrict)` (`SessionConfiguration.cs:91-95`) so deleting a room can never
+cascade sessions away. [`SessionAssetConfiguration`](#sessionassetconfiguration) shows the opposite end
+of the modelling choice: both of its foreign keys are declared with `HasOne<Event>()` and
+`HasOne<Session>()` and **no navigation property at all**
+(`SessionAssetConfiguration.cs:60-68`), so the database gets its referential integrity while the model
+gains no traversal path the read side never uses (`SessionAssetConfiguration.cs:13-17`). Two configs
+declare no index at all and map columns only,
 [`QuestionConfiguration`](#questionconfiguration) (`QuestionConfiguration.cs:10`) and
 [`SpeakerQuestionAnswerConfiguration`](#speakerquestionanswerconfiguration)
 (`SpeakerQuestionAnswerConfiguration.cs:10`).
@@ -134,12 +149,12 @@ cascade sessions away. Two configs declare no index at all and map columns only,
 ## DbSets, the context shape, and how the configurations are actually found
 
 [`ModuleApplicationDbContext`](#moduleapplicationdbcontext)
-(`MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:20`) is the
-Conference module's abstract `DbContext`. It does one job: declare 15 `internal DbSet<T>` properties
+(`MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:21`) is the
+Conference module's abstract `DbContext`. It does one job: declare 16 `internal DbSet<T>` properties
 (`Events`, `Rooms`, `EventSpeakers`, `EventQuestionAnswers`, `Sessions`, `SessionSpeakers`,
 `SessionQuestionAnswers`, `SessionCategoryItems`, `Speakers`, `SpeakerCategoryItems`, `Categories`,
-`CategoryItems`, `Questions`, `Sponsors`, `Activities`, at `ModuleApplicationDbContext.cs:28-70`). It is
-**abstract** and inherits from the Common
+`CategoryItems`, `Questions`, `Sponsors`, `Activities`, `SessionAssets`, at
+`ModuleApplicationDbContext.cs:28-74`). It is **abstract** and inherits from the Common
 [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) through its primary
 constructor (`ModuleApplicationDbContext.cs:20-25`), from which it gets the real machinery: the
 `SaveChangesAsync` override that stamps audit fields and captures domain events into the outbox, and the
@@ -153,12 +168,12 @@ A detail that surprises most readers: a `DbSet` is *not* what puts an entity in 
 context walks the registered configuration assemblies and applies every
 `IEntityTypeConfigurationSQLServer<,>` implementation whose entity resolves to this context's data
 source key
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:610-637`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:823-853`,
 with the engine-to-interface switch at `:612-618` and the registry filter at `:625-636`). That is why two
 entities with a configuration here, [`SessionAiScore`](group-17-conference-domain.md#sessionaiscore) and
 [`SpeakerQuestionAnswer`](group-17-conference-domain.md#speakerquestionanswer), are mapped and queryable
 through the repository layer even though `ModuleApplicationDbContext` declares no `DbSet` for either:
-17 configurations, 15 `DbSet`s, and the configurations win. `[Rubric §7, Microservices Readiness]` (can a
+18 configurations, 16 `DbSet`s, and the configurations win. `[Rubric §7, Microservices Readiness]` (can a
 module become its own service without a rewrite?) is embodied here: the Conference module already runs as
 `MMCA.ADC.Conference.Service` over its own `ADC_Conference` database
 (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:32`) with its own outbox, and cross-module
@@ -197,7 +212,7 @@ activities (a pre-conference party the evening before the Developers Conference,
 connect, and an after-party) whose event-local wall-clock times are anchored on each event's own start
 date (`:409-425`, `:441`). All of that runs only when `includeSampleData` is set. The flag comes from
 `Seeding:IncludeSampleConferenceData` (`MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:26`), which the
-local Aspire AppHost sets (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:162`) and production
+local Aspire AppHost sets (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:163`) and production
 leaves unset. The reason is documented in the seeder's own remarks
 (`ConferenceModuleDbSeeder.cs:17-24`): the public-browse E2E tests need at least one session and one
 speaker row to exist deterministically, while production's real sessions and speakers arrive through the
@@ -208,16 +223,25 @@ the transitive (SessionSpeaker) branches of the speakers-by-event filter are bot
 ## The Sessionize adapter
 
 [`SessionizeService`](#sessionizeservice)
-(`MMCA.ADC.Conference.Infrastructure/Events/Sessionize/SessionizeService.cs:10`) is a deliberately thin HTTP
-client: the whole class is one method. Given a Sessionize event code it builds the relative URI
-`{code}/view/All` (`SessionizeService.cs:15`), calls `GetAsync`, asserts success with
-`EnsureSuccessStatusCode` (`SessionizeService.cs:20`), and deserializes into the
+(`MMCA.ADC.Conference.Infrastructure/Events/Sessionize/SessionizeService.cs:12`) is a deliberately thin HTTP
+client: the whole class is one method (`SessionizeService.cs:15`). Given a Sessionize event code it
+builds the relative URI `{code}/view/All` (`SessionizeService.cs:32`), calls `GetAsync`, asserts success
+with `EnsureSuccessStatusCode` (`SessionizeService.cs:37`), and deserializes into the
 [`SessionizeResponse`](group-18-conference-application.md#sessionizeresponse) model owned by the
-Application layer (`SessionizeService.cs:22-24`). Unlike the AI adapter it **does** throw on a bad
+Application layer (`SessionizeService.cs:39-41`). Unlike the AI adapter it **does** throw on a bad
 status, because the import use-case that calls it is a foreground operation with a caller waiting on the
-result. It is registered as a typed `HttpClient` in [`DependencyInjection`](#dependencyinjection) with
-the base address `https://sessionize.com/api/v2/` baked in
-(`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:23-25`), so it inherits the standard Aspire
+result. One thing it does *not* throw on is a malformed event code: the method re-checks the code
+against `SessionizeCodeFormat.IsValid` and returns an `Error.Invariant` failure
+[`Result`](group-01-result-error-handling.md#result) instead of calling out
+(`SessionizeService.cs:23-30`). The comment above it states the threat in full
+(`SessionizeService.cs:17-22`): the code becomes the leading segment of a relative URI resolved against
+the configured base address, and RFC 3986 reads `//host/path` as a network-path reference, so an
+unchecked code would redirect the request to a foreign host whose JSON is then imported as speakers,
+sessions and rooms. The request validators already enforce the charset at the boundary, and this is the
+second layer that also covers a code written to the database before that rule existed: `[Rubric §11,
+Security]` defence in depth on an outbound call. It is registered as a typed `HttpClient` in
+[`DependencyInjection`](#dependencyinjection) with the base address `https://sessionize.com/api/v2/`
+baked in (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:29-31`), so it inherits the standard Aspire
 resilience handler (Polly retry, timeout, circuit breaker) unchanged: `[Rubric §29, Resilience &
 Business Continuity]`, the [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html)
 policy that every outbound client gets resilience by default. The thinness is intentional: parsing,
@@ -226,199 +250,147 @@ mapping, and the import workflow live in Application use-cases, and this adapter
 ## The Anthropic AI scoring adapter
 
 [`AnthropicScoringService`](#anthropicscoringservice)
-(`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:19`) is the richer of the
-two adapters: it scores one session proposal against a Program Committee rubric using the **Anthropic
-Claude Messages API**. It implements [`IAiScoringService`](group-18-conference-application.md#iaiscoringservice),
-publishes both the model id it calls (`claude-haiku-4-5`, `AnthropicScoringService.cs:26`) and a dated
-`PromptVersion` (`2026-09-04.1`, `AnthropicScoringService.cs:37`), reads the API key from configuration
-(`Anthropic:ApiKey`, expected in user secrets, `AnthropicScoringService.cs:44-49`), POSTs to the relative
-`v1/messages` endpoint with an `x-api-key` header (`AnthropicScoringService.cs:67-69`), and caps the
-response at 256 tokens (`AnthropicScoringService.cs:58`). Its contract is precise about failure: it
-**never throws for a scoring failure**, but **cancellation propagates**. Every failure path (missing key,
-non-2xx status, a `stop_reason` of `"refusal"`, no text block in the response, unparseable JSON, a partial
-score object, any other exception) funnels into `FailedResult`, which returns zero scores with
-`Success = false` (`AnthropicScoringService.cs:366-379`), while the catch filter
-`when (ex is not OperationCanceledException)` (`AnthropicScoringService.cs:83`) lets host shutdown unwind.
-That split matters because scoring runs in batches: one bad proposal must not abort the batch, but a
-deploy must still be able to stop the run.
+(`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:30`) is the richer of the
+two adapters: it scores one session proposal against a Program Committee rubric. Despite the name it owns
+no transport at all. It takes an `IChatClient` (`AnthropicScoringService.cs:31`), a
+[`PromptContract`](group-27-common-ai-integration.md#promptcontract) (`:32`) and a logger (`:33`), and the
+model, the credential, the per-call timeout and the tool gate are configuration under the `Ai` section
+handled by the framework's governed chat client in MMCA.Common.AI
+(`AnthropicScoringService.cs:13-21`,
+[ADR-111](https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html)). What stays here is
+the part only this module can know: the prompt, the redaction rules, the output schema and the scoring
+arithmetic. It implements [`IAiScoringService`](group-18-conference-application.md#iaiscoringservice), and
+one scoring call is `ToChatOptions()` off the contract plus two request-specific settings, a 256-token
+output ceiling (`:54`, `:99`) and `ChatResponseFormat.ForJsonSchema(ScoreSchema)` (`:100`), then a single
+`GetResponseAsync` with the user message (`:102-105`).
 
-The wire shapes are eight private sealed records nested inside the service: the request envelope
-[`AnthropicRequest`](#anthropicrequest) (`AnthropicScoringService.cs:434`) with its
-[`AnthropicMessage`](#anthropicmessage) list (`AnthropicScoringService.cs:467`) and its
-[`AnthropicOutputConfig`](#anthropicoutputconfig) (`AnthropicScoringService.cs:452`) wrapping an
-[`AnthropicJsonSchemaFormat`](#anthropicjsonschemaformat) (`AnthropicScoringService.cs:458`); the response
-envelope [`AnthropicResponse`](#anthropicresponse) (`AnthropicScoringService.cs:476`) with its
-[`AnthropicContentBlock`](#anthropiccontentblock) list (`AnthropicScoringService.cs:497`) and its
-[`AnthropicUsage`](#anthropicusage) token counts (`AnthropicScoringService.cs:488`); and
-[`AiScoreResponse`](#aiscoreresponse) (`AnthropicScoringService.cs:508`), the score JSON the model emits.
-Their snake_case `[JsonPropertyName]` names are the only place the vendor's contract appears, so the
-Application layer sees only
-[`SessionScoringResult`](group-18-conference-application.md#sessionscoringresult): that is
-`[Rubric §32, Dependency & Supply-Chain]` in miniature.
+The chat client is nullable **on purpose**, and that is the whole disabled path: it is resolved with
+`GetService` rather than `GetRequiredService`, because the framework registers no client when `Ai:Enabled`
+is false, so a host with no AI configured still starts and still serves every other Conference endpoint
+while scoring answers a failed result and calls nothing (`AnthropicScoringService.cs:22-27`, `:86-90`, and
+the registration comment at `DependencyInjection.cs:38-42`). The rest of the contract is equally precise
+about failure: it **never throws for a scoring failure**, but **cancellation propagates**. Every failure
+path (no client, a refusal, an empty answer, unparseable JSON, a partial score object, any other
+exception) funnels into `FailedResult`, which returns zero scores with `Success = false` (`:368-381`),
+while the catch filter `when (ex is not OperationCanceledException)` (`:109`) lets host shutdown unwind.
+That split matters because scoring runs a whole event: one bad proposal must not abort the pass, but a
+deploy must still be able to stop it.
+
+The prompt is a **versioned contract**, not a string constant, and that is what makes a score reproducible.
+`SessionScoringContract` is a static `PromptContract` built from the prompt name `session-scoring` (`:40`),
+the dated version `2026-09-04.1` (`:216`), the pinned model `claude-haiku-4-5` (`:47`) and the system brief
+(`:76-77`), and the service reports `ModelId` and `PromptVersion` by reading them back off that contract so
+the two can never disagree (`:57`, `:68`, `:213-215`). The framework hashes the contract and stamps the
+hash on every request, which is what the golden evaluation gate keys on; the remarks state the rule that
+any edit to the system prompt, the user-prompt builder, the speaker formatting, the redaction rules or the
+schema must bump the version, so an unversioned edit fails a test instead of quietly re-basing scores
+already on the dashboard (`:60-67`). `RenderPrompt` exposes the exact prompt pair without calling a model
+(`:313-328`) so that suite can hash it offline.
 
 The output is **schema-constrained rather than parsed out of prose**. `BuildScoreSchema()` emits a JSON
 Schema naming the six criteria as numbers, a `penalty` restricted to `0`, `0.5` or `1`, and a `reasoning`
 string, with `additionalProperties = false` and every field required
-(`AnthropicScoringService.cs:394-425`); it is built once into the static `ScoreSchema`
-(`AnthropicScoringService.cs:392`) and rides the request's `output_config`
-(`AnthropicScoringService.cs:61-64`). Because the model can only answer in that shape, the whole text
-block is the JSON object and deserialization is a single `JsonSerializer.Deserialize<AiScoreResponse>`
-call, with anything else (prose, fences, truncation) treated as a failed call
-(`AnthropicScoringService.cs:116-129`). Two defenses remain behind that: the response's `content` list is
-searched for the first `"text"` block (`AnthropicScoringService.cs:104-111`), and the six sub-scores and
-the penalty are **nullable** so a partial object is rejected by a property pattern rather than silently
-defaulting to zero (`AnthropicScoringService.cs:135-147`, with the reason spelled out at
-`AnthropicScoringService.cs:506-507`). The overall score is the documented weighted sum (topic 30%,
-description 10%, novelty 20%, takeaways 20%, depth 10%, credibility 10%) minus the penalty
-(`AnthropicScoringService.cs:151-162`), and every value is clamped to `[1.0, 10.0]` and rounded to one
-decimal with banker's rounding (`AnthropicScoringService.cs:364`).
+(`AnthropicScoringService.cs:388-419`); it is built once into the static `ScoreSchema` (`:386`) and rides
+the request's response format (`:100`). Because the model can only answer in that shape, the whole text is
+the JSON object and deserialization is a single `JsonSerializer.Deserialize<AiScoreResponse>` call, with
+anything else (prose, fences, truncation) treated as a failed call (`:155-168`).
+[`AiScoreResponse`](#aiscoreresponse) (`:429`) is the only wire shape left in this file, and its six
+sub-scores and penalty are **nullable** so a partial object is rejected by a property pattern rather than
+silently defaulting to zero (`:170-186`). Two more guards sit in front of the parse: a refusal is detected
+from both the normalized `ChatFinishReason.ContentFilter` and the provider's raw `refusal` value, so a
+mapping change on either side cannot turn a refusal into an unparseable answer (`:126-130`, `:142-153`),
+and an empty answer is failed outright (`:132-137`). The overall score is the documented weighted sum
+(topic 30%, description 10%, novelty 20%, takeaways 20%, depth 10%, credibility 10%) minus the penalty
+(`:188-196`), and every value is clamped to `[1.0, 10.0]` and rounded to one decimal with banker's rounding
+(`:366`). The Application layer sees only
+[`SessionScoringResult`](group-18-conference-application.md#sessionscoringresult).
 
 The prompt itself is treated as an attack surface, which is the `[Rubric §11, Security]` story here
-alongside the obvious one (the API key is a configuration secret, never hard-coded). Everything a speaker
-typed arrives through a public call-for-papers form, so the user message is a delimited envelope
-(`<session_proposal>` with `<session_title>`, `<session_description>` and a `<speakers>` block,
-`AnthropicScoringService.cs:231-267`) rather than labelled lines, angle brackets in every submitted value
-are escaped so a submission cannot forge a delimiter (`AnthropicScoringService.cs:295-298`), and emails
-and North-American phone shapes are redacted by source-generated regexes before the text leaves the
-process (`AnthropicScoringService.cs:303-320`); speaker names are deliberately left intact because they
-are the published conference record and the only evidence the credibility criterion has
-(`AnthropicScoringService.cs:253-257`). The system brief carries a matching `UntrustedInputBrief`
-constant (`AnthropicScoringService.cs:217-224`) that declares the tagged content data, not instructions,
-and routes an injection attempt to the existing 1.0 penalty. `RenderPrompt` exposes the exact prompt pair
-without calling the API (`AnthropicScoringService.cs:277-284`) so the golden evaluation suite can hash it
-per `PromptVersion`: the remarks on `PromptVersion` state the rule that any edit to the prompt, the
-speaker formatting, the redaction rules or the schema must bump the version, so an unversioned edit fails
-a test instead of quietly re-basing scores already on the dashboard (`AnthropicScoringService.cs:29-36`).
+alongside the obvious one (the credential is configuration the framework reads, never a literal in this
+file). Everything a speaker typed arrives through a public call-for-papers form, so the user message is a
+delimited envelope (`<session_proposal>` with `<session_title>`, `<session_description>` and a
+`<speakers>` block, `AnthropicScoringService.cs:275-311`) rather than labelled lines, because labelled
+lines gave a submission no boundary to be contained by (`:270-274`). Angle brackets in every submitted
+value are escaped so a submission cannot forge a delimiter, a typed `</session_title>` arriving as
+`&lt;/session_title&gt;` (`:336-342`), and emails and North-American phone shapes are redacted by
+source-generated regexes before the text leaves the process (`:347-364`), with the phone pattern kept
+deliberately narrow so the years and team sizes a bio legitimately carries are not redacted away
+(`:356-359`). Speaker names are deliberately left intact because they are the published conference record
+and the only evidence the credibility criterion has (`:297-299`, `:344-346`). The system brief carries a
+matching `UntrustedInputBrief` constant (`:261-268`) that declares the tagged content data rather than
+instructions and routes an injection attempt to the existing 1.0 penalty, which gives the model a rule to
+apply instead of a judgement call to make (`:255-258`).
 
-`[Rubric §13, Observability & Operability]` and `[Rubric §31, Cost/FinOps]` meet in the usage path.
-Every response's `usage` block is both logged per session and recorded on counters
-(`AnthropicScoringService.cs:92-96`): the nested
-[`ScoringInstruments`](#scoringinstruments) holder
-(`AnthropicScoringService.cs:326`) creates `scoring.tokens.input` and `scoring.tokens.output`
-(`AnthropicScoringService.cs:343-351`) on the **same** meter name the scoring processor already exports,
-`SessionScoringProcessor.MeterName` (`AnthropicScoringService.cs:340`), so a host that exports one
-exports all of them, and tags both by model and prompt version because those are exactly what move spend
-(`AnthropicScoringService.cs:354-361`). The holder exists rather than two field initializers so the meter
-is created once per service instance, and it deliberately does not dispose the meter the factory owns
-(`AnthropicScoringService.cs:322-341`). Two `[LoggerMessage]` source-generated methods carry the log
-half: a warning naming the session id and the failure reason, and an information line with the input and
-output token counts (`AnthropicScoringService.cs:427-431`).
+`[Rubric §13, Observability & Operability]` and `[Rubric §31, Cost/FinOps]` meet in the usage path, and
+the split of duties there is worth reading. The **aggregate** is the framework's: the governed pipeline's
+usage-recording chat client reports `mmca.ai.input_tokens` and `mmca.ai.output_tokens` on the
+`MMCA.Common.AI` meter, tagged by model, prompt name, prompt version and provider, which is why the prompt
+contract's identity is a first-class value here rather than a log string
+(`AnthropicScoringService.cs:118-120`, `:35-39`). What this adapter keeps is per-session forensics: when
+the response carries a usage block it logs the input and output token counts against the session id
+(`:121-124`). Two `[LoggerMessage]` source-generated methods carry the log half, a warning naming the
+session id and the failure reason, and that information line (`:421-425`).
 
-## Scoring runs on a hosted drain, guarded across replicas
+## The scoring run is durable now, and this layer keeps one adapter inside it
 
-[`SessionScoringProcessor`](#sessionscoringprocessor)
-(`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringProcessor.cs:49`) is the piece that makes a
-multi-minute paid AI pass safe to trigger from an HTTP POST. It is a `BackgroundService` that consumes
-[`SessionScoringQueue`](group-18-conference-application.md#sessionscoringqueue) with
-`ReadAllAsync(stoppingToken)` (`SessionScoringProcessor.cs:107`), so the host owns the work: shutdown
-cancels it and waits for it to unwind instead of a deploy or a scale-in tearing down a half-finished run.
-This is the concrete adoption of
-[ADR-052](https://ivanball.github.io/docs/adr/052-background-job-execution.html) (bounded queue plus
-single-reader hosted drain), and it replaced an untracked fire-and-forget task the controller used to
-start.
+A multi-minute paid AI pass triggered from an HTTP POST used to be this chapter's biggest piece of
+machinery: a hosted `BackgroundService` draining an in-memory queue, plus a five-minute cron sweep that
+re-queued whatever a crash had cut in half. Both are gone from this assembly, and the registration comment
+says why in one line: the framework's internal-command processor owns the durability, the claim lease and
+the retry backoff now (`DependencyInjection.cs:48-53`,
+[ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html)). The organizer's
+POST schedules a `ScoreEventSessionsInternalCommand` through `IInternalCommandScheduler` and returns
+`202 Accepted`
+(`MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:36,116,125`), the row is
+persisted, and
+[`ScoreEventSessionsInternalCommandHandler`](group-18-conference-application.md#scoreeventsessionsinternalcommandhandler)
+in the Application layer runs the pass. Cross-replica exclusion did not disappear with the drain, it moved:
+the handler takes an [`IDistributedLock`](group-05-cqrs-pipeline.md#idistributedlock) claim on the event
+with a 15-minute time-to-live and a zero wait, so the loser of a duplicate trigger logs and succeeds
+instead of paying for the same pass twice
+(`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:14-21,53,60`).
+`[Rubric §29, Resilience & Business Continuity]` reads better for it: durability is one framework
+capability rather than a per-module queue plus a per-module sweep.
 
-The queue's dedup lives in one process's memory, and Conference runs at `maxReplicas: 2`
-(the `conferenceApp` container app at `MMCA.ADC/infra/main.bicep:1236`, scale rule at
-`MMCA.ADC/infra/main.bicep:1357`), so the queue alone never stopped two organizer triggers landing on
-different replicas from each running a full paid pass over the same sessions. The worker therefore takes
-a **cross-replica lock** before invoking the handler: it creates a per-item DI scope
-(`CreateAsyncScope`, `SessionScoringProcessor.cs:160`) because the drain itself is a singleton while the
-[`ScoreEventSessionsCommand`](group-18-conference-application.md#scoreeventsessionscommand) handler is
-scoped, resolves an [`IDistributedLock`](group-05-cqrs-pipeline.md#idistributedlock) from that scope
-(`:175`), and calls `TryAcquireAsync` on the key `scoring:inflight:{eventId}` with a 15-minute
-time-to-live and a zero wait (`:85`, `:92`, `:101-102`, `:177-179`). A losing replica logs and returns
-rather than queueing behind the winner (`:181-188`), because waiting would only mean paying for the same
-pass twice in a row. The handle is disposed by an `await using` around the whole run, so the lock comes
-back on success, on failure, and via its time-to-live even when the replica is killed mid-pass: the
-comment at `:162-174` records that this replaced a cache counter released in a `finally`, which left a
-killed replica's key stuck at 1 and locked the event out until an operator cleared it by hand, and it
-records the honest limit that a host with no Redis configured falls back to the in-process
-`IDistributedLock`, where exclusion is per replica again. Note the doc drift here: ADR-052 still
-describes dedup as per-replica and a distributed lock as the point at which this would need a real job
-system (`Website/docs-src/adr/052-background-job-execution.md:92-95`), but the lock is in the code today.
-
-Failure handling is decided once instead of per call site. A cancellation during shutdown logs and
-returns without requeuing (`SessionScoringProcessor.cs:115-123`); any other exception is caught under an
-explicit `CA1031` suppression whose comment states the rule, one failed run must not kill the drain
-(`:124-129`); the queue's dedup claim is released in a `finally` (`queue.MarkCompleted(item.EventId)`,
-`:130-136`) *before* any requeue, because the order matters (`MarkCompleted` would otherwise clear the
-claim a requeue had just re-taken). A thrown failure is retried by re-queuing the item with an incremented
-attempt up to `MaxAttempts = 3` (`:74`, `:143-147`), and the ceiling is low on purpose: scoring is paid,
-so retries exist to absorb a rate-limit blip, not to grind against an outage. A run that instead returns a
-[`Result`](group-01-result-error-handling.md#result) failure is deliberately **not** retried (`:196-205`):
-the handler answered, and a business refusal replayed twice more just costs money. When every attempt is
-exhausted the terminal path increments the `scoring.run.failed.terminal` counter tagged by event
-(`:96-99`, `:150`) on the `MMCA.ADC.Conference.Scoring` meter (`:59`), which the service host exports by
-registering that meter name (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:135`): that
-is `[Rubric §13, Observability & Operability]` closing the loop on work that no user is waiting for.
-
-The output cache is evicted **twice** per run, once up front so polling clients stop seeing stale scores
-and once after a successful pass (`SessionScoringProcessor.cs:158` and `:208`), and it evicts the narrow
-`conference:sessions` tag rather than the root `conference` tag. The comment above that constant records
-why in production terms (`:61-66`): evicting the root flushed events, speakers, rooms, categories, and
-questions too, so an organizer triggering a scoring run during the event emptied the whole public read
-surface onto the Basic-tier database while attendees were browsing. `[Rubric §12, Performance &
-Scalability]` and `[Rubric §31, Cost/FinOps]` both live in that one constant
+What this layer keeps is the one step the Application layer cannot take.
+[`OutputCacheSessionScoresCacheEvictor`](#outputcachesessionscorescacheevictor)
+(`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/OutputCacheSessionScoresCacheEvictor.cs:17`)
+implements the Application-owned port
+[`ISessionScoresCacheEvictor`](group-18-conference-application.md#isessionscorescacheevictor) over the
+host's `IOutputCacheStore`, because an internal command handled in Application cannot see ASP.NET's output
+cache (`DependencyInjection.cs:48-51`). Its whole body is one call, and the value is in *which tag* it
+evicts: the narrow `conference:sessions` rather than the root `conference` tag every Conference policy
+carries (`OutputCacheSessionScoresCacheEvictor.cs:20,23-24`). The remarks record the production reason
+(`:9-15`): scoring writes session scores and nothing else, and evicting the root flushed events, speakers,
+rooms, categories and questions too, so an organizer triggering a scoring run during the event emptied the
+whole public read surface onto the Basic-tier database twice while attendees were browsing. `[Rubric §12,
+Performance & Scalability]` and `[Rubric §31, Cost/FinOps]` both live in that one constant
 ([ADR-026](https://ivanball.github.io/docs/adr/026-caching-strategy.html),
 [ADR-040](https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html)).
 
-## The sweep that finishes what a crash interrupted
-
-The drain is fast but not durable: the channel lives in one replica's memory, so a deploy, a scale-in or
-a crash between the organizer's click and the last session's score leaves an event half scored with
-nothing anywhere that would pick it up again.
-[`SessionScoringSweepJob`](#sessionscoringsweepjob)
-(`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringSweepJob.cs:54`) is the backstop for exactly
-that. It is an [`IScheduledJob`](group-05-cqrs-pipeline.md#ischeduledjob) named
-`conference-session-scoring-sweep` with the cron expression `*/5 * * * *`
-(`SessionScoringSweepJob.cs:69`, `:77`), so the framework's recurring-job scheduler
-([ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html)) runs it every five
-minutes, once across the whole service rather than once per replica, under the persistent claim lease the
-outbox pattern established
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IScheduledJob.cs:16-20`). A host overrides
-the cadence through `Scheduler:Jobs:conference-session-scoring-sweep:Cron` without touching code
-(`SessionScoringSweepJob.cs:72-76`).
-
-There is no scoring-state column on `Event`, so the job derives the condition from the rows the scoring
-handler already writes. It projects every non-service session into
-[`SessionScoringCandidate`](#sessionscoringcandidate) (`SessionScoringSweepJob.cs:86-89`, `:208`) and
-every persisted score into [`SessionScoreStamp`](#sessionscorestamp) (`:98-100`, `:213`), collapses the
-stamps to the newest per session (`:118-132`), then groups the candidates by event (`:105-108`) and
-judges each one: an event is mid-pass exactly when **some but not all** of its scorable sessions carry a
-score (`:170-173`). Two bounds keep a wrong guess from spending money. An event with **zero** scores is
-never enqueued, because nobody asked for it and starting a pass the organizer did not request would bill
-every event in the database on the first tick. A partially scored event is enqueued only while its newest
-score is inside the 24-hour `RecoveryWindow` (`:66`, `:103`, `:175-179`), so a crash is recovered but a
-session the model will never score cannot re-trigger paid passes forever; past that the job logs that it
-is leaving the event alone and an organizer re-triggers by hand (`:195-202`). Beyond the enqueue the job
-is read-only, and the enqueue itself is safe to repeat because the queue's pending set refuses an event
-that is already queued or running, which the job records as the outcome on its log line (`:181-182`,
-`:185-193`). `[Rubric §29, Resilience & Business Continuity]` is the lens: the fast path stays in memory,
-and a slow, cheap, idempotent sweep notices what the fast path dropped.
-
-## DI wiring and a deliberate resilience override
+## DI wiring, and what it deliberately no longer registers
 
 [`DependencyInjection`](#dependencyinjection)
-(`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:13`) is a single
+(`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:15`) is a single
 `extension(IServiceCollection)` block (the codebase's standard DI-registration idiom, taught in the
-primer) exposing `AddModuleConferenceInfrastructure()` (`DependencyInjection.cs:20-57`). It registers
-both adapters as typed HTTP clients, the drain as a hosted service (`DependencyInjection.cs:46`), and the
-sweep as a scheduled job (`DependencyInjection.cs:54`). That last registration carries a nuance worth
-reading: the job is registered by the **module**, the way the framework's own audit-trail retention job
-is, and it only actually runs in a host that also calls `AddScheduledJobs` and turns the scheduler on,
-which `MMCA.ADC.Conference.Service` does
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:314`); anywhere else the registration
-is inert (`DependencyInjection.cs:48-53`). The Anthropic client gets a **custom resilience policy**: a
-5-minute `HttpClient.Timeout` and the `anthropic-version: 2023-06-01` header
-(`DependencyInjection.cs:31-33`), then `RemoveAllResilienceHandlers()` followed by a re-added
-`StandardResilienceHandler` with a 3-minute attempt timeout, a 7-minute circuit-breaker sampling window,
-a 5-minute total request timeout, and only **one** retry (`DependencyInjection.cs:35-42`). The inline
-comment explains why (`DependencyInjection.cs:26-27`): AI scoring of a large batch can take minutes,
-which would blow through Aspire's default 30s attempt and 90s total limits, and retrying an expensive LLM
-call aggressively is wasteful. This is a precise illustration of
-[ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html): every
-outbound client is resilient by default, but a client with genuinely different latency characteristics
-tunes the policy rather than disabling it. The Sessionize client takes the defaults unchanged.
+primer) exposing `AddModuleConferenceInfrastructure()` (`DependencyInjection.cs:23-56`). It is now short
+enough to read in one screen and registers exactly three things: the Sessionize typed `HttpClient` with
+its base address baked in (`:29-31`), which takes Aspire's standard resilience handler unchanged
+([ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html)); the scoring
+adapter, constructed by hand as a scoped `IAiScoringService` so it can be handed
+`GetService<IChatClient>()` and the static `SessionScoringContract` (`:43-46`); and the output-cache
+evictor as a scoped `ISessionScoresCacheEvictor` (`:53`). Both use `TryAdd`, so a host or a test can
+substitute either adapter before this call runs.
+
+The three registrations that are **absent** teach as much as the three that are present, and each left a
+comment behind. The provider error classifiers this module used to own (a unique-constraint detector and a
+concurrency-conflict detector) are framework surface now, registered by MMCA.Common's `AddInfrastructure`
+(`DependencyInjection.cs:25-28`). No `HttpClient` is constructed for Anthropic and there is no custom
+resilience override on it: the transport, the credential, the model, the output ceiling, the per-call
+timeout and the tool gate belong to the governed `IChatClient` configured under the `Ai` section and
+registered by the host's `AddMmcaChatClient` call (`:33-36`). And the hosted drain plus the five-minute
+crash-recovery sweep are gone entirely (`:48-52`). That is the shape of a healthy module wiring file:
+every line in it is something only this module can know.
 
 ## How it fits together at runtime
 
@@ -430,15 +402,16 @@ and captures domain events into the per-database outbox, all in one transaction.
 organizer triggers a Sessionize refresh; the Application use-case calls
 [`ISessionizeService`](group-18-conference-application.md#isessionizeservice), the typed `HttpClient`
 adapter makes the outbound call inside the default Polly pipeline, and the parsed `SessionizeResponse`
-flows back for mapping. **Scoring flow:** the organizer POSTs to the scoring endpoint, the controller
-only calls `TryEnqueue` and returns `202 Accepted` or `409 Conflict`
-(`MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:110-131`),
-[`SessionScoringProcessor`](#sessionscoringprocessor) picks the event up, evicts the sessions cache tag,
-claims the event's distributed lock, runs the scoped command handler which calls
-[`AnthropicScoringService`](#anthropicscoringservice) once per session under the tuned resilience policy,
-persists one `SessionAiScore` row per session behind the unique filtered index, and evicts the tag again;
-if that run dies mid-pass, [`SessionScoringSweepJob`](#sessionscoringsweepjob) notices the partial result
-within five minutes and puts the event back on the queue. The two marker types in this assembly,
+flows back for mapping. **Scoring flow:** the organizer POSTs to the scoring endpoint, the controller only
+schedules a `ScoreEventSessionsInternalCommand` and returns `202 Accepted`
+(`MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:116,125`), the framework's
+internal-command processor picks the persisted row up on one of the replicas, and the Application handler
+evicts the sessions cache tag through
+[`OutputCacheSessionScoresCacheEvictor`](#outputcachesessionscorescacheevictor), claims the event's
+distributed lock, calls [`AnthropicScoringService`](#anthropicscoringservice) once per session through the
+governed chat client, persists one `SessionAiScore` row per session behind the unique filtered index, and
+evicts the tag again; if that run dies mid-pass, the command row is still there and the processor replays
+it under its own backoff and attempt ceiling. The two marker types in this assembly,
 [`AssemblyReference`](#assemblyreference) and [`ClassReference`](#classreference)
 (`MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:5` and
 `MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:11`), exist purely so the module loader and the
@@ -471,31 +444,13 @@ type list, the same extension point every module assembly provides.
 
 ---
 
-### DependencyInjection
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:13` · Level 10 · class (static)
-
-- **What it is**: the DI wiring for Conference Infrastructure. It registers the two outbound HTTP integrations as typed clients, the AI scoring drain as a hosted service, and the scoring crash-recovery sweep as a scheduled job.
-- **Depends on**: first-party: [ISessionizeService](group-18-conference-application.md#isessionizeservice) with [SessionizeService](#sessionizeservice), [IAiScoringService](group-18-conference-application.md#iaiscoringservice) with [AnthropicScoringService](#anthropicscoringservice), [SessionScoringProcessor](#sessionscoringprocessor), [SessionScoringSweepJob](#sessionscoringsweepjob). External: `Microsoft.Extensions.DependencyInjection`, `Microsoft.Extensions.Http.Resilience` (Polly).
-- **Concept introduced, tuning a resilience pipeline instead of disabling it.** `[Rubric §29, Resilience & Business Continuity]` assesses [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html)'s rule that every outbound client carries a resilience handler. The Sessionize client (`:22-24`) is a plain `AddHttpClient<TInterface, TImplementation>` with only a base address, so it inherits the standard handler configured by the Aspire service defaults. The Anthropic client is the interesting case: an AI batch can run for minutes, far past the Aspire default of a 30 second attempt and 90 second total, so the code calls `RemoveAllResilienceHandlers()` (`:35`) and immediately re-adds `AddStandardResilienceHandler` with hand-tuned values (`:36-42`). Removing and re-adding, rather than leaving the client bare, is the pattern worth copying: the client is still retried, still circuit-broken, just on a timescale that matches the work. The inline comment (`:26-27`) records the reasoning at the call site.
-- **Walkthrough**: a single `extension(IServiceCollection services)` block (`:14`, the codebase's standard DI idiom, see the primer's [extension(T) note](00-primer.md#c-extensiont-types-read-this-once)) exposes `AddModuleConferenceInfrastructure()` (`:20`).
-  - **Sessionize** (`:22-24`): typed client with base address `https://sessionize.com/api/v2/`.
-  - **Anthropic** (`:28-42`): base address `https://api.anthropic.com/` (`:31`), the API-version header `anthropic-version: 2023-06-01` (`:32`), and `HttpClient.Timeout` of 5 minutes (`:33`); then the tuned pipeline, attempt timeout 3 minutes (`:38`), circuit-breaker sampling duration 7 minutes (`:39`), total request timeout 5 minutes (`:40`), and `MaxRetryAttempts = 1` (`:41`), a deliberate single retry for an expensive call.
-  - **Hosted service** (`:46`): `AddHostedService<SessionScoringProcessor>()`, with a comment (`:44-45`) noting the queue itself is registered by `AddModuleConferenceApplication`, so the producer lives in Application and only the consumer is wired here, and that host ownership is the point: shutdown cancels the work instead of a deploy killing an untracked task.
-  - **Scheduled job** (`:54`): `AddScheduledJob<SessionScoringSweepJob>()`. The comment above it (`:48-53`) is worth reading in full: the job is registered here rather than in the service host so the module carries its own job, the way `AddAuditTrail` carries the framework's retention job, and it only *runs* in a host that also calls `AddScheduledJobs` and turns the scheduler on (which `Conference.Service` does). Anywhere else the registration is inert.
-  - Returns `services` for chaining (`:56`).
-- **Why it's built this way**: typed clients centralize base URL, default headers and the Polly pipeline so the adapter classes stay thin (compare the 26-line [SessionizeService](#sessionizeservice)). Pinning `anthropic-version` at registration is a supply-chain choice, `[Rubric §32, Dependency & Supply-Chain]`: the API contract this code parses is version-pinned, so a vendor-side default change cannot silently reshape the response. Keeping the hosted service and the scheduled job in the module's own registration is `[Rubric §7, Microservices Readiness]`: extracting Conference into its own process moves its background work with it, because the work travels with the module rather than with a host.
-- **Where it's used**: called from the Conference module's registration chain (see [ConferenceModule](group-20-conference-api-grpc.md#conferencemodule)), which the module loader invokes in topological order.
-
----
-
 ### AiScoreResponse
 
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:508` · Level 0 · record (private sealed)
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:429` · Level 0 · record (private sealed)
 
 - **What it is**: the score object the language model is constrained to emit, deserialized from the response text block. Six weighted sub-scores, a penalty, and a free-text `reasoning` line.
 - **Depends on**: no first-party types. External: `System.Text.Json.Serialization.JsonPropertyName`.
-- **Concept introduced, anti-corruption serialization records at the edge.** This is a `private sealed record` nested inside [AnthropicScoringService](#anthropicscoringservice) (`AnthropicScoringService.cs:508`), so the vendor's snake_case vocabulary (`topic_relevance`, `actionable_takeaways`, `depth_or_insight_quality`) is named here and nowhere else. `[Rubric §3, Clean Architecture]` assesses whether external contracts stay out of inner layers: the Application layer only ever sees [SessionScoringResult](group-18-conference-application.md#sessionscoringresult), never an Anthropic shape. `[Rubric §32, Dependency & Supply-Chain]` assesses how a third-party API dependency is isolated: if Anthropic reshapes its envelope, only this one file changes.
+- **Concept introduced, anti-corruption serialization records at the edge.** This is a `private sealed record` nested inside [AnthropicScoringService](#anthropicscoringservice) (`AnthropicScoringService.cs:429`), so the vendor's snake_case vocabulary (`topic_relevance`, `actionable_takeaways`, `depth_or_insight_quality`) is named here and nowhere else. `[Rubric §3, Clean Architecture]` assesses whether external contracts stay out of inner layers: the Application layer only ever sees [SessionScoringResult](group-18-conference-application.md#sessionscoringresult), never an Anthropic shape. `[Rubric §32, Dependency & Supply-Chain]` assesses how a third-party API dependency is isolated: if Anthropic reshapes its envelope, only this one file changes.
 - **Walkthrough**: eight `init` properties (`:508-533`), each carrying an explicit `[JsonPropertyName]`. `Penalty` (`:511`) and the six criterion scores (`TopicRelevance` `:514`, `DescriptionQuality` `:517`, `Novelty` `:520`, `ActionableTakeaways` `:523`, `DepthOrInsightQuality` `:526`, `CredibilityExperience` `:529`) are **`decimal?`**, not `decimal`: nullability is what makes a *partial* model response detectable. `BuildResult` (`:131`) pattern-matches all seven numeric fields against `{ } value` patterns (`:134-146`) and returns a failed result if any one is missing, instead of silently defaulting a missing score to `0m` and then clamping it up to `1.0`. There is **no overall score on the wire**: the weighted total is computed in-process from the six criteria and the penalty subtracted from it (`:150-162`), so the model is never asked to do arithmetic the code can do exactly. `Reasoning` (`:532`) stays `string?` and is the only genuinely optional field, defaulted to `string.Empty` at `:169`.
 - **Why it's built this way**: nesting it as a private record of the one class that speaks HTTP keeps it an implementation detail; making the score fields nullable turns "the model returned four of six scores" into a detectable parse failure rather than a plausible-looking but wrong row in [SessionAiScore](group-17-conference-domain.md#sessionaiscore).
 - **Where it's used**: [AnthropicScoringService](#anthropicscoringservice)`.ParseSingleScore` (`:116`) deserializes into it, and `BuildResult` (`:131`) converts it into a [SessionScoringResult](group-18-conference-application.md#sessionscoringresult).
@@ -504,242 +459,76 @@ type list, the same extension point every module assembly provides.
 
 `[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
 
-### AnthropicContentBlock
+### OutputCacheSessionScoresCacheEvictor
 
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:497` · Level 0 · record (private sealed)
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/OutputCacheSessionScoresCacheEvictor.cs:17` · Level 1 · class (sealed)
 
-- **What it is**: one element of the Messages API response `content` array: a `type` discriminator plus its `text`.
-- **Depends on**: no first-party types. External: `System.Text.Json.Serialization`.
-- **Concept**: same private wire-record pattern taught under [AiScoreResponse](#aiscoreresponse); nothing new.
-- **Walkthrough**: two properties, `Type` (`:500`) and `Text` (`:503`), both `string?`. They are nullable because the adapter must be able to deserialize a block it does not understand without throwing: [AnthropicScoringService](#anthropicscoringservice)`.InterpretResponse` scans the list with `Find(c => string.Equals(c.Type, "text", StringComparison.OrdinalIgnoreCase))` (`:105-106`) and treats a null `Text` as a logged failure (`:108-111`) rather than as an exception.
-- **Why it's built this way**: the Messages API returns an array of typed blocks, so the adapter selects the text block by discriminator instead of assuming index 0.
-- **Where it's used**: composed into [AnthropicResponse](#anthropicresponse)`.Content` (`:479`).
-
----
-
-`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
-
-### AnthropicJsonSchemaFormat
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:458` · Level 0 · record (private sealed)
-
-- **What it is**: the request fragment that names the output format as `json_schema` and carries the JSON Schema the model's answer must satisfy.
-- **Depends on**: no first-party types. External: `System.Text.Json.Serialization`, `System.Text.Json.JsonElement`.
-- **Concept introduced, constraining a model instead of parsing after it.** The alternative to a schema is asking politely in the prompt and then defending the parse: slice from the first `{` to the last `}`, strip code fences, hope the model did not add a preamble. Sending a schema moves the guarantee to the provider, which is why `ParseSingleScore` can now deserialize the whole text block directly and treat anything else as a failed call (`:118-119`). `[Rubric §16, AI-Native Application Architecture]` assesses whether model output is constrained and validated rather than trusted: this record is the constraint half, and [AiScoreResponse](#aiscoreresponse)'s all-or-nothing pattern match is the validation half that still runs anyway.
-- **Walkthrough**: two properties. `Type` (`:461`) is a plain `string` **defaulted** to `"json_schema"` rather than `required`, because there is exactly one legal value and forcing every construction site to repeat it would add a way to get it wrong. `Schema` (`:464`) is a `required JsonElement`, bound at the single call site to the static `ScoreSchema` (`:63`), which `BuildScoreSchema` (`:394-425`) serializes once into a `JsonElement` held in a `static readonly` field (`:392`) so the schema is built one time per process, not per call.
-- **Why it's built this way**: `BuildScoreSchema` derives the schema from the same six criterion names the weighting uses, sets `additionalProperties = false`, marks all eight fields `required`, and pins `penalty` to the enum `0`, `0.5`, `1` (`:412-421`), so the score band and the penalty ladder are enforced by the provider rather than discovered during parsing.
-- **Where it's used**: the `Format` property of [AnthropicOutputConfig](#anthropicoutputconfig) (`:455`), constructed inline in `ScoreSessionAsync` (`:63`).
-
----
-
-### AnthropicMessage
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:467` · Level 0 · record (private sealed)
-
-- **What it is**: one conversation turn in the request: a `role` and its `content`.
-- **Depends on**: no first-party types. External: `System.Text.Json.Serialization`.
-- **Concept**: cross-reference the private wire-record concept under [AiScoreResponse](#aiscoreresponse).
-- **Walkthrough**: `required string Role` (`:470`) and `required string Content` (`:473`). Both are `required`, the mirror image of the response records' nullability: the adapter controls what it sends, so a half-built message is a compile error, while what comes back must be parsed defensively. Exactly one instance is ever constructed, with `Role = "user"` and the assembled user prompt as `Content` (`:60`). The stable reviewer brief does **not** ride in this message: it goes in the request's top-level `system` field (`:59`), so only speaker-submitted data is ever carried by a user turn.
-- **Why it's built this way**: `required` plus `init` gives an immutable payload validated at construction (see the primer on `required`/`init` immutability).
-- **Where it's used**: the `Messages` list of [AnthropicRequest](#anthropicrequest) (`:446`).
-
----
-
-`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
-
-### AnthropicUsage
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:488` · Level 0 · record (private sealed)
-
-- **What it is**: the billed token counts the Messages API reports for one call: input tokens and output tokens.
-- **Depends on**: no first-party types. External: `System.Text.Json.Serialization`.
-- **Concept introduced, reading the invoice off the response.** Every scoring call is paid work, and the only place the actual cost of a call is knowable is the reply itself. `[Rubric §31, Cost/FinOps]` assesses whether spend is measured rather than estimated: capturing this block is what lets [ScoringInstruments](#scoringinstruments) publish real token counters instead of a per-call count multiplied by a guess.
-- **Walkthrough**: two `int` properties, `InputTokens` (`:491`) and `OutputTokens` (`:494`), mapped from `input_tokens` and `output_tokens`. Neither is `required` and neither is nullable: a missing block leaves the whole `Usage` property null on [AnthropicResponse](#anthropicresponse) (`:485`), which is the case the caller actually tests (`if (apiResponse?.Usage is { } usage)`, `:92`), so there is nothing for a per-property null to add.
-- **Why it's built this way**: usage is recorded **before** the refusal and empty-text guards run (`:92-96`, ahead of `:98`), because a refused or unusable answer is still a billed call and leaving it out of the counters would understate spend exactly when something is going wrong.
-- **Where it's used**: the `Usage` property of [AnthropicResponse](#anthropicresponse) (`:485`); consumed in `InterpretResponse` (`:90`), which logs the pair (`:94`) and forwards it to [ScoringInstruments](#scoringinstruments)`.RecordUsage` (`:95`).
-
----
-
-`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
-
-### SessionScoreStamp
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringSweepJob.cs:213` · Level 0 · record (internal sealed)
-
-- **What it is**: one persisted AI score reduced to the only two fields the crash-recovery sweep reasons about: which session it belongs to, and when it was written.
-- **Depends on**: first-party: the `SessionIdentifierType` alias (see the primer on identifier-type aliases). External: the BCL `DateTime`.
-- **Concept introduced, the projection record as a query bound.** `[Rubric §12, Performance & Scalability]` assesses whether reads pull only what they need. [SessionScoringSweepJob](#sessionscoringsweepjob) runs every five minutes and needs the score rows of every event, so materializing full [SessionAiScore](group-17-conference-domain.md#sessionaiscore) entities (seven decimals plus reasoning text plus audit columns) would move an order of magnitude more data than the decision needs. The read repository's `GetProjectedAsync` takes this record's constructor as its `select` expression (`SessionScoringSweepJob.cs:98-100`), so the projection is pushed into the query and only the two columns come back.
-- **Walkthrough**: a positional `internal sealed record class` with two parameters, `SessionId` and `CreatedOn` (`:213`). `CreatedOn` is the framework audit stamp described in the primer, not a scoring-specific column, which is what lets the sweep date a score without any extra schema.
-- **Why it's built this way**: `internal` because nothing outside this assembly has a reason to name it, and positional because it is a tuple with names rather than a modelled concept.
-- **Where it's used**: [SessionScoringSweepJob](#sessionscoringsweepjob)`.ExecuteAsync` projects into it (`:99`) and `NewestScorePerSession` (`:118-132`) collapses the resulting list to one timestamp per session.
-
----
-
-### SessionScoringCandidate
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringSweepJob.cs:208` · Level 0 · record (internal sealed)
-
-- **What it is**: one scorable session paired with the event that owns it, as read by the crash-recovery sweep.
-- **Depends on**: first-party: the `EventIdentifierType` and `SessionIdentifierType` aliases. External: none.
-- **Concept**: the same projection-record bound taught under [SessionScoreStamp](#sessionscorestamp).
-- **Walkthrough**: a positional `internal sealed record class` carrying `EventId` and `SessionId` (`:208`). The sweep selects into it under a `where` clause of `!session.IsServiceSession` (`:86-89`), so service sessions (breaks, lunch, keynote logistics) never enter the population. The comment at `:84-85` records why that filter has to match the scoring handler exactly: counting a session the handler will never score would make its event look permanently unfinished.
-- **Why it's built this way**: grouping by `EventId` (`:105`) is the whole algorithm, so the projection carries the grouping key rather than forcing a second query or a navigation load.
-- **Where it's used**: [SessionScoringSweepJob](#sessionscoringsweepjob)`.ExecuteAsync` (`:86-89`, `:105-108`) and `EnqueueIfInterrupted` (`:142-183`).
-
----
-
-`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
-
-### AnthropicOutputConfig
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:452` · Level 1 · record (private sealed)
-
-- **What it is**: the `output_config` node of the request body, a one-property wrapper around the output format.
-- **Depends on**: first-party: [AnthropicJsonSchemaFormat](#anthropicjsonschemaformat) (composed). External: `System.Text.Json.Serialization`.
-- **Concept**: cross-reference the private wire-record concept under [AiScoreResponse](#aiscoreresponse); this is the nesting layer the API's shape requires, nothing more.
-- **Walkthrough**: one property, `required AnthropicJsonSchemaFormat Format` (`:455`), mapped to `format`. It is `required`, in line with every other outbound property: the adapter never sends a request without an output format, so an unconfigured one is a compile error rather than an unconstrained model call.
-- **Why it's built this way**: modelling the wrapper as its own record instead of flattening it keeps the C# shape and the JSON shape in one-to-one correspondence, so a reader comparing this file against the vendor's request documentation does not have to hold a mental mapping.
-- **Where it's used**: the `OutputConfig` property of [AnthropicRequest](#anthropicrequest) (`:449`), constructed inline in `ScoreSessionAsync` (`:61-64`).
-
----
-
-`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
-
-### AnthropicResponse
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:476` · Level 1 · record (private sealed)
-
-- **What it is**: the deserialized reply envelope: the content blocks, why the model stopped, and what the call cost.
-- **Depends on**: first-party: [AnthropicContentBlock](#anthropiccontentblock) and [AnthropicUsage](#anthropicusage) (composed). External: `System.Text.Json.Serialization`.
-- **Concept**: cross-reference [AiScoreResponse](#aiscoreresponse).
-- **Walkthrough**: three properties, all nullable. `List<AnthropicContentBlock>? Content` (`:479`) is nullable end to end (`apiResponse?.Content?.Find(...)`, `:105`) so an empty or malformed body deserializes to something the adapter can test instead of throwing. `StopReason` (`:482`) carries the vendor's termination code and is compared ordinally against `"refusal"` (`:98`): a model that declines the request is a distinct, logged failure rather than an empty-text one, which matters because a refusal is the expected outcome when a submission tries to steer the reviewer. `Usage` (`:485`) is the billing block, read first (`:92-96`) so even a refused call is counted.
-- **Why it's built this way**: the "we control the request, we distrust the response" asymmetry, expressed in the type system: `required` on the way out, nullable on the way back.
-- **Where it's used**: deserialized in [AnthropicScoringService](#anthropicscoringservice)`.ScoreSessionAsync` (`:79`) and interpreted by its `InterpretResponse` (`:90`).
-
----
-
-`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
-
-### AnthropicRequest
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:434` · Level 2 · record (private sealed)
-
-- **What it is**: the POST body for the Anthropic Messages endpoint: which model, how many output tokens are allowed, the standing system brief, the message list, and the output-format constraint.
-- **Depends on**: first-party: [AnthropicMessage](#anthropicmessage) and [AnthropicOutputConfig](#anthropicoutputconfig) (composed). External: `System.Text.Json.Serialization`.
-- **Concept**: the composite half of the private envelope set introduced under [AiScoreResponse](#aiscoreresponse).
-- **Walkthrough**: five `required` properties (`:434-450`): `Model` (`model`, `:437`), `MaxTokens` (`max_tokens`, `:440`), `System` (`system`, `:443`), `List<AnthropicMessage> Messages` (`messages`, `:446`) and `AnthropicOutputConfig OutputConfig` (`output_config`, `:449`). At the one call site (`:55-65`) `Model` is bound to `ModelId` (`:26`) and `MaxTokens` to **256**: the scorer asks for a small JSON object, so a low output cap bounds both latency and per-call cost. `[Rubric §12, Performance & Scalability]` assesses whether expensive calls carry explicit bounds; this is one of two such bounds in the flow, the other being the tuned timeouts in [DependencyInjection](#dependencyinjection). The `System` property is the structural half of the injection defence: the standing reviewer brief travels in a field the API treats as system instruction, and the speaker-submitted text travels in a user turn, so the two are never concatenated into one string.
-- **Why it's built this way**: `required` on all five makes an incomplete request unrepresentable, and serializing through a typed record (rather than an anonymous object) keeps the property names under `[JsonPropertyName]` control.
-- **Where it's used**: [AnthropicScoringService](#anthropicscoringservice)`.ScoreSessionAsync` (`:55-65`), handed to `JsonContent.Create` (`:69`).
-
----
-
-`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
-
-### SessionScoringProcessor
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringProcessor.cs:49` · Level 3 · class (sealed partial)
-
-- **What it is**: the hosted background worker that drains [SessionScoringQueue](group-18-conference-application.md#sessionscoringqueue) and runs each queued AI scoring pass off the request path, under the host's stopping token and under a cross-replica lock.
-- **Depends on**: first-party: [SessionScoringQueue](group-18-conference-application.md#sessionscoringqueue), [SessionScoringWorkItem](group-18-conference-application.md#sessionscoringworkitem), [ScoreEventSessionsCommand](group-18-conference-application.md#scoreeventsessionscommand), [ScoreEventSessionsResultDTO](group-17-conference-domain.md#scoreeventsessionsresultdto), [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult), [IDistributedLock](group-05-cqrs-pipeline.md#idistributedlock), [Result](group-01-result-error-handling.md#result). External: `BackgroundService`, `IServiceScopeFactory`, `IOutputCacheStore`, `ILogger<T>`, `System.Diagnostics.Metrics`.
-- **Concept introduced, replacing fire-and-forget with a host-owned single reader plus a cross-replica lock.** A `BackgroundService` differs from a detached `Task.Run` in one decisive way: the host knows about it, so shutdown cancels the token and waits for the loop to unwind instead of tearing down a half-finished pass with nothing recorded (`:18-24`). One reader matches the queue's `SingleReader = true` (`SessionScoringQueue.cs:47`), so runs are serialized inside a process. The XML doc is explicit that this is only half the story (`:25-34`): serialization is **per process**, and Conference runs with `maxReplicas: 2`, so two organizer triggers landing on different replicas would each pay for a full pass over the same sessions and race each other's writes. The answer is an [IDistributedLock](group-05-cqrs-pipeline.md#idistributedlock) claim taken inside `ScoreAsync`. `[Rubric §7, Microservices Readiness]` assesses whether background work survives horizontal scale-out: the in-process channel alone does not, and the distributed lock is what makes the worker replica-safe. `[Rubric §12, Performance & Scalability]` assesses keeping slow work off the request path: the caller enqueues and returns instead of awaiting a multi-minute batch. `[Rubric §13, Observability & Operability]` assesses whether long-running work reports outcomes: six `[LoggerMessage]` methods cover completed, rejected, terminally failed, retrying, interrupted and not-claimed (`:211-227`), and a `Counter<long>` named `scoring.run.failed.terminal` (`:96-99`) makes abandoned runs alertable. `[Rubric §31, Cost/FinOps]` genuinely applies: every guard in this class exists because a duplicate pass is a duplicate invoice.
-- **Walkthrough**
-  - The **primary constructor** (`:49-53`) injects the queue, an `IServiceScopeFactory`, an `IOutputCacheStore` and a logger; the XML param docs (`:45-48`) state each role.
-  - `MeterName` (`:59`) is `"MMCA.ADC.Conference.Scoring"`, public so a host can register the meter for export (the doc names `MMCA.ADC.Conference.Service` as the host that does, `:56-57`). `TerminalFailureCounter` (`:96-99`) is created from it and tagged by `event_id` (`:77`, `:150`).
-  - `SessionsCacheTag` (`:66`) is `"conference:sessions"`. The comment above it (`:61-65`) records an incident-shaped rationale: evicting the root `conference` tag flushed events, speakers, rooms, categories and questions too, so an organizer starting a scoring run during the event emptied the whole public read surface onto the Basic-tier database while attendees were browsing. Scoring writes session scores, so it evicts only the sessions tag.
-  - `MaxAttempts = 3` (`:74`) bounds retries, and the doc explains the ceiling is deliberately low because scoring is paid work: retries exist to absorb a transient fault, not to grind against a genuine outage. `ClaimTimeToLive` is 15 minutes (`:85`) and `ClaimWait` is `TimeSpan.Zero` (`:92`), a single non-blocking attempt at the lock, because the loser is a duplicate trigger and waiting for it would only mean paying for the same pass twice in a row. `ClaimKey` formats `scoring:inflight:{eventId}` under `InvariantCulture` (`:101-102`).
-  - `ExecuteAsync` (`:105`) is one `await foreach` over `queue.Reader.ReadAllAsync(stoppingToken)` (`:107`). Cancellation during host shutdown logs an interruption and **returns** (`:115-123`), with a comment stating the item is deliberately never re-queued because it would be lost with the process anyway. Any other exception is captured into a local `failure` under a scoped `CA1031` suppression justified inline ("one failed run must not kill the drain", `:124-129`).
-  - The `finally` calls `queue.MarkCompleted(item.EventId)` (`:130-136`), and the comment there is the subtle part: the local claim must be released **before** any re-queue, because `MarkCompleted` would otherwise clear the very claim `TryRequeue` just took, leaving the event queued but not marked pending, so a concurrent trigger could start a second pass over it.
-  - The retry decision (`:138-150`): no failure means continue; otherwise, if the attempt count is under `MaxAttempts` **and** `queue.TryRequeue(item.EventId, item.Attempt + 1)` succeeds, log a warning and continue. A full queue makes the retry impossible, so it collapses into the terminal path (`:141-142`) rather than being silently dropped: `LogRunFailed` plus a counter increment.
-  - `ScoreAsync` (`:154`) evicts the sessions cache tag **before** the run (`:158`) so a client polling the dashboard stops seeing stale scores while work is in flight, creates an async DI scope (`:160`, needed because the command handler and its `DbContext` are scoped while this service is a singleton), resolves the `IDistributedLock` from that scope (`:175`) and takes the claim with `await using` (`:177-179`). A null claim means another replica owns the pass, which is logged and returned from without releasing anything (`:181-188`).
-  - With the claim held it resolves `ICommandHandler<ScoreEventSessionsCommand, Result<ScoreEventSessionsResultDTO>>` (`:190-191`) and invokes it (`:193-194`). A `Result` failure is handled as data and **not** retried: the comment (`:198-202`) draws the line precisely, a `Result` failure is a business outcome (nothing to score, the event is not in a scorable state, validation refused the command) and replaying it would only pay for the same refusal twice more, while a thrown exception is what a transient fault looks like from here. Success logs scored and failed counts (`:207`) and evicts the tag again (`:208`) so clients see the new scores.
-- **Why it's built this way**: resolving the handler through a scope keeps the CQRS decorator pipeline (logging, caching, transactional) intact for background work, so a queued run behaves exactly like a request-driven command. The lock replaced an earlier cache-counter approach, and the comment at `:166-174` says why: a counter released in a `finally` left the key stuck at 1 when a replica was killed between the increment and the release, locking the event out until an operator cleared it by hand, whereas a lock handle releases on every exit path and its time-to-live releases it for a replica that never reaches one.
-- **Where it's used**: registered by [DependencyInjection](#dependencyinjection) with `services.AddHostedService<SessionScoringProcessor>()` (`DependencyInjection.cs:47`); the producing side is the Conference endpoint that calls `TryEnqueue` on [ISessionScoringQueue](group-18-conference-application.md#isessionscoringqueue), and [SessionScoringSweepJob](#sessionscoringsweepjob) is the second producer, re-enqueuing interrupted passes.
-- **Caveats / not-in-source**: the class states one honest limit in its own comments (`:172-174`): a host with no Redis configured gets the in-process `IDistributedLock` fallback, where exclusion is per replica again. Whether a given environment has Redis configured is not determinable from this file.
-
----
-
-`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
-
-### ScoringInstruments
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:326` · Level 4 · class (private sealed)
-
-- **What it is**: the two token counters the scoring adapter publishes, wrapped in a small class that owns their creation and their tags.
-- **Depends on**: first-party: [SessionScoringProcessor](#sessionscoringprocessor) (for its `MeterName` constant). External: `System.Diagnostics.Metrics.IMeterFactory`, `Meter`, `Counter<long>`.
-- **Concept introduced, turning a paid dependency into a metered one.** A log line per call tells you what one session cost after you go looking; a counter tells you what the month is costing while it happens. `[Rubric §31, Cost/FinOps]` assesses whether spend is observable and alertable rather than reconstructed from an invoice: the comment above the field that holds this class (`:381-386`) states the split plainly, the existing usage log stays as per-session forensics and these counters are the aggregate a budget alert queries. `[Rubric §13, Observability & Operability]` assesses instrument hygiene: units and descriptions are supplied on both counters (`:343-346`, `:348-351`), and the tag names are constants (`:328-329`) rather than repeated literals, so a typo cannot silently split one series into two.
-- **Walkthrough**
-  - The constructor (`:334`) takes the `IMeterFactory` and creates its meter from `SessionScoringProcessor.MeterName` (`:340`), deliberately **reusing** the meter name the background worker already exports rather than minting a second one: a host that wires up one instrument family gets all of them with no extra registration.
-  - That line carries a scoped `CA2000` suppression with an inline justification (`:339`, `:341`): the factory caches the meter and disposes it with the container, so disposing it here would tear down a meter other holders are still recording through. This is the rare case where suppressing the analyzer is the correct answer, and the comment (`:336-338`) is what makes that auditable.
-  - `_inputTokens` and `_outputTokens` are `Counter<long>` (`:331-332`), named `scoring.tokens.input` and `scoring.tokens.output` with unit `{token}`.
-  - `RecordUsage` (`:354`) builds two `KeyValuePair<string, object?>` tags, `model` and `prompt_version` (`:356-357`), and adds both counts under them (`:359-360`). Those two dimensions are chosen because they are exactly what moves spend: a model swap changes the per-token price, a prompt revision changes the token count.
-- **Why it's built this way**: holding the counters in a `private sealed` helper rather than as two fields on the adapter keeps meter creation, tag names and the suppression in one place, and lets the adapter own a single readonly field initialized from the injected factory (`:387`). Because the adapter is registered as a typed `HttpClient` service, the factory is injected through its primary constructor and the instrument set is created once per adapter instance.
-- **Where it's used**: instantiated by [AnthropicScoringService](#anthropicscoringservice) into its `_instruments` field (`:387`) and called from `InterpretResponse` when the response carries an [AnthropicUsage](#anthropicusage) block (`:95`).
-
----
-
-`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
-
-### SessionizeService
-
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Events.Sessionize` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Events/Sessionize/SessionizeService.cs:10` · Level 4 · class (sealed)
-
-- **What it is**: the HTTP implementation of [ISessionizeService](group-18-conference-application.md#isessionizeservice). It calls the Sessionize "View All" endpoint, which returns every session, speaker, room and category for a conference in one document.
-- **Depends on**: first-party: [ISessionizeService](group-18-conference-application.md#isessionizeservice) (implements), [SessionizeResponse](group-18-conference-application.md#sessionizeresponse) (return shape). External: `HttpClient`, `System.Net.Http.Json`.
-- **Concept**: `[Rubric §2, Design Patterns]` and `[Rubric §1, SOLID]` (dependency inversion) assess whether the application depends on an abstraction it owns: the Application layer declares the port, Infrastructure supplies the adapter, and no Application file references `HttpClient`. The whole class is 26 lines because everything configurable (base address, resilience) lives on the typed-client registration in [DependencyInjection](#dependencyinjection).
-- **Walkthrough**: a primary constructor takes `HttpClient` (`:10`). `GetAllAsync` builds the relative URI `{sessionizeCode}/view/All` (`:15`), GETs it (`:16-18`), calls `EnsureSuccessStatusCode()` (`:20`), and deserializes to `SessionizeResponse?` (`:22-24`). Both awaits use `.ConfigureAwait(false)`, the repo-wide library rule from [ADR-049](https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html).
-- **Why it's built this way**: keeping parsing, mapping and the import workflow in Application use-cases leaves this adapter owning only the wire call, which is what makes it trivially fakeable in tests.
-- **Caveat, error handling differs from the AI adapter.** `EnsureSuccessStatusCode()` throws `HttpRequestException` on any non-2xx, and that exception **propagates** out of the class, the opposite of [AnthropicScoringService](#anthropicscoringservice)'s never-throw contract. The difference follows the shape of the work: a Sessionize sync is one explicit organizer action where a failure should surface as an error, while AI scoring is a per-item batch where one item's failure must not stop the rest. The return type is also nullable, so a 2xx with an empty body yields `null` rather than an exception.
-- **Where it's used**: the Sessionize import handlers in [Conference Application](group-18-conference-application.md), triggered when an organizer refreshes an event's data.
+- **What it is**: the Infrastructure adapter for [ISessionScoresCacheEvictor](group-18-conference-application.md#isessionscorescacheevictor), evicting the output-cache tag that fronts session score reads after a scoring pass writes fresh scores.
+- **Depends on**: first-party: [ISessionScoresCacheEvictor](group-18-conference-application.md#isessionscorescacheevictor) (implements). External: `Microsoft.AspNetCore.OutputCaching.IOutputCacheStore`.
+- **Concept**: the same dependency-inversion shape taught under [AnthropicScoringService](#anthropicscoringservice) and [SessionizeService](#sessionizeservice): Application declares the port, Infrastructure supplies the concrete ASP.NET Core dependency. The DI registration comment (`DependencyInjection.cs:48-52`) is explicit about why the port exists at all: the internal-command handler that runs a scoring pass lives in the Application layer, which cannot see `IOutputCacheStore` directly.
+- **Walkthrough**: a primary constructor injects `IOutputCacheStore` (`:17`). `SessionsCacheTag` (`:20`) is the private constant `"conference:sessions"`, the tag Conference's session-read output-cache policies are registered under. `EvictAsync` (`:23-24`) is a one-line expression body that calls `outputCacheStore.EvictByTagAsync(SessionsCacheTag, cancellationToken)` and returns the `ValueTask` directly, no `await` needed.
+- **Why it's built this way**: a single-method adapter keeps the output-cache API entirely out of Application, matching the boundary every other Infrastructure adapter in this chapter draws.
+- **Where it's used**: registered by [DependencyInjection](#dependencyinjection) (`services.TryAddScoped<ISessionScoresCacheEvictor, OutputCacheSessionScoresCacheEvictor>()`); called by the scoring pass's internal-command handler once a batch has written new `SessionAiScore` rows, so a cached session-score read never outlives the scores it summarizes. Exercised directly by `OutputCacheSessionScoresCacheEvictorTests`.
 
 ---
 
 ### AnthropicScoringService
 
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:19` · Level 5 · class (sealed partial)
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:30` · Level 3 · class (sealed partial)
 
-- **What it is**: the adapter that implements [IAiScoringService](group-18-conference-application.md#iaiscoringservice) by calling the Anthropic Claude Messages API (model `claude-haiku-4-5`, `:26`) to score one session proposal against a Program Committee rubric. Its XML doc states the contract plainly (`:14-18`): it never throws for scoring failures, but `OperationCanceledException` propagates. The governance around it (prompt versioning, the golden evaluation suite, the injection posture) is recorded in [ADR-111](https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html).
-- **Depends on**: first-party: [IAiScoringService](group-18-conference-application.md#iaiscoringservice) (implements), [SessionScoringInput](group-18-conference-application.md#sessionscoringinput), [SessionScoringResult](group-18-conference-application.md#sessionscoringresult), [SpeakerInfo](group-18-conference-application.md#speakerinfo), [SessionScoringProcessor](#sessionscoringprocessor) (for the shared meter name), and its own private types [AnthropicRequest](#anthropicrequest), [AnthropicOutputConfig](#anthropicoutputconfig), [AnthropicJsonSchemaFormat](#anthropicjsonschemaformat), [AnthropicMessage](#anthropicmessage), [AnthropicResponse](#anthropicresponse), [AnthropicContentBlock](#anthropiccontentblock), [AnthropicUsage](#anthropicusage), [AiScoreResponse](#aiscoreresponse), [ScoringInstruments](#scoringinstruments). External: `HttpClient`, `IConfiguration`, `IMeterFactory`, `ILogger<T>`, `System.Text.Json`, `System.Text.RegularExpressions`, `System.Globalization`.
-- **Concept introduced, the adapter that keeps an HTTP/LLM vendor at the edge.** `[Rubric §3, Clean Architecture]` and `[Rubric §1, SOLID]` (dependency inversion) assess whether inner layers depend on abstractions rather than vendors: every byte of Anthropic-specific HTTP and JSON lives in this one Infrastructure file, behind an Application-owned port. `[Rubric §11, Security]` assesses secret handling and untrusted input: the key is read from configuration (`Anthropic:ApiKey`, `:44`) and passed as the `x-api-key` header (`:68`), never hard-coded, and the failure log for a missing key names the configuration path, not a value (`:47`); speaker-submitted text is escaped, delimited and redacted before it leaves the process (below). `[Rubric §16, AI-Native Application Architecture]` assesses whether model interaction is versioned, constrained and evaluable: `PromptVersion` (`:37`), the structured-output schema (`:392-425`) and the prompt-injection brief (`:204-217`) are the three pieces. `[Rubric §13, Observability & Operability]` assesses structured, allocation-cheap logging: both log paths are source-generated `[LoggerMessage]` methods (`:427-431`), which is also why the class is `partial`, and token usage additionally lands on counters through [ScoringInstruments](#scoringinstruments). `[Rubric §29, Resilience & Business Continuity]` assesses graceful degradation: six distinct failure paths (missing key `:45-49`, non-2xx `:72-77`, model refusal `:98-102`, empty or absent text block `:108-111`, unparseable or partial JSON `:126-128` and `:134-146`, any other exception `:83-87`) all converge on `FailedResult`, so one bad proposal cannot abort a batch. `[Rubric §27, i18n]` assesses culture-correctness: `CultureInfo.InvariantCulture` is used for every interpolated string that reaches the prompt or the log (`:75`, `:235-236`, `:257-261`), so output never varies with server locale.
+- **What it is**: the adapter that implements [IAiScoringService](group-18-conference-application.md#iaiscoringservice) by scoring one session proposal against a Program Committee rubric through the framework's governed `IChatClient` (`MMCA.Common.AI`, `:14`), rather than by calling the Anthropic HTTP API directly. Its XML doc states the contract plainly (`:19-20`): it never throws for scoring failures, but `OperationCanceledException` propagates. The governance around it (prompt versioning, the golden evaluation suite, the injection posture) is recorded in [ADR-111](https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html); the boundary that put the chat client itself behind a framework port is [ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
+- **Depends on**: first-party: [IAiScoringService](group-18-conference-application.md#iaiscoringservice) (implements), [SessionScoringInput](group-18-conference-application.md#sessionscoringinput), [SessionScoringResult](group-18-conference-application.md#sessionscoringresult), [SpeakerInfo](group-18-conference-application.md#speakerinfo), [PromptContract](group-27-common-ai-integration.md#promptcontract) (constructor parameter and the source of `ModelId`/`PromptVersion`), and its own private nested [AiScoreResponse](#aiscoreresponse). External: `Microsoft.Extensions.AI` (`IChatClient`, `ChatMessage`, `ChatResponse`, `ChatFinishReason`, `ChatResponseFormat`), `ILogger<T>`, `System.Text.Json`, `System.Text.RegularExpressions`, `System.Globalization`.
+- **Concept introduced, the adapter that keeps an HTTP/LLM vendor at the edge, now one level further removed.** `[Rubric §3, Clean Architecture]` and `[Rubric §1, SOLID]` (dependency inversion) assess whether inner layers depend on abstractions rather than vendors: this class no longer constructs an `HttpClient` or reads an `Anthropic:ApiKey` setting at all, it depends on `IChatClient`, the framework's own port over the vendor. `[Rubric §11, Security]` assesses secret handling and untrusted input: the credential, transport and vendor identity are the framework's concern behind `IChatClient`; this class's own security surface is the constructor's nullable `chatClient` (`:31`, `null` when `Ai:Enabled` is false or no key reached configuration, XML doc `:22-27`) and the untrusted-text handling below (escaping, delimiting, redaction). `[Rubric §16, AI-Native Application Architecture]` assesses whether model interaction is versioned, constrained and evaluable: `PromptVersion` (`:68`), the structured-output schema (`:388-419`) and the prompt-injection brief (`:261-268`) are the three pieces, and the [PromptContract](group-27-common-ai-integration.md#promptcontract) itself now carries the hash the evaluation gate pins. `[Rubric §13, Observability & Operability]` assesses structured, allocation-cheap logging: both log paths are source-generated `[LoggerMessage]` methods (`:421-425`), which is also why the class is `partial`; per-call token usage is still logged here (`:121-124`) but the spend **aggregate** now lands on the framework's `MMCA.Common.AI` meter through its `UsageRecordingChatClient`, tagged model/prompt_name/prompt_version/provider (comment `:118-120`). `[Rubric §29, Resilience & Business Continuity]` assesses graceful degradation: five distinct failure paths (disabled client `:86-90`, model refusal `:126-130`, empty response text `:132-137`, unparseable or partial JSON `:164-166` and `:174-186`, any other exception `:109-113`) all converge on `FailedResult`, so one bad proposal cannot abort a batch. `[Rubric §27, i18n]` assesses culture-correctness: `CultureInfo.InvariantCulture` is used for every interpolated string that reaches the prompt (`:279`, `:301`, `:303`, `:305`), so output never varies with server locale.
 - **Walkthrough**
-  - A **primary constructor** injects `HttpClient`, `IConfiguration`, `IMeterFactory` and `ILogger<AnthropicScoringService>` (`:19-23`). The base address, the `anthropic-version` header and the resilience pipeline are not set here: they are configured once on the typed client in [DependencyInjection](#dependencyinjection) (`DependencyInjection.cs:33-45`), which is why the request below uses a *relative* URI.
-  - `ModelId` (`:26`) is a fixed string exposed through the port so callers can record which model produced a score. `PromptVersion` (`:37`) is the second half of that provenance, a `yyyy-MM-dd.N` stamp persisted on every score. Its remark (`:28-36`) is a maintenance contract: bump it on **any** change to the system prompt, the user-prompt builder, the speaker formatter, the redaction rules or the schema, because the golden evaluation suite pins the rendered prompt by hash per version, so an unversioned edit fails a test instead of quietly re-basing every score already on the dashboard.
-  - `ScoreSessionAsync` (`:40`) guards on the missing key first (`:44-49`), builds the user message with `BuildUserPrompt` (`:53`), assembles an [AnthropicRequest](#anthropicrequest) carrying `SystemPrompt`, one user [AnthropicMessage](#anthropicmessage), `MaxTokens = 256` and the schema-constrained [AnthropicOutputConfig](#anthropicoutputconfig) (`:55-65`), then constructs an `HttpRequestMessage` to the relative `v1/messages` with the `x-api-key` header attached per request rather than as a client default (`:67-69`). On a non-success status it reads the error body and logs `HTTP {code}: {body}` before returning `FailedResult` (`:72-77`).
-  - `InterpretResponse` (`:90`) records usage **before** it judges the answer (`:92-96`), so a refusal is still counted as spend, then checks `stop_reason == "refusal"` (`:98-102`), then locates the `"text"` block case-insensitively (`:105-106`) and fails on a null one (`:108-111`).
-  - `ParseSingleScore` (`:116`) deserializes the whole text block directly, with the inline comment stating why that is now safe (`:118-119`): structured outputs constrain the reply to the schema, so prose, code fences or truncation are a failed call rather than something to salvage. A `JsonException` returns `FailedResult` (`:125-128`).
-  - `BuildResult` (`:131`) is the correctness gate. Its single `is not { ... }` pattern (`:134-146`) requires the penalty and all six sub-scores to be present; a partial object is a failed parse, not a success full of defaults. The overall score is then computed here, not asked for: the six criteria are weighted 30/10/20/20/10/10 (`:150-158`) and the penalty subtracted (`:162`), with every value passed through `Clamp` (`:364`), which does `Math.Clamp(value, 1.0m, 10.0m)` and rounds to one decimal with `MidpointRounding.ToEven`.
-  - `SystemPrompt` (`:176`) is the domain knowledge of this file: the ADC track list, the six weighted criteria, calibration rules ("most talks should fall between 5.5 and 7.5"), and a penalty ladder of 0.0, 0.5 or 1.0. It ends by concatenating `UntrustedInputBrief` (`:217`), an `internal const` separated out only so the evaluation suite can assert on it by name. That brief names the `<session_proposal>` delimiters, declares everything inside them data rather than instruction, and wires an injection attempt straight to the existing 1.0 penalty, which its XML doc explains is the point (`:204-216`): a rule to apply beats a judgement call to make.
-  - `BuildUserPrompt` (`:231`) is the containment half. It emits a delimited, escaped envelope (`<session_proposal>`, `<session_title>`, `<session_description>`) rather than labelled `Title:` / `Description:` lines, and the comment above it (`:226-230`) records why: labelled lines gave a submission no boundary, so a description could open with its own `Title:` line and nothing in the format said which one to believe. `Escape` (`:295`) replaces `<` and `>` with entities, which is the whole containment story because angle brackets are the only characters that can forge a delimiter (`:292-294`).
-  - `Redact` (`:303`) runs submitted text through two `[GeneratedRegex]` patterns, `EmailPattern` (`:310`) and `PhonePattern` (`:320`), substituting `[email removed]` (`:287`) and `[phone removed]` (`:290`), both with a 1000 ms match timeout. The phone pattern is deliberately narrow rather than "any run of digits" (`:312-315`) because bios legitimately contain years and team sizes, and redacting those would cost the credibility criterion its evidence for no privacy gain. `FormatSpeakers` (`:242`) applies it to taglines and bios but **not** to names (`:253-255`): a speaker's name is the published conference record and the only handle the credibility criterion has on a track record. With no speakers it emits the literal `<speakers>(no speaker information available)</speakers>` (`:244-245`), which is what makes that criterion degrade gracefully.
-  - `RenderPrompt` (`:277`) is the one public affordance for testing: it returns the exact system-plus-user pair this service would send, without calling the API, so the evaluation suite can hash it per `PromptVersion`.
-  - `FailedResult` (`:366`) is the single shape of failure: all seven scores `0m`, `Reasoning = "Scoring failed"`, `Success = false`. Note that a zero sits outside the 1.0 to 10.0 band by construction, so a failed row is distinguishable from any real score.
-- **Why it's built this way**: concentrating vendor specifics behind the port makes swapping providers or faking the service in tests a one-class change, and the never-throw plus clamp plus all-or-nothing-parse discipline makes raw model output safe to persist into [SessionAiScore](group-17-conference-domain.md#sessionaiscore). The prompt is prescriptive because the scoring semantics depend on it, and it is versioned because the evaluation suite depends on being able to tell one prompt from another.
-- **Where it's used**: registered as the `IAiScoringService` implementation by [DependencyInjection](#dependencyinjection) (`DependencyInjection.cs:33-45`); driven per session by [ScoreEventSessionsHandler](group-18-conference-application.md#scoreeventsessionshandler), which is itself driven off the request path by [SessionScoringProcessor](#sessionscoringprocessor). It is exercised directly by `AnthropicScoringServiceTests` and, through `RenderPrompt` and `UntrustedInputBrief`, by the `MMCA.ADC.Conference.Scoring.Evaluation.Tests` project (`PromptContractTests`, `GoldenReplayTests`, `LiveJudgeTests`).
-- **Caveats / not-in-source**: there is **no retry inside this class**. Retry (`MaxRetryAttempts = 1`), attempt timeout (3 minutes) and circuit breaking are configured externally on the typed client (`DependencyInjection.cs:42-45`); the in-class contract is "never throw, let the batch continue". Whether scoring is enabled in a given environment is a configuration matter (the key must be present) and is not determinable from this file.
+  - A **primary constructor** injects `IChatClient? chatClient`, `PromptContract promptContract` and `ILogger<AnthropicScoringService>` (`:30-33`). `IChatClient` is resolved with `GetService`, not `GetRequiredService`, by [DependencyInjection](#dependencyinjection) (`DependencyInjection.cs:43-46`), so a host with AI disabled or no key still starts.
+  - `PromptName` (`:40`), `ModelIdValue` (`:47`) and `MaxOutputTokens` (`:54`) are `public const` fields, each with an XML doc explaining its role: the name tags every usage measurement, the model is pinned into the prompt contract's hash, and the token ceiling is the class's own default that `Ai:MaxOutputTokens` clamps again at the framework boundary. `ModelId` (`:57`) and `PromptVersion` (`:68`) are no longer literals, they read `promptContract.Model` and `promptContract.Version`. `PromptVersion`'s remark (`:60-67`) keeps the same maintenance contract as before: bump it on any change to `SystemPrompt`, `BuildUserPrompt`, `FormatSpeakers`, `Redact` or `BuildScoreSchema`, because the golden evaluation suite pins the rendered prompt by hash per version. `SessionScoringContract` (`:76-77`) is the one static [PromptContract](group-27-common-ai-integration.md#promptcontract) the module scores with, built from the four constants above plus `SystemPrompt`; composition passes it to the constructor so a test can score against a different contract without touching the registration.
+  - `ScoreSessionAsync` (`:80`) null-checks `session` (`:84`), then guards on a disabled client (`:86-90`, the same log-and-`FailedResult` shape the missing-API-key branch used before), builds the user message with `BuildUserPrompt` (`:94`), then asks the contract for its `ChatOptions` (`:98`) and layers on the two things specific to a scoring request: `MaxOutputTokens` (`:99`) and a JSON-schema `ResponseFormat` built from `ScoreSchema` (`:100`). `chatClient.GetResponseAsync` (`:102-105`) sends one user `ChatMessage`; a caught, non-cancellation exception logs and returns `FailedResult` (`:109-113`).
+  - `InterpretResponse` (`:116`) takes a `ChatResponse` (no longer a nullable Anthropic-shaped DTO) and logs usage from `response.Usage` when present (`:121-124`), then checks `IsRefusal(response.FinishReason)` (`:126-130`), then reads `response.Text` and fails on a null-or-empty one (`:132-137`).
+  - `IsRefusal` (`:150-153`) is new: because Microsoft.Extensions.AI normalizes provider-specific finish reasons, it treats both the normalized `ChatFinishReason.ContentFilter` and the raw string `"refusal"` (case-insensitive) as a refusal, so a mapping change on either side cannot silently turn a refusal into an unparseable answer (XML doc `:142-149`).
+  - `ParseSingleScore` (`:155`) deserializes the whole response text directly into [AiScoreResponse](#aiscoreresponse), with the inline comment stating why that is safe (`:157-158`): structured outputs constrain the reply to the schema, so prose, fences or truncation are a failed call rather than something to salvage. A `JsonException` returns `FailedResult` (`:164-166`).
+  - `BuildResult` (`:170`) is unchanged in shape from before: its single `is not { ... }` pattern (`:174-186`) requires the penalty and all six sub-scores present; the overall score is computed in-process, the six criteria weighted 30/10/20/20/10/10 (`:190-196`) and the penalty subtracted (`:201`), with every value passed through `Clamp` (`:366`), `Math.Clamp(value, 1.0m, 10.0m)` rounded to one decimal with `MidpointRounding.ToEven`.
+  - `SystemPrompt` (`:220`) is unchanged content: the ADC track list, the six weighted criteria, calibration rules ("most talks should fall between 5.5 and 7.5"), and the 0.0/0.5/1.0 penalty ladder, ending with `UntrustedInputBrief` (`:246`), an `internal const` kept separate only so the evaluation suite can assert on it by name (its own XML doc, `:248-260`, is the injection-defense rationale).
+  - `BuildUserPrompt` (`:275`) is the containment half, unchanged: a delimited, escaped envelope (`<session_proposal>`, `<session_title>`, `<session_description>`) rather than labelled `Title:`/`Description:` lines, with the reasoning recorded at `:270-274`. `Escape` (`:339`) replaces `<` and `>` with entities (`:336-338`).
+  - `Redact` (`:347`) runs submitted text through two `[GeneratedRegex]` patterns, `EmailPattern` (`:350-354`) and `PhonePattern` (`:360-364`), both with a 1000 ms match timeout; the phone pattern stays deliberately narrow (`:356-359`). `FormatSpeakers` (`:286`) applies it to taglines and bios but **not** to names (`:297-299`); with no speakers it returns the literal `<speakers>(no speaker information available)</speakers>` (`:288-289`).
+  - `RenderPrompt` (`:321`) is unchanged: the one public affordance for testing, returning the exact system-plus-user pair this service would send without calling the model, so the evaluation suite can hash it per `PromptVersion`.
+  - `BuildScoreSchema` (`:388-419`) builds the structured-output JSON schema from the six criterion names plus `penalty` and `reasoning`, with `additionalProperties = false` and everything listed as `required`, cached once into the static `ScoreSchema` field (`:386`).
+  - `FailedResult` (`:368`) is the single shape of failure: all seven scores `0m`, `Reasoning = "Scoring failed"`, `Success = false`, a value that sits outside the 1.0 to 10.0 band by construction.
+- **Why it's built this way**: concentrating vendor specifics behind `IChatClient` (itself a framework-owned port over the vendor) makes swapping providers or faking the service in tests a one-class change, and the never-throw plus clamp plus all-or-nothing-parse discipline makes raw model output safe to persist into [SessionAiScore](group-17-conference-domain.md#sessionaiscore). The prompt is prescriptive because the scoring semantics depend on it, and it is versioned through a `PromptContract` because the evaluation suite depends on being able to tell one prompt from another and to bind that identity to spend telemetry.
+- **Where it's used**: registered as the `IAiScoringService` implementation by [DependencyInjection](#dependencyinjection) (`DependencyInjection.cs:43-46`); driven per session by [ScoreEventSessionsHandler](group-18-conference-application.md#scoreeventsessionshandler). It is exercised directly by `AnthropicScoringServiceTests` and, through `RenderPrompt` and `UntrustedInputBrief`, by the `MMCA.ADC.Conference.Scoring.Evaluation.Tests` project (`PromptContractTests`, `GoldenReplayTests`, `LiveJudgeTests`).
+- **Caveats / not-in-source**: there is **no retry inside this class**. Whatever resilience the chat call carries (retry, timeout, circuit breaking) is now the framework's `IChatClient` pipeline's concern, configured where `AddMmcaChatClient` is called, not in this Infrastructure project; the in-class contract stays "never throw, let the batch continue". The hosted-drain and scheduled-sweep background work this class used to be driven by is gone (see [DependencyInjection](#dependencyinjection)): what now drives scoring per event, and on what schedule or durability guarantee, is not in this file.
 
 ---
 
-### SessionScoringSweepJob
+### SessionizeService
 
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringSweepJob.cs:54` · Level 9 · class (sealed partial)
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Events.Sessionize` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Events/Sessionize/SessionizeService.cs:12` · Level 4 · class (sealed)
 
-- **What it is**: the crash-recovery backstop for AI session scoring. Every five minutes it looks for an event whose scoring pass started but never finished, and re-enqueues it on [ISessionScoringQueue](group-18-conference-application.md#isessionscoringqueue).
-- **Depends on**: first-party: [IScheduledJob](group-05-cqrs-pipeline.md#ischeduledjob) (implements), [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork), [`IReadRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#ireadrepositorytentity-tidentifiertype), [Session](group-17-conference-domain.md#session), [SessionAiScore](group-17-conference-domain.md#sessionaiscore), [ISessionScoringQueue](group-18-conference-application.md#isessionscoringqueue), [SessionScoringEnqueueResult](group-18-conference-application.md#sessionscoringenqueueresult), [SessionScoringCandidate](#sessionscoringcandidate), [SessionScoreStamp](#sessionscorestamp). External: `TimeProvider`, `ILogger<T>`.
-- **Concept introduced, deriving a durable signal from the rows a process already writes.** The queue that [SessionScoringProcessor](#sessionscoringprocessor) drains lives in one process's memory, so it is exactly as durable as the replica holding it: a deploy, a scale-in or a crash between the organizer's trigger and the last session's score leaves the event half scored with nothing anywhere that would ever pick it up (`:13-20`). The instructive move is that this job adds **no state field**. There is no scoring-status column on [Event](group-17-conference-domain.md#event); the condition is derived from the rows the scoring handler already persists, one [SessionAiScore](group-17-conference-domain.md#sessionaiscore) per session as it goes, so an event is mid-pass exactly when SOME but not ALL of its non-service sessions carry a score (`:21-27`). `[Rubric §29, Resilience & Business Continuity]` assesses whether interrupted work is recovered rather than silently lost: this is that recovery path, deliberately the slow one sitting behind a fast in-memory queue. `[Rubric §8, Data Architecture]` assesses whether derived state is inferred from facts instead of duplicated into a status column that can itself go stale. `[Rubric §31, Cost/FinOps]` is unusually explicit here: the doc comment states that each pass issues one paid Anthropic call per session, and the two bounds below exist so a wrong guess does not spend real money on its own.
-- **Walkthrough**
-  - The **primary constructor** (`:54-58`) injects [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork), [ISessionScoringQueue](group-18-conference-application.md#isessionscoringqueue), `TimeProvider` and a logger. Taking the clock as `TimeProvider` rather than reading `DateTime.UtcNow` is what makes the recovery window testable, `[Rubric §14, Testability]`.
-  - `RecoveryWindow` is 24 hours (`:66`), `internal static readonly` so tests can reference the same constant. `Name` is `"conference-session-scoring-sweep"` (`:69`) and `CronExpression` is `"*/5 * * * *"` (`:77`), with the remark noting a host overrides it via `Scheduler:Jobs:conference-session-scoring-sweep:Cron` without touching code (`:72-76`).
-  - `ExecuteAsync` (`:80`) takes a **read** repository from the unit of work (`:82`, the injection rule from the primer: resolve through `IUnitOfWork.GetReadRepository`, never constructor-inject a repository), and projects every non-service session into [SessionScoringCandidate](#sessionscoringcandidate) (`:86-89`). An empty population returns immediately (`:91-94`).
-  - It then projects every score row into [SessionScoreStamp](#sessionscorestamp) (`:96-100`), collapses them with `NewestScorePerSession` (`:102`, `:118-132`), and computes the cutoff as `timeProvider.GetUtcNow().UtcDateTime` minus the window (`:103`). The doc on `NewestScorePerSession` (`:111-115`) explains why newest wins rather than last-read: the unique filtered index allows only one live row per session, but a soft-deleted predecessor can still surface through a future read path.
-  - Candidates are grouped by `EventId` and each group goes to `EnqueueIfInterrupted` (`:105-108`).
-  - `EnqueueIfInterrupted` (`:142`) counts `total` and `scored` for the event and tracks the newest score stamp (`:148-166`). **Bound one** (`:168-173`): `scored == 0` returns, because nobody triggered that event and starting an unrequested pass would bill every event in the database on the first tick; `scored == total` returns because there is nothing to finish. **Bound two** (`:175-179`): if the newest surviving score is older than the cutoff, it logs `LogSweepAbandoned` and lets the event go, so a permanently unscorable session cannot keep re-triggering paid passes and an organizer re-triggers by hand instead.
-  - Otherwise it calls `sessionScoringQueue.TryEnqueue(eventId)` and logs the [SessionScoringEnqueueResult](group-18-conference-application.md#sessionscoringenqueueresult) outcome (`:181-182`). Beyond that enqueue the job is read-only, and the enqueue is safe to repeat: the queue's pending set refuses an event already queued or running, so a sweep landing on top of a live pass is a logged no-op rather than a second paid run (`:44-48`).
-- **Why it's built this way**: registering the job in the module's own `DependencyInjection` rather than in a service host means the module carries its own recovery job, the way `AddAuditTrail` carries the framework's retention job (`DependencyInjection.cs:49-54`). The registration is inert in a host that does not turn the scheduler on, so a module can ship a job without forcing every host to run it.
-- **Where it's used**: registered by [DependencyInjection](#dependencyinjection) via `services.AddScheduledJob<SessionScoringSweepJob>()` (`DependencyInjection.cs:55`); it only executes in a host that also calls `AddScheduledJobs`, which the Conference service host does.
-- **Caveats / not-in-source**: each tick reads every non-service session and every score row with no event-level filter pushed down, which is sized for a conference-scale dataset rather than an arbitrary one. Whether the scheduler is enabled and which cron a given environment overrides are configuration questions outside this file.
+- **What it is**: the HTTP implementation of [ISessionizeService](group-18-conference-application.md#isessionizeservice). It calls the Sessionize "View All" endpoint, which returns every session, speaker, room and category for a conference in one document, after validating that the caller-supplied Sessionize code is well-formed.
+- **Depends on**: first-party: [ISessionizeService](group-18-conference-application.md#isessionizeservice) (implements), `SessionizeResponse` (return shape), [SessionizeCodeFormat](group-17-conference-domain.md#sessionizecodeformat) (the format validator), `Result<T>` / `Error` (the framework Result pattern). External: `HttpClient`, `System.Net.Http.Json`.
+- **Concept introduced, a second-layer format check ahead of a redirect-capable URI segment.** `[Rubric §11, Security]` assesses defense against SSRF-shaped input: `sessionizeCode` becomes the leading segment of a relative URI resolved against the configured Sessionize base address, and the inline `SECURITY` comment (`:14-19`) spells out the exact attack, RFC 3986 resolution reads a code that starts `//host/path` as a network-path reference, so an unchecked code redirects the request to a foreign host whose JSON gets imported as speakers, sessions and rooms. Request validators already enforce the charset at the boundary; this check is deliberately a **second** layer, because it is the one that still covers a code written to the database before that validator rule existed. `[Rubric §2, Design Patterns]` and `[Rubric §1, SOLID]` (dependency inversion) assess whether the application depends on an abstraction it owns: the Application layer declares the port, Infrastructure supplies the adapter, and no Application file references `HttpClient`.
+- **Walkthrough**: a primary constructor takes `HttpClient` (`:12`). `GetAllAsync` now returns `Task<Result<SessionizeResponse?>>` rather than a bare nullable task (`:14`). It first checks `SessionizeCodeFormat.IsValid(sessionizeCode)` (`:21`) and, on a bad format, returns `Result.Failure<SessionizeResponse?>` with the invariant error `Event.SessionizeCode.InvalidFormat` (`:22-27`), naming `SessionizeService` as the source and `sessionizeCode` as the target. Past that gate the wire call is unchanged: it builds the relative URI `{sessionizeCode}/view/All` (`:31`), GETs it (`:32-34`), calls `EnsureSuccessStatusCode()` (`:36`), and now wraps the deserialized `SessionizeResponse?` in `Result.Success` (`:38-40`). Both awaits use `.ConfigureAwait(false)`, the repo-wide library rule from [ADR-049](https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html).
+- **Why it's built this way**: keeping parsing, mapping and the import workflow in Application use-cases leaves this adapter owning only the wire call and the one input check that only Infrastructure can make (the value that becomes part of a URI), which is what keeps it trivially fakeable in tests.
+- **Caveat, error handling still differs from the AI adapter.** `EnsureSuccessStatusCode()` throws `HttpRequestException` on any non-2xx, and that exception **propagates** out of the class, the opposite of [AnthropicScoringService](#anthropicscoringservice)'s never-throw contract; only the new format check returns a `Result` failure instead of throwing. The difference still follows the shape of the work: a Sessionize sync is one explicit organizer action where a failure should surface as an error, while AI scoring is a per-item batch where one item's failure must not stop the rest. The success payload is also nullable, so a 2xx with an empty body yields a successful `Result` wrapping `null` rather than an exception.
+- **Where it's used**: the Sessionize import handlers in [Conference Application](group-18-conference-application.md), triggered when an organizer refreshes an event's data.
 
 ---
 
-`[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
+### DependencyInjection
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:15` · Level 5 · class (static)
+
+- **What it is**: the DI wiring for Conference Infrastructure. It registers the one remaining outbound HTTP integration (Sessionize) as a typed client, wires the AI scoring adapter against the framework's governed chat client, and registers the output-cache eviction adapter the internal-command scoring pass depends on.
+- **Depends on**: first-party: [ISessionizeService](group-18-conference-application.md#isessionizeservice) with [SessionizeService](#sessionizeservice), [IAiScoringService](group-18-conference-application.md#iaiscoringservice) with [AnthropicScoringService](#anthropicscoringservice), [ISessionScoresCacheEvictor](group-18-conference-application.md#isessionscorescacheevictor) with [OutputCacheSessionScoresCacheEvictor](#outputcachesessionscorescacheevictor). External: `Microsoft.Extensions.DependencyInjection`, `Microsoft.Extensions.AI` (`IChatClient`).
+- **Concept introduced, what moved to the framework and what stayed.** The comment above the Sessionize registration (`:25-28`) is itself a piece of documentation: provider error classification (`IUniqueConstraintViolationDetector`, `IConcurrencyConflictDetector`) used to be registered by this module and is now framework surface added by MMCA.Common's `AddInfrastructure`. The AI scoring registration carries the larger version of the same story (`:33-42`): the transport, the credential, the model, the output ceiling, the per-call timeout and the tool gate all now belong to the framework's governed `IChatClient` (registered by the host's `AddMmcaChatClient` call, [ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html)), so nothing in this file constructs an `HttpClient` for Anthropic or tunes a resilience pipeline for it. `[Rubric §3, Clean Architecture]` and `[Rubric §7, Microservices Readiness]` assess how cleanly a module's registration surface shrinks as its responsibilities move to shared framework surface without the module losing the ability to run as its own service.
+- **Walkthrough**: a single `extension(IServiceCollection services)` block (`:17`, the codebase's standard DI idiom, see the primer's [extension(T) note](00-primer.md#c-extensiont-types-read-this-once)) exposes `AddModuleConferenceInfrastructure()` (`:23`).
+  - **Sessionize** (`:29-31`): typed client with base address `https://sessionize.com/api/v2/`, unchanged from before.
+  - **AI session scoring** (`:43-46`): `services.TryAddScoped<IAiScoringService>(serviceProvider => new AnthropicScoringService(...))`, a factory registration rather than a constructor-injected `AddHttpClient` pair because [AnthropicScoringService](#anthropicscoringservice) needs `IChatClient` resolved with `GetService` (nullable, the disabled path) alongside `AnthropicScoringService.SessionScoringContract` (the static [PromptContract](group-27-common-ai-integration.md#promptcontract)) and a required `ILogger<AnthropicScoringService>`. The comment (`:38-42`) restates the null contract plainly: a host without an AI key still starts and still serves every other Conference endpoint, because the scoring service just answers a failed result.
+  - **Output-cache eviction** (`:53`): `services.TryAddScoped<ISessionScoresCacheEvictor, OutputCacheSessionScoresCacheEvictor>()`. The comment above it (`:48-52`) is explicit about what is gone: the hosted drain and the five-minute crash-recovery sweep that used to live in this file are removed entirely, because the framework's internal-command processor now owns the durability, the claim lease and the retry backoff for a scoring pass.
+  - Returns `services` for chaining (`:55`).
+- **Why it's built this way**: registering `AnthropicScoringService` from a factory lambda rather than a typed `AddHttpClient` call is the direct consequence of depending on a shared, already-configured `IChatClient` instead of owning a client's lifecycle; the module supplies only what is specific to scoring (the contract, the logger) and takes the transport as a dependency. Registering `OutputCacheSessionScoresCacheEvictor` here, rather than in the internal-command handler's own project, keeps the ASP.NET Core output-cache dependency out of Application, `[Rubric §3, Clean Architecture]`.
+- **Where it's used**: called from the Conference module's registration chain (see [ConferenceModule](group-20-conference-api-grpc.md#conferencemodule)), which the module loader invokes in topological order.
+
+---
 
 ### CategoryItemConfiguration
 
@@ -749,9 +538,9 @@ type list, the same extension point every module assembly provides.
 - **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype) (base, `:11`), [`CategoryItem`](group-17-conference-domain.md#categoryitem), [`Category`](group-17-conference-domain.md#category), [`CategoryInvariants`](group-17-conference-domain.md#categoryinvariants) (`:19`). External: `Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<T>`.
 - **Concept introduced, the per-entity configuration class and what the base already did.** Every configuration in this folder is an `internal sealed class` deriving from `EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>` and overriding one method, `Configure(EntityTypeBuilder<TEntity> builder)`, whose first statement is always `base.Configure(builder)` (`:16`). Knowing exactly what that base call does is what stops you re-declaring things by hand:
   - `EntityTypeConfigurationSQLServer` is a **shim with no body** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfigurationSQLServer.cs:17-20`). Its whole contribution is the `[UseDataSource(DataSource.SQLServer)]` attribute it carries (`:16`), an instance of [`UseDataSourceAttribute`](group-14-module-system-composition.md#usedatasourceattribute).
-  - The real work is in [`EntityTypeConfiguration<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationtentity-tidentifiertype). Its `Configure` (`EntityTypeConfiguration.cs:37`) reads the attribute off `GetType()` and throws if it is missing (`:43-46`), then calls `ApplyEngineConventions` (`:48`). For `DataSource.SQLServer` that means `ToTable(typeof(TEntity).Name, NamespaceConventions.GetModuleName(typeof(TEntity)) ?? "dbo")`, so the table name comes from the CLR type and **the schema comes from the module segment of the entity's namespace** (`:66`), then `HasKey(p => p.Id)` (`:67`) and either `ValueGeneratedOnAdd()` or `ValueGeneratedNever()` depending on `IsIdValueGenerated` (`:68-71`).
+  - The real work is in [`EntityTypeConfiguration<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationtentity-tidentifiertype). Its `Configure` (`EntityTypeConfiguration.cs:39`) reads the attribute off `GetType()` and throws if it is missing (`:43-46`), then calls `ApplyEngineConventions` (`:48`). For `DataSource.SQLServer` that means `ToTable(typeof(TEntity).Name, NamespaceConventions.GetModuleName(typeof(TEntity)) ?? "dbo")`, so the table name comes from the CLR type and **the schema comes from the module segment of the entity's namespace** (`:66`), then `HasKey(p => p.Id)` (`:67`) and either `ValueGeneratedOnAdd()` or `ValueGeneratedNever()` depending on `IsIdValueGenerated` (`:68-71`).
   - Below that, [`EntityTypeConfigurationBase<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationbasetentity-tidentifiertype) does exactly one thing: `builder.Ignore(nameof(AuditableAggregateRootEntity<>.DomainEvents))` for aggregate roots (`EntityTypeConfigurationBase.cs:29-32`), keeping the in-memory event list out of the schema.
-  - What the base chain does **not** do is equally important. The soft-delete global query filter, the `rowversion` concurrency token and the soft-delete index convention are installed by the context, not by these classes: [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) adds the query filter at `ApplicationDbContext.cs:348`, marks the concurrency property at `:469` and `:473`, and registers [`SoftDeleteUniqueIndexConvention`](group-07-persistence-ef-core.md#softdeleteuniqueindexconvention) at `:296`. So a configuration class in this folder is only ever about *this entity's* columns, relationships and indexes.
+  - What the base chain does **not** do is equally important. The soft-delete global query filter, the `rowversion` concurrency token and the soft-delete index convention are installed by the context, not by these classes: [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) adds the query filter at `ApplicationDbContext.cs:422`, marks the concurrency property at `:469` and `:473`, and registers [`SoftDeleteUniqueIndexConvention`](group-07-persistence-ef-core.md#softdeleteuniqueindexconvention) at `:296`. So a configuration class in this folder is only ever about *this entity's* columns, relationships and indexes.
 
   Because the engine is pinned entirely by the base type, re-pointing a Conference entity at SQLite or Cosmos is a base-class swap with no edit to the body of `Configure`: the domain entity, the handlers and everything above stay untouched. All seventeen Conference configurations use the SQL Server base, since ADC runs SQL Server only.
 
@@ -811,7 +600,7 @@ type list, the same extension point every module assembly provides.
 - **What it is**: the persistence map for [`EventQuestionAnswer`](group-17-conference-domain.md#eventquestionanswer), one attendee's answer to one event-scoped [`Question`](group-17-conference-domain.md#question).
 - **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), [`EventQuestionAnswer`](group-17-conference-domain.md#eventquestionanswer), [`Event`](group-17-conference-domain.md#event), [`EventInvariants`](group-17-conference-domain.md#eventinvariants), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions) (`HasSoftDeleteFilter`). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
 - **Concept introduced, `HasSoftDeleteFilter()` and the database as the concurrency backstop.**
-  - `HasSoftDeleteFilter()` (`IndexBuilderExtensions.cs:50-64`) replaces a hand-typed `HasFilter("[IsDeleted] = 0")`. It builds the predicate through [`SoftDeleteFilterSql`](group-07-persistence-ef-core.md#softdeletefiltersql) from the live model (`:56`), so a renamed soft-delete column follows automatically and the identifier quoting comes from the engine instead of a SQL-Server-shaped literal. Its `engine` parameter defaults to `DataSource.SQLServer` (`:51`), which is exactly what the `…SQLServer` base already implies. On a **unique** index the call is technically redundant with `SoftDeleteUniqueIndexConvention`, which would apply the same predicate at model finalizing; writing it explicitly keeps the intent readable at the call site, and because the convention skips any index that already declares a filter (`SoftDeleteUniqueIndexConvention.cs:53`) the two can never disagree. On a **non-unique** index like the `EventId` lookup here, the convention deliberately does nothing, so the explicit call is the only way to get the filter.
+  - `HasSoftDeleteFilter()` (`IndexBuilderExtensions.cs:52-66`) replaces a hand-typed `HasFilter("[IsDeleted] = 0")`. It builds the predicate through [`SoftDeleteFilterSql`](group-07-persistence-ef-core.md#softdeletefiltersql) from the live model (`:56`), so a renamed soft-delete column follows automatically and the identifier quoting comes from the engine instead of a SQL-Server-shaped literal. Its `engine` parameter defaults to `DataSource.SQLServer` (`:51`), which is exactly what the `…SQLServer` base already implies. On a **unique** index the call is technically redundant with `SoftDeleteUniqueIndexConvention`, which would apply the same predicate at model finalizing; writing it explicitly keeps the intent readable at the call site, and because the convention skips any index that already declares a filter (`SoftDeleteUniqueIndexConvention.cs:53`) the two can never disagree. On a **non-unique** index like the `EventId` lookup here, the convention deliberately does nothing, so the explicit call is the only way to get the filter.
   - The `(EventId, QuestionId, CreatedBy)` unique index (`:42-44`) is a **race backstop**, and the comment (`:38-41`) is unusually candid about why: the application-level upsert only inspects the in-memory collection, so two concurrent submits can both take the create branch. The database refuses the second one, and the shared `DbUpdateException` handler turns the violation into a 409 for the client. `[Rubric §8, Data Architecture]` assesses whether invariants that matter are enforced where they cannot be raced, and `[Rubric §15, Best Practices and Code Quality]` assesses whether known limitations are documented at the point of the compensating control rather than left for the next reader to discover.
 - **Walkthrough**: required `EventId` and `QuestionId` scalars (`:19-23`); required `AnswerValue` at `EventInvariants.AnswerValueMaxLength` (`:25-27`); required parent relationship `HasOne(p => p.Event).WithMany(p => p.EventQuestionAnswers).HasForeignKey(p => p.EventId)` (`:29-32`); soft-delete-filtered lookup index on `EventId` (`:35-36`); the BR-123 filtered unique index (`:42-44`).
 - **Why it's built this way**: `CreatedBy` is part of the uniqueness tuple, so "one live answer per question" is scoped **per author**, not globally, which is what a per-attendee feedback form needs.
@@ -880,7 +669,7 @@ type list, the same extension point every module assembly provides.
 - **Walkthrough**: required `SessionId` scalar (`:19-20`); seven `decimal(3,1)` required score columns, `OverallScore`, `TopicRelevanceScore`, `DescriptionQualityScore`, `NoveltyScore`, `ActionableTakeawaysScore`, `DepthOrInsightQualityScore`, `CredibilityExperienceScore` (`:22-48`); required `Reasoning`, `ModelUsed` and `PromptVersion` (`:50-63`); and `HasIndex(p => p.SessionId).IsUnique().HasSoftDeleteFilter()` (`:66-68`), commented "One score per session (among non-deleted)" (`:65`). There is **no** `HasOne` relationship to [`Session`](group-17-conference-domain.md#session): `SessionId` is a plain scalar, so the score row is not a child of the session aggregate.
 - **Why it's built this way**: keeping the score in its own table behind a unique-per-session index means re-scoring is a soft-delete plus insert (the filter frees the slot) rather than an in-place overwrite, and the previous scoring run stays on disk for comparison.
 - **Where it's used**: written by the Conference scoring pipeline, whose adapter and processor are covered earlier in this chapter under [`AnthropicScoringService`](#anthropicscoringservice) and [`SessionScoringProcessor`](#sessionscoringprocessor).
-- **Caveats / not-in-source**: this configuration only defines the table. Whether scoring runs in a given environment is a configuration and feature-gating question decided outside this file. Note also that [`ModuleApplicationDbContext`](#moduleapplicationdbcontext) declares no `DbSet` for `SessionAiScore` (its fifteen sets are listed at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:28-70`), and nothing breaks, because that manifest does not drive the model.
+- **Caveats / not-in-source**: this configuration only defines the table. Whether scoring runs in a given environment is a configuration and feature-gating question decided outside this file. Note also that [`ModuleApplicationDbContext`](#moduleapplicationdbcontext) declares no `DbSet` for `SessionAiScore` (its fifteen sets are listed at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:29-71`), and nothing breaks, because that manifest does not drive the model.
 
 ---
 
@@ -933,6 +722,25 @@ type list, the same extension point every module assembly provides.
 
 ---
 
+### SessionAssetConfiguration
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.SessionAssets` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionAssets/SessionAssetConfiguration.cs:18` · Level 9 · class
+
+- **What it is**: the persistence map for `SessionAsset`, a file or link (slides, a recording, a resource) attached to a session, with the uploading speaker recorded and its own sort order.
+- **Depends on**: first-party: [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), `SessionAsset`, `SessionAssetInvariants`, [`Event`](group-17-conference-domain.md#event), [`Session`](group-17-conference-domain.md#session), [`IndexBuilderExtensions`](group-07-persistence-ef-core.md#indexbuilderextensions). External: `Microsoft.EntityFrameworkCore.Metadata.Builders`.
+- **Concept**: an instance of the join/child-entity mapping template taught under [`EventSpeakerConfiguration`](#eventspeakerconfiguration) and [`CategoryItemConfiguration`](#categoryitemconfiguration): required scalars sized from an `...Invariants` class, two `HasOne(...).WithMany()` parent relationships with no inverse navigation, and filtered indexes shaped for the two read paths that actually query the table.
+- **Walkthrough**
+  - **Required** (`:26-33`, `:35-41`, `:54-55`): `EventId`, `SessionId`, `Kind`, `Title` at `SessionAssetInvariants.TitleMaxLength`, `Url` at `SessionAssetInvariants.UrlMaxLength`, `SortOrder`.
+  - **Optional** (`:43-52`, `:57-58`): `BlobName` (`SessionAssetInvariants.BlobNameMaxLength`), `ContentType` (`SessionAssetInvariants.ContentTypeMaxLength`), `SizeBytes`, `UploadedBySpeakerId`, all `IsRequired(false)`. `BlobName` and `ContentType` being nullable is the schema admitting that not every asset is a stored blob; an asset that is an external link carries a `Url` and no blob.
+  - **Event and Session relationships** (`:60-68`): both required, both `HasOne<Event>()`/`HasOne<Session>()` with the parameterless `WithMany()`, so neither `Event` nor `Session` exposes an assets collection navigation.
+  - **Indexes** (`:70-78`): a filtered composite `(SessionId, SortOrder)`, commented as serving the one read shape the public session page has, one session's assets in sort order (`:70-74`); and a filtered single-column `EventId` index for the event-level cascade delete to select every asset of one event in one read (`:76-78`).
+- **Why it's built this way**: sizing the two indexes to the two actual consumers, the per-session ordered read and the per-event bulk delete, rather than adding a general-purpose index, follows the pattern used across the rest of this folder.
+- **Where it's used**: exposed as `DbSet<SessionAsset> SessionAssets` on [`ModuleApplicationDbContext`](#moduleapplicationdbcontext) (`ModuleApplicationDbContext.cs:74`).
+
+`[Rubric §8, Data Architecture]` applies: index shape follows the two queries the table actually serves rather than a generic default.
+
+---
+
 ### SessionCategoryItemConfiguration
 
 > MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Sessions/SessionCategoryItemConfiguration.cs:11` · Level 9 · class
@@ -954,13 +762,13 @@ type list, the same extension point every module assembly provides.
 - **Concept introduced, `DeleteBehavior.Restrict` as a schedule-integrity guard.** The optional room relationship (`:83-87`) ends in `.OnDelete(DeleteBehavior.Restrict)`. Under EF's default for an optional relationship the FK would be **set to null** on delete, silently unscheduling every talk in the room; `Restrict` makes the database refuse the delete instead, forcing the organizer to move the sessions first. `[Rubric §8, Data Architecture]` assesses whether referential actions match the business meaning of the relationship rather than the framework default.
 - **Concept reinforced, navigation configured on one side only.** Both relationships here use the parameterless `WithMany()` (`:73`, `:84`), meaning **there is no inverse collection navigation** on `Event` or `Room` for sessions. Sessions are a large collection queried with paging and filters, so exposing them as an aggregate navigation would invite accidental full loads; the read paths go through explicit queries instead.
 - **Walkthrough**
-  - **Required** (`:20-22`, `:38-48`, `:69-70`): `Title` at `SessionInvariants.TitleMaxLength`; four booleans, `IsInformed`, `IsConfirmed`, `IsServiceSession`, `IsPlenumSession`; and the `EventId` scalar.
-  - **Optional** (`:24-36`, `:50-64`, `:80-81`): `Description`, `StartsAt`, `EndsAt`, `Status`, `LiveUrl`, `RecordingUrl`, `AccessibilityInfo`, `ResourceLinks`, `RoomId`. That `StartsAt`, `EndsAt` and `RoomId` are all nullable is the schema admitting that a session exists as an accepted talk long before it is scheduled.
+  - **Required** (`:20-22`, `:38-48`, `:77-78`): `Title` at `SessionInvariants.TitleMaxLength`; four booleans, `IsInformed`, `IsConfirmed`, `IsServiceSession`, `IsPlenumSession`; and the `EventId` scalar.
+  - **Optional** (`:24-36`, `:50-64`, `:88-89`): `Description`, `StartsAt`, `EndsAt`, `Status`, `LiveUrl`, `RecordingUrl`, `AccessibilityInfo`, `ResourceLinks`, `RoomId`. That `StartsAt`, `EndsAt` and `RoomId` are all nullable is the schema admitting that a session exists as an accepted talk long before it is scheduled.
   - **`Status` is a plain string** (`:34-36`) capped at `SessionInvariants.StatusMaxLength`, not an enum with a conversion (the entity declares it as `string?` at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:37`), so adding a status value needs no migration.
-  - **Computed property excluded** (`:67`): `builder.Ignore(p => p.Duration)`, since `Duration` is derived from `StartsAt` and `EndsAt` (`Session.cs:80`).
-  - **Event relationship** (`:72-75`) required, plus `HasIndex(p => p.EventId).HasSoftDeleteFilter()` (`:77-78`), a non-unique filtered lookup index for "all live sessions of this event", the single hottest read in the app.
-  - **Room relationship** (`:83-87`) optional, with the `Restrict` behaviour described above.
-- **Why it's built this way**: the required or optional split mirrors the real conference workflow (accept first, schedule later), and the two relationship decisions, no inverse navigation and restricted room deletes, both trade a little convenience for predictable performance and predictable schedule integrity.
+  - **`Duration` is a stored computed column, not an ignored derived property** (`:74-75`): `builder.Property(p => p.Duration).HasComputedColumnSql("DATEDIFF(minute, [StartsAt], [EndsAt])", stored: true)`. The comment above it (`:66-73`) explains why: the sessions grid sorts on `Duration`, and an `ORDER BY` needs a column, dynamic LINQ cannot express a date difference and the provider does not translate `DateTime` subtraction client-side, so the value has to live in the database. `stored: true` keeps the two representations from drifting, the column is a function of `StartsAt`/`EndsAt`, so no writer can set it to anything else; EF infers `ValueGeneratedOnAddOrUpdate` from a computed column, so the client value is never sent and the stored value is read back after `SaveChanges`. The property stays nullable (`int?`), so there is no `IsRequired()` call: a session without both bounds has no duration, and `DATEDIFF` returns `NULL` for it.
+  - **Event relationship** (`:80-83`) required, plus `HasIndex(p => p.EventId).HasSoftDeleteFilter()` (`:85-86`), a non-unique filtered lookup index for "all live sessions of this event", the single hottest read in the app.
+  - **Room relationship** (`:91-95`) optional, with the `Restrict` behaviour described above.
+- **Why it's built this way**: the required or optional split mirrors the real conference workflow (accept first, schedule later), and the two relationship decisions, no inverse navigation and restricted room deletes, both trade a little convenience for predictable performance and predictable schedule integrity. Moving `Duration` from an ignored computed property to a stored computed column is the same trade applied to sorting: the database, not the client, now owns the one representation of it.
 - **Where it's used**: `Session` is the owning aggregate for [`SessionSpeakerConfiguration`](#sessionspeakerconfiguration), [`SessionCategoryItemConfiguration`](#sessioncategoryitemconfiguration) and [`SessionQuestionAnswerConfiguration`](#sessionquestionanswerconfiguration), and the scalar target of [`SessionAiScoreConfiguration`](#sessionaiscoreconfiguration).
 
 ---
@@ -997,8 +805,8 @@ type list, the same extension point every module assembly provides.
 - **What it is**: the Conference module's startup data seeder. It puts the two real conference editions and the ten feedback questions into a fresh database on every boot, and, only when its `includeSampleData` flag is set, a small deterministic browse fixture on top (two speakers, two sessions, the speaker links, four sponsors, three social activities). Every write goes through a domain factory and the unit of work, and every insert is guarded by an existence check, so running it against an already-seeded database is a no-op.
 - **Depends on**: first-party: [`DbSeeder`](group-07-persistence-ef-core.md#dbseeder) (base, `:25`), [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) (`:25`, `:44`) and the `IRepository<TEntity, TIdentifierType>` handles it hands out (`:66`, `:141`, `:189`, `:243`, `:302`, `:356`, `:415`), the domain factories [`Event`](group-17-conference-domain.md#event) (`:81`, `:116`), [`Question`](group-17-conference-domain.md#question) (`:169`), [`Speaker`](group-17-conference-domain.md#speaker) (`:209`), [`Session`](group-17-conference-domain.md#session) (`:273`), [`Sponsor`](group-17-conference-domain.md#sponsor) (`:381`) and [`Activity`](group-17-conference-domain.md#activity) (`:454`), the join entities [`EventSpeaker`](group-17-conference-domain.md#eventspeaker) and [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker) (created indirectly at `:338`, `:341`, `:511`), the id-range constants on [`QuestionInvariants`](group-17-conference-domain.md#questioninvariants) (`:165`) and [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants) (`:251-252`), and [`SponsorTier`](group-17-conference-domain.md#sponsortier) (`:358`). External: BCL only (`DateOnly`, `TimeOnly`, `TimeSpan`, `DateTimeKind`).
 - **Concept introduced, seeding through the domain rather than through SQL.** A seeder in this codebase never writes rows. It calls the same static factory an HTTP command handler would call, checks the returned [`Result`](group-01-result-error-handling.md#result) wrapper, hands the entity to a repository, and lets [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) commit. `Event.Create(...)` at `:81-93` is the identical entry point the organizer's create-event use case takes, so seeded data satisfies exactly the invariants that user-created data satisfies: there is no second, looser definition of a valid event hiding in the seeder. The consequence worth internalizing is that a seed insert is a full domain write with all its side effects: `eventResult.Value!.Publish()` at `:98` flips `IsPublished` **and** raises an `EventChanged` domain event (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:310-312`), so the `SaveChangesAsync` at `:101` writes an outbox row alongside the entity row. Startup seeding therefore feeds the same dual-dispatch pipeline as runtime traffic (ADR-003), it does not bypass it. `[Rubric §4, DDD]` assesses whether the domain model is the single place invariants live; routing seed data through the factories is what keeps that true at the one moment it is most tempting to cheat.
-- **Concept introduced, idempotency that respects soft delete.** Every existence probe in this file passes `ignoreQueryFilters: true` (`:75`, `:110`, `:145`, `:203`, `:264`, `:375`, `:446`), which turns off the global soft-delete filter for that one query. The comment at `:68-72` gives both halves of the reason. First, a deleted seed row is a decision someone made, not a gap to refill, so the seeder must see it and stand down. Second, the fixed-id rows (questions at `:170`, sample sessions at `:251-252`) keep their primary keys when soft-deleted, so a filtered check would report "missing", re-insert the same id, and take startup down on a primary-key violation. The `ExistsAsync(Expression<Func<TEntity, bool>>, bool ignoreQueryFilters, CancellationToken)` overload that makes this possible is on the shared repository contract (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:62-65`). [`ConferenceModuleDbSeederTests`](group-27-testing-infrastructure.md#conferencemoduledbseedertests) pins the behavior mechanically: its Moq setups match `true` for that parameter only (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Infrastructure.Tests/Seeding/ConferenceModuleDbSeederTests.cs:103-113`), so a future edit that drops the flag falls through to Moq's default `false` and the "skips when exists" tests go red (the reasoning is spelled out in the comment at `:99-102` of that test file). `[Rubric §17, DevOps]` assesses whether startup is repeatable and safe to re-run; this is the pattern that makes "boot the app twice" a non-event.
-- **Concept introduced, environment-gated fixture data.** The class takes `bool includeSampleData = false` (`:25`), stores it (`:45`), and branches on it in `SeedAsync` (`:54-61`). The default is off, and the only thing that turns it on is [`ConferenceModuleSeeder`](group-20-conference-api-grpc.md#conferencemoduleseeder) reading `configuration.GetValue<bool>("Seeding:IncludeSampleConferenceData")` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:26`). `GetValue<bool>` on an absent key yields `false`, so a production host that never sets the key gets the real events and questions and nothing else. The one place the key is set is the local Aspire AppHost, `.WithEnvironment("Seeding__IncludeSampleConferenceData", "true")` on the Conference service (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:210`, rationale at `:207-209`). E2E CI inherits it by launching that same AppHost (`MMCA.ADC/.github/workflows/e2e.yml:219`), which is why the two public-browse tests can assume rows exist (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Conference/Public/PublicBrowseTests.cs:92`, `:102`). `[Rubric §11, Security]` assesses whether non-production affordances are structurally unable to reach production: here the gate is a default-false configuration read in the composition root, not a runtime environment sniff inside the seeder.
+- **Concept introduced, idempotency that respects soft delete.** Every existence probe in this file passes `ignoreQueryFilters: true` (`:75`, `:110`, `:145`, `:203`, `:264`, `:375`, `:446`), which turns off the global soft-delete filter for that one query. The comment at `:68-72` gives both halves of the reason. First, a deleted seed row is a decision someone made, not a gap to refill, so the seeder must see it and stand down. Second, the fixed-id rows (questions at `:170`, sample sessions at `:251-252`) keep their primary keys when soft-deleted, so a filtered check would report "missing", re-insert the same id, and take startup down on a primary-key violation. The `ExistsAsync(Expression<Func<TEntity, bool>>, bool ignoreQueryFilters, CancellationToken)` overload that makes this possible is on the shared repository contract (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRepository.cs:62-65`). [`ConferenceModuleDbSeederTests`](group-28-testing-infrastructure.md#conferencemoduledbseedertests) pins the behavior mechanically: its Moq setups match `true` for that parameter only (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Infrastructure.Tests/Seeding/ConferenceModuleDbSeederTests.cs:103-113`), so a future edit that drops the flag falls through to Moq's default `false` and the "skips when exists" tests go red (the reasoning is spelled out in the comment at `:99-102` of that test file). `[Rubric §17, DevOps]` assesses whether startup is repeatable and safe to re-run; this is the pattern that makes "boot the app twice" a non-event.
+- **Concept introduced, environment-gated fixture data.** The class takes `bool includeSampleData = false` (`:25`), stores it (`:45`), and branches on it in `SeedAsync` (`:54-61`). The default is off, and the only thing that turns it on is [`ConferenceModuleSeeder`](group-20-conference-api-grpc.md#conferencemoduleseeder) reading `configuration.GetValue<bool>("Seeding:IncludeSampleConferenceData")` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:26`). `GetValue<bool>` on an absent key yields `false`, so a production host that never sets the key gets the real events and questions and nothing else. The one place the key is set is the local Aspire AppHost, `.WithEnvironment("Seeding__IncludeSampleConferenceData", "true")` on the Conference service (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:211`, rationale at `:207-209`). E2E CI inherits it by launching that same AppHost (`MMCA.ADC/.github/workflows/e2e.yml:219`), which is why the two public-browse tests can assume rows exist (`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/Conference/Public/PublicBrowseTests.cs:92`, `:102`). `[Rubric §11, Security]` assesses whether non-production affordances are structurally unable to reach production: here the gate is a default-false configuration read in the composition root, not a runtime environment sniff inside the seeder.
 - **Concept introduced, reserved manual id ranges.** Conference session ids are app-assigned rather than database-generated because the integer primary key **is** the Sessionize id when a session arrives through the import (comment at `:245-248`). Sample sessions have no Sessionize id, so they take explicit ids from the top of the integer space: `SessionInvariants.ManualIdRangeStart` is `999_999_000` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:44`) and the two fixtures take that value and that value plus one (`:251-252`). Questions do the same from `QuestionInvariants.ManualIdRangeStart`, also `999_999_000` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/QuestionInvariants.cs:40`), incremented per question by `id: nextId++` (`:165`, `:170`). The range sits above any id an upstream system will mint, so seed rows and imported rows can never collide, and the same constants are what the organizer-facing create handlers continue from. `[Rubric §8, Data Architecture]` assesses whether key strategy is deliberate; reserving a high range is the cheap alternative to a separate identity column or a synthetic-vs-natural key split.
 - **Walkthrough**
   - **Primary constructor and fields** (`:25`, `:44-45`): `ConferenceModuleDbSeeder(IUnitOfWork unitOfWork, bool includeSampleData = false) : DbSeeder()`. The unit of work is null-guarded into `_unitOfWork` at `:44` (the one behavior a unit test asserts directly, `ConferenceModuleDbSeederTests.cs:73-75`); the flag is copied to `_includeSampleData` at `:45`. The base [`DbSeeder`](group-07-persistence-ef-core.md#dbseeder) contributes the `SeedAsync` abstract member and a `GetId<TIdentifier>(int)` helper for int-or-Guid key strategies (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/DbSeeder.cs:20-39`), which this seeder does not use: the Conference identifier aliases are `int`, so literal ids pass straight through.
@@ -1034,7 +842,7 @@ type list, the same extension point every module assembly provides.
   - **Event relationship** (`:53-56`): required `HasOne(p => p.Event).WithMany().HasForeignKey(p => p.EventId)`, with the **parameterless** `WithMany()`, so `Event` exposes no activities collection. The same one-sided-navigation choice is made in [`SessionConfiguration`](#sessionconfiguration): activities are read by explicit event-scoped queries, not by walking the event aggregate.
   - **Indexes** (`:58-59`, `:63-64`): the filtered `EventId` lookup, then the filtered `(EventId, StartTime, SortOrder)` browse index described above. Neither is unique, so `SoftDeleteUniqueIndexConvention` would not have touched either one, which is why both spell out `HasSoftDeleteFilter()`.
 - **Why it's built this way**: an activity is a first-class row rather than a flavour of session because it has a different shape (its own venue, no room, no speakers), and separating it keeps the session table free of columns that only apply to parties. `[Rubric §4, DDD]` assesses whether the model names distinct concepts distinctly instead of overloading one entity with a type discriminator.
-- **Where it's used**: exposed as `DbSet<Activity> Activities` on [`ModuleApplicationDbContext`](#moduleapplicationdbcontext) (`ModuleApplicationDbContext.cs:70`); read by the public agenda queries and written by the organizer-facing activity commands.
+- **Where it's used**: exposed as `DbSet<Activity> Activities` on [`ModuleApplicationDbContext`](#moduleapplicationdbcontext) (`ModuleApplicationDbContext.cs:71`); read by the public agenda queries and written by the organizer-facing activity commands.
 
 ---
 
@@ -1064,21 +872,19 @@ type list, the same extension point every module assembly provides.
 
 ### ModuleApplicationDbContext
 
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:20` · Level 12 · abstract class
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:21` · Level 12 · abstract class
 
-- **What it is**: an abstract `DbContext` that names the Conference module's entity sets. It declares fifteen `internal DbSet<T>` properties and forwards its four constructor arguments unchanged to the framework base; it adds no `OnModelCreating`, no `OnConfiguring`, and no behavior of any kind.
-- **Depends on**: first-party: [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) (base, `:25`), [`IEntityConfigurationAssemblyProvider`](group-07-persistence-ef-core.md#ientityconfigurationassemblyprovider) (`:23`), [`PhysicalDataSource`](group-07-persistence-ef-core.md#physicaldatasource) (`:24`), and the fifteen Conference entity types it exposes, all from [Group 17](group-17-conference-domain.md): [`Event`](group-17-conference-domain.md#event), [`Room`](group-17-conference-domain.md#room), [`EventSpeaker`](group-17-conference-domain.md#eventspeaker), [`EventQuestionAnswer`](group-17-conference-domain.md#eventquestionanswer), [`Session`](group-17-conference-domain.md#session), [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker), [`SessionQuestionAnswer`](group-17-conference-domain.md#sessionquestionanswer), [`SessionCategoryItem`](group-17-conference-domain.md#sessioncategoryitem), [`Speaker`](group-17-conference-domain.md#speaker), [`SpeakerCategoryItem`](group-17-conference-domain.md#speakercategoryitem), [`Category`](group-17-conference-domain.md#category), [`CategoryItem`](group-17-conference-domain.md#categoryitem), [`Question`](group-17-conference-domain.md#question), [`Sponsor`](group-17-conference-domain.md#sponsor), [`Activity`](group-17-conference-domain.md#activity). External: `Microsoft.EntityFrameworkCore.DbContextOptions` and `DbSet<T>` (`:1`).
-- **Concept introduced, a `DbSet` list is an index, not the model.** The instinct carried over from a typical EF application is that `DbSet<T>` properties define what the context maps. In this codebase they do not. The model is built by [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext), which walks the assemblies handed to it by [`IEntityConfigurationAssemblyProvider`](group-07-persistence-ef-core.md#ientityconfigurationassemblyprovider) and applies every configuration implementing the engine's interface, filtered to the entities routed to *this* physical data source (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:690-716`). The proof is in the arithmetic: the Conference `EntityConfiguration` folder holds seventeen `*Configuration.cs` files, two more than the fifteen `DbSet`s here. `SessionAiScore` and `SpeakerQuestionAnswer` are mapped, migrated, and queried without ever appearing on this class. Reading the `DbSet` list as a coverage manifest would therefore mislead you; read the configuration folder instead. `[Rubric §8, Data Architecture]` assesses whether the mapping strategy is explicit and centrally governed; convention-by-assembly-scan is what lets one context class serve every module without any module editing it.
-- **Concept introduced, `internal` sets as a layering boundary.** All fifteen properties are `internal` (`:28-70`), not `public`. Nothing outside `MMCA.ADC.Conference.Infrastructure` can reach `context.Sessions` even with a context instance in hand. Application-layer handlers get their data through [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) and `IRepository<TEntity, TIdentifierType>` instead, which is where soft-delete filtering, tracking choices, and data-source routing are decided. `[Rubric §3, Clean Architecture]` assesses whether the dependency rule is enforced by the compiler rather than by convention; an access modifier is the cheapest available enforcement, and it is why a handler cannot accidentally grow a raw LINQ query against a `DbSet`.
+- **What it is**: an abstract `DbContext` that names the Conference module's entity sets. It declares sixteen `internal DbSet<T>` properties and forwards its four constructor arguments unchanged to the framework base; it adds no `OnModelCreating`, no `OnConfiguring`, and no behavior of any kind.
+- **Depends on**: first-party: [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) (base, `:25`), [`IEntityConfigurationAssemblyProvider`](group-07-persistence-ef-core.md#ientityconfigurationassemblyprovider) (`:23`), [`PhysicalDataSource`](group-07-persistence-ef-core.md#physicaldatasource) (`:24`), and the sixteen Conference entity types it exposes, all from [Group 17](group-17-conference-domain.md) except `SessionAsset` (mapped by [`SessionAssetConfiguration`](#sessionassetconfiguration) in this chapter): [`Event`](group-17-conference-domain.md#event), [`Room`](group-17-conference-domain.md#room), [`EventSpeaker`](group-17-conference-domain.md#eventspeaker), [`EventQuestionAnswer`](group-17-conference-domain.md#eventquestionanswer), [`Session`](group-17-conference-domain.md#session), [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker), [`SessionQuestionAnswer`](group-17-conference-domain.md#sessionquestionanswer), [`SessionCategoryItem`](group-17-conference-domain.md#sessioncategoryitem), `SessionAsset`, [`Speaker`](group-17-conference-domain.md#speaker), [`SpeakerCategoryItem`](group-17-conference-domain.md#speakercategoryitem), [`Category`](group-17-conference-domain.md#category), [`CategoryItem`](group-17-conference-domain.md#categoryitem), [`Question`](group-17-conference-domain.md#question), [`Sponsor`](group-17-conference-domain.md#sponsor), [`Activity`](group-17-conference-domain.md#activity). External: `Microsoft.EntityFrameworkCore.DbContextOptions` and `DbSet<T>` (`:1`).
+- **Concept introduced, a `DbSet` list is an index, not the model.** The instinct carried over from a typical EF application is that `DbSet<T>` properties define what the context maps. In this codebase they do not. The model is built by [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext), which walks the assemblies handed to it by [`IEntityConfigurationAssemblyProvider`](group-07-persistence-ef-core.md#ientityconfigurationassemblyprovider) and applies every configuration implementing the engine's interface, filtered to the entities routed to *this* physical data source (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:950-977`). The proof is in the arithmetic: the Conference `EntityConfiguration` folder holds eighteen `*Configuration.cs` files (seventeen plus the new [`SessionAssetConfiguration`](#sessionassetconfiguration)), two more than the sixteen `DbSet`s here. `SessionAiScore` and `SpeakerQuestionAnswer` are mapped, migrated, and queried without ever appearing on this class. Reading the `DbSet` list as a coverage manifest would therefore mislead you; read the configuration folder instead. `[Rubric §8, Data Architecture]` assesses whether the mapping strategy is explicit and centrally governed; convention-by-assembly-scan is what lets one context class serve every module without any module editing it.
+- **Concept introduced, `internal` sets as a layering boundary.** All sixteen properties are `internal` (`:28-74`), not `public`. Nothing outside `MMCA.ADC.Conference.Infrastructure` can reach `context.Sessions` even with a context instance in hand. Application-layer handlers get their data through [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) and `IRepository<TEntity, TIdentifierType>` instead, which is where soft-delete filtering, tracking choices, and data-source routing are decided. `[Rubric §3, Clean Architecture]` assesses whether the dependency rule is enforced by the compiler rather than by convention; an access modifier is the cheapest available enforcement, and it is why a handler cannot accidentally grow a raw LINQ query against a `DbSet`.
 - **Walkthrough**
   - **Class declaration and primary constructor** (`:20-25`): `public abstract class ModuleApplicationDbContext(DbContextOptions options, IServiceProvider serviceProvider, IEntityConfigurationAssemblyProvider assemblyProvider, PhysicalDataSource physicalDataSource) : ApplicationDbContext(options, serviceProvider, assemblyProvider, physicalDataSource)`. Every parameter is passed straight through; the class captures none of them and overrides nothing. Note the untyped `DbContextOptions` rather than `DbContextOptions<TContext>`, which is what allows an arbitrary concrete subclass to supply its own typed options.
-  - **The fifteen entity sets** (`:28-70`): `Events` (`:28`), `Rooms` (`:31`), `EventSpeakers` (`:34`), `EventQuestionAnswers` (`:37`), `Sessions` (`:40`), `SessionSpeakers` (`:43`), `SessionQuestionAnswers` (`:46`), `SessionCategoryItems` (`:49`), `Speakers` (`:52`), `SpeakerCategoryItems` (`:55`), `Categories` (`:58`), `CategoryItems` (`:61`), `Questions` (`:64`), `Sponsors` (`:67`), `Activities` (`:70`). Read top to bottom they trace the module's aggregate map: the two roots that own schedules (`Event`, `Session`), their join tables to speakers and categories, the taxonomy pair (`Category` and `CategoryItem`), the feedback pair (`Question` plus the two answer tables), and the two newest per-event additions (`Sponsor`, `Activity`).
+  - **The sixteen entity sets** (`:28-74`): `Events` (`:28`), `Rooms` (`:31`), `EventSpeakers` (`:34`), `EventQuestionAnswers` (`:37`), `Sessions` (`:40`), `SessionSpeakers` (`:43`), `SessionQuestionAnswers` (`:46`), `SessionCategoryItems` (`:49`), `Speakers` (`:52`), `SpeakerCategoryItems` (`:55`), `Categories` (`:58`), `CategoryItems` (`:61`), `Questions` (`:64`), `Sponsors` (`:67`), `Activities` (`:70`), `SessionAssets` (`:74`). Read top to bottom they trace the module's aggregate map: the two roots that own schedules (`Event`, `Session`), their join tables to speakers and categories, the taxonomy pair (`Category` and `CategoryItem`), the feedback pair (`Question` plus the two answer tables), the two per-event additions (`Sponsor`, `Activity`), and the newest set, `SessionAssets`, appended at the end rather than grouped with the other session-scoped sets.
   - **What is deliberately absent**: no `OnModelCreating` override, so nothing here competes with the base's assembly scan; no `OnConfiguring`, so provider selection stays with the concrete engine context; no `SaveChanges` override, so audit stamping, soft delete, and outbox dispatch remain the base's job.
-- **Why it's built this way**: ADR-006 fixes one sealed context class per engine, shared across modules, rather than one context class per module, and the runtime honors that literally. The concrete context is Common's `sealed class SQLServerDbContext`, which derives from [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) directly (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/SQLServerDbContext.cs:15-20`), and the Conference migrations project targets that same type through `IDesignTimeDbContextFactory<SQLServerDbContext>` (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/DesignTimeSQLServerDbContextFactory.cs:12-15`). Keeping the module-level class abstract, behavior-free, and additive means the per-engine story stated in ADR-018 (SQL Server today, Cosmos and SQLite as further engines) needs no per-module change: a new engine adds one sealed class in MMCA.Common, not fifteen `DbSet` declarations per module. `[Rubric §7, Microservices Readiness]` assesses whether a module could be lifted into its own host without a rewrite; the entity-set surface being module-scoped and `internal` is part of what makes that lift mechanical.
-- **Where it's used**: the fifteen sets correspond one to one with fifteen of the seventeen configurations in this chapter, including [`EventConfiguration`](#eventconfiguration), [`SessionConfiguration`](#sessionconfiguration), [`SponsorConfiguration`](#sponsorconfiguration) and [`ActivityConfiguration`](#activityconfiguration), and with the tables the Conference migrations project maintains for the `ADC_Conference` database. Application-layer access to those tables runs through [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork), and the rows themselves are first written by [`ConferenceModuleDbSeeder`](#conferencemoduledbseeder).
+- **Why it's built this way**: ADR-006 fixes one sealed context class per engine, shared across modules, rather than one context class per module, and the runtime honors that literally. The concrete context is Common's `sealed class SQLServerDbContext`, which derives from [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) directly (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/SQLServerDbContext.cs:15-20`), and the Conference migrations project targets that same type through `IDesignTimeDbContextFactory<SQLServerDbContext>` (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/DesignTimeSQLServerDbContextFactory.cs:12-15`). Keeping the module-level class abstract, behavior-free, and additive means the per-engine story stated in ADR-018 (SQL Server today, Cosmos and SQLite as further engines) needs no per-module change: a new engine adds one sealed class in MMCA.Common, not sixteen `DbSet` declarations per module. `[Rubric §7, Microservices Readiness]` assesses whether a module could be lifted into its own host without a rewrite; the entity-set surface being module-scoped and `internal` is part of what makes that lift mechanical.
+- **Where it's used**: the sixteen sets correspond one to one with sixteen of the eighteen configurations in this chapter, including [`EventConfiguration`](#eventconfiguration), [`SessionConfiguration`](#sessionconfiguration), [`SponsorConfiguration`](#sponsorconfiguration), [`ActivityConfiguration`](#activityconfiguration) and [`SessionAssetConfiguration`](#sessionassetconfiguration), and with the tables the Conference migrations project maintains for the `ADC_Conference` database. Application-layer access to those tables runs through [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork), and the rows themselves are first written by [`ConferenceModuleDbSeeder`](#conferencemoduledbseeder).
 - **Caveats / not-in-source**: (1) **Nothing derives from this class.** A repository-wide search of MMCA.ADC for the identifier `ModuleApplicationDbContext` returns exactly three hits, the three sibling declarations in the Conference, Engagement, and Identity Infrastructure projects, and no subclass, no DI registration, and no consumer. The class compiles and is packaged, but it is not on the runtime path today: `SQLServerDbContext` bypasses it. Treat this section as documentation of the module's entity surface and of an extension point that is currently unexercised, not of a type in the request path. (2) Consequently the `internal` visibility of the sets protects a surface nothing currently reaches; the layering point it makes is real but presently theoretical for this class. (3) `SessionAiScore` and `SpeakerQuestionAnswer` have configurations in `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/` but no `DbSet` here; whether that is deliberate or an oversight is not determinable from source, since no code reads the `DbSet` list. (4) The three sibling `ModuleApplicationDbContext` classes share a name across three namespaces (Conference at `:20`, Engagement at `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:19`, Identity at `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:15`); each has its own section in its own chapter, so check the namespace before assuming which one a search result refers to.
-
----
 
 
 ---

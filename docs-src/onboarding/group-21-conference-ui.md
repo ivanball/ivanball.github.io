@@ -1,6 +1,6 @@
 # 21. ADC Conference - UI
 
-**What this chapter covers.** This is the **consumer half** of the "write-once UI, render everywhere" story ([primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)): the Blazor pages, page-local collaborators, and per-entity HTTP services that turn the Conference REST surface ([G20](group-20-conference-api-grpc.md)) into the screens an organizer, a speaker, a sponsor, or an anonymous attendee actually touches. Everything here lives in the per-module Razor Class Library `MMCA.ADC.Conference.UI` (under `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/`, the path every `File:line` citation below is relative to), which, like every consumer UI, assembles the reusable primitives taught in [G15 (Common UI Framework)](group-15-common-ui-framework.md) into concrete pages. There is very little new *infrastructure* here: the value is in seeing how a twelve-area feature surface (events, sessions, speakers, conference categories and their items, questions, rooms, sponsors, activities, feedback moderation, public browsing, session selection, and the conference landing page) is *composed* from the framework's list-page base, typed HTTP service base, validation bridge, device-capability abstractions, and module system. The headline lens is `[Rubric §18, UI Architecture & Component Design]`, which assesses component reuse, separation of presentation from data access, and a coherent composition model. Because the same Razor components compile into the Blazor Server, WebAssembly, and .NET MAUI hybrid heads, this one library renders the conference across web, Android, iOS, macOS, and Windows with no per-platform reimplementation. `[Rubric §22, Responsive & Cross-Browser/Device]`.
+**What this chapter covers.** This is the **consumer half** of the "write-once UI, render everywhere" story ([primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)): the Blazor pages, page-local collaborators, and per-entity HTTP services that turn the Conference REST surface ([G20](group-20-conference-api-grpc.md)) into the screens an organizer, a speaker, a sponsor, or an anonymous attendee actually touches. Everything here lives in the per-module Razor Class Library `MMCA.ADC.Conference.UI` (under `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/`, the path every `File:line` citation below is relative to), which, like every consumer UI, assembles the reusable primitives taught in [G15 (Common UI Framework)](group-15-common-ui-framework.md) into concrete pages. There is very little new *infrastructure* here: the value is in seeing how a thirteen-area feature surface (events, sessions, speakers, conference categories and their items, questions, rooms, sponsors, activities, session materials, feedback moderation, public browsing, session selection, and the conference landing page) is *composed* from the framework's list-page base, typed HTTP service base, validation bridge, device-capability abstractions, and module system. The headline lens is `[Rubric §18, UI Architecture & Component Design]`, which assesses component reuse, separation of presentation from data access, and a coherent composition model. Because the same Razor components compile into the Blazor Server, WebAssembly, and .NET MAUI hybrid heads, this one library renders the conference across web, Android, iOS, macOS, and Windows with no per-platform reimplementation. `[Rubric §22, Responsive & Cross-Browser/Device]`.
 
 ## The layering inside the UI: a page never touches HttpClient
 
@@ -20,7 +20,7 @@ Two public lists deliberately opt out of the grid entirely. [`PublicSponsorList`
 
 ## Detail pages, form models, and one declaration of the rules
 
-The organizer detail pages share their own ADC-local base, [`DetailPageBase`](#detailpagebase) (`Pages/Common/DetailPageBase.cs:19`), which owns the two things every one of them repeated verbatim: the page-scoped `CancellationTokenSource` with its dispose pattern (`:21`, `:29`, `:56`) and the inline edit-mode lifecycle, `IsEditing`/`IsDirty` plus the `BeginEdit`/`EndEdit` transitions that keep the dirty flag from being left set behind a closed editor (`:32` to `:52`). Four pages inherit it from markup: [`EventDetail`](#eventdetail), [`SessionDetail`](#sessiondetail), [`SpeakerDetail`](#speakerdetail), and [`ConferenceCategoryDetail`](#conferencecategorydetail) (`Pages/Event/EventDetail.razor:6`, code-behind at `Pages/Event/EventDetail.razor.cs:19`), and the dirty flag feeds Common's `UnsavedChangesGuard` directly (`Pages/Event/EventDetail.razor:11`). `[Rubric §24, Forms, Validation & UX Safety]`.
+The organizer detail pages share their own ADC-local base, [`DetailPageBase`](#detailpagebase) (`Pages/Common/DetailPageBase.cs:19`), which owns the two things every one of them repeated verbatim: the page-scoped `CancellationTokenSource` with its dispose pattern (`:21`, `:29`, `:56`) and the inline edit-mode lifecycle, `IsEditing`/`IsDirty` plus the `BeginEdit`/`EndEdit` transitions that keep the dirty flag from being left set behind a closed editor (`:32` to `:52`). Four pages inherit it from markup: [`EventDetail`](#eventdetail), [`SessionDetail`](#sessiondetail), [`SpeakerDetail`](#speakerdetail), and [`ConferenceCategoryDetail`](#conferencecategorydetail) (`Pages/Events/EventDetail.razor:9` with its code-behind at `Pages/Events/EventDetail.razor.cs:19`, `Pages/Speakers/SpeakerDetail.razor:9` with its code-behind at `Pages/Speakers/SpeakerDetail.razor.cs:24`), and the dirty flag feeds Common's `UnsavedChangesGuard` directly (`Pages/Events/EventDetail.razor:14`). `[Rubric §24, Forms, Validation & UX Safety]`.
 
 Editable fields are not loose page state. Each entity declares an abstract **form model** carrying its DataAnnotations, and the create page and the detail page's inline editor each bind a sealed subclass of it: [`EventFormModel`](#eventformmodel) with [`EventCreateModel`](#eventcreatemodel) and [`EventEditModel`](#eventeditmodel) (`Pages/Event/EventFormModel.cs:26`, `Pages/Event/EventCreateModel.cs:11`, `Pages/Event/EventEditModel.cs:11`), and the same triad for sessions, speakers, rooms, questions, sponsors, activities, and conference categories ([`SessionFormModel`](#sessionformmodel) `Pages/Session/SessionFormModel.cs:24`, [`SpeakerFormModel`](#speakerformmodel) `Pages/Speaker/SpeakerFormModel.cs:25`, [`RoomFormModel`](#roomformmodel) `Pages/Room/RoomFormModel.cs:24`, [`QuestionFormModel`](#questionformmodel) `Pages/Question/QuestionFormModel.cs:24`, [`SponsorFormModel`](#sponsorformmodel) `Pages/Sponsor/SponsorFormModel.cs:25`, [`ActivityFormModel`](#activityformmodel) `Pages/Activity/ActivityFormModel.cs:25`, [`ConferenceCategoryFormModel`](#conferencecategoryformmodel) `Pages/ConferenceCategory/ConferenceCategoryFormModel.cs:24`). The rules live once: the MudForm fields bridge to the annotations through Common's [`ModelValidation`](group-15-common-ui-framework.md#modelvalidation) rather than repeating `Required`/`RequiredError` per field, the length caps come from the DTO's own constants, and every `ErrorMessage` is a resource key resolved by the localizing [`DataAnnotationsModelValidator`](group-15-common-ui-framework.md#dataannotationsmodelvalidator) ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)) (`Pages/Event/EventFormModel.cs:42` to `:44`). The subclasses own only the direction of travel: `EventCreateModel.ToNew()` builds the posted DTO and always as an unpublished draft, because publishing is a separate gesture on the detail page (`Pages/Event/EventCreateModel.cs:25` to `:42`), while `EventEditModel.LoadFrom(source)` copies the loaded event into the editor in one call and `ToUpdated(source)` writes the edited values over the identity, row version, and published state that were loaded (`Pages/Event/EventEditModel.cs:18`, `:48`). Because both pages bind the same `EventFormFields.razor` component to an instance of the same base, a value the create page accepts is a value the detail page accepts. `[Rubric §1, SOLID]` and `[Rubric §15, Best Practices & Code Quality]`. The one model with no create page to mirror follows the same discipline anyway: [`ConferenceCategoryItemEditModel`](#conferencecategoryitemeditmodel) declares the inline item form's rules against `CategoryItemDTO`'s own length constant (`Pages/ConferenceCategory/ConferenceCategoryItemEditModel.cs:19` to `:31`).
 
@@ -46,7 +46,17 @@ First, the **speaker self-service dashboard**. [`SpeakerDashboard`](#speakerdash
 
 Second, **organizer feedback moderation** (BR-53). [`OrganizerEventFeedback`](#organizereventfeedback) and [`OrganizerSessionFeedback`](#organizersessionfeedback) let organizers review and delete answers through [`OrganizerEventFeedbackService`](#organizereventfeedbackservice) and [`OrganizerSessionFeedbackService`](#organizersessionfeedbackservice) (`Services/OrganizerFeedbackService.cs:15`, `:66`, behind [`IOrganizerEventFeedbackUIService`](#iorganizereventfeedbackuiservice) and [`IOrganizerSessionFeedbackUIService`](#iorganizersessionfeedbackuiservice) at `Services/IOrganizerFeedbackUIService.cs:11`, `:27`). The read is the unscoped organizer view, capped at 500 answers (`Services/OrganizerFeedbackService.cs:26`), and each delete passes the parent id explicitly on the query string to satisfy the controller's binding (`Services/OrganizerFeedbackService.cs:48`). `[Rubric §11, Security]`: the scoping is server-side and the pages carry `[Authorize(Roles = "Organizer")]` (`Pages/Feedback/OrganizerEventFeedback.razor:2`), not a client-side hide.
 
-Third, **QR self-service**. [`SpeakerQr`](#speakerqr) renders a full-screen code a speaker can hold up at the podium with **no backend call at all**: the speaker comes from the `speaker_id` claim and the payload is built locally, so the page renders identically on the prerender and interactive passes (`Pages/Speaker/SpeakerQr.razor.cs:19`, `:49` to `:55`). The payload is always the absolute public URL from Common's [`IPublicLinkBuilder`](group-15-common-ui-framework.md#ipubliclinkbuilder) (`Pages/Speaker/SpeakerQr.razor.cs:21`, `:55`), never the WebView-internal origin, or a code scanned off the MAUI head would open for nobody else. The framework's `QrCodeButton` puts the same capability on five organizer and public print surfaces: public event detail (`Pages/Public/PublicEventDetail.razor:30`), public session detail (`Pages/Public/PublicSessionDetail.razor:41`), public speaker detail (`Pages/Public/PublicSpeakerDetail.razor:45`), room detail (`Pages/Room/RoomDetail.razor:58`), and sponsor detail (`Pages/Sponsor/SponsorDetail.razor:70`).
+Third, **QR self-service**. [`SpeakerQr`](#speakerqr) renders a full-screen code a speaker can hold up at the podium with **no backend call at all**: the speaker comes from the `speaker_id` claim and the payload is built locally, so the page renders identically on the prerender and interactive passes (`Pages/Speaker/SpeakerQr.razor.cs:19`, `:49` to `:55`). The payload is always the absolute public URL from Common's [`IPublicLinkBuilder`](group-15-common-ui-framework.md#ipubliclinkbuilder) (`Pages/Speaker/SpeakerQr.razor.cs:21`, `:55`), never the WebView-internal origin, or a code scanned off the MAUI head would open for nobody else. The framework's `QrCodeButton` puts the same capability on five organizer and public print surfaces: public event detail (`Pages/Public/Events/PublicEventDetail.razor:31`), public session detail (`Pages/Public/Sessions/PublicSessionDetail.razor:44`), public speaker detail (`Pages/Public/Speakers/PublicSpeakerDetail.razor:47`, code-behind at `Pages/Public/Speakers/PublicSpeakerDetail.razor.cs:22`), room detail (`Pages/Rooms/RoomDetail.razor:60`), and sponsor detail (`Pages/Sponsors/SponsorDetail.razor:73`).
+
+## Session materials, a resource deliberately not shaped as CRUD
+
+Speakers publish the decks, handouts, and links that go with their own sessions, and anyone downloads them from the public session page (ADR-123, speaker session assets). This is the one area here that does **not** get an `IEntityService<,>`. [`ISessionAssetUIService`](#isessionassetuiservice) declares exactly the five operations the API offers, `GetBySessionAsync`, `AddLinkAsync`, `UploadFileAsync`, `UpdateAsync`, and `DeleteAsync` (`Services/SessionAssets/ISessionAssetUIService.cs:17`, `:27`, `:35`, `:49`, `:66`), with the rationale recorded on the interface itself (`:11` to `:16`): the endpoint has no paged list, no lookup, and no by-id read (an asset is only ever fetched as part of its session's list), and its two creates are different verbs on different routes. Declaring only what exists keeps a page from reaching for a CRUD method with no endpoint behind it. The two write bodies sit beside the service as [`SessionAssetLinkRequest`](#sessionassetlinkrequest) and [`SessionAssetUpdateRequest`](#sessionassetupdaterequest) (`Services/SessionAssets/SessionAssetRequests.cs:14`, `:35`) rather than being reused from the Application layer, because the UI RCL references the module's Shared project only (`SessionAssetRequests.cs:7` to `:13`); neither carries the caller's identity, which the API stamps from the token, so a request body can never claim to be a speaker it is not. `[Rubric §9, API & Contract Design]`.
+
+[`SessionAssetService`](#sessionassetservice) derives from Common's [`AuthenticatedServiceBase`](group-15-common-ui-framework.md#authenticatedservicebase) (`Services/SessionAssets/SessionAssetService.cs:26`) and is the clearest worked example in this library of **per-verb transport policy**. Adding a link appends a row, so that POST carries an `Idempotency-Key` and keeps the shared retry policy (`:59`, `:68`). The file POST carries the key but has no retry at all: a picked file's stream is single-shot (neither a browser file input nor a native picker rewinds), so a second attempt would post an exhausted body, while a repeated key replays the stored response instead of re-uploading 50 MB over venue wifi (`:82` to `:86`, `:103`, `:130`). The upload streams straight from the browser file into the multipart body with the cap stated to `OpenReadStream`, because Blazor's 512 KB default would otherwise truncate every real deck (`:107`, note at `:105` to `:106`), and the four part names match the controller's `IFormFile` parameter and its `[FromForm]` arguments exactly (`:125` to `:128`). The update is conditional (the ADR-035 rule): the edited row version travels as `If-Match` through [`ConcurrencyETag`](group-08-auth.md#concurrencyetag), and a DTO carrying no token sends no header, so the API refuses with 428 rather than overwriting another editor's change (`:151`, header applied at `:204` to `:207`). Both the key and the precondition are default headers on a client built once per logical operation, so every retry attempt states the same pair (`:195`, reasoning at `:188` to `:194`). `[Rubric §29, Resilience]`.
+
+Two components consume that service. [`SessionAssetsPanel`](#sessionassetspanel) is the management half (`Pages/SessionAssets/SessionAssetsPanel.razor.cs:31`), a component rather than a page, so the organizer session detail page and a speaker's own dashboard host it by saying only *which* session and *whether* the viewer may manage it (`Pages/Sessions/SessionDetail.razor:171`, `Pages/Speakers/SpeakerDashboard.razor:223`, parameters at `SessionAssetsPanel.razor.cs:36`, `:42`). `CanManage` decides only what the panel offers: the right itself is re-checked by the API on every write (a privileged role, or a speaker whose `speaker_id` claim is on the session), so a viewer who reaches a hidden control still gets `SessionAsset.Forbidden` (`:20` to `:22`). `[Rubric §11, Security]`. The panel enforces the two limits client-side as courtesy rather than as the rule: the per-session cap disables the add controls (`:67`, the constant `SessionAssetLimits.MaxAssetsPerSession = 10` at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/SessionAssets/SessionAssetLimits.cs:27`), and the size check runs before the post so a speaker does not wait out a whole 50 MB upload on venue wifi to be told no (`:153` to `:154`, cap at `SessionAssetLimits.cs:11`). Every refusal is worded from the API's machine-readable error *code* through a resource-key table (`:268`, generic fallback at `:291`), so `SessionAsset.UnsupportedFormat`, `SessionAsset.LimitReached`, and `SessionAsset.StorageNotConfigured` each read in the selected language instead of echoing the server's English sentence ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)); `Http.413` is the one transport status in that table, because Kestrel refuses an over-cap body before the friendly check ever runs (`:256` to `:259`). A pasted `github.com/me/repo` is normalized to `https://` locally rather than round-tripped to be told about schemes (`:326`, reasoning at `:316` to `:322`), and every write funnels through one `MutateAsync` shape: run it, report the refusal or the success, run the caller's own reset, reload the list (`:218`, value-returning overload at `:248`).
+
+[`SessionAssetsDownloadList`](#sessionassetsdownloadlist) is the public read-only half, embedded in the public session page (`Pages/SessionAssets/SessionAssetsDownloadList.razor.cs:18`, hosted at `Pages/Public/Sessions/PublicSessionDetail.razor:114`). It is anonymous because the list endpoint is, and a reader who cannot see the session gets an empty list rather than a refusal. A load failure here is deliberately silent: the materials are supplementary to the session page, so the section simply does not render rather than raising an alert for something the reader never asked for (`:13` to `:17`, `:43`). Both components reload only when the session id actually changes (`:31` to `:38`, panel at `SessionAssetsPanel.razor.cs:72` to `:81`), and both swallow `OperationCanceledException` from disposal or the InteractiveAuto render-mode transition (`SessionAssetsDownloadList.razor.cs:45` to `:48`). The presentation decisions they would otherwise duplicate live once in [`SessionAssetDisplay`](#sessionassetdisplay) (`Pages/SessionAssets/SessionAssetDisplay.cs:13`): the icon that names an asset by kind and by format so a reader can tell a deck from an archive before clicking (`:27`), and a byte count split into an amount plus the resource *key* naming its unit, which the caller composes through its own localizer so a Spanish reader reads "1,4 MB" (`:56`, used at `SessionAssetsDownloadList.razor.cs:53` and `SessionAssetsPanel.razor.cs:310`). The extension is read off the stored blob name first, because a blob URL can carry a signature query string and taking the extension from that would yield the query rather than the format (`SessionAssetDisplay.cs:79` to `:86`). `[Rubric §18, UI Architecture & Component Design]` and `[Rubric §27, Internationalization & Localization]`.
 
 ## Session-selection decision support, the asynchronous edge
 
@@ -82,7 +92,7 @@ All paths are centralized in [`ConferenceRoutePaths`](#conferenceroutepaths), a 
 
 Two registration types wire the area in. [`ConferenceUIModule`](#conferenceuimodule) implements Common's [`IUIModule`](group-15-common-ui-framework.md#iuimodule) (the front-end counterpart of the [`IModule`](group-14-module-system-composition.md#imodule) back-end contract): it declares the module's sixteen [`NavItem`](group-15-common-ui-framework.md#navitem) entries, whose labels are resource *keys* (`Nav.Events`, `Nav.Dashboard`, and so on) resolved by the shared NavMenu at render time against the co-located `ConferenceUIModule.resx` pair (`MMCA.ADC.Conference.UI/ConferenceUIModule.cs:14`, `:16` to `:18`). Those sixteen split three ways: five public entries for everyone, Events, Sessions, Speakers, Sponsors, and Activities (`ConferenceUIModule.cs:21` to `:25`), two `speaker_id`-claim-gated entries in the user section, the dashboard and the speaker's own QR (`ConferenceUIModule.cs:28`, `:29`), and an `Organizer`-role-gated admin group of nine, Events, Sessions, Speakers, Categories, Questions, Rooms, Sponsors, Activities, and Session Selection (`ConferenceUIModule.cs:32` to `:40`); it then exposes its assembly so the host can discover the Razor routes (`ConferenceUIModule.cs:43`).
 
-The companion [`DependencyInjection`](#dependencyinjection) extension `AddConferenceUI()` (a C# `extension(IServiceCollection)` member, [primer §4](00-primer.md#c-extensiont-types-read-this-once)) is the one call a host makes (`MMCA.ADC.Conference.UI/DependencyInjection.cs:17`, `:19`). It delegates the prologue to Common's `AddUIModule<ConferenceUIModule>()`, which scans the module assembly for every `IEntityService<,>` implementation as scoped and registers the descriptor as a singleton `IUIModule` (`DependencyInjection.cs:23`), then explicitly registers what a scan cannot infer: the four child-entity services (`:26` to `:29`), the speaker dashboard (`:32`), the two organizer feedback services (`:35`, `:36`), session selection (`:39`), the offline-first schedule service (`:42`), the three lookup services (`:45` to `:47`), and the composite speaker-detail lookup (`:51`). Public share links are *not* registered here: `IPublicLinkBuilder` comes from the framework's own `AddUIShared`, and the MAUI head overrides that registration afterwards so shared links always point at the web app, a note left in place where the registration used to be (`DependencyInjection.cs:53` to `:56`). Because the scan covers the entity services, adding a tenth CRUD entity needs no edit in this file at all, and because the module contributes its own nav and assembly, the shell folds it in with no edit to the shell either. `[Rubric §1, SOLID]` (Open/Closed) and `[Rubric §18, UI Architecture]`. Read the per-type sections that follow for the mechanics of each page, model, and service; the bUnit and Playwright tests that exercise this library live in the testing chapter ([G27](group-27-testing-infrastructure.md)).
+The companion [`DependencyInjection`](#dependencyinjection) extension `AddConferenceUI()` (a C# `extension(IServiceCollection)` member, [primer §4](00-primer.md#c-extensiont-types-read-this-once)) is the one call a host makes (`MMCA.ADC.Conference.UI/DependencyInjection.cs:18`, extension block at `:20`, method at `:26`). It delegates the prologue to Common's `AddUIModule<ConferenceUIModule>()`, which scans the module assembly for every `IEntityService<,>` implementation as scoped and registers the descriptor as a singleton `IUIModule` (`DependencyInjection.cs:30`), then explicitly registers what a scan cannot infer: the four child-entity services (`:33` to `:36`), the speaker dashboard (`:39`), the two organizer feedback services (`:42`, `:43`), session selection (`:46`), the session-materials service, which is outside the scan for exactly the reason its interface records (`:51`, note at `:48` to `:50`), the offline-first schedule service (`:54`), the three lookup services (`:57` to `:59`), and the composite speaker-detail lookup (`:63`). Public share links are *not* registered here: `IPublicLinkBuilder` comes from the framework's own `AddUIShared`, and the MAUI head overrides that registration afterwards so shared links always point at the web app, a note left in place where the registration used to be (`DependencyInjection.cs:65` to `:68`). Because the scan covers the entity services, adding a tenth CRUD entity needs no edit in this file at all, and because the module contributes its own nav and assembly, the shell folds it in with no edit to the shell either. `[Rubric §1, SOLID]` (Open/Closed) and `[Rubric §18, UI Architecture]`. Read the per-type sections that follow for the mechanics of each page, model, and service; the bUnit and Playwright tests that exercise this library live in the testing chapter ([G27](group-28-testing-infrastructure.md)).
 
 ### ADCEventInfo
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Home` · `MMCA.ADC.Conference.UI/Pages/Home/ADCHome.razor.cs:291` · Level 0 · record (sealed, private)
@@ -214,33 +224,34 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 - **What it is**: the Conference module's UI descriptor. It contributes the navigation items for the whole conference capability (public Events/Sessions/Speakers/Sponsors/Activities, the claim-gated speaker Dashboard and QR page, and an organizer admin group covering Events, Sessions, Speakers, Categories, Questions, Rooms, Sponsors, Activities, and Session Selection) and exposes its assembly so the host can discover the module's routable Blazor components.
 - **Depends on**: [IUIModule](group-15-common-ui-framework.md#iuimodule) (the contract it implements), [NavItem](group-15-common-ui-framework.md#navitem) and [NavSection](group-15-common-ui-framework.md#navsection) (the nav vocabulary from `MMCA.Common.UI.Common`), [RoleNames](group-08-auth.md#rolenames) (the `Organizer` role string), [ConferenceRoutePaths](#conferenceroutepaths) (the URLs), plus MudBlazor `Icons` and `System.Reflection.Assembly` (externals, `:1`, `:5`) and the co-located `ConferenceUIModule.resx` / `ConferenceUIModule.es.resx` pair.
-- **Concept introduced: the modular-UI descriptor, the front-end analogue of `IModule`.** [Rubric §18, UI Architecture and Component Design] assesses whether UI is composed from cohesive, self-describing modules rather than a hard-coded master shell; a module declaring its own menu is exactly that, and it is the Open/Closed half of [Rubric §1, SOLID]: enabling a module adds its navigation with no edit to the shell. [Rubric §25, Navigation and Information Architecture] is served because the items are role- and claim-aware and grouped into sections. [Rubric §11, Security] applies with an important caveat: hiding a nav item is UX only. The services still enforce authorization server-side, so the claim and role here are not the security boundary. Per [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) the `Title` and `Group` strings are resource *keys*, not literals: `typeof(ConferenceUIModule)` in the `TitleResource` position on every item tells the shared NavMenu to resolve them against the co-located `.resx` at render time, which the file's own comment records (`:16-17`). The record's own documentation adds the failure mode (`MMCA.Common.UI/Common/NavItem.cs:10-14`): a key the resource type does not declare renders as the raw string, so a not-yet-translated entry is legible rather than blank.
+- **Concept introduced: the modular-UI descriptor, the front-end analogue of `IModule`.** [Rubric §18, UI Architecture and Component Design] assesses whether UI is composed from cohesive, self-describing modules rather than a hard-coded master shell; a module declaring its own menu is exactly that, and it is the Open/Closed half of [Rubric §1, SOLID]: enabling a module adds its navigation with no edit to the shell. [Rubric §25, Navigation and Information Architecture] is served because the items are role- and claim-aware and grouped into sections. [Rubric §11, Security] applies with an important caveat: hiding a nav item is UX only. The services still enforce authorization server-side, so the claim and role here are not the security boundary. Per [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) the `Title` and `Group` strings are resource *keys*, not literals: `typeof(ConferenceUIModule)` in the `TitleResource` position on every item tells the shared NavMenu to resolve them against the co-located `.resx` at render time, which the file's own comment records (`:16-17`). The record's own documentation adds the failure mode (`MMCA.Common.UI/Common/NavItem.cs:14-18`): a key the resource type does not declare renders as the raw string, so a not-yet-translated entry is legible rather than blank.
 - **Walkthrough**: `NavItems` (`:18-41`) is an `IReadOnlyList<NavItem>` initialized with a collection expression in three tiers, sixteen items in all.
   - **Public** (`:21-25`): five items for everyone, anonymous included, pointing at the `/conference/...` routes: Events, Sessions, Speakers, Sponsors, Activities. They carry no `RequiredRole` and no `Section`, so they default to `NavSection.General` (`MMCA.Common.UI/Common/NavItem.cs:16`).
   - **Speaker** (`:28-29`): the Dashboard and the QR page, both carrying `RequiredClaim: "speaker_id"` and `Section: NavSection.User`, so they appear only for a user whose JWT links them to a speaker record and they render in the user menu rather than the main list.
   - **Organizer** (`:32-40`): nine items, each carrying `RoleNames.Organizer`, `Section: NavSection.Admin`, and `Group: "Nav.Group.Conference"` so they fold into one labelled admin group, ending with the Session Selection entry (`:40`).
   - `Assembly` (`:43`) returns `typeof(ConferenceUIModule).Assembly` so the host's Blazor router can discover this library's routable components. Note that "Events", "Sessions", "Speakers", "Sponsors", and "Activities" each appear twice in the list, once public and once organizer, differing only in route and gating: the same label serves two audiences with two destinations.
 - **Why it's built this way**: mirroring the backend [IModule](group-14-module-system-composition.md#imodule) pattern on the UI side keeps the app extensible. A host that boots without the Conference module simply has no conference nav and no conference routes, with no conditional code anywhere in the shell. The class also leaves `AppBarComponentTypes` and `LayoutComponentTypes` at their interface defaults (`MMCA.Common.UI/Common/Interfaces/IUIModule.cs:19-22`): Conference contributes no app-bar badge and no root overlay.
-- **Where it's used**: registered as a singleton `IUIModule` by this module's [DependencyInjection](#dependencyinjection) through `AddUIModule<ConferenceUIModule>()` (`DependencyInjection.cs:23`, implemented at `MMCA.Common.UI/DependencyInjection.cs:207-216`) and aggregated by the shared UI navigation builder in [group 15](group-15-common-ui-framework.md#iuimodule).
+- **Where it's used**: registered as a singleton `IUIModule` by this module's [DependencyInjection](#dependencyinjection) through `AddUIModule<ConferenceUIModule>()` (`DependencyInjection.cs:23`, implemented at `MMCA.Common.UI/DependencyInjection.cs:259-268`) and aggregated by the shared UI navigation builder in [group 15](group-15-common-ui-framework.md#iuimodule).
 
 ### DependencyInjection
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI` · `MMCA.ADC.Conference.UI/DependencyInjection.cs:17` · Level 6 · class (static)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI` · `MMCA.ADC.Conference.UI/DependencyInjection.cs:18` · Level 6 · class (static)
 
-- **What it is**: the Conference UI composition root. Its single `AddConferenceUI()` method is the one call a host makes to register every Conference UI service (the per-entity CRUD services by assembly scan, then the child-entity, dashboard, feedback, selection, offline-schedule, and lookup services explicitly) plus the module descriptor.
-- **Depends on**: [ConferenceUIModule](#conferenceuimodule) and, through `AddUIModule<T>` (`MMCA.Common.UI/DependencyInjection.cs:207-216`), Scrutor's assembly-scanning API and the open generic [IEntityService<TEntityDTO, TIdentifierType>](group-15-common-ui-framework.md#ientityservicetentitydto-tidentifiertype). Then this module's own service contracts: [IEventSpeakerUIService](#ieventspeakeruiservice), [ISessionSpeakerUIService](#isessionspeakeruiservice), [ISessionCategoryItemUIService](#isessioncategoryitemuiservice), [ISpeakerCategoryItemUIService](#ispeakercategoryitemuiservice), [ISpeakerDashboardUIService](#ispeakerdashboarduiservice), [IOrganizerEventFeedbackUIService](#iorganizereventfeedbackuiservice), [IOrganizerSessionFeedbackUIService](#iorganizersessionfeedbackuiservice), [ISessionSelectionUIService](#isessionselectionuiservice), [IPublicSessionScheduleService](#ipublicsessionscheduleservice), [ISpeakerLookupService](#ispeakerlookupservice), [IEventLookupService](#ieventlookupservice), [ICategoryItemLookupService](#icategoryitemlookupservice), and [ISpeakerDetailLookupService](#ispeakerdetaillookupservice).
-- **Concept introduced: the `extension(IServiceCollection)` registration block, half convention and half explicit.** [Rubric §3, Clean Architecture] and [Rubric §15, Best Practices & Code Quality] both come down to keeping wiring at the edges; this file is the module's one wiring point. It uses the C# preview extension-type syntax `extension(IServiceCollection services)` (`:13`) to hang `AddConferenceUI` (`:19`) off `IServiceCollection`, the same idiom every module's `DependencyInjection` uses. The convention half is delegated to `AddUIModule<ConferenceUIModule>()` (`:23`), which does two things in one call (`MMCA.Common.UI/DependencyInjection.cs:210-216`): a Scrutor scan of this assembly registering every `IEntityService<,>` implementation `AsImplementedInterfaces().WithScopedLifetime()`, and the singleton registration of the descriptor itself. Registering `AsImplementedInterfaces` is what makes a page able to inject the narrow per-entity interface rather than the open generic, and it means adding a new entity service needs no edit here.
-- **Walkthrough**: the scan runs first (`:23`), then the method registers by hand exactly the services the scan cannot see, because they do not implement `IEntityService<,>`:
-  - four child-entity managers for the join relationships (`:26-29`);
-  - the speaker dashboard service (`:32`);
-  - the two organizer feedback moderation services, tagged BR-53 in the comment (`:34-36`);
-  - the session-selection decision-support service (`:39`);
-  - the offline-first page fetch for the public session schedule, tagged to [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 3 (`:41-42`);
-  - three cross-module lookup services (`:44-47`);
-  - and the composite lookup for the speaker detail page (`:51`), whose comment states its purpose precisely (`:49-50`): one call and one failure branch over the three lookups that page needs together.
+- **What it is**: the Conference UI composition root. Its single `AddConferenceUI()` method is the one call a host makes to register every Conference UI service (the per-entity CRUD services by assembly scan, then the child-entity, dashboard, feedback, selection, session-asset, offline-schedule, and lookup services explicitly) plus the module descriptor.
+- **Depends on**: [ConferenceUIModule](#conferenceuimodule) and, through `AddUIModule<T>` (`MMCA.Common.UI/DependencyInjection.cs:259-268`), Scrutor's assembly-scanning API and the open generic [IEntityService<TEntityDTO, TIdentifierType>](group-15-common-ui-framework.md#ientityservicetentitydto-tidentifiertype). Then this module's own service contracts: [IEventSpeakerUIService](#ieventspeakeruiservice), [ISessionSpeakerUIService](#isessionspeakeruiservice), [ISessionCategoryItemUIService](#isessioncategoryitemuiservice), [ISpeakerCategoryItemUIService](#ispeakercategoryitemuiservice), [ISpeakerDashboardUIService](#ispeakerdashboarduiservice), [IOrganizerEventFeedbackUIService](#iorganizereventfeedbackuiservice), [IOrganizerSessionFeedbackUIService](#iorganizersessionfeedbackuiservice), [ISessionSelectionUIService](#isessionselectionuiservice), [ISessionAssetUIService](#isessionassetuiservice), [IPublicSessionScheduleService](#ipublicsessionscheduleservice), [ISpeakerLookupService](#ispeakerlookupservice), [IEventLookupService](#ieventlookupservice), [ICategoryItemLookupService](#icategoryitemlookupservice), and [ISpeakerDetailLookupService](#ispeakerdetaillookupservice).
+- **Concept introduced: the `extension(IServiceCollection)` registration block, half convention and half explicit.** [Rubric §3, Clean Architecture] and [Rubric §15, Best Practices & Code Quality] both come down to keeping wiring at the edges; this file is the module's one wiring point. It uses the C# preview extension-type syntax `extension(IServiceCollection services)` (`:20`) to hang `AddConferenceUI` (`:26`) off `IServiceCollection`, the same idiom every module's `DependencyInjection` uses. The convention half is delegated to `AddUIModule<ConferenceUIModule>()` (`:30`), which does two things in one call (`MMCA.Common.UI/DependencyInjection.cs:262-268`): a Scrutor scan of this assembly registering every `IEntityService<,>` implementation `AsImplementedInterfaces().WithScopedLifetime()`, and the singleton registration of the descriptor itself. Registering `AsImplementedInterfaces` is what makes a page able to inject the narrow per-entity interface rather than the open generic, and it means adding a new entity service needs no edit here.
+- **Walkthrough**: the scan runs first (`:30`), then the method registers by hand exactly the services the scan cannot see, because they do not implement `IEntityService<,>`:
+  - four child-entity managers for the join relationships (`:33-36`);
+  - the speaker dashboard service (`:39`);
+  - the two organizer feedback moderation services, tagged BR-53 in the comment (`:41-43`);
+  - the session-selection decision-support service (`:46`);
+  - the session-asset service, registered explicitly because the endpoint has no paged list, no lookup, and no by-id read, so the service declares only the five operations the API actually offers, per the comment (`:48-51`);
+  - the offline-first page fetch for the public session schedule, tagged to [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 3 (`:53-54`);
+  - three cross-module lookup services (`:56-59`);
+  - and the composite lookup for the speaker detail page (`:63`), whose comment states its purpose precisely (`:61-62`): one call and one failure branch over the three lookups that page needs together.
 
-  Every explicit registration is `AddScoped`; only the descriptor is a singleton, which is correct because it is immutable data. The method returns `services` for chaining (`:57`).
-- **Why it's built this way**: scanning the uniform bulk and spelling out the one-off collaborators keeps registration short without hiding the non-trivial wiring. The closing comment (`:53-56`) documents what this file deliberately does *not* register: `IPublicLinkBuilder` comes from the framework, where `AddUIShared` `TryAdd`-registers the browser-origin builder (`MMCA.Common.UI/DependencyInjection.cs:129-131`), and the MAUI head overrides it afterwards with `AddCommonMauiPublicLinkBuilder()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:134`, called at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:143`) so last-registration-wins points shared links at the configured public web URL. Recording an ordering dependency that lives in another repository, right where a reader would otherwise expect the registration, is the cheap version of [Rubric §34, Architecture Governance and Documentation].
-- **Where it's used**: called once during startup by each of the three UI heads: the Blazor Server host (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:86`), the WebAssembly client (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:65`), and the MAUI host (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:131`), alongside the other modules' `AddXxxUI()` extensions.
+  Every explicit registration is `AddScoped`; only the descriptor is a singleton, which is correct because it is immutable data. The method returns `services` for chaining (`:69`).
+- **Why it's built this way**: scanning the uniform bulk and spelling out the one-off collaborators keeps registration short without hiding the non-trivial wiring. The closing comment (`:65-68`) documents what this file deliberately does *not* register: `IPublicLinkBuilder` comes from the framework, where `AddUIShared` `TryAdd`-registers the browser-origin builder (`MMCA.Common.UI/DependencyInjection.cs:134-136`), and the MAUI head overrides it afterwards with `AddCommonMauiPublicLinkBuilder()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:134`, called at `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:143`) so last-registration-wins points shared links at the configured public web URL. Recording an ordering dependency that lives in another repository, right where a reader would otherwise expect the registration, is the cheap version of [Rubric §34, Architecture Governance and Documentation].
+- **Where it's used**: called once during startup by each of the three UI heads: the Blazor Server host (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:139`), the WebAssembly client (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:65`), and the MAUI host (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:131`), alongside the other modules' `AddXxxUI()` extensions.
 
 ### ADCHome
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Home` · `MMCA.ADC.Conference.UI/Pages/Home/ADCHome.razor.cs:17` · Level 9 · class (sealed partial component)
@@ -436,7 +447,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   not a wire contract and not a domain type.
 - **Depends on**: no first-party types. Its two id parameters use the Conference identifier aliases
   `CategoryItemIdentifierType` and `ConferenceCategoryIdentifierType`, both `int` in this module
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:6-7`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:8-9`).
   BCL `string`.
 - **Concept introduced, the UI lookup projection.** `[Rubric §18, UI Architecture]` (assesses whether
   the front end keeps its own display-shaped models instead of dragging server contracts through the
@@ -497,7 +508,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   parent id through the same invariant conversion wrapped in `Uri.EscapeDataString`. Both conversions
   fall back to `string.Empty` on a null result. The generic parameters matter because Conference ids
   are not one type: `SpeakerIdentifierType` is a `System.Guid` while every other alias here is `int`
-  (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21`).
+  (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:7-24`).
 - **Why it's built this way**: the shared
   [ChildEntityServiceBase](group-15-common-ui-framework.md#childentityservicebase) appends whatever
   string it is given straight onto the endpoint, `var url = $"{endpoint}/{id}"`
@@ -538,7 +549,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   implementation detail (`CategoryItemLookupService.cs:22-38`).
 - **Where it's used**: implemented by [CategoryItemLookupService](#categoryitemlookupservice),
   registered scoped at
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:53` under the
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:59` under the
   "cross-module lookup services" comment, and injected into [SessionLookups](#sessionlookups)
   (`SessionLookups.cs:35`), [PublicSessionDetail](#publicsessiondetail)
   (`PublicSessionDetail.razor.cs:31`), and
@@ -585,11 +596,11 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 - **Why it's built this way**: keeping the four as separate interfaces in one file makes the family
   obvious to a reader while still giving DI four distinct binding targets
-  (`DependencyInjection.cs:32-35`). The implementations are equally uniform: each derives from the
+  (`DependencyInjection.cs:33-36`). The implementations are equally uniform: each derives from the
   shared [ChildEntityServiceBase](group-15-common-ui-framework.md#childentityservicebase) and supplies
   only its resource root (`ChildEntityServices.cs:23,36,49,62`).
 - **Where it's used**: implemented by [EventSpeakerService](#eventspeakerservice)
-  (`ChildEntityServices.cs:22-23`) and registered scoped at `DependencyInjection.cs:32`.
+  (`ChildEntityServices.cs:22-23`) and registered scoped at `DependencyInjection.cs:33`.
 - **Caveats / not-in-source**: unlike its three siblings, this contract has no page consumer in the
   current source. It is registered and implemented, but no Razor component injects
   `IEventSpeakerUIService` today, so the event-to-speaker association is reachable only through the
@@ -611,7 +622,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   `Task<Result<SessionCategoryItemDTO>>` (line 40) and `DeleteAsync(sessionId, id, ct)` returning
   `Task<Result>` (line 41).
 - **Where it's used**: implemented by [SessionCategoryItemService](#sessioncategoryitemservice)
-  (`ChildEntityServices.cs:48-49`), registered at `DependencyInjection.cs:34`, injected into
+  (`ChildEntityServices.cs:48-49`), registered at `DependencyInjection.cs:35`, injected into
   [SessionDetail](#sessiondetail) (`SessionDetail.razor.cs:33`), which pairs it with
   [ICategoryItemLookupService](#icategoryitemlookupservice), reached through
   [SessionLookups](#sessionlookups), to offer the untagged items as choices.
@@ -632,7 +643,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Walkthrough**: `AddAsync(sessionId, speakerId, ct)` returning `Task<Result<SessionSpeakerDTO>>`
   (line 28) and `DeleteAsync(sessionId, id, ct)` returning `Task<Result>` (line 29).
 - **Where it's used**: implemented by [SessionSpeakerService](#sessionspeakerservice)
-  (`ChildEntityServices.cs:35-36`), registered at `DependencyInjection.cs:33`, injected into
+  (`ChildEntityServices.cs:35-36`), registered at `DependencyInjection.cs:34`, injected into
   [SessionDetail](#sessiondetail) (`SessionDetail.razor.cs:32`).
 
 ### ISpeakerCategoryItemUIService
@@ -652,7 +663,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   `Task<Result<SpeakerCategoryItemDTO>>` (line 52) and `DeleteAsync(speakerId, id, ct)` returning
   `Task<Result>` (line 53).
 - **Where it's used**: implemented by [SpeakerCategoryItemService](#speakercategoryitemservice)
-  (`ChildEntityServices.cs:61-62`), registered at `DependencyInjection.cs:35`, injected into
+  (`ChildEntityServices.cs:61-62`), registered at `DependencyInjection.cs:36`, injected into
   [SpeakerCategoryItemsPanel](#speakercategoryitemspanel)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerCategoryItemsPanel.razor.cs:19`),
   the component [SpeakerDetail](#speakerdetail) hosts.
@@ -718,7 +729,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   `TryGetValue` fallback (`:78`) means a missing or newly added category degrades to an unprefixed label
   instead of throwing mid-render.
 - **Where it's used**: registered scoped in `AddConferenceUI` against
-  [ICategoryItemLookupService](#icategoryitemlookupservice) (`DependencyInjection.cs:53`); injected into
+  [ICategoryItemLookupService](#icategoryitemlookupservice) (`DependencyInjection.cs:59`); injected into
   [SessionDetail](#sessiondetail) (`Pages/Session/SessionDetail.razor.cs:26`) and
   [PublicSessionDetail](#publicsessiondetail) (`Pages/Public/PublicSessionDetail.razor.cs:27`), taken as
   a constructor argument by [SessionLookups](#sessionlookups) (`Pages/Session/SessionLookups.cs:32`),
@@ -799,7 +810,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   storage (`CategoryItemService.cs:10-12`), and the same line declares
   [`ICategoryItemUIService`](#icategoryitemuiservice).
 - **Where it's used**: picked up by the same assembly scan as its siblings
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:29`) and resolved
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:30`) and resolved
   through [`ICategoryItemUIService`](#icategoryitemuiservice) in
   [`ConferenceCategoryItemsPanel`](#conferencecategoryitemspanel), the category detail page's items
   editor (`Pages/ConferenceCategory/ConferenceCategoryItemsPanel.razor.cs:24`).
@@ -825,7 +836,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Walkthrough**: no members; the base call passes `"conferencecategories"` alongside the factory and
   token storage (`ConferenceCategoryService.cs:10-12`).
 - **Where it's used**: picked up by the same assembly scan as its siblings
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:29`) and resolved
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:30`) and resolved
   through [`IConferenceCategoryUIService`](#iconferencecategoryuiservice) in
   [`ConferenceCategoryList`](#conferencecategorylist)
   (`Pages/ConferenceCategory/ConferenceCategoryList.razor.cs:16`),
@@ -891,7 +902,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   child base keeps the add/remove surface uniform and each payload strongly typed, without the CRUD
   surface a join row does not need.
 - **Where it's used**: registered explicitly at
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:32` (join services
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:33` (join services
   are not `IEntityService<,>` implementations, so the assembly scan does not see them).
 - **Caveats / not-in-source**: unlike the CRUD services, none of the
   [`ChildEntityServiceBase`](group-15-common-ui-framework.md#childentityservicebase) helpers runs inside
@@ -929,7 +940,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   child base keeps the add/remove surface uniform and each payload strongly typed, without the CRUD
   surface a join row does not need.
 - **Where it's used**: registered explicitly at
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:34`, and injected
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:35`, and injected
   into [`SessionDetail`](#sessiondetail)'s "categories on this session" editor
   (`Pages/Session/SessionDetail.razor.cs:28`).
 
@@ -960,7 +971,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Why it's built this way**: same rationale as the other join services, a tiny per-link service over
   the shared child base keeps the add/remove surface uniform and strongly typed.
 - **Where it's used**: registered explicitly at
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:33`, and injected
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:34`, and injected
   into [`SessionDetail`](#sessiondetail)'s "speakers on this session" editor
   (`Pages/Session/SessionDetail.razor.cs:27`). The rows it creates are also what the server joins on when
   [`SpeakerDashboardService`](#speakerdashboardservice) filters sessions by the virtual `SpeakerId` key.
@@ -991,7 +1002,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   four differ only in the resource name, the two id fields in the payload, and the parent parameter name
   in the delete path, which is exactly the amount of code the base cannot supply.
 - **Where it's used**: registered explicitly at
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:35`, and injected
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:36`, and injected
   into [`SpeakerCategoryItemsPanel`](#speakercategoryitemspanel), the speaker detail page's category
   editor (`Pages/Speaker/SpeakerCategoryItemsPanel.razor.cs:18`).
 
@@ -1033,6 +1044,60 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   names, including [`EventFilteredListPageBase<TDto>`](#eventfilteredlistpagebasetdto)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:27`),
   which supplies the shared event filter to its derived list pages.
+
+### SessionAssetLinkRequest
+
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services.SessionAssets` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/SessionAssets/SessionAssetRequests.cs:14` · Level 0 · record
+
+- **What it is**: the request DTO for adding one link-type session asset from the UI: the session it
+  belongs to, the display title, the URL, and its sort order
+  (`SessionAssetRequests.cs:14-27`).
+- **Depends on**: no first-party types. `SessionIdentifierType` is `int` in this module
+  (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:15`); BCL `string`, `int`.
+- **Concept**: a plain positional-free `record class` with `init`-only, `required` members for the two
+  values that must be supplied (`Title`, `Url`) and defaulted members for the rest
+  (`SessionAssetRequests.cs:25-38`). `[Rubric §24, Forms/Validation/UX Safety]`: the `required` modifier
+  makes a missing title or URL a compile error at every construction site rather than a runtime
+  validation surprise, before the request even reaches
+  [SessionAssetLinkRequestValidator](group-17-conference-domain.md#sessionassetlinkrequestvalidator)
+  on the server.
+- **Walkthrough**: four members.
+  - `SessionId` (line 17): the owning session, defaults to the type's default (`0`).
+  - `Title` (line 20): `required string`, the display title on the public session page.
+  - `Url` (line 23): `required string`, the absolute http or https URL the link points at.
+  - `SortOrder` (line 26): `int`, the display order within the session's asset list.
+- **Why it's built this way**: the panel builds one of these per "add link" gesture and posts it
+  through [ISessionAssetUIService](#isessionassetuiservice)`.AddLinkAsync`, which is the client half of
+  the same shape the API validates
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/UseCases/AddLink/SessionAssetLinkRequestValidator.cs`).
+- **Where it's used**: constructed by
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/SessionAssets/SessionAssetsPanel.razor.cs`
+  and passed to [ISessionAssetUIService.AddLinkAsync](#isessionassetuiservice), implemented by
+  [SessionAssetService](#sessionassetservice).
+
+### SessionAssetUpdateRequest
+
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services.SessionAssets` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/SessionAssets/SessionAssetRequests.cs:35` · Level 0 · record
+
+- **What it is**: the request DTO for editing one session asset's title, sort order and (for a link)
+  URL (`SessionAssetRequests.cs:35-45`).
+- **Depends on**: no first-party types. BCL `string`, `int`.
+- **Concept**: the sibling of [SessionAssetLinkRequest](#sessionassetlinkrequest), but `Url` here is
+  optional (`string?`) rather than required, because the same update shape covers a FILE asset too, and
+  a file's URL cannot be edited from the client, only its title and order
+  (`SessionAssetRequests.cs:42-44`).
+- **Walkthrough**: three members.
+  - `Title` (line 38): `required string`, the new display title.
+  - `SortOrder` (line 41): `int`, the new display order.
+  - `Url` (line 44): `string?`, the new URL for a LINK asset, or `null` to leave it unchanged. The doc
+    comment states the "leave unchanged" meaning explicitly.
+- **Why it's built this way**: one request shape serves both asset kinds instead of two near-duplicate
+  DTOs, at the cost of `Url` being meaningless for a FILE asset; the panel only ever populates it for a
+  link edit.
+- **Where it's used**: constructed by
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/SessionAssets/SessionAssetsPanel.razor.cs`
+  and passed to [ISessionAssetUIService.UpdateAsync](#isessionassetuiservice), implemented by
+  [SessionAssetService](#sessionassetservice).
 
 ### SessionSchedulePageRequest
 
@@ -1092,7 +1157,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Walkthrough**: one member, `GetAllAsync(CancellationToken cancellationToken = default)` returning
   `Task<Result<IReadOnlyDictionary<EventIdentifierType, EventInfo>>>` (`IEventLookupService.cs:28-29`).
 - **Where it's used**: implemented by [EventLookupService](#eventlookupservice), registered scoped at
-  `DependencyInjection.cs:52`, and injected into a wide set of Conference pages, including
+  `DependencyInjection.cs:58`, and injected into a wide set of Conference pages, including
   [`EventFilteredListPageBase<TDto>`](#eventfilteredlistpagebasetdto)
   (`EventFilteredListPageBase.cs:27`), [RoomDetail](#roomdetail) (`RoomDetail.razor.cs:21`),
   [RoomCreate](#roomcreate) (`RoomCreate.razor.cs:15`), [SessionCreate](#sessioncreate)
@@ -1108,7 +1173,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   pages (`SponsorDetail.razor.cs:24`, `SponsorCreate.razor.cs:21`). It is also consumed from the
   Engagement module's event feedback page, [EventFeedback](group-22-engagement-module.md#eventfeedback)
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/Feedback/EventFeedback.razor.cs:23`),
-  which is why `DependencyInjection.cs:50` labels these "cross-module lookup services".
+  which is why `DependencyInjection.cs:56` labels these "cross-module lookup services".
 
 ### IPublicSessionScheduleService
 
@@ -1156,9 +1221,49 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   directly: only the banner stays in the page, the service decides when it is warranted
   (`PublicSessionList.razor.cs:289-291`).
 - **Where it's used**: implemented by [PublicSessionScheduleService](#publicsessionscheduleservice),
-  registered scoped at `DependencyInjection.cs:48` under an explicit ADR-042 Wave 3 comment (line 41),
+  registered scoped at `DependencyInjection.cs:54` under an explicit ADR-042 Wave 3 comment (line 41),
   and injected into [PublicSessionList](#publicsessionlist) (`PublicSessionList.razor.cs:34`), which
   calls it from its unified fetch delegate (`PublicSessionList.razor.cs:277-285`).
+
+### ISessionAssetUIService
+
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services.SessionAssets` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/SessionAssets/ISessionAssetUIService.cs:17` · Level 3 · interface
+
+- **What it is**: the UI-service contract for a session's materials: list, add a link, upload a file,
+  update, and delete (`ISessionAssetUIService.cs:17-79`). Unlike the generic entity-service pattern
+  elsewhere in this chapter, this contract is hand-written rather than derived from
+  `IEntityService<,>`, because a session asset is not a plain CRUD resource: it has two creation paths
+  (link vs. uploaded file) and a conditional update.
+- **Depends on**: [SessionAssetDTO](group-17-conference-domain.md#sessionassetdto),
+  [SessionAssetLinkRequest](#sessionassetlinkrequest),
+  [SessionAssetUpdateRequest](#sessionassetupdaterequest), `Result<T>`; BCL `IBrowserFile`
+  (`Microsoft.AspNetCore.Components.Forms`), `byte[]`, `CancellationToken`.
+- **Concept**: the conditional update carries the same `If-Match` shape as
+  [IEventUIService](#ieventuiservice)'s transitions: `UpdateAsync` takes a required
+  `byte[] rowVersion` and refuses the write with 428 Precondition Required when it is empty
+  (`ISessionAssetUIService.cs:56-59`), the same ADR-035 optimistic-concurrency contract. The list
+  call is deliberately forgiving instead: `GetBySessionAsync` is anonymous, and a session the caller
+  cannot see answers with an empty list rather than a failure, because it backs the public session
+  page as well as the organizer panel (`ISessionAssetUIService.cs:19-26`).
+- **Walkthrough**: five members.
+  - `GetBySessionAsync(sessionId, ct)` (`:27-29`): `Task<Result<IReadOnlyList<SessionAssetDTO>>>`.
+  - `AddLinkAsync(request, ct)` (`:35-37`): `Task<Result<SessionAssetDTO>>`, takes a
+    [SessionAssetLinkRequest](#sessionassetlinkrequest).
+  - `UploadFileAsync(sessionId, title, file, sortOrder, ct)` (`:49-54`):
+    `Task<Result<SessionAssetDTO>>`. The doc comment (`:39-48`) frames it as streaming the picked
+    file straight into the multipart body rather than buffering the whole deck in the circuit.
+  - `UpdateAsync(id, rowVersion, request, ct)` (`:66-70`): `Task<Result<SessionAssetDTO>>`, conditional
+    on `rowVersion` as described above.
+  - `DeleteAsync(id, ct)` (`:76-78`): `Task<Result>`. The doc comment notes a file asset also
+    schedules its blob for removal (`:72`).
+- **Why it's built this way**: separating `AddLinkAsync` from `UploadFileAsync` instead of one
+  polymorphic "add" call keeps the link path a small JSON POST and the file path a multipart stream,
+  which matters because the upload path deliberately skips the shared retry policy (see
+  [SessionAssetService](#sessionassetservice)).
+- **Where it's used**: implemented by [SessionAssetService](#sessionassetservice), registered in
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs`, and injected
+  into `SessionAssetsPanel.razor.cs` and `SessionAssetsDownloadList.razor.cs`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/SessionAssets/`).
 
 ### SessionizeRefreshOutcome
 
@@ -1226,7 +1331,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     server-side `"EventsCache"` output-cache policy so the client entry can never be staler than the
     response the origin would have served anyway (`:36-40`).
   - **No lock** (`:22-25`). The service is registered scoped in both heads
-    (`DependencyInjection.cs:52`), and Blazor's renderer dispatches every component callback for one
+    (`DependencyInjection.cs:58`), and Blazor's renderer dispatches every component callback for one
     scope on a single logical thread, so the read-modify-write at `:56-66` never interleaves with
     itself. This is a case where the *hosting model*, not a synchronization primitive, is the safety
     argument, and the code says so rather than leaving the reader to infer it.
@@ -1264,7 +1369,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   and collapsing them onto this URL family would trade one saved round trip for a wider payload on every
   one of them (`EventLookupService.cs:26-31`).
 - **Where it's used**: registered scoped against [IEventLookupService](#ieventlookupservice)
-  (`DependencyInjection.cs:52`). It is injected across the Conference UI, including
+  (`DependencyInjection.cs:58`). It is injected across the Conference UI, including
   [EventFilteredListPageBase<TDto>](#eventfilteredlistpagebasetdto)
   (`Pages/Common/EventFilteredListPageBase.cs:27`, which is what puts it behind every event-filtered
   grid), [SessionDetail](#sessiondetail) (`:24`), [SessionCreate](#sessioncreate) (`:20`),
@@ -1347,6 +1452,70 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [PublicEventDetail](#publiceventdetail) (`:20`), [PublicSessionList](#publicsessionlist) (`:32`) and
   [PublicSpeakerDetail](#publicspeakerdetail) (`:24`).
 
+### SessionAssetService
+
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services.SessionAssets` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/SessionAssets/SessionAssetService.cs:26` · Level 4 · class (sealed)
+
+- **What it is**: the implementation behind [ISessionAssetUIService](#isessionassetuiservice): list,
+  add a link, upload a file, conditionally update, and delete, all against the `SessionAssets`
+  endpoint (`SessionAssetService.cs:26-211`).
+- **Depends on**: [ISessionAssetUIService](#isessionassetuiservice) (implemented interface);
+  [AuthenticatedServiceBase](group-15-common-ui-framework.md#authenticatedservicebase) for the
+  authenticated client; [HttpResultExecutor](group-15-common-ui-framework.md#httpresultexecutor) and
+  [ProblemDetailsResultReader](group-08-auth.md#problemdetailsresultreader) for the request/response
+  plumbing; [ConcurrencyETag](group-08-auth.md#concurrencyetag) for the `If-Match` header;
+  [SessionAssetLinkRequest](#sessionassetlinkrequest),
+  [SessionAssetUpdateRequest](#sessionassetupdaterequest),
+  [SessionAssetDTO](group-17-conference-domain.md#sessionassetdto); BCL `IHttpClientFactory`,
+  `IBrowserFile`, `MultipartFormDataContent`, `CultureInfo.InvariantCulture`.
+- **Concept**: the upload path is the teaching point. `UploadFileAsync` carries no retry policy at all
+  (`SessionAssetService.cs:87-90`), unlike every other method here, which runs its request through the
+  shared `RetryPolicy`. The doc comment explains why: a picked file's stream is single-shot, neither a
+  browser file input nor a native picker rewinds it, so a retried attempt would post an exhausted body.
+  The `Idempotency-Key` header covers the case the retry existed for instead, because a repeated key
+  replays the stored server response rather than re-uploading tens of megabytes over venue wifi
+  (`:87-90`). `[Rubric §29, Resilience & Business Continuity]` assesses whether a retry strategy
+  actually fits the operation it wraps; here the right answer is to not retry the transport call and to
+  rely on idempotency at the server instead. `[Rubric §24, Forms/Validation/UX Safety]`: the 50 MB cap
+  is declared once, in `SessionAssetLimits.MaxFileBytes`, and stated to `OpenReadStream` so Blazor's own
+  512 KB default cannot silently truncate a real slide deck (`:107,127-128`); the suppressed
+  Sonar rule S5693 on `UploadFileAsync` (`:91-96`) documents that the length IS limited, just not by
+  the pattern the rule looks for.
+- **Walkthrough**
+  - `Endpoint = "SessionAssets"` (`:29`).
+  - `GetBySessionAsync(sessionId, ct)` (`:32-51`): GETs `SessionAssets?sessionId={id}` through
+    `HttpResultExecutor.ExecuteAsync`, using the plain authenticated client (no idempotency key, no
+    `If-Match`, since it is a read), and reads the array through
+    [ProblemDetailsResultReader](group-08-auth.md#problemdetailsresultreader) (`:36-49`).
+  - `AddLinkAsync(request, ct)` (`:59-77`): POSTs the [SessionAssetLinkRequest](#sessionassetlinkrequest)
+    to `SessionAssets/link` through a client built with a fresh `Idempotency-Key` and no `If-Match`
+    (`:65`), so a retried add cannot publish the same link twice.
+  - `UploadFileAsync(sessionId, title, file, sortOrder, ct)` (`:91-141`): opens the file's stream capped
+    at `SessionAssetLimits.MaxFileBytes` (`:107`); builds a `MultipartFormDataContent` with parts named
+    `file`, `sessionId`, `title`, `sortOrder` (`:125-128`), matching the controller's `IFormFile`
+    parameter and its three `[FromForm]` arguments exactly, since a renamed part fails binding; posts
+    directly with `httpClient.PostAsync` rather than through `RetryPolicy` (`:130-131`), for the
+    single-shot-stream reason above.
+  - `UpdateAsync(id, rowVersion, request, ct)` (`:141-166`): builds the `If-Match` header only when
+    `rowVersion` is non-empty (`:151`), so an empty token sends no header and the server answers 428
+    rather than the write overwriting another editor's change; PUTs to `SessionAssets/{id}`.
+  - `DeleteAsync(id, ct)` (`:169-186`): DELETEs `SessionAssets/{id}` through the plain authenticated
+    client.
+  - `CreateRequestClientAsync(idempotencyKey, ifMatch)` (`:195-210`): the shared client builder for a
+    write. Both headers are set once, as default request headers on a client built once per logical
+    operation, so every `RetryPolicy` attempt for that call states the same idempotency key and the
+    same precondition: a duplicate arrival dedups at the server, and a write that lost the concurrency
+    race keeps failing the same precondition instead of eventually succeeding against a version the
+    caller never saw.
+- **Why it's built this way**: the interface exists because a session asset is not one CRUD resource,
+  it is two creation paths (a cheap link POST and an expensive multipart upload) plus a conditional
+  update, and each earns a method shaped for what it actually sends over the wire rather than a single
+  generic `Create`/`Update` pair.
+- **Where it's used**: registered against [ISessionAssetUIService](#isessionassetuiservice) in
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs`, and injected into
+  `SessionAssetsPanel.razor.cs` and `SessionAssetsDownloadList.razor.cs`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/SessionAssets/`).
+
 ### EventService
 
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Events/EventService.cs:15` · Level 5 · class (sealed)
@@ -1423,7 +1592,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   optional: returning a bare summary would leave the page holding an event whose row version no longer
   matches, and the next conditional write would fail.
 - **Where it's used**: registered by the `AddUIModule<ConferenceUIModule>()` entity-service scan
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:29`), since
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:30`), since
   [`IEventUIService`](#ieventuiservice) derives from `IEntityService<,>`. It is injected as
   [`IEventUIService`](#ieventuiservice) into [`EventList`](#eventlist) (`Pages/Event/EventList.razor.cs:21`),
   [`EventDetail`](#eventdetail) (`Pages/Event/EventDetail.razor.cs:23`), [`EventCreate`](#eventcreate)
@@ -1459,7 +1628,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`OfflineFirstPageSnapshot<TItem>`](group-15-common-ui-framework.md#offlinefirstpagesnapshottitem),
   narrows the fallback deliberately: `CanServe` is true only when the device reports itself offline, the
   store is available, and the requested page is page 1
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/OfflineFirstPageSnapshot.cs:31`), and
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/OfflineFirstPageSnapshot.cs:43`), and
   `RememberAsync` records only page 1 (`:41-45`). That is what keeps the live path unaffected: there is
   no scenario in which a stale snapshot outranks a live answer.
   [`ILocalCacheStore`](group-26-device-capability-layer.md#ilocalcachestore) persists on the MAUI and
@@ -1513,7 +1682,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`ISessionUIService`](#isessionuiservice) inherits the caching.
 - **Where it's used**: registered explicitly as
   [`IPublicSessionScheduleService`](#ipublicsessionscheduleservice) at
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:48`, under the
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:54`, under the
   comment naming ADR-042 Wave 3 (`:41`), and injected into
   [`PublicSessionList`](#publicsessionlist) (`Pages/Public/PublicSessionList.razor.cs:31`), whose grid
   data delegate calls `FetchPageAsync` at `:274`.
@@ -1530,7 +1699,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   nullable `ProfilePicture` (`ISpeakerLookupService.cs:9-12`). It is what pages index when they hold a
   speaker id and must render a name or an avatar.
 - **Depends on**: no first-party types. `SpeakerIdentifierType` is `System.Guid` in this module
-  (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:19`), unlike the other Conference aliases,
+  (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:22`), unlike the other Conference aliases,
   which are `int`, because speakers carry Sessionize-assigned GUIDs (BR-61, noted at
   `MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:3`).
 - **Concept**: the UI lookup projection introduced by [CategoryItemInfo](#categoryiteminfo); see there
@@ -1628,7 +1797,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerDetailLookupService.cs:22-35`).
 - **Where it's used**: implemented by [SpeakerDetailLookupService](#speakerdetaillookupservice),
   registered scoped in the Conference UI composition root under a comment that repeats the rationale
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:55-57`), and
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:61-63`), and
   injected into exactly one page, [SpeakerDetail](#speakerdetail)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:30`).
 
@@ -1660,7 +1829,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`ISpeakerLookupService.cs:9-12`), so a change to the transport DTO that does not touch those three
   fields never reaches the consuming pages.
 - **Where it's used**: implemented by [SpeakerLookupService](#speakerlookupservice) and registered
-  scoped (`DependencyInjection.cs:51`). Injected into [SessionDetail](#sessiondetail)
+  scoped (`DependencyInjection.cs:57`). Injected into [SessionDetail](#sessiondetail)
   (`Pages/Session/SessionDetail.razor.cs:25`), [SessionList](#sessionlist)
   (`Pages/Session/SessionList.razor.cs:26`), [PublicSessionList](#publicsessionlist)
   (`Pages/Public/PublicSessionList.razor.cs:33`), [PublicSessionDetail](#publicsessiondetail)
@@ -1681,7 +1850,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Depends on**: [SessionDTO](group-17-conference-domain.md#sessiondto) and
   [SessionFeedbackDTO](group-17-conference-domain.md#sessionfeedbackdto), the `SpeakerIdentifierType`
   alias (a `Guid` in this module,
-  `MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:19`) and `SessionIdentifierType`.
+  `MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:22`) and `SessionIdentifierType`.
 - **Concept introduced, a cache-bypassing personalized read.** `[Rubric §23, Front-End Performance]`
   and `[Rubric §19, State Management]` (assess how the front end balances shared caching against
   read-your-writes freshness for a personalized view). The doc comment on `GetSpeakerSessionsAsync`
@@ -1717,7 +1886,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   authorization story simple: every method takes the speaker id explicitly, so the server has the
   subject it needs to check ownership on every call `[Rubric §11, Security]`.
 - **Where it's used**: implemented by [SpeakerDashboardService](#speakerdashboardservice)
-  (`SpeakerDashboardService.cs:14-16`) and registered explicitly at `DependencyInjection.cs:38` (an
+  (`SpeakerDashboardService.cs:14-16`) and registered explicitly at `DependencyInjection.cs:39` (an
   explicit `AddScoped` because it is not an `IEntityService<,>` and the assembly scan would not find
   it); injected into [SpeakerDashboard](#speakerdashboard)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDashboard.razor.cs:25`),
@@ -1850,7 +2019,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   correctness on the one surface where staleness is unacceptable, while the anonymous public list keeps
   its output cache.
 - **Where it's used**: registered explicitly as [`ISpeakerDashboardUIService`](#ispeakerdashboarduiservice)
-  at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:38`, and injected
+  at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:39`, and injected
   into [`SpeakerDashboard`](#speakerdashboard), the speaker's "My Sessions" page
   (`Pages/Speaker/SpeakerDashboard.razor.cs:24`).
 - **Caveats / not-in-source**: the retry-plus-reader dispatch in `SendGetRequestAsync` is a deliberate
@@ -1912,7 +2081,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`SpeakerDTO`](group-17-conference-domain.md#speakerdto), so what a page holds in memory stays small.
 - **Where it's used**: registered as [`ISpeakerLookupService`](#ispeakerlookupservice) among the
   "cross-module lookup services"
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:51`), and injected
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:57`), and injected
   into [`SessionList`](#sessionlist) (`Pages/Session/SessionList.razor.cs:26`),
   [`SessionDetail`](#sessiondetail) (`Pages/Session/SessionDetail.razor.cs:25`),
   [`PublicSessionList`](#publicsessionlist) (`Pages/Public/PublicSessionList.razor.cs:33`) and
@@ -1991,7 +2160,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Where it's used**: registered explicitly rather than by the entity-service scan, because it
   implements no `IEntityService<,>`:
   `services.AddScoped<ISpeakerDetailLookupService, SpeakerDetailLookupService>()`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:57`). Its one
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:63`). Its one
   consumer is [`SpeakerDetail`](#speakerdetail), which injects it
   (`Pages/Speaker/SpeakerDetail.razor.cs:29`), holds the value in a single nullable field for the life
   of the page (`SpeakerDetail.razor.cs:81`), calls it once inside the guarded load
@@ -1999,8 +2168,8 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`SpeakerDetail.razor.cs:198-199`) and hands `CategoryItems` plus `CategoryTitles` to
   [`SpeakerCategoryItemsPanel`](#speakercategoryitemspanel)
   (`Pages/Speaker/SpeakerDetail.razor:169-172`). The interface is also what
-  [`SpeakerDetailTests`](group-27-testing-infrastructure.md#speakerdetailtests) mocks
-  (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Speakers/SpeakerDetailTests.cs:30`),
+  [`SpeakerDetailTests`](group-28-testing-infrastructure.md#speakerdetailtests) mocks
+  (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Speakers/SpeakerDetailTests.cs:31`),
   which is the practical payoff of the facade: one `Mock<ISpeakerDetailLookupService>` stands in for
   three collaborators. `[Rubric §14, Testability]` (assesses whether collaborators can be substituted
   at a narrow boundary).
@@ -2068,7 +2237,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
     (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:51-53`), which
     is also where the bearer token is attached (`AuthenticatedServiceBase.cs:57-62`). The interpolated
     `speakerId` is culture-safe because `SpeakerIdentifierType` aliases `System.Guid`
-    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:19`,
+    (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:22`,
     [ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)).
   - `UnlinkUserAsync(speakerId, cancellationToken)` (`SpeakerService.cs:28-35`): the same dispatch with
     `DeleteAsync` against the identical path and no body (`:32-34`). Both methods return the
@@ -2087,9 +2256,9 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   generic contract (`ISpeakerUIService.cs:10-15`), means pages doing plain CRUD never see them while
   the organizer page that needs them gets them without a cast.
 - **Where it's used**: registered by the Scrutor scan inside `AddUIModule<ConferenceUIModule>()`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:29`, which scans
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:30`, which scans
   the module assembly for `IEntityService<,>` implementations at
-  `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:210-214`), so no explicit
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:262-266`), so no explicit
   `AddScoped` line exists for it. Injected as [`ISpeakerUIService`](#ispeakeruiservice) into
   [`SpeakerList`](#speakerlist) (`Pages/Speaker/SpeakerList.razor.cs:23`),
   [`SpeakerDetail`](#speakerdetail) (`Pages/Speaker/SpeakerDetail.razor.cs:27`),
@@ -2288,10 +2457,10 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 ### SpeakerDetail
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:24` · Level 8 · class (Blazor code-behind)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:24` · Level 6 · class (Blazor code-behind)
 
 - **What it is**: the organizer's speaker console. It loads one speaker with children by route id, inline-edits the profile, shows the answered questions and the speaker's sessions, hosts the category-item panel, links or unlinks a login, and deletes with confirmation.
-- **Depends on**: [`ISpeakerUIService`](#ispeakeruiservice), [`ISessionUIService`](#isessionuiservice), [`ISpeakerDetailLookupService`](#ispeakerdetaillookupservice) returning [`SpeakerDetailLookups`](#speakerdetaillookups), and [`IUserUIService`](group-24-identity-module.md#iuseruiservice) (`:27-30`); [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:32`); [`SpeakerEditModel`](#speakereditmodel) (`:72`), [`SpeakerUserSearch`](#speakerusersearch) (`:291`), [`ModelValidation`](group-15-common-ui-framework.md#modelvalidation) and [`DataAnnotationsModelValidator`](group-15-common-ui-framework.md#dataannotationsmodelvalidator) (`:54`), [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (`:115,224`), and [`ConferenceRoutePaths`](#conferenceroutepaths) (`:49,343,345`). It extends [`DetailPageBase`](#detailpagebase) (`SpeakerDetail.razor:8`), which supplies `PageToken`, `IsEditing`, `IsDirty`, `MarkDirty`, `BeginEdit`, `EndEdit` and the disposal pattern. Externals: MudBlazor's `MudForm`, `MudAutocomplete` and `BreadcrumbItem`, plus the `IStringLocalizer<SpeakerDetail>` from the template.
+- **Depends on**: [`ISpeakerUIService`](#ispeakeruiservice), [`ISessionUIService`](#isessionuiservice), [`ISpeakerDetailLookupService`](#ispeakerdetaillookupservice) returning [`SpeakerDetailLookups`](#speakerdetaillookups), and [`IUserUIService`](group-24-identity-module.md#iuseruiservice) (`:27-30`); [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:32`); [`SpeakerEditModel`](#speakereditmodel) (`:72`), [`SpeakerUserSearch`](#speakerusersearch) (`:291`), [`ModelValidation`](group-15-common-ui-framework.md#modelvalidation) and [`DataAnnotationsModelValidator`](group-15-common-ui-framework.md#dataannotationsmodelvalidator) (`:54`), [`ErrorMessages`](group-15-common-ui-framework.md#errormessages) (`:115,224`), and [`ConferenceRoutePaths`](#conferenceroutepaths) (`:50,344`). It extends [`DetailPageBase`](#detailpagebase) (`SpeakerDetail.razor:8`), which supplies `PageToken`, `IsEditing`, `IsDirty`, `MarkDirty`, `BeginEdit`, `EndEdit` and the disposal pattern. Externals: MudBlazor's `MudForm`, `MudAutocomplete` and `BreadcrumbItem`, plus the `IStringLocalizer<SpeakerDetail>` from the template.
 - **Concept introduced, the load-generation guard.** Every detail page in this group guards against a re-render refetching (`OnParametersSetAsync` compares `Id` against `_loadedId`, `:84-93`). This page carries a second, stronger guard that is worth reading closely.
   `_loadGeneration` (`:65`) is incremented at the top of `LoadAsync` (`:98`) and each awaited step re-checks its captured `generation` before touching page state (`:107`, `:132`, `:184`). The doc comment states the reason precisely (`:59-64`): `_loadedId` is stamped synchronously *before* the await, so two rapid route changes would let a later-completing fetch of the older speaker paint over the newer one. The generation, not the route id, is authoritative. The `finally` applies the same rule to the spinner (`:151-156`): only the current generation may clear `IsLoading`, because an unconditional clear would switch off a spinner that a newer load just turned on. `[Rubric §19, State Management & Data Flow]` (assesses reconciliation of concurrent updates to view state) and `[Rubric §12, Performance & Scalability]` (the cheap fix is to serialize the loads, which would be slower and still wrong).
   Two further mechanisms sit alongside it.
@@ -2306,7 +2475,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   - Link and unlink (`:289-341`): `SearchUsersAsync` delegates to [`SpeakerUserSearch`](#speakerusersearch) (`:291`); `OnUserPickedAsync` (`:293-316`) posts `LinkUserAsync` and reloads; `UnlinkUserAsync` (`:318-341`) is the mirror. Both reload through `LoadAsync` rather than patching local state, which is exactly why the generation guard matters: a link followed quickly by an unlink starts two loads.
   - `GetQuestionText` (`:198-199`) resolves an answered question's text from the cached lookups with an id fallback.
 - **Why it's built this way**: this page is the widest read surface in the organizer area, so it composes four services rather than growing one. Delegating the chip panel to [`SpeakerCategoryItemsPanel`](#speakercategoryitemspanel), the candidate search to [`SpeakerUserSearch`](#speakerusersearch), the field rules to [`SpeakerFormModel`](#speakerformmodel), and the edit lifecycle to [`DetailPageBase`](#detailpagebase) is what keeps the code-behind at load, save, delete and link. `[Rubric §15, Best Practices & Code Quality]`.
-- **Where it's used**: the `/speakers/{Id}` route with a bare `[Authorize]` (`SpeakerDetail.razor:1-2`), reached from [`SpeakerList`](#speakerlist) rows and from [`SpeakerCreate`](#speakercreate)'s success redirect. Session rows navigate on to [`SessionDetail`](#sessiondetail) (`:345`). It edits the aggregate the [`Speaker`](group-17-conference-domain.md#speaker) entity models.
+- **Where it's used**: the `/speakers/{Id}` route with a bare `[Authorize]` (`SpeakerDetail.razor:1-2`), reached from [`SpeakerList`](#speakerlist) rows and from [`SpeakerCreate`](#speakercreate)'s success redirect. Session rows link straight to [`SessionDetail`](#sessiondetail) through a `MudLink` built from `ConferenceRoutePaths.SessionDetails(session.Id)` in the markup (`SpeakerDetail.razor:210`); there is no code-behind navigation method for it. It edits the aggregate the [`Speaker`](group-17-conference-domain.md#speaker) entity models.
 
 ---
 
@@ -3011,7 +3180,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`.../Pages/Question/QuestionCreate.razor:1-2`), reached from [`QuestionList`](#questionlist)'s create
   button; on success it hands off to [`QuestionDetail`](#questiondetail). It is also the one page in this
   unit with a bUnit component test class,
-  [`QuestionCreateTests`](group-27-testing-infrastructure.md#questioncreatetests)
+  [`QuestionCreateTests`](group-28-testing-infrastructure.md#questioncreatetests)
   (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Questions/QuestionCreateTests.cs:19`),
   which asserts that a blank submit shows the model's own required message without MudBlazor's duplicate,
   that the required field keeps its `aria-required` affordance, that an overlong text shows the model's
@@ -3235,6 +3404,58 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   passes validation. What the detail page does with it is render it as text through a localized
   template (`.../Pages/Sponsor/SponsorDetail.razor:127`), not as a link.
 
+### SessionAssetDisplay
+
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.SessionAssets` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/SessionAssets/SessionAssetDisplay.cs:13` · Level 2 · internal static class
+
+- **What it is**: a small, stateless helper shared by the two session-materials components: it picks the
+  icon for an asset and formats a byte count for display. Everything on it is a pure function over its
+  arguments.
+- **Depends on**: `SessionAssetDTO` and `SessionAssetKind`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/SessionAssets/SessionAssetDTO.cs`,
+  `.../SessionAssets/SessionAssetKind.cs`), `SessionAssetLimits.MaxFileBytes` (line 28). Externals:
+  MudBlazor `Icons.Material.Filled.*` (lines 45, 52-58), `System.Globalization.CultureInfo` (line 80).
+- **Concept introduced, deriving display facts instead of storing them.** Neither the icon nor the
+  formatted size is persisted anywhere; both are computed on demand from the asset's `Kind` and stored
+  byte count, so a rendering change (a new icon, a different rounding) touches this one file and nothing
+  in the data model.
+  `[Rubric §15, Best Practices & Code Quality]` assesses whether a number lives in one place: the upload
+  cap shown in the UI hint and the over-size message is `MaxFileMegabytes` (line 28), derived from
+  `SessionAssetLimits.MaxFileBytes` by division rather than restated as a literal, so the client hint and
+  the server-enforced cap cannot drift apart.
+  `[Rubric §27, Internationalization]` assesses whether user-facing text is externalized: `FormatSize`
+  returns the numeric amount and a resource key (`"Size.Megabytes"`, `"Size.Kilobytes"`, `"Size.Bytes"`),
+  not a formatted sentence, so the caller composes it through its own localizer and a Spanish reader sees
+  "1,4 MB" rather than an English-punctuated string (doc, lines 62-65).
+- **Walkthrough**
+  - `IconFor(SessionAssetDTO asset)` (lines 39-60) null-guards (line 41), returns the link icon outright
+    for `SessionAssetKind.Link` (lines 43-46), and otherwise switches on `ExtensionOf(asset)` over a
+    closed set of upper-cased extensions (`.PDF`, `.PPTX`, `.DOCX`, `.XLSX`, `.ZIP`, `.MD`/`.TXT`, lines
+    50-59), falling back to a generic file icon. The in-code comment (lines 48-49) explains the
+    upper-casing: the comparison is over a closed set the code owns, so SonarAnalyzer's CA1308 wants the
+    round-trip-safe casing rather than a culture-sensitive lower-case.
+  - `FormatSize(long sizeBytes)` (lines 68-81) picks the largest unit the value clears (megabytes, then
+    kilobytes, then bytes, lines 70-80) and rounds through `Round` (lines 83-84), which formats with
+    `"0.#"` under `CultureInfo.CurrentCulture` so the decimal separator matches the active locale.
+  - `ExtensionOf(SessionAssetDTO asset)` (lines 86-103) reads the extension off the stored blob name
+    first, and only falls back to parsing the asset's `Url` when the blob name is blank (lines 93-98).
+    The doc comment states why the order matters (lines 86-89): a blob URL can carry a signature query
+    string, and taking the extension from the URL first would yield the query string rather than the
+    file's actual format.
+- **Why it's built this way**: both helpers are pure and side-effect-free, so a component that needs an
+  icon or a formatted size calls a static method instead of duplicating the switch or the rounding logic;
+  keeping the file extension check on the blob name first (not the URL) is what keeps the icon correct
+  for a signed download link.
+- **Where it's used**: `IconFor` renders the material icon on
+  [`SessionAssetsPanel`](#sessionassetspanel) and [`SessionAssetsDownloadList`](#sessionassetsdownloadlist);
+  `FormatSize` backs `DescribeSize` on both of those components
+  (`.../SessionAssets/SessionAssetsPanel.razor.cs:486-490`,
+  `.../SessionAssets/SessionAssetsDownloadList.razor.cs:157-161`); `MaxFileMegabytes` is quoted in
+  [`SessionAssetsPanel`](#sessionassetspanel)'s over-size message (`.../SessionAssetsPanel.razor.cs:333`).
+- **Caveats / not-in-source**: the extension switch (lines 50-59) recognizes six formats explicitly; any
+  other extension, including one the API itself accepts, falls back to the generic file icon. Whether the
+  set of icons is meant to track the server's allowed-format list is not determinable from this source.
+
 ### RoomCreateModel
 
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Rooms` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Rooms/RoomCreateModel.cs:12` · Level 3 · sealed class
@@ -3400,6 +3621,122 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`.../Pages/Sponsor/SponsorDetail.razor.cs:64`); `LoadFrom` in `StartEditing`
   (`.../Pages/Sponsor/SponsorDetail.razor.cs:132`), `ToUpdated` in `SaveChangesAsync`
   (`.../Pages/Sponsor/SponsorDetail.razor.cs:160`).
+
+### SessionAssetsDownloadList
+
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.SessionAssets` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/SessionAssets/SessionAssetsDownloadList.razor.cs:18` · Level 5 · class (Blazor code-behind, `IDisposable`)
+
+- **What it is**: the read-only, attendee-facing list of a session's slides, links and files. It loads
+  once per session and renders nothing organizers-only, no add/rename/delete affordances at all.
+- **Depends on**: `ISessionAssetUIService` (line 20 injected field), `SessionIdentifierType` (line 23
+  parameter), [`SessionAssetDisplay`](#sessionassetdisplay)`.FormatSize` (line 53). Externals: Blazor
+  `[Inject]`/`[Parameter]`, `System.Threading.CancellationTokenSource`.
+- **Concept introduced, none new.** This component is the minimal half of the pattern
+  [`SessionAssetsPanel`](#sessionassetspanel) teaches in full: load-once-per-session, swallow
+  `OperationCanceledException` during disposal, dispose the `_cts` exactly once. Reading the two side by
+  side is the point: this one keeps only the load and render path and drops every mutation.
+  `[Rubric §19, State Management]` assesses whether fetched state is invalidated deliberately:
+  `OnParametersSetAsync` (lines 31-49) returns immediately when `_loadedSessionId == SessionId` (lines
+  33-36), the same reload guard the mutable panel uses, so re-rendering the same session never refetches.
+- **Walkthrough**
+  - `OnParametersSetAsync` (lines 31-49) sets `_loadedSessionId` (line 38), then awaits
+    `SessionAssetService.GetBySessionAsync(SessionId, _cts.Token)` (line 42) and unwraps the
+    [`Result`](group-01-result-error-handling.md#result) with `TryGetValue`, falling back to an empty
+    list on failure (line 43) rather than surfacing an error state.
+  - `DescribeSize(long sizeBytes)` (lines 51-55) forwards to
+    [`SessionAssetDisplay.FormatSize`](#sessionassetdisplay) and resolves the returned unit key through
+    the component's own localizer (`L[unitKey, amount].Value`, line 54).
+  - The `_disposed`-guarded `Dispose(bool)` / `Dispose` pair (lines 57-79) cancels and disposes `_cts`
+    exactly once, identical in shape to every other component in this group.
+  - The per-instance `_headingId` (line 26) exists for the same reason as on
+    [`SessionAssetsPanel`](#sessionassetspanel): a page can render more than one materials list, and a
+    fixed id would break the label/heading association across instances.
+- **Why it's built this way**: an attendee never edits a session's materials, so giving them a component
+  with no mutation surface at all (rather than the organizer panel with `CanManage="false"`) means there
+  is no upload input, no delete button and no edit state to accidentally expose in a public view.
+- **Where it's used**: rendered on the public session detail page wherever attendee-visible materials are
+  shown, keyed by the session's identifier.
+- **Caveats / not-in-source**: a failed load renders an empty list with no visible error (line 43), so
+  an attendee cannot distinguish "this session has no materials" from "the materials failed to load".
+
+### SessionAssetsPanel
+
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.SessionAssets` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/SessionAssets/SessionAssetsPanel.razor.cs:31` · Level 5 · class (Blazor code-behind, `IDisposable`)
+
+- **What it is**: the organizer- and speaker-facing manager for a session's materials: add a link, upload
+  a file, rename or delete an asset, all behind a shared cap and a shared failure-to-message mapping. A
+  `CanManage` parameter (line 42) toggles it into the same read-only rendering
+  [`SessionAssetsDownloadList`](#sessionassetsdownloadlist) provides.
+- **Depends on**: `ISessionAssetUIService` (line 33 injected field), `SessionIdentifierType` (line 36
+  parameter), [`SessionAssetDisplay`](#sessionassetdisplay) for `MaxFileMegabytes` and `FormatSize`
+  (lines 157, 312), `SessionAssetLimits.MaxAssetsPerSession` (line 67), `SessionAssetLinkRequest` (lines
+  125-131) and `SessionAssetUpdateRequest` (lines 190-194), and
+  [`Result`](group-01-result-error-handling.md#result) (line 218). Externals: Blazor (`[Inject]`,
+  `[Parameter]`, `InputFileChangeEventArgs`), MudBlazor (`Severity`), and a `DeleteConfirmation` component
+  (line 65) from `MMCA.Common.UI.Components`.
+- **Concept introduced, one mutation gateway for every write.** Add-link, upload-file, rename and delete
+  are four different service calls, but they all route through `MutateAsync` (lines 218-242, plus the
+  `Task<Result<T>>`-adapting overload at lines 248-249): set busy, run the operation, report the failure
+  through `DescribeFailure` or the success through a localized toast state, reload the list, clear busy
+  in a `finally`. A caller supplies only the operation delegate, the success resource key, and an
+  optional post-success callback (`AddLinkAsync` clears the link fields, `SaveTitleAsync` calls
+  `CancelEditing`).
+  `[Rubric §24, Forms, Validation & UX Safety]` assesses whether a rejection is explained in place:
+  `FailureResourceKeys` (lines 268-284) maps every machine-readable error code the four write paths can
+  return to a resource key, with the class doc explaining two edge cases directly in the source (lines
+  255-260, 261-266): `Http.413` is the one transport-level status in the table, because Kestrel refuses an
+  over-cap request body before the friendly `SessionAsset.InvalidUpload` domain check ever runs, which is
+  the one case the client-side size check at line 155 cannot catch (a body inflated past the cap by
+  multipart framing); and a title refusal is listed under two different codes because two layers can
+  raise it, the domain invariant (`SessionAsset.Title.*`) and the request validator's FluentValidation
+  defaults (`NotEmptyValidator` / `MaximumLengthValidator`), which the request validator leaves unwrapped
+  rather than remapping. `DescribeFailure` (lines 291-302) falls back to one generic sentence for any code
+  not in the table (a transport fault, a concurrency refusal, an unexpected 500) rather than surfacing the
+  server's raw text.
+  `[Rubric §27, Internationalization]` assesses whether every user-facing string is externalized: every
+  key in `FailureResourceKeys` and every success key passed into `MutateAsync` is a resource lookup
+  through `L[...]`, never an inline sentence.
+- **Walkthrough**
+  - `IsAtCap` (line 67) and `CanSubmitLink` (lines 69-70) are the two gating booleans the markup reads
+    before offering the add-link and upload affordances.
+  - `OnParametersSetAsync` / `LoadAsync` (lines 72-106) mirror
+    [`SessionAssetsDownloadList`](#sessionassetsdownloadlist)'s reload guard, but on a failed fetch this
+    version keeps the list empty **and** sets a status message (`SetStatus`, line 96), unlike the
+    read-only list's silent fallback.
+  - `AddLinkAsync` (lines 108-141) re-checks `CanSubmitLink` and `IsAtCap` (line 110), then calls
+    `TryNormalizeWebUrl` (line 115) before building a `SessionAssetLinkRequest` with `SortOrder =
+    _assets.Count` (line 130) and appending it through `AddLinkAsync`. The normalized URL is echoed back
+    into the bound field (line 123, with the in-code comment explaining why: the speaker should see the
+    address that will actually be stored, not only the one they typed).
+  - `TryNormalizeWebUrl` (lines 326-351) accepts a value that already parses as an absolute `http`/`https`
+    URL as-is, and otherwise prefixes a scheme-less value (one with no `Uri.SchemeDelimiter`) with
+    `https://` and re-parses, so a speaker pasting `github.com/me/repo` is treated as a web address rather
+    than rejected outright. Both scheme comparisons are `Ordinal` (lines 332-334), matching the domain
+    invariant and the FluentValidation rule that guard the same value server-side.
+  - `OnFileSelectedAsync` (lines 143-166) rejects an over-cap file client-side against
+    `SessionAssetLimits.MaxFileBytes` (line 155) before ever posting, with a title defaulted by
+    `DefaultTitleFor` (lines 353-365), which strips the extension and falls back to the raw file name only
+    if the stripped result is blank, capped at `SessionAssetDTO.TitleMaxLength`.
+  - `StartEditing` / `CancelEditing` (lines 168-179) toggle the inline rename state; `SaveTitleAsync`
+    (lines 181-200) echoes the asset's own `SortOrder` back unchanged (line 193, with the in-code comment:
+    omitting it would silently move the material to the top) and posts through `UpdateAsync` with the
+    asset's `RowVersion` for optimistic concurrency (line 197).
+  - `DeleteAsync` (lines 202-212) confirms through the injected `DeleteConfirmation` component rather than
+    a native browser `confirm()` (comment, lines 204-205: unstyled, untranslated and unreachable from the
+    MAUI head), then deletes through `MutateAsync`.
+  - The `_disposed`-guarded dispose pair (lines 367-389) follows the same shape as every other component
+    in this group.
+- **Why it's built this way**: four writes with the same busy/report/reload shape and a shared failure
+  vocabulary are cheaper to keep correct as one gateway method than as four hand-written try/catch blocks,
+  and centralizing `FailureResourceKeys` is what lets a new server error code be wired to a message in one
+  place instead of four.
+- **Where it's used**: rendered on the organizer's and the speaker's session detail surfaces, with
+  `CanManage` distinguishing an editable view from a read-only preview; `SessionAssetDisplay.IconFor` and
+  `FormatSize` supply the icon and size text for every rendered asset.
+- **Caveats / not-in-source**: `CanManage="false"` renders the same read-only shape
+  [`SessionAssetsDownloadList`](#sessionassetsdownloadlist) provides independently, so the codebase
+  carries two components capable of a read-only materials list rather than one component the other wraps.
+  Whether that duplication is deliberate is not determinable from this source.
 
 ### RoomCreate
 
@@ -4331,7 +4668,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Feedback/OrganizerFeedbackService.cs:15-64`)
   for the paged request it actually issues and the ceiling that comes with it.
 - **Where it's used**: implemented by [OrganizerEventFeedbackService](#organizereventfeedbackservice),
-  registered scoped at `DependencyInjection.cs:41` (whose comment names BR-53 moderation), and injected
+  registered scoped at `DependencyInjection.cs:43` (whose comment names BR-53 moderation), and injected
   into [OrganizerEventFeedback](#organizereventfeedback)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Feedback/OrganizerEventFeedback.razor.cs:20`).
 
@@ -4356,7 +4693,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 
 - **Where it's used**: implemented by
   [OrganizerSessionFeedbackService](#organizersessionfeedbackservice)
-  (`OrganizerFeedbackService.cs:66-110`), registered scoped at `DependencyInjection.cs:42`, and
+  (`OrganizerFeedbackService.cs:66-110`), registered scoped at `DependencyInjection.cs:43`, and
   injected into [OrganizerSessionFeedback](#organizersessionfeedback)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Feedback/OrganizerSessionFeedback.razor.cs:20`).
 
@@ -4434,7 +4771,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   There is a second, load-bearing reason for the body-less specialization: registration is done by a
   Scrutor assembly scan, not by hand. `AddUIModule<ConferenceUIModule>()` scans the Conference UI
   assembly for every `IEntityService<,>` implementation and registers it with a scoped lifetime
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:27-29`), so the
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:28-30`), so the
   named marker is exactly what a page gets to inject. Every plain-CRUD sibling in this group repeats
   this shape.
 - **Walkthrough**: no members. The whole contract is "be an `IEntityService` bound to `ActivityDTO` plus
@@ -4530,7 +4867,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   client-side paging) at the cost of a hard ceiling, see the caveat.
 - **Where it's used**: registered explicitly as
   [IOrganizerEventFeedbackUIService](#iorganizereventfeedbackuiservice) under a comment naming BR-53
-  moderation (`DependencyInjection.cs:40-41`) and injected into
+  moderation (`DependencyInjection.cs:41-42`) and injected into
   [OrganizerEventFeedback](#organizereventfeedback)
   (`Pages/Feedback/OrganizerEventFeedback.razor.cs:18`). Its structural twin
   [OrganizerSessionFeedbackService](#organizersessionfeedbackservice) shares the same file
@@ -4616,8 +4953,8 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Where it's used**: registered explicitly (it is not an `IEntityService<,>` implementation, so the
   assembly scan does not see it) as
   [`IOrganizerSessionFeedbackUIService`](#iorganizersessionfeedbackuiservice) at
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:42`, under the
-  comment naming BR-53 moderation (`DependencyInjection.cs:40`), and injected into
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:43`, under the
+  comment naming BR-53 moderation (`DependencyInjection.cs:43`), and injected into
   [`OrganizerSessionFeedback`](#organizersessionfeedback)
   (`Pages/Feedback/OrganizerSessionFeedback.razor.cs:18`).
 - **Caveats / not-in-source**: the read is capped at `pageSize=500` in a single call
@@ -4736,8 +5073,8 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Where it's used**: never named in DI by hand. Because it is an `IEntityService<,>` implementation in
   the Conference UI assembly, the Scrutor scan inside `AddUIModule<ConferenceUIModule>()` registers it
   `AsImplementedInterfaces()` with a scoped lifetime
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:29` calling
-  `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:207-213`), which is what makes
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:30` calling
+  `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:259-265`), which is what makes
   [`IActivityUIService`](#iactivityuiservice) resolvable in [`ActivityList`](#activitylist)
   (`Pages/Activity/ActivityList.razor.cs:24`), [`ActivityDetail`](#activitydetail)
   (`Pages/Activity/ActivityDetail.razor.cs:23`), [`ActivityCreate`](#activitycreate)
@@ -4769,7 +5106,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`IQuestionUIService`](#iquestionuiservice) and keeps the resource name in exactly one place.
 - **Where it's used**: picked up automatically by the Scrutor scan inside
   `AddUIModule<ConferenceUIModule>()`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:29`), so no explicit
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:30`), so no explicit
   `AddScoped` line exists for it. Injected as [`IQuestionUIService`](#iquestionuiservice) into
   [`QuestionList`](#questionlist) (`Pages/Question/QuestionList.razor.cs:16`),
   [`QuestionDetail`](#questiondetail) (`Pages/Question/QuestionDetail.razor.cs:18`),
@@ -5141,8 +5478,8 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   The two map one to one onto two of the endpoints on
   [SessionSelectionController](group-20-conference-api-grpc.md#sessionselectioncontroller): the
   `GET dashboard/{eventId}` read
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:40`)
-  and the `POST score/{eventId}` command (`SessionSelectionController.cs:106`). The controller exposes
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:41`)
+  and the `POST score/{eventId}` command (`SessionSelectionController.cs:108`). The controller exposes
   three further analytical GETs (category distribution, speaker overlap, content similarity, `:54,68,82`)
   that this UI contract deliberately does not surface.
 - **Why it's built this way**: keeping the analytical surface on its own interface matches its
@@ -5153,7 +5490,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   second endpoint and no polling contract on the service: polling is a rendering decision, and it lives
   beside the page.
 - **Where it's used**: implemented by [SessionSelectionService](#sessionselectionservice), registered
-  explicitly (`DependencyInjection.cs:45`, explicit because it is not an `IEntityService<,>` and the
+  explicitly (`DependencyInjection.cs:46`, explicit because it is not an `IEntityService<,>` and the
   assembly scan would not find it), injected into
   [SessionSelectionDashboard](#sessionselectiondashboard)
   (`Pages/SessionSelection/SessionSelectionDashboard.razor.cs:17`) and taken as a constructor argument
@@ -5206,7 +5543,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 - **Why it's built this way**: sponsor management is plain CRUD from the client's point of view, so the
   contract adds nothing; the named marker exists so the assembly scan inside
   `AddUIModule<ConferenceUIModule>()` can bind a concrete implementation to a name the pages inject
-  (`DependencyInjection.cs:29`).
+  (`DependencyInjection.cs:30`).
 - **Where it's used**: implemented by [SponsorService](#sponsorservice); injected into
   [SponsorList](#sponsorlist) (`Pages/Sponsor/SponsorList.razor.cs:23`),
   [SponsorDetail](#sponsordetail) (`Pages/Sponsor/SponsorDetail.razor.cs:22`),
@@ -5302,7 +5639,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   `AddRoomRequest` shape, and the parent-scoped delete exists because rooms belong to an event and the
   endpoint binds the parent id as a query argument.
 - **Where it's used**: registered by the `AddUIModule<ConferenceUIModule>()` entity-service scan
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:29`) and injected as
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:30`) and injected as
   [`IRoomUIService`](#iroomuiservice) into [`RoomList`](#roomlist) (`Pages/Room/RoomList.razor.cs:17`),
   [`RoomDetail`](#roomdetail) (`Pages/Room/RoomDetail.razor.cs:19`), [`RoomCreate`](#roomcreate)
   (`Pages/Room/RoomCreate.razor.cs:13`), [`SessionCreate`](#sessioncreate)
@@ -5370,7 +5707,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   branch on.
 - **Where it's used**: registered explicitly as
   [`ISessionSelectionUIService`](#isessionselectionuiservice) at
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:45`, and injected
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:46`, and injected
   into [`SessionSelectionDashboard`](#sessionselectiondashboard)
   (`Pages/SessionSelection/SessionSelectionDashboard.razor.cs:17`), which loads the projection at `:123`,
   starts a run at `:172` and branches on the `SessionsScored == -1` sentinel at `:180`.
@@ -5407,7 +5744,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   services ([`SpeakerDashboardService`](#speakerdashboardservice) and
   [`PublicSessionScheduleService`](#publicsessionscheduleservice)) rather than as overrides here.
 - **Where it's used**: registered by the `AddUIModule<ConferenceUIModule>()` scan
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:29`), and injected
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:30`), and injected
   as [`ISessionUIService`](#isessionuiservice) into [`SessionList`](#sessionlist)
   (`Pages/Session/SessionList.razor.cs:24`), [`SessionDetail`](#sessiondetail)
   (`Pages/Session/SessionDetail.razor.cs:23`), [`SessionCreate`](#sessioncreate)
@@ -5435,7 +5772,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`ITokenStorageService`](group-15-common-ui-framework.md#itokenstorageservice);
   [`SponsorDTO`](group-17-conference-domain.md#sponsordto);
   [`ISponsorUIService`](#isponsoruiservice); the `SponsorIdentifierType` alias, an `int`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:21`);
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:24`);
   BCL `IHttpClientFactory`.
 - **Concept**: the thin-leaf CRUD service taught at [`ActivityService`](#activityservice), over a
   different resource. `[Rubric §2, Design Patterns]`, `[Rubric §15, Best Practices & Code Quality]` (assesses what a
@@ -5453,7 +5790,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   [`ISponsorUIService`](#isponsoruiservice) and keeps the resource name in exactly one place.
 - **Where it's used**: picked up automatically by the Scrutor scan inside
   `AddUIModule<ConferenceUIModule>()`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:29`), so no
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:30`), so no
   explicit `AddScoped` line exists for it. Injected as [`ISponsorUIService`](#isponsoruiservice) into
   [`SponsorList`](#sponsorlist) (`Pages/Sponsor/SponsorList.razor.cs:23`),
   [`SponsorDetail`](#sponsordetail) (`Pages/Sponsor/SponsorDetail.razor.cs:22`),
@@ -5648,17 +5985,17 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
 > MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Pages.Public.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Speakers/PublicSpeakerDetail.razor.cs:22` · Level 10 · class (Blazor code-behind)
 
 - **What it is**: the public speaker profile: photo, bio, social links, and the sessions that speaker presents at the conference the reader is allowed to see. Email is deliberately **not** rendered, BR-66 (class doc, `PublicSpeakerDetail.razor.cs:18-21`).
-- **Depends on**: [`ISpeakerUIService`](#ispeakeruiservice), [`ISessionUIService`](#isessionuiservice) and [`IEventUIService`](#ieventuiservice) (`:22-24`), `AuthenticationStateProvider` read directly rather than as a cascading task (`:25`), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:27`), [`SpeakerDTO`](group-17-conference-domain.md#speakerdto) and [`SessionDTO`](group-17-conference-domain.md#sessiondto), [`ConferenceReadAudience`](group-17-conference-domain.md#conferencereadaudience) (`:205`), [`CurrentEventDefaults`](group-17-conference-domain.md#currenteventdefaults) (`:212`), [`ConferenceRoutePaths`](#conferenceroutepaths) (`:216`, `:218`), and [`DomainHelper`](group-02-domain-building-blocks.md#domainhelper)'s `Id.Parse<T>` (`:98`).
+- **Depends on**: [`ISpeakerUIService`](#ispeakeruiservice), [`ISessionUIService`](#isessionuiservice) and [`IEventUIService`](#ieventuiservice) (`:24-26`), `AuthenticationStateProvider` read directly rather than as a cascading task (`:27`), [`IToastService`](group-15-common-ui-framework.md#itoastservice) (`:29`), [`SpeakerDTO`](group-17-conference-domain.md#speakerdto) and [`SessionDTO`](group-17-conference-domain.md#sessiondto), [`ConferenceReadAudience`](group-17-conference-domain.md#conferencereadaudience) (`:207`), [`CurrentEventDefaults`](group-17-conference-domain.md#currenteventdefaults) (`:214`), [`ConferenceRoutePaths`](#conferenceroutepaths) (`:48`, `:218`), and [`DomainHelper`](group-02-domain-building-blocks.md#domainhelper)'s `Id.Parse<T>` (`:100`).
 - **Concept introduced, the prerender skip, the server-side filter that replaced an in-memory one, and fail-closed audience scoping.**
-  1. **Prerender skip.** `OnParametersSetAsync` returns immediately when `!RendererInfo.IsInteractive` (`:76-79`): under InteractiveAuto the interactive instance re-runs the method, so without this guard every visit fetched the speaker and the session catalog twice. The prerender pass renders the loading skeleton, and the comment names the sibling pages that use the same guard (`:73-75`). `[Rubric §23, Front-End Performance & Rendering]` (assesses avoidable duplicate work per view).
-  2. **Push the filter to the server.** `LoadSpeakerSessionsAsync` (`:157-194`) sends a `SpeakerId equals` filter with `includeChildren: false`, sorted by `StartsAt` ascending, capped at `MaxSpeakerSessions = 100` (`:31-32`, request at `:178-185`). The remarks block (`:147-152`) records what this replaced: the page used to pull the entire session catalog with all child collections and filter it in memory on `SessionSpeakers`, so viewing one speaker cost a full-catalog read. Since the page never renders those children, they are gone from the request too. `[Rubric §12, Performance & Scalability]` and `[Rubric §8, Data Architecture]` (a bounded page size instead of an unbounded read).
-  3. **Fail closed on the audience scope.** `ResolveSessionEventScopeAsync` (`:202-214`) returns an unscoped result for a privileged reader (`:205-208`) and otherwise resolves the current or next event through [`CurrentEventDefaults`](group-17-conference-domain.md#currenteventdefaults) (`:212`); a failed events lookup returns `(false, null)`, an *unresolved* scope rather than a wide one, and the caller turns that into a load failure (`:167-170`). The comment states the leak it prevents (`:164-166`): without this, a speaker who also presented at past conferences leaked those sessions to attendees here. `[Rubric §11, Security]` and `[Rubric §26, Front-End Security]`.
+  1. **Prerender skip.** `OnParametersSetAsync` returns immediately when `!RendererInfo.IsInteractive` (`:78-81`): under InteractiveAuto the interactive instance re-runs the method, so without this guard every visit fetched the speaker and the session catalog twice. The prerender pass renders the loading skeleton, and the comment names the sibling pages that use the same guard (`:75-77`). `[Rubric §23, Front-End Performance & Rendering]` (assesses avoidable duplicate work per view).
+  2. **Push the filter to the server.** `LoadSpeakerSessionsAsync` (`:159-196`) sends a `SpeakerId equals` filter with `includeChildren: false`, sorted by `StartsAt` ascending, capped at `MaxSpeakerSessions = 100` (`:33-34`, request at `:180-187`). The remarks block (`:149-154`) records what this replaced: the page used to pull the entire session catalog with all child collections and filter it in memory on `SessionSpeakers`, so viewing one speaker cost a full-catalog read. Since the page never renders those children, they are gone from the request too. `[Rubric §12, Performance & Scalability]` and `[Rubric §8, Data Architecture]` (a bounded page size instead of an unbounded read).
+  3. **Fail closed on the audience scope.** `ResolveSessionEventScopeAsync` (`:204-216`) returns an unscoped result for a privileged reader (`:206-210`) and otherwise resolves the current or next event through [`CurrentEventDefaults`](group-17-conference-domain.md#currenteventdefaults) (`:214`); a failed events lookup returns `(false, null)`, an *unresolved* scope rather than a wide one, and the caller turns that into a load failure (`:169-173`). The comment states the leak it prevents (`:166-168`): without this, a speaker who also presented at past conferences leaked those sessions to attendees here. `[Rubric §11, Security]` and `[Rubric §26, Front-End Security]`.
   `[Rubric §30, Compliance, Privacy & Data Governance]` (assesses deliberate handling of personal data): the speaker email exists on the DTO but is never rendered on the public page, and the class doc names the rule.
 - **Walkthrough**
-  - `OnInitialized` (`:40-49`) builds the Home / Speakers / Profile breadcrumbs; unlike [`PublicEventDetail`](#publiceventdetail) it is synchronous, because the speaker list is reachable by every audience and the trail does not vary.
-  - `HasSocialLinks` (`:65-69`) collapses the four optional link fields into a single render guard, so the social row is absent rather than empty when a speaker supplied none.
-  - `LoadSpeakerAsync` (`:90-141`): bump the generation (`:93`, field doc at `:53-58`), parse the id (`:98`), `GetByIdAsync(speakerId, true, ...)` (`:99`), clear `Speaker` and toast not-found-versus-load-failed on failure (`:105-115`), then load the sessions and toast one load failure if that resolver returned false (`:119-122`); `OperationCanceledException` is swallowed (`:124-127`) and the generation-guarded `finally` clears `IsLoading` (`:132-140`).
-  - Navigation (`:216-218`) routes to a session or back to the speaker list. Disposal (`:222-242`) is the standard cancel-on-disposal pattern over the page's `CancellationTokenSource` (`:34`).
+  - `OnInitialized` (`:42-51`) builds the Home / Speakers / Profile breadcrumbs; unlike [`PublicEventDetail`](#publiceventdetail) it is synchronous, because the speaker list is reachable by every audience and the trail does not vary.
+  - `HasSocialLinks` (`:67-71`) collapses the four optional link fields into a single render guard, so the social row is absent rather than empty when a speaker supplied none.
+  - `LoadSpeakerAsync` (`:92-143`): bump the generation (`:95`, field doc at `:55-60`), parse the id (`:100`), `GetByIdAsync(speakerId, true, ...)` (`:101`), clear `Speaker` and toast not-found-versus-load-failed on failure (`:109-117`), then load the sessions and toast one load failure if that resolver returned false (`:121-124`); `OperationCanceledException` is swallowed (`:126-129`) and the generation-guarded `finally` clears `IsLoading` (`:134-142`).
+  - Session links are plain `MudLink` markup to `ConferenceRoutePaths.PublicSessionDetails(session.Id)` (`PublicSpeakerDetail.razor:117`), not a code-behind navigation method; the page kept only `NavigateToList` (`:218`) for the back action. Disposal (`:220-242`) is the standard cancel-on-disposal pattern over the page's `CancellationTokenSource` (`:36`).
 - **Why it's built this way**: a public profile is a read-only, cache-friendly page; keeping its fetches narrow (one speaker, that speaker's sessions for one event, no children) is what makes it cheap enough to serve to an anonymous crowd, and scoping those sessions to the reader's event keeps the profile consistent with the schedule they can actually browse.
 - **Where it's used**: the `/conference/speakers/{Id}` route (`PublicSpeakerDetail.razor:1`), reached from [`PublicSpeakerList`](#publicspeakerlist) cards and from session pages. Its markup renders the `QrCodeButton` for its own link (`PublicSpeakerDetail.razor:45`).
 
