@@ -194,21 +194,21 @@ for the best-effort live-channel push (`Program.cs:283`, replacing the framework
 [`NullLiveChannelPublisher`](group-10-notifications.md#nulllivechannelpublisher) behind
 [`ILiveChannelPublisher`](group-10-notifications.md#ilivechannelpublisher)), Conference to Engagement
 for `IBookmarkCountService` on the speaker dashboard
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:350`), Notification to Identity for
-attendee user ids (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:218`), and
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:384`), Notification to Identity for
+attendee user ids (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:225`), and
 Identity to Engagement plus Identity to Notification for the cross-service data-subject export
-aggregation (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:290-291`). Server sides are
+aggregation (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:316-317`). Server sides are
 mapped in each host with `AddGrpcServiceDefaults()` plus `app.MapGrpcService<...>()`, mostly behind
 `.RequireAuthorization()`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:362`, `:396-397`).
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:396`, `:396-397`).
 
 **The startup-ordering edge worth knowing.** Conference and Engagement call *each other*, so the
 AppHost gives Engagement a `WithReference(conference).WaitFor(conference)` but the reverse Conference
 to Engagement edge only a `WithReference` with **no `WaitFor`**
-(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:270`, `:273`), because a reciprocal wait would
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:271`, `:273`), because a reciprocal wait would
 deadlock startup with each service waiting for the other to be healthy. The same reasoning drops the
-`WaitFor` on Engagement to Notification (`Program.cs:281`) and on both Identity edges
-(`Program.cs:291-292`); only Notification to Identity keeps one (`Program.cs:268`). The transient
+`WaitFor` on Engagement to Notification (`Program.cs:282`) and on both Identity edges
+(`Program.cs:292-293`); only Notification to Identity keeps one (`Program.cs:269`). The transient
 "peer not ready" errors that result self-heal through the resilience pipeline. This is the practical
 cost [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) calls out: mutual
 synchronous dependencies need care, and the retry plus circuit breaker is what makes them tolerable.
@@ -226,12 +226,12 @@ marks its own. Two fitness functions read the attribute by full name
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Contracts.cs:10`): the
 **purity** rule, that a contract type must not reach into the producing service's Domain, Application,
 or Infrastructure (`ArchitectureRules.Contracts.cs:32`, exposed through
-[`ServiceContractPurityTestsBase`](group-27-testing-infrastructure.md#servicecontractpuritytestsbase)),
+[`ServiceContractPurityTestsBase`](group-28-testing-infrastructure.md#servicecontractpuritytestsbase)),
 and the **encapsulation** rule, that the class serving a `[ServiceContract]` interface must not be
 public (`ArchitectureRules.Contracts.cs:81`, exposed through
-[`ContractImplementationTestsBase`](group-27-testing-infrastructure.md#contractimplementationtestsbase)),
+[`ContractImplementationTestsBase`](group-28-testing-infrastructure.md#contractimplementationtestsbase)),
 which is why every gRPC adapter above is `internal sealed`. Alongside them,
-[`MicroserviceExtractionTestsBase`](group-27-testing-infrastructure.md#microserviceextractiontestsbase)
+[`MicroserviceExtractionTestsBase`](group-28-testing-infrastructure.md#microserviceextractiontestsbase)
 forbids MassTransit and gRPC types from leaking into Application, Domain, or Shared. Each repo
 subclasses all three (for example
 `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/ServiceContractPurityTests.cs:9`). That is the
@@ -361,9 +361,9 @@ virtue of their `.proto`.
   `IUserSalesExportService`
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Exports/IUserSalesExportService.cs:20`). The
   rules that read the marker are surfaced to each repo through
-  [`ServiceContractPurityTestsBase`](group-27-testing-infrastructure.md#servicecontractpuritytestsbase)
+  [`ServiceContractPurityTestsBase`](group-28-testing-infrastructure.md#servicecontractpuritytestsbase)
   (`ServiceContractPurityTestsBase.cs:20-26`) and
-  [`ContractImplementationTestsBase`](group-27-testing-infrastructure.md#contractimplementationtestsbase)
+  [`ContractImplementationTestsBase`](group-28-testing-infrastructure.md#contractimplementationtestsbase)
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/ContractImplementationTestsBase.cs:20,34`),
   which Common, ADC, Store, and Helpdesk each subclass in their architecture-test project.
 - **Caveats / not-in-source**: generated gRPC client and server classes are **not** marked; the doc

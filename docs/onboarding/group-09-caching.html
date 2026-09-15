@@ -129,7 +129,8 @@
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
-        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
+        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -151,10 +152,11 @@
           and the opt-in two-level <a href="#hybridcacheservice"><code>HybridCacheService</code></a>), the shared Redis prefix-eviction
           helper the last two both run (<a href="#redisprefixscanner"><code>RedisPrefixScanner</code></a>), a static TTL-policy factory
           (<a href="#cacheoptions"><code>CacheOptions</code></a>) with the bound settings object that reproduces its defaults from
-          configuration (<a href="#cachesettings"><code>CacheSettings</code></a>), and the optional key-namespace pair
+          configuration (<a href="#cachesettings"><code>CacheSettings</code></a>), and the key-namespace pair
           (<a href="#cachekeyprefixoptions"><code>CacheKeyPrefixOptions</code></a> plus its internal applier
-          <a href="#cachekeynamespace"><code>CacheKeyNamespace</code></a>) that keeps two services sharing one Redis instance out of
-          each other&#39;s keyspace. No handler ever talks to Redis or <code>IMemoryCache</code> directly: the read-through and
+          <a href="#cachekeynamespace"><code>CacheKeyNamespace</code></a>) that keeps two applications sharing one Redis instance out
+          of each other&#39;s keyspace by default, without anyone configuring it. No handler ever talks to Redis or
+          <code>IMemoryCache</code> directly: the read-through and
           invalidate-on-write behavior lives in two pipeline decorators taught in
           <a href="group-05-cqrs-pipeline.html">Group 5, CQRS Pipeline</a>. This chapter is the cache&#39;s own machinery, the
           contract, the three backends, the scanner, the TTL policy and its configuration object, and the
@@ -184,30 +186,30 @@
           infrastructure stays replaceable; this is that rule in one file, since the only thing Application knows
           about caching is six method signatures.</p>
           <p><strong>Backend selection happens once, at the composition root.</strong> <code>AddCaching(IConfiguration?)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:229</code>, called from
-          <code>AddInfrastructure</code> at <code>DependencyInjection.cs:131</code>) always calls <code>AddMemoryCache()</code>
-          (<code>DependencyInjection.cs:231</code>), then binds the shared <code>Cache</code> configuration section three ways when
-          configuration was supplied (<code>DependencyInjection.cs:242-255</code>): to
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:259</code>, called from
+          <code>AddInfrastructure</code> at <code>DependencyInjection.cs:150</code>) always calls <code>AddMemoryCache()</code>
+          (<code>DependencyInjection.cs:261</code>), then binds the shared <code>Cache</code> configuration section three ways when
+          configuration was supplied (<code>DependencyInjection.cs:272-285</code>): to
           <a href="#cachekeyprefixoptions"><code>CacheKeyPrefixOptions</code></a> for the key namespace
-          (<code>DependencyInjection.cs:244</code>), to <a href="#cachesettings"><code>CacheSettings</code></a>
-          for the TTL policy (<code>DependencyInjection.cs:246-249</code>), and to
+          (<code>DependencyInjection.cs:274</code>), to <a href="#cachesettings"><code>CacheSettings</code></a>
+          for the TTL policy (<code>DependencyInjection.cs:276-279</code>), and to
           <a href="group-14-module-system-composition.html#querycachepipelinesettings"><code>QueryCachePipelineSettings</code></a> for
-          the one knob the Application-layer query decorator needs (<code>DependencyInjection.cs:251-254</code>, defined in
+          the one knob the Application-layer query decorator needs (<code>DependencyInjection.cs:281-284</code>, defined in
           that layer because it cannot reference Infrastructure). Without configuration both settings objects are
-          still registered at their defaults (<code>DependencyInjection.cs:256-260</code>), so <code>IOptions&lt;T&gt;</code> always resolves.
+          still registered at their defaults (<code>DependencyInjection.cs:286-290</code>), so <code>IOptions&lt;T&gt;</code> always resolves.
           <a href="#icacheservice"><code>ICacheService</code></a> itself is registered through <code>TryAddSingleton</code> with a factory that
-          probes the container (<code>DependencyInjection.cs:262-281</code>). If an <code>IDistributedCache</code> is registered <strong>and
-          it is not the default <code>MemoryDistributedCache</code></strong> (<code>DependencyInjection.cs:265</code>), meaning a real
+          probes the container (<code>DependencyInjection.cs:292-311</code>). If an <code>IDistributedCache</code> is registered <strong>and
+          it is not the default <code>MemoryDistributedCache</code></strong> (<code>DependencyInjection.cs:295</code>), meaning a real
           out-of-process store such as the Redis cache Aspire wires, the factory builds a
           <a href="#distributedcacheservice"><code>DistributedCacheService</code></a> with whatever <code>IConnectionMultiplexer</code> and
           <code>ILogger</code> it can resolve plus the bound key namespace and cache settings
-          (<code>DependencyInjection.cs:267-276</code>); otherwise it falls back to a
+          (<code>DependencyInjection.cs:297-306</code>); otherwise it falls back to a
           <a href="#memorycacheservice"><code>MemoryCacheService</code></a> over the registered <code>IMemoryCache</code>
-          (<code>DependencyInjection.cs:280</code>). The same method registers the
+          (<code>DependencyInjection.cs:310</code>). The same method registers the
           <a href="group-05-cqrs-pipeline.html#idistributedlock"><code>IDistributedLock</code></a> that the API idempotency filter pairs
           with the cache, <a href="group-14-module-system-composition.html#redisdistributedlock">Redis-backed</a> when a
           multiplexer is present and <a href="group-14-module-system-composition.html#inprocessdistributedlock">process-local</a>
-          otherwise (<code>DependencyInjection.cs:287-301</code>). A single-process monolith therefore caches in-process for
+          otherwise (<code>DependencyInjection.cs:317-331</code>). A single-process monolith therefore caches in-process for
           free, and the identical application code uses Redis the moment a distributed cache is present: no flag,
           no per-environment branch in a handler. This is the same &quot;abstraction in Application, transport chosen
           at the edge&quot; pattern the message bus and gRPC clients use, which is what [Rubric §7, Microservices
@@ -215,21 +217,21 @@
           [Rubric §12, Performance and Scalability] rewards (the scaled-out deployment gets a shared cache
           without touching business code).</p>
           <p><strong>A third substrate, opt in and explicit.</strong> <code>AddCommonHybridCache(Action&lt;HybridCacheOptions&gt;?)</code>
-          (<code>DependencyInjection.cs:340</code>) calls <code>AddHybridCache()</code> (<code>DependencyInjection.cs:342</code>) and then
+          (<code>DependencyInjection.cs:370</code>) calls <code>AddHybridCache()</code> (<code>DependencyInjection.cs:372</code>) and then
           configures <code>HybridCacheOptions</code> through the options pipeline rather than through the
-          <code>AddHybridCache</code> callback (<code>DependencyInjection.cs:348-362</code>), because the TTL policy now comes from
+          <code>AddHybridCache</code> callback (<code>DependencyInjection.cs:378-392</code>), because the TTL policy now comes from
           the bound <a href="#cachesettings"><code>CacheSettings</code></a> and the callback has no service provider to read it
           from; the framework sets <code>Expiration</code> from <code>DefaultDuration</code> and
           <code>LocalCacheExpiration</code> from <code>LocalCacheDuration</code> (falling back to
-          <code>HybridCacheService.LocalCacheDefault</code>) at <code>DependencyInjection.cs:355-359</code>, and the host&#39;s own hook
-          runs last so it can override anything (<code>DependencyInjection.cs:361</code>). The swap of the cache
+          <code>HybridCacheService.LocalCacheDefault</code>) at <code>DependencyInjection.cs:385-389</code>, and the host&#39;s own hook
+          runs last so it can override anything (<code>DependencyInjection.cs:391</code>). The swap of the cache
           implementation is deliberately <code>RemoveAll&lt;ICacheService&gt;()</code> followed by <code>AddSingleton</code>
-          (<code>DependencyInjection.cs:366-380</code>) rather than <code>TryAdd</code>, so the call wins whether it runs before or
+          (<code>DependencyInjection.cs:396-410</code>) rather than <code>TryAdd</code>, so the call wins whether it runs before or
           after <code>AddInfrastructure</code>; the source is equally explicit that this also removes a host&#39;s own bespoke
           <code>ICacheService</code>, so calling it is a statement that the two-level cache is the cache
-          (<code>DependencyInjection.cs:328-333</code>). All seven deployed service hosts call it, inside the same &quot;is Redis
+          (<code>DependencyInjection.cs:358-363</code>). All seven deployed service hosts call it, inside the same &quot;is Redis
           configured&quot; branch that registers the distributed cache: ADC Conference at
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:151</code> and Store Catalog at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:179</code> and Store Catalog at
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94</code>, with ADC Engagement, Identity
           and Notification and Store Sales and Identity alongside them. Without Redis the branch does not run and
           the host keeps the auto-selected substrate, which is the point: an L1 in front of an in-process L2 buys
@@ -318,17 +320,33 @@
           <code>HybridCacheService.cs:54</code>, <code>HybridCacheService.cs:269-280</code>), not by the eviction, and the source names
           that as the accepted cost of the L1 hit rate.</p>
           <p><strong>The key namespace and the TTL policy.</strong> <a href="#cachekeyprefixoptions"><code>CacheKeyPrefixOptions</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:28</code>) binds the <code>Cache</code>
-          configuration section (<code>CacheKeyPrefix.cs:31</code>) and carries one setting, <code>KeyPrefix</code>, defaulting to
-          empty (<code>CacheKeyPrefix.cs:37</code>). <a href="#cachekeynamespace"><code>CacheKeyNamespace</code></a> (<code>CacheKeyPrefix.cs:41</code>) is
-          the internal applier: a <code>None</code> instance for the untouched case (<code>CacheKeyPrefix.cs:44</code>), a <code>From</code>
-          factory that tolerates an unregistered options section (<code>CacheKeyPrefix.cs:50-54</code>), and <code>Qualify</code>
-          (<code>CacheKeyPrefix.cs:57</code>) which prepends the prefix. Both Redis-capable adapters honor it and apply it
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:31</code>) binds the <code>Cache</code>
+          configuration section (<code>CacheKeyPrefix.cs:34</code>) and carries one setting, <code>KeyPrefix</code>, still defaulting
+          to empty (<code>CacheKeyPrefix.cs:46</code>) but where empty no longer means &quot;no prefix&quot;: it means take the
+          framework&#39;s per-application default, and a host sets the value explicitly only to pin a keyspace two
+          hosts of the same application must share (<code>CacheKeyPrefix.cs:36-45</code>). The reason the default changed
+          is recorded on the property itself: it used to be no prefix at all, so two applications sharing one
+          Redis shared one keyspace for both cache entries and distributed locks, silently
+          (<code>CacheKeyPrefix.cs:42-45</code>). <a href="#cachekeynamespace"><code>CacheKeyNamespace</code></a> (<code>CacheKeyPrefix.cs:50</code>) is the
+          internal applier. It keeps a <code>None</code> instance for the untouched case (<code>CacheKeyPrefix.cs:53</code>) and an
+          options-taking <code>From</code> overload that tolerates an unregistered section (<code>CacheKeyPrefix.cs:59-63</code>), but
+          the composition root calls the container-taking overload (<code>CacheKeyPrefix.cs:73-88</code>), which returns the
+          configured prefix when a host set one (<code>CacheKeyPrefix.cs:77-81</code>) and otherwise builds
+          <code>{application namespace}:</code> from
+          <a href="group-14-module-system-composition.html#applicationnamespace"><code>ApplicationNamespace.Resolve</code></a>
+          (<code>CacheKeyPrefix.cs:83-87</code>). That resolver reads <code>Application:Namespace</code>, falls back to the host&#39;s
+          application name, and falls back again to the literal <code>app</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53-67</code>,
+          keys at <code>ApplicationNamespace.cs:31</code> and <code>ApplicationNamespace.cs:34</code>), so the resolved prefix is never
+          empty and isolation is automatic rather than opt-in (<code>ApplicationNamespace.cs:45-48</code>). <code>Qualify</code>
+          (<code>CacheKeyPrefix.cs:91-92</code>) prepends it. The same namespace instance is handed to the Redis distributed
+          lock registered beside the cache (<code>DependencyInjection.cs:324-325</code>), so one application&#39;s cache entries
+          and its lock keys carry one prefix. Both Redis-capable adapters honor it and apply it
           <em>inside</em> the adapter rather than through <code>RedisCacheOptions.InstanceName</code>; the rationale in the source
-          (<code>CacheKeyPrefix.cs:13-22</code>) is precise, since <code>InstanceName</code> is prepended below this abstraction where
+          (<code>CacheKeyPrefix.cs:16-25</code>) is precise, since <code>InstanceName</code> is prepended below this abstraction where
           the SCAN cannot see it, so prefix eviction would search for <code>product:*</code> while the stored keys were
           <code>svc:product:*</code> and evict nothing, silently. <a href="#memorycacheservice"><code>MemoryCacheService</code></a> ignores
-          prefixes entirely because a per-process keyspace is private by construction (<code>CacheKeyPrefix.cs:23-26</code>).
+          prefixes entirely because a per-process keyspace is private by construction (<code>CacheKeyPrefix.cs:26-29</code>).
           TTL policy is centralized the same way: <a href="#cacheoptions"><code>CacheOptions</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheOptions.cs:15</code>) exposes a
           deliberately short <strong>30-second</strong> <code>DefaultDuration</code> (<code>CacheOptions.cs:23</code>) as a bare <code>TimeSpan</code>, so
@@ -347,34 +365,34 @@
           then <code>Transactional</code> then handler for commands, and the same chain without the last two for queries;
           the order is documented at
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:66-83</code> and registered at
-          <code>DependencyInjection.cs:134</code> and <code>DependencyInjection.cs:142</code>, taught in
+          <code>DependencyInjection.cs:140</code> and <code>DependencyInjection.cs:148</code>, taught in
           <a href="group-05-cqrs-pipeline.html">Group 5</a>). On the <strong>read</strong> path,
           <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a>
           tests the query for <a href="group-05-cqrs-pipeline.html#iquerycacheable"><code>IQueryCacheable</code></a> and passes straight
           through when it is absent
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:63-64</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:64-65</code>).
           When present it scopes the key to the resolved tenant through
           <a href="group-05-cqrs-pipeline.html#tenantcachekey"><code>TenantCacheKey</code></a> (<code>CachingQueryDecorator.cs:57-58</code>, so two
           tenants can never share an entry), takes a lock-free fast path on a hit
-          (<code>CachingQueryDecorator.cs:73-78</code>), and on a miss acquires a per-key stripe from the process-wide
-          <a href="group-05-cqrs-pipeline.html#querycachekeylocks"><code>QueryCacheKeyLocks</code></a> (<code>CachingQueryDecorator.cs:184</code>),
-          re-checks (<code>CachingQueryDecorator.cs:99-104</code>), records the miss on
-          <a href="group-05-cqrs-pipeline.html#cqrsmetrics"><code>CqrsMetrics</code></a> exactly once (<code>CachingQueryDecorator.cs:112</code>),
+          (<code>CachingQueryDecorator.cs:74-79</code>), and on a miss acquires a per-key stripe from the process-wide
+          <a href="group-05-cqrs-pipeline.html#querycachekeylocks"><code>QueryCacheKeyLocks</code></a> (<code>CachingQueryDecorator.cs:185</code>),
+          re-checks (<code>CachingQueryDecorator.cs:100-105</code>), records the miss on
+          <a href="group-05-cqrs-pipeline.html#cqrsmetrics"><code>CqrsMetrics</code></a> exactly once (<code>CachingQueryDecorator.cs:113</code>),
           and only then runs the inner handler. That stripe wait is itself bounded by
-          <code>Cache:PopulateLockTimeout</code> (<code>CachingQueryDecorator.cs:83-84</code>, default
+          <code>Cache:PopulateLockTimeout</code> (<code>CachingQueryDecorator.cs:84-85</code>, default
           <code>Timeout.InfiniteTimeSpan</code> on <a href="#cachesettings"><code>CacheSettings</code></a> at <code>CacheSettings.cs:57</code>): when a
           finite budget elapses the waiter logs, counts a miss, and runs the query itself uncached rather than
-          queueing behind a pathologically slow populate (<code>CachingQueryDecorator.cs:86-95</code>,
-          <code>CachingQueryDecorator.cs:178-197</code>). The lock table is a fixed-width
+          queueing behind a pathologically slow populate (<code>CachingQueryDecorator.cs:87-96</code>,
+          <code>CachingQueryDecorator.cs:179-198</code>). The lock table is a fixed-width
           <a href="group-08-auth.html#keyedsemaphorestripe"><code>KeyedSemaphoreStripe</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22</code>, 256 stripes by
           default at <code>KeyedSemaphoreStripe.cs:25</code>), which bounds memory no matter how many parameterized cache
           keys the process sees. Every cache call is fail-open: a read fault is logged and treated as a miss
-          (<code>CachingQueryDecorator.cs:207-222</code>) and a populate fault returns the result uncached
-          (<code>CachingQueryDecorator.cs:119-130</code>), so a cache outage degrades reads instead of turning cacheable
+          (<code>CachingQueryDecorator.cs:208-223</code>) and a populate fault returns the result uncached
+          (<code>CachingQueryDecorator.cs:120-131</code>), so a cache outage degrades reads instead of turning cacheable
           queries into 500s, which is the [Rubric §29, Resilience] posture in miniature. Results are stored only
           when they are not a failed <a href="group-01-result-error-handling.html#result"><code>Result</code></a>
-          (<code>CachingQueryDecorator.cs:117</code>). On the <strong>write</strong> path,
+          (<code>CachingQueryDecorator.cs:118</code>). On the <strong>write</strong> path,
           <a href="group-05-cqrs-pipeline.html#cachingcommanddecoratortcommand-tresult"><code>CachingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
           runs the inner handler first and then, only if the command implements
           <a href="group-05-cqrs-pipeline.html#icacheinvalidating"><code>ICacheInvalidating</code></a>, the prefix is non-blank (a blank
@@ -390,7 +408,7 @@
           <a href="https://ivanball.github.io/docs/adr/026-caching-strategy.html" target="_blank" rel="noopener">ADR-026</a> records. Tier 2 is a separate
           HTTP output-cache edge: <code>MMCA.Common.API</code> always runs <code>app.UseOutputCache()</code> as a named step in the
           shared middleware pipeline
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:137-139</code>, see
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:143-145</code>, see
           <a href="group-12-api-hosting-mapping.html#middlewarepipelinebuilder"><code>MiddlewarePipelineBuilder</code></a>) but ships no
           policies, so each host opts in with its own <code>AddOutputCache(...)</code>. The read-heavy public services
           declare real cacheable policies through
@@ -405,7 +423,7 @@
           <a href="group-04-events-outbox.html#outputcacheevictionrequested"><code>OutputCacheEvictionRequested</code></a> integration
           event and its <a href="group-12-api-hosting-mapping.html#outputcacheevictionhandler"><code>OutputCacheEvictionHandler</code></a>.
           Both adopters back that edge with Redis when Redis is configured
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:141</code>;
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:169</code>;
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:104</code>), so the two tiers ride the same
           Redis instance from opposite ends: Tier 1 through <code>IDistributedCache</code> or <code>HybridCache</code>, Tier 2 through
           the output-cache store. ADR-026 also records an optional <strong>third tier on the client</strong>,
@@ -418,10 +436,10 @@
           Redis is live in the deployed services: every service host registers the Aspire Redis integration
           through <a href="group-16-aspire-orchestration.html#rediscachingextensions"><code>RedisCachingExtensions</code></a>, whose
           <code>AddRedisCaching()</code> brings the <code>IConnectionMultiplexer</code> the SCAN needs along with the distributed cache
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:131</code>;
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:159</code>;
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:86</code>), and the hybrid substrate is
           registered inside the same connection-string conditional
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:149-152</code>). Write-side adoption is
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:177-180</code>). Write-side adoption is
           broad: about forty types across ADC&#39;s Conference, Engagement and Identity modules implement
           <a href="group-05-cqrs-pipeline.html#icacheinvalidating"><code>ICacheInvalidating</code></a>, for example
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/UseCases/UpdateCategoryItem/UpdateCategoryItemCommand.cs:18</code>
@@ -439,11 +457,19 @@
           <a href="group-08-auth.html">Group 8, Authentication and Authorization</a>, and
           <a href="group-12-api-hosting-mapping.html#idempotencyfilter"><code>IdempotencyFilter</code></a> resolves it per request to
           store and replay responses
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:140</code>). Three honest
-          caveats round this out. No host in the workspace sets <code>Cache:KeyPrefix</code> in an <code>appsettings</code> file today,
-          so <a href="#cachekeynamespace"><code>CacheKeyNamespace</code></a> resolves to <code>None</code> everywhere and the feature is available
-          rather than exercised. The stampede lock is per process
-          (<code>CachingQueryDecorator.cs:238-244</code>): across replicas over a shared Redis you get at most one handler
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:140</code>). The key
+          namespace is live in both deployed applications, and the two pin it differently: ADC&#39;s four service
+          hosts all set <code>Cache:KeyPrefix</code> to <code>adc:</code> alongside <code>Application:Namespace</code> <code>adc</code>, because they share
+          one Redis and one Service Bus namespace and must agree on the keyspace they already share
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:44</code>, rationale at <code>:30-42</code>),
+          while each Store service pins its own
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/appsettings.json:45</code>, rationale at <code>:29-33</code>).
+          Each of those values restates what the per-application default would already have produced, so the
+          setting pins the keyspace against a rename rather than turning the feature on, and
+          <a href="#cachekeynamespace"><code>CacheKeyNamespace.None</code></a> is now only the constructor fallback the adapters use
+          when no namespace is passed, not the deployed state. Two honest caveats round this out. The stampede
+          lock is per process
+          (<code>CachingQueryDecorator.cs:239-245</code>): across replicas over a shared Redis you get at most one handler
           execution per replica, not one cluster-wide, which is deliberate (a distributed lock is not attempted)
           and harmless because the duplicated writes carry equal content. And <code>GetOrCreateAsync</code> has no
           first-party caller outside tests today: it is a published extension point plus the member
@@ -458,43 +484,53 @@
           an opt-in cache bolted onto a database-per-service system. Everything in the bound <code>Cache</code> section is
           fail-open by design (<code>CacheSettings.cs:10-15</code>): no value there can turn a cache outage or a slow
           populate into an error. The unit tests for these types, including the Redis-backed
-          <a href="group-27-testing-infrastructure.html#distributedcacheserviceredistests"><code>DistributedCacheServiceRedisTests</code></a>
-          and <a href="group-27-testing-infrastructure.html#hybridcacheserviceredistests"><code>HybridCacheServiceRedisTests</code></a>,
-          are catalogued in <a href="group-27-testing-infrastructure.html">Group 27, Testing and Quality Infrastructure</a>.</p>
+          <a href="group-28-testing-infrastructure.html#distributedcacheserviceredistests"><code>DistributedCacheServiceRedisTests</code></a>
+          and <a href="group-28-testing-infrastructure.html#hybridcacheserviceredistests"><code>HybridCacheServiceRedisTests</code></a>,
+          are catalogued in <a href="group-28-testing-infrastructure.html">Group 27, Testing and Quality Infrastructure</a>.</p>
           <h3 id="cachekeyprefixoptions">CacheKeyPrefixOptions</h3>
           <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Caching</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:28</code> · Level 0 · class (public sealed, options)</p>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Caching</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:31</code> · Level 0 · class (public sealed, options)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the bound options object for one setting, <code>Cache:KeyPrefix</code>, the namespace prepended
           to every cache key written through <a href="#distributedcacheservice">DistributedCacheService</a>,
           <a href="#hybridcacheservice">HybridCacheService</a> and the Redis distributed lock. It exists so several
           services sharing one Redis instance cannot read each other&#39;s entries by accidentally choosing the
-          same key.</li>
-          <li><strong>Depends on</strong>: nothing first-party. It is a plain options POCO bound by
+          same key. Leaving it unset no longer means &quot;no prefix&quot;: the empty value is a signal to fall back to
+          the framework&#39;s own per-application default (<code>CacheKeyPrefix.cs:106-109</code>).</li>
+          <li><strong>Depends on</strong>: nothing first-party for the options object itself; it is a plain POCO bound by
           <code>Microsoft.Extensions.Options</code> / <code>IConfiguration</code> (BCL). Its value is turned into behavior by
-          <a href="#cachekeynamespace">CacheKeyNamespace</a>, which is what the cache adapters actually hold.</li>
-          <li><strong>Concept introduced, keyspace isolation for a shared cache.</strong> <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module keeps working, and keeps its data to itself, once it is lifted
-          into its own process next to its siblings. A cache instance is exactly the kind of shared
-          infrastructure that survives extraction unchanged, so the isolation a private process gave you for
-          free has to be re-created explicitly: the class doc (<code>CacheKeyPrefix.cs:5-12</code>) states the failure
-          mode plainly, two services that pick the same key for different data will serve each other&#39;s values.
-          Giving each service a prefix such as <code>&quot;conference:&quot;</code> restores the separation. <code>[Rubric §11, Security]</code> assesses whether the system prevents data reaching a caller who should not see it; a
-          cross-service key collision is a data-exposure bug wearing a performance-feature costume, and this
-          option is the control that prevents it.</li>
+          <a href="#cachekeynamespace">CacheKeyNamespace</a>, which is what the cache adapters actually hold, and which
+          now falls back to <a href="group-14-module-system-composition.html#applicationnamespace">ApplicationNamespace</a> when this option
+          is unset (<code>CacheKeyPrefix.cs:106-109</code>).</li>
+          <li><strong>Concept introduced, keyspace isolation for a shared cache, on by default.</strong> <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module keeps working, and keeps its data to itself, once
+          it is lifted into its own process next to its siblings. A cache instance is exactly the kind of
+          shared infrastructure that survives extraction unchanged, so the isolation a private process gave you
+          for free has to be re-created explicitly. This option is one of two ways to get it: set it explicitly
+          to pin a shared keyspace across hosts of the <em>same</em> application, or leave it unset and let
+          <a href="group-14-module-system-composition.html#applicationnamespace">ApplicationNamespace</a> derive a distinct keyspace per
+          application automatically (<code>CacheKeyPrefix.cs:105-109</code>). <code>[Rubric §11, Security]</code> assesses whether the
+          system prevents data reaching a caller who should not see it; SEC-Common-53
+          (<code>CacheKeyPrefix.cs:90-92</code>) records that this option used to default to no prefix at all, so two
+          applications sharing one Redis silently shared one keyspace for both cache entries and distributed
+          locks. Isolation is now automatic rather than opt-in.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>SectionName</code> (<code>CacheKeyPrefix.cs:31</code>), <code>const string</code> = <code>&quot;Cache&quot;</code>. This is the configuration
+          <li><code>SectionName</code> (<code>CacheKeyPrefix.cs:34</code>), <code>const string</code> = <code>&quot;Cache&quot;</code>. This is the configuration
           section, so the setting a host writes is <code>Cache:KeyPrefix</code>. The same section carries the TTL policy
           (<a href="group-09-caching.html#cachesettings">CacheSettings</a>) and the query pipeline&#39;s
           populate-lock knob (<a href="group-14-module-system-composition.html#querycachepipelinesettings">QueryCachePipelineSettings</a>),
           all three bound side by side in <code>AddCaching</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:242-260</code>).</li>
-          <li><code>KeyPrefix</code> (<code>CacheKeyPrefix.cs:37</code>), <code>string</code> with <code>{ get; init; }</code> and a default of
-          <code>string.Empty</code>. Empty is the deliberate default: it leaves keys exactly as callers wrote them,
-          which is the correct behavior for a host that owns its cache outright and does not share it.</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:272-290</code>).</li>
+          <li><code>KeyPrefix</code> (<code>CacheKeyPrefix.cs:46</code>, doc at <code>CacheKeyPrefix.cs:105-109</code>), <code>string</code> with
+          <code>{ get; init; }</code> and a default of <code>string.Empty</code>. The property default is unchanged, but its meaning
+          changed: an empty value now tells
+          <a href="#cachekeynamespace">CacheKeyNamespace</a><code>.From(IServiceProvider)</code> to resolve the framework&#39;s
+          per-application default (<code>&quot;{application namespace}:&quot;</code>) rather than leaving keys unprefixed. Setting
+          it explicitly is for the narrower case, pinning a keyspace two hosts of the <em>same</em> application must
+          share.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: the class remarks (<code>CacheKeyPrefix.cs:13-26</code>) record the decision that
+          <li><strong>Why it&#39;s built this way</strong>: the class remarks (<code>CacheKeyPrefix.cs:16-29</code>) record the decision that
           makes this type necessary rather than redundant. Redis has a built-in equivalent,
           <code>RedisCacheOptions.InstanceName</code>, and it was rejected: <code>InstanceName</code> is prepended by
           <code>IDistributedCache</code> <em>below</em> this framework&#39;s abstraction, where prefix invalidation cannot see it.
@@ -504,21 +540,23 @@
           <a href="https://ivanball.github.io/docs/adr/026-caching-strategy.html" target="_blank" rel="noopener">ADR-026</a> records the same reasoning
           (<code>026-caching-strategy.md:235-238</code>).</li>
           <li><strong>Where it&#39;s used</strong>: bound in <code>AddCaching()</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:244</code>) via
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:274</code>) via
           <code>services.Configure&lt;CacheKeyPrefixOptions&gt;(configuration.GetSection(CacheKeyPrefixOptions.SectionName))</code>,
-          and only when a non-null <code>IConfiguration</code> was passed (<code>DependencyInjection.cs:242</code>).
-          <code>AddInfrastructure</code> always passes one (<code>DependencyInjection.cs:131</code>), so a host composing through the
+          and only when a non-null <code>IConfiguration</code> was passed (<code>DependencyInjection.cs:272</code>).
+          <code>AddInfrastructure</code> always passes one (<code>DependencyInjection.cs:150</code>), so a host composing through the
           normal entry point gets the binding; a test calling the parameterless <code>AddCaching()</code> overload does
-          not. The bound options are then read once per registration through
-          <a href="#cachekeynamespace">CacheKeyNamespace</a><code>.From</code>, at three sites: the distributed cache factory
-          (<code>DependencyInjection.cs:270</code>), the Redis lock factory (<code>DependencyInjection.cs:294</code>) and the opt-in
-          hybrid factory (<code>DependencyInjection.cs:372</code>).</li>
+          not. The bound options are no longer read directly at the call sites; instead
+          <a href="#cachekeynamespace">CacheKeyNamespace</a><code>.From(IServiceProvider)</code> resolves them (and the
+          per-application fallback) once per registration, at three sites: the distributed cache factory
+          (<code>DependencyInjection.cs:300</code>), the Redis lock factory (<code>DependencyInjection.cs:324</code>) and the opt-in
+          hybrid factory (<code>DependencyInjection.cs:402</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: <a href="#memorycacheservice">MemoryCacheService</a> never sees the prefix, because
           a per-process keyspace is private by construction and a prefix would add nothing
-          (<code>CacheKeyPrefix.cs:23-26</code>). Also worth knowing before you go looking for a live example: no
-          checked-in <code>appsettings*.json</code> in the four repos sets <code>Cache:KeyPrefix</code>, so the effective prefix
-          everywhere today is the empty default, and the option is a capability that is wired but not
-          exercised.</li>
+          (<code>CacheKeyPrefix.cs:26-29</code>). The prior caveat here, that no checked-in <code>appsettings*.json</code> sets
+          <code>Cache:KeyPrefix</code> so the effective prefix is empty everywhere, no longer holds: because the empty
+          default now resolves through
+          <a href="group-14-module-system-composition.html#applicationnamespace">ApplicationNamespace</a>, every host that never sets
+          <code>Cache:KeyPrefix</code> still gets a non-empty, per-application prefix at runtime.</li>
           </ul>
           <h3 id="cacheoptions">CacheOptions</h3>
           <blockquote>
@@ -577,7 +615,7 @@
           (<code>CacheSettings.cs:32</code>), which is what both distributed adapters actually read at runtime.
           <a href="#memorycacheservice">MemoryCacheService</a> does <strong>not</strong> route through this type at all; it builds
           <code>MemoryCacheEntryOptions</code> inline. Unit-tested by
-          <a href="group-27-testing-infrastructure.html#cacheoptionstests">CacheOptionsTests</a>.</li>
+          <a href="group-28-testing-infrastructure.html#cacheoptionstests">CacheOptionsTests</a>.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>DefaultExpiration</code> has no first-party caller outside <code>Create</code> itself
           (<code>CacheOptions.cs:41</code>) and its test; it is a published convenience on the package surface. And do not
           read the 30 seconds as a universal cache floor: because <a href="#memorycacheservice">MemoryCacheService</a>
@@ -651,8 +689,8 @@
           <a href="#hybridcacheservice">HybridCacheService</a><code>.RemoveByPrefixAsync</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:173-179</code>).
           Exercised against a real Redis by
-          <a href="group-27-testing-infrastructure.html#distributedcacheserviceredistests">DistributedCacheServiceRedisTests</a>
-          and <a href="group-27-testing-infrastructure.html#hybridcacheserviceredistests">HybridCacheServiceRedisTests</a>,
+          <a href="group-28-testing-infrastructure.html#distributedcacheserviceredistests">DistributedCacheServiceRedisTests</a>
+          and <a href="group-28-testing-infrastructure.html#hybridcacheserviceredistests">HybridCacheServiceRedisTests</a>,
           which live in a separate <code>MMCA.Common.Infrastructure.Redis.Tests</code> project over Testcontainers rather
           than in the unit loop.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>KeysAsync</code> (SCAN) is O(keyspace) on the Redis side. That is acceptable
@@ -661,7 +699,7 @@
           </ul>
           <h3 id="cachekeynamespace">CacheKeyNamespace</h3>
           <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Caching</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:41</code> · Level 1 · class (internal sealed)</p>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Caching</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:50</code> · Level 1 · class (internal sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the tiny behavioral half of <a href="#cachekeyprefixoptions">CacheKeyPrefixOptions</a>. It holds
@@ -672,52 +710,78 @@
           factory) and <code>Microsoft.Extensions.Options.IOptions&lt;T&gt;</code> (BCL). Consumed by
           <a href="#distributedcacheservice">DistributedCacheService</a>, <a href="#hybridcacheservice">HybridCacheService</a> and
           <a href="group-14-module-system-composition.html#redisdistributedlock">RedisDistributedLock</a>.</li>
-          <li><strong>Concept introduced, the null object as a configuration default.</strong> <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether the code avoids incidental complexity and defensive noise. Rather
-          than making every call site ask &quot;is a prefix configured?&quot;, the unconfigured case is represented by a
-          real instance, <code>None</code>, whose <code>Qualify</code> returns the key unchanged. There is one branch
-          (<code>CacheKeyPrefix.cs:58</code>) instead of a null check at every use. <code>[Rubric §14, Testability]</code> assesses
-          whether behavior can be exercised without standing up the world: because the type is a plain object
-          that both adapters take as an optional constructor parameter, a unit test passes
+          <li><strong>Concept introduced, the null object as a configuration default, now with a non-empty fallback.</strong>
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether the code avoids incidental complexity
+          and defensive noise. Rather than making every call site ask &quot;is a prefix configured?&quot;, the
+          unconfigured case is represented by a real instance, <code>None</code>, whose <code>Qualify</code> returns the key
+          unchanged. There is one branch (<code>CacheKeyPrefix.cs:266-267</code>) instead of a null check at every use.
+          <code>[Rubric §11, Security]</code> assesses whether the system prevents data reaching a caller who should not
+          see it: the composition-root factory, <code>From(IServiceProvider)</code>, is what turns an unset
+          <code>Cache:KeyPrefix</code> into a non-empty, per-application prefix (SEC-Common-53,
+          <code>CacheKeyPrefix.cs:240-245</code>) rather than into <code>None</code>, so cross-application key collisions are closed
+          by construction rather than by a host remembering to configure a prefix. <code>[Rubric §14, Testability]</code>
+          assesses whether behavior can be exercised without standing up the world: because the type is a plain
+          object that both adapters take as an optional constructor parameter, a unit test passes
           <code>new CacheKeyNamespace(&quot;svc:&quot;)</code> directly and asserts on the qualified key with no configuration
           system involved
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Caching/DistributedCacheServiceTests.cs:425</code>,
           and the same shape throughout <code>HybridCacheServiceTests.cs:78-95</code>).</li>
-          <li><strong>Walkthrough</strong>: primary constructor <code>CacheKeyNamespace(string prefix)</code> (<code>CacheKeyPrefix.cs:41</code>).<ul>
-          <li><code>None</code> (<code>CacheKeyPrefix.cs:44</code>), a <code>static</code> property initialised to <code>new(string.Empty)</code>. One
-          shared, immutable instance meaning &quot;leave keys alone&quot;.</li>
-          <li><code>Prefix</code> (<code>CacheKeyPrefix.cs:47</code>), get-only, initialised with <code>prefix ?? string.Empty</code>, so a null
+          <li><strong>Walkthrough</strong>: primary constructor <code>CacheKeyNamespace(string prefix)</code> (<code>CacheKeyPrefix.cs:225</code>).<ul>
+          <li><code>None</code> (<code>CacheKeyPrefix.cs:228</code>), a <code>static</code> property initialised to <code>new(string.Empty)</code>. One
+          shared, immutable instance meaning &quot;leave keys alone&quot;; still used directly wherever a caller wants
+          no prefix at all (for example <a href="#memorycacheservice">MemoryCacheService</a>&#39;s registration), but no
+          longer what an unconfigured <code>Cache:KeyPrefix</code> resolves to through <code>From(IServiceProvider)</code>.</li>
+          <li><code>Prefix</code> (<code>CacheKeyPrefix.cs:231</code>), get-only, initialised with <code>prefix ?? string.Empty</code>, so a null
           argument degrades to the no-op prefix rather than throwing later inside <code>string.Concat</code>.</li>
-          <li><code>From(IOptions&lt;CacheKeyPrefixOptions&gt;? options)</code> (<code>CacheKeyPrefix.cs:50-54</code>), the composition-root
-          factory. It tolerates a <strong>null options object</strong> (the <code>?</code> is deliberate: the registrations resolve
-          it with <code>GetService</code>, not <code>GetRequiredService</code>, so an unbound <code>Cache</code> section yields null), reads
-          <code>options?.Value.KeyPrefix</code>, and returns <code>None</code> when that is null or empty. Both &quot;no configuration
-          section&quot; and &quot;section present but empty prefix&quot; land on the same no-op path.</li>
-          <li><code>Qualify(string key)</code> (<code>CacheKeyPrefix.cs:57-58</code>), expression-bodied: returns <code>key</code> unchanged when
-          <code>Prefix.Length == 0</code>, otherwise <code>string.Concat(Prefix, key)</code>. No separator is inserted, so the
-          configured prefix must carry its own delimiter (<code>&quot;conference:&quot;</code>, not <code>&quot;conference&quot;</code>).</li>
+          <li><code>From(IOptions&lt;CacheKeyPrefixOptions&gt;? options)</code> (<code>CacheKeyPrefix.cs:234-238</code>), the original
+          factory: tolerates a <strong>null options object</strong>, reads <code>options?.Value.KeyPrefix</code>, and returns <code>None</code>
+          when that is null or empty. It is still the plain, options-only overload used directly by tests;
+          production DI code no longer calls it.</li>
+          <li><code>From(IServiceProvider serviceProvider)</code> (<code>CacheKeyPrefix.cs:248-263</code>), the overload the DI
+          factories now call. It null-checks <code>serviceProvider</code>, reads the bound <code>CacheKeyPrefixOptions</code> off
+          it, and returns <code>new CacheKeyNamespace(configured)</code> when <code>Cache:KeyPrefix</code> is set
+          (<code>CacheKeyPrefix.cs:252-256</code>); otherwise it resolves
+          <a href="group-14-module-system-composition.html#applicationnamespace">ApplicationNamespace</a><code>.Resolve</code> against
+          the container&#39;s <code>IConfiguration</code> and <code>IHostEnvironment</code> and returns
+          <code>new CacheKeyNamespace($&quot;{applicationNamespace}:&quot;)</code> (<code>CacheKeyPrefix.cs:258-262</code>). Because
+          <code>ApplicationNamespace.Resolve</code> never returns empty (<code>ApplicationNamespace.cs:47-48</code>), this overload
+          never returns <code>None</code>.</li>
+          <li><code>Qualify(string key)</code> (<code>CacheKeyPrefix.cs:266-267</code>), expression-bodied: returns <code>key</code> unchanged when
+          <code>Prefix.Length == 0</code>, otherwise <code>string.Concat(Prefix, key)</code>. No separator is inserted for an
+          explicit prefix, so a caller-configured <code>Cache:KeyPrefix</code> must carry its own delimiter
+          (<code>&quot;conference:&quot;</code>, not <code>&quot;conference&quot;</code>); the per-application fallback path adds the <code>:</code> itself.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: <code>internal sealed</code> because it is an implementation detail of the
           Infrastructure caching adapters, never part of the package&#39;s public surface. Splitting an <code>init</code>-only
           options POCO from this behavior object keeps the configuration contract (bindable, public) separate
-          from the runtime helper (internal, immutable, allocation-free on the common path). Resolving the
-          prefix once at construction rather than per call also means the options are read a single time for
-          the lifetime of the singleton.</li>
-          <li><strong>Where it&#39;s used</strong>: built in three DI factories and passed as a constructor argument: to
-          <a href="#distributedcacheservice">DistributedCacheService</a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:270</code>, passed at <code>:261</code>),
-          to <a href="group-14-module-system-composition.html#redisdistributedlock">RedisDistributedLock</a>
-          (<code>DependencyInjection.cs:294-295</code>), and to <a href="#hybridcacheservice">HybridCacheService</a> in the opt-in
-          hybrid path (<code>DependencyInjection.cs:372</code>, passed at <code>:364</code>). Inside each adapter it lands in a
-          <code>_keys</code> field with a <code>?? CacheKeyNamespace.None</code> fallback (<code>DistributedCacheService.cs:30</code>,
-          <code>HybridCacheService.cs:82</code>). The in-process branch of <code>AddCaching()</code> constructs
-          <a href="#memorycacheservice">MemoryCacheService</a> with no namespace at all
-          (<code>DependencyInjection.cs:279-280</code>), and the comment above it says why: the keyspace is private to the
-          process.</li>
+          from the runtime helper (internal, immutable, allocation-free on the common path). Keeping the
+          options-only <code>From(IOptions&lt;T&gt;?)</code> overload alongside the new <code>From(IServiceProvider)</code> overload lets
+          the isolation policy (container-resolved, needs <code>IConfiguration</code>/<code>IHostEnvironment</code>) live next to the
+          narrower, easily-unit-tested construction path rather than forcing every caller through a full
+          service provider. Resolving the prefix once at construction rather than per call also means the
+          options (and, on the fallback path, the application name) are read a single time for the lifetime of
+          the singleton.</li>
+          <li><strong>Where it&#39;s used</strong>: built via <code>From(IServiceProvider)</code> in three DI factories and passed as a
+          constructor argument: to <a href="#distributedcacheservice">DistributedCacheService</a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:300</code>), to
+          <a href="group-14-module-system-composition.html#redisdistributedlock">RedisDistributedLock</a>
+          (<code>DependencyInjection.cs:324</code>), and to <a href="#hybridcacheservice">HybridCacheService</a> in the opt-in hybrid
+          path (<code>DependencyInjection.cs:402</code>). Inside each adapter it lands in a <code>_keys</code> field with a
+          <code>?? CacheKeyNamespace.None</code> fallback (<code>DistributedCacheService.cs:30</code>, <code>HybridCacheService.cs:82</code>).
+          The in-process branch of <code>AddCaching()</code> constructs <a href="#memorycacheservice">MemoryCacheService</a> with no
+          namespace at all (<code>DependencyInjection.cs:309-310</code>), and the comment above it says why: the keyspace
+          is private to the process, so neither the explicit prefix nor the per-application fallback is needed
+          there.</li>
           <li><strong>Caveats / not-in-source</strong>: because <code>Qualify</code> is applied inside the adapter and not by Redis, keys
           written by any code path that bypasses <a href="#icacheservice">ICacheService</a> and talks to
           <code>IDistributedCache</code> directly would land unprefixed. Nothing in the framework does that today, but it
-          is the invariant the design depends on.</li>
+          is the invariant the design depends on. Also worth knowing: the per-application default changes the
+          effective Redis key for every host that never set <code>Cache:KeyPrefix</code>, so an existing deployment
+          upgrading past SEC-Common-53 starts writing under a new prefix; that is the intended fix, but it means
+          entries written under the old, unprefixed keys are not found or invalidated by the new prefixed reads
+          and simply age out under the TTL policy (<a href="#cacheoptions">CacheOptions</a> /
+          <a href="group-09-caching.html#cachesettings">CacheSettings</a>).</li>
           </ul>
           <h3 id="cachesettings">CacheSettings</h3>
           <blockquote>
@@ -781,19 +845,19 @@
           </li>
           <li><p><strong>Why it&#39;s built this way</strong>: registration guarantees <code>IOptions&lt;CacheSettings&gt;</code> always resolves. When
           configuration is available the section is bound and validated
-          (<code>DependencyInjection.cs:246-249</code>, fail-fast via <code>ValidateOnStart</code>, see
+          (<code>DependencyInjection.cs:276-279</code>, fail-fast via <code>ValidateOnStart</code>, see
           <a href="https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html" target="_blank" rel="noopener">ADR-070</a>); when the
           parameterless overload is used, <code>AddOptions&lt;CacheSettings&gt;()</code> is still called so the defaults
           materialize instead of failing the host (<code>:258</code>, rationale at <code>:236-241</code>). The same values are then
           projected into <code>HybridCache</code>&#39;s own option type through the options pipeline rather than the
           <code>AddHybridCache</code> callback, because the callback has no service provider to read the bound section
           from, and the host&#39;s own hook still runs last so it can override anything the framework set
-          (<code>DependencyInjection.cs:344-361</code>,
+          (<code>DependencyInjection.cs:374-391</code>,
           <a href="https://ivanball.github.io/docs/adr/077-hybridcache-substrate.html" target="_blank" rel="noopener">ADR-077</a>).</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: <a href="#distributedcacheservice">DistributedCacheService</a> and
           <a href="#hybridcacheservice">HybridCacheService</a> receive it through <code>IOptions&lt;CacheSettings&gt;</code>
-          (<code>DependencyInjection.cs:276</code>, <code>:379</code>), and the <code>HybridCacheOptions</code> projection reads it at
+          (<code>DependencyInjection.cs:306</code>, <code>:379</code>), and the <code>HybridCacheOptions</code> projection reads it at
           <code>:349-358</code>. Its defaults and binding are pinned by
           <code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Settings/CacheSettingsTests.cs</code>.</p>
           </li>
@@ -895,10 +959,10 @@
           a constructor dependency
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:37</code>). Exactly
           one implementation is live per host: <code>AddCaching()</code> registers one via <code>TryAddSingleton</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:262</code>), and
-          <code>AddCommonHybridCache()</code> replaces it (<code>DependencyInjection.cs:366-367</code>). The default
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:292</code>), and
+          <code>AddCommonHybridCache()</code> replaces it (<code>DependencyInjection.cs:396-397</code>). The default
           <code>GetOrCreateAsync</code> body is covered by
-          <a href="group-27-testing-infrastructure.html#cacheservicegetorcreatetests">CacheServiceGetOrCreateTests</a>.</li>
+          <a href="group-28-testing-infrastructure.html#cacheservicegetorcreatetests">CacheServiceGetOrCreateTests</a>.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>IncrementAsync</code> is <strong>not atomic</strong> on any shipped implementation. The
           default body is a read-modify-write, and both distributed adapters override it with the same shape
           rather than Redis <code>INCR</code>, for the storage-format reason spelled out in the
@@ -1001,23 +1065,23 @@
           generated log methods, <code>internal sealed</code> because it is only ever resolved through the
           <a href="#icacheservice">ICacheService</a> registration.</li>
           <li><strong>Where it&#39;s used</strong>: selected by <code>AddCaching()</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:262-281</code>). The
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:292-311</code>). The
           <code>TryAddSingleton&lt;ICacheService&gt;</code> factory builds this implementation <strong>only when</strong> an
           <code>IDistributedCache</code> is present and is not the default <code>MemoryDistributedCache</code>
-          (<code>DependencyInjection.cs:265</code>), resolving the optional <code>IConnectionMultiplexer</code>
-          (<code>DependencyInjection.cs:267</code>), an <code>ILogger</code> with a <code>NullLogger</code> fallback
-          (<code>DependencyInjection.cs:268-269</code>), the <a href="#cachekeynamespace">CacheKeyNamespace</a>
+          (<code>DependencyInjection.cs:295</code>), resolving the optional <code>IConnectionMultiplexer</code>
+          (<code>DependencyInjection.cs:297</code>), an <code>ILogger</code> with a <code>NullLogger</code> fallback
+          (<code>DependencyInjection.cs:298-299</code>), the <a href="#cachekeynamespace">CacheKeyNamespace</a>
           (<code>DependencyInjection.cs:270</code>) and the optional
           <a href="group-09-caching.html#cachesettings">CacheSettings</a>
-          (<code>DependencyInjection.cs:276</code>); otherwise it falls back to
+          (<code>DependencyInjection.cs:306</code>); otherwise it falls back to
           <a href="#memorycacheservice">MemoryCacheService</a>. Downstream it is consumed only through the interface.
           Covered by
-          <a href="group-27-testing-infrastructure.html#distributedcacheservicetests">DistributedCacheServiceTests</a> and,
+          <a href="group-28-testing-infrastructure.html#distributedcacheservicetests">DistributedCacheServiceTests</a> and,
           against a real Redis,
-          <a href="group-27-testing-infrastructure.html#distributedcacheserviceredistests">DistributedCacheServiceRedisTests</a>.</li>
+          <a href="group-28-testing-infrastructure.html#distributedcacheserviceredistests">DistributedCacheServiceRedisTests</a>.</li>
           <li><strong>Caveats / not-in-source</strong>: all seven deployed service hosts call <code>AddCommonHybridCache()</code> inside a
           Redis-conditional block (for example
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:149-152</code>,
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:177-180</code>,
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94</code>), so this adapter is not the
           one the container hands out in those hosts: it is the default for any host that registers a real
           distributed cache and does <em>not</em> opt in. <code>IncrementAsync</code> here is not atomic (see the walkthrough);
@@ -1065,7 +1129,7 @@
           It is both the default L1 lifetime and the <strong>ceiling</strong> applied to every entry, and
           <code>AddCommonHybridCache</code> seeds <code>HybridCacheOptions</code> from the same field when the host configured no
           <code>Cache:LocalCacheDuration</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:358</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:388</code>).</li>
           <li><code>ReadOnlyOptions</code> (<code>HybridCacheService.cs:62-65</code>) and <code>CounterReadOptions</code>
           (<code>HybridCacheService.cs:71-76</code>), two static option objects. The first sets
           <code>HybridCacheEntryFlags.DisableUnderlyingData</code>, which tells <code>HybridCache</code> not to invoke the factory
@@ -1123,27 +1187,27 @@
           rather than default keeps the release non-breaking: a host that never calls <code>AddCommonHybridCache</code>
           gets a byte-identical registration to before, and a memory-only host would gain nothing from an L1 in
           front of an L1 anyway
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:314-319</code>). The
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:344-349</code>). The
           registration deliberately uses <code>RemoveAll</code> + <code>Add</code> rather than <code>TryAdd</code> so it wins in either call
-          order (<code>DependencyInjection.cs:364-367</code>), with the honest warning that <code>RemoveAll</code> does not
+          order (<code>DependencyInjection.cs:394-397</code>), with the honest warning that <code>RemoveAll</code> does not
           distinguish the framework&#39;s registration from a host&#39;s own custom
-          <a href="#icacheservice">ICacheService</a> (<code>DependencyInjection.cs:328-333</code>). <code>[Rubric §29, Resilience]</code> shows
+          <a href="#icacheservice">ICacheService</a> (<code>DependencyInjection.cs:358-363</code>). <code>[Rubric §29, Resilience]</code> shows
           up in the fail-soft read: the cache is an optimization, never the system of record, so an unreadable
           entry costs a database round trip rather than a failed request.</li>
           <li><strong>Where it&#39;s used</strong>: registered only by <code>AddCommonHybridCache</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:340-383</code>), which all
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:370-413</code>), which all
           seven deployed service hosts call inside a <code>GetConnectionString(&quot;redis&quot;)</code> conditional
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:151</code>,
-          <code>MMCA.ADC.Engagement.Service/Program.cs:113</code>, <code>MMCA.ADC.Identity.Service/Program.cs:133</code>,
-          <code>MMCA.ADC.Notification.Service/Program.cs:116</code>,
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:179</code>,
+          <code>MMCA.ADC.Engagement.Service/Program.cs:113</code>, <code>MMCA.ADC.Identity.Service/Program.cs:135</code>,
+          <code>MMCA.ADC.Notification.Service/Program.cs:119</code>,
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94</code>,
           <code>MMCA.Store.Sales.Service/Program.cs:111</code>, <code>MMCA.Store.Identity.Service/Program.cs:100</code>). Everything
           downstream still talks to <a href="#icacheservice">ICacheService</a> and is unaware. Covered by
-          <a href="group-27-testing-infrastructure.html#hybridcacheservicetests">HybridCacheServiceTests</a>, the
+          <a href="group-28-testing-infrastructure.html#hybridcacheservicetests">HybridCacheServiceTests</a>, the
           registration semantics by
-          <a href="group-27-testing-infrastructure.html#addcommonhybridcachetests">AddCommonHybridCacheTests</a>, and the
+          <a href="group-28-testing-infrastructure.html#addcommonhybridcachetests">AddCommonHybridCacheTests</a>, and the
           storage format against a real Redis by
-          <a href="group-27-testing-infrastructure.html#hybridcacheserviceredistests">HybridCacheServiceRedisTests</a>.</li>
+          <a href="group-28-testing-infrastructure.html#hybridcacheserviceredistests">HybridCacheServiceRedisTests</a>.</li>
           <li><strong>Caveats / not-in-source</strong>: replica L1 staleness after an invalidation is bounded by the local
           expiration (30 seconds by default, <code>Cache:LocalCacheDuration</code> to change it), not by the eviction,
           because only the evicting process&#39;s L1 is cleared (<code>HybridCacheService.cs:29-34</code>). That is the
@@ -1242,8 +1306,8 @@
           key is a bounded-memory choice made once in
           <a href="group-08-auth.html#keyedsemaphorestripe">KeyedSemaphoreStripe</a> and reused here. The class is <code>internal sealed</code> because it is only ever resolved through the <a href="#icacheservice">ICacheService</a> registration.</li>
           <li><strong>Where it&#39;s used</strong>: the fallback branch of <code>AddCaching()</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:280</code>). <code>AddCaching()</code>
-          always calls <code>AddMemoryCache()</code> first (<code>DependencyInjection.cs:231</code>), so when no real distributed
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:310</code>). <code>AddCaching()</code>
+          always calls <code>AddMemoryCache()</code> first (<code>DependencyInjection.cs:261</code>), so when no real distributed
           cache is registered this is the <a href="#icacheservice">ICacheService</a> the container hands out, and a host
           with no Redis behaves as a single-instance cached monolith with the full interface intact. Consumed
           through the interface by both CQRS caching decorators,
@@ -1251,7 +1315,7 @@
           <a href="group-08-auth.html#passwordresettokenservice">PasswordResetTokenService</a>,
           <a href="group-08-auth.html#softdeletedusercache">SoftDeletedUserCache</a> and
           <a href="group-12-api-hosting-mapping.html#idempotencyfilter">IdempotencyFilter</a>. Unit-tested by
-          <a href="group-27-testing-infrastructure.html#memorycacheservicetests">MemoryCacheServiceTests</a>, which pins the
+          <a href="group-28-testing-infrastructure.html#memorycacheservicetests">MemoryCacheServiceTests</a>, which pins the
           concurrency behavior deterministically rather than racing for it: the test takes the key&#39;s own stripe
           first, then asserts that a <code>SetAsync</code> and a <code>RemoveByPrefixAsync</code> both park on it
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Caching/MemoryCacheServiceTests.cs:187</code>)

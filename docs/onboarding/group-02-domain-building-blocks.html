@@ -130,7 +130,8 @@
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
-        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
+        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -290,9 +291,9 @@
           read-only <code>string TenantId</code> (<code>ITenantEntity.cs:39</code>), and marking an entity with it buys two behaviors
           at once. On reads, a <strong>named</strong> <code>Tenant</code> global query filter is applied alongside the existing
           <code>SoftDelete</code> filter (<code>ApplyTenantFilters</code> at
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:428</code>
-          and <code>entity.HasQueryFilter(TenantFilterName, filter)</code> at <code>ApplicationDbContext.cs:486</code>, with the filter
-          name constant at <code>ApplicationDbContext.cs:391</code> and the soft-delete filter at <code>ApplicationDbContext.cs:379</code>);
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:509</code>
+          and <code>entity.HasQueryFilter(TenantFilterName, filter)</code> at <code>ApplicationDbContext.cs:567</code>, with the filter
+          name constant at <code>ApplicationDbContext.cs:472</code> and the soft-delete filter at <code>ApplicationDbContext.cs:460</code>);
           named filters compose with AND, so a tenant sees neither another tenant&#39;s rows nor soft-deleted ones. On
           writes, <a href="group-07-persistence-ef-core.html#tenantsavechangesinterceptor"><code>TenantSaveChangesInterceptor</code></a>
           stamps the value on insert and refuses a cross-tenant save, which is why the property is read-only on
@@ -300,7 +301,7 @@
           64-character <code>string</code> on purpose, because it arrives from a claim, a header, or configuration, all of
           which are strings (<code>ITenantEntity.cs:22-25</code>). Adopting tenancy is three things together: marking
           entities, calling <code>AddMultiTenancy(configuration)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:525</code>), and setting
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:686</code>), and setting
           <code>Tenancy:Enabled</code> (<code>ITenantEntity.cs:26-31</code>); a host that never resolves a tenant behaves exactly as it
           did before (<a href="https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html" target="_blank" rel="noopener">ADR-073</a>).</p>
           <p><a href="#iauditedentity"><code>IAuditedEntity</code></a>
@@ -316,7 +317,7 @@
           <code>IAuditedEntity</code> records the SEQUENCE that produced it, and when both are present the trail rows see the
           freshly stamped values because the trail is captured after the stamping interceptor has run
           (<code>IAuditedEntity.cs:16-21</code>). Like tenancy, recording is host-gated behind <code>AddAuditTrail(configuration)</code>
-          (<code>DependencyInjection.cs:476</code>) plus <code>AuditTrail:Enabled</code>, so marking an entity in a host that never
+          (<code>DependencyInjection.cs:637</code>) plus <code>AuditTrail:Enabled</code>, so marking an entity in a host that never
           opted in is inert (<code>IAuditedEntity.cs:23-26</code>).</p>
           <p><a href="#ireactivatable"><code>IReactivatable</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IReactivatable.cs:19</code>) is the third marker and
@@ -340,18 +341,18 @@
           time
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:207</code>,
           <code>:220-224</code>), serializes them into <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> rows <strong>in
-          the same transaction</strong> as the data (<code>DomainEventSaveChangesInterceptor.cs:236-246</code>), then after a
+          the same transaction</strong> as the data (<code>DomainEventSaveChangesInterceptor.cs:236-253</code>), then after a
           successful save dispatches the local <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a>s in
           process, marks their outbox rows processed, and removes exactly the captured events from each aggregate
-          (<code>DomainEventSaveChangesInterceptor.cs:361-364</code>). That last step is why <code>IAggregateRoot</code> grew
+          (<code>DomainEventSaveChangesInterceptor.cs:368-371</code>). That last step is why <code>IAggregateRoot</code> grew
           <code>RemoveDomainEvents</code>: clearing wholesale would also discard anything a handler raised on the same
           aggregate during in-process dispatch, and those events would never dispatch and never reach the outbox
           (<code>IAggregateRoot.cs:25-31</code>). Integration events
           (<a href="group-04-events-outbox.html#iintegrationevent"><code>IIntegrationEvent</code></a>) deliberately get rows but no
           in-process dispatch; the <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> publishes them
-          (<code>DomainEventSaveChangesInterceptor.cs:249-257</code>). Inside a transactional command the whole flush is
+          (<code>DomainEventSaveChangesInterceptor.cs:256-264</code>). Inside a transactional command the whole flush is
           deferred until after commit through a <code>DeferredDispatch</code> record
-          (<code>DomainEventSaveChangesInterceptor.cs:313-314</code>), so a handler never acts on state that could still roll
+          (<code>DomainEventSaveChangesInterceptor.cs:320-321</code>), so a handler never acts on state that could still roll
           back. The <a href="#domainentitystate"><code>DomainEntityState</code></a> enum (<code>Unchanged</code>/<code>Added</code>/<code>Updated</code>/<code>Deleted</code>, with
           explicit numeric values at
           <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:9-12</code>) is the small vocabulary an
@@ -380,10 +381,10 @@
           contract: an event returns a key naming the entity whose stream must stay sequential, typically the
           aggregate id, or <code>null</code> to opt that individual instance out (<code>IHasOrderingKey.cs:26-30</code>). The outbox
           copies the value onto the row it writes
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:116</code>) and the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:152</code>) and the
           processor refuses to claim a row while an earlier unprocessed, non-dead-lettered row carries the same
           key in the same data source
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:552-553</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:559-560</code>,
           with an in-batch guard at <code>:516</code>), so ordering holds across batches and across scaled-out replicas
           rather than only within one batch. Read the doc comment before adopting it, because the trade-off is
           explicit: this is head-of-line blocking by design, so keys must be as NARROW as the requirement really
@@ -730,19 +731,19 @@
           attribute&quot; answer (<code>EventNameResolver.cs:26,35-38</code>) and exposes three views: <code>GetStorageName</code>
           (declared name, else assembly-qualified name, <code>:47-51</code>) written into
           <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a><code>.EventType</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:107</code>);
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:139</code>);
           <code>GetInboxName</code> (declared name, else short type name, <code>:59-60</code>) used as the inbox dedup key by
           <code>IntegrationEventConsumer</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:43</code>) and
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumer.cs:70</code>) and
           <code>UpcastingIntegrationEventConsumer</code> (<code>.../UpcastingIntegrationEventConsumer.cs:62</code>); and
           <code>FindTypeByDeclaredName</code> (<code>:75-81</code>), the reverse lookup that scans loaded assemblies when a stored
           name is not a CLR type name, reached from <code>OutboxMessage</code>&#39;s cached type resolution
-          (<code>OutboxMessage.cs:153</code>) and degrading gracefully past an unloadable assembly (<code>:90-100</code>).
+          (<code>OutboxMessage.cs:189</code>) and degrading gracefully past an unloadable assembly (<code>:90-100</code>).
           Applied today to the framework&#39;s own
           <a href="group-04-events-outbox.html#outputcacheevictionrequested"><code>OutputCacheEvictionRequested</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:28</code>)
           and to every cross-service integration event in the apps: ADC&#39;s <code>UserRegistered</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:24</code>),
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:35</code>),
           <code>UserDeleted</code> (<code>.../UserDeleted.cs:25</code>), <code>SpeakerLinkedToUser</code>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/IntegrationEvents/SpeakerLinkedToUser.cs:21</code>),
           <code>SpeakerUnlinkedFromUser</code> (<code>.../SpeakerUnlinkedFromUser.cs:18</code>), <code>SessionFeedbackSubmitted</code>
@@ -851,7 +852,7 @@
           <a href="group-07-persistence-ef-core.html#audittrailentry"><code>AuditTrailEntry</code></a> rows and is registered last,
           after the audit and domain-event interceptors, so it diffs final values
           (<code>AuditTrailSaveChangesInterceptor.cs:26-29</code>). The host gate is <code>AddAuditTrail</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:476</code>) plus
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:637</code>) plus
           <a href="group-07-persistence-ef-core.html#audittrailsettings"><code>AuditTrailSettings</code></a><code>.Enabled</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26</code>, an
           uninitialized <code>bool</code> and therefore <code>false</code> unless configured). Marked aggregates today: ADC&#39;s
@@ -866,8 +867,8 @@
           <code>TicketComment</code> deliberately does NOT carry it, and says so
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:12,16</code>).
           The opting-in hosts are the three ADC services
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:232</code>,
-          <code>MMCA.ADC.Conference.Service/Program.cs:297</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:198</code>) and the
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:239</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:325</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:198</code>) and the
           Helpdesk web host (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: retention is not automatic. <code>AuditTrailSettings.RetentionDays</code> defaults
           to 90 (<code>AuditTrailSettings.cs:38</code>), but the doc comment states the purge only happens if the host
@@ -926,7 +927,7 @@
           <code>IsIdValueGenerated</code> extension property is a single <code>GetCustomAttribute&lt;IdValueGeneratedAttribute&gt;() is not null</code> check
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Extensions/EntityTypeExtensions.cs:19</code>), and consumed by
           the EF entity-configuration base to decide the key&#39;s value-generation strategy
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:61</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:63</code>)
           as well as by entity factory methods deciding whether to set <code>Id</code> (for example ADC&#39;s
           <a href="group-24-identity-module.html#user"><code>User</code></a>, marked <code>[IdValueGenerated]</code> at
           <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:33</code>).</li>
@@ -964,21 +965,21 @@
           individual event instance out of ordered delivery even though its type implements the interface.
           That is why the framework does an instance-level interface test rather than a type-level flag, and
           the code comment at the copy site says so
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:113-116</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:149-152</code>).</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: ordering is enforced at <strong>claim</strong> time rather than at fetch time, which
           is what makes it survive batching and scale-out
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:441-448</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:448-455</code>).
           Making it opt-in per event keeps the unordered fast path free: a batch containing no keyed row runs
           exactly the query it always ran, with no subquery for the optimizer to prove away
-          (<code>OutboxProcessor.cs:472-477</code>). The decision is recorded in
+          (<code>OutboxProcessor.cs:479-484</code>). The decision is recorded in
           <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a> (<code>003-outbox-dual-dispatch.md:142-157</code>).</li>
           <li><strong>Where it&#39;s used</strong>: <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> copies the key onto
           the row it writes (<code>OutboxMessage.cs:86</code> for the column, <code>:115</code> inside <code>FromDomainEvent</code> at <code>:98</code>).
           <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> enforces it in two places:
-          <code>SelectOrderedCandidates</code> (<code>OutboxProcessor.cs:509-526</code>) keeps at most one row per key in this
-          cycle&#39;s candidate set (<code>:516</code>), and <code>FilterUnblocked</code> (<code>OutboxProcessor.cs:546-556</code>) adds the
+          <code>SelectOrderedCandidates</code> (<code>OutboxProcessor.cs:516-533</code>) keeps at most one row per key in this
+          cycle&#39;s candidate set (<code>:516</code>), and <code>FilterUnblocked</code> (<code>OutboxProcessor.cs:553-563</code>) adds the
           <code>NOT EXISTS</code> predicate to the claim update itself, so a second replica racing the same key loses on
           the row rather than on a check made before the race (<code>:550-554</code>; the retry-count conjunct at <code>:552</code>
           is what lets a dead-lettered predecessor stop blocking). The storage side is configured on
@@ -995,7 +996,7 @@
           tested, not exercised by an application event. Ordering is also <strong>not</strong> total under a timestamp tie:
           the predecessor test is on <code>OccurredOn</code> alone, so two rows sharing a key and an exact timestamp are
           ordered within a cycle by <code>Id</code> but neither blocks the other in SQL, which the code states as a
-          deliberate non-guarantee (<code>OutboxProcessor.cs:450-455</code>).</li>
+          deliberate non-guarantee (<code>OutboxProcessor.cs:457-462</code>).</li>
           </ul>
           <h3 id="irowversioned">IRowVersioned</h3>
           <blockquote>
@@ -1077,8 +1078,8 @@
           claim, a header, or configuration, all of which are strings, so a stronger domain type would only
           add a conversion at every boundary without adding a guarantee. The cap is enforced at the model
           (<code>TenantIdMaxLength = 64</code> at
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:397</code>,
-          applied via <code>IsRequired().HasMaxLength(...).IsUnicode(false)</code> at <code>ApplicationDbContext.cs:445-448</code>).</li>
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:478</code>,
+          applied via <code>IsRequired().HasMaxLength(...).IsUnicode(false)</code> at <code>ApplicationDbContext.cs:526-529</code>).</li>
           <li><em>Marking is host-gated in practice</em> (<code>ITenantEntity.cs:26-31</code>): a host that never resolves a tenant
           behaves exactly as it did before. Adopting tenancy is marking entities, calling
           <code>AddMultiTenancy(configuration)</code>, and setting <code>Tenancy:Enabled</code>.</li>
@@ -1093,7 +1094,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/TenantSaveChangesInterceptor.cs:29-34</code>).</li>
           <li><strong>Where it&#39;s used</strong>: the read side is
           <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a><code>.ApplyTenantFilters</code>
-          (<code>ApplicationDbContext.cs:428-488</code>, called from <code>OnModelCreating</code> at <code>:334</code>), which selects every
+          (<code>ApplicationDbContext.cs:509-569</code>, called from <code>OnModelCreating</code> at <code>:334</code>), which selects every
           non-owned <code>ITenantEntity</code> type (<code>:439-441</code>), indexes the discriminator on non-Cosmos engines, widening
           it to <code>(TenantId, IsDeleted)</code> when the entity is also auditable (<code>:457-466</code>), and installs the named
           filter <code>CurrentTenantId == null || EF.Property&lt;string&gt;(e, &quot;TenantId&quot;) == CurrentTenantId</code>
@@ -1106,7 +1107,7 @@
           <a href="group-07-persistence-ef-core.html#crosstenantwriteexception"><code>CrossTenantWriteException</code></a> rather than
           writing a row nobody can read (<code>:101-110</code>), and a declared-versus-current mismatch is rejected the
           same way (<code>:123</code>). The host gate is <code>AddMultiTenancy</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:525</code>) plus
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:686</code>) plus
           <a href="group-07-persistence-ef-core.html#tenancysettings"><code>TenancySettings</code></a> (<code>Tenancy:Enabled</code> at
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:67</code>, claim-then-header
           resolution order at <code>TenancySettings.cs:57</code>). The only entities marked in the workspace apps today
@@ -1117,7 +1118,7 @@
           today.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>Tenancy:Enabled</code> gates <strong>resolution</strong>, not isolation. The filter and the
           interceptor are always registered and are inert whenever no tenant is resolved
-          (<code>TenancySettings.cs:37-39</code>, and the registration note at <code>DependencyInjection.cs:549</code>), so an
+          (<code>TenancySettings.cs:37-39</code>, and the registration note at <code>DependencyInjection.cs:710</code>), so an
           untenanted code path (a job, a seeder) reads every tenant&#39;s rows by design. That is the documented
           behavior, not an oversight, but it means &quot;tenant safety&quot; is a property of the request pipeline
           resolving a tenant, not of the entity marker alone.</li>
@@ -1156,7 +1157,7 @@
           alternative (a hand-maintained list of which fields are personal) drifts out of sync with the model.</li>
           <li><strong>Where it&#39;s used</strong>: applied to four properties of the ADC Identity
           <a href="group-24-identity-module.html#user"><code>User</code></a> aggregate: <code>Email</code>, <code>FirstName</code>, <code>LastName</code> and
-          <code>AvatarUrl</code> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38,42,46,105</code>);
+          <code>AvatarUrl</code> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:51,55,59,118</code>);
           <code>User</code> reaches <a href="#ianonymizable"><code>IAnonymizable</code></a> through
           <a href="group-08-auth.html#ierasableuser"><code>IErasableUser</code></a>, which extends it
           (<code>User.cs:35</code> and
@@ -1262,7 +1263,7 @@
           <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
           during persistence, whose <code>ClearDomainEvents(CapturedState)</code> helper retires exactly what it captured
           by calling <code>RemoveDomainEvents</code> per capture
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:356-365</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:363-372</code>),
           on the deferred-transaction path (<code>:312</code>) and after in-process dispatch (<code>:331</code>).</li>
           </ul>
           <h3 id="piiredactor">PiiRedactor</h3>
@@ -1375,12 +1376,12 @@
           entity silently lacks an erasure path (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>).</li>
           <li><strong>Where it&#39;s used</strong>: satisfied by the ADC Identity <a href="group-24-identity-module.html#user"><code>User</code></a>
           aggregate, which holds the four <code>[Pii]</code> fields <code>Email</code>/<code>FirstName</code>/<code>LastName</code>/<code>AvatarUrl</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:38,42,46,105</code>) and declares
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:51,55,59,118</code>) and declares
           <a href="group-08-auth.html#ierasableuser"><code>IErasableUser</code></a> (<code>User.cs:35</code>), which extends <code>IAnonymizable</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IErasableUser.cs:30</code>); the placement of that
           interface on <code>User</code> itself is load-bearing, because <code>User.Delete</code> hides the base soft-delete with
-          <code>new</code> (<code>User.cs:341</code>, rationale at <code>User.cs:22-25</code>), and the implementation is <code>User.Anonymize</code> at
-          <code>User.cs:363</code>. Enforced by <code>PiiConventionTests</code> (G25), and exercised together with
+          <code>new</code> (<code>User.cs:443</code>, rationale at <code>User.cs:22-25</code>), and the implementation is <code>User.Anonymize</code> at
+          <code>User.cs:465</code>. Enforced by <code>PiiConventionTests</code> (G25), and exercised together with
           <a href="#piiredactor"><code>PiiRedactor</code></a> by <code>PiiErasureContractFitnessTests</code>
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PiiErasureContractFitnessTests.cs:19</code>).</li>
           </ul>
@@ -1790,7 +1791,7 @@
           map a member to its <code>int</code> <code>Value</code> and back through <code>FromValue</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/EnumerationValueConverter.cs:33,42,63</code>),
           and <code>AddAPI</code> registers the JSON factory
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:58</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:59</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: no concrete enumeration ships in ADC or Store today. The only derived
           types in the workspace are the fixtures in <code>MMCA.Common.Shared.Tests/ValueObjects/EnumerationTests.cs</code>
           and <code>EnumerationSerializationTests.cs</code>, plus
@@ -1851,7 +1852,7 @@
           System.Text.Json reads <code>[JsonConverter]</code> off the type it is converting <strong>without walking base
           types</strong>, so the attribute on <code>Enumeration&lt;T&gt;</code> does not reach <code>Priority</code>. A host therefore either
           repeats the attribute on each concrete type or registers this factory once. <code>AddAPI</code> takes the
-          second route (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:58</code>, with the
+          second route (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:59</code>, with the
           inline comment explaining the <code>inherit: false</code> behaviour).</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>CanConvert(Type typeToConvert)</code> (<code>Enumeration.cs:198-199</code>):
@@ -1873,7 +1874,7 @@
           MVC model binding. The <code>HandleNull</code> default of <code>false</code> is left alone on purpose
           (<code>Enumeration.cs:189-193</code>) so nullable members still deserialize to <code>null</code>.</li>
           <li><strong>Where it&#39;s used</strong>: registered in <code>AddAPI</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:58</code>), named in that
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:59</code>), named in that
           method&#39;s doc comment alongside <code>CurrencyJsonConverter</code>
           (<code>.../DependencyInjection.cs:30-31</code>); also reachable via the <code>[JsonConverter]</code> attribute on
           <a href="#enumerationtenumeration"><code>Enumeration&lt;TEnumeration&gt;</code></a> (<code>Enumeration.cs:66</code>) for a member typed as
@@ -1978,8 +1979,8 @@
           <a href="group-07-persistence-ef-core.html#auditsavechangesinterceptor"><code>AuditSaveChangesInterceptor</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:104-105</code>)
           and covered by
-          <a href="group-27-testing-infrastructure.html#auditablebaseentitytests"><code>AuditableBaseEntityTests</code></a> and
-          <a href="group-27-testing-infrastructure.html#auditablebaseentityadditionaltests"><code>AuditableBaseEntityAdditionalTests</code></a>.</li>
+          <a href="group-28-testing-infrastructure.html#auditablebaseentitytests"><code>AuditableBaseEntityTests</code></a> and
+          <a href="group-28-testing-infrastructure.html#auditablebaseentityadditionaltests"><code>AuditableBaseEntityAdditionalTests</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: the delete stamps are written only on a <strong>transition</strong> of the flag
           (<code>AuditSaveChangesInterceptor.cs:98-102</code>), so updating an already-deleted row keeps the stamps of
           the delete that produced it rather than refreshing them.</li>
@@ -2146,17 +2147,17 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:361-363</code>),
           <code>RestoreChild</code> for room reinstatement (<code>Event.cs:496</code>) and <code>RemoveChildOrNotFound</code> for room
           removal (<code>Event.cs:486</code>); <code>Session</code> cascades to its speakers and question answers
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:288-289</code>) and
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:311-312</code>) and
           <code>Category</code> to its items
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:107</code>). The
           event queue is drained by
           <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>,
           which calls <code>RemoveDomainEvents</code> per captured entry
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:364</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:371</code>).
           Covered by
-          <a href="group-27-testing-infrastructure.html#auditableaggregaterootentitytests"><code>AuditableAggregateRootEntityTests</code></a>
+          <a href="group-28-testing-infrastructure.html#auditableaggregaterootentitytests"><code>AuditableAggregateRootEntityTests</code></a>
           and
-          <a href="group-27-testing-infrastructure.html#auditableaggregaterootentityadditionaltests"><code>AuditableAggregateRootEntityAdditionalTests</code></a>.</li>
+          <a href="group-28-testing-infrastructure.html#auditableaggregaterootentityadditionaltests"><code>AuditableAggregateRootEntityAdditionalTests</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>SetItems</code> and the child helpers operate purely on the in-memory
           collection. If an aggregate was loaded without its children included, <code>GetChildOrNotFound</code> returns
           <code>NotFound</code> for a child that exists in the database; nothing in this class detects that case.</li>
@@ -2204,7 +2205,7 @@
           <a href="#currencyjsonconverter"><code>CurrencyJsonConverter</code></a> serializes it; the API layer registers its own
           <a href="group-12-api-hosting-mapping.html#currencyjsonconverter"><code>CurrencyJsonConverter</code></a> into MVC&#39;s
           <code>JsonSerializerOptions</code> in <code>AddAPI</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:53</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:54</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: <code>All</code> has exactly two entries today. A deployment needing a third
           currency changes framework source, not configuration.</li>
           </ul>
@@ -2249,7 +2250,7 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:114</code>,
           called from <code>Event.cs:179</code> and <code>Event.cs:252</code>), with the request-side counterpart
           <code>EventDateRangeRules&lt;T&gt;</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:91</code>).
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:93</code>).
           That is the honest state of the code: the primitive exists, the app has not adopted it.</li>
           </ul>
           <h3 id="datetimerange">DateTimeRange</h3>
@@ -2307,7 +2308,7 @@
           (<code>Currency.cs:13</code>); the separate API-layer
           <a href="group-12-api-hosting-mapping.html#currencyjsonconverter"><code>CurrencyJsonConverter</code></a> is registered
           globally in <code>AddAPI</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:53</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:54</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: there is no version sentinel. If the closed code set ever shrinks,
           deserializing a previously stored code (a stale cache entry, an old outbox row) throws
           <code>JsonException</code>.</li>
@@ -2371,7 +2372,7 @@
           <code>Email</code>: the remarks (<code>Money.cs:14-19</code>) direct configurations at
           <code>EntityTypeBuilderExtensions.OwnsMoney</code>
           (<a href="group-07-persistence-ef-core.html#entitytypebuilderextensions">group-07</a>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:51</code>),
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:58</code>),
           which produces the amount column plus ISO-code column mapping together with the currency round-trip
           fallback every hand-rolled <code>OwnsOne</code> block would otherwise have to repeat.</li>
           <li><strong>Where it&#39;s used</strong>: the Store Sales <code>Order</code> aggregate holds <code>public Money Total</code>
@@ -2569,7 +2570,7 @@
           <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderInvariants.cs:28</code> and
           <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductInvariants.cs:76</code>.
           Exercised directly by
-          <a href="group-27-testing-infrastructure.html#commoninvariantstests"><code>CommonInvariantsTests</code></a>.</p>
+          <a href="group-28-testing-infrastructure.html#commoninvariantstests"><code>CommonInvariantsTests</code></a>.</p>
           </li>
           <li><p><strong>Caveats / not-in-source</strong>: <code>EnsureTimeZoneIsValid</code> resolves against the <strong>host&#39;s</strong> time zone
           database (<code>CommonInvariants.cs:268</code>), so an identifier valid on a Windows developer machine and an

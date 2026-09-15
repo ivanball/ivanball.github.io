@@ -130,7 +130,8 @@
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
-        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
+        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -436,7 +437,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>015</td>
           <td>Architecture fitness functions: compile-time layer guard + shared NetArchTest rule library</td>
-          <td><a href="group-27-testing-infrastructure.html">g27</a></td>
+          <td><a href="group-28-testing-infrastructure.html">g27</a></td>
           </tr>
           <tr>
           <td>016</td>
@@ -620,7 +621,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           </tr>
           <tr>
           <td>052</td>
-          <td>Background job execution: work outliving a request runs as a bounded <code>Channel&lt;T&gt;</code> plus a <code>SingleReader</code> hosted drain, never an untracked <code>Task</code> from a controller, so the host can cancel and await it on shutdown; full mode encodes what the work is worth (<code>DropOldest</code> vs <code>Wait</code>)</td>
+          <td><del>Background job execution: work outliving a request runs as a bounded <code>Channel&lt;T&gt;</code> plus a <code>SingleReader</code> hosted drain, never an untracked <code>Task</code> from a controller, so the host can cancel and await it on shutdown; full mode encodes what the work is worth (<code>DropOldest</code> vs <code>Wait</code>)</del> <strong>superseded by <a href="https://ivanball.github.io/docs/adr/121-ephemeral-in-process-work-queue.html" target="_blank" rel="noopener">ADR-121</a></strong></td>
           <td><a href="group-23-engagement-live-layer.html">g23</a></td>
           </tr>
           <tr>
@@ -651,7 +652,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>058</td>
           <td>Runtime conformance suites shipped in <code>MMCA.Common.Testing</code>: six abstract behavioral bases (problem details, OpenAPI, <code>/ServiceInfo</code> versioning, security headers, graceful shutdown, decorator order) that a host subclasses and that run against a really booted host, picking up where ADR-015&#39;s structural fitness tests stop</td>
-          <td><a href="group-27-testing-infrastructure.html">g27</a></td>
+          <td><a href="group-28-testing-infrastructure.html">g27</a></td>
           </tr>
           <tr>
           <td>059</td>
@@ -671,12 +672,12 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>062</td>
           <td>SLO alerting as code: <code>sloAlertSpecs</code> in each consumer&#39;s Bicep materializes KQL scheduled query rules (401/499 and hub traffic excluded) on one action group, and a framework test base pairs every alert with a severity-correct <code>OPERATIONS.md</code> triage section, failing the build in either direction</td>
-          <td><a href="devops-iac.html">devops-iac</a>/<a href="group-27-testing-infrastructure.html">g27</a></td>
+          <td><a href="devops-iac.html">devops-iac</a>/<a href="group-28-testing-infrastructure.html">g27</a></td>
           </tr>
           <tr>
           <td>063</td>
           <td>WCAG 2.1 AA as a shipped test contract: <code>AxeOptions.Wcag21Aa</code> pins the four WCAG tag sets and excludes axe&#39;s advisory rules, a violation throws instead of reporting, and the scan is a cross-browser required merge check in Common plus a chromium deploy gate in both apps</td>
-          <td><a href="group-27-testing-infrastructure.html">g27</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          <td><a href="group-28-testing-infrastructure.html">g27</a>/<a href="devops-cicd.html">devops-cicd</a></td>
           </tr>
           <tr>
           <td>064</td>
@@ -821,7 +822,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>092</td>
           <td>Core Web Vitals budget as a shipped test contract and deploy gate: <code>WebVitalsCollector</code> installs <code>PerformanceObserver</code> hooks as a Playwright init script, <code>WebVitalsBudget</code> defaults to the good band (LCP 2500, FCP 1800, TTFB 800 ms, CLS 0.1, INP 500), a breach throws naming the page, and both apps&#39; assertions ride the chromium <code>e2e-gate</code></td>
-          <td><a href="group-27-testing-infrastructure.html">g27</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          <td><a href="group-28-testing-infrastructure.html">g27</a>/<a href="devops-cicd.html">devops-cicd</a></td>
           </tr>
           <tr>
           <td>093</td>
@@ -851,7 +852,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>098</td>
           <td>Aspire for orchestration, not for testing or production dashboards: each AppHost composes the local stack and every host calls <code>AddServiceDefaults</code>/<code>MapDefaultEndpoints</code>, but integration testing stays <code>WebApplicationFactory</code> + Testcontainers (<code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code> per service, <code>CrossServiceFixtureBase</code> for the three-host tier) and <code>DistributedApplicationTestingBuilder</code> stays out; production observability is Application Insights, not the Aspire dashboard</td>
-          <td><a href="devops-testing.html">devops-testing</a>/<a href="group-27-testing-infrastructure.html">g27</a>/<a href="devops-aspire.html">devops-aspire</a></td>
+          <td><a href="devops-testing.html">devops-testing</a>/<a href="group-28-testing-infrastructure.html">g27</a>/<a href="devops-aspire.html">devops-aspire</a></td>
           </tr>
           <tr>
           <td>099</td>
@@ -876,7 +877,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>103</td>
           <td>bUnit component-test tier as a package: <code>MMCA.Common.Testing.UI</code> ships <code>BunitComponentTestBase</code>, which fixes once the choices every consumer UI test tree would otherwise re-derive (bUnit v2 on the xUnit v3 / Microsoft Testing Platform line, <code>BunitContext</code> and <code>Render&lt;T&gt;</code> isolated behind <code>RenderUnderTest</code>/<code>RenderAs</code>, the MudBlazor service set and the JS-interop stubs), so a move off that bUnit line changes one file</td>
-          <td><a href="group-27-testing-infrastructure.html">g27</a></td>
+          <td><a href="group-28-testing-infrastructure.html">g27</a></td>
           </tr>
           <tr>
           <td>104</td>
@@ -886,7 +887,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>105</td>
           <td>Data residency as a build gate: <code>DataResidencyTestsBase</code> (one <code>[Fact]</code>, rubric section 30) parses the region where a repo actually provisions PII-bearing storage from that repo&#39;s own infrastructure source of truth (ADC from the <code>SQL_LOCATION_OVERRIDE</code> default in <code>deploy.yml</code>, Store from its DR runbook) and fails the build unless <code>PRIVACY.md</code> states it, with a per-repo denylist that blocks a stale or copied region claim</td>
-          <td><a href="group-27-testing-infrastructure.html">g27</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          <td><a href="group-28-testing-infrastructure.html">g27</a>/<a href="devops-cicd.html">devops-cicd</a></td>
           </tr>
           <tr>
           <td>106</td>
@@ -906,7 +907,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>109</td>
           <td>Feature-by-folder as an enforced convention: the aggregate names the first folder level in Domain/Application/Shared, a technical root then the aggregate in UI/API/Infrastructure, at most twelve direct code files per folder, namespaces follow folders, and a layout change ships as a breaking release with a migration map (<code>FolderWidthTestsBase</code> enforces the cap in every repo)</td>
-          <td><a href="group-27-testing-infrastructure.html">g27</a></td>
+          <td><a href="group-28-testing-infrastructure.html">g27</a></td>
           </tr>
           <tr>
           <td>110</td>
@@ -917,6 +918,66 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <td>111</td>
           <td>AI session scoring governed as a production dependency: the model call sits behind <code>IAiScoringService</code> (declared in Application, carrying <code>ModelId</code> + <code>PromptVersion</code>, both persisted with every score), a golden-replay + prompt-contract evaluation suite is a deploy precondition, the untrusted half of the prompt is delimited, escaped and redacted, the response is schema-constrained, and token spend is metered and alerted against a budgeted ceiling</td>
           <td><a href="group-18-conference-application.html">g18</a>/<a href="group-19-conference-infrastructure.html">g19</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
+          <tr>
+          <td>112</td>
+          <td>Catalog owns effective pricing: an admin-managed variant discount is a variant-level owned <code>ValueObject</code> (<code>VariantDiscount</code>: percentage off or special price, an optional inclusive-start / exclusive-end window, a 50-char label) flattened onto the variant row rather than a Promotion aggregate; Catalog computes the effective price and Sales snapshots it at checkout</td>
+          <td><a href="group-02-domain-building-blocks.html">g02</a> (the <code>ValueObject</code> base only; the Store worked example sits outside this guide&#39;s two codebases)</td>
+          </tr>
+          <tr>
+          <td>113</td>
+          <td>PostgreSQL as a fourth first-class engine: <code>DataSource.PostgreSQL</code> is appended to the enum, a sealed <code>PostgreSQLDbContext</code> sits over the abstract <code>ApplicationDbContext</code> per ADR-006, and <code>EntityTypeConfigurationPostgreSQL</code> mirrors the SQL Server footprint one for one, differing only where the server forces a difference</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a></td>
+          </tr>
+          <tr>
+          <td>114</td>
+          <td>Internal commands, a durable job queue on the outbox&#39;s machinery: deferred work is an ordinary CQRS command marked <code>IInternalCommand</code>, scheduled into a per-source <code>InternalCommands</code> table by <code>IInternalCommandScheduler</code> and executed later by <code>InternalCommandProcessor</code> through the normal decorator pipeline, with dead-lettering and an administration surface</td>
+          <td><a href="group-14-module-system-composition.html">g14</a>/<a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-18-conference-application.html">g18</a></td>
+          </tr>
+          <tr>
+          <td>115</td>
+          <td>Strongly typed identifiers opt in, aliases stay the default: <code>IStronglyTypedId&lt;TSelf, TValue&gt;</code> plus a two-line record declaration, with the EF value converter and comparer, model configuration, filter strategy and OpenAPI schema transformer shipped complete; no existing entity, consumer or test migrates and nothing pushes a consumer toward a wrapper</td>
+          <td><a href="group-08-auth.html">g08</a>/<a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-03-querying-specifications.html">g03</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>116</td>
+          <td>Identity completions as opt-in bases, not features: two-factor (<code>ITwoFactorService</code> plus a challenge step), email confirmation, operator-editable stored permission grants (<code>IPermissionGrantStore</code>, <code>IPermissionCatalog</code>) and the user/role administration API (<code>UsersAdminControllerBase</code>, <code>RolesAdminControllerBase</code>) ship as contracts and abstract bases behind their own <code>Add*</code> calls; a consumer that adopts none observes no change</td>
+          <td><a href="group-08-auth.html">g08</a>/<a href="group-14-module-system-composition.html">g14</a>/<a href="group-12-api-hosting-mapping.html">g12</a>/<a href="group-15-common-ui-framework.html">g15</a></td>
+          </tr>
+          <tr>
+          <td>117</td>
+          <td>AppHost integration testing as a shipped package: <code>MMCA.Common.Testing.Aspire</code> gives a consumer&#39;s smoke tier <code>AppHostFixtureBase&lt;TAppHost&gt;</code> (one collection fixture, per-resource readiness waits) and a named skip when a precondition is missing, so the composition itself is asserted rather than only type-checked</td>
+          <td><a href="group-28-testing-infrastructure.html">g28</a>/<a href="group-16-aspire-orchestration.html">g16</a>/<a href="devops-testing.html">devops-testing</a></td>
+          </tr>
+          <tr>
+          <td>118</td>
+          <td>Message transport library policy: MassTransit stays pinned at v8 behind <code>IMessageBus</code> (<code>DependencyVersionTestsBase</code> gates the major), the outbox and inbox stay custom precisely because that keeps a transport swap cheap, and the exit triggers and replacement order are recorded so the pin is a dated decision</td>
+          <td><a href="group-04-events-outbox.html">g04</a>/<a href="group-28-testing-infrastructure.html">g28</a></td>
+          </tr>
+          <tr>
+          <td>119</td>
+          <td>Delete behavior is an explicit business rule: <code>RestrictDeleteByDefaultConvention</code> sets Restrict on every relationship nobody configured when the model is finalized, a cascade is an opt-in with a stated reason, and the finished model records which of the two each foreign key is</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a></td>
+          </tr>
+          <tr>
+          <td>120</td>
+          <td>Governed language-model boundary: <code>MMCA.Common.AI</code> owns the LLM call as one optional package, the provider half is the official SDK&#39;s <code>IChatClient</code> adapter, governance is a pipeline of delegating clients (<code>BoundedChatClient</code> bounds, <code>UsageRecordingChatClient</code> meters), prompts are versioned <code>PromptContract</code>s the framework hashes, and tools are off until a host turns them on</td>
+          <td><a href="group-27-common-ai-integration.html">g27</a></td>
+          </tr>
+          <tr>
+          <td>121</td>
+          <td>Ephemeral in-process work queue (supersedes 052): best-effort work owned by one process runs as a bounded 1024-item <code>Channel&lt;T&gt;</code> singleton (<code>DropOldest</code>, the one full mode) plus a <code>SingleReader</code> hosted drain the host cancels and awaits, <code>TryWrite</code> always succeeds, nothing starts an untracked <code>Task</code> from a request, and nothing that must run lands here</td>
+          <td><a href="group-23-engagement-live-layer.html">g23</a></td>
+          </tr>
+          <tr>
+          <td>122</td>
+          <td>Dev-only relaxations are environment-gated and fail closed: <code>SensitiveDataLoggingGate</code>, <code>SmtpTransportSecurity</code> and the AI telemetry gate apply a relaxation only when the environment is positively identified as Development; an absent or unparseable environment yields the production posture</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-14-module-system-composition.html">g14</a>/<a href="group-27-common-ai-integration.html">g27</a></td>
+          </tr>
+          <tr>
+          <td>123</td>
+          <td>Speaker-published session materials: <code>SessionAsset</code> is its own Conference aggregate (a server-minted GUID id, plain <code>EventId</code> / <code>SessionId</code> keys, not a child of the Sessionize-synced <code>Session</code>), written by the session&#39;s own speakers or an organizer, stored public-read under an unguessable blob name, and admitted only by the framework&#39;s byte-level <code>DocumentContentSniffer</code> gate</td>
+          <td><a href="group-17-conference-domain.html">g17</a>/<a href="group-18-conference-application.html">g18</a>/<a href="group-21-conference-ui.html">g21</a></td>
           </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>

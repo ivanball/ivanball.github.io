@@ -1,8 +1,8 @@
 # MMCA Concept & Pattern Maps
 
 Mermaid diagrams distilled from the [Onboarding guide](00-index.md) (primer, group taxonomy,
-dependency manifest, and the 27 group chapters). Each diagram captures a *relationship* between the
-concepts the guide teaches: the layering, the 27 functional groups, the cross-cutting patterns, and
+dependency manifest, and the 28 group chapters). Each diagram captures a *relationship* between the
+concepts the guide teaches: the layering, the 28 functional groups, the cross-cutting patterns, and
 the ADRs (see `Website/docs-src/adr/README.md` for the canonical range) / rubric categories that explain the "why".
 
 Diagrams are grounded in:
@@ -11,9 +11,9 @@ Diagrams are grounded in:
 
 ---
 
-## 1. System context, two codebases + the 17 packages
+## 1. System context, two codebases + the 19 packages
 
-`MMCA.Common` is a framework published as seventeen NuGet packages in lockstep, to nuget.org **and**
+`MMCA.Common` is a framework published as nineteen NuGet packages in lockstep, to nuget.org **and**
 GitHub Packages from one tag ([ADR-053](https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html));
 `MMCA.ADC` and `MMCA.Store` consume them. `MMCA.Common/FACTS.md` owns the count and the list (link
 there, do not recount). The framework depends on neither consumer (that one-way arrow is why the
@@ -26,11 +26,15 @@ first-party project reference at all
 ([ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html)). `UI.Maui`
 is the one MAUI-TFM package: it lives outside `MMCA.Common.slnx` and is built and packed by
 dedicated windows CI jobs
-([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
+([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Two more
+stand apart from the layer chain: `MMCA.Common.AI` is the governed language-model boundary
+([ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html), taught as its
+own chapter group), and `MMCA.Common.Testing.Aspire` ships the AppHost integration-test base
+([ADR-117](https://ivanball.github.io/docs/adr/117-apphost-integration-test-base.html)).
 
 ```mermaid
 flowchart TD
-    subgraph COMMON["MMCA.Common: framework, 17 NuGet packages (lockstep versioned)"]
+    subgraph COMMON["MMCA.Common: framework, 19 NuGet packages (lockstep versioned)"]
         direction TB
         subgraph CORE["Core (4)"]
             SH["Shared"]
@@ -50,12 +54,14 @@ flowchart TD
             ASPH["Aspire.Hosting"]
             GWPK["Gateway<br/>(YARP edge kit, ADR-088)"]
         end
-        subgraph TEST["Testing (4)"]
+        subgraph TEST["Testing (5)"]
             T1["Testing"]
             T2["Testing.E2E"]
             T3["Testing.UI"]
             T4["Testing.Architecture"]
+            T5["Testing.Aspire<br/>(AppHost test base, ADR-117)"]
         end
+        AIPK["AI<br/>(governed chat boundary, ADR-120)"]
         META["MMCA.Common<br/>(metapackage, no assembly:<br/>the Core 6, ADR-101)"]
     end
 
@@ -67,7 +73,7 @@ flowchart TD
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef con fill:#e6f4ea,stroke:#34a853,color:#111
-    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,META fw
+    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,T5,AIPK,META fw
     class ADC,STORE con
 ```
 
@@ -124,13 +130,13 @@ flowchart TD
 
 ---
 
-## 3. The 27 functional groups, dependency / build order
+## 3. The 28 functional groups, dependency / build order
 
-The primary axis of the guide: every type lives in exactly one of 27 chapter groups, ordered roughly
+The primary axis of the guide: every type lives in exactly one of 28 chapter groups, ordered roughly
 **topologically**. Foundational, widely-depended-on concerns first (Result → domain blocks →
 querying → events → CQRS → …), then the ASP.NET/UI/Aspire edges, then the ADC business modules, then
-the late-added Common device-capability layer and the test infrastructure. Arrows show the dominant
-"builds on" direction (charters + levels).
+the late-added Common device-capability layer, the Common AI integration and the test infrastructure.
+Arrows show the dominant "builds on" direction (charters + levels).
 
 ```mermaid
 flowchart TD
@@ -165,7 +171,8 @@ flowchart TD
     end
 
     G26["G26 Device Capability Layer<br/>(MMCA.Common, appended after the modules)"]
-    G27["G27 Testing &amp; Quality Infrastructure"]
+    G27["G27 Common AI Integration<br/>(MMCA.Common, self-contained: no first-party group deps)"]
+    G28["G28 Testing &amp; Quality Infrastructure"]
 
     %% framework backbone
     G01 --> G02 --> G03
@@ -220,16 +227,17 @@ flowchart TD
     G26 --> G25
 
     %% everything is tested
-    ADCMOD --> G27
-    G16 --> G27
-    G26 --> G27
+    ADCMOD --> G28
+    G16 --> G28
+    G26 --> G28
+    G27 --> G28
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef adc fill:#e6f4ea,stroke:#34a853,color:#111
     classDef test fill:#f3e8fd,stroke:#a142f4,color:#111
-    class G01,G02,G03,G04,G05,G06,G07,G08,G09,G10,G11,G12,G13,G14,G15,G16,G26 fw
+    class G01,G02,G03,G04,G05,G06,G07,G08,G09,G10,G11,G12,G13,G14,G15,G16,G26,G27 fw
     class G17,G18,G19,G20,G21,G22,G23,G24,G25 adc
-    class G27 test
+    class G28 test
 ```
 
 ---
@@ -702,9 +710,9 @@ flowchart LR
 
 Every accepted ADR in `Website/docs-src/adr/`, clustered by the concern it governs. That directory's
 [`README.md`](https://ivanball.github.io/docs/adr/) is the canonical index and owns the count and
-range; this map only regroups it. (Three are struck through there: 011 superseded by 027, 032 by
-102, and 050 by 097. They stay on this map because the records they replaced still explain the
-shape of the code that followed.)
+range; this map only regroups it. (Four are struck through there: 011 superseded by 027, 032 by
+102, 050 by 097, and 052 by 121. They stay on this map because the records they replaced still
+explain the shape of the code that followed.)
 
 ```mermaid
 mindmap
@@ -729,7 +737,7 @@ mindmap
       083 CRUD lifecycle event taxonomy
       054 Saga compensation and reconciliation
       086 Process manager deferred
-      052 Background job execution
+      052 Background job execution superseded by 121
       074 Recurring job scheduler
     Notifications and real time
       024 Two-channel notifications
@@ -888,12 +896,13 @@ navigation.
 flowchart TD
     PRIMER["Primer: cross-cutting concepts, stack, conventions, rubric (taught once)"]
 
-    subgraph AXIS1["Primary axis: functional groups (G01→G27)"]
+    subgraph AXIS1["Primary axis: functional groups (G01→G28)"]
         FW["Framework groups G01-G16 (MMCA.Common)"]
         ADCG["ADC module groups G17-G25"]
         CAPG["Device capability layer G26 (MMCA.Common, appended late)"]
-        TESTG["Testing G27"]
-        FW --> ADCG --> CAPG --> TESTG
+        AIG["Common AI integration G27 (MMCA.Common, appended late)"]
+        TESTG["Testing G28"]
+        FW --> ADCG --> CAPG --> AIG --> TESTG
     end
 
     AXIS2["Secondary axis: dependency Level within each group<br/>(meet a type only after its first-party deps)"]
@@ -907,7 +916,7 @@ flowchart TD
     AXIS1 --> DEVOPS
 
     classDef m fill:#e8f0fe,stroke:#4285f4,color:#111
-    class PRIMER,FW,ADCG,CAPG,TESTG,AXIS2,LENS,DEVOPS m
+    class PRIMER,FW,ADCG,CAPG,AIG,TESTG,AXIS2,LENS,DEVOPS m
 ```
 
 ---
@@ -920,8 +929,8 @@ flowchart TD
 - **GNN here is the chapter number** (`group-NN-*.md`), the numbering the index and the reading paths
   use. [`00-group-taxonomy.md`](00-group-taxonomy.md) still carries the original classification ids
   for the chapters inserted later (its G26 is the live layer, chapter 23; its G27 is the device
-  capability layer, chapter 26; its G25 is testing, chapter 27), so match that table by chapter
-  filename rather than by its id.
+  capability layer, chapter 26; its G28 is Common AI integration, chapter 27; its G25 is testing,
+  chapter 28), so match that table by chapter filename rather than by its id.
 - Pattern diagrams (§4-§12) reflect the mechanisms as taught in the corresponding `group-NN-*.md`
   chapters and the ADRs named in [`00-primer.md`](00-primer.md).
 - The 36 dependency cycles (SCCs) listed in the manifest are kept whole inside a single group

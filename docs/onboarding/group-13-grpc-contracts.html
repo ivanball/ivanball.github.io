@@ -129,7 +129,8 @@
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
-        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
+        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -328,20 +329,20 @@
           <a href="group-10-notifications.html#nulllivechannelpublisher"><code>NullLiveChannelPublisher</code></a> behind
           <a href="group-10-notifications.html#ilivechannelpublisher"><code>ILiveChannelPublisher</code></a>), Conference to Engagement
           for <code>IBookmarkCountService</code> on the speaker dashboard
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:350</code>), Notification to Identity for
-          attendee user ids (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:218</code>), and
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:384</code>), Notification to Identity for
+          attendee user ids (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:225</code>), and
           Identity to Engagement plus Identity to Notification for the cross-service data-subject export
-          aggregation (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:290-291</code>). Server sides are
+          aggregation (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:316-317</code>). Server sides are
           mapped in each host with <code>AddGrpcServiceDefaults()</code> plus <code>app.MapGrpcService&lt;...&gt;()</code>, mostly behind
           <code>.RequireAuthorization()</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:362</code>, <code>:396-397</code>).</p>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:396</code>, <code>:396-397</code>).</p>
           <p><strong>The startup-ordering edge worth knowing.</strong> Conference and Engagement call <em>each other</em>, so the
           AppHost gives Engagement a <code>WithReference(conference).WaitFor(conference)</code> but the reverse Conference
           to Engagement edge only a <code>WithReference</code> with <strong>no <code>WaitFor</code></strong>
-          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:270</code>, <code>:273</code>), because a reciprocal wait would
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:271</code>, <code>:273</code>), because a reciprocal wait would
           deadlock startup with each service waiting for the other to be healthy. The same reasoning drops the
-          <code>WaitFor</code> on Engagement to Notification (<code>Program.cs:281</code>) and on both Identity edges
-          (<code>Program.cs:291-292</code>); only Notification to Identity keeps one (<code>Program.cs:268</code>). The transient
+          <code>WaitFor</code> on Engagement to Notification (<code>Program.cs:282</code>) and on both Identity edges
+          (<code>Program.cs:292-293</code>); only Notification to Identity keeps one (<code>Program.cs:269</code>). The transient
           &quot;peer not ready&quot; errors that result self-heal through the resilience pipeline. This is the practical
           cost <a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a> calls out: mutual
           synchronous dependencies need care, and the retry plus circuit breaker is what makes them tolerable.</p>
@@ -358,12 +359,12 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Contracts.cs:10</code>): the
           <strong>purity</strong> rule, that a contract type must not reach into the producing service&#39;s Domain, Application,
           or Infrastructure (<code>ArchitectureRules.Contracts.cs:32</code>, exposed through
-          <a href="group-27-testing-infrastructure.html#servicecontractpuritytestsbase"><code>ServiceContractPurityTestsBase</code></a>),
+          <a href="group-28-testing-infrastructure.html#servicecontractpuritytestsbase"><code>ServiceContractPurityTestsBase</code></a>),
           and the <strong>encapsulation</strong> rule, that the class serving a <code>[ServiceContract]</code> interface must not be
           public (<code>ArchitectureRules.Contracts.cs:81</code>, exposed through
-          <a href="group-27-testing-infrastructure.html#contractimplementationtestsbase"><code>ContractImplementationTestsBase</code></a>),
+          <a href="group-28-testing-infrastructure.html#contractimplementationtestsbase"><code>ContractImplementationTestsBase</code></a>),
           which is why every gRPC adapter above is <code>internal sealed</code>. Alongside them,
-          <a href="group-27-testing-infrastructure.html#microserviceextractiontestsbase"><code>MicroserviceExtractionTestsBase</code></a>
+          <a href="group-28-testing-infrastructure.html#microserviceextractiontestsbase"><code>MicroserviceExtractionTestsBase</code></a>
           forbids MassTransit and gRPC types from leaking into Application, Domain, or Shared. Each repo
           subclasses all three (for example
           <code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/ServiceContractPurityTests.cs:9</code>). That is the
@@ -493,9 +494,9 @@
           <code>IUserSalesExportService</code>
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Exports/IUserSalesExportService.cs:20</code>). The
           rules that read the marker are surfaced to each repo through
-          <a href="group-27-testing-infrastructure.html#servicecontractpuritytestsbase"><code>ServiceContractPurityTestsBase</code></a>
+          <a href="group-28-testing-infrastructure.html#servicecontractpuritytestsbase"><code>ServiceContractPurityTestsBase</code></a>
           (<code>ServiceContractPurityTestsBase.cs:20-26</code>) and
-          <a href="group-27-testing-infrastructure.html#contractimplementationtestsbase"><code>ContractImplementationTestsBase</code></a>
+          <a href="group-28-testing-infrastructure.html#contractimplementationtestsbase"><code>ContractImplementationTestsBase</code></a>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/ContractImplementationTestsBase.cs:20,34</code>),
           which Common, ADC, Store, and Helpdesk each subclass in their architecture-test project.</li>
           <li><strong>Caveats / not-in-source</strong>: generated gRPC client and server classes are <strong>not</strong> marked; the doc

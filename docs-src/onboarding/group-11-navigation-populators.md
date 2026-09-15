@@ -67,22 +67,22 @@ Once the metadata exists, the
 via a **two-path strategy**, and reading its real code
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:13`) is the
 clearest way to see how the metadata earns its keep. Both paths share a front half,
-`ApplyIncludesCriteriaAndFilters` (`EntityQueryPipeline.cs:119`). **Path 1 (server-side includes):**
+`ApplyIncludesCriteriaAndFilters` (`EntityQueryPipeline.cs:120`). **Path 1 (server-side includes):**
 if there are `SupportedIncludes`, each becomes an EF `Include` call through the queryable executor
-(`EntityQueryPipeline.cs:131-134`), and, importantly, if any of them is a child *collection*, the
-pipeline switches to `AsSplitQuery` (`EntityQueryPipeline.cs:140-141`). That split-query line is not
+(`EntityQueryPipeline.cs:132-135`), and, importantly, if any of them is a child *collection*, the
+pipeline switches to `AsSplitQuery` (`EntityQueryPipeline.cs:141-142`). That split-query line is not
 cosmetic: paginating a single-query collection-`Include` makes EF apply `Skip`/`Take` to the
 JOIN-expanded row set, which truncates child rows and returns empty collections on list reads while
-by-id reads still work, and the comment above it records exactly that (`EntityQueryPipeline.cs:136-139`).
+by-id reads still work, and the comment above it records exactly that (`EntityQueryPipeline.cs:137-140`).
 After includes, specification criteria and dynamic filters are applied *before* materialization so
 the database does the filtering (`EntityQueryPipeline.cs:143-151`). **Path 2 (manual navigation
 loading):** the moment `UnsupportedIncludes.Count != 0` the pipeline cannot trust a JOIN
-(`EntityQueryPipeline.cs:53-54`), so `ExecuteWithManualNavigationAsync` (`EntityQueryPipeline.cs:161`)
+(`EntityQueryPipeline.cs:53-54`), so `ExecuteWithManualNavigationAsync` (`EntityQueryPipeline.cs:162`)
 sorts server-side with a key tie-break for paginated reads (`EntityQueryPipeline.cs:175-180`),
 applies paging or, for an unpaginated read, caps the result set at the `MaxUnboundedResultLimit`
-ceiling of 1000 rows (`EntityQueryPipeline.cs:23`, `EntityQueryPipeline.cs:184-194`), materializes
+ceiling of 1000 rows (`EntityQueryPipeline.cs:23`, `EntityQueryPipeline.cs:186-196`), materializes
 that bounded page, and *then* invokes a **navigation-populator delegate** on it
-(`EntityQueryPipeline.cs:196-200`) to fill in the cross-source relationships. The manual-load cost is
+(`EntityQueryPipeline.cs:198-202`) to fill in the cross-source relationships. The manual-load cost is
 paid on one page of parents, not the whole table, and never as an N+1.
 
 That delegate is the extension point to the second half of the chapter. Its signature,
@@ -101,7 +101,7 @@ Null Object whose `PopulateAsync` is a single `Task.CompletedTask`
 branches on null (`[Rubric §2, Design Patterns]`). It is registered exactly that way for entities
 with nothing to hand-load, for example
 `services.TryAddScoped<INavigationPopulator<Question>, NullNavigationPopulator<Question>>()`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:85`) and
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:90`) and
 the framework's own push-notification entity
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:39`).
 
@@ -165,16 +165,16 @@ End to end, the runtime flow for a list query is: a module query handler asks th
 [`EntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype)
 to run; the service calls `NavigationMetadataProvider.BuildIncludes<TEntity>` to get the
 supported/unsupported split
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:283`); it hands that
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:317`); it hands that
 split plus its module's injected `INavigationPopulator<TEntity>` (as the method-group delegate
 `NavigationPopulator.PopulateAsync`) to `EntityQueryPipeline.ExecuteAsync`
-(`EntityQueryService.cs:317-322`); the pipeline JOINs the supported navigations and, if any are
+(`EntityQueryService.cs:352-357`); the pipeline JOINs the supported navigations and, if any are
 unsupported, materializes the page and calls the populator; the populator (almost always a
 `DeclarativeNavigationPopulator` built from descriptors) iterates its descriptors and calls
 `NavigationLoader` once per cross-source navigation. The same metadata also gates the service's keyed
 by-id fast path: requested includes alone do not disqualify a keyed read, but a single unsupported
 include does, because only the pipeline's populator can batch-load across physical sources
-(`EntityQueryService.cs:184-188`). The concrete consumers live in ADC's Conference module. For example
+(`EntityQueryService.cs:218-222`). The concrete consumers live in ADC's Conference module. For example
 [`EventNavigationPopulator`](group-18-conference-application.md#eventnavigationpopulator)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/EventNavigationPopulator.cs:11`)
 is *just* a subclass of `DeclarativeNavigationPopulator<Event>` constructed with three
@@ -184,8 +184,8 @@ imperative loading code at all, and
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/SessionNavigationPopulator.cs:13`)
 mixes two `FKNavigationDescriptor`s (`Event`, `Room`) with three `ChildNavigationDescriptor`s. Each is
 registered per entity as a scoped service
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:68`,
-`DependencyInjection.cs:72`), and those module-level populators are taught in
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:73`,
+`DependencyInjection.cs:77`), and those module-level populators are taught in
 [Group 18](group-18-conference-application.md).
 
 Two architectural threads are worth holding onto as you read the per-type sections. First, this

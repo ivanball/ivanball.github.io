@@ -129,7 +129,8 @@
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
         <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
-        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-27-common-ai-integration.html">27. Common AI Integration</a></li>
+        <li><a href="group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -207,22 +208,22 @@
           via a <strong>two-path strategy</strong>, and reading its real code
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:13</code>) is the
           clearest way to see how the metadata earns its keep. Both paths share a front half,
-          <code>ApplyIncludesCriteriaAndFilters</code> (<code>EntityQueryPipeline.cs:119</code>). <strong>Path 1 (server-side includes):</strong>
+          <code>ApplyIncludesCriteriaAndFilters</code> (<code>EntityQueryPipeline.cs:120</code>). <strong>Path 1 (server-side includes):</strong>
           if there are <code>SupportedIncludes</code>, each becomes an EF <code>Include</code> call through the queryable executor
-          (<code>EntityQueryPipeline.cs:131-134</code>), and, importantly, if any of them is a child <em>collection</em>, the
-          pipeline switches to <code>AsSplitQuery</code> (<code>EntityQueryPipeline.cs:140-141</code>). That split-query line is not
+          (<code>EntityQueryPipeline.cs:132-135</code>), and, importantly, if any of them is a child <em>collection</em>, the
+          pipeline switches to <code>AsSplitQuery</code> (<code>EntityQueryPipeline.cs:141-142</code>). That split-query line is not
           cosmetic: paginating a single-query collection-<code>Include</code> makes EF apply <code>Skip</code>/<code>Take</code> to the
           JOIN-expanded row set, which truncates child rows and returns empty collections on list reads while
-          by-id reads still work, and the comment above it records exactly that (<code>EntityQueryPipeline.cs:136-139</code>).
+          by-id reads still work, and the comment above it records exactly that (<code>EntityQueryPipeline.cs:137-140</code>).
           After includes, specification criteria and dynamic filters are applied <em>before</em> materialization so
           the database does the filtering (<code>EntityQueryPipeline.cs:143-151</code>). <strong>Path 2 (manual navigation
           loading):</strong> the moment <code>UnsupportedIncludes.Count != 0</code> the pipeline cannot trust a JOIN
-          (<code>EntityQueryPipeline.cs:53-54</code>), so <code>ExecuteWithManualNavigationAsync</code> (<code>EntityQueryPipeline.cs:161</code>)
+          (<code>EntityQueryPipeline.cs:53-54</code>), so <code>ExecuteWithManualNavigationAsync</code> (<code>EntityQueryPipeline.cs:162</code>)
           sorts server-side with a key tie-break for paginated reads (<code>EntityQueryPipeline.cs:175-180</code>),
           applies paging or, for an unpaginated read, caps the result set at the <code>MaxUnboundedResultLimit</code>
-          ceiling of 1000 rows (<code>EntityQueryPipeline.cs:23</code>, <code>EntityQueryPipeline.cs:184-194</code>), materializes
+          ceiling of 1000 rows (<code>EntityQueryPipeline.cs:23</code>, <code>EntityQueryPipeline.cs:186-196</code>), materializes
           that bounded page, and <em>then</em> invokes a <strong>navigation-populator delegate</strong> on it
-          (<code>EntityQueryPipeline.cs:196-200</code>) to fill in the cross-source relationships. The manual-load cost is
+          (<code>EntityQueryPipeline.cs:198-202</code>) to fill in the cross-source relationships. The manual-load cost is
           paid on one page of parents, not the whole table, and never as an N+1.</p>
           <p>That delegate is the extension point to the second half of the chapter. Its signature,
           <code>Func&lt;IReadOnlyCollection&lt;TEntity&gt;, NavigationMetadata, bool, bool, CancellationToken, Task&gt;</code>
@@ -240,7 +241,7 @@
           branches on null (<code>[Rubric §2, Design Patterns]</code>). It is registered exactly that way for entities
           with nothing to hand-load, for example
           <code>services.TryAddScoped&lt;INavigationPopulator&lt;Question&gt;, NullNavigationPopulator&lt;Question&gt;&gt;()</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:85</code>) and
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:90</code>) and
           the framework&#39;s own push-notification entity
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:39</code>).</p>
           <p>The actual batch loading is done by <a href="#navigationloader"><code>NavigationLoader</code></a>
@@ -299,16 +300,16 @@
           <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>
           to run; the service calls <code>NavigationMetadataProvider.BuildIncludes&lt;TEntity&gt;</code> to get the
           supported/unsupported split
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:283</code>); it hands that
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:317</code>); it hands that
           split plus its module&#39;s injected <code>INavigationPopulator&lt;TEntity&gt;</code> (as the method-group delegate
           <code>NavigationPopulator.PopulateAsync</code>) to <code>EntityQueryPipeline.ExecuteAsync</code>
-          (<code>EntityQueryService.cs:317-322</code>); the pipeline JOINs the supported navigations and, if any are
+          (<code>EntityQueryService.cs:352-357</code>); the pipeline JOINs the supported navigations and, if any are
           unsupported, materializes the page and calls the populator; the populator (almost always a
           <code>DeclarativeNavigationPopulator</code> built from descriptors) iterates its descriptors and calls
           <code>NavigationLoader</code> once per cross-source navigation. The same metadata also gates the service&#39;s keyed
           by-id fast path: requested includes alone do not disqualify a keyed read, but a single unsupported
           include does, because only the pipeline&#39;s populator can batch-load across physical sources
-          (<code>EntityQueryService.cs:184-188</code>). The concrete consumers live in ADC&#39;s Conference module. For example
+          (<code>EntityQueryService.cs:218-222</code>). The concrete consumers live in ADC&#39;s Conference module. For example
           <a href="group-18-conference-application.html#eventnavigationpopulator"><code>EventNavigationPopulator</code></a>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/EventNavigationPopulator.cs:11</code>)
           is <em>just</em> a subclass of <code>DeclarativeNavigationPopulator&lt;Event&gt;</code> constructed with three
@@ -318,8 +319,8 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/SessionNavigationPopulator.cs:13</code>)
           mixes two <code>FKNavigationDescriptor</code>s (<code>Event</code>, <code>Room</code>) with three <code>ChildNavigationDescriptor</code>s. Each is
           registered per entity as a scoped service
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:68</code>,
-          <code>DependencyInjection.cs:72</code>), and those module-level populators are taught in
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:73</code>,
+          <code>DependencyInjection.cs:77</code>), and those module-level populators are taught in
           <a href="group-18-conference-application.html">Group 18</a>.</p>
           <p>Two architectural threads are worth holding onto as you read the per-type sections. First, this
           subsystem is <em>why</em> the database-per-service split is feasible without rewriting query code
