@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-027: Multi-Locale Internationalization (Supersedes ADR-011) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29; corrected 2026-08-01: the pseudo-locale CI gate is required on all…">
+  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)">
-  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29; corrected 2026-08-01: the pseudo-locale CI gate is required on all…">
+  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)">
-  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29; corrected 2026-08-01: the pseudo-locale CI gate is required on all…">
+  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"027 · Multi-Locale Internationalization (Supersedes ADR-011)","item":"https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -231,7 +231,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-027-multi-locale-internationalization-supersedes-adr-011">ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults). <strong>Supersedes <a href="011-single-locale-i18n.html">ADR-011</a></strong> (single-locale by design).</p>
+          <p>Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults). <strong>Supersedes <a href="011-single-locale-i18n.html">ADR-011</a></strong> (single-locale by design).</p>
           <h2 id="context">Context</h2>
           <p>ADR-011 recorded single-locale (en-US) as a deliberate, <em>revisitable</em> non-goal and sketched what
           re-introducing i18n would entail. That revisit has now happened: the framework adds first-class
@@ -403,6 +403,30 @@
           counterpart to the WASM <code>MmcaCultureBootstrap</code>. Both are wired by
           <code>UseMauiDeviceCapabilities()</code> so no head can be left half-configured, with <code>UseMauiCulture()</code>
           separately callable.</p>
+          <p><strong>The thread-defaults-only rule binds the dependencies too (amended 2026-09-15).</strong> The rule
+          above only holds if NO code on the render path assigns <code>CurrentCulture</code>/<code>CurrentUICulture</code>, and
+          MudBlazor 9.7+ does: its <code>DefaultLocalizationInterceptor</code> reads the built-in English strings by
+          assigning <code>CurrentUICulture</code> to the invariant culture and then assigning the previous value back
+          (so it never probes for a <code>MudBlazor.resources</code> satellite under a non-English culture). The
+          restore is itself an <code>AsyncLocal</code> write, so the calling thread leaves that read carrying an
+          explicit culture. On a hybrid head the renderer dispatches on the process&#39;s main thread, which
+          nothing ever resets, and the first MudBlazor chrome string a page rendered (a pager label, the
+          notification badge, a dialog close button) pinned the app to its launch language: the applier set
+          the defaults to <code>es</code>, the WebView reloaded, and every render still resolved <code>en-US</code>. Anonymous
+          landing pages render almost no MudBlazor chrome while signed-in pages do, which is why it surfaced
+          as &quot;switching works signed out but not signed in&quot;; a web head never sees it because request
+          localization sets the culture per request and a browser reload discards the WASM runtime.
+          <code>AddUIShared</code> therefore replaces the interceptor with <code>InvariantMudLocalizationInterceptor</code>
+          (<code>MudBlazor.Services.AddLocalizationInterceptor</code>, replace semantics, so registration order against
+          <code>AddMudServices</code> does not matter): the same resolution order as the default (an English UI culture
+          or no <code>MudLocalizer</code> reads the built-ins; any other culture asks <code>ResxMudLocalizer</code> and falls back
+          to the built-in string), with the built-ins read through a <code>ResourceManager</code> under an explicit
+          invariant culture, which is what the swap was for, without any culture assignment. A canary test
+          (<code>InvariantMudLocalizationInterceptorTests</code>) asserts that MudBlazor&#39;s default still writes the
+          <code>AsyncLocal</code>, so the replacement is retired the day upstream stops. The general rule for the
+          hybrid head: audit every dependency on the render path for <code>set_CurrentUICulture</code> /
+          <code>set_CurrentCulture</code> (the shipped assemblies name the setter in their string heap, so a grep of
+          the trimmed output finds callers) before trusting a culture switch to land.</p>
           <p>Precedence mirrors the web deliberately: the persisted choice (the cookie&#39;s analogue), then the
           device locale (<code>Accept-Language</code>&#39;s analogue), then <code>SupportedCultures.Default</code>. Matching a device
           locale needs the same language fallback request localization does, so
