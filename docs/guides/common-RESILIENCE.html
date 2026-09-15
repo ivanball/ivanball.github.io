@@ -162,6 +162,11 @@
           <td>covered by messaging tests</td>
           </tr>
           <tr>
+          <td>Broker backpressure (consumer prefetch and concurrency ceiling) on RabbitMQ / Azure Service Bus</td>
+          <td><code>Infrastructure</code> (<code>ConfigureBrokerTransport</code>, <code>MessageBusSettings.PrefetchCount</code> / <code>MessageBusSettings.ConcurrentMessageLimit</code>; both optional, null keeps the transport default, applied to every receive endpoint, so a burst is bounded per replica instead of running on provider defaults)</td>
+          <td>covered by the broker-messaging binding tests</td>
+          </tr>
+          <tr>
           <td>Warm-up / readiness gate: holds <code>/health/ready</code> closed until startup warm-up runs, opens <strong>even on task failure</strong> (availability over warmth), pre-warms OIDC discovery to kill ACA cold-start</td>
           <td><code>Aspire/Warmup/</code> (<code>WarmupHostedService</code>, <code>WarmupReadinessGate</code>, <code>WarmupReadinessHealthCheck</code>, <code>OpenIdConnectMetadataWarmupTask</code>): wired by <code>AddServiceDefaults</code></td>
           <td><code>WarmupReadinessGateTests</code>, <code>WarmupReadinessHealthCheckTests</code>, <code>WarmupHostedServiceTests</code> (ADR-025)</td>

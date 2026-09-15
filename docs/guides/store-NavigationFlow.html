@@ -219,6 +219,7 @@
 
     subgraph Identity[&quot;Profile&quot;]
         Profile[&quot;/profile&lt;br/&gt;My Profile&quot;]
+        Sessions[&quot;/profile/sessions&lt;br/&gt;Active Sessions, framework page&quot;]
     end
 
     Home[&quot;/  Store Home&quot;]
@@ -226,6 +227,7 @@
     Home --&gt;|nav menu| Browse
     Home --&gt;|nav menu| Orders
     Home --&gt;|nav menu| Profile
+    Home --&gt;|nav menu| Sessions
 
     Browse --&gt;|card click| ProductDetail
     ProductDetail --&gt;|add to cart| Cart
@@ -308,7 +310,12 @@
           <li><strong>API resource ownership (ADR-033).</strong> <code>OwnerOrAdminFilter</code> 403s requests whose <code>customer_id</code> claim mismatches the owner parameter, and <code>OwnershipHelper.GetOwnershipSpecification()</code> row-scopes collection queries so customers only ever receive their own carts/orders. Per-mutation checks on orders return 404-not-403 to avoid leaking existence.</li>
           <li><strong>In-page conditionals.</strong> <code>AuthorizeView</code> hides customer-only affordances (add-to-cart) from anonymous visitors and admin-only affordances from customers; these are UX sugar on top of layers 1-2, never the enforcement.</li>
           </ol>
-          <p>Menu items are rendered per-role, so each actor&#39;s nav menu contains only the routes shown in their diagram above.</p>
+          <p>Menu items are rendered per-role, so each actor&#39;s nav menu contains only the routes shown in their diagram above, plus the framework-owned routes below, which the shared <code>MMCA.Common.UI</code> shell contributes to every host.</p>
+          <p><strong>Framework-owned routes.</strong> Two routes come from the <code>MMCA.Common.UI</code> package rather than from a Store module:</p>
+          <ul>
+          <li><code>/profile/sessions</code> (active refresh sessions) is rendered in the nav for every signed-in user, Customer and Admin alike, by the framework <code>NavMenu</code>; a host can restrict the link to one role with <code>Layout:SessionsNavRequiredRole</code>, which Store deliberately leaves unset so customers can review and revoke their own sessions.</li>
+          <li><code>/notifications/send</code> ships in the same package behind a bare <code>[Authorize]</code>, so it is routable by URL for any signed-in user, but Store registers no notification services, so it has no nav item and is not a supported Store surface (opening it fails at dependency resolution rather than rendering a form); hiding it needs a framework-side feature gate, tracked as a [C-&gt;A] item.</li>
+          </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>

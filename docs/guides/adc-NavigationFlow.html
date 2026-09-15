@@ -152,13 +152,18 @@
           <td>Authenticated, account linked to a Speaker (<code>speaker_id</code> claim)</td>
           </tr>
           <tr>
+          <td><strong>ContentEditor</strong></td>
+          <td>Attendee + catalog curation (sessions, speakers, categories, sponsors, activities), a strict subset of the Organizer&#39;s capabilities</td>
+          <td>Authenticated, <code>ContentEditor</code> role</td>
+          </tr>
+          <tr>
           <td><strong>Organizer</strong></td>
-          <td>Full access: conference CRUD, user management, feedback analytics, session selection</td>
+          <td>Full access: conference CRUD, user management, role administration, feedback analytics, session selection</td>
           <td>Authenticated, <code>Organizer</code> role</td>
           </tr>
           </tbody></table></div>
           <blockquote>
-          <p><strong>Roles &amp; menu:</strong> <code>Organizer</code> is the only elevated role (default is <code>Attendee</code>). A <em>Speaker</em> is an attendee whose account is linked to a Speaker, surfaced via the <code>speaker_id</code> claim. The left nav is data-driven from each module&#39;s <code>IUIModule.NavItems</code>: items carry a required role (<code>Organizer</code>) or claim (<code>speaker_id</code>) and are hidden when the user lacks it. See <strong>Authorization Model</strong> at the end.</p>
+          <p><strong>Roles &amp; menu:</strong> the role vocabulary is <code>Organizer</code>, <code>ContentEditor</code> and <code>Attendee</code> (the default, <code>RoleNames</code>). <code>Organizer</code> holds every capability; <code>ContentEditor</code> holds the catalog-curation subset and no event-structure, room, question, session-selection or user-administration rights; the role-to-capability map itself is editable on the Role Administration pages. A <em>Speaker</em> is an attendee whose account is linked to a Speaker, surfaced via the <code>speaker_id</code> claim. The left nav is data-driven from each module&#39;s <code>IUIModule.NavItems</code>: items carry a required role (<code>Organizer</code>), claim (<code>speaker_id</code>) or permission (<code>roles:manage</code>) and are hidden when the user lacks it. See <strong>Authorization Model</strong> at the end.</p>
           </blockquote>
           <hr>
           <h2 id="1-anonymous-user">1. Anonymous User</h2>
@@ -362,7 +367,7 @@
     SessionFeedback --&gt;|cancel| PubSessionDetail</pre>
           <hr>
           <h2 id="4-organizer">4. Organizer</h2>
-          <p>Authenticated users with the <code>Organizer</code> role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, activities), user management, feedback analytics, the badge <strong>check-in</strong> and attendance pages, the points overview, and the AI-assisted <strong>Session Selection Dashboard</strong>. These items appear under the nav menu&#39;s <em>Admin</em> section (most grouped under &quot;Conference&quot;).</p>
+          <p>Authenticated users with the <code>Organizer</code> role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, activities), user management, <strong>role administration</strong> (the per-role permission editor), feedback analytics, the badge <strong>check-in</strong> and attendance pages, the points overview, and the AI-assisted <strong>Session Selection Dashboard</strong>. These items appear under the nav menu&#39;s <em>Admin</em> section (most grouped under &quot;Conference&quot;).</p>
           <pre class="mermaid">flowchart TD
     subgraph Auth[&quot;Authentication&quot;]
         Login[&quot;/login&lt;br/&gt;Login&quot;]
@@ -371,6 +376,8 @@
     subgraph Profile[&quot;Identity&quot;]
         MyProfile[&quot;/profile&lt;br/&gt;My Profile&quot;]
         Users[&quot;/users&lt;br/&gt;User Management&quot;]
+        Roles[&quot;/roles&lt;br/&gt;Role Administration&quot;]
+        RoleEdit[&quot;/roles/{Role}&lt;br/&gt;Role Permission Editor&quot;]
     end
 
     subgraph Public[&quot;Public Conference&quot;]
@@ -451,6 +458,9 @@
     Home --&gt;|nav menu| PubSpeakers
     Home --&gt;|nav menu| MyProfile
     Home --&gt;|nav menu| Users
+    Home --&gt;|nav menu, Admin section| Roles
+    Roles --&gt;|edit role| RoleEdit
+    RoleEdit --&gt;|back| Roles
     Home --&gt;|nav menu| EventList
     Home --&gt;|nav menu| SessionList
     Home --&gt;|nav menu| SpeakerList
@@ -665,6 +675,20 @@
     Manage --&gt;|row click| Edit[&quot;/activities/{Id}&lt;br/&gt;Edit Activity&quot;]
     Create --&gt;|on success| Edit
     Edit --&gt;|back| Manage</pre>
+          <h3 id="510-role-administration-organizer">5.10 Role Administration (Organizer)</h3>
+          <p><code>/roles</code> lists the three known roles (<code>Organizer</code>, <code>ContentEditor</code>, <code>Attendee</code>, the <code>KnownRoles</code> list in the
+          Identity service configuration) and <code>/roles/{Role}</code> is the permission editor for one of them: every capability
+          the modules register is shown as a checkbox, grants compiled into the role by code render ticked and disabled,
+          and only the editable grants can be toggled. Both pages carry <code>[Authorize(Roles = &quot;Organizer&quot;)]</code>, and the nav
+          item is gated on the <code>roles:manage</code> capability rather than on a role, because the screen exists to change the
+          role-to-capability map. Writes go through the Identity service&#39;s <code>Admin/Roles</code> endpoints (gateway route
+          <code>identity-admin-roles</code>); the <code>RoleAdministrationTests</code> E2E workflow pins the list, the editor and the
+          disabled compiled grants.</p>
+          <pre class="mermaid">flowchart TD
+    Home[&quot;/&lt;br/&gt;Home, Organizer&quot;] --&gt;|nav menu, Admin section| Roles[&quot;/roles&lt;br/&gt;Role Administration&quot;]
+    Roles --&gt;|edit role| RoleEdit[&quot;/roles/{Role}&lt;br/&gt;Role Permission Editor&quot;]
+    RoleEdit --&gt;|save| RoleEdit
+    RoleEdit --&gt;|back| Roles</pre>
           <hr>
           <h2 id="navigation-patterns">Navigation Patterns</h2>
           <h3 id="authentication-redirects">Authentication Redirects</h3>
@@ -676,12 +700,12 @@
           </ul>
           <h3 id="authorization-model">Authorization Model</h3>
           <ul>
-          <li><strong>Roles:</strong> <code>Organizer</code> is the only elevated role; every other authenticated user is an <code>Attendee</code> (the default). There is no separate &quot;Admin&quot; role.</li>
+          <li><strong>Roles:</strong> three roles, <code>Organizer</code>, <code>ContentEditor</code> and <code>Attendee</code> (the default for new registrations). <code>Organizer</code> holds every capability and is the only role that opens the management pages; <code>ContentEditor</code> holds the catalog-curation subset of the Organizer&#39;s capabilities (API-side permission checks, no extra page routes); there is no separate &quot;Admin&quot; role. The role-to-capability map is editable at <code>/roles/{Role}</code>.</li>
           <li><strong>Speaker:</strong> not a role, but an attendee whose account is linked to a Speaker, surfaced as the <code>speaker_id</code> JWT claim (auto-linked by email match at registration, or linked manually by an organizer).</li>
           <li><strong>In-page rights, not route rights:</strong> the live layer gates <em>panels</em>, not routes. <code>/conference/sessions/{Id}/live</code> is one page for everyone authenticated; the moderation panel renders only when the caller is the session&#39;s presenter or an Organizer, and the server re-checks that on every moderation call (BR-236), so the client-side gate is convenience, not security.</li>
-          <li><strong>Menu-driven visibility:</strong> the left nav is built from each module&#39;s <code>IUIModule.NavItems</code>. Items declare a required role (<code>Organizer</code>) or claim (<code>speaker_id</code>); the menu hides what the current user can&#39;t use. Organizer items sit in the <em>Admin</em> nav section (most grouped under &quot;Conference&quot;); &quot;My Profile&quot;, the Speaker &quot;Dashboard&quot; and the speaker&#39;s &quot;QR&quot; item sit in the <em>User</em> section. &quot;Activities&quot; appears twice under two different items: a public one pointing at <code>/conference/activities</code> with no requirement, and an Organizer one pointing at <code>/activities</code> under the &quot;Conference&quot; admin group. The speaker QR item declares <code>RequiredClaim: &quot;speaker_id&quot;</code>, so it is hidden from an attendee whose account is not linked to a Speaker; the page itself carries only <code>[Authorize]</code> and answers a typed or bookmarked URL with an explanatory alert rather than an empty card.</li>
+          <li><strong>Menu-driven visibility:</strong> the left nav is built from each module&#39;s <code>IUIModule.NavItems</code>. Items declare a required role (<code>Organizer</code>), claim (<code>speaker_id</code>) or permission (the &quot;Roles&quot; item declares <code>RequiredPermission: roles:manage</code>, read from the <code>permission</code> claim the Identity host mints); the menu hides what the current user can&#39;t use. Organizer items sit in the <em>Admin</em> nav section (most grouped under &quot;Conference&quot;); &quot;My Profile&quot;, the Speaker &quot;Dashboard&quot; and the speaker&#39;s &quot;QR&quot; item sit in the <em>User</em> section. &quot;Activities&quot; appears twice under two different items: a public one pointing at <code>/conference/activities</code> with no requirement, and an Organizer one pointing at <code>/activities</code> under the &quot;Conference&quot; admin group. The speaker QR item declares <code>RequiredClaim: &quot;speaker_id&quot;</code>, so it is hidden from an attendee whose account is not linked to a Speaker; the page itself carries only <code>[Authorize]</code> and answers a typed or bookmarked URL with an explanatory alert rather than an empty card.</li>
           <li><strong>Page guards (<code>@attribute [Authorize…]</code>):</strong><ul>
-          <li><em>Organizer role required:</em> <code>/sessions/selection-dashboard</code>, <code>/events/{EventId}/feedback</code>, <code>/sessions/{SessionId}/feedback</code>, and every conference/user management page (<code>/events</code>, <code>/sessions</code>, <code>/speakers</code>, <code>/conferencecategories</code>, <code>/questions</code>, <code>/rooms</code>, <code>/users</code>), each carrying a page-level <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> (e.g. <code>EventList.razor</code>, <code>UserList.razor</code>). The shared <code>Routes.razor</code> renders the Forbidden page for an authenticated non-Organizer; the inherited <code>RegisteredUser_AdminPages_ShouldBeForbidden</code> E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth). The sponsor management pages (<code>/sponsors</code>, <code>/sponsors/create</code>, <code>/sponsors/{Id}</code>), the activity management pages (<code>/activities</code>, <code>/activities/create</code>, <code>/activities/{Id}</code>, each <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> on <code>ActivityList.razor</code>, <code>ActivityCreate.razor</code> and <code>ActivityDetail.razor</code>) and the check-in and rewards pages (<code>/check-in</code>, <code>/organizer/attendance</code>, <code>/organizer/points</code>) carry the same page-level attribute, and their <strong>writes</strong> are additionally permission-checked API-side (<code>conference:sponsors:manage</code>, <code>engagement:checkin:manage</code>, <code>engagement:points:view-overview</code>), so the role opens the page and the permission authorizes the call.</li>
+          <li><em>Organizer role required:</em> <code>/sessions/selection-dashboard</code>, <code>/events/{EventId}/feedback</code>, <code>/sessions/{SessionId}/feedback</code>, and every conference/user management page (<code>/events</code>, <code>/sessions</code>, <code>/speakers</code>, <code>/conferencecategories</code>, <code>/questions</code>, <code>/rooms</code>, <code>/users</code>), each carrying a page-level <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> (e.g. <code>EventList.razor</code>, <code>UserList.razor</code>). The shared <code>Routes.razor</code> renders the Forbidden page for an authenticated non-Organizer; the inherited <code>RegisteredUser_AdminPages_ShouldBeForbidden</code> E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth). The sponsor management pages (<code>/sponsors</code>, <code>/sponsors/create</code>, <code>/sponsors/{Id}</code>), the activity management pages (<code>/activities</code>, <code>/activities/create</code>, <code>/activities/{Id}</code>, each <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> on <code>ActivityList.razor</code>, <code>ActivityCreate.razor</code> and <code>ActivityDetail.razor</code>) and the check-in and rewards pages (<code>/check-in</code>, <code>/organizer/attendance</code>, <code>/organizer/points</code>) carry the same page-level attribute, and their <strong>writes</strong> are additionally permission-checked API-side (<code>conference:sponsors:manage</code>, <code>engagement:checkin:manage</code>, <code>engagement:points:view-overview</code>), so the role opens the page and the permission authorizes the call. The role-administration pages (<code>/roles</code>, <code>/roles/{Role}</code>, <code>RoleList.razor</code> and <code>RoleEdit.razor</code>) follow the same shape: <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> opens the page and the <code>roles:manage</code> capability authorizes the <code>Admin/Roles</code> writes; <code>IdentityRouteAuthorizationTests</code> covers the Identity UI namespace.</li>
           <li><em>Authentication only:</em> <code>/profile</code>, <code>/profile/claims</code>, <code>/speaker/dashboard</code>, <code>/speaker/qr</code>, <code>/my-badge</code>, <code>/points</code>, the two scanned engagement landings (<code>/engage/sponsors/{SponsorId}</code>, <code>/engage/rooms/{RoomId}</code>), both attendee feedback forms, the conference-day live pages (<code>/happening-now</code>, <code>/conference/sessions/{Id}/live</code>, <code>/conference/sessions/{Id}/present</code>), and <code>/speakers/{Id}</code> (SpeakerDetail is the one management page still gated by plain <code>[Authorize]</code> because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).</li>
           <li><em>Public (no attribute):</em> all <code>/conference/*</code> read pages including <code>/conference/activities</code> (the public activity list, filtered by the selected event), except the two live-layer routes above, plus the two password-reset pages (<code>/forgot-password</code>, <code>/reset-password</code>), which ship in the framework UI package and are reachable only by an unauthenticated visitor&#39;s own action (the &quot;Forgot password?&quot; link on <code>/login</code> or the link in the reset email).</li>
           <li><em>MAUI head only:</em> <code>/settings/device</code> is registered by <code>DeviceUIModule</code> and exists in no web head.</li>
