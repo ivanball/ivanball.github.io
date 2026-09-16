@@ -9,6 +9,20 @@ Revised 2026-09-11: ADC's session scoring runs on the package. The Context, Trad
 Consequences describe the adopted state (a constructor-injected `IChatClient` and `PromptContract`,
 framework-owned bounds and one framework meter) instead of a pending migration.
 
+Revised 2026-09-15 (MMCA.Common v1.203.0): the pipeline gains an optional guardrail layer and its
+telemetry is exported by the framework host. `IChatGuardrail` (`MMCA.Common.AI.Chat`) is an
+extension point only: a host registers one or more implementations and `GuardrailChatClient` runs
+them, in registration order, on the request and on the buffered response, throwing
+`ChatGuardrailException` on the first `GuardrailVerdict.Block(reason)`; with no registration the
+chain is byte-identical to the 2026-09-11 shape. The streaming path inspects the request only,
+because buffering a streamed answer would defeat streaming. Content policy (delimiting, redaction,
+injection handling) still lives in the feature per the trade-off below; the framework now offers
+the place to plug it in, not the policy. `AiUsageMeter` also publishes a `mmca.ai.call.duration`
+histogram (seconds, tagged `outcome` = `success` | `error` | `canceled` beside the usage tags), and
+`MMCA.Common.Aspire`'s `ConfigureOpenTelemetry` registers the `MMCA.Common.AI` trace source and
+meter, so a consumer no longer has to add either by hand for the spans and counters to leave the
+process.
+
 ## Context
 Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
 calls a language model: is that dependency governed like any other external system, meaning
@@ -89,9 +103,11 @@ host turns them on.**
 
 4. **Governance is a pipeline of delegating clients, ordered outermost first.**
    `AddMmcaChatClient(IConfiguration)` (`:59`) builds `BoundedChatClient` ->
-   `UsageRecordingChatClient` -> optional `DistributedCache` -> `OpenTelemetry` -> `Logging` ->
-   provider (registration at `:100-123`, order documented at `:22-36`). Bounds are outermost so a
-   call the configuration forbids is refused before it is logged, cached or counted. Telemetry rides
+   optional `GuardrailChatClient` (present only when the host registers at least one
+   `IChatGuardrail`) -> `UsageRecordingChatClient` -> optional `DistributedCache` ->
+   `OpenTelemetry` -> `Logging` -> provider (registration at `:100-123`, order documented at
+   `:22-36`). Bounds are outermost so a call the configuration forbids is refused before it is
+   inspected, logged, cached or counted, and a guardrail block is refused before it is counted. Telemetry rides
    the same name as the meter (`:120-122`), and prompt and completion text reach traces only on a
    host positively identified as Development (`:117`, gate at `:172-176`), which fails closed.
 
@@ -207,8 +223,9 @@ host turns them on.**
 - **Section 16 re-scoring is open for ADC on "observed" and "bounded".** Token usage, model id and
   prompt version reach telemetry through one shared source, and the per-call ceiling is
   configuration rather than a literal in a request body, so the next scorecard cycle scores those
-  two criteria against the framework pipeline. The criteria this record does not touch (evaluation,
-  guardrails, retrieval) are unchanged.
+  two criteria against the framework pipeline. Since the 2026-09-15 revision the guardrail
+  criterion has a framework extension point (`IChatGuardrail`) and the spans and counters are
+  exported by the Aspire host; evaluation gating and retrieval remain feature-side and unchanged.
 
 ## Related
 [ADR-111](111-ai-session-scoring-governance.md) (the record this one extends: every scoring-specific

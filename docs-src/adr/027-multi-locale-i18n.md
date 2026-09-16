@@ -1,7 +1,7 @@
 # ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults). **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
+Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, 2026-07-29, and 2026-09-15: the MudBlazor localization interceptor is replaced so no dependency assigns the current culture on a hybrid head; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults). **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
 
 ## Context
 ADR-011 recorded single-locale (en-US) as a deliberate, *revisitable* non-goal and sketched what
@@ -183,6 +183,31 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
     counterpart to the WASM `MmcaCultureBootstrap`. Both are wired by
     `UseMauiDeviceCapabilities()` so no head can be left half-configured, with `UseMauiCulture()`
     separately callable.
+
+    **The thread-defaults-only rule binds the dependencies too (amended 2026-09-15).** The rule
+    above only holds if NO code on the render path assigns `CurrentCulture`/`CurrentUICulture`, and
+    MudBlazor 9.7+ does: its `DefaultLocalizationInterceptor` reads the built-in English strings by
+    assigning `CurrentUICulture` to the invariant culture and then assigning the previous value back
+    (so it never probes for a `MudBlazor.resources` satellite under a non-English culture). The
+    restore is itself an `AsyncLocal` write, so the calling thread leaves that read carrying an
+    explicit culture. On a hybrid head the renderer dispatches on the process's main thread, which
+    nothing ever resets, and the first MudBlazor chrome string a page rendered (a pager label, the
+    notification badge, a dialog close button) pinned the app to its launch language: the applier set
+    the defaults to `es`, the WebView reloaded, and every render still resolved `en-US`. Anonymous
+    landing pages render almost no MudBlazor chrome while signed-in pages do, which is why it surfaced
+    as "switching works signed out but not signed in"; a web head never sees it because request
+    localization sets the culture per request and a browser reload discards the WASM runtime.
+    `AddUIShared` therefore replaces the interceptor with `InvariantMudLocalizationInterceptor`
+    (`MudBlazor.Services.AddLocalizationInterceptor`, replace semantics, so registration order against
+    `AddMudServices` does not matter): the same resolution order as the default (an English UI culture
+    or no `MudLocalizer` reads the built-ins; any other culture asks `ResxMudLocalizer` and falls back
+    to the built-in string), with the built-ins read through a `ResourceManager` under an explicit
+    invariant culture, which is what the swap was for, without any culture assignment. A canary test
+    (`InvariantMudLocalizationInterceptorTests`) asserts that MudBlazor's default still writes the
+    `AsyncLocal`, so the replacement is retired the day upstream stops. The general rule for the
+    hybrid head: audit every dependency on the render path for `set_CurrentUICulture` /
+    `set_CurrentCulture` (the shipped assemblies name the setter in their string heap, so a grep of
+    the trimmed output finds callers) before trusting a culture switch to land.
 
     Precedence mirrors the web deliberately: the persisted choice (the cookie's analogue), then the
     device locale (`Accept-Language`'s analogue), then `SupportedCultures.Default`. Matching a device

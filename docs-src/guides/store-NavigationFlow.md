@@ -83,6 +83,7 @@ flowchart TD
 
     subgraph Identity["Profile"]
         Profile["/profile<br/>My Profile"]
+        Sessions["/profile/sessions<br/>Active Sessions, framework page"]
     end
 
     Home["/  Store Home"]
@@ -90,6 +91,7 @@ flowchart TD
     Home -->|nav menu| Browse
     Home -->|nav menu| Orders
     Home -->|nav menu| Profile
+    Home -->|nav menu| Sessions
 
     Browse -->|card click| ProductDetail
     ProductDetail -->|add to cart| Cart
@@ -178,4 +180,9 @@ Three cooperating layers; the API is always the boundary:
 2. **API resource ownership (ADR-033).** `OwnerOrAdminFilter` 403s requests whose `customer_id` claim mismatches the owner parameter, and `OwnershipHelper.GetOwnershipSpecification()` row-scopes collection queries so customers only ever receive their own carts/orders. Per-mutation checks on orders return 404-not-403 to avoid leaking existence.
 3. **In-page conditionals.** `AuthorizeView` hides customer-only affordances (add-to-cart) from anonymous visitors and admin-only affordances from customers; these are UX sugar on top of layers 1-2, never the enforcement.
 
-Menu items are rendered per-role, so each actor's nav menu contains only the routes shown in their diagram above.
+Menu items are rendered per-role, so each actor's nav menu contains only the routes shown in their diagram above, plus the framework-owned routes below, which the shared `MMCA.Common.UI` shell contributes to every host.
+
+**Framework-owned routes.** Two routes come from the `MMCA.Common.UI` package rather than from a Store module:
+
+- `/profile/sessions` (active refresh sessions) is rendered in the nav for every signed-in user, Customer and Admin alike, by the framework `NavMenu`; a host can restrict the link to one role with `Layout:SessionsNavRequiredRole`, which Store deliberately leaves unset so customers can review and revoke their own sessions.
+- `/notifications/send` ships in the same package behind a bare `[Authorize]`, so it is routable by URL for any signed-in user, but Store registers no notification services, so it has no nav item and is not a supported Store surface (opening it fails at dependency resolution rather than rendering a form); hiding it needs a framework-side feature gate, tracked as a [C->A] item.
