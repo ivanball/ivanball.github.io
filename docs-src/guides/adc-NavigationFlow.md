@@ -9,7 +9,7 @@ This document maps the site navigation flow for each actor in the MMCA.ADC appli
 | **Anonymous** | Public conference pages only | Not authenticated |
 | **Attendee** | Public + profile + feedback + bookmarks | Authenticated, default `Attendee` role |
 | **Speaker** | Attendee + speaker dashboard | Authenticated, account linked to a Speaker (`speaker_id` claim) |
-| **ContentEditor** | Attendee + catalog curation (sessions, speakers, categories, sponsors, activities), a strict subset of the Organizer's capabilities | Authenticated, `ContentEditor` role |
+| **ContentEditor** | Attendee + catalog curation (sessions, speakers, categories, sponsors, partners, activities), a strict subset of the Organizer's capabilities | Authenticated, `ContentEditor` role |
 | **Organizer** | Full access: conference CRUD, user management, role administration, feedback analytics, session selection | Authenticated, `Organizer` role |
 
 > **Roles & menu:** the role vocabulary is `Organizer`, `ContentEditor` and `Attendee` (the default, `RoleNames`). `Organizer` holds every capability; `ContentEditor` holds the catalog-curation subset and no event-structure, room, question, session-selection or user-administration rights; the role-to-capability map itself is editable on the Role Administration pages. A *Speaker* is an attendee whose account is linked to a Speaker, surfaced via the `speaker_id` claim. The left nav is data-driven from each module's `IUIModule.NavItems`: items carry a required role (`Organizer`), claim (`speaker_id`) or permission (`roles:manage`) and are hidden when the user lacks it. See **Authorization Model** at the end.
@@ -41,11 +41,15 @@ flowchart TD
     end
 
     Home["/  Home Page"]
+    HomePartners["Community Partners band on Home<br/>Community and Special groups, empty groups hidden"]
+    PartnerSite["Partner website<br/>external"]
 
     Home -->|nav menu| PubEvents
     Home -->|nav menu| PubSessions
     Home -->|nav menu| PubSpeakers
     Home -->|nav menu, sponsor strip| PubSponsors
+    Home -->|scroll, shown only when announced| HomePartners
+    HomePartners -.->|partner logo, new tab| PartnerSite
     Home -->|nav menu| PubActivities
     Home -->|auth links| Login
     Home -->|auth links| Register
@@ -236,7 +240,7 @@ flowchart TD
 
 ## 4. Organizer
 
-Authenticated users with the `Organizer` role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, activities), user management, **role administration** (the per-role permission editor), feedback analytics, the badge **check-in** and attendance pages, the points overview, and the AI-assisted **Session Selection Dashboard**. These items appear under the nav menu's *Admin* section (most grouped under "Conference").
+Authenticated users with the `Organizer` role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms, sponsors, partners, activities), user management, **role administration** (the per-role permission editor), feedback analytics, the badge **check-in** and attendance pages, the points overview, and the AI-assisted **Session Selection Dashboard**. These items appear under the nav menu's *Admin* section (most grouped under "Conference").
 
 ```mermaid
 flowchart TD
@@ -305,6 +309,12 @@ flowchart TD
         SponsorDetail["/sponsors/{Id}<br/>Edit Sponsor"]
     end
 
+    subgraph PartnerMgmt["Organizer: Partner Management"]
+        PartnerList["/partners<br/>Partner List"]
+        PartnerCreate["/partners/create<br/>Create Partner"]
+        PartnerDetail["/partners/{Id}<br/>Edit Partner"]
+    end
+
     subgraph ActivityMgmt["Organizer: Activity Management"]
         ActivityList["/activities<br/>Activity List"]
         ActivityCreate["/activities/create<br/>Create Activity"]
@@ -339,6 +349,7 @@ flowchart TD
     Home -->|nav menu| QuestionList
     Home -->|nav menu| RoomList
     Home -->|nav menu| SponsorList
+    Home -->|nav menu| PartnerList
     Home -->|nav menu| ActivityList
     Home -->|nav menu| Scan
     Home -->|nav menu| Attendance
@@ -419,6 +430,13 @@ flowchart TD
     SponsorCreate -->|on success| SponsorDetail
     SponsorCreate -->|back| SponsorList
     SponsorDetail -->|back| SponsorList
+
+    %% Partner CRUD
+    PartnerList -->|create| PartnerCreate
+    PartnerList -->|row click| PartnerDetail
+    PartnerCreate -->|on success| PartnerDetail
+    PartnerCreate -->|back| PartnerList
+    PartnerDetail -->|back| PartnerList
 
     %% Activity CRUD
     ActivityList -->|create| ActivityCreate
@@ -626,7 +644,7 @@ flowchart TD
 - **In-page rights, not route rights:** the live layer gates *panels*, not routes. `/conference/sessions/{Id}/live` is one page for everyone authenticated; the moderation panel renders only when the caller is the session's presenter or an Organizer, and the server re-checks that on every moderation call (BR-236), so the client-side gate is convenience, not security.
 - **Menu-driven visibility:** the left nav is built from each module's `IUIModule.NavItems`. Items declare a required role (`Organizer`), claim (`speaker_id`) or permission (the "Roles" item declares `RequiredPermission: roles:manage`, read from the `permission` claim the Identity host mints); the menu hides what the current user can't use. Organizer items sit in the *Admin* nav section (most grouped under "Conference"); "My Profile", the Speaker "Dashboard" and the speaker's "QR" item sit in the *User* section. "Activities" appears twice under two different items: a public one pointing at `/conference/activities` with no requirement, and an Organizer one pointing at `/activities` under the "Conference" admin group. The speaker QR item declares `RequiredClaim: "speaker_id"`, so it is hidden from an attendee whose account is not linked to a Speaker; the page itself carries only `[Authorize]` and answers a typed or bookmarked URL with an explanatory alert rather than an empty card.
 - **Page guards (`@attribute [Authorize…]`):**
-  - *Organizer role required:* `/sessions/selection-dashboard`, `/events/{EventId}/feedback`, `/sessions/{SessionId}/feedback`, and every conference/user management page (`/events`, `/sessions`, `/speakers`, `/conferencecategories`, `/questions`, `/rooms`, `/users`), each carrying a page-level `[Authorize(Roles = "Organizer")]` (e.g. `EventList.razor`, `UserList.razor`). The shared `Routes.razor` renders the Forbidden page for an authenticated non-Organizer; the inherited `RegisteredUser_AdminPages_ShouldBeForbidden` E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth). The sponsor management pages (`/sponsors`, `/sponsors/create`, `/sponsors/{Id}`), the activity management pages (`/activities`, `/activities/create`, `/activities/{Id}`, each `[Authorize(Roles = "Organizer")]` on `ActivityList.razor`, `ActivityCreate.razor` and `ActivityDetail.razor`) and the check-in and rewards pages (`/check-in`, `/organizer/attendance`, `/organizer/points`) carry the same page-level attribute, and their **writes** are additionally permission-checked API-side (`conference:sponsors:manage`, `engagement:checkin:manage`, `engagement:points:view-overview`), so the role opens the page and the permission authorizes the call. The role-administration pages (`/roles`, `/roles/{Role}`, `RoleList.razor` and `RoleEdit.razor`) follow the same shape: `[Authorize(Roles = "Organizer")]` opens the page and the `roles:manage` capability authorizes the `Admin/Roles` writes; `IdentityRouteAuthorizationTests` covers the Identity UI namespace.
+  - *Organizer role required:* `/sessions/selection-dashboard`, `/events/{EventId}/feedback`, `/sessions/{SessionId}/feedback`, and every conference/user management page (`/events`, `/sessions`, `/speakers`, `/conferencecategories`, `/questions`, `/rooms`, `/users`), each carrying a page-level `[Authorize(Roles = "Organizer")]` (e.g. `EventList.razor`, `UserList.razor`). The shared `Routes.razor` renders the Forbidden page for an authenticated non-Organizer; the inherited `RegisteredUser_AdminPages_ShouldBeForbidden` E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth). The sponsor management pages (`/sponsors`, `/sponsors/create`, `/sponsors/{Id}`), the partner management pages (`/partners`, `/partners/create`, `/partners/{Id}`, each `[Authorize(Roles = "Organizer")]` on `PartnerList.razor`, `PartnerCreate.razor` and `PartnerDetail.razor`), the activity management pages (`/activities`, `/activities/create`, `/activities/{Id}`, each `[Authorize(Roles = "Organizer")]` on `ActivityList.razor`, `ActivityCreate.razor` and `ActivityDetail.razor`) and the check-in and rewards pages (`/check-in`, `/organizer/attendance`, `/organizer/points`) carry the same page-level attribute, and their **writes** are additionally permission-checked API-side (`conference:sponsors:manage`, `conference:partners:manage`, `engagement:checkin:manage`, `engagement:points:view-overview`), so the role opens the page and the permission authorizes the call. The role-administration pages (`/roles`, `/roles/{Role}`, `RoleList.razor` and `RoleEdit.razor`) follow the same shape: `[Authorize(Roles = "Organizer")]` opens the page and the `roles:manage` capability authorizes the `Admin/Roles` writes; `IdentityRouteAuthorizationTests` covers the Identity UI namespace.
   - *Authentication only:* `/profile`, `/profile/claims`, `/speaker/dashboard`, `/speaker/qr`, `/my-badge`, `/points`, the two scanned engagement landings (`/engage/sponsors/{SponsorId}`, `/engage/rooms/{RoomId}`), both attendee feedback forms, the conference-day live pages (`/happening-now`, `/conference/sessions/{Id}/live`, `/conference/sessions/{Id}/present`), and `/speakers/{Id}` (SpeakerDetail is the one management page still gated by plain `[Authorize]` because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).
   - *Public (no attribute):* all `/conference/*` read pages including `/conference/activities` (the public activity list, filtered by the selected event), except the two live-layer routes above, plus the two password-reset pages (`/forgot-password`, `/reset-password`), which ship in the framework UI package and are reachable only by an unauthenticated visitor's own action (the "Forgot password?" link on `/login` or the link in the reset email).
   - *MAUI head only:* `/settings/device` is registered by `DeviceUIModule` and exists in no web head.
