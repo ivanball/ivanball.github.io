@@ -183,6 +183,17 @@ and the equivalent `servicebus-emulator-smoke` job in
 `MMCA.Store/.github/workflows/cross-service-tests.yml`; the deploy-side halves are recorded in
 ADR-066 and ADR-064). Any transport candidate has somewhere to be exercised that is not production.
 
+## Alternatives rejected
+- **Opt-in flags and compatibility shims for a framework change, with consumers upgraded per page or
+  per PR.** Declined outright: no `virtual` opt-in properties, no parallel old and new code paths, no
+  sequencing that leaves a consumer half upgraded. The rejection was made concrete against a proposed
+  `UseQueryStringState` flag on `DataGridListPageBase`, which would have kept unconverted pages
+  working until each was migrated; every consumer page in MMCA.ADC and MMCA.Store was updated in the
+  same change instead. What removes the usual reason to phase a sweep is the `local.props`
+  source-mapping path, which makes a lockstep cross-repo change practical without a NuGet publish
+  round trip. A half-upgraded codebase is the cost this record is spending lockstep releases to
+  avoid, so re-introducing one per feature would defeat the decision above.
+
 ## Related
 ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker
 transport behind the outbox and database-per-service flows).

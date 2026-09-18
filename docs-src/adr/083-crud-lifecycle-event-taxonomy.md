@@ -191,6 +191,18 @@ total number of records deriving the base to **17**.
   (`IntegrationEventContractTests.cs:12`), the enum's member values are part of the payload: adding a
   member is additive, but renumbering or removing one is a breaking change under ADR-010.
 
+## Alternatives rejected
+- **Splitting each `XChanged` event into per-fact past-tense events** (`SpeakerRenamed`,
+  `SessionCancelled`, and so on) with every handler and bridge updated to match. Proposed
+  2026-08-26, after a naming audit flagged ADC's roughly 20 CRUD-shaped domain events as diverging
+  from past-tense-fact naming, and declined the same day. The one-event-per-aggregate convention
+  this record decides is deliberate; integration events are separately past-tense and stay that
+  way; and the churn of renaming high-traffic events plus every handler was judged not worth the
+  purity. Handler-side state filtering (a `SpeakerDeletedHandler` narrowing to `Deleted`) is
+  conformant with this record, not a smell.
+- **A past-tense naming fitness rule in `EventConventionTestsBase`.** Rejected alongside the rename,
+  and for a stronger reason: the rule would fail the build on the convention this ADR accepts.
+
 ## Related
 ADR-003 (how these events are captured and dispatched; this ADR decides only their shape), ADR-010
 (schema versioning for the discriminator once it crosses a service boundary), ADR-008 (the extraction

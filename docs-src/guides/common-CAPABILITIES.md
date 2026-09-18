@@ -1,6 +1,6 @@
 # MMCA.Common Capability Catalog
 
-_MMCA.Common framework, v1.187.0._
+_As of: 2026-09-10 (framework v1.187.0)._
 
 Everything an adopting team gets from the MMCA.Common framework: a .NET 10 package set for building a modular monolith on DDD, Clean Architecture, and CQRS, with a tested path to extract modules into microservices later. Every item below is grounded in a real shipped type, guide, CI job, or consumer call site (MMCA.ADC, MMCA.Store, MMCA.Helpdesk), verified against framework source at v1.187.0.
 

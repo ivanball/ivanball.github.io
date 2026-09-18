@@ -418,6 +418,19 @@
           (<code>IntegrationEventContractTests.cs:12</code>), the enum&#39;s member values are part of the payload: adding a
           member is additive, but renumbering or removing one is a breaking change under ADR-010.</li>
           </ul>
+          <h2 id="alternatives-rejected">Alternatives rejected</h2>
+          <ul>
+          <li><strong>Splitting each <code>XChanged</code> event into per-fact past-tense events</strong> (<code>SpeakerRenamed</code>,
+          <code>SessionCancelled</code>, and so on) with every handler and bridge updated to match. Proposed
+          2026-08-26, after a naming audit flagged ADC&#39;s roughly 20 CRUD-shaped domain events as diverging
+          from past-tense-fact naming, and declined the same day. The one-event-per-aggregate convention
+          this record decides is deliberate; integration events are separately past-tense and stay that
+          way; and the churn of renaming high-traffic events plus every handler was judged not worth the
+          purity. Handler-side state filtering (a <code>SpeakerDeletedHandler</code> narrowing to <code>Deleted</code>) is
+          conformant with this record, not a smell.</li>
+          <li><strong>A past-tense naming fitness rule in <code>EventConventionTestsBase</code>.</strong> Rejected alongside the rename,
+          and for a stronger reason: the rule would fail the build on the convention this ADR accepts.</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p>ADR-003 (how these events are captured and dispatched; this ADR decides only their shape), ADR-010
           (schema versioning for the discriminator once it crosses a service boundary), ADR-008 (the extraction
@@ -439,6 +452,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

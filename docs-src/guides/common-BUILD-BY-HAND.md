@@ -1,5 +1,7 @@
 # Building on MMCA.Common by Hand
 
+_As of: 2026-09-13._
+
 This is the long-form walkthrough: every project, every file, and every load-bearing line that goes
 into an application on the MMCA.Common framework, in the order you would create them. MMCA.Common is
 a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set of lockstep-versioned

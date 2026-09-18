@@ -1,5 +1,7 @@
 # Cost & FinOps Notes (rubric §31)
 
+_As of: 2026-09-02._
+
 MMCA.Common is a library, so it cannot *provision* anything: right-sizing, scale rules, budgets,
 and per-service cost attribution live in the consumer apps' IaC (e.g. MMCA.ADC's `infra/main.bicep`,
 `cost-guard.yml`, and budget alerts). What the framework *can* do is keep its own cost-relevant

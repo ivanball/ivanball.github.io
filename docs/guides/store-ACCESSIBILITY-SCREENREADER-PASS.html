@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Manual Screen-Reader Pass: Runbook (§21 Accessibility) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="The automated layer (axe-core WCAG 2.1 AA scans in Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs plus the shared…">
+  <meta name="description" content="As of: 2026-09-07.">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/store-ACCESSIBILITY-SCREENREADER-PASS.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Manual Screen-Reader Pass: Runbook (§21 Accessibility)">
-  <meta property="og:description" content="The automated layer (axe-core WCAG 2.1 AA scans in Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs plus the shared…">
+  <meta property="og:description" content="As of: 2026-09-07.">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/store-ACCESSIBILITY-SCREENREADER-PASS.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Manual Screen-Reader Pass: Runbook (§21 Accessibility)">
-  <meta name="twitter:description" content="The automated layer (axe-core WCAG 2.1 AA scans in Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs plus the shared…">
+  <meta name="twitter:description" content="As of: 2026-09-07.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)","item":"https://ivanball.github.io/docs/guides/store-ACCESSIBILITY-SCREENREADER-PASS.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -126,6 +126,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="manual-screen-reader-pass-runbook-21-accessibility">Manual Screen-Reader Pass: Runbook (§21 Accessibility)</h1>
+          <p><em>As of: 2026-09-07.</em></p>
           <p>The automated layer (axe-core WCAG 2.1 AA scans in <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs</code>
           plus the shared Login/Register/Profile bases in <code>MMCA.Common.Testing.E2E</code>) catches programmatic
           violations: missing labels, contrast, ARIA misuse, landmark gaps. It cannot judge whether the experience

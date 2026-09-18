@@ -410,6 +410,19 @@ that takes the AI package exports nothing from it through `AddServiceDefaults` u
 the name itself. That is the duplicated-literal cost of the decoupled package graph in its other
 direction, where the miss reads as an absence rather than as a rename.
 
+## Alternatives rejected
+- **An `ActivitySource` span per command and query in the CQRS pipeline, tagged by module.**
+  Evaluated 2026-09-16 against a modular-monolith template that ships one, and declined. The pitch
+  assumes production runs as a single process, and it does not: ADC and Store deploy one module per
+  container app, so cross-module calls are already gRPC or HTTP spans and the module is implied by
+  the cloud role name. The ASP.NET Core request span already names the route, which maps to one
+  command or query; `LoggingCommandDecorator` already carries a CommandName plus ModuleName log
+  scope, a query tag on the SQL, and a `CqrsMetrics` duration histogram tagged by command. Traces
+  sample at 25% and trace ingestion is the largest observability cost line here, so an extra
+  dependency row per command or query buys duplication at a measurable price. Revisit only on a
+  concrete diagnostic gap (orphan SQL spans from scheduled jobs would be one), and scope any fix to
+  that path rather than to the pipeline.
+
 ## Related
 ADR-003 (the outbox whose dead-letter counter and poll-span filtering this defines), ADR-014 (the
 CQRS decorator pipeline that emits the RED histograms as a byproduct of its logging decorators),

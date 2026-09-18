@@ -1,5 +1,7 @@
 # Versioning & Breaking-Change Policy
 
+_As of: 2026-09-03._
+
 MMCA.Common publishes its NuGet packages (the authoritative list and count live in
 [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)) versioned and released
 **together** as a single unit. They share one version number so a consumer never has to reason about cross-package
