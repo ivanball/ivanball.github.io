@@ -3,6 +3,11 @@
 Accepted ADRs explaining *why* the core cross-cutting patterns exist. Read these before changing a
 pattern they describe: they capture context and trade-offs that aren't obvious from the code.
 
+**123 accepted ADRs**, 001-123, numbered contiguously with one row per ADR in the table below.
+This file owns the ADR count and range (`MMCA.Common/FACTS.md`): read them here rather than
+recounting, and when you add an ADR, update this line with its row. `Tools/Scripts/adr-index.ps1`
+re-derives both from the files and fails if this line, the table, or a link drifts from them.
+
 | # | Decision | Summary |
 |---|----------|---------|
 | [001](001-manual-dto-mapping.md) | Manual DTO mapping | Per-entity Mapperly source-generated mappers chosen over AutoMapper-style runtime reflection. |
