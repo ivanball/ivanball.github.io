@@ -6,7 +6,9 @@ Accepted (2026-08-23). Revised 2026-08-31: `GetByIdAsync` is recorded with its r
 `treatNotFoundAsDefault` switch), `ChildEntityServiceBase` is recorded with both `PostAsync` overloads
 and with a missing join row answering `NotFound` rather than `false`, and the line anchors into
 `EntityServiceBase`, `IEntityService`, `ChildEntityServiceBase`, `DataGridListPageBase` and the
-idempotency-retry tests are re-pinned.
+idempotency-retry tests are re-pinned. Revised 2026-09-19: the optional client read cache and the
+`If-Match` conditional-write header are recorded as part of the contract, and the adoption inventory
+is recounted.
 
 ## Context
 ADR-034 decided the **server** half of entity data access: a generic controller base with a dynamic
@@ -57,6 +59,18 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   `NotFound` failure, not a default value (`:143-146`): the caller tells it apart from a transport
   failure through `ResultUiExtensions.IsNotFound`
   (`.../MMCA.Common.UI/Common/ResultUiExtensions.cs:315`) rather than by asking for a null.
+- **Reads go through an optional client read cache.** The constructor takes an optional `IUiReadCache`
+  (`EntityServiceBase.cs:47`, exposed to subclasses as `ReadCache`, `:58`), the client half of
+  [ADR-040](040-authenticated-output-caching-for-public-reads.md). All four reads call `GetCachedAsync`
+  (`:241-268`) rather than dispatching directly. With no cache registered, or with `bypassCache` set,
+  it falls straight through to the normal dispatch (`:248-251`); with one, a fresh entry answers the
+  read with no HTTP call at all (`:253-256`), and only a successful non-null response is stored
+  (`:262-265`), so a transient outage or a 404 is not pinned in front of the user for the whole TTL.
+  The cache key is the request path plus its full query string, stored verbatim so it matches the
+  server-side output-cache key shape. Every write that actually succeeded drops this endpoint's
+  entries (`InvalidateOnSuccess`, `:281-287`, calling `ReadCache?.InvalidatePrefix(Endpoint)`, invoked
+  from `AddAsync` at `:165`, `UpdateAsync` at `:187` and `DeleteAsync` at `:213`); a rejected write
+  changed nothing, so it invalidates nothing.
 - **Retry is owned by the client base, not by a resilience handler.** `RetryPolicy`
   (`AuthenticatedServiceBase.cs:25`) is a static Polly policy: three retries after the initial
   attempt, on `HttpRequestException` or a retryable response, with 2s / 4s / 8s exponential backoff
@@ -78,6 +92,17 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Api/EntityServiceBaseIdempotencyRetryTests.cs:96`),
   no key on reads, updates or deletes (`:118,130,143`), and the 501-not-retried / 429-retried edges
   (`:156,171`).
+- **The `If-Match` precondition is set the same way, from the DTO's own concurrency token.**
+  `UpdateAsync` is the only verb that sends one: it passes `ConcurrencyTagOf(entity)`
+  (`EntityServiceBase.cs:184`) into the dispatch, and that helper (`:197-200`) renders an
+  `IConcurrencyAware` DTO's `RowVersion` as a weak entity tag and answers null when the DTO type
+  carries no token. The header rides on the same per-operation `HttpClient` as the idempotency key
+  (`CreateRequestClientAsync`, `:389-394`, under the shared name `ConcurrencyETag.IfMatchHeaderName`),
+  so every retry attempt states the same precondition rather than a later attempt succeeding against
+  a version the caller never saw. This is the client end of
+  [ADR-035](035-optimistic-concurrency.md): the `If-Match` header is the only route the token travels,
+  and a DTO carrying none sends no header and is refused instead of overwriting another editor's
+  change (`:170-175`).
 - **The dispatch returns a `Result`; it does not throw** (2026-08-27, v1.164.0). `SendRequestAsync`
   wraps the whole send-and-read in `HttpResultExecutor.ExecuteAsync` and hands the response to
   `ProblemDetailsResultReader`, in both the value-returning overload
@@ -105,26 +130,31 @@ Client-side entity data access goes through one hand-written base hierarchy in `
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Services/SessionLive/LivePollUIService.cs:93,156`
   and `.../SessionQuestionUIService.cs:73`).
 
-Adoption inventory as of 2026-09-04, with every service filed under its aggregate folder.
-**Sixteen production services derive from `EntityServiceBase`**: nine in ADC Conference
+Adoption inventory as of 2026-09-19, with every service filed under its aggregate folder.
+**Nineteen production services derive from `EntityServiceBase`**: ten in ADC Conference
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/`:
 `Activities/ActivityService.cs:11`, `Categories/CategoryItemService.cs:11`,
 `Categories/ConferenceCategoryService.cs:11`, `Events/EventService.cs:16`,
-`Questions/QuestionService.cs:11`, `Rooms/RoomService.cs:15`, `Sessions/SessionService.cs:11`,
-`Speakers/SpeakerService.cs:14`, `Sponsors/SponsorService.cs:11`), six in Store
-(`Catalog.UI/Services/ProductService.cs:27` and `CategoryService.cs:24`;
-`Sales.UI/Services/Orders/OrderService.cs:19`, `ShoppingCarts/ShoppingCartService.cs:18`,
-`Inventory/InventoryItemService.cs:20`; `Identity.UI/Services/CustomerService.cs:25`), and one inside
+`Partners/PartnerService.cs:11`, `Questions/QuestionService.cs:11`, `Rooms/RoomService.cs:15`,
+`Sessions/SessionService.cs:11`, `Speakers/SpeakerService.cs:14`, `Sponsors/SponsorService.cs:11`),
+eight in Store
+(`Catalog.UI/Services/ProductService.cs:27`, `CategoryService.cs:24` and
+`Reviews/ReviewService.cs:24`; `Sales.UI/Services/Orders/OrderService.cs:19`,
+`ShoppingCarts/ShoppingCartService.cs:18`, `Inventory/InventoryItemService.cs:20`;
+`Identity.UI/Services/CustomerService.cs:25` and `EmailConfirmationService.cs:21`), and one inside
 the framework itself
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/PushNotificationService.cs:20`).
 **Four derive from `ChildEntityServiceBase`**, all in ADC Conference and all in one file
-(`.../Services/Common/ChildEntityServices.cs:23,36,49,62`). **Sixteen more take
-`AuthenticatedServiceBase` directly**: ten in ADC Engagement, four in ADC Conference (three files:
+(`.../Services/Common/ChildEntityServices.cs:23,36,49,62`). **Nineteen more take
+`AuthenticatedServiceBase` directly**: ten in ADC Engagement, five in ADC Conference (four files:
 `Services/Feedback/OrganizerFeedbackService.cs` declares two of them, at `:17` and `:68`, next to
-`Services/Speakers/SpeakerDashboardService.cs:16` and
-`Services/Sessions/Selection/SessionSelectionService.cs:16`), ADC Identity's
-`Services/UserService.cs:22`, and the framework's
-`Services/Notifications/NotificationInboxService.cs:34`. Store has none of that third kind; its one
+`Services/Speakers/SpeakerDashboardService.cs:16`,
+`Services/Sessions/Selection/SessionSelectionService.cs:16` and
+`Services/SessionAssets/SessionAssetService.cs:27`), ADC Identity's
+`Services/UserService.cs:22`, and three in the framework
+(`Services/Notifications/NotificationInboxService.cs:34`,
+`Services/Administration/UserAdminService.cs:29` and
+`Services/Administration/RoleAdminService.cs:28`). Store has none of that third kind; its one
 hand-rolled exception is `CartStateService`
 (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Services/ShoppingCarts/CartStateService.cs:37`),
 which sits outside the hierarchy and re-implements both the retry policy (`:52`) and the key mint
@@ -142,8 +172,11 @@ delegate that is almost always an `EntityServiceBase.GetPagedAsync` call.
 - **Server-side paging through MudDataGrid `ServerData`.** `LoadServerDataAsync` (`:503`) flattens the
   grid's filter definitions into the one-filter-per-column dictionary the fetch delegate takes, with
   the newest row winning when the user stacks two filters on one column (`ExtractGridFilters`,
-  `:813-826`), extracts sort from `GridState` (`ExtractSortParameters`, `:828-833`), and converts the
-  grid's zero-based page to the API's one-based `pageNumber` (`:545`).
+  `:813-826`), resolves sort from `GridState` (`ResolveSortParameters`, called at `:543`, defined at
+  `:840-852`: it reads the grid's own `SortDefinition` through `ExtractSortParameters`, `:828-833`,
+  and falls back to the sort restored from the query string when the grid has not picked one up yet,
+  which is the normal case on a first fetch with a URL-driven sort), and converts the grid's
+  zero-based page to the API's one-based `pageNumber` (`:545`).
 - **Cancellation-token management.** Each fetch swaps in a fresh source before tearing down the
   previous one, tolerating the `ObjectDisposedException` race a debounced reload after disposal would
   otherwise raise (`ResetCancellationTokenAsync`, `:779-801`); during SSR pre-render the token
@@ -168,11 +201,12 @@ delegate that is almost always an `EntityServiceBase.GetPagedAsync` call.
   pinned at initialization rather than read from the live URI at write time (`_ownRoutePath`, field at
   `:934`, pinned at `:201`; `IsOwnRouteCurrent`, `:942-943`).
 
-**Nineteen types inherit this base**: thirteen in ADC and six in Store, eighteen of them routable list
+**Twenty types inherit this base**: thirteen in ADC (seven directly, six through the abstract
+`Pages/Common/EventFilteredListPageBase.cs:25`) and seven in Store, nineteen of them routable list
 pages plus ADC's non-routable `AttendeeSearchPanel`
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/AttendeeSearchPanel.razor.cs:16`).
 ADR-056 owns the render-mode aspect of the same type (the `PersistentComponentState` pre-render
-handoff and the `InteractiveAuto` registration) and carries the same count.
+handoff and the `InteractiveAuto` registration) and inventories the same set of pages.
 
 ## Rationale
 - **A hand-written typed base beats a generated client here because the surface is already generic.**
@@ -193,9 +227,9 @@ handoff and the `InteractiveAuto` registration) and carries the same count.
   wording but kept the failure in the exception channel; returning a `Result` preserves the wording
   **and** the category, so a page can turn a 404 into an empty state and a 401 into a redirect
   instead of pattern-matching on message text ([ADR-013](013-result-pattern.md)).
-- **The list page is repeated nineteen times, so it is worth a base class.** Paging, cancellation,
+- **The list page is repeated twenty times, so it is worth a base class.** Paging, cancellation,
   filter and sort extraction, viewport switching, error state and state restoration are identical
-  across every list in both apps; nineteen hand-rolled copies is nineteen chances to get the
+  across every list in both apps; twenty hand-rolled copies is twenty chances to get the
   cancellation race or the empty-versus-failed distinction wrong.
 
 ## Trade-offs
@@ -228,7 +262,7 @@ handoff and the `InteractiveAuto` registration) and carries the same count.
   where the same blip on the parent entity would be absorbed.
 - **The list-page base is deep.** It coordinates render-mode-aware persistence, three state stores, JS
   interop for scroll tracking, and two MudDataGrid v9 parameter-setter workarounds
-  (`DataGridListPageBase.cs:408-414`, `:458-482`). That depth is the price of nineteen pages behaving
+  (`DataGridListPageBase.cs:408-414`, `:458-482`). That depth is the price of twenty pages behaving
   identically, but it makes the base itself the hardest type in the UI package to change safely.
 
 ## Related
@@ -239,5 +273,7 @@ client half is specified here: who mints the key and what keeps it constant),
 stored and refreshed across render modes), [ADR-009](009-resilience-and-recovery-objectives.md) (the
 server-to-server resilience handler whose budget interacts with, but does not replace, the client
 retry), [ADR-056](056-blazor-render-mode-strategy.md) (the render-mode aspect of
-`DataGridListPageBase<TDto>`, including the pre-render data handoff and the same nineteen-inheritor
-inventory).
+`DataGridListPageBase<TDto>`, including the pre-render data handoff and the same inheritor
+inventory), [ADR-035](035-optimistic-concurrency.md) (the concurrency token whose `If-Match` carriage
+this base owns), [ADR-040](040-authenticated-output-caching-for-public-reads.md) (the caching policy
+whose client-side read cache this base consults).

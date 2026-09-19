@@ -1,7 +1,7 @@
 # ADR-021: Consumer-Side Inbox for Integration-Event Idempotency
 
 ## Status
-Accepted (2026-06-09; adoption reviewed 2026-07-15, inventory refreshed 2026-09-01). Revised 2026-08-18 (the inbox stays opt-in, but
+Accepted (2026-06-09; adoption reviewed 2026-07-15, inventory refreshed 2026-09-19). Revised 2026-08-18 (the inbox stays opt-in, but
 being off is no longer silent: a broker-connected host running `NoOpInboxStore` logs a startup
 warning, `MessageBus:EnableInbox=true` becomes the stated recommendation for any such host, and the
 `InboxMessages` entity is confirmed to be part of the relational model unconditionally. See the
@@ -11,8 +11,15 @@ handler's own unit of work so it commits atomically with the handler's mutations
 (2026-08-26) at the end). See also
 [ADR-100](100-outbox-opt-in-resolved-from-messaging-mode.md) (2026-08-29, v1.170.0), which applies this
 record's three-valued resolution rule to the **producer** side: `MessageBus:EnableOutbox` is `bool?`
-and resolves from the transport the same way `EnableInbox` does here, so the two settings now read
-identically. Nothing about the inbox contract changes.
+and resolves from the transport the same way `EnableInbox` does here. The two settings read
+identically only in that resolution direction. In the explicit-`false` direction they part: under a
+broker transport `EnableInbox=false` is honoured (the host gets `NoOpInboxStore` plus the startup
+warning), whereas `EnableOutbox=false` is refused at registration, because a broker deployment
+publishes exclusively through the outbox and has no other path
+(`EnsureOutboxAvailableForProvider` throws in
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:1138-1145`, stated on the
+setting itself at `.../Messaging/MessageBusSettings.cs:161-164`). Nothing about the inbox contract
+changes.
 Revised 2026-09-07 (queue and endpoint names are prefixed per application by default, so a
 consumer either pins its pre-upgrade prefix or drains its old queues on cutover).
 Revised 2026-09-11 (a broker-delivered event now restores the publisher's tenant, principal and
@@ -86,17 +93,25 @@ inside its single `InitialCreate` migration
 `MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs:48,213`,
 `MMCA.Store.Migrations.SqlServer.Identity/Migrations/20260621192816_InitialCreate.cs:49,119`),
 because those per-service projects postdate the frozen combined-archive lineage that added the ADC
-migration. Adoption inventory as of 2026-09-01: **three ADC services consume from the broker** and
-so use their inbox for real, plus Store Sales. ADC Identity consumes `SpeakerLinkedToUser` and
+migration. Adoption inventory as of 2026-09-19: **five of the seven service hosts consume from the
+broker** and so use their inbox for real, three in ADC and two in Store. ADC Identity consumes
+`SpeakerLinkedToUser` and
 `SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:294-295`),
-ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:352`), and ADC
+ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:352`) and chains a
+second broker consumer beside it, `RegisterOutputCacheEvictionConsumer()`
+(`MMCA.ADC.Conference.Service/Program.cs:395`), and ADC
 Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
 `EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:286-289`), the
 first of which is ADC's first **self-consumption** over the broker: Engagement publishes
 `AttendeeCheckedIn` and consumes it back, which is precisely the shape a redelivery would double-count,
-so the inbox is load-bearing there rather than decorative. Store Sales consumes `ProductVariantChanged`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:257`). The remaining three hosts (**ADC
-Notification**, **Store Catalog** and **Store Identity**) carry `EnableInbox: true` and the table while
+so the inbox is load-bearing there rather than decorative. Store Sales consumes three events,
+`ProductVariantChanged`, `ProductInfoChanged` and `CustomerErased`
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:261`, `:266`, `:271`), and Store
+Catalog consumes `OrderFulfilled` and `CustomerErased` plus the output-cache eviction event
+(`MMCA.Store.Catalog.Service/Program.cs:269`, `:274`, `:280`), which makes Catalog both publisher and
+consumer of that eviction event and therefore exactly the redelivery-doubles-work shape the inbox
+guards. The remaining two hosts (**ADC
+Notification** and **Store Identity**) carry `EnableInbox: true` and the table while
 registering no consumer, so their inboxes are provisioned and unused, which is functionally harmless:
 the flag costs one scoped `EfInboxStore` registration and the table stays empty until one of them
 starts consuming. The audit condition the Trade-offs below state (no broker-consuming service lacks
@@ -190,7 +205,12 @@ What changed is that the default is now loud.
    `ApplicationDbContext.OnModelCreating` calls `ConfigureInbox(modelBuilder)` with no flag check
    (`.../Persistence/DbContexts/ApplicationDbContext.cs:347`, body at `:565-584`, including the unique
    `IX_InboxMessages_MessageId` at `:576-578`), and it is configured inline in the base context rather
-   than as an `IEntityTypeConfiguration`. `SQLServerDbContext` and `SqliteDbContext` reach it through
+   than as an `IEntityTypeConfiguration`. The same configuration carries a **second, non-unique index**,
+   `IX_InboxMessages_ProcessedOn`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:730-731`),
+   which exists purely for the retention path: the unique index is keyed on `MessageId`, so the
+   age-based purge (`OutboxCleanupService.PurgeInbox`, the "Bounded retention" bullet above) had
+   nothing to seek on and scanned the table. `SQLServerDbContext` and `SqliteDbContext` reach it through
    `base.OnModelCreating`; `CosmosDbContext` deliberately does not call the base (`CosmosDbContext.cs:89`,
    documented at `ApplicationDbContext.cs:567-568`), so the guarantee is **relational engines only**,
    consistent with the "Cosmos hosts skip it" statement in the Decision above.
@@ -324,7 +344,13 @@ failing the consume. The tenant is set only when the scope has not already resol
 
 **An older publisher keeps working.** A message carrying none of these headers leaves the consuming
 scope's defaults untouched, so an event published by a service still on an earlier package is
-consumed exactly as it is today. On the type level both consumer constructors gained one optional
-`IServiceProvider` parameter (`IntegrationEventConsumer.cs:42`); omitting it restores nothing, which
-is the pre-upgrade behaviour, and the container fills it in for a host that registers the consumers
-the normal way.
+consumed exactly as it is today. On the type level the two consumers differ.
+`IntegrationEventConsumer<TEvent>` gained one **optional** `IServiceProvider` parameter
+(`IntegrationEventConsumer.cs:42`, null-guarded before the restore at `:62`); omitting it restores
+nothing, which is the pre-upgrade behaviour, and the container fills it in for a host that registers
+the consumers the normal way. `UpcastingIntegrationEventConsumer<TEvent>` takes the provider as a
+**required**, non-nullable parameter
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/UpcastingIntegrationEventConsumer.cs:34`),
+because it already needed one before this revision: handler resolution there is non-generic, since
+the terminal contract type is only known once the upcasters have run, so it resolves handlers through
+the provider at `:108`. There is nothing to omit on that type, and its restore always runs.

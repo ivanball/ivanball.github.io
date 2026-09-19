@@ -1,7 +1,7 @@
 # ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation
 
 ## Status
-Accepted (2026-08-13; revised 2026-08-18, 2026-08-31). The endpoint ships in the MMCA.Common
+Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19). The endpoint ships in the MMCA.Common
 "enterprise capability wave" release (v1.150.0), its scoping hook in v1.151.0, and the widened
 read hook that supersedes that hook in v1.165.0; all three consumers run on pins that carry them.
 Unlike the wave's other features this one is NOT opt-in: every controller deriving from
@@ -25,10 +25,17 @@ that make that the wrong shape here.
 - **The output cache does not vary by `Accept`.** `PublicEndpointOutputCachePolicy`
   ([ADR-040](040-authenticated-output-caching-for-public-reads.md)) sets
   `context.CacheVaryByRules.QueryKeys = "*"`
-  (`Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:81`) and varies by
-  nothing else. On any endpoint carrying that policy, a CSV request and a JSON request to the same URL
-  with the same query string are the same cache entry, so a CSV request can be served a stored JSON body
-  with a `Content-Type` that no longer matches what the formatter would have produced.
+  (`Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:81`). The key has
+  exactly one other dimension, and it is not a header: when `ITenantContext` resolves a tenant the policy
+  stamps that tenant into `CacheVaryByRules.VaryByValues[TenantVaryByKey]`
+  (`PublicEndpointOutputCachePolicy.cs:102-105`, the `"t"` key constant at `:50`), and an unresolved
+  tenant adds nothing. A caller holding one of the policy's configured bypass roles is out of the cache
+  altogether rather than in a different entry: the policy leaves `AllowCacheLookup` and
+  `AllowCacheStorage` false for that request (`:86-90`, `IsBypassedCaller` at `:141-142`). Nothing in
+  the policy varies by `Accept`. On any endpoint carrying that policy, a CSV request and a JSON request
+  to the same URL with the same query string, from the same tenant and a non-bypass caller, are the same
+  cache entry, so a CSV request can be served a stored JSON body with a `Content-Type` that no longer
+  matches what the formatter would have produced.
 - **A negotiation failure is silent.** `AddAPI` sets `options.ReturnHttpNotAcceptable = false`
   (`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:48`), so a request for a media type no
   formatter can produce does not get 406: it falls back to the default formatter. A caller asking for CSV
@@ -251,7 +258,7 @@ re-baselining the OpenAPI contract snapshots asserted by `OpenApiContractTestsBa
 [ADR-034](034-generic-entity-query-layer.md) (the generic entity surface and query contract this extends,
 and the `MaxUnboundedResultLimit` ceiling that forced the page loop),
 [ADR-040](040-authenticated-output-caching-for-public-reads.md) (the output-cache policy whose
-`Accept`-blind query-string variance is one of the two forcing findings),
+`Accept`-blind cache key is one of the two forcing findings),
 [ADR-013](013-result-pattern.md) (the `Result` contract at the edge and the unhandled-failure filter the
 streamed result passes through untouched),
 [ADR-058](058-runtime-conformance-suites-as-a-package.md) (the shipped OpenAPI contract snapshots every

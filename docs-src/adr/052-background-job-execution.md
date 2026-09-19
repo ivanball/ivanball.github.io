@@ -8,7 +8,8 @@ ephemeral half continues unchanged in ADR-121; the body below is left in place a
 
 Previously: Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one)
 and 2026-08-31 (three of the four command-handler enqueue sites inherit the save-then-enqueue
-ordering from a shared base class instead of writing it): see the revisions at the end.
+ordering from a shared base class instead of writing it) and 2026-09-19 (the fourth site moved its
+save into a distributed-lock helper): see the revisions at the end.
 
 ## Context
 Some requests trigger work that cannot run inside the request: an AI scoring pass over an event's
@@ -192,6 +193,8 @@ shared `MutateEntityHandlerCore` at `:52`), and the base saves once for every su
    `EnqueueSubmittedAsync(question)` at `:107`, whose `BestEffort.ExecuteAsync` body (`:130-131`)
    writes the queue at `:142` (approved) and `:157` (pending count). This is the one handler where an
    edit that lifted the enqueue above the save would break the property with nothing to catch it.
+   (**Superseded by the Revision (2026-09-19)**: the save named here is no longer a statement in
+   `HandleAsync`. The text is left in place as the record of what was true when written.)
 3. **Point 3 above is narrowed, not withdrawn.** Its premise still holds:
    `TransactionalCommandDecorator` wraps only commands implementing `ITransactional` and passes
    everything else straight through
@@ -200,3 +203,32 @@ shared `MutateEntityHandlerCore` at `:52`), and the base saves once for every su
    `SaveChangesAsync` is the commit for all four sites. What no longer holds is its closing sentence:
    for the three base-class handlers a pipeline does keep the ordering, and the rule a future edit
    has to keep by hand lives in `SubmitQuestionHandler` alone.
+
+## Revision (2026-09-19)
+**The decision and the safety property are unchanged: post-commit work is still enqueued only once
+the write is durable.** What changed is where the save sits in the one remaining hand-written site.
+The per-user open-question cap in `SubmitQuestionHandler` did not hold under a burst from one
+account, because the count read and the insert are not one atomic statement, so the count, the
+creation and the save moved together into a private helper that runs under a cross-replica claim on
+(session, user) ([ADR-108](108-distributed-lock-primitive.md)).
+
+1. **`SubmitQuestionHandler` no longer saves inline in `HandleAsync`.** It takes `IDistributedLock`
+   as a constructor parameter
+   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34`,
+   interface at `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IDistributedLock.cs:30`)
+   and calls `CreateUnderClaimAsync` at `:91`. That helper (`:142`) acquires the claim with
+   `TryAcquireAsync` at `:148` on the key built by `ClaimKey` at `:107`, answers a refused claim with
+   the same cap error as a refused count (`:151-154`), counts the open questions at `:159`, creates
+   and adds the question at `:172` and `:182`, and awaits `unitOfWork.SaveChangesAsync` at `:184`.
+2. **The ordering is still written by hand, one level up.** `HandleAsync` logs at `:97` and awaits
+   `EnqueueSubmittedAsync(question)` at `:99`, below the `CreateUnderClaimAsync` call that now
+   contains the save; the enqueue helper's `BestEffort.ExecuteAsync` body (`:205-206`) writes the queue at
+   `:217-218` (approved) and `:232-233` (pending count). Point 2 of the Revision (2026-08-31) holds
+   in substance: this is still the one site where the property lives in statement order rather than
+   in a base class, and the statement the enqueue has to stay below is now the helper call.
+3. **The claim is scoped so the post-commit rule survives it.** It is taken after the gRPC
+   live-window lookup, so no lock is held across a cross-service call, and it is released when the
+   helper's handle is disposed, before anything is enqueued (`:126-132` state both), with a
+   30-second time to live (`:50`) as the crash backstop. With no Redis configured the lock falls
+   back to its in-process implementation, so exclusion is per replica again (`:134-140`), which is
+   the same honest limit the "dedup is per replica" trade-off above states for in-process dedup.

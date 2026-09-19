@@ -2,10 +2,10 @@
 
 ## Status
 Accepted (2026-07-20; measurements re-anchored 2026-08-07, 2026-08-14, 2026-08-18, 2026-08-23,
-2026-08-31, 2026-09-01, 2026-09-03 and 2026-09-11).
-Revised 2026-09-11: all three counted figures are re-measured (framework sites, consumer-scale upper
-bound, and the occurrence-versus-line delta), and the double-await example is re-anchored to the two
-Application-layer handlers that carry it today. The policy, the gate and the exemption are unchanged.
+2026-08-31, 2026-09-01, 2026-09-03, 2026-09-11 and 2026-09-19).
+Revised 2026-09-19: the framework site counts and the consumer-scale upper bound are re-measured, and
+the occurrence-versus-line delta still turns on the same two ADC handler lines. The policy, the gate
+and the exemption are unchanged.
 
 ## Context
 MMCA.Common ships as NuGet packages consumed by host applications, not as an application itself.
@@ -50,8 +50,8 @@ application code do not.
 - **Standard .NET library guidance, applied at the boundary where it holds.** The rule is scoped to
   exactly the code that ships in packages; it is not blanket-applied to the apps, where it would be
   360+ sites of pure noise (measured across Store/ADC before this decision, and the current scale is
-  far past that: a raw `\bawait\b` scan on 2026-09-11 counts 781 occurrences in `MMCA.Store/Source`
-  and 1,359 in `MMCA.ADC/Source`, 2,140 combined, which is the upper bound on the CA2007 sites the
+  far past that: a raw `\bawait\b` scan on 2026-09-19 counts 779 occurrences in `MMCA.Store/Source`
+  and 1,453 in `MMCA.ADC/Source`, 2,232 combined, which is the upper bound on the CA2007 sites the
   rule would open there).
 - **Mechanical, with the enforcement and the remediation at different levels.** The build gate is the
   enforced half: a new context-capturing await in packaged non-UI code fails the build, so it costs no
@@ -61,8 +61,8 @@ application code do not.
 
 ## Trade-offs
 - **Visual noise in framework source.** Every await in `Source/` (except UI packages) carries
-  `.ConfigureAwait(false)` (324 sites at adoption; 1,059 gated sites as of the 2026-09-11 snapshot,
-  out of 1,169 across `Source/` once the exempt UI packages are counted back in). The gate makes it
+  `.ConfigureAwait(false)` (324 sites at adoption; 1,076 gated sites as of the 2026-09-19 snapshot,
+  out of 1,186 across `Source/` once the exempt UI packages are counted back in). The gate makes it
   uniform, so the noise is consistent rather than sporadic.
 - **A per-repo delta in an otherwise shared analyzer baseline.** The workspace keeps one
   byte-identical `.editorconfig` baseline across the four repos; this policy lives in the marked
@@ -437,3 +437,37 @@ last two passes recorded.
    `Website/docs-src/guides/common-GETTING-STARTED.md:162` and
    `MMCA.Helpdesk/build/templates/stage.ps1:1235`; the `:156` and `:1093` citations in the revisions
    above were correct at their dates and are superseded by these.
+
+## Revision (2026-09-19)
+A re-measurement in the same terms as the 2026-09-11 pass, covering the two counted figures that
+move (framework sites and the consumer-scale upper bound) and the occurrence-versus-line delta that
+depends on them. The policy, the gate and the exemption are unchanged.
+
+1. **Framework site counts, measured 2026-09-19.** `MMCA.Common/Source/**/*.cs` now holds 1,186
+   `ConfigureAwait(false)` occurrences across 232 files, of which 110 sit inside the exempt UI
+   packages across 37 files (`MMCA.Common.UI` 56 across 17 files, `MMCA.Common.UI.Maui` 52 across
+   19 files, `MMCA.Common.UI.Web` 2 in 1 file), leaving 1,076 under the gate across 195 files. The
+   exempt split is identical to the 2026-09-11 split, so all 17 new occurrences and the one new file
+   are gated code and growth is back inside the gate. No line in `Source/` carries two
+   `ConfigureAwait(false)` calls, so the occurrence count and the matching-line count are still the
+   same number (1,186 both ways). The 2026-09-11 figures (1,169 / 231 files, 110 exempt, 1,059
+   gated) and every earlier set stay in their own revisions as the history of those measurements;
+   the Trade-offs entry now carries today's numbers. "324 sites at adoption" remains the 2026-07-20
+   snapshot and is unchanged.
+2. **Consumer-scale upper bound, measured 2026-09-19.** A raw `\bawait\b` scan gives 779 occurrences
+   across 143 files in `MMCA.Store/Source/**/*.cs` (down from 781 across 144 files) and 1,453 across
+   281 files in `MMCA.ADC/Source/**/*.cs` (up from 1,359 across 264 files), 2,232 combined. ADC
+   carries all of the growth this pass; Store gave back two occurrences and one file after the large
+   move the 2026-09-11 pass recorded. The scan is scoped to `*.cs`, as this figure has been since
+   adoption: `.razor` files would add 9 occurrences across 2 files in Store and 27 across 10 files in
+   ADC and are deliberately outside it. Raw `await` still overcounts CA2007 sites (it catches
+   `await using`, `await foreach` and awaits the analyzer would not flag), so this remains an upper
+   bound and a snapshot of how much noise the rule would open in the apps rather than a trend line.
+3. **The occurrence-versus-line delta still turns on the same two lines.** The
+   `await using var claim = await ...` pattern sits on exactly two lines under `MMCA.ADC/Source`,
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:75`
+   and
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:147`,
+   both unmoved from the 2026-09-11 pass, so a per-line scan reports 1,451 for ADC and 2,230
+   combined. `MMCA.Store/Source` carries no double-await line, so its 779 occurrences and 779
+   matching lines are the same number.

@@ -1,7 +1,7 @@
 # ADR-109: Feature-by-Folder Layout as an Enforced Convention
 
 ## Status
-Accepted (2026-09-03).
+Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19).
 
 ## Context
 The rubric's section 5 asks that "code is organized by feature/capability, so a change touches one
@@ -30,10 +30,14 @@ feature names a folder, a folder holds at most twelve direct code files, namespa
 and a layout change ships as a breaking release with a migration map.**
 
 1. **The aggregate names the first folder level in Domain, Application and Shared.** MMCA.ADC's
-   Conference module carries `Activities`, `Categories`, `Events`, `Questions`, `Sessions`,
-   `Speakers` and `Sponsors` directly under
-   `Source/Modules/Conference/MMCA.ADC.Conference.Domain/`, and the same names under
-   `.Application/` and `.Shared/`. MMCA.Helpdesk's single-module seed shows the minimal case: one
+   Conference module carries `Activities`, `Categories`, `Events`, `Partners`, `Questions`,
+   `SessionAssets`, `Sessions`, `Speakers` and `Sponsors` directly under
+   `Source/Modules/Conference/MMCA.ADC.Conference.Domain/`, and all nine names recur under
+   `.Application/` and `.Shared/`. The match is not exact in the other direction: `.Application/`
+   also carries `Common` and `Users`, and `.Shared/` also carries `Rooms` and `Authorization`, none
+   of which has a Domain folder, so the rule is that an aggregate names a folder in every layer that
+   has code for it, not that the three layers hold identical folder sets. MMCA.Helpdesk's
+   single-module seed shows the minimal case: one
    `Tickets` folder under `Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/`, `.Application/`
    and `.Shared/`.
 
@@ -42,7 +46,11 @@ and a layout change ships as a breaking release with a migration map.**
    (`MMCA.ADC.Conference.UI/`), `Controllers/` (`MMCA.ADC.Conference.API/`) and `Persistence/`
    (`MMCA.ADC.Conference.Infrastructure/`), with the aggregate folders one level down:
    `UI/Pages/Speakers`, `UI/Services/Speakers`, `API/Controllers/Speakers`,
-   `Infrastructure/Persistence/EntityConfiguration/Speakers`.
+   `Infrastructure/Persistence/EntityConfiguration/Speakers`. Infrastructure is a documented partial
+   exception: beside `Persistence/`, its first level also carries aggregate names for external
+   adapters, `Events/Sessionize/` and `Sessions/Scoring/`. MMCA.ADC's own `CLAUDE.md` states that
+   shape as the rule for the repo, "external adapters sitting under their aggregate"
+   (`MMCA.ADC/CLAUDE.md:99`).
 
 3. **The aggregate carries the same plural name in every project of the module.** `Speakers` appears
    in the Conference module's Domain, Application, Shared, `UI/Pages`, `UI/Services`,
@@ -83,9 +91,13 @@ and a layout change ships as a breaking release with a migration map.**
    it.** The shared analyzer baseline sets `dotnet_style_namespace_match_folder = true:warning`
    (`MMCA.Common/.editorconfig:90`) and `TreatWarningsAsErrors` is on repo-wide
    (`MMCA.Common/Directory.Build.props:7`), so IDE0130 fails the build. The exceptions are named per
-   path: six in MMCA.Common for the flat public surfaces consumers subclass and two Aspire extension
-   folders (`.editorconfig:858-866` for the reasons, globs at `:867`, `:870`, `:873`, `:876`,
-   `:879`, `:882`), and one each in ADC and Store for the MAUI head's per-TFM `Platforms/` bootstrap
+   path: six in MMCA.Common (`.editorconfig:858-866` for the reasons), three of them the flat public
+   surfaces consumers subclass (`Testing.Architecture/Bases/` at `:867`, `Testing.Architecture/Rules/`
+   at `:870`, `Testing.UI/Infrastructure/` at `:873`), two of them Aspire extension folders whose
+   methods stay in the `MMCA.Common.Aspire` namespace a host already has a using for (`:876`,
+   `:879`), and the sixth a test fake that carries a consumer-shaped namespace because the
+   convention under test keys on namespace shape (`Tests/Presentation/MMCA.Common.API.Tests/Fakes/`
+   at `:882`), and one each in ADC and Store for the MAUI head's per-TFM `Platforms/` bootstrap
    files (`MMCA.ADC/.editorconfig:848-857`, `MMCA.Store/.editorconfig:837-846`).
 
 8. **A folder inside a module project is never named `Domain`, `Application`, `Infrastructure`,
@@ -146,10 +158,12 @@ and a layout change ships as a breaking release with a migration map.**
 - **Documentation citations rot underneath the moves, and they did.** The 2026-09-03 ADR audit
   classified 56 of its 84 needs-edit records as citation-only drift, almost all of it a folder segment
   the v1.183.0 to v1.185.0 moves introduced (`Rules/`, `Bases/Governance/`, `Messaging/`, `Auth/`,
-  `Services/Api/`, `Startup/Pipeline/`) that the cited path no longer carried, and the MMCA.Common
-  scorecard's section 5 row still cites the pre-move `ArchitectureRules.Slices.cs`
-  (`governance/common-ArchitectureScorecard.md:77`). Every one of those is a path-only break with
-  the behavior unchanged, which is precisely what makes it easy to miss.
+  `Services/Api/`, `Startup/Pipeline/`) that the cited path no longer carried. The MMCA.Common
+  scorecard's section 5 row was one of those, and it has since been repaired: it now cites the
+  post-move `Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.Slices.cs`
+  (`governance/common-ArchitectureScorecard.md:85`). Every one of those is a path-only break with
+  the behavior unchanged, which is precisely what makes it easy to miss, and repairing them is a
+  pass of its own, separate from the move that caused them.
 - **The gate counts; it does not read names.** Nothing verifies that a folder is named after an
   aggregate, that the plural name matches across projects, or that no sub-folder is called `Domain`.
   A repo can satisfy the twelve-file cap with twelve technical buckets, and Decision point 8 is

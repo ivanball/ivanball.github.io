@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -241,7 +243,12 @@
           events across the three apps, 9 of them in Store; 15 records derive the base), the wire
           discriminator&#39;s type was corrected to Catalog&#39;s own <code>ProductChangeState</code>, the Sales consumer was
           re-anchored to <code>ProductVariantChangedHandler</code> (which handles <code>Added</code> and <code>Updated</code>), and the
-          <code>Session</code>, <code>OrderPaid</code> and contract-test citations were re-anchored.</p>
+          <code>Session</code>, <code>OrderPaid</code> and contract-test citations were re-anchored.
+          Revised 2026-09-19: both counts were recounted from source and raised. ADC Conference&#39;s
+          <code>PartnerChanged</code> and <code>SessionAssetChanged</code> were missing from the base-derived set, so 17 records now
+          derive <code>EntityChangedEvent&lt;TId&gt;</code> across the four repos (19 including the <code>MMCA.ECommerce</code> sample), and
+          the shape sweep finds 35 lifecycle events across the three apps (25 in ADC, of which 18 are in
+          Conference; 9 in Store; 1 in Helpdesk).</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 decides how a domain event <strong>moves</strong>: captured into the outbox inside <code>SaveChangesAsync</code>,
           dispatched in-process after commit, or published to the broker when it is an integration event.
@@ -314,15 +321,16 @@
           the sibling <code>ProductInfoChanged</code> entry at <code>:11</code> carries it too),
           so retyping or removing the discriminator fails the build and, under ADR-010, requires a new event
           type rather than a silent reshape.</li>
-          <li><strong>The shared base is the convenience; the discriminator shape is the convention.</strong> Fifteen concrete
+          <li><strong>The shared base is the convenience; the discriminator shape is the convention.</strong> Seventeen concrete
           records derive <code>EntityChangedEvent&lt;TId&gt;</code> across the four repos: seven in Store (<code>OrderChanged.cs:19</code>,
           <code>ShoppingCartChanged.cs:16</code>, <code>InventoryItemChanged.cs:17</code> under <code>Sales.Domain</code>,
           <code>Catalog.Domain/Products/DomainEvents/ProductChanged.cs:23</code>,
           <code>Catalog.Domain/Categories/DomainEvents/CategoryChanged.cs:19</code>,
           <code>Catalog.Domain/Reviews/DomainEvents/ProductReviewChanged.cs:15-20</code>,
-          <code>Identity.Domain/Customers/DomainEvents/CustomerChanged.cs:25</code>), seven in ADC Conference
+          <code>Identity.Domain/Customers/DomainEvents/CustomerChanged.cs:25</code>), nine in ADC Conference
           (<code>SponsorChanged.cs:16</code>, <code>EventChanged.cs:16</code>, <code>QuestionChanged.cs:16</code>, <code>CategoryChanged.cs:16</code>,
-          <code>ActivityChanged.cs:16</code>, <code>SpeakerChanged.cs:21</code>, <code>SessionChanged.cs:18</code>), and one in Helpdesk
+          <code>ActivityChanged.cs:16</code>, <code>SpeakerChanged.cs:21</code>, <code>SessionChanged.cs:18</code>, <code>PartnerChanged.cs:16</code>,
+          <code>SessionAssetChanged.cs:18</code>), and one in Helpdesk
           (<code>TicketChanged.cs:15</code>).
           Eighteen further domain events follow the same one-event-with-<code>State</code> shape while inheriting
           <code>BaseDomainEvent</code> directly (<code>ProductVariantChanged</code> does the same over <code>BaseIntegrationEvent</code> on
@@ -336,10 +344,10 @@
           or because the module took the shape without the base (all seven ADC Engagement events, for example
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/UserSessionBookmarks/DomainEvents/UserSessionBookmarkChanged.cs:21-26</code>,
           whose doc cites the same rule as BR-60 at <code>:8-9</code>). Counting the shape rather than the base type, a
-          sweep of every <code>DomainEvents/*.cs</code> declaring a <code>DomainEntityState State</code> member finds <strong>23 in ADC</strong>
-          (16 Conference, 7 Engagement; Identity&#39;s two events are business-specific and carry no
+          sweep of every <code>DomainEvents/*.cs</code> declaring a <code>DomainEntityState State</code> member finds <strong>25 in ADC</strong>
+          (18 Conference, 7 Engagement; Identity&#39;s two events are business-specific and carry no
           discriminator), <strong>9 in Store</strong> (of twenty-three domain events there, the other fourteen name
-          business transitions) and <strong>1 in Helpdesk</strong>: <strong>33</strong> in total.</li>
+          business transitions) and <strong>1 in Helpdesk</strong>: <strong>35</strong> in total.</li>
           <li><strong>Nothing enforces the taxonomy.</strong> The shared fitness rules require domain events to be sealed and to
           live in a <code>*.DomainEvents</code> namespace
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Naming.cs:66-75</code>), to
@@ -366,7 +374,7 @@
           <code>MMCA.ECommerce</code> companion sample carries two more adopters on the same pattern
           (<code>MMCA.ECommerce/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/DomainEvents/ProductChanged.cs:15</code>,
           <code>.../Orders/MMCA.ECommerce.Orders.Domain/Orders/DomainEvents/OrderChanged.cs:15</code>), which brings the
-          total number of records deriving the base to <strong>17</strong>.</p>
+          total number of records deriving the base to <strong>19</strong>.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>One type per entity is one subscription surface.</strong> A subscriber declares interest in the entity,
@@ -402,7 +410,7 @@
           tell the transitions apart
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/LivePolls/DomainEvents/LivePollChanged.cs:9-11,17-22</code>),
           which is a state machine expressed through the CRUD shape rather than as its own events.</li>
-          <li><strong>The base type is optional in practice.</strong> 15 of the 33 lifecycle events across the three apps derive
+          <li><strong>The base type is optional in practice.</strong> 17 of the 35 lifecycle events across the three apps derive
           <code>EntityChangedEvent&lt;TId&gt;</code>; the other 18 re-declare the same two members on <code>BaseDomainEvent</code>.
           Consistency is a review convention, not a fitness function (ADR-015), so a new module can drift
           without a failing test.</li>

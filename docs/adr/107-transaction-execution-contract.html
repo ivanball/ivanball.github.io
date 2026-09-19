@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-107: Transaction Execution and Commit-Ambiguity Contract · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-03).">
+  <meta name="description" content="Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/107-transaction-execution-contract.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-107: Transaction Execution and Commit-Ambiguity Contract">
-  <meta property="og:description" content="Accepted (2026-09-03).">
+  <meta property="og:description" content="Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/107-transaction-execution-contract.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-107: Transaction Execution and Commit-Ambiguity Contract">
-  <meta name="twitter:description" content="Accepted (2026-09-03).">
+  <meta name="twitter:description" content="Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"107 · Transaction Execution and Commit-Ambiguity Contract","item":"https://ivanball.github.io/docs/adr/107-transaction-execution-contract.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -231,7 +233,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-107-transaction-execution-and-commit-ambiguity-contract">ADR-107: Transaction Execution and Commit-Ambiguity Contract</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-03).</p>
+          <p>Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19).</p>
           <h2 id="context">Context</h2>
           <p>Every transactional write in this workspace funnels through one method. <code>IUnitOfWork.ExecuteInTransactionAsync</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:70</code>) is the
@@ -345,9 +347,11 @@
           cases pin the no-rerun wrapper, the dropped dispatch, the ordinary commit path, the still-retried pre-commit
           failure and the per-source report (<code>:73</code>, <code>:108</code>, <code>:132</code>, <code>:152</code>, <code>:171</code>).</p>
           </li>
-          <li><p><strong>Adoption is deliberately narrow.</strong> MMCA.ADC has four <code>ITransactional</code> commands
+          <li><p><strong>Adoption is deliberately narrow.</strong> MMCA.ADC has five <code>ITransactional</code> commands
           (<code>RefreshFromSessionizeCommand.cs:13</code>, <code>LinkUserToSpeakerCommand.cs:13</code>, <code>UnlinkUserFromSpeakerCommand.cs:12</code>,
-          <code>BatchAddSessionQuestionAnswersCommand.cs:24</code>), MMCA.Store has two (<code>ReorderProductImagesCommand.cs:22</code>,
+          <code>BatchAddSessionQuestionAnswersCommand.cs:24</code>, and Identity&#39;s
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:22</code>,
+          which carries the flag so the erasure lands as one write), MMCA.Store has two (<code>ReorderProductImagesCommand.cs:22</code>,
           <code>UploadProductImageCommand.cs:27</code>) plus four commands whose XML doc records a deliberate opt-out
           (&quot;Deliberately NOT <code>ITransactional</code>&quot;: <code>VerifyPaymentCommand.cs:11</code>, <code>ProcessPaymentWebhookCommand.cs:9</code>,
           <code>CheckOutCommand.cs:9</code>, <code>BulkSetInventoryCommand.cs:11</code>), and MMCA.Helpdesk has none. Direct callers are the
@@ -389,11 +393,14 @@
           single transactional source, which is a property of today&#39;s deployments rather than a guarantee of the code.</li>
           <li><strong>The retry contract is a trap for handler authors.</strong> Anything computed outside the delegate but committed inside
           it is silently wrong on the second attempt, and the change-tracker reset makes the failure quiet rather than loud.
-          Store&#39;s <code>CheckOutHandler</code> carries a long comment explaining exactly this for the one value it keeps outside the
-          delegate (<code>CheckOutHandler.cs:16-24</code>, <code>:80-92</code>), which is discipline, not enforcement.</li>
+          Store&#39;s <code>CheckOutHandler</code> carries a long comment explaining exactly this, and it now keeps two values outside the
+          delegate: the cross-service gRPC price fetch and a best-effort customer-name lookup whose latency is kept off the
+          database locks the same way (<code>CheckOutHandler.cs:16-24</code>, <code>:80-92</code>, <code>:102-117</code>). That is discipline, not
+          enforcement, and the discipline already drifts: the handler&#39;s own class doc still says only the price fetch stays
+          outside (<code>:34</code>).</li>
           <li><strong>A stale consumer comment still describes the fix as future work.</strong> <code>CheckOutHandler.cs:90-92</code> names
           &quot;MMCA.Common&#39;s forthcoming commit-phase fix&quot; as what will remove its residual window, but that fix shipped in
-          v1.135.0 (<code>MMCA.Common/CHANGELOG.md:2114</code>) and Store pins v1.185.0
+          v1.135.0 (<code>MMCA.Common/CHANGELOG.md:2114</code>) and Store pins v1.205.0
           (<code>MMCA.Store/Directory.Packages.props:11</code>), so the comment describes a state that has not existed for a while.</li>
           <li><strong>Cosmos participation is silent.</strong> A Cosmos context in a transactional scope is skipped without a warning
           (<code>DbContextFactory.cs:754-757</code>), so a future host mixing engines gets partial atomicity with no signal at the call
@@ -407,8 +414,9 @@
           2026-07-19 revision decided the failed-<code>Result</code> rollback this record implements),
           <a href="006-database-per-service.html">ADR-006</a> (database-per-service, whose &quot;no cross-database transactions&quot; trade-off is
           what makes the sequential best-effort commit the only option),
-          <a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> (compensation and reconciliation, which cites this record&#39;s
-          per-data-source best-effort commit as its premise),
+          <a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> (compensation and reconciliation, which builds on the same
+          per-data-source best-effort commit, though it attributes that premise in-line to ADR-006 and does not reference this
+          record),
           <a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox that survives an ambiguous commit, and the deferred in-process
           dispatch that does not),
           <a href="013-result-pattern.html">ADR-013</a> (Result-over-exceptions, the reason a returned failure has to roll back),

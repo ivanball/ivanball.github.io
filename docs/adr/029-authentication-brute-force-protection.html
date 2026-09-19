@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -240,15 +242,24 @@
           now sits on both endpoints by default, so the context and the ADR-019 comparison were corrected to
           describe the layering instead; the lockout decision itself is unchanged).
           Revised 2026-09-07 (the account-state gate runs after the password check, a credential-less account
-          cannot authenticate, and every login branch pays the same key-derivation cost).</p>
+          cannot authenticate, and every login branch pays the same key-derivation cost).
+          Updated 2026-09-19 (ADR-019&#39;s anonymous exemption now has one metered exception, the real-time hub
+          paths counted per client IP, and the <code>auth-ip</code> window&#39;s algorithm is configurable with fixed as the
+          default; a third <code>ICacheService</code> implementation, the opt-in <code>HybridCacheService</code>, also overrides
+          <code>IncrementAsync</code>; and <code>ResetPasswordHandlerBase</code> is a second framework call site, clearing the
+          failed-attempt counter after a password reset).</p>
           <h2 id="context">Context</h2>
-          <p>ADR-019&#39;s global rate limiter is <strong>authenticated-only</strong>: it caps requests per authenticated principal
-          and deliberately <em>exempts</em> anonymous traffic. The highest-value anonymous attack surface (the login
-          and registration endpoints) therefore gets nothing from <em>that</em> limiter (credential stuffing, password
-          spraying, registration spam). ADR-019 now puts a second, narrower limiter directly on those two
-          endpoints: the named <code>RateLimitPolicyAuthIp</code> (<code>&quot;auth-ip&quot;</code>) policy, a fixed one-minute window keyed on
-          the client IP (default 30 requests, <code>429</code> on overage), which <code>AuthControllerBase</code> applies to login and
-          register by default. That caps how fast <em>one source address</em> can hammer the auth surface; it does not
+          <p>ADR-019&#39;s global rate limiter is <strong>principal-keyed</strong>: it caps requests per authenticated principal,
+          and anonymous traffic is exempt with one metered exception, the configured real-time hub path
+          prefixes, where an unauthenticated request counts per client IP instead. The highest-value anonymous
+          attack surface (the login and registration endpoints) is not that exception, so it still gets nothing
+          from <em>that</em> limiter (credential stuffing, password spraying, registration spam). ADR-019 now puts a
+          second, narrower limiter directly on those two endpoints: the named <code>RateLimitPolicyAuthIp</code>
+          (<code>&quot;auth-ip&quot;</code>) policy, a one-minute window keyed on the client IP (default 30 requests, <code>429</code> on
+          overage), which <code>AuthControllerBase</code> applies to login and register by default. That window is
+          fixed by default and sliding when <code>RateLimiting:Algorithm</code> selects it, so the counting shape is
+          configuration, not a constant. That caps how fast <em>one source address</em> can hammer the auth surface;
+          it does not
           cap guesses against <em>one account</em>, since an attacker spreading a run across addresses gets a fresh
           bucket per address, and its response is a middleware <code>429</code> rather than an auth outcome. Two of those
           defences also cannot live in a per-principal limiter at all:
@@ -292,7 +303,11 @@
           so mixing the two formats at one key makes the next read of that counter fail with <code>WRONGTYPE</code>, which
           surfaces as a 500 on the login and registration endpoints that own it. A readable counter was worth
           more than an atomic one. <code>MemoryCacheService</code> does not override the member either, so memory mode runs
-          the same default. The accepted cost, in the code&#39;s own words: parallel attempts can overwrite each
+          the same default. <code>HybridCacheService</code>, the opt-in two-level implementation a host selects by calling
+          <code>AddCommonHybridCache</code> (which replaces whatever <code>ICacheService</code> was registered), overrides it with the
+          same read-modify-write shape and additionally forces both legs past the in-process L1: an L1 hit would
+          let a replica read a stale counter and write it back near its starting value, which is a security
+          control quietly weakened by a cache optimization. The accepted cost, in the code&#39;s own words: parallel attempts can overwrite each
           other&#39;s increments, so a burst of genuinely concurrent guesses can undercount and stay below
           <code>MaxFailedAttempts</code>. Sequential guessing, which is what a credential-stuffing run against one account
           looks like, still trips the lockout. Because every shipped implementation writes the value back with
@@ -303,11 +318,15 @@
           via cache TTL: a lockout is inherently ephemeral, so expiry <em>is</em> the reset.</li>
           <li><strong>Returns <code>Result</code> (ADR-013)</strong>, so the HTTP edge maps every failure to a uniform <code>401</code> without the
           endpoint special-casing it.</li>
-          <li><strong>Centralized in the shared authentication base.</strong> The call sequence lives once in
-          <code>AuthenticationServiceBase&lt;TUser&gt;</code> (<code>MMCA.Common.Application.Auth</code>): <code>CheckLockoutAsync</code> before
-          credential validation, <code>IncrementFailedAttemptsAsync</code> on each failed attempt,
+          <li><strong>Centralized in framework code, not in consumer code.</strong> The login and registration call sequence
+          lives in <code>AuthenticationServiceBase&lt;TUser&gt;</code> (<code>MMCA.Common.Application.Auth</code>): <code>CheckLockoutAsync</code>
+          before credential validation, <code>IncrementFailedAttemptsAsync</code> on each failed attempt,
           <code>ResetFailedAttemptsAsync</code> on a successful login, and <code>CheckRegistrationRateLimitAsync</code> /
-          <code>IncrementRegistrationCountAsync</code> around sign-up. Store and ADC <code>AuthenticationService</code> are sealed
+          <code>IncrementRegistrationCountAsync</code> around sign-up. One further framework call site sits outside that
+          base: <code>ResetPasswordHandlerBase</code> takes <code>ILoginProtectionService</code> as a constructor dependency and
+          calls <code>ResetFailedAttemptsAsync(request.Email)</code> once the new credential is persisted, so a user who
+          reset the password <em>because</em> of a lockout is not left locked out by it. Store and ADC
+          <code>AuthenticationService</code> are sealed
           subclasses that inject <code>ILoginProtectionService</code> into the base constructor and inherit those calls;
           neither app invokes the protection methods directly. Settings bind from the <code>&quot;LoginProtection&quot;</code>
           section.</li>
@@ -344,7 +363,8 @@
           <li><strong>IP-keyed registration throttle is coarse.</strong> Shared NAT/proxy IPs throttle innocents together, and
           per-attacker IP rotation evades it; it is fail-open on a missing IP. It raises the cost of bulk signup,
           it does not stop a determined distributed attacker.</li>
-          <li><strong>Protection rides on the shared base class, not on the HTTP edge.</strong> Because the call sequence is
+          <li><strong>Protection rides on the shared base class, not on the HTTP edge.</strong> Because the login and
+          registration call sequence is
           centralized in <code>AuthenticationServiceBase&lt;TUser&gt;</code>, a consumer whose <code>AuthenticationService</code>
           subclasses it inherits the lockout and registration-throttle checks automatically (both apps do), so
           it is no longer a per-flow convention that a subclass can forget. What the framework still does not do
@@ -394,8 +414,9 @@
           accepted final state, not a TODO: cite this section rather than re-opening the finding.</li>
           </ul>
           <h2 id="related">Related</h2>
-          <p>ADR-019 (the layered limiter: an authenticated-only global cap that exempts this anonymous surface,
-          plus the per-IP <code>auth-ip</code> window that now sits on the same two endpoints),
+          <p>ADR-019 (the layered limiter: a principal-keyed global cap that exempts this anonymous surface, its
+          one metered anonymous exception being the real-time hub paths, plus the per-IP <code>auth-ip</code> window that
+          now sits on these two endpoints and on the password-reset pair),
           ADR-026 (the <code>ICacheService</code> substrate these counters live in),
           ADR-013 (the <code>Result</code> / <code>Error</code> the checks return),
           ADR-022 (the browser session-cookie auth flow these endpoints sit behind).</p>

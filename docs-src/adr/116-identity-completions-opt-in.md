@@ -1,7 +1,10 @@
 # ADR-116: Identity Completions Ship as Opt-In Base Classes, Not as Framework Features
 
 ## Status
-Accepted (2026-09-09). Layers stored permission grants over
+Accepted (2026-09-09; revised 2026-09-19: item 10 now scopes the "no `@page` directive" claim to what
+this decision ships, because `MMCA.Common.UI` itself ships 13 of them in the credential and
+notification pages, and it now names `UserAdminList<TUser>` as the third routeless administration
+component). Layers stored permission grants over
 [ADR-020](020-permission-based-authorization.md)'s compiled registry and extends the shared sign-in
 workflow of [ADR-050](050-jwt-refresh-token-rotation.md) with optional collaborators.
 
@@ -166,19 +169,30 @@ same one.**
    dependency-free, matching the `Cronos` precedent.
 
 10. **Pages stay with the consumers; the administration surface ships as routeless components.** No
-    enrollment page and no confirmation page ships in `MMCA.Common.UI`, and nothing the framework
-    ships carries an `@page` directive: `RoleAdminList`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/RoleAdminList.razor.cs:27`)
-    and `RoleAdminEdit` (`.../Pages/Administration/RoleAdminEdit.razor.cs:35`) are components the app
-    routes, authorizes and links for itself (`RoleAdminList.razor.cs:12-13`). They were promoted under
-    the rule the framework already applies to shared components, two consumers wanting the same one,
-    and they qualify because roles and permissions are strings the framework already owns, so there is
-    no app DTO to name (`.../Presentation/MMCA.Common.UI/DependencyInjection.cs:227-228`). They talk
-    to the controller base through `IRoleAdminUIService`
+    enrollment page and no confirmation page ships in `MMCA.Common.UI`, and nothing this decision
+    ships carries an `@page` directive. (The package itself does ship routable pages, the credential
+    and notification screens of the Context above: 13 `@page` directives across 12 components, from
+    `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:1` to
+    `.../Pages/Notifications/NotificationInbox.razor:1-2`. None of them is one of these.)
+    `RoleAdminList`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/RoleAdminList.razor.cs:27`),
+    `RoleAdminEdit` (`.../Pages/Administration/RoleAdminEdit.razor.cs:35`) and `UserAdminList<TUser>`
+    (`.../Pages/Administration/UserAdminList.razor.cs:47`) are components the app routes, authorizes
+    and links for itself (`RoleAdminList.razor.cs:12-13`). They were promoted under the rule the
+    framework already applies to shared components, two consumers wanting the same one. The two role
+    components are non-generic because roles and permissions are strings the framework already owns,
+    so there is no app DTO to name
+    (`.../Presentation/MMCA.Common.UI/DependencyInjection.cs:227-228`); the roster is generic instead,
+    over an app-owned DTO that only has to implement `IUserAdminDTO`
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Administration/IUserAdminDTO.cs:15`), which is
+    the one place a routeless component still names app shape. The role pair talks to the controller
+    base through `IRoleAdminUIService`
     (`.../UI/Services/Administration/IRoleAdminUIService.cs:41`) and its typed-client implementation
     `RoleAdminService` (`.../UI/Services/Administration/RoleAdminService.cs:50-51`), registered by
-    `AddRoleAdministrationUI()` (`.../UI/DependencyInjection.cs:234`). An app that serves no
-    role-administration endpoints registers nothing and renders neither component.
+    `AddRoleAdministrationUI()` (`.../UI/DependencyInjection.cs:234`); the roster registers through
+    `AddUserAdministrationUI<TUserDto>()` (`.../UI/DependencyInjection.cs:218`). An app that serves no
+    role-administration endpoints registers nothing and renders neither role component, and an app
+    that serves no `Admin/Users` endpoints never renders the roster.
 
 11. **The editor draws a closed catalog, and the surface cannot be locked out from inside it.**
     `IPermissionCatalog`

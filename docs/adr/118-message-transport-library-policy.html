@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -234,12 +236,24 @@
           <p>Accepted (2026-09-11). Promotes the MassTransit clause inside
           <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> into a decision of its own: ADR-016 owns the
           release policy that the pin is enforced under, this record owns the choice of transport library, the
-          conditions that end it, and the ordered list of what replaces it.</p>
+          conditions that end it, and the ordered list of what replaces it.
+          Amended (2026-09-19): the pinned-entry count is restated workspace-wide (five entries, three in
+          MMCA.Common plus one each in MMCA.ADC and MMCA.Store) and the build gate&#39;s reach is scoped to
+          MMCA.Common; the <code>using MassTransit</code> surface is recounted from source as nine files; ADC&#39;s nightly
+          Service Bus emulator smoke is restated as authoritative rather than advisory; the external v9 and
+          support-horizon dates gain the hedge ADR-016 already carries; and the unreconciled overlap with
+          ADR-016&#39;s still-live <strong>Transport exit options</strong> section is recorded under <strong>Related</strong>. The pin, the
+          decision and the replacement order are unchanged.</p>
           <h2 id="context">Context</h2>
           <p>MassTransit is the only message-broker library in this workspace, and it is pinned to 8.5.10 across
-          all three of its packages (<code>MMCA.Common/Directory.Packages.props:106-108</code>). The pin is a policy
+          all three of its packages (<code>MMCA.Common/Directory.Packages.props:106-108</code>). Two consumers declare a
+          <code>MassTransit.Azure.ServiceBus.Core</code> entry of their own at the same 8.5.10 patch for their Service Bus
+          emulator test tier (<code>MMCA.ADC/Directory.Packages.props:64</code>,
+          <code>MMCA.Store/Directory.Packages.props:91</code>), so the workspace carries five pinned MassTransit entries,
+          not three. The pin is a policy
           rather than a lag: v9 was announced in April 2025 and shipped in January 2026 as a commercial,
-          source-available product with a runtime licence key. A v9 bus fails its startup licence check and
+          source-available product with a runtime licence key (those two dates are the vendor&#39;s own public
+          record, not something this repository can assert). A v9 bus fails its startup licence check and
           every broker-enabled service host crashes, which is a failure mode a build cannot see because CI
           never starts a broker. That is why the ceiling is a fitness function rather than a comment:
           <code>MassTransit_MustNotExceed_MajorVersion8</code>
@@ -247,7 +261,13 @@
           parses <code>Directory.Packages.props</code> and fails the build at an exclusive major ceiling of 9 (<code>:31</code>),
           and MMCA.Common subclasses it
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9</code>).
-          A blanket package update bumped the version to 9.1.2 once before and reintroduced the crash.</p>
+          A blanket package update bumped the version to 9.1.2 once before and reintroduced the crash. The
+          gate reads the props file found by walking up from the running test assembly, and MMCA.Common is the
+          only repo that subclasses the base (the base&#39;s own doc comment tells consumers not to), so the build
+          gate covers Common&#39;s three entries and nothing else. What holds the two consumer entries at v8 is
+          the lockstep sweep plus a <code>dependabot.yml</code> scoped to github-actions only in each repo, whose comment
+          says NuGet is excluded and MassTransit must stay v8 (<code>MMCA.ADC/.github/dependabot.yml:1-4</code>,
+          <code>MMCA.Store/.github/dependabot.yml:1-8</code>).</p>
           <p>A pin with no horizon is a decision that expires quietly, so the real question is not &quot;which version&quot;
           but &quot;what does this workspace actually owe MassTransit, and what would it cost to leave&quot;. The answer
           is narrower than the usual framework-lock-in story, because the durable parts of the messaging design
@@ -279,9 +299,11 @@
           (<code>.../Infrastructure/Messaging/BrokerMessageBus.cs:24</code>); <code>BrokerEventBus</code> implements the second and
           does not reference MassTransit at all (<code>.../Infrastructure/Messaging/BrokerEventBus.cs:31</code>), because
           in broker mode its whole job is to write the outbox row and signal the processor. The whole
-          <code>using MassTransit</code> surface is <strong>eight files</strong>: seven inside <code>MMCA.Common.Infrastructure</code>
+          <code>using MassTransit</code> surface is <strong>nine files</strong>: eight inside <code>MMCA.Common.Infrastructure</code>
           (<code>DependencyInjection.cs</code>, <code>Messaging/BrokerMessageBus.cs</code>, <code>Messaging/ServiceBusEmulatorSupport.cs</code>
-          and the four consumer files under <code>Messaging/Consumers/</code>) plus the emulator test fixture
+          and the five consumer files under <code>Messaging/Consumers/</code>: <code>IntegrationEventConsumer.cs</code>,
+          <code>IntegrationEventConsumerExtensions.cs</code>, <code>UpcastingIntegrationEventConsumer.cs</code>,
+          <code>FaultIntegrationEventConsumer.cs</code> and <code>ConsumerOriginRestore.cs</code>) plus the emulator test fixture
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs</code>. Domain,
           Application and Shared hold the interfaces alone, and that is build-gated:
           <code>MicroserviceExtractionTestsBase</code>
@@ -289,15 +311,22 @@
           bans MassTransit, gRPC and Protobuf outside API and Infrastructure in every repo.</p>
           <p>The comparison landscape is also public rather than internal: the August 2025 Visual Studio Magazine
           article &quot;Messaging Made Simple: Choosing the Right Framework for .NET&quot; surveys the same shift, and
-          the two candidates below are the ones that survive this workspace&#39;s constraints.</p>
+          the two candidates below are the ones that survive this workspace&#39;s constraints. That article, the
+          v9 release dates above and the v8 support horizon below are all external statements cited as
+          published: none of them is verifiable from this repository, which is the same hedge
+          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> applies to the support horizon.</p>
           <h2 id="decision">Decision</h2>
           <p><strong>Stay on MassTransit v8 behind <code>IMessageBus</code>, and keep the outbox and inbox custom precisely because
           that is what keeps a transport swap cheap. Record the exit triggers now, and the replacement order,
           so the pin is a dated decision rather than an open-ended hold.</strong></p>
           <ol>
-          <li><p><strong>The pin stands and stays build-gated.</strong> MassTransit remains at 8.5.10 on all three packages, and
-          <code>DependencyVersionTestsBase</code> remains the enforcement point. The ceiling is the major version only:
-          v8 patch and minor updates are ordinary dependency work.</p>
+          <li><p><strong>The pin stands and stays build-gated in MMCA.Common.</strong> MassTransit remains at 8.5.10 on all
+          three packages, and <code>DependencyVersionTestsBase</code> remains the enforcement point for those three.
+          The two consumer-declared <code>MassTransit.Azure.ServiceBus.Core</code> entries are held at the same patch
+          by the lockstep sweep and the NuGet-excluded dependabot config, not by a build gate, and a
+          consumer that wants its own guard overrides <code>MassTransitPackageIds</code> rather than subclassing the
+          base as shipped. The ceiling is the major version only: v8 patch and minor updates are ordinary
+          dependency work.</p>
           </li>
           <li><p><strong>No durable messaging mechanism may move into the library.</strong> The outbox, the inbox, the claim
           lease, the retry and dead-letter policy, the ordering key and the trace propagation columns stay
@@ -340,8 +369,12 @@
           <code>MessageBusProvider</code> switch inside <code>ConfigureBrokerTransport</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:1189</code>, beside the
           RabbitMQ arm at <code>:1196</code> and the Azure Service Bus arm at <code>:1226</code>), so a candidate is exercised by
-          configuration without removing anything, and ADC&#39;s advisory nightly Service Bus emulator smoke is
-          where it runs first.</p>
+          configuration without removing anything, and ADC&#39;s nightly Service Bus emulator smoke is where it
+          runs first. That job is authoritative rather than advisory: it has carried no <code>continue-on-error</code>
+          since 2026-08-31 (TD-17), and <code>deploy.yml</code>&#39;s cross-service-freshness gate requires it to have
+          concluded success alongside the <code>cross-service</code> job in the same qualifying nightly
+          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:156</code>, the gating rationale at <code>:129-140</code>), so
+          a candidate arm that regresses Service Bus topology or the AMQP round-trip blocks the next deploy.</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -353,7 +386,7 @@
           <li><strong>Custom durable machinery is what makes the transport replaceable.</strong> A library that owned the
           outbox would own the lease semantics, the ordering guarantee, the dead-letter retention window and
           the replay API, and every one of those would have to be re-earned against a new library&#39;s model.
-          Owning them means a swap is a publish-and-consume adapter, which is the eight-file surface above.</li>
+          Owning them means a swap is a publish-and-consume adapter, which is the nine-file surface above.</li>
           <li><strong>Wolverine ahead of raw SDKs</strong> because it keeps retry, delayed redelivery and consumer dispatch as
           library concerns on both transports this workspace runs, which is precisely the part the raw-SDK
           option hand-writes. It is ordered first on licence and transport coverage, not on a benchmark run
@@ -384,7 +417,11 @@
           <h2 id="related">Related</h2>
           <p><a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (the lockstep release policy this pin is
           enforced under; its 2026-08-28 amendment first sketched exit options, and this record takes ownership
-          of that list),
+          of that list. As of 2026-09-19 that transfer is recorded on this side only: ADR-016&#39;s
+          <strong>Transport exit options</strong> section is still live, names no successor record, and ranks a different
+          set of candidates, an OpenTransit community fork of v8 first and a commercial v9 licence second,
+          neither of which appears in decision 4 here. Where the two disagree on candidates or ordering, this
+          record is the later decision; ADR-016 has not yet been amended to say so),
           <a href="066-broker-transport-selection.html">ADR-066</a> (which broker runs where, the axis orthogonal to which
           library talks to it),
           <a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox this record refuses to hand to a library),

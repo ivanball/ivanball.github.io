@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -250,6 +252,9 @@
           <code>MMCA.Common.Aspire</code>&#39;s <code>ConfigureOpenTelemetry</code> registers the <code>MMCA.Common.AI</code> trace source and
           meter, so a consumer no longer has to add either by hand for the spans and counters to leave the
           process.</p>
+          <p>Revised 2026-09-19: the section 16 re-scoring this record left open for ADC has happened. The
+          Consequences state the outcome of the thirty-second scorecard cycle (2026-09-16, M4/I9, Implementation
+          8 to 9) instead of a pending cycle.</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
           calls a language model: is that dependency governed like any other external system, meaning
@@ -447,12 +452,17 @@
           free-standing model or ceiling literal and no per-service meter.</li>
           <li><strong>Store and Helpdesk adopt nothing.</strong> Section 16 remains N/A for both until a product feature of
           theirs calls a model.</li>
-          <li><strong>Section 16 re-scoring is open for ADC on &quot;observed&quot; and &quot;bounded&quot;.</strong> Token usage, model id and
-          prompt version reach telemetry through one shared source, and the per-call ceiling is
-          configuration rather than a literal in a request body, so the next scorecard cycle scores those
-          two criteria against the framework pipeline. Since the 2026-09-15 revision the guardrail
-          criterion has a framework extension point (<code>IChatGuardrail</code>) and the spans and counters are
-          exported by the Aspire host; evaluation gating and retrieval remain feature-side and unchanged.</li>
+          <li><strong>Section 16 has been re-scored for ADC, at M4/I9.</strong> Token usage, model id and prompt version
+          reach telemetry through one shared source, and the per-call ceiling is configuration rather than
+          a literal in a request body, so the thirty-second scorecard cycle (2026-09-16) scored those
+          criteria against the framework pipeline and raised Implementation from 8 to 9
+          (<code>Website/docs-src/governance/adc-ArchitectureScorecard.md:68</code>; the M2/I5 entry value of
+          2026-09-04 is recorded at <code>:96</code>). The cycle credits the framework&#39;s <code>mmca.ai.call.duration</code>
+          histogram, the Conference host registering the <code>MMCA.Common.AI</code> trace source and meter, and
+          <code>AddServiceDefaults</code> subscribing that same source. One of the three reasons the cycle names for
+          holding at 9 rather than 10 belongs to this package: <code>GuardrailChatClient</code> is composed only when
+          a host registers an <code>IChatGuardrail</code>, and ADC registers none. Evaluation gating and retrieval
+          remain feature-side and unchanged.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="111-ai-session-scoring-governance.html">ADR-111</a> (the record this one extends: every scoring-specific

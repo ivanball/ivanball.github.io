@@ -19,7 +19,10 @@ tests), and every staging, README, template and smoke anchor were re-taken at HE
 2026-09-11: `--database` offers three engines rather than two (`postgresql` joins `sqlserver` and
 `sqlite`, ADR-113), a second generation path (the `postgresql-canary` CI job) sits beside
 `template-smoke`, and the seed measurements, the fitness-subclass count (24), the documented seed run
-(128 tests), and every staging, README, template and CI anchor were re-taken at HEAD.
+(128 tests), and every staging, README, template and CI anchor were re-taken at HEAD. Revised
+2026-09-19: the seed's fitness map declares 25 sealed subclasses rather than 24
+(`FeatureFlagLifecycleTests` joined it), and the seed no longer documents a run count of its own, so
+the generated-app test figure is stated only as unpinned on both sides.
 
 ## Context
 
@@ -217,11 +220,11 @@ silently: the output still compiles, it just carries someone else's domain vocab
   to owner, repository, and workflow filename, with no API-key fallback, so renaming that file
   breaks publishing silently. Same property as the MMCA.Common release workflow (ADR-053).
 - **The generated app's test count is not pinned anywhere, and shape flags move it.** The scaffold
-  hands over the whole fitness map: all 24 sealed subclasses in
+  hands over the whole fitness map: all 25 sealed subclasses in
   `Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs` reach a generated app,
   `IntegrationEventContractTests` (at `:99`) included, and it is frozen on its own event rather than
-  the seed's, so it passes on arrival. The seed's own documented run is 128 tests
-  (`MMCA.Helpdesk/CLAUDE.md:185`). A generated app that turns off shape axes runs fewer, and no gate
+  the seed's, so it passes on arrival. The seed documents no run count of its own either. A generated
+  app that turns off shape axes runs fewer than the seed, and no gate
   pins the figure on either side: `smoke.ps1:361`, `:487` and `:909` all pass
   `--minimum-expected-tests 1`, as does the seed's own CI (`.github/workflows/ci.yml:104`). The cost
   of shipping the freeze is that staging has to keep finding the class: `stage.ps1:1318-1319` throws when

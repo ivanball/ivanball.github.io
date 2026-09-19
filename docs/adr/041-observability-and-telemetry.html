@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -275,7 +277,11 @@
           the exception object while their duration histograms and outcome tags stay exactly as this record
           describes them. The eight-meter count in the entry above is superseded, and the metrics configuration
           moved into its own <code>ConfigureMetrics</code> method, so the subscription block no longer sits at the lines
-          the earlier entries cite. See the &quot;Amended (2026-09-11): the Polly meter&quot; section at the end.</p>
+          the earlier entries cite. See the &quot;Amended (2026-09-11): the Polly meter&quot; section at the end.
+          Revised 2026-09-19 (<code>MMCA.Common.AI</code> is now subscribed in the meter chain and added as a trace
+          source, so the block carries ten subscribed meters: nine <code>MMCA.Common.*</code> plus <code>Polly</code>. Both
+          2026-09-11 entries above are superseded on those two points, the one that records the AI meter as
+          defined but not subscribed and the one that counts nine. See the Revision (2026-09-19) at the end).</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -416,8 +422,8 @@
           <ul>
           <li><strong>Custom instrumentation carries a maintenance cost.</strong> The Aspire package has no reference to
           Application or Infrastructure by design, so the meter and activity-source names are duplicated as
-          literals (the nine meter subscriptions at <code>Extensions.cs:582</code>-<code>Extensions.cs:589</code> and
-          <code>Extensions.cs:596</code>, the trace sources at <code>Extensions.cs:169</code>-<code>Extensions.cs:171</code>, and the sync
+          literals (the ten meter subscriptions at <code>Extensions.cs:598</code>-<code>Extensions.cs:606</code> and
+          <code>Extensions.cs:613</code>, the trace sources at <code>Extensions.cs:182</code>-<code>Extensions.cs:185</code>, and the sync
           notes at <code>CqrsMetrics.cs:9</code>,
           <code>OutboxMetrics.cs:9</code> and <code>OutboxPollFilterProcessor.cs:19</code>-<code>:25</code>). A rename on one side silently
           stops export until the literal is updated. That is the price of the decoupled package graph.</li>
@@ -453,7 +459,7 @@
           <code>MMCA.Common.Outbox</code>, <code>MMCA.Common.Cqrs</code>, <code>MMCA.Common.Idempotency</code>, <code>MMCA.Common.Scheduler</code>,
           <code>MMCA.Common.Broker</code>, <code>MMCA.Common.OutputCache</code>, <code>MMCA.Common.BestEffort</code>. Two of them
           (<code>Idempotency</code>, <code>Scheduler</code>) were never recorded here at all. Read that block, not this prose, when
-          the question is what the framework exports (it carries eight today; see the Revision (2026-09-11)).</p>
+          the question is what the framework exports (it carries ten today; see the Revision (2026-09-19)).</p>
           <p><strong>Correlation now starts at the edge.</strong> <a href="088-gateway-edge-responsibilities.html">ADR-088</a> adds a
           context-free <code>GatewayCorrelationMiddleware</code> that ensures <code>X-Correlation-ID</code> on the way in and echoes it
           on the way out, writing it onto the forwarded request so the service-tier <code>CorrelationIdMiddleware</code>
@@ -642,7 +648,7 @@
           warm-up and readiness gating, whose health-check endpoints are the operational-signal sibling of these
           telemetry signals in the same Aspire defaults), ADR-114 (the durable internal-command queue whose
           meter, activity source and poll-span filtering this pipeline carries), ADR-120 (the governed chat
-          client whose <code>MMCA.Common.AI</code> meter these defaults do not subscribe), and COST.md (the FinOps companion that records
+          client whose <code>MMCA.Common.AI</code> meter these defaults now subscribe), and COST.md (the FinOps companion that records
           span-filtering and sampling as cost levers).</p>
           <h2 id="amended-2026-09-11-the-polly-meter">Amended (2026-09-11): the Polly meter</h2>
           <p>A ninth meter, one cost knob, and one log level.</p>
@@ -669,9 +675,9 @@
           mirror image of <code>Telemetry:DisableHttpClientMetrics</code>: it is off by default and must be turned on, and
           anything other than a parseable <code>true</code> leaves the histograms dropped.</p>
           <p><strong>Where the block lives now.</strong> The metrics configuration moved out of the <code>WithMetrics</code> lambda into a
-          dedicated <code>ConfigureMetrics</code> method (<code>Extensions.cs:520</code>, called at <code>:166</code>). The <code>MMCA.Common.*</code> meter
-          chain is at <code>Extensions.cs:582</code>-<code>:589</code>, the Polly subscription at <code>:596</code>, and the trace sources at
-          <code>:169</code>-<code>:171</code>. The earlier entries in this record cite the pre-move lines; the Trade-offs bullet above
+          dedicated <code>ConfigureMetrics</code> method (<code>Extensions.cs:534</code>, called at <code>:179</code>). The <code>MMCA.Common.*</code> meter
+          chain is at <code>Extensions.cs:598</code>-<code>:606</code>, the Polly subscription at <code>:613</code>, and the trace sources at
+          <code>:182</code>-<code>:185</code>. The earlier entries in this record cite the pre-move lines; the Trade-offs bullet above
           is corrected to the current ones. The authoritative list is still the block itself, and it now carries
           <strong>nine</strong>.</p>
           <p><strong>The CQRS decorators log a thrown exception once.</strong> <code>LoggingCommandDecorator</code> and
@@ -687,6 +693,31 @@
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:31</code>). Both
           lines carry the same correlation id, so they still join; an alert built on the decorator&#39;s Error level
           moves to the boundary&#39;s (<a href="014-cqrs-decorator-pipeline.html">ADR-014</a>).</p>
+          <h2 id="revision-2026-09-19-the-ai-meter-is-subscribed">Revision (2026-09-19): the AI meter is subscribed</h2>
+          <p>A tenth meter, and a fourth trace source.</p>
+          <p><strong><code>MMCA.Common.AI</code> is in the chain now.</strong> The subscription block ends with
+          <code>.AddMeter(AiTelemetryName)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:606</code>, the literal at <code>:62</code>), and the
+          same name is added as a trace source beside the application name, the outbox one and the
+          internal-command one (<code>Extensions.cs:185</code>). The meter carries the token-usage instruments of the
+          governed chat-client boundary (<a href="120-governed-chat-client-boundary.html">ADR-120</a>): two token counters
+          and a call-duration histogram, created by <code>AiUsageMeter</code> from an <code>IMeterFactory</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Observability/AiUsageMeter.cs:77</code>, <code>:81</code>, <code>:85</code>) on the
+          meter name it declares at <code>AiUsageMeter.cs:26</code>. A host that takes the AI package therefore exports
+          token spend and call duration through <code>AddServiceDefaults</code> with no per-host subscription, which is
+          what the Revision (2026-09-11) said it had to do for itself. That entry and the Related line that
+          restated it are superseded.</p>
+          <p><strong>The count is ten.</strong> Reading the block itself, which stays the authoritative list: nine
+          <code>MMCA.Common.*</code> meters (<code>Outbox</code>, <code>Cqrs</code>, <code>Idempotency</code>, <code>Scheduler</code>, <code>Broker</code>, <code>OutputCache</code>,
+          <code>BestEffort</code>, <code>InternalCommands</code>, <code>AI</code>, at <code>Extensions.cs:598</code>-<code>:606</code>) plus <code>Polly</code>
+          (<code>Extensions.cs:613</code>). The <strong>nine</strong> in the Amended (2026-09-11) section counted eight
+          <code>MMCA.Common.*</code> names plus <code>Polly</code> and is superseded by this one.</p>
+          <p><strong>Subscribing a package this assembly cannot reference is still deliberate, and still free.</strong> The
+          Aspire package has no project reference to <code>MMCA.Common.AI</code>, which is what keeps the optional
+          language-model dependency out of every host that never adopts it, so the name is a literal here and
+          the subscription is inert in a host that never takes the package (<code>Extensions.cs:55</code>-<code>:62</code>). The
+          cost is the one this record&#39;s Trade-offs already name, now spread over ten meter literals rather
+          than nine: a rename on the publishing side stops export silently until the literal follows.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -710,6 +741,7 @@
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#amended-2026-09-11-the-polly-meter">Amended (2026-09-11): the Polly meter</a></li>
+            <li><a href="#revision-2026-09-19-the-ai-meter-is-subscribed">Revision (2026-09-19): the AI meter is subscribed</a></li>
             </ul>
           </nav>
         </aside>

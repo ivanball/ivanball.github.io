@@ -5,7 +5,10 @@ Accepted (2026-08-14). Revised 2026-08-19 (refreshed the `WebApplicationBuilderE
 cross-reference anchor, which moved to `:555`). Revised 2026-08-21: the order became data (named
 steps seeded by `MiddlewarePipelineBuilder.CreateDefault()`), gained a scoped configure overload
 with startup-validated invariants, and is frozen by the `MiddlewarePipelineOrderTestsBase` fitness
-function; the two costs this record originally carried as open trade-offs are retired below.
+function; the two costs this record originally carried as open trade-offs are retired below. Revised
+2026-09-19: the HTTPS-redirect gRPC exemption is now keyed on the negotiated protocol
+(`MiddlewarePipelineBuilder.IsCleartextHttp2`) rather than on a forgeable `Content-Type` header
+(SEC-Common-44), and the fitness function is recorded as adopted by all three consumer repos.
 
 ## Context
 In ASP.NET Core, middleware order is behavior, not style: a rate limiter placed before authentication
@@ -68,10 +71,18 @@ every REST/gRPC host call it instead of composing its own.
   addresses that are not in the default allow-lists (comment at `:74-76`). It sits ahead of the rate
   limiter, which is the ordering ADR-019 depends on, and `Build()` enforces that it precedes the
   HTTPS redirect (`:275-278`).
-- **HTTPS redirect is exempted for gRPC.** The redirect is wrapped in `app.UseWhen` and skipped for any
-  request whose `Content-Type` starts with `application/grpc`
-  (`MiddlewarePipelineBuilder.cs:91-93`), because extracted services are reached over HTTP/2
-  cleartext and a 307 on those requests breaks the call (comment at `:85-90`, ADR-012).
+- **HTTPS redirect is exempted for cleartext HTTP/2, which is the gRPC case.** The redirect is wrapped
+  in `app.UseWhen` and skipped for any request that matches
+  `MiddlewarePipelineBuilder.IsCleartextHttp2` (`MiddlewarePipelineBuilder.cs:97-99`), a predicate
+  defined as `!Request.IsHttps && HttpProtocol.IsHttp2(Request.Protocol)` (`:362-368`), because
+  extracted services are reached over HTTP/2 cleartext (h2c) and a 307 on those requests breaks the
+  call (comment at `:85-89`, ADR-012). The exemption keys on the protocol Kestrel negotiated during
+  connection setup, which no header can fake; it does not read `Content-Type` and it does not read
+  routed-endpoint gRPC metadata, because the step runs before `UseRouting` and no endpoint metadata
+  exists yet (comment at `:91-96`). Matching on a `Content-Type` of `application/grpc` was the
+  original shape and was replaced as forgeable: any caller could have set that header and been served
+  plaintext (SEC-Common-44). The predicate is `public` so a host that rebuilds this step through the
+  configure overload reuses it rather than reinventing the weaker check (`:357-362`).
 - **The soft-deleted-user check sits between the limiter and authorization.**
   `SoftDeletedUserMiddleware` (`Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:31`)
   is the `SoftDeletedUserFilter` step (`MiddlewarePipelineBuilder.cs:129-131`), after `RateLimiting`
@@ -87,8 +98,12 @@ every REST/gRPC host call it instead of composing its own.
   the subclass's `Configure` customization if any (`:35`), and asserts the step sequence is exactly
   the documented order (`:60-67`) and that `Build()`'s invariants hold (`:69-77`). No
   `WebApplication` is built, so it runs in the fast unit tier. The framework subclasses it in its own
-  test pass (`Tests/Hosting/MMCA.Common.Testing.Tests/MiddlewarePipelineOrderTests.cs`); consumer
-  repos subclass it next to their decorator-order tests.
+  test pass (`Tests/Hosting/MMCA.Common.Testing.Tests/MiddlewarePipelineOrderTests.cs`), and all
+  three consumer repos subclass it next to their decorator-order tests, each with no overrides
+  because every host calls the zero-argument overload:
+  `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/MiddlewarePipelineOrderTests.cs:16`,
+  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Api/MiddlewarePipelineOrderTests.cs:16`
+  and `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15`.
 - **Conditional middleware is registered unconditionally and made inert at runtime.** Both
   `TenantResolutionMiddleware` (the `TenantResolution` step, `MiddlewarePipelineBuilder.cs:113-119`) and
   `SoftDeletedUserMiddleware` (the `SoftDeletedUserFilter` step, `:129-131`) are always in the chain:
@@ -154,9 +169,10 @@ pipeline's `RequestLocalization` step calls (`MiddlewarePipelineBuilder.cs:48`,
   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:108,127`). Both are addressed by the revision
   above: `MiddlewarePipelineOrderTestsBase` turns a reorder into a red test, `Build()` turns a
   misordered customization into a startup failure, and the configure overload makes the escape hatch
-  scoped instead of all-or-nothing. What remains true: the fitness function is opt-in per repo, so a
-  consumer that never subclasses it gets only the startup validation, and only for the invariants
-  `Build()` knows about, not for the full sequence.
+  scoped instead of all-or-nothing. What remains true: the fitness function is opt-in per repo. All
+  three consumer repos have taken it up, so nothing is currently uncovered, but a future repo that
+  never subclasses it would get only the startup validation, and only for the invariants `Build()`
+  knows about, not for the full sequence.
 - **The extension API is a new public surface to hold stable.** Step names are now contract:
   renaming a constant on `MiddlewarePipelineStepNames`, or reordering in a way the invariants do not
   cover, is a behavior change for any host using the configure overload. No host uses it yet, which

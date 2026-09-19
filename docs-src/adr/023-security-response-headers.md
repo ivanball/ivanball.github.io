@@ -10,6 +10,10 @@ resolved policy).
 Revised 2026-09-07 (HSTS and forwarded headers are applied on the UI hosts and not only at the
 gateway, and credential-carrying paths additionally answer `Referrer-Policy: no-referrer` and
 `Cache-Control: no-store`).
+Revised 2026-09-19 (the Blazor provider's emitted policy is recorded in full: it also carries
+`img-src` and `font-src`, an opt-in startup-validated `frame-src`, and a Development-only
+`script-src 'unsafe-inline'`; and the UI host's forwarded-headers options clear `KnownProxies` and
+`KnownIPNetworks` on purpose).
 ## Context
 Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
 hardened HTTP response headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
@@ -49,15 +53,19 @@ with `AddCommonSecurityHeaders(configuration?, configure?)` and inserted early w
   configures the `"SecurityHeaders"` section or registers its own provider.
 - **HTML hosts register their own `ICspPolicyProvider`** before calling `AddCommonSecurityHeaders`
   (the registration uses `TryAddSingleton`, so the first-registered provider wins). Both apps register
-  one shared `BlazorCspPolicyProvider` (a single `internal sealed` class hoisted into
-  `MMCA.Common.UI.Web`, byte-identical to the copies the app hosts formerly carried) via
-  `AddCommonBlazorCsp` ahead of `AddCommonSecurityHeaders`. It pins `connect-src` to `'self'` plus the
-  configured API/Gateway origin (https + wss, from the shared `ApiSettings`), adds `script-src 'self'
-  'wasm-unsafe-eval'` and `style-src 'self' 'unsafe-inline'`, and **fails closed when that origin cannot
+  one shared `BlazorCspPolicyProvider` (a single `internal sealed` class living in
+  `MMCA.Common.UI.Web`) via `AddCommonBlazorCsp` ahead of `AddCommonSecurityHeaders`. It pins
+  `connect-src` to `'self'` plus the configured API/Gateway origin (https + wss, from the shared
+  `ApiSettings`), adds `script-src 'self' 'wasm-unsafe-eval'`, `style-src 'self' 'unsafe-inline'`,
+  `img-src 'self' data: https:` and `font-src 'self'`, emits an opt-in `frame-src` when the host
+  configures one, and **fails closed when that origin cannot
   be resolved or parsed**: `connect-src` narrows to `'self'` and the policy is still enforced, so a
   misconfiguration shows up immediately as blocked cross-origin calls in the browser console rather than
-  as a header that is emitted but inert. It loosens the policy for localhost only in Development (Visual
-  Studio Browser Link / Hot Reload).
+  as a header that is emitted but inert. Development loosens two directives, not one: `connect-src`
+  gains `http://localhost:* ws://localhost:*` and `script-src` additionally gains `'unsafe-inline'`
+  (Visual Studio Browser Link / Hot Reload injects an inline bootstrap script as well as opening a
+  localhost WebSocket), and the second of those is not localhost-scoped. The 2026-09-19 revision below
+  records the emitted policy directive by directive.
 - **Adopted at both edges of both apps:** Store and ADC each wire `AddCommonSecurityHeaders` +
   `UseCommonSecurityHeaders` in their Gateway host and their UI web host, with the UI host also
   registering `BlazorCspPolicyProvider`. The middleware carries a unit test
@@ -146,6 +154,56 @@ Store's sits at `MMCA.Store/MMCA.Store.CI.slnf:55`), so the guard runs on every 
 than existing and never being executed. That is the whole difference between a conformance suite that
 is adopted and one that is merely present: item 2 above records the UI origin emitting its own HSTS,
 and a host-level test in the gating tier is what keeps a later pipeline edit from quietly undoing it.
+
+## Revision (2026-09-19)
+
+**The Blazor policy is wider than the Decision above recorded, and the UI host's forwarded-headers
+options clear their allow-lists on purpose.** The provider is no longer the copy that was hoisted out
+of the two app hosts: it now takes `IOptions<BlazorCspSettings>` alongside `ApiSettings`
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:33-40`), so
+"identical to the app-local copies" is history and the emitted string is what follows.
+
+1. **The full policy it emits.** `BuildPolicy` (`.../Security/BlazorCspPolicyProvider.cs:103-113`)
+   concatenates, in order: `default-src 'self'` (`:104`), `script-src 'self' 'wasm-unsafe-eval'`
+   (`:105`), `style-src 'self' 'unsafe-inline'` (`:106`), `img-src 'self' data: https:` (`:107`),
+   `font-src 'self'` (`:108`), the computed `connect-src` (`:109`), an optional `frame-src` (`:110`),
+   then `base-uri 'self'`, `form-action 'self'` and `frame-ancestors 'none'` (`:111-113`). `img-src`
+   is open to any https source on purpose, because profile pictures and content images come from
+   arbitrary external hosts, while the directives that matter for exfiltration (`script-src` and
+   `connect-src`) stay pinned (`:99-102`). Two differences from the static baseline in the Decision
+   above are worth stating: this policy adds `img-src` and `font-src`, and it carries no `object-src`
+   directive at all, so objects fall back to `default-src 'self'` rather than the baseline's explicit
+   `object-src 'none'`
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:65-67`).
+2. **Development loosens `script-src`, not just localhost `connect-src`.** On `IsDevelopment` the
+   provider appends `http://localhost:* ws://localhost:*` to `connect-src` (`:74-77`) and
+   `'unsafe-inline'` to `script-src` (`:105`). Only the first is localhost-scoped; the second is a
+   blanket inline-script allowance for that environment. Both exist for Visual Studio's Browser Link
+   and Hot Reload, which inject an inline bootstrap script and open a WebSocket on a port that changes
+   every run (`:70-73`). Neither reaches a non-Development host, because the flag is
+   `IWebHostEnvironment.IsDevelopment()` read once at construction (`:41`).
+3. **`frame-src` is opt-in and startup-validated.** The directive is emitted only when
+   `BlazorCspSettings.FrameSources`
+   (`.../Security/BlazorCspSettings.cs:35`, bound from the `"BlazorCsp"` configuration section,
+   `:21`) lists at least one origin, as `frame-src 'self' <origins>` (`:85-97`); with the default
+   empty list there is no `frame-src` at all and frames fall back to `default-src 'self'`, leaving the
+   policy unchanged. Each entry must be a plain absolute https origin: `BlazorCspSettingsValidator`
+   (`.../Security/BlazorCspSettingsValidator.cs:40-56`) refuses a wildcard, quote, semicolon, comma,
+   whitespace, user info, query, fragment or non-root path (`:19`), and `AddCommonBlazorCsp` registers
+   it with `ValidateOnStart`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:52-60`), so a bad entry
+   fails the boot with a message naming it instead of being spliced verbatim into a security response
+   header. Validated entries are canonicalized and de-duplicated before the splice (`:91-96`). This
+   governs only what the host may frame: `frame-ancestors 'none'` is never relaxed by this path.
+4. **The forwarded-headers allow-lists are cleared deliberately.** Item 2 of the 2026-09-07 revision
+   records that the UI host's options mirror the gateway and the service pipeline
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:173-176`). What it leaves out is
+   load-bearing: `KnownProxies` and `KnownIPNetworks` are both cleared before the middleware is added
+   (`:184-185`), because a cloud reverse proxy fronts the app from internal addresses that are in
+   neither default list, and leaving the defaults in place makes `UseForwardedHeaders` ignore every
+   forwarded header it receives (`:177-179`). Populated allow-lists therefore make the whole
+   2026-09-07 fix inert: `Request.IsHttps` stays false behind the ingress and no
+   `Strict-Transport-Security` is emitted.
 
 ## Related
 ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022

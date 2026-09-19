@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -235,6 +237,9 @@
           <p>Revised 2026-09-07: an order line freezes the list price and the promotion label beside the charged
           unit price, so an order answers what it saved without asking Catalog again. The two cross-service
           reply contracts grow additive fields for them; the integration events are untouched.</p>
+          <p>Revised 2026-09-19: the receipt email is rendered by a durable internal command rather than inside the
+          <code>OrderPaid</code> domain event handler (ADR-114), and it re-reads the order&#39;s frozen pricing columns instead
+          of consuming the event&#39;s carried copies. The columns, the invariants and the contracts are unchanged.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Store sells product variants, and a variant&#39;s price is one <code>Money</code> on the variant row
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:26</code>).
@@ -294,13 +299,20 @@
           is money owed: the line total and the Stripe total still follow from it alone.</p>
           <p><strong>What the order saved is derived, not stored.</strong> <code>OrderLine.Savings</code> and <code>Order.TotalSavings</code> are
           computed on read from the frozen pair and excluded from the EF mapping (<code>OrderLine.cs:65</code>,
-          <code>Order.cs:72</code>): a stored total could only ever disagree with the two numbers it restates. <code>OrderPaid</code>
-          carries the order&#39;s <code>TotalSavings</code> and each line&#39;s <code>ListPrice</code> and <code>PromotionLabel</code>
-          (<code>Orders/DomainEvents/OrderPaid.cs:21,42</code>), so the receipt email and the order detail page each show
-          a struck &quot;Was&quot; amount, the label (HTML-encoded in the email), an accessible &quot;Was X, now Y&quot; sentence
-          and a &quot;You saved&quot; total, every one only when there is a saving
-          (<code>Orders/DomainEventHandlers/OrderPaidHandler.cs:89,97,111</code>,
-          <code>Sales.UI/Pages/Orders/OrderLinesPanel.razor:56,72,95</code>).</p>
+          <code>Order.cs:72</code>): a stored total could only ever disagree with the two numbers it restates. Both places
+          that show a saving read the frozen columns back off the order rather than off an event payload. The
+          receipt email is scheduled by the <code>OrderPaid</code> handler, not written by it: <code>OrderPaidHandler</code> writes a
+          <code>SendOrderPaidEmailInternalCommand</code> carrying the order id alone (ADR-114,
+          <code>Orders/DomainEventHandlers/OrderPaidHandler.cs:37-39</code>), and
+          <code>SendOrderPaidEmailInternalCommandHandler</code> re-reads the order with its lines
+          (<code>Orders/InternalCommands/SendOrderPaidEmailInternalCommandHandler.cs:44-47</code>) before rendering the
+          struck &quot;Was&quot; amount, the HTML-encoded label and the &quot;You saved&quot; total
+          (<code>SendOrderPaidEmailInternalCommandHandler.cs:96,104,119</code>). The order detail page renders the same
+          three from the order&#39;s own read model, plus an accessible &quot;Was X, now Y&quot; sentence
+          (<code>Sales.UI/Pages/Orders/OrderLinesPanel.razor:56,72,95</code>). Every one appears only when there is a
+          saving. <code>OrderPaid</code> still carries the order&#39;s <code>TotalSavings</code> and each line&#39;s <code>ListPrice</code> and
+          <code>PromotionLabel</code> (<code>Orders/DomainEvents/OrderPaid.cs:21,42</code>), but its one subscriber now reads only
+          the order id and the customer id from it.</p>
           <p><strong>The wire contracts grow additive fields; the event contracts do not.</strong> <code>UnitPriceEntry</code> gains
           <code>list_price = 3</code> and <code>promotion_label = 4</code>
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:106,109</code>) and
@@ -381,6 +393,8 @@
           <li><a href="057-expand-contract-schema-evolution-gate.html">ADR-057</a>: the discount columns are add-only.</li>
           <li><a href="083-crud-lifecycle-event-taxonomy.html">ADR-083</a>: discount changes reuse <code>ProductVariantChanged</code> with
           the <code>Updated</code> state rather than minting a new event type.</li>
+          <li><a href="114-internal-commands-durable-job-queue.html">ADR-114</a>: the receipt that renders the struck price is
+          a durable internal command, which is why it re-reads the order instead of trusting the event.</li>
           </ul>
           
         <div class="doc-foot btn-row">

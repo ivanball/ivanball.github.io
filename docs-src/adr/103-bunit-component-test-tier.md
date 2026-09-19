@@ -2,7 +2,9 @@
 
 ## Status
 Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the `AngleSharp` advisory
-pin travels. See Revision (2026-09-03) at the end.
+pin travels. See Revision (2026-09-03) at the end. Revised 2026-09-19: four drifted facts refreshed
+(the `bunit` pin, the `TestPrincipal` role shorthand, the helper's call-site count, and the lockstep
+package count). See Revision (2026-09-19) at the end.
 
 ## Context
 Three test tiers in this workspace are decided in writing and one is not. ADR-015 gates **structure**
@@ -29,7 +31,7 @@ after the bUnit provider was frozen.
 ## Decision
 Ship the component-test tier as a package. `MMCA.Common.Testing.UI`
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/MMCA.Common.Testing.UI.csproj:3-4`) is one of the
-17 packages released in lockstep (`MMCA.Common/FACTS.md:19,37`), and its `BunitComponentTestBase`
+`MMCA.Common.*` packages released in lockstep (`MMCA.Common/FACTS.md:19,37`), and its `BunitComponentTestBase`
 fixes every choice above once, in one file.
 
 - **bUnit v2, with the version-specific symbols isolated to this base.** The base derives from bUnit
@@ -38,9 +40,9 @@ fixes every choice above once, in one file.
   and its remarks state why: v2 is the line compatible with xUnit v3 and Microsoft Testing Platform,
   and derived test classes call `RenderUnderTest` / `RenderAs` and never touch the version-specific
   symbols, so a move off that line changes this file and no other
-  (`BunitComponentTestBase.cs:29-34`). The line is pinned at `bunit` 2.9.0 in each repo's central
-  package file (`MMCA.Common/Directory.Packages.props:205-206`,
-  `MMCA.ADC/Directory.Packages.props:30-31`, `MMCA.Store/Directory.Packages.props:50-51`), and the
+  (`BunitComponentTestBase.cs:29-34`). The line is pinned at `bunit` 2.11.3 in each repo's central
+  package file (`MMCA.Common/Directory.Packages.props:232-233`,
+  `MMCA.ADC/Directory.Packages.props:30-31`, `MMCA.Store/Directory.Packages.props:54-55`), and the
   package carries a direct `AngleSharp` pin because central package management does not pin
   transitives (`MMCA.Common.Testing.UI.csproj:13-15`).
 - **MudBlazor services plus the ADR-067 facades, registered once.** The constructor calls
@@ -63,7 +65,9 @@ fixes every choice above once, in one file.
   succeeds for an authenticated identity and fails otherwise (`:57`, `:176-186`). Principals come from
   the shipped `TestPrincipal` factory, which writes the user id under both `sub` and
   `ClaimTypes.NameIdentifier` because a real principal reaches a page under either name
-  (`Infrastructure/TestPrincipal.cs:7,22-32`), plus an `Organizer` shorthand (`TestPrincipal.cs:35-36`).
+  (`Infrastructure/TestPrincipal.cs:7,22-32`), plus an `InRole(role, userId)` shorthand for a
+  single-role principal. The framework declares no role vocabulary of its own, so a test names the
+  role its app uses (`TestPrincipal.cs:41`).
 - **Open-generic `IStringLocalizer` for ADR-027 markup.** `Services.AddLogging()` and
   `Services.AddLocalization()` (`BunitComponentTestBase.cs:63-64`) let every component test render
   localized markup against the neutral resources in the component's own assembly with no per-test
@@ -76,7 +80,7 @@ fixes every choice above once, in one file.
   for the prerender boundary (`:114`), and calls `SetRendererInfo` **last** (`:117`). The rule is
   written where the helper is: `SetRendererInfo` builds and freezes the bUnit service provider, so any
   registration made after it is silently ignored and the page resolves the framework default instead
-  of the test's double (`:78-82`). Nineteen test files across MMCA.Common, MMCA.ADC and MMCA.Store
+  of the test's double (`:78-82`). Twenty-two test files across MMCA.Common, MMCA.ADC and MMCA.Store
   call the helper today; its comment records the fifteen hand-rolled copies of the block that the
   extraction replaced (`:81-82`).
 - **The rest of the harness ships with it.** `RenderMudProviders` renders the popover, dialog and
@@ -157,7 +161,7 @@ where a Blazor UI exists.
   so each repo's central package file names the number
   (`MMCA.Common/Directory.Packages.props:206`, `MMCA.ADC/Directory.Packages.props:31`,
   `MMCA.Store/Directory.Packages.props:51`) and three files have to agree. The `AngleSharp` advisory
-  pin does not spread that way: it is named once, in `MMCA.Common/Directory.Packages.props:210`, and
+  pin does not spread that way: it is named once, in `MMCA.Common/Directory.Packages.props:237`, and
   reaches consumers transitively through the package's own direct reference
   (`MMCA.Common.Testing.UI.csproj:15`).
 
@@ -188,3 +192,18 @@ versions the package's own direct reference (`MMCA.Common.Testing.UI.csproj:15`)
 pins it in a central package file or a project file, so consumers inherit the patched version with
 the package. The trade-off now says so. Citation anchors elsewhere in the record were refreshed at
 the same time with no change of substance.
+
+## Revision (2026-09-19)
+**The decision and the mechanism are unchanged.** Four facts had drifted since the record was
+written. The `bunit` line is now pinned at 2.11.3, not 2.9.0, and all three central package files
+still agree on that number (`MMCA.Common/Directory.Packages.props:233`,
+`MMCA.ADC/Directory.Packages.props:31`, `MMCA.Store/Directory.Packages.props:55`). `TestPrincipal`
+no longer carries an ADC-specific `Organizer` shorthand: it exposes a generic
+`InRole(string role, string userId = "1")` whose remarks state that the framework declares no role
+vocabulary, so a test names the role its own app uses
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/TestPrincipal.cs:34-42`).
+`ConfigureDataGridListPageHost` now has twenty-two calling test files, not nineteen (two in
+MMCA.Common, twelve in MMCA.ADC, eight in MMCA.Store). The lockstep package count is no longer
+restated here at all, because `MMCA.Common/FACTS.md` owns it and the number moves with every new
+package. The `AngleSharp` claim from the 2026-09-03 revision was re-checked and still holds: the pin
+is named only in MMCA.Common's central package file and in no consumer repo's.

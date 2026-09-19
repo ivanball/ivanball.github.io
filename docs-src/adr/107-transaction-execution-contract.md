@@ -1,7 +1,7 @@
 # ADR-107: Transaction Execution and Commit-Ambiguity Contract
 
 ## Status
-Accepted (2026-09-03).
+Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19).
 
 ## Context
 Every transactional write in this workspace funnels through one method. `IUnitOfWork.ExecuteInTransactionAsync`
@@ -119,9 +119,11 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
     cases pin the no-rerun wrapper, the dropped dispatch, the ordinary commit path, the still-retried pre-commit
     failure and the per-source report (`:73`, `:108`, `:132`, `:152`, `:171`).
 
-12. **Adoption is deliberately narrow.** MMCA.ADC has four `ITransactional` commands
+12. **Adoption is deliberately narrow.** MMCA.ADC has five `ITransactional` commands
     (`RefreshFromSessionizeCommand.cs:13`, `LinkUserToSpeakerCommand.cs:13`, `UnlinkUserFromSpeakerCommand.cs:12`,
-    `BatchAddSessionQuestionAnswersCommand.cs:24`), MMCA.Store has two (`ReorderProductImagesCommand.cs:22`,
+    `BatchAddSessionQuestionAnswersCommand.cs:24`, and Identity's
+    `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:22`,
+    which carries the flag so the erasure lands as one write), MMCA.Store has two (`ReorderProductImagesCommand.cs:22`,
     `UploadProductImageCommand.cs:27`) plus four commands whose XML doc records a deliberate opt-out
     ("Deliberately NOT `ITransactional`": `VerifyPaymentCommand.cs:11`, `ProcessPaymentWebhookCommand.cs:9`,
     `CheckOutCommand.cs:9`, `BulkSetInventoryCommand.cs:11`), and MMCA.Helpdesk has none. Direct callers are the
@@ -160,11 +162,14 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
   single transactional source, which is a property of today's deployments rather than a guarantee of the code.
 - **The retry contract is a trap for handler authors.** Anything computed outside the delegate but committed inside
   it is silently wrong on the second attempt, and the change-tracker reset makes the failure quiet rather than loud.
-  Store's `CheckOutHandler` carries a long comment explaining exactly this for the one value it keeps outside the
-  delegate (`CheckOutHandler.cs:16-24`, `:80-92`), which is discipline, not enforcement.
+  Store's `CheckOutHandler` carries a long comment explaining exactly this, and it now keeps two values outside the
+  delegate: the cross-service gRPC price fetch and a best-effort customer-name lookup whose latency is kept off the
+  database locks the same way (`CheckOutHandler.cs:16-24`, `:80-92`, `:102-117`). That is discipline, not
+  enforcement, and the discipline already drifts: the handler's own class doc still says only the price fetch stays
+  outside (`:34`).
 - **A stale consumer comment still describes the fix as future work.** `CheckOutHandler.cs:90-92` names
   "MMCA.Common's forthcoming commit-phase fix" as what will remove its residual window, but that fix shipped in
-  v1.135.0 (`MMCA.Common/CHANGELOG.md:2114`) and Store pins v1.185.0
+  v1.135.0 (`MMCA.Common/CHANGELOG.md:2114`) and Store pins v1.205.0
   (`MMCA.Store/Directory.Packages.props:11`), so the comment describes a state that has not existed for a while.
 - **Cosmos participation is silent.** A Cosmos context in a transactional scope is skipped without a warning
   (`DbContextFactory.cs:754-757`), so a future host mixing engines gets partial atomicity with no signal at the call
@@ -178,8 +183,9 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
 2026-07-19 revision decided the failed-`Result` rollback this record implements),
 [ADR-006](006-database-per-service.md) (database-per-service, whose "no cross-database transactions" trade-off is
 what makes the sequential best-effort commit the only option),
-[ADR-054](054-saga-compensation-and-reconciliation.md) (compensation and reconciliation, which cites this record's
-per-data-source best-effort commit as its premise),
+[ADR-054](054-saga-compensation-and-reconciliation.md) (compensation and reconciliation, which builds on the same
+per-data-source best-effort commit, though it attributes that premise in-line to ADR-006 and does not reference this
+record),
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox that survives an ambiguous commit, and the deferred in-process
 dispatch that does not),
 [ADR-013](013-result-pattern.md) (Result-over-exceptions, the reason a returned failure has to roll back),

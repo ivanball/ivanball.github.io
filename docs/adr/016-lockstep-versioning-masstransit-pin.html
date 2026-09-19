@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -261,7 +263,15 @@
           eight files across two packages (the six that reference MassTransit types, plus the two that lower
           the emulator&#39;s entity-quota defaults), and the <code>MessageBusSettings.cs</code>, <code>IntegrationEventConsumer.cs</code>,
           <code>UpcastingIntegrationEventConsumer.cs</code> and Service-Bus-side <code>DependencyInjection.cs</code> citations are
-          rebased onto their current lines. The pin, the gate and the dependency set are unchanged.</p>
+          rebased onto their current lines. The pin, the gate and the dependency set are unchanged.
+          Amended (2026-09-19): the <code>using MassTransit</code> surface in <strong>Transport exit options</strong> is recounted from
+          source and restated as nine files across two packages, eight of them in <code>MMCA.Common.Infrastructure</code>
+          (the added file is <code>Messaging/Consumers/ConsumerOriginRestore.cs</code>, which takes the consume context&#39;s
+          <code>Headers</code>), which supersedes the eight-file figure in the 2026-09-01 entry; the split between
+          type-referencing and quota-lowering files is corrected, because the emulator pair references
+          <code>IServiceBusBusFactoryConfigurator</code> and <code>IBusControl</code> in addition to setting the statics, so every
+          file in the set references a MassTransit type. The pin, the gate and the dependency set are
+          unchanged, and the three candidates are unchanged.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common publishes its <code>MMCA.Common.*</code> NuGet package set (see <code>FACTS.md</code> for the authoritative
           list and count) consumed by three downstream repos: the two
@@ -359,19 +369,25 @@
           &quot;stay on v8&quot; is a decision with an expiry rather than a permanent one. Nothing changes today; the
           candidates are recorded now so the eventual move is a comparison and not a scramble.</p>
           <p>What makes any of them a bounded change is where MassTransit actually sits. The whole
-          <code>using MassTransit</code> surface is <strong>eight files across two packages</strong>. Seven are in
+          <code>using MassTransit</code> surface is <strong>nine files across two packages</strong>. Eight are in
           <code>MMCA.Common.Infrastructure</code>: <code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:3</code>,
           <code>Messaging/BrokerMessageBus.cs:1</code>, <code>Messaging/Consumers/IntegrationEventConsumer.cs:1</code>,
           <code>Messaging/Consumers/IntegrationEventConsumerExtensions.cs:1</code>,
           <code>Messaging/Consumers/UpcastingIntegrationEventConsumer.cs:3</code>,
-          <code>Messaging/Consumers/FaultIntegrationEventConsumer.cs:1</code> and <code>Messaging/ServiceBusEmulatorSupport.cs:4</code>;
-          the eighth is <code>Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs:5</code>. The
+          <code>Messaging/Consumers/FaultIntegrationEventConsumer.cs:1</code>,
+          <code>Messaging/Consumers/ConsumerOriginRestore.cs:2</code> and <code>Messaging/ServiceBusEmulatorSupport.cs:4</code>;
+          the ninth is <code>Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs:5</code>. The
           last two are the emulator test tier rather than the transport: each one lowers the process-global
           <code>MassTransit.AzureServiceBusTransport.Defaults</code> entity quotas the emulator rejects
           (<code>ServiceBusEmulatorSupport.cs:115-117</code>, <code>ServiceBusEmulatorFixtureBase.cs:74-76</code>), a v8 constraint
-          that moves with that tier, not with the bus. The files that reference MassTransit <strong>types</strong>
-          (<code>IConsumer&lt;T&gt;</code>, <code>ConsumeContext&lt;T&gt;</code>, <code>IPublishEndpoint</code>, <code>IBusRegistrationConfigurator</code>) are the
-          first six, all in <code>MMCA.Common.Infrastructure</code>. Application, Domain and Shared never reference it:
+          that moves with that tier, not with the bus. Every one of the nine references a MassTransit <strong>type</strong>,
+          so none of them is an unused import: <code>IConsumer&lt;T&gt;</code>, <code>ConsumeContext&lt;T&gt;</code>, <code>IPublishEndpoint</code> and
+          <code>IBusRegistrationConfigurator</code> across the seven transport-side files, where
+          <code>ConsumerOriginRestore</code> takes the consume context&#39;s <code>Headers</code>
+          (<code>Messaging/Consumers/ConsumerOriginRestore.cs:34</code>); the emulator pair adds
+          <code>IServiceBusBusFactoryConfigurator</code> (<code>ServiceBusEmulatorSupport.cs:87</code>) and <code>IBusControl</code>
+          (<code>ServiceBusEmulatorFixtureBase.cs:68</code>) on top of the quota statics.
+          Application, Domain and Shared never reference it:
           <code>IMessageBus</code> is the Application-layer abstraction
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28</code>) and
           <code>BrokerMessageBus</code> is its only broker implementation (<code>BrokerMessageBus.cs:24</code>), which is the
@@ -427,7 +443,9 @@
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker
-          transport behind the outbox and database-per-service flows).</p>
+          transport behind the outbox and database-per-service flows).
+          <a href="118-message-transport-library-policy.html">ADR-118</a> revisits the exit strategy and ranks its
+          candidates differently; the two lists are not reconciled, and neither has been adopted.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

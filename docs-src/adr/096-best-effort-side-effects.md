@@ -1,7 +1,7 @@
 # ADR-096: Best-Effort Side-Effect Contract
 
 ## Status
-Accepted (2026-08-23). Revised 2026-08-31.
+Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19.
 
 ## Context
 A command that has already committed often has follow-up work attached to it: evict the output-cache
@@ -67,7 +67,8 @@ documented exception.
   and argument validation
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/BestEffortTests.cs:15-141`).
 
-Adoption today is **seven call sites**, six of them in ADC Engagement: the
+Adoption today is **eleven call sites**: six in ADC Engagement, four in Store, and the framework's own
+eviction helper. The ADC six are the
 live-channel drain worker, whose operation name is the prefix `live-channel-publish:` plus the work
 item's event name and whose own catch turns the rethrown cancellation into a quiet stop
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:36`,
@@ -80,27 +81,50 @@ broadcast `livepoll-results-broadcast`
 (`.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:44`, call at `:51`); and the
 cross-host cache eviction `bookmark-cache-evict-broadcast`
 (`.../UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:56`, call at
-`:68-80`). The seventh is the framework's own multi-tag eviction helper,
+`:68-80`). The Store four are a checkout display label, `checkout-customer-name`, resolved outside the
+transaction so an unreachable Identity leaves the name null instead of failing an otherwise valid
+checkout
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:107`);
+two inventory label fetches sharing the operation name `inventory-catalog-labels`, so a Catalog service
+that drops out leaves rows with whatever labels they had
+(`.../Inventory/UseCases/Create/CreateInventoryItemHandler.cs:68` and
+`.../Inventory/UseCases/BulkSet/BulkSetInventoryHandler.cs:67`); and the post-save eviction broadcast
+`review-anonymize-cache-evict-broadcast` raised after a customer erasure anonymizes reviews, where a
+broker fault must not fail an erasure that has already committed
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/CustomerErasedHandler.cs:62`,
+call at `:109-115`). Two of those four are pre-commit reads rather than post-commit follow-ups: the
+contract is about what a failure is allowed to do to the caller, not about where in the handler the
+work sits. The eleventh is the framework's own multi-tag eviction helper,
 `OutputCacheEvictionExtensions.TryEvictTagsAsync`, whose operation name is the constant prefix
 `output-cache-evict:` plus the tag being evicted
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:34`,
-`:78-92`). Store Catalog reaches it from four controllers, each naming its own low-cardinality cache
+`:78-92`). Store Catalog reaches it from five controllers, each naming its own low-cardinality cache
 tag: `catalog:categories` from `Controllers/CategoriesController.cs:168`, and `catalog:products` from
-`ProductsController.cs:242`, `ProductVariantsController.cs:140` and `ProductImagesController.cs:208`.
+`ProductsController.cs:242`, `ProductVariantsController.cs:140`, `ProductImagesController.cs:208` and
+`ReviewsController.cs:451`.
 
-Two swallows deliberately stay hand-rolled, and both say so in code. Store's `AddVariantHandler`
-publishes `ProductVariantChanged` after the commit and catches around it, logging at **Error** with
-the `ProductId` and `ProductVariantId`: the event is lost, Sales does not auto-create the zero-stock
-inventory record, and an operator needs those ids to create it by hand. Routing it through the helper
-would both downgrade an unrecoverable loss to Warning and drop the ids, which is why that one site
-stays as it is while every other swallow in the repo uses the helper
-(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/AddVariant/AddVariantHandler.cs:81-95`,
-the post-commit publish at `:97-108` and its catch at `:111-115`). The framework's own
+One swallow deliberately stays hand-rolled, and it says so in code. The framework's own
 `OutputCacheEvictionHandler` hand-rolls the same swallow-log-count shape against
 `cache.eviction.failed` on the `MMCA.Common.OutputCache` meter
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:51-62`): it is
 the one documented non-reuse of this helper inside the framework, and ADR-026 records the rationale
 (`026-caching-strategy.md:507-511`).
+
+Store's `AddVariantHandler` used to be the second hand-rolled case, and it now shows what the contract
+says to do when a side effect is too important to swallow: stop swallowing it. It no longer catches
+anything and no longer publishes inline. After the commit it schedules a durable ADR-114 internal
+command, `PublishProductVariantChangedInternalCommand`, carrying the `ProductId` and the
+database-generated `ProductVariantId`, with `CancellationToken.None` so the follow-up outlives a caller
+that has walked away
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/AddVariant/AddVariantHandler.cs:93-96`).
+The scheduled row is the durable record, so a broker fault retries with backoff instead of stranding the
+variant without inventory; an inline publish left a window in which a crash between the commit and the
+publish lost the event outright, and the outbox could not help because the row only lands there once
+`PublishAsync` has been reached. What survives is much narrower: only a failure to write the row itself
+loses the event. That failure arrives as a `Result`, not an exception, and is still isolated from the
+caller's outcome (the variant is committed, and a client retry with a null SKU would create a duplicate),
+and it is still logged at **Error** with both ids, because it is the case where an admin has to create
+the inventory record by hand (`:98-99`, the `[LoggerMessage]` at `:109-112`).
 
 ## Rationale
 - **One policy beats five local leniencies.** Each feature record is still right about its own
@@ -117,13 +141,15 @@ the one documented non-reuse of this helper inside the framework, and ADR-026 re
   request's context and without the logger scope that names what it was doing.
 - **Fixing the severity at Warning is a filter, not a limitation.** A swallow that genuinely deserves
   Error, with ids an operator must act on, is evidence the work is not best-effort. `AddVariantHandler`
-  is exactly that case, and it stays outside the helper.
+  was exactly that case, and the answer was to make the work durable rather than to keep it outside the
+  helper: the publish became a scheduled internal command, and only the narrow failure to record that
+  command still logs at Error.
 
 ## Trade-offs
 - **Nothing gates use of the helper.** There is no fitness rule, analyzer or architecture test that
   fails a build for a hand-rolled `catch (Exception)` that should have been a `BestEffort` call; the
-  helper is a convention backed by review. The only inventory is a search, which is how the seven call
-  sites and two deviations above were enumerated.
+  helper is a convention backed by review. The only inventory is a search, which is how the eleven call
+  sites and the one remaining hand-rolled swallow above were enumerated.
 - **The Warning carries the operation name and the exception, nothing else.** No entity id, no
   correlation payload beyond the ambient scope. `SubmitQuestionHandler` records that cost explicitly:
   the question id is one log line earlier, not in the best-effort warning
@@ -153,4 +179,6 @@ one hand-rolled swallow is the same question answered locally),
 [ADR-076](076-data-subject-export.md) (per-section degradation makes an incomplete package the
 contract rather than a failure),
 [ADR-091](091-cache-backed-password-reset.md) (the reset email is awaited, caught, logged and
-swallowed, the shape this helper standardizes).
+swallowed, the shape this helper standardizes),
+[ADR-114](114-internal-commands-durable-job-queue.md) (the durable queue `AddVariantHandler` now
+schedules onto, the alternative to swallowing a side effect whose loss is unrecoverable).

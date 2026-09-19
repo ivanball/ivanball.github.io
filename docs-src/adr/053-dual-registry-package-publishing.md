@@ -15,7 +15,11 @@ corrected to what `release.yml` actually does. Revised (2026-09-01): the two bui
 record used to quote no longer carry a package count of their own (`release.yml:90`,
 `Directory.Build.props:68`), so that note is dropped and `MMCA.Common/FACTS.md:19-38` is the single
 place the published set is enumerated; the `release.yml` line anchors are re-pinned to the current
-file.
+file. Revised (2026-09-19): that re-pin no longer holds. `release.yml` has since gained a
+deployment-environment gate, a merged-main ancestry assertion and a locked-mode restore, so every
+`release.yml` line number quoted below points at the file as it stood on 2026-09-01 rather than at
+the current one; the step names and the behavior described are still accurate, and the Trade-offs
+section now enumerates the added gates.
 
 ## Context
 The `MMCA.Common.*` packages have shipped to GitHub Packages since the first release (the package
@@ -112,9 +116,18 @@ Every release publishes to **both** registries, from the same tag, in the same w
 
 ## Trade-offs
 - **A published version can never be withdrawn.** nuget.org allows unlisting, not deletion. A bad
-  release is now permanent public history, which raises the stakes on the release gates (the SBOM
-  hard gate, the package-consumption job, and the Helpdesk source-build canary all already run
-  before a tag ships).
+  release is now permanent public history, which raises the stakes on the release gates. Six stand
+  between a tag and a push. Four run inside `release.yml`: both publishing jobs declare
+  `environment: release` (`release.yml:16`, `:127`), so each waits on that environment's protection
+  rules, which are configured in repository settings and are therefore not reviewable from this
+  repository; both jobs refuse to publish unless the tagged commit is an ancestor of `origin/main`
+  (`release.yml:34-42`, `:145-154`), because a `v*` tag is the one ref pushed outside the
+  branch-protection flow; and the ubuntu job restores `--locked-mode` (`release.yml:62`, the MAUI
+  job has no restore step of its own), so an irreversible push cannot carry a transitive version
+  nobody reviewed. The fourth is the SBOM hard gate, which runs in both jobs (`release.yml:81-86`,
+  `:183-189`). The remaining two, the package-consumption job (`ci.yml:694`) and the Helpdesk
+  source-build canary (`ci.yml:495`), run on the merged pull request rather than on the tag, and the
+  ancestry assertion is what makes them cover the tagged tree.
 - **Two registries can report different availability.** nuget.org indexing lags a push by minutes,
   so immediately after a release the two feeds disagree briefly. Consumers pinned to exact versions
   are unaffected; anyone restoring the newest version within that window may not see it yet.

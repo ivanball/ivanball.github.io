@@ -4,6 +4,11 @@
 Accepted (2026-09-11). Inverts EF Core's cascading default for every relationship in every repo built
 on this framework, and stamps each foreign key with where its delete behavior came from.
 
+Revised 2026-09-19: the rule is adopted end to end. All eight migrations were authored and merged on
+2026-09-11 (four in ADC, three in Store, one in Helpdesk), and all three applications subclass the
+shipped fitness-function base, so the Decision and Trade-offs record adopted state instead of
+pending work.
+
 ## Context
 EF Core picks a delete behavior for you. A required relationship gets `Cascade`, an optional one gets
 `ClientSetNull`, and neither choice appears anywhere a reviewer reads. The consequence is a database
@@ -77,8 +82,14 @@ opt-in with a stated reason, and the finished model records which of the two eac
    `Rules/Domain/ArchitectureRules.DeleteBehavior.cs`: any `Cascade` or `ClientCascade` must carry
    source `Explicit` (`:34`), and any foreign key sourced `Convention` must be `Restrict` (`:65`). A
    subclass supplies `dbContext.Model` from a context built the way the app builds it, so no database
-   server is needed: the model is what is asserted. The base points at relational models only, since
-   a Cosmos model carries no stamps.
+   server is needed: the model is what is asserted. All three applications subclass it
+   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/DeleteBehaviorConventionTests.cs:29`,
+   `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/DeleteBehaviorConventionTests.cs:22`,
+   `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DeleteBehaviorConventionTests.cs:20`),
+   each handing the base one model and covering its remaining service models with an explicit pair of
+   facts (ADC adds Identity, Engagement and Notification; Store adds Sales and Identity; Helpdesk has
+   one database, so it adds none). The base points at relational models only, since a Cosmos model
+   carries no stamps.
 
 7. **A cascade keeps its reason next to it.** Opting in means writing
    `.OnDelete(DeleteBehavior.Cascade)` in the entity configuration with the business reason beside
@@ -103,8 +114,13 @@ opt-in with a stated reason, and the finished model records which of the two eac
   that were already written down keep working exactly as written, and are simply stamped `Explicit`.
 
 ## Trade-offs
-- **One migration per service database at the next framework bump.** The FK constraints change, so
-  each database needs a migration: four in ADC, three in Store, one in Helpdesk. MMCA.Common's own
+- **One migration per service database, authored and merged on 2026-09-11.** The FK constraints
+  change, so each database needed a migration: four in ADC (Conference, Identity, Engagement,
+  Notification), three in Store (Catalog, Sales, Identity) and one in Helpdesk
+  (`MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/Migrations/20260911154248_RestrictDeleteByDefault.cs`),
+  all eight named `RestrictDeleteByDefault`. Five of them drop and re-add foreign keys with
+  `ReferentialAction.Restrict`; three (ADC Identity, ADC Notification, Store Identity) are empty,
+  because those models had no convention-sourced foreign key to flip. MMCA.Common's own
   tables (outbox, inbox, internal commands, scheduler, audit trail, refresh sessions, permission
   grants, notifications) declare no relationships between each other
   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/DeleteBehaviorConventionTests.cs:21-26`),
@@ -119,9 +135,10 @@ opt-in with a stated reason, and the finished model records which of the two eac
 - **SQL Server's multiple-cascade-path limit only bites where a configuration opts in.** Restrict
   cannot create a cycle, so the error class that most often forces a schema redesign now appears
   exactly where a human chose a cascade, which is the one place it is diagnosable.
-- **The fitness functions assert the model, not the database.** They prove what the next migration
-  will write, not what an already-deployed schema contains. The two converge once each database has
-  taken its migration, and drift in between is the ordinary migrations-pending state.
+- **The fitness functions assert the model, not the database.** They prove what a migration will
+  write, not what an already-deployed schema contains. The migrations that carry the current models
+  into the schemas were merged on 2026-09-11, so the gap this bullet describes reopens only in the
+  ordinary migrations-pending window between a model change and the migration that follows it.
 - **Cosmos-backed entities get no coverage from this rule**, by construction. The audit says nothing
   about them because the model cannot carry the claim.
 

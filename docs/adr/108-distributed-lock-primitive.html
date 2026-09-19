@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-108: Cross-Replica Mutual Exclusion via IDistributedLock · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-03).">
+  <meta name="description" content="Accepted (2026-09-03). Revised 2026-09-19 (the second consumer moved: ADC&#39;s AI scoring pass now runs as the internal command…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/108-distributed-lock-primitive.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-108: Cross-Replica Mutual Exclusion via IDistributedLock">
-  <meta property="og:description" content="Accepted (2026-09-03).">
+  <meta property="og:description" content="Accepted (2026-09-03). Revised 2026-09-19 (the second consumer moved: ADC&#39;s AI scoring pass now runs as the internal command…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/108-distributed-lock-primitive.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-108: Cross-Replica Mutual Exclusion via IDistributedLock">
-  <meta name="twitter:description" content="Accepted (2026-09-03).">
+  <meta name="twitter:description" content="Accepted (2026-09-03). Revised 2026-09-19 (the second consumer moved: ADC&#39;s AI scoring pass now runs as the internal command…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"108 · Cross-Replica Mutual Exclusion via IDistributedLock","item":"https://ivanball.github.io/docs/adr/108-distributed-lock-primitive.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -231,7 +233,11 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-108-cross-replica-mutual-exclusion-via-idistributedlock">ADR-108: Cross-Replica Mutual Exclusion via IDistributedLock</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-03).</p>
+          <p>Accepted (2026-09-03). Revised 2026-09-19 (the second consumer moved: ADC&#39;s AI scoring pass now runs
+          as the internal command <code>ScoreEventSessionsInternalCommandHandler</code> under
+          <a href="114-internal-commands-durable-job-queue.html">ADR-114</a>, taking the lock as a constructor dependency
+          rather than resolving it from a service scope; and adoption is now three call sites rather than two,
+          the third being ADC&#39;s question submit path).</p>
           <h2 id="context">Context</h2>
           <p>Both deployed apps run more than one replica of every service. ADC&#39;s Conference container app is
           declared with <code>minReplicas: 1, maxReplicas: 2</code> (<code>MMCA.ADC/infra/main.bicep:1223</code>, scale at <code>:1349</code>),
@@ -250,10 +256,12 @@
           <p>Some critical sections have no such row. The API idempotency filter&#39;s window between executing an
           action and storing its response is guarded by a cache entry, not a database row (ADR-017, ADR-026):
           two duplicates landing on different replicas both miss the cache, both execute, and the second
-          overwrites the first&#39;s stored response. ADC&#39;s AI scoring pass had the same shape, and its previous
-          guard was a cache counter released in a <code>finally</code>, which a killed replica left stuck at 1 until an
-          operator cleared it by hand
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringProcessor.cs:162-174</code>).</p>
+          overwrites the first&#39;s stored response. ADC&#39;s AI scoring pass reaches the same place from the other
+          side: it runs as a durable internal command (ADR-114), so each trigger does own a claimable row, but
+          two rows for the same event can be claimed by different replicas at the same time, and each pass
+          issues one paid Anthropic call per session
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:15-21</code>).
+          The exclusion the pass needs is per event, not per row.</p>
           <p>ADR-017 records how the idempotency filter uses a distributed lock. Nothing records the primitive
           itself: what it does and deliberately does not promise, what it degrades to, and when to reach for it
           rather than for a claim-lease row. This record does.</p>
@@ -333,13 +341,14 @@
           counted, so a Redis blip does not become a write outage (<code>:253-259</code>). With no lock registered the
           filter falls back to its striped semaphore (<code>:199</code>, stripe at <code>:90</code>).</p>
           </li>
-          <li><p><strong>Second consumer: ADC&#39;s AI scoring pass.</strong> <code>SessionScoringProcessor</code> resolves the lock from a
-          service scope (<code>SessionScoringProcessor.cs:175</code>) and claims the event with
-          <code>TryAcquireAsync(ClaimKey(eventId), ClaimTimeToLive, ClaimWait, ...)</code> (<code>:178</code>), where the key is
-          <code>scoring:inflight:{eventId}</code> (<code>:101-102</code>), the TTL is 15 minutes (<code>:85</code>) and the wait is
-          <code>TimeSpan.Zero</code> (<code>:92</code>), so a duplicate trigger skips the run rather than queueing behind it
-          (<code>:181-188</code>). The <code>await using</code> on the handle releases on success, on failure, and by TTL when the
-          replica is killed mid-pass.</p>
+          <li><p><strong>Second consumer: ADC&#39;s AI scoring pass.</strong> <code>ScoreEventSessionsInternalCommandHandler</code> takes the
+          lock as a primary-constructor dependency rather than resolving it from a service scope
+          (<code>ScoreEventSessionsInternalCommandHandler.cs:41</code>) and claims the event with
+          <code>TryAcquireAsync(ClaimKey(eventId), ClaimTimeToLive, ClaimWait, ...)</code> (<code>:75-77</code>), where the key is
+          <code>scoring:inflight:{eventId}</code> (<code>:100-101</code>), the TTL is 15 minutes (<code>:53</code>) and the wait is
+          <code>TimeSpan.Zero</code> (<code>:60</code>), so a duplicate trigger logs and reports success rather than queueing
+          behind the pass already covering the same work (<code>:79-83</code>). The <code>await using</code> on the handle releases
+          on success, on failure, and by TTL when the replica is killed mid-pass.</p>
           </li>
           <li><p><strong>The choose-between rule.</strong> Work that already owns a durable row uses the claim-lease: the
           outbox and the scheduler both stamp <code>LockedUntil</code> plus a <code>LockToken</code> in a conditional update whose
@@ -349,9 +358,16 @@
           over rows it does not own. Inventing a row purely to hold a lease is not the answer for those, and
           neither is holding a database transaction open across the work.</p>
           </li>
-          <li><p><strong>Adoption is exactly these two call sites.</strong> No other MMCA.Common component, and nothing in
+          <li><p><strong>Adoption is exactly these three call sites.</strong> The third is ADC&#39;s question submit cap:
+          <code>SubmitQuestionHandler</code> takes the lock as a constructor dependency
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34</code>)
+          and serializes the per-(session, user) open-question cap, whose count-then-insert is not one
+          atomic statement, under a claim keyed <code>session-question:submit:{sessionId}:{userId}</code> (<code>:107</code>,
+          taken at <code>:148</code>) with a 30 second TTL (<code>:49</code>) and a 2 second wait (<code>:57</code>); a submit that cannot
+          get in within the wait is answered with the same cap failure the count itself would have
+          returned, so contention never surfaces as a fault. No other MMCA.Common component, and nothing in
           MMCA.Store or MMCA.Helpdesk, takes a lock today. The primitive is shipped and registered in every
-          host that calls <code>AddInfrastructure</code>, and used in two places.</p>
+          host that calls <code>AddInfrastructure</code>, and used in three places.</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -362,7 +378,8 @@
           log naming both the condition and the fix (<code>InProcessDistributedLock.cs:75</code>).</li>
           <li><strong>A handle makes release structural.</strong> Returning <code>IAsyncDisposable?</code> rather than a boolean plus a
           <code>ReleaseAsync(key)</code> means the release cannot be skipped on a throw path and cannot be aimed at the
-          wrong acquisition. That is exactly what the ADC cache counter it replaced got wrong.</li>
+          wrong acquisition. A counter taken on entry and released in a <code>finally</code> gets both of those wrong,
+          and a process killed between the two leaves the guard stuck until an operator clears it.</li>
           <li><strong>The owner token is the whole of release correctness.</strong> Deleting without the comparison would let a
           caller whose lock already expired free the next holder&#39;s lock, which is the double execution the
           lock exists to prevent (<code>RedisDistributedLock.cs:32-37</code>).</li>
@@ -381,7 +398,9 @@
           caveat.</li>
           <li><strong>The fallback is correct only at one replica.</strong> A multi-replica host with no Redis connection gets
           per-replica exclusion from <code>InProcessDistributedLock</code>, and after the first warning nothing repeats
-          it. ADC&#39;s scoring processor names this as its floor (<code>SessionScoringProcessor.cs:171-174</code>).</li>
+          it. ADC&#39;s scoring handler names the condition that defeats it: Conference runs two replicas and the
+          framework&#39;s processor polls on each of them
+          (<code>ScoreEventSessionsInternalCommandHandler.cs:15-17</code>).</li>
           <li><strong>No renewal.</strong> Nothing extends a TTL mid-section. A section that outlives its TTL silently loses
           exclusion; Redis notices only after the fact, when the release script returns 0 and logs
           (<code>RedisDistributedLock.cs:84</code>), and the in-process fallback cannot notice at all because it ignores
@@ -399,7 +418,7 @@
           still in flight with a conflict rather than a longer wait (<code>IdempotencyFilter.cs:263-270</code>), so the
           client has to retry. That is deliberate, but it is behavior the TTL and wait pairing tunes rather
           than removes.</li>
-          <li><strong>Two consumers is a thin evidence base.</strong> The contract&#39;s edges (TTL loss, wait expiry, idempotent
+          <li><strong>Three consumers is a thin evidence base.</strong> The contract&#39;s edges (TTL loss, wait expiry, idempotent
           disposal) are exercised by unit tests against a mocked <code>IDatabase</code>
           (<code>Infrastructure.Tests/Concurrency/RedisDistributedLockTests.cs:22-40</code>, six cases) and by the
           in-process tests, not against a live Redis under failover. The behavior most likely to matter in

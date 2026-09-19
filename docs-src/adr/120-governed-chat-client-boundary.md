@@ -23,6 +23,10 @@ histogram (seconds, tagged `outcome` = `success` | `error` | `canceled` beside t
 meter, so a consumer no longer has to add either by hand for the spans and counters to leave the
 process.
 
+Revised 2026-09-19: the section 16 re-scoring this record left open for ADC has happened. The
+Consequences state the outcome of the thirty-second scorecard cycle (2026-09-16, M4/I9, Implementation
+8 to 9) instead of a pending cycle.
+
 ## Context
 Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
 calls a language model: is that dependency governed like any other external system, meaning
@@ -220,12 +224,17 @@ host turns them on.**
   free-standing model or ceiling literal and no per-service meter.
 - **Store and Helpdesk adopt nothing.** Section 16 remains N/A for both until a product feature of
   theirs calls a model.
-- **Section 16 re-scoring is open for ADC on "observed" and "bounded".** Token usage, model id and
-  prompt version reach telemetry through one shared source, and the per-call ceiling is
-  configuration rather than a literal in a request body, so the next scorecard cycle scores those
-  two criteria against the framework pipeline. Since the 2026-09-15 revision the guardrail
-  criterion has a framework extension point (`IChatGuardrail`) and the spans and counters are
-  exported by the Aspire host; evaluation gating and retrieval remain feature-side and unchanged.
+- **Section 16 has been re-scored for ADC, at M4/I9.** Token usage, model id and prompt version
+  reach telemetry through one shared source, and the per-call ceiling is configuration rather than
+  a literal in a request body, so the thirty-second scorecard cycle (2026-09-16) scored those
+  criteria against the framework pipeline and raised Implementation from 8 to 9
+  (`Website/docs-src/governance/adc-ArchitectureScorecard.md:68`; the M2/I5 entry value of
+  2026-09-04 is recorded at `:96`). The cycle credits the framework's `mmca.ai.call.duration`
+  histogram, the Conference host registering the `MMCA.Common.AI` trace source and meter, and
+  `AddServiceDefaults` subscribing that same source. One of the three reasons the cycle names for
+  holding at 9 rather than 10 belongs to this package: `GuardrailChatClient` is composed only when
+  a host registers an `IChatGuardrail`, and ADC registers none. Evaluation gating and retrieval
+  remain feature-side and unchanged.
 
 ## Related
 [ADR-111](111-ai-session-scoring-governance.md) (the record this one extends: every scoring-specific

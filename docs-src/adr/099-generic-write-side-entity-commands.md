@@ -14,7 +14,10 @@ command and applier compiles and behaves exactly as before. See the Revision at 
 2026-08-31: both consumer applications run on the extended surface from their own `main`, so the
 closing note records adoption in production rather than a branch. Revised 2026-09-03 (framework
 v1.177.0): `AddEntityCrud` also registers the update command's validator bridge, so a module's
-update-request rules reach the generic command with no hand-registered pairing.
+update-request rules reach the generic command with no hand-registered pairing. Revised 2026-09-19:
+the shared mutate workflow now carries one more step, a concurrency-token touch on a conditional
+write just before the save (SEC-Common-77), and ADC's Conference module registers a fourth
+`AddEntityCrud` aggregate, `Partner`.
 
 ## Context
 ADR-034 records the read side of the generic resource layer and stops one verb short. Its
@@ -29,9 +32,11 @@ a status and a child collection, and the update handler is the same twelve lines
 shared load-mutate-save machinery already existed
 (`Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:52`, whose
 `MutateCoreAsync` at `:271` loads the aggregate (`:281`), stamps the caller's concurrency token
-(`:291-292`), runs the mutation (`:294`) and saves (`:303`)), so what was missing was not the
-workflow but a command and a handler generic enough to close over any aggregate, plus somewhere for
-the module to say which aggregate method a request maps to.
+(`:291-292`), runs the mutation (`:294`), touches the root's concurrency token when the request was
+conditional (`MutateEntityHandlerBase.cs:314`, added 2026-09-07 for SEC-Common-77 so a write that
+changed only child rows still emits a root `UPDATE` carrying the caller's token) and saves (`:303`)),
+so what was missing was not the workflow but a command and a handler generic enough to close over any
+aggregate, plus somewhere for the module to say which aggregate method a request maps to.
 
 Two constraints shaped the answer.
 
@@ -170,9 +175,10 @@ Ship the generic write side as four additive pieces plus a registration helper.
   raise no events. No fitness rule checks it today; the interface makes the right thing easy, not the
   wrong thing impossible.
 - **Nothing in the framework opts a consumer in: every registration is a line the module writes.**
-  Adoption is per aggregate and partial. ADC's Conference module registers it for `Category`,
-  `Activity` and `Sponsor`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:143-145`),
+  Adoption is per aggregate and partial. ADC's Conference module registers it for four aggregates,
+  `Category`, `Activity`, `Sponsor` and `Partner`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:143-145`,
+  and `Partner` at `:159`),
   Store's Catalog for `Product` (one call per field-scoped update request) and `Category`
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:73-76`,
   `:77`, `:84`),

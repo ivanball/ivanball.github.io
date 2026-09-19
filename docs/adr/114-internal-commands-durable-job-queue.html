@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-114: Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-09). Rides the outbox machinery of ADR-003 without extending it.">
+  <meta name="description" content="Accepted (2026-09-09). Rides the outbox machinery of ADR-003 without extending it. Revised 2026-09-19 (three corrections to match the code: a schedule…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-114: Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery">
-  <meta property="og:description" content="Accepted (2026-09-09). Rides the outbox machinery of ADR-003 without extending it.">
+  <meta property="og:description" content="Accepted (2026-09-09). Rides the outbox machinery of ADR-003 without extending it. Revised 2026-09-19 (three corrections to match the code: a schedule…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-114: Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery">
-  <meta name="twitter:description" content="Accepted (2026-09-09). Rides the outbox machinery of ADR-003 without extending it.">
+  <meta name="twitter:description" content="Accepted (2026-09-09). Rides the outbox machinery of ADR-003 without extending it. Revised 2026-09-19 (three corrections to match the code: a schedule…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"114 · Internal Commands, a Job Queue Built on the Outbox's Machinery","item":"https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -232,7 +234,10 @@
           <h1 id="adr-114-internal-commands-a-job-queue-built-on-the-outboxs-machinery">ADR-114: Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-09-09). Rides the outbox machinery of
-          <a href="003-outbox-dual-dispatch.html">ADR-003</a> without extending it.</p>
+          <a href="003-outbox-dual-dispatch.html">ADR-003</a> without extending it. Revised 2026-09-19 (three corrections
+          to match the code: a schedule outside a transaction signals the processor only when the row is
+          already due, context restoration moved to the shared <code>AmbientOrigin</code> helper, and the queue&#39;s polling
+          interval matches the outbox default, with the difference coming from deployed configuration).</p>
           <h2 id="context">Context</h2>
           <p>The framework has had two ways to move work off the request thread and neither of them is a job
           queue.</p>
@@ -285,8 +290,11 @@
           adds the row to the context handed back by the scope&#39;s own <code>IDbContextFactory</code>, which is the same
           instance the calling handler&#39;s repositories use. With a transaction active it enrolls the row and
           stops, so the caller&#39;s commit persists it and a rollback erases it; with no transaction active it
-          saves immediately and signals the processor. That is the outbox&#39;s atomicity guarantee applied to an
-          instruction instead of an event: a transaction that aborts schedules nothing.</p>
+          saves immediately, and signals the processor only when the row is already due
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:124</code>),
+          so a future-dated row is persisted without a wake-up and waits for the poll loop. That is the
+          outbox&#39;s atomicity guarantee applied to an instruction instead of an event: a transaction that
+          aborts schedules nothing.</p>
           <p><strong>3. One table per relational source, mapped unconditionally.</strong> <code>InternalCommandMessage</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:21</code>)
           is configured in <code>ApplicationDbContext.ConfigureInternalCommands</code>
@@ -307,10 +315,12 @@
           databases, and a flag that changed the schema would make enabling the queue a migration rather than a
           deployment decision.</p>
           <p><strong>4. Execution restores the caller&#39;s context.</strong> The row captures the scheduling user id, roles,
-          tenant and correlation id. Before resolving the handler the processor sets the tenant, then rebuilds
-          a <code>ClaimsPrincipal</code> carrying the <code>sub</code> claim and one role claim per stored role
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:568</code>)
-          and hands it to <code>ScopedUserOverride</code>
+          tenant and correlation id. The processor does not restore that context itself: before the dispatcher
+          runs it calls the shared <code>AmbientOrigin.Restore</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:127</code>), the same helper
+          the other background hops use, so every hop restores the same shape. <code>Restore</code> sets the tenant
+          first, then rebuilds a <code>ClaimsPrincipal</code> carrying the <code>sub</code> claim and one role claim per stored role
+          (<code>AmbientOrigin.BuildPrincipal</code>, same file <code>:73</code>) and hands it to <code>ScopedUserOverride</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ScopedUserOverride.cs:23</code>), a scoped
           carrier read by <code>ImpersonatingCurrentUserService</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ImpersonatingCurrentUserService.cs:20</code>),
@@ -396,8 +406,13 @@
           data (<a href="003-outbox-dual-dispatch.html">ADR-003</a> / <a href="005-soft-delete-vs-erasure.html">ADR-005</a>).</p>
           <p><strong>A command scheduled inside a transaction waits up to one polling interval.</strong> The enrolled row
           raises no signal, because a signal before the commit only buys a poll against a transaction that has
-          not committed. <code>InternalCommands:PollingIntervalSeconds</code> therefore defaults to 2 rather than the 300
-          a deployed outbox uses, and a host that raises it to cut idle polling accepts that much latency on
+          not committed. <code>InternalCommands:PollingIntervalSeconds</code> ships at 2
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:49</code>),
+          which is the same default <code>OutboxSettings</code> ships
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:31</code>),
+          so the divergence is a deployment decision rather than a framework one: ADC and Store both run the
+          queue at 60 seconds while pushing the outbox to 300 (<code>MMCA.ADC/infra/main.bicep:1591</code> and <code>:1597</code>).
+          A host that raises the interval to cut idle polling accepts that much latency on
           transaction-scheduled work.</p>
           <p><strong>Two poll loops, not one.</strong> A host now runs the outbox processor and the queue processor side by
           side, each with its own signal instance so a burst of schedules cannot consume the outbox&#39;s single

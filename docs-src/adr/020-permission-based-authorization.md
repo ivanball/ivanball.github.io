@@ -9,6 +9,10 @@ Revised 2026-09-09: [ADR-116](116-identity-completions-opt-in.md) layers OPTIONA
 registry, through a decorator that unions a `(Role, Permission)` table into it with no deny row and a
 cached per-role snapshot behind the synchronous read, so the compiled map stays the floor and a data
 edit can only widen a role.
+Revised 2026-09-19: capability counts re-enumerated from source. ADC's Conference module now defines
+eleven permissions (`ActivitiesManage` and `SessionAssetsManage` added) and its `ContentManagement`
+curation subset now carries seven members; MMCA.Store now defines eleven across its three modules,
+Catalog having grown to six with `PricingManage` and `ReviewsModerate`.
 ## Context
 The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
 `[Authorize(Policy = "RequireOrganizer")]` against a named policy that calls `RequireRole(...)`, and a
@@ -64,17 +68,17 @@ one authorization model. Nothing is pre-registered per role name.
   `Organizer` alone (`MMCA.ADC.Notification.API/DependencyInjection.cs:38`).
 
 Adoption is asymmetric and that is intentional: a module declares as many capabilities as its own
-surface needs. ADC's Conference module defines nine (`ConferencePermissions.cs:12-36`, enumerated in
-`All` at `:39-50`), including a curation subset (`ContentManagement` at `:57-64`: sessions, speakers,
-categories, sponsors, activities) granted to the app's own `ContentEditor` role constant
+surface needs. ADC's Conference module defines eleven (`ConferencePermissions.cs:12-47`, enumerated in
+`All` at `:50-63`), including a curation subset (`ContentManagement` at `:70-79`: sessions, speakers,
+categories, sponsors, partners, activities, session assets) granted to the app's own `ContentEditor` role constant
 (`MMCA.ADC.Conference.API/DependencyInjection.cs:50`); its Engagement module defines three
 (`engagement:live:manage` gating the conference-day live-poll management endpoints,
 `engagement:checkin:manage` gating QR badge check-in and the attendance rollup, and
 `engagement:points:view-overview` gating the organizer points rollup, at
 `EngagementPermissions.cs:16`, `:23`, `:30`), each granted to `Organizer`; and its
-Identity module defines `identity:users:read`. MMCA.Store defines nine of its own across three
-modules: four in Catalog (`CatalogPermissions.cs:12-21`), three in Sales
-(`SalesPermissions.cs:12-18`) and two in Identity (`IdentityPermissions.cs:12-15`), each module
+Identity module defines `identity:users:read`. MMCA.Store defines eleven of its own across three
+modules: six in Catalog (`CatalogPermissions.cs:12-36`), three in Sales
+(`SalesPermissions.cs:12-18`) and two in Identity (`IdentityPermissions.cs:14-17`), each module
 granting its whole set to its own `Admin` role constant from its own `AddPermissions(...)` call
 (`MMCA.Store.Catalog.API/DependencyInjection.cs:41`, `MMCA.Store.Sales.API/DependencyInjection.cs:40`,
 `MMCA.Store.Identity.API/DependencyInjection.cs:42`). The registry, handler and policy provider are

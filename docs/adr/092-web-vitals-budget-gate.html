@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-092: Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-23). Revised 2026-09-01: the measurement flow itself now ships as the one-call IPage.MeasureWebVitalsAsync extension that every suite…">
+  <meta name="description" content="Accepted (2026-08-23). Revised 2026-09-01: the measurement flow itself now ships as an IPage extension that every suite routes through, and the…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/092-web-vitals-budget-gate.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-092: Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate">
-  <meta property="og:description" content="Accepted (2026-08-23). Revised 2026-09-01: the measurement flow itself now ships as the one-call IPage.MeasureWebVitalsAsync extension that every suite…">
+  <meta property="og:description" content="Accepted (2026-08-23). Revised 2026-09-01: the measurement flow itself now ships as an IPage extension that every suite routes through, and the…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/092-web-vitals-budget-gate.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-092: Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate">
-  <meta name="twitter:description" content="Accepted (2026-08-23). Revised 2026-09-01: the measurement flow itself now ships as the one-call IPage.MeasureWebVitalsAsync extension that every suite…">
+  <meta name="twitter:description" content="Accepted (2026-08-23). Revised 2026-09-01: the measurement flow itself now ships as an IPage extension that every suite routes through, and the…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate","item":"https://ivanball.github.io/docs/adr/092-web-vitals-budget-gate.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -231,10 +233,13 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-092-core-web-vitals-budget-as-a-shipped-test-contract-and-deploy-gate">ADR-092: Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-23). Revised 2026-09-01: the measurement flow itself now ships as the one-call
-          <code>IPage.MeasureWebVitalsAsync</code> extension that every suite routes through, the framework gallery
-          measures three pages against a <code>WebVitalsBudget</code> plus an anti-vacuity guard rather than three local
-          constants over two pages, and the ADC and Store <code>deploy.yml</code> line anchors were refreshed.</p>
+          <p>Accepted (2026-08-23). Revised 2026-09-01: the measurement flow itself now ships as an <code>IPage</code>
+          extension that every suite routes through, and the framework gallery measures three pages against a
+          <code>WebVitalsBudget</code> plus an anti-vacuity guard rather than three local constants over two pages.
+          Revised 2026-09-19: the extension block ships a second member,
+          <code>MeasureWebVitalsWithInteractionAsync</code>; the gallery has stepped its ceilings down from the opening
+          set, now specifies all five metrics and drives an interaction on one of its three pages; and Store
+          now carries the same <code>backend-test-gate</code> pairing that only ADC had.</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 23 asks for client-side performance that is measured rather than assumed, naming Core
           Web Vitals (LCP, INP, CLS) or an equivalent as the evidence
@@ -257,7 +262,7 @@
           it has to fail something, and the only place a real engine already runs against a real stack is the
           Playwright suite that ADR-063 made a deploy gate for accessibility.</p>
           <h2 id="decision">Decision</h2>
-          <p>Ship the measurement infrastructure, the one-call measurement flow and the assert mechanics in
+          <p>Ship the measurement infrastructure, the measurement flow and the assert mechanics in
           <code>MMCA.Common.Testing.E2E</code>, default the budget to the Core Web Vitals good band, and let the
           assertions ride the existing deploy-gating E2E suite.</p>
           <ul>
@@ -287,12 +292,16 @@
           <code>WebVitalsSample</code> (<code>:76</code>), under <code>WEB_VITALS_OUTPUT_DIR</code> or <code>artifacts/</code> beneath the working
           directory (<code>:65-66</code>); <code>Describe</code> (<code>:118</code>) renders the same sample as one invariant-culture line
           (<code>:122-124</code>) that <code>AssertWithinBudget</code> writes to test output.</li>
-          <li><strong>One shipped call owns the whole measurement flow.</strong> <code>MeasureWebVitalsAsync</code>
+          <li><strong>The measurement flow is shipped, not hand-rolled per repo.</strong> <code>MeasureWebVitalsAsync</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Infrastructure/WebVitalsPageExtensions.cs:32</code>,
           an <code>extension(IPage)</code> block at <code>:15</code>) installs the collector, navigates, optionally drives one
-          scripted interaction, collects, writes the artifact and asserts the budget, in that order (<code>:43-44</code>,
-          <code>:46-57</code>, <code>:59-62</code>). Install-before-navigate is the load-bearing part: observers installed after the
-          navigation record no LCP, FCP or TTFB for that load (<code>:5-11</code>). Every suite routes through it (ADC
+          scripted interaction against a named input placeholder, collects, writes the artifact and asserts
+          the budget, in that order (<code>:43-44</code>, <code>:46-57</code>, <code>:59-62</code>). A second member,
+          <code>MeasureWebVitalsWithInteractionAsync</code> (<code>:84</code>), takes a <code>Func&lt;IPage, Task&gt;</code> interaction instead of a
+          placeholder for the interactions that form cannot express, and carries its own name rather than
+          overloading the first, whose optional parameters would make the two ambiguous at the call site
+          (<code>:70-72</code>). Install-before-navigate is the load-bearing part: observers installed after the
+          navigation record no LCP, FCP or TTFB for that load (<code>:5-11</code>). Every suite routes through the block (ADC
           <code>WebVitalsTests.cs:90</code>, Store <code>:42</code>, <code>:52</code>, <code>:62</code>, the framework gallery <code>WebVitalsE2ETests.cs:40</code>,
           <code>:48</code>, <code>:56</code>); Store&#39;s product-detail test is the one caller that still drives the collector
           directly, because it reaches its page by navigation rather than by path (Store
@@ -326,12 +335,16 @@
           <li><strong>The framework measures its own UI, under its own looser numbers.</strong> <code>WebVitalsE2ETests</code>
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:15</code>) measures the
           backend-less in-process gallery on three pages, login (<code>:40</code>), components (<code>:48</code>) and grid (<code>:56</code>),
-          through the same shipped extension, against a <code>WebVitalsBudget</code> of LCP 8000 ms, FCP 8000 ms, TTFB
-          4000 ms and CLS 0.25 (<code>:29-30</code>, constants at <code>:17-19</code>). FCP is pinned to the LCP ceiling rather than
-          left on the package default, so the effective gate is the three metrics the gallery gates on
-          (<code>:21-27</code>): the gallery is a backstop against catastrophic regression in the shared chrome (a render
-          loop, a giant synchronous asset, a layout-shifting theme change), not a calibrated app budget
-          (<code>:7-14</code>). Each test adds one in-class guard, <code>AssertSomethingWasMeasured</code> (<code>:42</code>, <code>:50</code>, <code>:58</code>,
+          through the same shipped extension, against a <code>WebVitalsBudget</code> of LCP 4000 ms, FCP 3000 ms, TTFB
+          1500 ms, CLS 0.1 and INP 500 ms (constants at <code>:17-21</code>, assembled at <code>:36-37</code>). All five metrics
+          are specified, so the gallery gates on the same set the apps do; the three loose ceilings are a
+          recorded step down from the opening 8000/4000/0.25 set and step down again to the package default
+          after one green cross-browser cycle (<code>:28-30</code>). The gallery is a backstop against catastrophic
+          regression in the shared chrome (a render loop, a giant synchronous asset, a layout-shifting theme
+          change), not a calibrated app budget (<code>:7-14</code>). The components test is the one case in the whole
+          adoption set that drives an interaction, a plain button click passed to
+          <code>MeasureWebVitalsWithInteractionAsync</code> (<code>:59-65</code>, documented at <code>:52-55</code>), so INP is sampled there
+          rather than skipped. Each test adds one in-class guard, <code>AssertSomethingWasMeasured</code> (<code>:42</code>, <code>:50</code>, <code>:58</code>,
           defined at <code>:66-69</code>), which fails when neither TTFB nor FCP was recorded, so an all-zero sample
           cannot clear every ceiling by never having been measured.</li>
           <li><strong>The regression behaviour is pinned by unit tests, not by the browser runs.</strong>
@@ -380,9 +393,9 @@
           <li><strong>The gate is ui-scoped and may legitimately skip.</strong> Both apps gate <code>e2e-gate</code> on a <code>ui</code> change
           filter (ADC <code>deploy.yml:688</code>, Store <code>:645</code>) and <code>deploy</code> accepts <code>skipped</code> for it (ADC <code>:1092</code>,
           Store <code>:1038</code>), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
-          commit. ADC pairs the gate with a <code>backend-test-gate</code> carrying the exact inverse condition
-          (<code>deploy.yml:394</code>, <code>:396</code>), but that job runs no browser, so it leaves this budget unmeasured on
-          those deploys. Same intended cost trade as the accessibility gate, and the same caveat: &quot;deployed&quot;
+          commit. Both apps pair the gate with a <code>backend-test-gate</code> carrying the exact inverse condition
+          (ADC <code>deploy.yml:419</code>, <code>:421</code>; Store <code>:376</code>, <code>:378</code>), but that job runs no browser, so it leaves
+          this budget unmeasured on those deploys. Same intended cost trade as the accessibility gate, and the same caveat: &quot;deployed&quot;
           does not always mean &quot;the budget ran on this commit&quot;.</li>
           <li><strong>It never runs on a pull request.</strong> The E2E project is in neither solution filter and the gate is
           push/dispatch only (ADC <code>deploy.yml:688</code>, Store <code>:645</code>), so a regression is caught between merge and
@@ -403,12 +416,15 @@
           <li><strong>Coverage is a hand-picked page list.</strong> Four pages in ADC and four in Store, against far larger
           inventories. Nothing forces a new page to acquire a budget, so breadth grows by discipline, the same
           caveat as the accessibility suites.</li>
-          <li><strong>Only pages with a search box get an INP sample.</strong> The interaction is best-effort and page-specific
-          (ADC <code>WebVitalsTests.cs:31-35</code>, Store <code>:44-49</code>); on every other measured page INP stays 0 and its
-          assertion is skipped, so interaction latency is asserted on one page per app.</li>
+          <li><strong>One page per app gets an INP sample.</strong> In both apps the interaction is best-effort and
+          page-specific, a search box on the single grid page (ADC <code>WebVitalsTests.cs:31-35</code>, Store
+          <code>:44-49</code>); on every other measured page INP stays 0 and its assertion is skipped, so interaction
+          latency is asserted on one page per app. The gallery&#39;s components test is the only other place in
+          the adoption set that drives one (<code>WebVitalsE2ETests.cs:59-65</code>).</li>
           <li><strong>The green-run artifact is written but not kept.</strong> Both workflows upload the diagnostics bundle
           only on failure (ADC <code>e2e.yml:355-359</code>, Store <code>:398-404</code>), and MMCA.Common&#39;s <code>ui-e2e</code> job sets no
-          <code>WEB_VITALS_OUTPUT_DIR</code> at all and uploads only Playwright traces (<code>ci.yml:316-322</code>), so the JSON
+          <code>WEB_VITALS_OUTPUT_DIR</code> at all and uploads no Web Vitals artifact of its own (what it does upload
+          is the chromium leg&#39;s coverage file and, on failure, Playwright traces) (<code>ci.yml:353-359</code>), so the JSON
           lands beside the test binaries and is discarded with the runner. There is no time series: the
           sample line in the run log is the only surviving record of a green run.</li>
           <li><strong>Nothing stops a ceiling being raised to silence a red gate.</strong> As with ADR-060&#39;s baseline, the

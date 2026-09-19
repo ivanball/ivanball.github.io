@@ -12,6 +12,11 @@ events across the three apps, 9 of them in Store; 15 records derive the base), t
 discriminator's type was corrected to Catalog's own `ProductChangeState`, the Sales consumer was
 re-anchored to `ProductVariantChangedHandler` (which handles `Added` and `Updated`), and the
 `Session`, `OrderPaid` and contract-test citations were re-anchored.
+Revised 2026-09-19: both counts were recounted from source and raised. ADC Conference's
+`PartnerChanged` and `SessionAssetChanged` were missing from the base-derived set, so 17 records now
+derive `EntityChangedEvent<TId>` across the four repos (19 including the `MMCA.ECommerce` sample), and
+the shape sweep finds 35 lifecycle events across the three apps (25 in ADC, of which 18 are in
+Conference; 9 in Store; 1 in Helpdesk).
 
 ## Context
 ADR-003 decides how a domain event **moves**: captured into the outbox inside `SaveChangesAsync`,
@@ -88,15 +93,16 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   the sibling `ProductInfoChanged` entry at `:11` carries it too),
   so retyping or removing the discriminator fails the build and, under ADR-010, requires a new event
   type rather than a silent reshape.
-- **The shared base is the convenience; the discriminator shape is the convention.** Fifteen concrete
+- **The shared base is the convenience; the discriminator shape is the convention.** Seventeen concrete
   records derive `EntityChangedEvent<TId>` across the four repos: seven in Store (`OrderChanged.cs:19`,
   `ShoppingCartChanged.cs:16`, `InventoryItemChanged.cs:17` under `Sales.Domain`,
   `Catalog.Domain/Products/DomainEvents/ProductChanged.cs:23`,
   `Catalog.Domain/Categories/DomainEvents/CategoryChanged.cs:19`,
   `Catalog.Domain/Reviews/DomainEvents/ProductReviewChanged.cs:15-20`,
-  `Identity.Domain/Customers/DomainEvents/CustomerChanged.cs:25`), seven in ADC Conference
+  `Identity.Domain/Customers/DomainEvents/CustomerChanged.cs:25`), nine in ADC Conference
   (`SponsorChanged.cs:16`, `EventChanged.cs:16`, `QuestionChanged.cs:16`, `CategoryChanged.cs:16`,
-  `ActivityChanged.cs:16`, `SpeakerChanged.cs:21`, `SessionChanged.cs:18`), and one in Helpdesk
+  `ActivityChanged.cs:16`, `SpeakerChanged.cs:21`, `SessionChanged.cs:18`, `PartnerChanged.cs:16`,
+  `SessionAssetChanged.cs:18`), and one in Helpdesk
   (`TicketChanged.cs:15`).
   Eighteen further domain events follow the same one-event-with-`State` shape while inheriting
   `BaseDomainEvent` directly (`ProductVariantChanged` does the same over `BaseIntegrationEvent` on
@@ -110,10 +116,10 @@ carrying a `DomainEntityState` discriminator; handlers filter on `State`.
   or because the module took the shape without the base (all seven ADC Engagement events, for example
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/UserSessionBookmarks/DomainEvents/UserSessionBookmarkChanged.cs:21-26`,
   whose doc cites the same rule as BR-60 at `:8-9`). Counting the shape rather than the base type, a
-  sweep of every `DomainEvents/*.cs` declaring a `DomainEntityState State` member finds **23 in ADC**
-  (16 Conference, 7 Engagement; Identity's two events are business-specific and carry no
+  sweep of every `DomainEvents/*.cs` declaring a `DomainEntityState State` member finds **25 in ADC**
+  (18 Conference, 7 Engagement; Identity's two events are business-specific and carry no
   discriminator), **9 in Store** (of twenty-three domain events there, the other fourteen name
-  business transitions) and **1 in Helpdesk**: **33** in total.
+  business transitions) and **1 in Helpdesk**: **35** in total.
 - **Nothing enforces the taxonomy.** The shared fitness rules require domain events to be sealed and to
   live in a `*.DomainEvents` namespace
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Naming.cs:66-75`), to
@@ -140,7 +146,7 @@ records exactly that gap (`TicketChangedAuditHandler.cs:13-14`). Outside the fou
 `MMCA.ECommerce` companion sample carries two more adopters on the same pattern
 (`MMCA.ECommerce/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/DomainEvents/ProductChanged.cs:15`,
 `.../Orders/MMCA.ECommerce.Orders.Domain/Orders/DomainEvents/OrderChanged.cs:15`), which brings the
-total number of records deriving the base to **17**.
+total number of records deriving the base to **19**.
 
 ## Rationale
 - **One type per entity is one subscription surface.** A subscriber declares interest in the entity,
@@ -175,7 +181,7 @@ total number of records deriving the base to **17**.
   tell the transitions apart
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/LivePolls/DomainEvents/LivePollChanged.cs:9-11,17-22`),
   which is a state machine expressed through the CRUD shape rather than as its own events.
-- **The base type is optional in practice.** 15 of the 33 lifecycle events across the three apps derive
+- **The base type is optional in practice.** 17 of the 35 lifecycle events across the three apps derive
   `EntityChangedEvent<TId>`; the other 18 re-declare the same two members on `BaseDomainEvent`.
   Consistency is a review convention, not a fitness function (ADR-015), so a new module can drift
   without a failing test.

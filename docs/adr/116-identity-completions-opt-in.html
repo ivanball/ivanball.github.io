@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-116: Identity Completions Ship as Opt-In Base Classes, Not as Framework Features · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-09). Layers stored permission grants over ADR-020&#39;s compiled registry and extends the shared sign-in workflow of ADR-050 with…">
+  <meta name="description" content="Accepted (2026-09-09; revised 2026-09-19: item 10 now scopes the &quot;no @page directive&quot; claim to what this decision ships, because MMCA.Common.UI itself…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-116: Identity Completions Ship as Opt-In Base Classes, Not as Framework Features">
-  <meta property="og:description" content="Accepted (2026-09-09). Layers stored permission grants over ADR-020&#39;s compiled registry and extends the shared sign-in workflow of ADR-050 with…">
+  <meta property="og:description" content="Accepted (2026-09-09; revised 2026-09-19: item 10 now scopes the &quot;no @page directive&quot; claim to what this decision ships, because MMCA.Common.UI itself…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-116: Identity Completions Ship as Opt-In Base Classes, Not as Framework Features">
-  <meta name="twitter:description" content="Accepted (2026-09-09). Layers stored permission grants over ADR-020&#39;s compiled registry and extends the shared sign-in workflow of ADR-050 with…">
+  <meta name="twitter:description" content="Accepted (2026-09-09; revised 2026-09-19: item 10 now scopes the &quot;no @page directive&quot; claim to what this decision ships, because MMCA.Common.UI itself…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features","item":"https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -231,7 +233,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-116-identity-completions-ship-as-opt-in-base-classes-not-as-framework-features">ADR-116: Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-09). Layers stored permission grants over
+          <p>Accepted (2026-09-09; revised 2026-09-19: item 10 now scopes the &quot;no <code>@page</code> directive&quot; claim to what
+          this decision ships, because <code>MMCA.Common.UI</code> itself ships 13 of them in the credential and
+          notification pages, and it now names <code>UserAdminList&lt;TUser&gt;</code> as the third routeless administration
+          component). Layers stored permission grants over
           <a href="020-permission-based-authorization.html">ADR-020</a>&#39;s compiled registry and extends the shared sign-in
           workflow of <a href="050-jwt-refresh-token-rotation.html">ADR-050</a> with optional collaborators.</p>
           <h2 id="context">Context</h2>
@@ -389,19 +394,30 @@
           dependency-free, matching the <code>Cronos</code> precedent.</p>
           </li>
           <li><p><strong>Pages stay with the consumers; the administration surface ships as routeless components.</strong> No
-          enrollment page and no confirmation page ships in <code>MMCA.Common.UI</code>, and nothing the framework
-          ships carries an <code>@page</code> directive: <code>RoleAdminList</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/RoleAdminList.razor.cs:27</code>)
-          and <code>RoleAdminEdit</code> (<code>.../Pages/Administration/RoleAdminEdit.razor.cs:35</code>) are components the app
-          routes, authorizes and links for itself (<code>RoleAdminList.razor.cs:12-13</code>). They were promoted under
-          the rule the framework already applies to shared components, two consumers wanting the same one,
-          and they qualify because roles and permissions are strings the framework already owns, so there is
-          no app DTO to name (<code>.../Presentation/MMCA.Common.UI/DependencyInjection.cs:227-228</code>). They talk
-          to the controller base through <code>IRoleAdminUIService</code>
+          enrollment page and no confirmation page ships in <code>MMCA.Common.UI</code>, and nothing this decision
+          ships carries an <code>@page</code> directive. (The package itself does ship routable pages, the credential
+          and notification screens of the Context above: 13 <code>@page</code> directives across 12 components, from
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:1</code> to
+          <code>.../Pages/Notifications/NotificationInbox.razor:1-2</code>. None of them is one of these.)
+          <code>RoleAdminList</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/RoleAdminList.razor.cs:27</code>),
+          <code>RoleAdminEdit</code> (<code>.../Pages/Administration/RoleAdminEdit.razor.cs:35</code>) and <code>UserAdminList&lt;TUser&gt;</code>
+          (<code>.../Pages/Administration/UserAdminList.razor.cs:47</code>) are components the app routes, authorizes
+          and links for itself (<code>RoleAdminList.razor.cs:12-13</code>). They were promoted under the rule the
+          framework already applies to shared components, two consumers wanting the same one. The two role
+          components are non-generic because roles and permissions are strings the framework already owns,
+          so there is no app DTO to name
+          (<code>.../Presentation/MMCA.Common.UI/DependencyInjection.cs:227-228</code>); the roster is generic instead,
+          over an app-owned DTO that only has to implement <code>IUserAdminDTO</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Administration/IUserAdminDTO.cs:15</code>), which is
+          the one place a routeless component still names app shape. The role pair talks to the controller
+          base through <code>IRoleAdminUIService</code>
           (<code>.../UI/Services/Administration/IRoleAdminUIService.cs:41</code>) and its typed-client implementation
           <code>RoleAdminService</code> (<code>.../UI/Services/Administration/RoleAdminService.cs:50-51</code>), registered by
-          <code>AddRoleAdministrationUI()</code> (<code>.../UI/DependencyInjection.cs:234</code>). An app that serves no
-          role-administration endpoints registers nothing and renders neither component.</p>
+          <code>AddRoleAdministrationUI()</code> (<code>.../UI/DependencyInjection.cs:234</code>); the roster registers through
+          <code>AddUserAdministrationUI&lt;TUserDto&gt;()</code> (<code>.../UI/DependencyInjection.cs:218</code>). An app that serves no
+          role-administration endpoints registers nothing and renders neither role component, and an app
+          that serves no <code>Admin/Users</code> endpoints never renders the roster.</p>
           </li>
           <li><p><strong>The editor draws a closed catalog, and the surface cannot be locked out from inside it.</strong>
           <code>IPermissionCatalog</code>

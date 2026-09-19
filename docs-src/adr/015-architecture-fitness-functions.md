@@ -29,6 +29,10 @@ restated are removed from this record's live text, because
 here goes stale between audits while the generated one cannot. What this record states instead is the
 structure the figures describe: one shared rule library of abstract `*TestsBase` classes, subclassed
 per repo. Six citations that moved are re-anchored. See Revision (2026-09-11) at the end.
+Revised 2026-09-19: the public API gate covers two more projects than this record said, so the baseline
+file count, the header-only list and the unshipped declaration figure are corrected in the live text
+(eighteen baseline pairs, still one per published package except `MMCA.Common.UI.Maui`). See
+Revision (2026-09-19) at the end.
 
 ## Context
 The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
@@ -186,7 +190,7 @@ project-reference guard and a NetArchTest suite). The gate is neither: it is a *
 with a committed baseline**, `Microsoft.CodeAnalysis.PublicApiAnalyzers` 5.6.0
 (`MMCA.Common/Directory.Packages.props:226`), applied to every `Source` project through one
 `Directory.Build.props` ItemGroup rather than per csproj (`:86-93`), with `PublicAPI.Shipped.txt` and
-`PublicAPI.Unshipped.txt` added as `AdditionalFiles` (`:91-92`). Sixteen projects carry the pair, one
+`PublicAPI.Unshipped.txt` added as `AdditionalFiles` (`:91-92`). Eighteen projects carry the pair, one
 for every published package except the single exclusion below.
 **`MMCA.Common.UI.Maui` is deliberately excluded** and the condition says why (`:82-84`): it lives
 outside `MMCA.Common.slnx` and builds only on the windows `build-maui` job across four MAUI TFMs
@@ -201,14 +205,15 @@ explicitly set to `error`: both are left at the repository's global analyzer-err
 Widening or breaking a package's shipped surface therefore becomes a reviewable diff in a text file
 instead of something a consumer discovers after the release.
 
-The shipped baselines hold **5,034 declarations** across the sixteen files (5,050 non-empty lines, each
-file opening with a `#nullable enable` header; two of them, `MMCA.Common.Gateway` and the `MMCA.Common`
-metapackage, hold the header alone). The `PublicAPI.Unshipped.txt` files are no longer header-only
-stubs: fourteen of the sixteen now carry **1,486 declarations** of surface added since their shipped
-baseline was last written, the two exceptions being `MMCA.Common.UI.Web` and the `MMCA.Common`
+The shipped baselines hold **5,034 declarations** across the eighteen files (5,052 non-empty lines, each
+file opening with a `#nullable enable` header; four of them, `MMCA.Common.AI`, `MMCA.Common.Gateway`,
+`MMCA.Common.Testing.Aspire` and the `MMCA.Common` metapackage, hold the header alone). The
+`PublicAPI.Unshipped.txt` files are no longer header-only
+stubs: seventeen of the eighteen now carry **2,710 declarations** of surface added since their shipped
+baseline was last written (2,728 non-empty lines), the one exception being the `MMCA.Common`
 metapackage. **What is baselined is the surface as of this branch**, which is whichever release
-`MMCA.Common/FACTS.md:14` currently names (v1.154.0 when this revision was written; the figures above
-were re-counted on 2026-09-03), so they cover the Section A additions this
+`MMCA.Common/FACTS.md:14` currently names (v1.154.0 when this revision was first written; the figures
+above were re-counted on 2026-09-19), so they cover the Section A additions this
 revision described plus every wave that followed, not a frozen picture of one release. The
 start version is no longer uncited: the gate shipped in v1.153.0, whose changelog entry names
 `Microsoft.CodeAnalysis.PublicApiAnalyzers` on every in-slnx Source project with committed baselines as
@@ -497,6 +502,38 @@ about 520 lines per audit cycle.
 **One figure stays unverified rather than corrected.** The "roughly 2,254" suite size beside the 2,000
 floor is the CI step's own comment, not something a static read can confirm, and it is left as the
 estimate it always was. The floor itself is live.
+
+## Revision (2026-09-19): the gate covers eighteen projects, and the unshipped side nearly doubled
+No rule family joined or left the library in this entry and no decision changed. It corrects the
+public-API gate's file and declaration figures, which had gone stale in the direction the gate's own
+design predicts.
+
+**The pair count is eighteen, not sixteen.** `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` pairs
+now exist under seventeen `Source/<tier>/<package>/` directories plus `Source/MMCA.Common/` for the
+metapackage. That is still every project under `Source/` except `MMCA.Common.UI.Maui`, which the
+`Directory.Build.props` ItemGroup condition continues to exclude by name for the reason quoted in the
+live text, so the rule the record states did not change: the two additions are new packages picking up
+the gate automatically, not a widening of its scope. The published-package total stays with
+[FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) (`FACTS.md:19`) rather than being
+transcribed here.
+
+**Four shipped baselines are header-only now, not two.** `MMCA.Common.AI` and
+`MMCA.Common.Testing.Aspire` join `MMCA.Common.Gateway` and the `MMCA.Common` metapackage in holding
+the `#nullable enable` header and nothing else. For the two new ones that is the expected state of a
+package whose whole surface postdates the last baseline roll: everything they expose sits in their
+unshipped file (104 and 94 declarations) waiting for a release to move it across.
+
+**The unshipped side carries 2,710 declarations across seventeen of the eighteen files**, where the
+2026-09-03 entry read 1,486 across fourteen of sixteen, and the shipped side is unchanged at 5,034
+declarations (the non-empty line total moves from 5,050 to 5,052 only because two more header lines
+exist). `MMCA.Common.UI.Web` is no longer an exception: its unshipped file holds eight declarations, so
+the only header-only unshipped file left is the metapackage's. The pattern the 2026-09-03 entry
+described is now visible at scale: the shipped figure holds flat between releases while the unshipped
+figure absorbs every wave, which is what a baseline that rolls over at release time is supposed to look
+like.
+
+**No citation was re-anchored in this entry**, and the dated figures inside the earlier revisions stay
+as they are, under the convention this record has used since 2026-09-01.
 
 ## Related
 ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the

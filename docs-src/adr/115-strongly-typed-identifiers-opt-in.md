@@ -1,7 +1,9 @@
 # ADR-115: Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default
 
 ## Status
-Accepted (2026-09-09).
+Accepted (2026-09-09). Revised 2026-09-19 (the alias count and the migration-surface census this
+record quotes were re-measured, the `CheckIn` parameter run was corrected from "consecutive", and the
+fitness rule's subclass list was completed; see the Revision (2026-09-19) at the end).
 **Revisits [ADR-048](048-primitive-identifier-type-aliases.md) and
 [ADR-085](085-identifier-type-aliases-revisited.md)** by adding the capability those records deferred,
 without migrating anything. ADR-048's decision (every entity identity is a primitive named through a
@@ -13,9 +15,15 @@ boundaries.
 ## Context
 ADR-048 chose primitive identifier aliases over wrapper structs. ADR-085 re-opened that choice on
 2026-08-18, priced the migration in numbers (44 aliases, 43 of them `int`, 3,192 occurrences across
-1,001 files), deferred again, and replaced the open-ended "not now" with three named revisit triggers:
-a production defect traced to an identifier transposition, a greenfield fifth consumer, or a
-cross-module identifier count that keeps climbing.
+1,001 files, the August figures), deferred again, and replaced the open-ended "not now" with three
+named revisit triggers: a production defect traced to an identifier transposition, a greenfield fifth
+consumer, or a cross-module identifier count that keeps climbing. Those numbers have moved twice
+since. A recount of the ten `GlobalUsings.*IdentifierType.cs` files on 2026-09-19 gives **48 aliases,
+46 of them `int`**; the two exceptions are both `System.Guid` and both in ADC's Conference module
+(`SessionAssetIdentifierType` and `SpeakerIdentifierType`,
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17`
+and `:23`). ADR-085's 2026-09-19 census puts the migration surface at 3,767 alias-carrying lines
+across 1,192 files.
 
 **None of the three has fired, and this record is not claiming otherwise.** The trigger here is a
 different one: the 2026-09-09 framework gap analysis of what a .NET application framework is expected
@@ -176,8 +184,13 @@ the framework pushes a consumer toward a wrapper.**
     flags a wrapper that is not a struct, is not `readonly`, is not a record, or declares instance
     state beyond the wrapped value. It is exposed by `StronglyTypedIdTestsBase`
     (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/StronglyTypedIdTestsBase.cs:9`)
-    and subclassed in MMCA.Common's own architecture tests, where it is satisfied by having nothing
-    to check. It exists to hold the FIRST wrapper any repo declares to the shape the converters,
+    and subclassed in three repositories' architecture tests: MMCA.Common
+    (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/StronglyTypedIdConventionTests.cs:12`),
+    MMCA.ADC
+    (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/StronglyTypedIdTests.cs:9`) and
+    MMCA.Store
+    (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/StronglyTypedIdTests.cs:3`).
+    All three are satisfied by having nothing to check; MMCA.Helpdesk declares no subclass. It exists to hold the FIRST wrapper any repo declares to the shape the converters,
     comparer and route binding are written against. The rule is deliberately separate from
     `ValueObjectsAreImmutableSealedInShared`: an identifier is not a `ValueObject` derivative, it has
     no validation to fail and no `Result`-returning `Create` factory, which is the same reasoning
@@ -185,8 +198,9 @@ the framework pushes a consumer toward a wrapper.**
 
 13. **Adoption is zero and this record says so.** No production type in MMCA.Common, MMCA.Store,
     MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample implements `IStronglyTypedId<,>`. The only
-    implementations anywhere are the fixtures in six of the framework's own test files. The 44
-    aliases ADR-085 counted are untouched, and no consumer needs a version-bump behaviour change:
+    implementations anywhere are the fixtures in six of the framework's own test files. The 48
+    aliases in force across the four repositories on 2026-09-19 (46 `int`, two `System.Guid`) are
+    untouched, and no consumer needs a version-bump behaviour change:
     without a call to `AddStronglyTypedIds`, every framework site that reads the registry treats its
     absence as "no wrappers in use".
 
@@ -216,9 +230,12 @@ the framework pushes a consumer toward a wrapper.**
   for smart enumerations and [ADR-037](037-field-level-encryption-at-rest.md) for the encryption
   converter. The alternative, leaving the code in place with no record, reads as unfinished adoption
   to the next reader.
-- **The aliases are still right for the four repos.** ADR-085's arithmetic did not change: 3,192
-  occurrences across 1,001 files, no incident traced to a transposition, and a partial migration
-  worse than either endpoint. Nothing here proposes moving any of it.
+- **The aliases are still right for the four repos.** ADR-085's conclusion did not change, though its
+  arithmetic did: its 2026-09-19 census reports 3,767 alias-carrying lines across 1,192 files, up
+  from the 3,192 across 1,001 it priced in August. There is still no incident traced to a
+  transposition, and a partial migration is still worse than either endpoint. A surface that grows on
+  its own makes the migration more expensive, not the deferral less sound. Nothing here proposes
+  moving any of it.
 - **A greenfield consumer now has a first-class path.** ADR-085's second trigger says a new
   application on the framework pays none of the migration cost and is the right place to build
   wrappers first. That path now exists as one DI call rather than as a research project, which is
@@ -258,10 +275,12 @@ the framework pushes a consumer toward a wrapper.**
   compiler error whether a call site is protected. ADR-085 named that as the reason the migration is
   all-or-nothing; this record does not fix it, it only makes the wrapped half possible. The rule in
   Decision point 13 (adopt nothing) is prose, not a fitness function.
-- **The ADR-085 transposition risk is only closed for adopters.** `CheckIn`'s five consecutive
-  identifier parameters
+- **The ADR-085 transposition risk is only closed for adopters.** `CheckIn`'s five identifier
+  parameters
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:57-64`) are
-  still five `int`s. Shipping the capability does not retire the risk; it makes retiring it a choice
+  still five `int`s. They are not five in a row, as this record previously said: a `CheckInScope`
+  parameter sits between `userId` and the run of four that follows it, which narrows the transposable
+  window without closing it, since four adjacent `int`-aliased parameters remain. Shipping the capability does not retire the risk; it makes retiring it a choice
   someone can now make cheaply for one aggregate at a time.
 - **A capability nobody uses is a capability nobody has stress-tested.** 77 tests against fixtures
   are not a production module with real migrations, a real wire history and a real query surface.
@@ -304,3 +323,30 @@ surface, and the fitness-function library the new rule joins),
 column has to keep speaking),
 [ADR-113](113-postgresql-as-a-first-class-engine.md) (the fourth engine the one base-context
 registration reaches without an engine branch).
+
+## Revision (2026-09-19)
+The decision is unchanged: the framework still ships the capability, the aliases are still the
+default, and adoption is still zero. Four facts this record borrowed were re-measured against source.
+
+**The alias count is 48, not 44, and 46 of them are `int`, not 43.** Recounted directly from the ten
+`GlobalUsings.*IdentifierType.cs` files: Common Domain 1, Common Shared 2, ADC Notification 2, ADC
+Identity 1, ADC Engagement 10, ADC Conference 19, Store Catalog 6, Store Identity 2, Store Sales 3,
+Helpdesk Tickets 2. The two non-`int` aliases are both `System.Guid` and both in ADC Conference
+(`SessionAssetIdentifierType` at
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17`,
+`SpeakerIdentifierType` at `:23`), so the "one exception" framing earlier records used no longer
+holds. The Context and Decision point 13 carried the August figure of 44.
+
+**The migration surface is ADR-085's to own, and it moved.** That record's 2026-09-19 census reports
+3,767 alias-carrying lines across 1,192 files against the 3,192 across 1,001 this record quoted. The
+Rationale said the arithmetic had not changed; it had, twice, and the deferral survives it on its
+own merits rather than on the numbers standing still.
+
+**`CheckIn`'s five identifier parameters are not consecutive.** `CheckInScope scope` sits between
+`userId` and the four identifier parameters that follow it in the private constructor. All five are
+still `int`-aliased, so the trade-off holds; the word "consecutive" was wrong.
+
+**The fitness rule is subclassed in three repositories, not one.** MMCA.Common, MMCA.ADC and
+MMCA.Store each declare a `StronglyTypedIdTestsBase` subclass over their own architecture map, and
+all three pass vacuously. MMCA.Helpdesk declares none. Decision point 12 named only MMCA.Common,
+which was true when written and had become incomplete.

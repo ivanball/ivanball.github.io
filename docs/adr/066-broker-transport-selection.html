@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -250,7 +252,11 @@
           Service Bus emulator host build moved out of <code>ConfigureBrokerTransport</code> into the
           <code>ServiceBusEmulatorSupport</code> helper, so the bullet describing that branch is restated).
           Revised 2026-09-07 (the single shared client SAS is replaced by a rule per service in both
-          consumers, so broker rights and rotations are scoped to one service).</p>
+          consumers, so broker rights and rotations are scoped to one service). Revised 2026-09-19 (no
+          <code>app-clients</code> rule is named anywhere in either template, so the tier-and-rights bullet, the <code>Manage</code>
+          trade-off and the 2026-09-07 revision are restated around the seven per-service rules that actually
+          exist and are named here; the claim that a namespace-level rule survives beside them is dropped,
+          because both templates record the opposite in a comment above the rules).</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 decides that integration events leave an aggregate through the outbox and are published by
           <code>OutboxProcessor</code> via <code>IMessageBus</code>, and it settles the <em>dispatch</em> question (&quot;in-process for the
@@ -334,16 +340,21 @@
           Both namespaces are <code>Standard</code>/<code>Standard</code> (<code>MMCA.ADC/infra/main.bicep:716-719</code>,
           <code>MMCA.Store/infra/main.bicep:690-693</code>) because <code>UsingAzureServiceBus</code> configures a topic per
           message type plus a subscription per consumer, and Basic supports queues only
-          (<code>MMCA.ADC/infra/main.bicep:707-708</code>, <code>MMCA.Store/infra/main.bicep:682-684</code>). The <code>app-clients</code>
-          authorization rule carries <code>Send</code> + <code>Listen</code> + <strong><code>Manage</code></strong> (<code>MMCA.ADC/infra/main.bicep:735-739</code>,
-          rule at <code>:731-741</code>; <code>MMCA.Store/infra/main.bicep:709-713</code>, rule at <code>:705-715</code>) so
-          <code>ConfigureEndpoints</code> can provision that topology at startup; without <code>Manage</code> the first publish
-          fails with an Unauthorized topology error (<code>MMCA.ADC/infra/main.bicep:728-729</code>,
-          <code>MMCA.Store/infra/main.bicep:702-703</code>). Both repos source the connection string from that dedicated
-          rule rather than from <code>RootManageSharedAccessKey</code>, so a later move to managed identity can revoke it
-          without touching the namespace root (<code>MMCA.ADC/infra/main.bicep:177-179</code>,
-          <code>MMCA.Store/infra/main.bicep:137-139</code>, the same two-line rationale comment above the same
-          <code>serviceBusAuthRule.listKeys().primaryConnectionString</code> expression in each).</li>
+          (<code>MMCA.ADC/infra/main.bicep:707-708</code>, <code>MMCA.Store/infra/main.bicep:682-684</code>). There is no shared
+          client rule: each container app owns a namespace authorization rule of its own, and every one of
+          them carries <code>Send</code> + <code>Listen</code> + <strong><code>Manage</code></strong>. ADC declares four (<code>identity-service</code>,
+          <code>conference-service</code>, <code>engagement-service</code>, <code>notification-service</code> at
+          <code>MMCA.ADC/infra/main.bicep:980</code>, <code>:992</code>, <code>:1004</code>, <code>:1016</code>, rights at <code>:984-988</code> and repeated
+          identically on the other three); Store declares three (<code>catalog-app</code>, <code>sales-app</code>, <code>identity-app</code>
+          at <code>MMCA.Store/infra/main.bicep:1005</code>, <code>:1017</code>, <code>:1029</code>, rights at <code>:1009-1013</code>). <code>Manage</code> is on
+          all seven so <code>ConfigureEndpoints</code> can provision that topology at startup; without it the first
+          publish fails with an Unauthorized topology error, which is why neither template drops it
+          (<code>MMCA.ADC/infra/main.bicep:953-965</code>, <code>MMCA.Store/infra/main.bicep:995-1004</code>). Neither repo
+          sources a connection string from <code>RootManageSharedAccessKey</code>, so a later move to managed identity
+          can revoke these without touching the namespace root: each service reads its own
+          <code>listKeys().primaryConnectionString</code> variable, four of them under a four-line rationale comment in
+          ADC (<code>MMCA.ADC/infra/main.bicep:197-200</code>, variables at <code>:201-204</code>) and three under a five-line one
+          in Store (<code>MMCA.Store/infra/main.bicep:154-158</code>, variables at <code>:159-161</code>).</li>
           <li><strong>Tests use the transport the tier is testing.</strong> A per-service integration host configures no
           provider, so <code>AddBrokerMessaging</code> short-circuits and the in-process bus stands
           (<code>DependencyInjection.cs:755-758</code>). The cross-service round-trip tier runs the real broker: the
@@ -440,9 +451,13 @@
           <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs</code>, plus a throttled
           admin plane and a 10-connection namespace quota), so a green
           smoke proves the binding and the topology provisioning, not production behavior at volume.</li>
-          <li><strong><code>Manage</code> rights are broad.</strong> The <code>app-clients</code> rule can create and delete entities in the
-          namespace, which is the price of letting <code>ConfigureEndpoints</code> build the topology instead of
-          declaring every topic in Bicep (<code>MMCA.ADC/infra/main.bicep:731-741</code>).</li>
+          <li><strong><code>Manage</code> rights are broad, and splitting the credential did not narrow them.</strong> Every per-service
+          rule can create and delete entities anywhere in the namespace, which is the price of letting
+          <code>ConfigureEndpoints</code> build the topology instead of declaring every topic in Bicep
+          (<code>MMCA.ADC/infra/main.bicep:980-1026</code>, <code>MMCA.Store/infra/main.bicep:1005-1039</code>). Both templates
+          record the residual next to the rules: a compromised container still holds namespace-wide
+          <code>Send</code> + <code>Listen</code> + <code>Manage</code>, so per-service rules buy credential separation and revocability, not
+          privilege reduction (<code>MMCA.ADC/infra/main.bicep:967-979</code>, <code>MMCA.Store/infra/main.bicep:995-1004</code>).</li>
           <li><strong>Provider selection is per host and silent when missing.</strong> A service that never receives
           <code>MessageBus__Provider</code> keeps the in-process bus and publishes nothing to the broker, without an
           error (<code>DependencyInjection.cs:755-758</code>); correctness depends on auditing the AppHost and the Bicep
@@ -459,10 +474,15 @@
           <p>The transport selection is unchanged. The credential topology under it is (SEC-ADC-26 /
           SEC-Store-38).</p>
           <p>Both repos previously sourced their Service Bus connection strings from one shared authorization
-          rule on the namespace. Each service now has its own: ADC declares Identity, Conference, Engagement
-          and Notification rules (<code>MMCA.ADC/infra/main.bicep:977</code>, <code>:989</code>, <code>:1001</code>, <code>:1013</code>) beside the
-          namespace-level rule (<code>:934</code>), and Store declares Catalog, Sales and Identity rules
-          (<code>MMCA.Store/infra/main.bicep:1005</code>, <code>:1017</code>, <code>:1029</code>) beside <code>:966</code>.</p>
+          rule on the namespace. Each service now has its own, and the shared rule is gone rather than kept
+          alongside them: ADC declares <code>identity-service</code>, <code>conference-service</code>, <code>engagement-service</code> and
+          <code>notification-service</code> (<code>MMCA.ADC/infra/main.bicep:980</code>, <code>:992</code>, <code>:1004</code>, <code>:1016</code>) and states the
+          absence in the template itself, &quot;One rule per service (SEC-ADC-26): there is no namespace-wide
+          shared credential&quot; (<code>:200</code>); Store declares <code>catalog-app</code>, <code>sales-app</code> and <code>identity-app</code>
+          (<code>MMCA.Store/infra/main.bicep:1005</code>, <code>:1017</code>, <code>:1029</code>) under the matching note, &quot;One namespace
+          authorization rule per container app, and no namespace-wide shared credential&quot; (<code>:981</code>). Store&#39;s
+          namespace keeps local auth enabled precisely because those three rules are SAS credentials
+          (<code>MMCA.Store/infra/main.bicep:984-985</code>).</p>
           <p>The consequence for this record is operational rather than architectural: dev/prod parity is
           unaffected (the emulator tier has no SAS at all), but a rotation is now a per-service action instead
           of a synchronized restart of every service on the namespace, and a leaked connection string names

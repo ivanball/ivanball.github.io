@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -239,7 +241,11 @@
           resolved policy).
           Revised 2026-09-07 (HSTS and forwarded headers are applied on the UI hosts and not only at the
           gateway, and credential-carrying paths additionally answer <code>Referrer-Policy: no-referrer</code> and
-          <code>Cache-Control: no-store</code>).</p>
+          <code>Cache-Control: no-store</code>).
+          Revised 2026-09-19 (the Blazor provider&#39;s emitted policy is recorded in full: it also carries
+          <code>img-src</code> and <code>font-src</code>, an opt-in startup-validated <code>frame-src</code>, and a Development-only
+          <code>script-src &#39;unsafe-inline&#39;</code>; and the UI host&#39;s forwarded-headers options clear <code>KnownProxies</code> and
+          <code>KnownIPNetworks</code> on purpose).</p>
           <h2 id="context">Context</h2>
           <p>Every client-facing host (the YARP Gateway and the Blazor UI web host in each app) must stamp the same
           hardened HTTP response headers: <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>,
@@ -278,14 +284,19 @@
           configures the <code>&quot;SecurityHeaders&quot;</code> section or registers its own provider.</li>
           <li><strong>HTML hosts register their own <code>ICspPolicyProvider</code></strong> before calling <code>AddCommonSecurityHeaders</code>
           (the registration uses <code>TryAddSingleton</code>, so the first-registered provider wins). Both apps register
-          one shared <code>BlazorCspPolicyProvider</code> (a single <code>internal sealed</code> class hoisted into
-          <code>MMCA.Common.UI.Web</code>, byte-identical to the copies the app hosts formerly carried) via
-          <code>AddCommonBlazorCsp</code> ahead of <code>AddCommonSecurityHeaders</code>. It pins <code>connect-src</code> to <code>&#39;self&#39;</code> plus the
-          configured API/Gateway origin (https + wss, from the shared <code>ApiSettings</code>), adds <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code> and <code>style-src &#39;self&#39; &#39;unsafe-inline&#39;</code>, and <strong>fails closed when that origin cannot
+          one shared <code>BlazorCspPolicyProvider</code> (a single <code>internal sealed</code> class living in
+          <code>MMCA.Common.UI.Web</code>) via <code>AddCommonBlazorCsp</code> ahead of <code>AddCommonSecurityHeaders</code>. It pins
+          <code>connect-src</code> to <code>&#39;self&#39;</code> plus the configured API/Gateway origin (https + wss, from the shared
+          <code>ApiSettings</code>), adds <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code>, <code>style-src &#39;self&#39; &#39;unsafe-inline&#39;</code>,
+          <code>img-src &#39;self&#39; data: https:</code> and <code>font-src &#39;self&#39;</code>, emits an opt-in <code>frame-src</code> when the host
+          configures one, and <strong>fails closed when that origin cannot
           be resolved or parsed</strong>: <code>connect-src</code> narrows to <code>&#39;self&#39;</code> and the policy is still enforced, so a
           misconfiguration shows up immediately as blocked cross-origin calls in the browser console rather than
-          as a header that is emitted but inert. It loosens the policy for localhost only in Development (Visual
-          Studio Browser Link / Hot Reload).</li>
+          as a header that is emitted but inert. Development loosens two directives, not one: <code>connect-src</code>
+          gains <code>http://localhost:* ws://localhost:*</code> and <code>script-src</code> additionally gains <code>&#39;unsafe-inline&#39;</code>
+          (Visual Studio Browser Link / Hot Reload injects an inline bootstrap script as well as opening a
+          localhost WebSocket), and the second of those is not localhost-scoped. The 2026-09-19 revision below
+          records the emitted policy directive by directive.</li>
           <li><strong>Adopted at both edges of both apps:</strong> Store and ADC each wire <code>AddCommonSecurityHeaders</code> +
           <code>UseCommonSecurityHeaders</code> in their Gateway host and their UI web host, with the UI host also
           registering <code>BlazorCspPolicyProvider</code>. The middleware carries a unit test
@@ -374,6 +385,55 @@
           than existing and never being executed. That is the whole difference between a conformance suite that
           is adopted and one that is merely present: item 2 above records the UI origin emitting its own HSTS,
           and a host-level test in the gating tier is what keeps a later pipeline edit from quietly undoing it.</p>
+          <h2 id="revision-2026-09-19">Revision (2026-09-19)</h2>
+          <p><strong>The Blazor policy is wider than the Decision above recorded, and the UI host&#39;s forwarded-headers
+          options clear their allow-lists on purpose.</strong> The provider is no longer the copy that was hoisted out
+          of the two app hosts: it now takes <code>IOptions&lt;BlazorCspSettings&gt;</code> alongside <code>ApiSettings</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:33-40</code>), so
+          &quot;identical to the app-local copies&quot; is history and the emitted string is what follows.</p>
+          <ol>
+          <li><strong>The full policy it emits.</strong> <code>BuildPolicy</code> (<code>.../Security/BlazorCspPolicyProvider.cs:103-113</code>)
+          concatenates, in order: <code>default-src &#39;self&#39;</code> (<code>:104</code>), <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code>
+          (<code>:105</code>), <code>style-src &#39;self&#39; &#39;unsafe-inline&#39;</code> (<code>:106</code>), <code>img-src &#39;self&#39; data: https:</code> (<code>:107</code>),
+          <code>font-src &#39;self&#39;</code> (<code>:108</code>), the computed <code>connect-src</code> (<code>:109</code>), an optional <code>frame-src</code> (<code>:110</code>),
+          then <code>base-uri &#39;self&#39;</code>, <code>form-action &#39;self&#39;</code> and <code>frame-ancestors &#39;none&#39;</code> (<code>:111-113</code>). <code>img-src</code>
+          is open to any https source on purpose, because profile pictures and content images come from
+          arbitrary external hosts, while the directives that matter for exfiltration (<code>script-src</code> and
+          <code>connect-src</code>) stay pinned (<code>:99-102</code>). Two differences from the static baseline in the Decision
+          above are worth stating: this policy adds <code>img-src</code> and <code>font-src</code>, and it carries no <code>object-src</code>
+          directive at all, so objects fall back to <code>default-src &#39;self&#39;</code> rather than the baseline&#39;s explicit
+          <code>object-src &#39;none&#39;</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:65-67</code>).</li>
+          <li><strong>Development loosens <code>script-src</code>, not just localhost <code>connect-src</code>.</strong> On <code>IsDevelopment</code> the
+          provider appends <code>http://localhost:* ws://localhost:*</code> to <code>connect-src</code> (<code>:74-77</code>) and
+          <code>&#39;unsafe-inline&#39;</code> to <code>script-src</code> (<code>:105</code>). Only the first is localhost-scoped; the second is a
+          blanket inline-script allowance for that environment. Both exist for Visual Studio&#39;s Browser Link
+          and Hot Reload, which inject an inline bootstrap script and open a WebSocket on a port that changes
+          every run (<code>:70-73</code>). Neither reaches a non-Development host, because the flag is
+          <code>IWebHostEnvironment.IsDevelopment()</code> read once at construction (<code>:41</code>).</li>
+          <li><strong><code>frame-src</code> is opt-in and startup-validated.</strong> The directive is emitted only when
+          <code>BlazorCspSettings.FrameSources</code>
+          (<code>.../Security/BlazorCspSettings.cs:35</code>, bound from the <code>&quot;BlazorCsp&quot;</code> configuration section,
+          <code>:21</code>) lists at least one origin, as <code>frame-src &#39;self&#39; &lt;origins&gt;</code> (<code>:85-97</code>); with the default
+          empty list there is no <code>frame-src</code> at all and frames fall back to <code>default-src &#39;self&#39;</code>, leaving the
+          policy unchanged. Each entry must be a plain absolute https origin: <code>BlazorCspSettingsValidator</code>
+          (<code>.../Security/BlazorCspSettingsValidator.cs:40-56</code>) refuses a wildcard, quote, semicolon, comma,
+          whitespace, user info, query, fragment or non-root path (<code>:19</code>), and <code>AddCommonBlazorCsp</code> registers
+          it with <code>ValidateOnStart</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:52-60</code>), so a bad entry
+          fails the boot with a message naming it instead of being spliced verbatim into a security response
+          header. Validated entries are canonicalized and de-duplicated before the splice (<code>:91-96</code>). This
+          governs only what the host may frame: <code>frame-ancestors &#39;none&#39;</code> is never relaxed by this path.</li>
+          <li><strong>The forwarded-headers allow-lists are cleared deliberately.</strong> Item 2 of the 2026-09-07 revision
+          records that the UI host&#39;s options mirror the gateway and the service pipeline
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:173-176</code>). What it leaves out is
+          load-bearing: <code>KnownProxies</code> and <code>KnownIPNetworks</code> are both cleared before the middleware is added
+          (<code>:184-185</code>), because a cloud reverse proxy fronts the app from internal addresses that are in
+          neither default list, and leaving the defaults in place makes <code>UseForwardedHeaders</code> ignore every
+          forwarded header it receives (<code>:177-179</code>). Populated allow-lists therefore make the whole
+          2026-09-07 fix inert: <code>Request.IsHttps</code> stays false behind the ingress and no
+          <code>Strict-Transport-Security</code> is emitted.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022
           (browser session-cookie auth, the other browser-edge security control), ADR-008 (the gateway topology
@@ -395,6 +455,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
+            <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

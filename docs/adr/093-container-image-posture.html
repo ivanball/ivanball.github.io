@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-093: Container Image Build and Runtime Posture · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-23) for the three build decisions below. The two runtime postures in &quot;Open postures&quot; are recorded as undecided: they describe what…">
+  <meta name="description" content="Accepted (2026-08-23) for the three build decisions below. The two runtime postures below were recorded as undecided at that date: they described what…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/093-container-image-posture.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-093: Container Image Build and Runtime Posture">
-  <meta property="og:description" content="Accepted (2026-08-23) for the three build decisions below. The two runtime postures in &quot;Open postures&quot; are recorded as undecided: they describe what…">
+  <meta property="og:description" content="Accepted (2026-08-23) for the three build decisions below. The two runtime postures below were recorded as undecided at that date: they described what…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/093-container-image-posture.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-093: Container Image Build and Runtime Posture">
-  <meta name="twitter:description" content="Accepted (2026-08-23) for the three build decisions below. The two runtime postures in &quot;Open postures&quot; are recorded as undecided: they describe what…">
+  <meta name="twitter:description" content="Accepted (2026-08-23) for the three build decisions below. The two runtime postures below were recorded as undecided at that date: they described what…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"093 · Container Image Build and Runtime Posture","item":"https://ivanball.github.io/docs/adr/093-container-image-posture.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -231,16 +233,18 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-093-container-image-build-and-runtime-posture">ADR-093: Container Image Build and Runtime Posture</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-23) for the three build decisions below. The two runtime postures in &quot;Open
-          postures&quot; are recorded as <strong>undecided</strong>: they describe what the images do today and the trade-off
-          each one carries, not a decision to keep doing it. Revised 2026-09-03: the Container Apps sizing
-          that decision 3&#39;s cold-start argument rests on is now uniform across all six ADC apps, so the
-          4-vs-2 split that argument cited is gone. See Revision (2026-09-03) at the end.
+          <p>Accepted (2026-08-23) for the three build decisions below. The two runtime postures below were
+          recorded as <strong>undecided</strong> at that date: they described what the images did and the trade-off each
+          one carried, not a decision to keep doing it. Both are closed. Revised 2026-09-03: the Container
+          Apps sizing that decision 3&#39;s cold-start argument rests on is now uniform across all six ADC apps,
+          so the 4-vs-2 split that argument cited is gone. See Revision (2026-09-03) at the end.
           Revised 2026-09-07 (base images are digest-pinned, every final stage drops to <code>USER $APP_UID</code>,
           image builds restore in locked mode, and both consumers scan the built image with Trivy).
           Revised 2026-09-10: the locked-mode inventory is restated per image (nine of eleven build-stage
           restores, the two UI images excluded by design), and the Trivy scan is report-only in <strong>both</strong>
-          consumers, not gating in ADC. See Revision (2026-09-10) at the end.</p>
+          consumers, not gating in ADC. See Revision (2026-09-10) at the end.
+          Revised 2026-09-19: the body now states the closed runtime postures in the present tense, instead of
+          leaving the superseded &quot;open&quot; wording standing beside the revisions that closed it.</p>
           <h2 id="context">Context</h2>
           <p>Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
           MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -249,11 +253,15 @@
           <code>mcr.microsoft.com/dotnet/aspnet:10.0</code>, <code>build</code> on <code>mcr.microsoft.com/dotnet/sdk:10.0</code>, <code>publish</code>,
           <code>final</code>), and the differences between them are the project path, the <code>COPY</code> granularity, and one
           publish property (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Dockerfile:1,6,37,46</code>).
+          Both of those base images are named by <code>sha256</code> digest with the tag kept as a readable suffix, and
+          the digest pair is per repository: the six ADC images resolve one runtime and SDK pair, the five
+          Store images resolve another (see Revision (2026-09-07) item 1).
           Nothing in the repositories reconciles them: an edit to one is an edit to one.</p>
           <p>That uniformity encodes three decisions that were made once, defended in Dockerfile comments, and
-          never written down anywhere a reader of the architecture library would find them. It also leaves two
-          runtime properties in the state of &quot;what the default gave us&quot;, which is worth recording as such so
-          that a later hardening pass starts from a stated position rather than from a discovery.</p>
+          never written down anywhere a reader of the architecture library would find them. It also left two
+          runtime properties in the state of &quot;what the default gave us&quot;, which was worth recording as such so
+          that a later hardening pass started from a stated position rather than from a discovery. That pass
+          ran on 2026-09-07 and closed both.</p>
           <p>The images are built in CI, not by hand: a fan-out <code>build-images</code> matrix job with one leg per image
           (<code>MMCA.ADC/.github/workflows/deploy.yml:960,971-988</code> for the six ADC legs,
           <code>MMCA.Store/.github/workflows/deploy.yml:902,913-927</code> for the five Store legs) runs
@@ -309,32 +317,36 @@
           noise.</p>
           <p><strong>4. Every image is published with <code>UseAppHost=false</code> and started through the shared runtime.</strong> The
           <code>final</code> stage is the <code>base</code> stage plus the publish output, <code>ENV ASPNETCORE_ENVIRONMENT=Production</code>,
-          and <code>ENTRYPOINT [&quot;dotnet&quot;, &quot;&lt;Host&gt;.dll&quot;]</code>
+          <code>USER $APP_UID</code> (added 2026-09-07, see the revision below) and <code>ENTRYPOINT [&quot;dotnet&quot;, &quot;&lt;Host&gt;.dll&quot;]</code>
           (<code>.../MMCA.ADC.Conference.Service/Dockerfile:46-50</code>); the base stage exposes 8080 and 8081, the
           REST and h2c gRPC ports of the ADR-012 endpoint profile (<code>:3-4</code>). No image installs a package, adds
           a shell script, or runs a health-check command of its own: liveness is the Container Apps probe
           configured in Bicep.</p>
-          <h2 id="open-postures-undecided">Open postures (undecided)</h2>
-          <p><strong>The base image is a floating tag, not a digest.</strong> All eleven images start from
-          <code>mcr.microsoft.com/dotnet/aspnet:10.0</code> with no digest pin
-          (<code>.../MMCA.ADC.Conference.Service/Dockerfile:1</code> and the corresponding first line of the other ten),
-          and build on <code>mcr.microsoft.com/dotnet/sdk:10.0</code> the same way (<code>:6</code>). The consequence is two-sided
-          and neither side has been chosen: a rebuild picks up Microsoft&#39;s monthly runtime patches with no
-          action, and a rebuild is also not reproducible, since the same commit built a month apart yields a
-          different runtime layer. Note the asymmetry with the application layer, which <em>is</em> pinned: the
-          deployment references each image by commit sha, not by <code>latest</code>
-          (<code>MMCA.ADC/.github/workflows/deploy.yml:1017,1166-1171</code>). So the code in a revision is exactly
-          identified and the runtime under it is not.</p>
-          <p><strong>No image drops privileges: all eleven run as root.</strong> No Dockerfile in either repository contains a
-          <code>USER</code> directive, and the <code>final</code> stage adds no user (<code>.../MMCA.ADC.Conference.Service/Dockerfile:46-50</code>).
-          The .NET 10 <code>aspnet</code> image ships a non-root <code>app</code> user, so this is one line per file plus a check
-          that nothing writes outside the publish directory, not a rearchitecture. It has not been done, and
-          nothing currently fails because of it: Container Apps runs each container in its own sandbox, so
-          root inside the container is not root on a shared host.</p>
-          <p>Neither posture is currently observed by any gate. The supply-chain job generates its CycloneDX SBOM
-          from the solution filter (<code>MMCA.ADC/.github/workflows/deploy.yml:490-503</code>), so it describes the
-          NuGet graph, not the image: no image scanner runs in either pipeline, and a base-layer CVE would
-          therefore not be reported by the checks that gate a deploy.</p>
+          <h2 id="runtime-postures-closed-2026-09-07">Runtime postures (closed 2026-09-07)</h2>
+          <p><strong>The base image is pinned by digest.</strong> All eleven images name the runtime and the SDK image by
+          <code>sha256</code>, with the <code>10.0</code> tag left in place as a readable suffix (ADC
+          <code>.../MMCA.ADC.Conference.Service/Dockerfile:4</code> and <code>:10</code>; Store
+          <code>.../MMCA.Store.Sales.Service/Dockerfile:5</code> and <code>:12</code>). A rebuild of the same commit now resolves
+          the same runtime layer, and Microsoft&#39;s monthly runtime patches arrive as a Dependabot bump of the
+          digest rather than as a side effect of rebuilding (ADR-038). That restores the symmetry with the
+          application layer, which was already pinned: the deployment references each image by commit sha, not
+          by <code>latest</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:1017,1166-1171</code>). See Revision (2026-09-07)
+          item 1.</p>
+          <p><strong>Every image drops privileges.</strong> <code>USER $APP_UID</code> is the last instruction before the entrypoint in
+          all eleven (ADC services <code>Dockerfile:67</code>, ADC Gateway <code>:72</code>, ADC UI.Web <code>:69</code>, Store services and
+          Store UI.Web <code>:72</code>, Store Gateway <code>:79</code>), and the .NET base image is what defines the uid. The
+          comment above the line records what kept the change to one line per file: nothing in these images
+          writes to the container filesystem at runtime, and every port the host binds is 8080 or higher,
+          outside the range a non-root user cannot bind
+          (<code>.../MMCA.ADC.Conference.Service/Dockerfile:59-66</code>). See Revision (2026-09-07) item 2.</p>
+          <p>What stays open is the gate, not the image. Each deploy scans the image it pushes with Trivy, but
+          report-only in both consumers (<code>MMCA.ADC/.github/workflows/deploy.yml:1292</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:1154</code>), so a base-layer CRITICAL or HIGH is printed in the
+          step log and does not stop a rollout. The supply-chain job generates its CycloneDX SBOM from the
+          solution filter (<code>MMCA.ADC/.github/workflows/deploy.yml:490-503</code>), so it describes the NuGet graph
+          and not the image, which leaves that report-only scan as the only thing in either pipeline that
+          looks at the base layer at all. Flipping it to gating is recorded as a follow-up beside each step
+          rather than decided here: see Revision (2026-09-07) item 4 and Revision (2026-09-10).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>A secret that is never a layer cannot leak from a layer.</strong> BuildKit secret mounts are the only
@@ -352,8 +364,8 @@
           without ReadyToRun the publish RID path matches the build path, which is what makes the missing
           build stage cheap rather than wasteful there.</li>
           <li><strong>Recording an undecided posture is worth more than implying a decision.</strong> Writing &quot;floating tag,
-          root user, no image scan&quot; down as open is what lets a later hardening pass argue about the
-          trade-off instead of rediscovering the state.</li>
+          root user, no image scan&quot; down as open is what let the 2026-09-07 hardening pass argue about the
+          trade-off instead of rediscovering the state, and two of those three are closed because of it.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -372,9 +384,10 @@
           relationship: the build still requires a credential with <code>packages:read</code> even though the same
           packages are published credential-free to nuget.org (ADR-053), because both applications keep
           their <code>MMCA.*</code> source mapping on GitHub Packages.</li>
-          <li><strong>Root plus a floating base is the compounding one.</strong> Individually each open posture is mild; a
-          base-layer vulnerability that no scanner reports, in a container whose process runs as root, is
-          the combination worth closing first.</li>
+          <li><strong>The compounding posture was closed first; the gate was not.</strong> A base-layer vulnerability that no
+          scanner reports, in a container whose process runs as root, was the combination worth closing
+          first, and the digest pin plus <code>USER $APP_UID</code> closed it. What is left is weaker and singular: the
+          scan runs and reports, and nothing fails a deploy on what it finds.</li>
           </ul>
           <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
           <p>The open postures this record listed are closed in both consumers, from the 2026-09-07 security
@@ -409,7 +422,8 @@
           <a href="080-deploy-rollout-revision-rollback.html">ADR-080</a> (what happens to these images after they are
           built: the revision-only rollout and automatic image rollback, whose <code>build-images</code> phase is the job
           described here), <a href="064-deploy-recency-gates.html">ADR-064</a> (the proof-of-recency preconditions on a
-          deploy, none of which observes the image contents, which is the gap the open postures above name),
+          deploy, none of which observes the image contents, which is the gap the report-only image scan above
+          names),
           <a href="053-dual-registry-package-publishing.html">ADR-053</a> (the dual-registry publishing that makes the credential
           in decision 1 a repository-mapping choice rather than a necessity).</p>
           <h2 id="revision-2026-09-03">Revision (2026-09-03)</h2>
@@ -438,8 +452,8 @@
           the workflow itself is unchanged in substance.</p>
           <h2 id="revision-2026-09-10">Revision (2026-09-10)</h2>
           <p><strong>Locked mode is back on Store&#39;s four non-UI images, and the inventory is stated per image rather
-          than by one example.</strong> Decision 3&#39;s anchor pointed at a line that had stopped carrying
-          <code>--locked-mode</code>, so the record claimed a control the command no longer applied. It applies again, and
+          than by one example.</strong> The anchor in Revision (2026-09-07) item 3 pointed at a line that had stopped
+          carrying <code>--locked-mode</code>, so the record claimed a control the command no longer applied. It applies again, and
           the current state is:</p>
           <div class="table-wrap"><table>
           <thead>
@@ -537,12 +551,12 @@
           build. The SEC-Store-44 comment above Store&#39;s Sales restore now says exactly that
           (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:31-35</code>), which is the property a
           rationale comment has to have: it describes the command beneath it.</p>
-          <p><strong>Related correction, same revision.</strong> Decision 4 asserted that ADC&#39;s Trivy scan fails the job while
-          Store&#39;s is report-only for one cycle, and the asymmetry does not exist: ADC&#39;s step carries
+          <p><strong>Related correction, same revision.</strong> Revision (2026-09-07) item 4 asserted that ADC&#39;s Trivy scan
+          fails the job while Store&#39;s is report-only for one cycle, and the asymmetry does not exist: ADC&#39;s step carries
           <code>continue-on-error: true</code> (<code>MMCA.ADC/.github/workflows/deploy.yml:1293</code>), so its <code>exit-code: &#39;1&#39;</code>
           (<code>:1300</code>) marks the step failed and lets the job pass. Both consumers are report-only. ADC&#39;s own
           comment (<code>:1288-1291</code>) names floating base images as the reason to stay non-gating, and that reason
-          is stale: the base images are digest-pinned (decision 1), so ADC can either flip
+          is stale: the base images are digest-pinned (Revision (2026-09-07) item 1), so ADC can either flip
           <code>continue-on-error</code> to <code>false</code> or rewrite the comment to state the real remaining reason. That choice
           is left open here rather than decided.</p>
           
@@ -558,7 +572,7 @@
             <li><a href="#status">Status</a></li>
             <li><a href="#context">Context</a></li>
             <li><a href="#decision">Decision</a></li>
-            <li><a href="#open-postures-undecided">Open postures (undecided)</a></li>
+            <li><a href="#runtime-postures-closed-2026-09-07">Runtime postures (closed 2026-09-07)</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
