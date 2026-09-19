@@ -149,7 +149,7 @@
           <blockquote>
           <p><strong>Chapter scope note.</strong> The tier chapters (<code>tier-00</code> through the sweep) document every type
           in the production codebase one by one. Test types are the logged exception: this chapter covers
-          the <strong>2,471</strong> types that live in test projects, grouped by project purpose and foundational
+          the <strong>2,540</strong> types that live in test projects, grouped by project purpose and foundational
           infrastructure, not written as one section per <code>[Fact]</code>. Individual test methods are cited only
           as worked examples. Cross-reference the tier chapters for the production types being tested.
           The counts come from the Roslyn inventory (<code>00-inventory.md:25-123</code>), which scans
@@ -349,7 +349,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <p>The inventory below is drawn from <code>00-inventory.md:25-123</code> (test-assembly counts) and the solution
           files above. Counts are distinct types per project as reported by the Roslyn inventory scan, not
           <code>[Fact]</code> counts.</p>
-          <h3 id="mmcacommon-1608-test-types-across-14-in-solution-projects--39-across-4-out-of-solution">MMCA.Common, 1,608 test types across 14 in-solution projects + 39 across 4 out-of-solution</h3>
+          <h3 id="mmcacommon-1641-test-types-across-16-in-solution-projects--49-across-6-out-of-solution">MMCA.Common, 1,641 test types across 16 in-solution projects + 49 across 6 out-of-solution</h3>
           <p><strong>Unit, Core layer</strong></p>
           <div class="table-wrap"><table>
           <thead>
@@ -376,13 +376,18 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </tr>
           <tr>
           <td><code>MMCA.Common.Infrastructure.Tests</code></td>
-          <td>493</td>
+          <td>494</td>
           <td>Unit/integration tests for EF base contexts, outbox processor, repository, caching, JWT generation, JWKS provider, data-source resolver, plus the <code>Scheduling/</code>, <code>Persistence/Tenancy/</code>, <code>Persistence/AuditTrail/</code> and hybrid-cache subtrees</td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Infrastructure.Tests.MigrationsFixture</code></td>
           <td>1</td>
           <td>A single-type companion project that gives the infrastructure suite a real migrations assembly to point EF at</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.AI.Tests</code></td>
+          <td>12</td>
+          <td>The <code>MMCA.Common.AI</code> package&#39;s decorator chain over <code>IChatClient</code>: <code>BoundedChatClientTests</code>, <code>GuardrailChatClientTests</code>, <code>UsageRecordingChatClientTests</code>, <code>PromptContractTests</code>, <code>AiSettingsTests</code> and <code>AiServiceCollectionExtensionsTests</code>, driven by a <code>StubChatClient</code>/<code>StubGuardrail</code> pair (<code>MMCA.Common/MMCA.Common.slnx:35</code>)</td>
           </tr>
           </tbody></table></div>
           <p><strong>Unit, Presentation layer</strong></p>
@@ -406,7 +411,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </tr>
           <tr>
           <td><code>MMCA.Common.UI.Tests</code></td>
-          <td>136</td>
+          <td>140</td>
           <td>bUnit component tests for shared Blazor components (login/register forms, nav, theming, notification pages)</td>
           </tr>
           <tr>
@@ -426,7 +431,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </thead>
           <tbody><tr>
           <td><code>MMCA.Common.Aspire.Tests</code></td>
-          <td>49</td>
+          <td>50</td>
           <td>Tests for <code>AddServiceDefaults</code>, health-check registration, <code>OutboxPollFilterProcessor</code> telemetry suppression, the warmup readiness gate, metrics/trace-ratio toggles, security headers, Key Vault configuration, data protection and the Kestrel endpoint extensions</td>
           </tr>
           <tr>
@@ -444,6 +449,11 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <td>27</td>
           <td>The framework dogfooding its own shipped test bases and helpers: <code>DecoratorPipelineOrderTests</code> and <code>MiddlewarePipelineOrderTests</code>, <code>MmcaGatewayHardeningTestsBaseTests</code>, <code>HandlerTestBaseTests</code>, <code>CrossServiceFixtureBaseTests</code>, <code>ServiceBusEmulatorFixtureBaseTests</code>, <code>DependencyInjectionAssertTests</code>, <code>FeatureManagementTestExtensionsTests</code>, <code>JwtTokenGeneratorTests</code>, <code>RateLimiterTestExtensionsTests</code>, <code>RecordingHttpForwarderTests</code> and <code>TestPollingTests</code></td>
           </tr>
+          <tr>
+          <td><code>MMCA.Common.Testing.Aspire.Tests</code></td>
+          <td>8</td>
+          <td>The unit tier over the shipped <code>MMCA.Common.Testing.Aspire</code> package: <code>AppHostReadinessBudgetTests</code>, the three precondition gates (<code>AppHostEnvironmentGateTests</code>, <code>DockerAvailabilityTests</code>, <code>DeveloperCertificateAvailabilityTests</code>), <code>EphemeralRsaKeyPairTests</code>, and <code>AppHostProbePathsTests</code> plus the two h2c probe suites (<code>MMCA.Common/MMCA.Common.slnx:52</code>)</td>
+          </tr>
           </tbody></table></div>
           <p><strong>Architecture</strong></p>
           <div class="table-wrap"><table>
@@ -456,8 +466,8 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </thead>
           <tbody><tr>
           <td><code>MMCA.Common.Architecture.Tests</code></td>
-          <td>196</td>
-          <td>47 test source files (thin subclasses of the shared bases plus the Common-only <code>*FitnessTests</code> family), <code>CommonArchitectureMap</code>, and the fake modules and probe fixtures the adversarial suites drive (see section 4)</td>
+          <td>203</td>
+          <td>58 of its 76 tracked source files declare test classes (thin subclasses of the shared bases plus the Common-only <code>*FitnessTests</code> family); one more is <code>CommonArchitectureMap</code> and the remaining sixteen are the fake modules, drifted probes and fixtures the adversarial suites drive (see section 4)</td>
           </tr>
           </tbody></table></div>
           <p><strong>Out-of-solution (each run by its own dedicated CI job)</strong></p>
@@ -489,14 +499,23 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <td>6</td>
           <td>BenchmarkDotNet hot-path suite behind the ADR-060 performance gate (section 7)</td>
           </tr>
+          <tr>
+          <td><code>MMCA.Common.Infrastructure.PostgreSQL.Tests</code></td>
+          <td>7</td>
+          <td><code>PostgreSQLPersistenceTests</code> drives the shipped <code>PostgreSQLDbContext</code> against a real PostgreSQL container, with its own <code>PgThing</code> fixture aggregate, events and a recording dispatcher (<code>MMCA.Common/.github/workflows/ci.yml:880</code>)</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common.Testing.Aspire.AppHostTests</code></td>
+          <td>3</td>
+          <td><code>SampleAppHostFixture</code>, <code>SampleAppHostCollection</code> and <code>SampleAppHostTests</code>: a sample AppHost booted through the shipped <code>MMCA.Common.Testing.Aspire</code> fixtures (<code>ci.yml:939</code>)</td>
+          </tr>
           </tbody></table></div>
-          <p>Two further out-of-solution tiers landed after the type-inventory scan, so they carry no row above
-          and no type count here: <code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests</code>, which runs the
-          shipped <code>PostgreSQLDbContext</code> against a real PostgreSQL container
-          (<code>MMCA.Common/.github/workflows/ci.yml:880</code>), and <code>Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests</code>,
-          which boots a sample AppHost through <code>Aspire.Hosting.Testing</code> (<code>ci.yml:939</code>). Both are described in
-          section 7; treat the totals below as covering the 18 scanned projects only.</p>
-          <h3 id="mmcaadc-821-test-types-across-31-in-solution-projects--3-across-1-out-of-solution">MMCA.ADC, 821 test types across 31 in-solution projects + 3 across 1 out-of-solution</h3>
+          <p>The last two rows are the tiers that landed after the previous inventory pass; the current scan covers
+          them, so the totals below cover all 22 MMCA.Common test projects. Both run outside every solution
+          file, each from its own CI job, and both are described in section 7. Keeping them out of the <code>.slnx</code>
+          is deliberate: a tier that needs Docker or a trusted development certificate must not be able to break
+          a plain <code>dotnet build</code> of the solution for an engineer who has neither.</p>
+          <h3 id="mmcaadc-847-test-types-across-32-in-solution-projects--3-across-1-out-of-solution">MMCA.ADC, 847 test types across 32 in-solution projects + 3 across 1 out-of-solution</h3>
           <p><strong>Unit, per-module, per-layer (Identity module)</strong></p>
           <div class="table-wrap"><table>
           <thead>
@@ -548,12 +567,12 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </thead>
           <tbody><tr>
           <td><code>MMCA.ADC.Conference.Domain.Tests</code></td>
-          <td>31</td>
+          <td>34</td>
           <td>Event/Session/Speaker/Sponsor aggregate factories, invariants, domain events</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Application.Tests</code></td>
-          <td>184</td>
+          <td>191</td>
           <td>Handler tests for the Conference controllers&#39; use cases (bulk), including the <code>Sponsors/</code> create, update, public-filter and mapper tests</td>
           </tr>
           <tr>
@@ -563,7 +582,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.API.Tests</code></td>
-          <td>21</td>
+          <td>22</td>
           <td>Controller registration, route tests, <code>SponsorsControllerTests</code> and <code>EntityExportAuthorizationTests</code></td>
           </tr>
           <tr>
@@ -574,11 +593,11 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <tr>
           <td><code>MMCA.ADC.Conference.Scoring.Evaluation.Tests</code></td>
           <td>10</td>
-          <td>The AI session scorer&#39;s behavioural suite: <code>GoldenReplayTests</code>, <code>PromptContractTests</code> and the opt-in <code>LiveJudgeTests</code> (<code>MMCA.ADC/MMCA.ADC.slnx:88</code>, in <code>CI.slnf:49</code>). Its 10 types are inside the 821 below (<code>00-inventory.md</code>, current scan); the gate that runs it is in section 7</td>
+          <td>The AI session scorer&#39;s behavioural suite: <code>GoldenReplayTests</code>, <code>PromptContractTests</code> and the opt-in <code>LiveJudgeTests</code> (<code>MMCA.ADC/MMCA.ADC.slnx:88</code>, in <code>CI.slnf:49</code>). Its 10 types are inside the 847 below (<code>00-inventory.md</code>, current scan); the gate that runs it is in section 7</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.UI.Tests</code></td>
-          <td>56</td>
+          <td>63</td>
           <td>bUnit tests for session/speaker components and dashboards, the sponsor create/detail pages and the public sponsor list</td>
           </tr>
           </tbody></table></div>
@@ -676,6 +695,11 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <td>7</td>
           <td>The gRPC export services and their adapters, with a <code>FakeServerCallContext</code></td>
           </tr>
+          <tr>
+          <td><code>MMCA.ADC.UI.Web.Tests</code></td>
+          <td>4</td>
+          <td>The Blazor Web head itself: <code>SecurityHeadersTests</code> and <code>UiRateLimitingTests</code> against a <code>ConferenceUiHostApplicationFactory</code>, plus <code>BoundedCircuitHandlerTests</code> (<code>MMCA.ADC/MMCA.ADC.slnx:117</code>, in <code>CI.slnf:61</code>)</td>
+          </tr>
           </tbody></table></div>
           <p><strong>Integration (per-service WebApplicationFactory, in <code>MMCA.ADC.Integration.slnf</code> only)</strong></p>
           <div class="table-wrap"><table>
@@ -738,8 +762,8 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </thead>
           <tbody><tr>
           <td><code>MMCA.ADC.E2E.Tests</code></td>
-          <td>88</td>
-          <td>Playwright browser-automation tests across login, register, password reset, conference browsing, organizer management, bookmark and live flows, plus the 31-scan <code>AccessibilityTests</code> suite (<code>MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17</code>, 31 <code>[Fact]</code> methods, each one <code>ScanAsync</code>/<code>ScanGridAsync</code> call); requires the Aspire stack running</td>
+          <td>92</td>
+          <td>Playwright browser-automation tests across login, register, password reset, conference browsing, organizer management, bookmark and live flows, plus the 45-scan <code>AccessibilityTests</code> suite (<code>MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:29</code>, 45 <code>[Fact]</code> methods, each one <code>ScanAsync</code>/<code>ScanGridAsync</code> call); requires the Aspire stack running</td>
           </tr>
           </tbody></table></div>
           <p><strong>Out-of-solution</strong></p>
@@ -759,15 +783,17 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </tbody></table></div>
           <h3 id="test-type-totals">Test-type totals</h3>
           <ul>
-          <li><strong>MMCA.Common:</strong> the 14 in-solution projects sum to 58 + 62 + 397 + 493 + 1 + 153 + 16 + 136 + 9 +
-          49 + 4 + 7 + 27 + 196 = <strong>1,608</strong>; the 4 scanned out-of-solution projects add 11 + 20 + 2 + 6 =
-          <strong>39</strong>, for <strong>1,647</strong> (the PostgreSQL and AppHost tiers noted above are not in the scan).</li>
-          <li><strong>MMCA.ADC:</strong> 73 (Identity) + 329 (Conference, incl. the 10-type scoring evaluation suite) + 134 (Engagement) + 6 (Notification) + 51
+          <li><strong>MMCA.Common:</strong> the 16 in-solution projects sum to 58 + 62 + 397 + 494 + 1 + 12 + 153 + 16 + 140 +
+          9 + 50 + 4 + 8 + 7 + 27 + 203 = <strong>1,641</strong>; the 6 out-of-solution projects add 11 + 20 + 2 + 6 + 7 +
+          3 = <strong>49</strong>, for <strong>1,690</strong>.</li>
+          <li><strong>MMCA.ADC:</strong> 73 (Identity) + 347 (Conference, incl. the 10-type scoring evaluation suite) + 134 (Engagement) + 6 (Notification) + 51
           (architecture) + 108 (four integration projects) + 16 (two Testcontainers tiers) + 9 (Gateway) + 7
-          (Services) + 88 (E2E) = <strong>821</strong> in-solution, plus the 3-type AppHost smoke project = <strong>824</strong>.</li>
-          <li><strong>Combined test projects: 2,471.</strong> Separately, the four shipped testing packages contribute
-          another <strong>126</strong> types (<code>MMCA.Common.Testing</code> 23, <code>.Testing.Architecture</code> 57, <code>.Testing.E2E</code> 30,
-          <code>.Testing.UI</code> 16): those are shipped product, not tests, which is why they are counted apart.</li>
+          (Services) + 4 (UI.Web) + 92 (E2E) = <strong>847</strong> in-solution, plus the 3-type AppHost smoke project =
+          <strong>850</strong>.</li>
+          <li><strong>Combined test projects: 2,540.</strong> Separately, the five shipped testing packages contribute
+          another <strong>145</strong> types (<code>MMCA.Common.Testing</code> 23, <code>.Testing.Architecture</code> 66, <code>.Testing.Aspire</code> 10,
+          <code>.Testing.E2E</code> 30, <code>.Testing.UI</code> 16): those are shipped product, not tests, which is why they are
+          counted apart.</li>
           </ul>
           <p>[Rubric §14, Testability &amp; Test Strategy]: §14 assesses the breadth and meaningfulness of the
           test suite across all layers; the project layout above, unit per layer, arch per repo,
@@ -775,8 +801,8 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           demonstrates deliberate stratification rather than a single catch-all integration tier.</p>
           <hr>
           <h2 id="3-shipped-testing-infrastructure-packages">3. Shipped testing-infrastructure packages</h2>
-          <p>MMCA.Common ships <strong>four</strong> of its seventeen packages as testing infrastructure that downstream apps
-          consume as NuGet references rather than writing their own harness (<code>MMCA.Common/FACTS.md:19,34-37</code>):</p>
+          <p>MMCA.Common ships <strong>five</strong> of its nineteen packages as testing infrastructure that downstream apps
+          consume as NuGet references rather than writing their own harness (<code>MMCA.Common/FACTS.md:19,35-39</code>):</p>
           <ul>
           <li><code>MMCA.Common.Testing</code> (23 types), integration-test base, JWT generator, SQL fixture base, handler
           scaffold, entity builders, and the eight runtime conformance bases (this section).</li>
@@ -787,8 +813,10 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <li><code>MMCA.Common.Testing.UI</code> (16 types), bUnit component-test base, MudBlazor provider harness, HTTP
           test doubles, an error-summary helper and a markup snapshot helper (this section; see the bUnit
           worked example in section 6).</li>
-          <li><code>MMCA.Common.Testing.Architecture</code> (57 types), the shared NetArchTest fitness-function rule library
-          plus 46 abstract test bases (covered in section 4, where each repo&#39;s <code>*.Architecture.Tests</code> consumes it).</li>
+          <li><code>MMCA.Common.Testing.Architecture</code> (66 types), the shared NetArchTest fitness-function rule library
+          plus 53 abstract test bases (covered in section 4, where each repo&#39;s <code>*.Architecture.Tests</code> consumes it).</li>
+          <li><code>MMCA.Common.Testing.Aspire</code> (10 types), the AppHost boot fixture, its readiness budget, the
+          Docker/certificate/environment preconditions and the wiring probes (this section).</li>
           </ul>
           <h3 id="mmcacommontesting">MMCA.Common.Testing</h3>
           <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/</code>, 23 types, shipped as <code>MMCA.Common.Testing</code>.</p>
@@ -1304,6 +1332,39 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           v1.x, this file is the only place that changes.</li>
           </ul>
           <hr>
+          <h3 id="mmcacommontestingaspire">MMCA.Common.Testing.Aspire</h3>
+          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/</code>, 10 types, shipped as
+          <code>MMCA.Common.Testing.Aspire</code> (<code>MMCA.Common.Testing.Aspire.csproj:3</code>). Its package description states
+          the job exactly: a collection fixture that boots a real Aspire AppHost, waits for per-resource health,
+          and typed assertions for the framework wiring contracts, health, liveness, JWKS, h2c and data sources
+          (<code>MMCA.Common.Testing.Aspire.csproj:4</code>). Three folders:</p>
+          <ul>
+          <li><strong><code>Fixtures/</code></strong>: <code>AppHostFixtureBase</code> (<code>Fixtures/AppHostFixtureBase.cs:38</code>) and its generic form
+          <code>AppHostFixtureBase&lt;TAppHost&gt;</code> (<code>Fixtures/AppHostFixtureBase.Generic.cs:20</code>), the per-class
+          <code>AppHostTestBase&lt;TFixture&gt;</code> (<code>Fixtures/AppHostTestBase.cs:29</code>), and <code>AppHostReadinessBudget</code>
+          (<code>Fixtures/AppHostReadinessBudget.cs:16</code>), which makes the wait allowance a passed value rather
+          than a timeout hard-coded inside the fixture.</li>
+          <li><strong><code>Preconditions/</code></strong>: <code>AppHostEnvironmentGate</code> (<code>Preconditions/AppHostEnvironmentGate.cs:9</code>) and
+          <code>AppHostEnvironmentRequirement</code> (<code>Preconditions/AppHostEnvironmentRequirement.cs:10</code>),
+          <code>DockerAvailability</code> (<code>Preconditions/DockerAvailability.cs:13</code>), <code>DeveloperCertificateAvailability</code>
+          (<code>Preconditions/DeveloperCertificateAvailability.cs:22</code>) and <code>EphemeralRsaKeyPair</code>
+          (<code>Preconditions/EphemeralRsaKeyPair.cs:20</code>). This folder is why the tier can be optional without
+          being a silent no-op: the things a real-stack boot needs (a container runtime, a trusted
+          development certificate, a signing keypair) are first-class checkable types rather than a note in
+          a README.</li>
+          <li><strong><code>Probes/</code></strong>: <code>AppHostProbePaths</code> (<code>Probes/AppHostProbePaths.cs:15</code>) and <code>H2cProbe</code>
+          (<code>Probes/H2cProbe.cs:25</code>), the endpoint contract a framework host is expected to satisfy and the
+          cleartext HTTP/2 check an ordinary <code>HttpClient</code> cannot perform.</li>
+          </ul>
+          <p>MMCA.Common consumes the package from both sides: <code>MMCA.Common.Testing.Aspire.Tests</code> (8 types,
+          in-solution) unit-tests the preconditions and probes, and the out-of-solution
+          <code>MMCA.Common.Testing.Aspire.AppHostTests</code> (3 types) boots a sample AppHost through the fixtures in its
+          own CI job (<code>MMCA.Common/.github/workflows/ci.yml:939</code>, section 7).</p>
+          <p>[Rubric §33, Developer Experience]: §33 assesses how much harness an engineer has to build before
+          writing the test they actually wanted. Shipping the AppHost boot, the readiness wait and the
+          environment gates as a referenced package means a consumer AppHost gets a composition test by
+          subclassing two types, and the preconditions keep that test honest on a machine that cannot run it.</p>
+          <hr>
           <h2 id="4-architecture-fitness-tests-executable-governance">4. Architecture fitness tests, executable governance</h2>
           <p>[Rubric §34, Architecture Governance &amp; Documentation]: §34 assesses whether architectural
           decisions are documented, enforced, and kept honest over time; fitness functions are the &quot;enforced&quot;
@@ -1321,17 +1382,19 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           into an xUnit assertion failure whose message includes the reason string and the offending type
           names, so a developer adding a forbidden reference sees exactly which type broke the rule and why.</p>
           <p><strong>The rule bodies live once, in a shipped package.</strong> <code>MMCA.Common.Testing.Architecture</code> holds the
-          reusable rule library, now <strong>29 <code>ArchitectureRules.*</code> partial classes</strong>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/</code>: <code>Layers</code>, <code>Purity</code>, <code>Transport</code>,
-          <code>Modules</code>, <code>Handlers</code>, <code>Entities</code>, <code>Naming</code>, <code>Events</code>, <code>Controllers</code>, <code>Governance</code>, <code>HandlerResults</code>,
-          <code>Immutability</code>, <code>Slices</code>, <code>Specifications</code>, <code>Localization</code>, <code>LocalizedText</code>, <code>CancellationTokens</code>,
-          <code>CascadeSoftDelete</code>, <code>CommandValidators</code>, <code>Contracts</code>, <code>Cycles</code>, <code>DomainEventHandlerSaves</code>,
-          <code>DomainThrows</code>, <code>ErrorCatalog</code>, <code>Idempotency</code>, <code>Markup</code>, <code>Protos</code>, <code>SoftDelete</code>, <code>Upcasters</code>), plus a
-          <code>CallGraphIndex</code> for the rules that must follow a call chain rather than a type reference, and
-          <strong>46 abstract <code>*TestsBase</code> classes</strong> in <code>Bases/</code>, all parameterized by an <code>IArchitectureMap</code>. The
-          package declares <strong>123 test methods across those 46 bases</strong>, and MMCA.Common&#39;s own build executes
-          <strong>196</strong> of them: the methods of the bases its arch-tests subclass, plus its Common-only direct tests
-          (<code>MMCA.Common/FACTS.md:46,49</code>, which is generated from source and CI-gated, so it is the number to
+          reusable rule library, now <strong>35 <code>ArchitectureRules.*</code> partial classes</strong> filed by area under
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/</code>: <code>Api/</code> (<code>Controllers</code>),
+          <code>Contracts/</code> (<code>Contracts</code>, <code>ErrorCatalog</code>, <code>Events</code>, <code>IntegrationEventPurity</code>, <code>Protos</code>, <code>Upcasters</code>),
+          <code>Cqrs/</code> (<code>CancellationTokens</code>, <code>CommandValidators</code>, <code>DomainEventHandlerSaves</code>, <code>Handlers</code>,
+          <code>HandlerResults</code>, <code>Idempotency</code>, <code>Slices</code>), <code>Domain/</code> (<code>CascadeSoftDelete</code>, <code>DeleteBehavior</code>,
+          <code>DomainThrows</code>, <code>Entities</code>, <code>Immutability</code>, <code>SoftDelete</code>, <code>Specifications</code>, <code>StronglyTypedIds</code>),
+          <code>Governance/</code> (<code>FeatureFlags</code>, <code>FolderWidth</code>, <code>Governance</code>, <code>Naming</code>), <code>Layering/</code> (<code>Ai</code>, <code>Cycles</code>,
+          <code>Layers</code>, <code>Modules</code>, <code>Purity</code>, <code>Transport</code>) and <code>Ui/</code> (<code>Localization</code>, <code>LocalizedText</code>, <code>Markup</code>),
+          plus a <code>CallGraphIndex</code> for the rules that must follow a call chain rather than a type reference, and
+          <strong>53 abstract <code>*TestsBase</code> classes</strong> in <code>Bases/</code>, all parameterized by an <code>IArchitectureMap</code>. The
+          package declares <strong>136 test methods across those 53 bases</strong>, and MMCA.Common&#39;s own build executes
+          <strong>267</strong> of them: the methods of the bases its arch-tests subclass, plus its Common-only direct tests
+          (<code>MMCA.Common/FACTS.md:48,51</code>, which is generated from source and CI-gated, so it is the number to
           quote rather than a hand count).</p>
           <p>Each repo&#39;s <code>*.Architecture.Tests</code> project consumes the package and supplies its own map:
           <code>CommonArchitectureMap</code> (MMCA.Common, every layer is a framework layer, one anchor type per package),
@@ -1355,11 +1418,14 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <p>The walkthroughs below describe <strong>what each rule enforces</strong> (and the count of facts it produces);
           the rule <em>implementations</em> live in the shared package&#39;s <code>ArchitectureRules.*</code> + <code>*TestsBase</code> files,
           not in the per-repo test class.</p>
-          <h3 id="mmcacommonarchitecturetests-196-types">MMCA.Common.Architecture.Tests, 196 types</h3>
-          <p>Located at <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/</code>. Of its 49 <code>.cs</code> files,
-          <strong>forty-seven declare test classes</strong>; one more is <code>CommonArchitectureMap</code> and the last is
-          <code>GlobalUsings.cs</code>. The rest of the 158 inventoried types are the fakes, drifted probes and fixtures
-          the adversarial suites drive. The project falls into two halves:</p>
+          <h3 id="mmcacommonarchitecturetests-203-types">MMCA.Common.Architecture.Tests, 203 types</h3>
+          <p>Located at <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/</code>, filed into the same
+          per-area folders as the rule library (<code>Api/</code>, <code>Contracts/</code>, <code>Cqrs/</code>, <code>Domain/</code>, <code>Governance/</code>,
+          <code>Layering/</code>, <code>Ui/</code>) plus the <code>*Fixtures/</code> trees the adversarial suites drive. Of its 76 tracked <code>.cs</code>
+          files, <strong>fifty-eight declare test classes</strong>; one more is <code>CommonArchitectureMap</code>, one is
+          <code>GlobalUsings.cs</code>, and the remaining sixteen are fixture files. The balance of the 203 inventoried
+          types are those fakes, drifted probes and fixtures, which is why the type count runs so far ahead of
+          the file count. The project falls into two halves:</p>
           <p><strong>Thin subclasses of a shared mapped base</strong> (about half the files): <code>LayerDependencyTests</code>,
           <code>DomainPurityTests</code>, <code>MicroserviceExtractionTests</code>, <code>PiiConventionTests</code>, <code>AggregateConventionTests</code>,
           <code>DependencyVersionTests</code>, <code>EventVersioningConventionTests</code>, <code>SliceCohesionTests</code>,
@@ -1922,7 +1988,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           itself (<code>ci.yml:916</code>) and gates on <code>MMCA_APPHOST_TESTS</code> with a <code>--minimum-expected-tests</code> floor so a
           silently skipped tier is visible rather than a green no-op (<code>ci.yml:939</code>).</p>
           <h3 id="e2e-tests">E2E tests</h3>
-          <p><code>MMCA.ADC.E2E.Tests</code> (88 types) and <code>MMCA.Common.UI.E2E.Tests</code> (20 types) require either the
+          <p><code>MMCA.ADC.E2E.Tests</code> (92 types) and <code>MMCA.Common.UI.E2E.Tests</code> (20 types) require either the
           full Aspire stack (<code>dotnet run --project Source/Hosting/MMCA.ADC.AppHost</code>) or the Gallery
           backend (<code>MMCA.Common.UI.Gallery</code>) respectively. The Aspire AppHost starts SQL Server, Redis,
           RabbitMQ, MailDev, all four service hosts, the Gateway, and the UI; it cannot be launched

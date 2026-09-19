@@ -979,6 +979,16 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <td>Speaker-published session materials: <code>SessionAsset</code> is its own Conference aggregate (a server-minted GUID id, plain <code>EventId</code> / <code>SessionId</code> keys, not a child of the Sessionize-synced <code>Session</code>), written by the session&#39;s own speakers or an organizer, stored public-read under an unguessable blob name, and admitted only by the framework&#39;s byte-level <code>DocumentContentSniffer</code> gate</td>
           <td><a href="group-17-conference-domain.html">g17</a>/<a href="group-18-conference-application.html">g18</a>/<a href="group-21-conference-ui.html">g21</a></td>
           </tr>
+          <tr>
+          <td>124</td>
+          <td>The server-rendered Blazor UI host is its own hardened edge, because it is a separate origin the Gateway limiter never sees: <code>BoundedCircuitHandler</code> (a singleton so one count spans the replica) refuses circuits past <code>MaxActiveCircuits</code>, and <code>UiRateLimitingSettings</code> puts a fixed-window limiter on the page and negotiate endpoints, both bound from host-owned configuration sections</td>
+          <td><a href="group-25-adc-host-composition.html">g25</a></td>
+          </tr>
+          <tr>
+          <td>125</td>
+          <td>Parameterized SQL only: hand-written SQL has exactly one door, <code>IRawSqlQueryExecutor</code>, whose two entry points accept <code>FormattableString</code> and nothing else (a concatenated statement does not compile), <code>EFRawSqlQueryExecutor</code> names the relational-only limit, and <code>RawSqlConventionTestsBase</code> bans the four <code>*Raw</code> EF members in module code as a fitness gate</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-28-testing-infrastructure.html">g28</a></td>
+          </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>
           <hr>

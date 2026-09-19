@@ -157,7 +157,7 @@
           <a href="group-13-grpc-contracts.html">G13 (gRPC &amp; Inter-Service Contracts)</a>, and the module entry point is one
           implementation of the <a href="group-14-module-system-composition.html#imodule"><code>IModule</code></a> contract from
           <a href="group-14-module-system-composition.html">G14 (Module System &amp; Composition)</a>. What this chapter teaches
-          is <em>how the Conference module wires those reusable pieces into a real, eighteen-controller,
+          is <em>how the Conference module wires those reusable pieces into a real, nineteen-controller,
           twice-gRPC-edged conference API</em>, and the handful of places where it deviates from the generic shape
           for a business reason. The headline rubric lenses are <code>[Rubric §9, API &amp; Contract Design]</code> (a
           consistent, versioned REST + gRPC contract), <code>[Rubric §5, Vertical Slice]</code> and <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (each action dispatches to a single command or query handler), and <code>[Rubric §7, Microservices Readiness]</code> (the same code runs in-process or extracted). Everything lives in three
@@ -166,20 +166,22 @@
           (the host wiring plus the gRPC servers), and <code>MMCA.ADC.Conference.Contracts</code> (the client-side gRPC
           adapters and the contract-package DI).</p>
           <h2 id="the-controller-hierarchy-almost-everything-is-inherited">The controller hierarchy, almost everything is inherited</h2>
-          <p>The Conference API exposes <strong>eighteen controllers</strong>, and the striking thing about them is how little
+          <p>The Conference API exposes <strong>nineteen controllers</strong>, and the striking thing about them is how little
           code each carries. They split into three structural families, all built on the generic bases from
-          <a href="group-12-api-hosting-mapping.html">G12</a>. <strong>Aggregate-root controllers</strong> (seven:
+          <a href="group-12-api-hosting-mapping.html">G12</a>. <strong>Aggregate-root controllers</strong> (eight:
           <a href="#sessionscontroller"><code>SessionsController</code></a>, <a href="#speakerscontroller"><code>SpeakersController</code></a>,
           <a href="#eventscontroller"><code>EventsController</code></a>, <a href="#questionscontroller"><code>QuestionsController</code></a>,
           <a href="#conferencecategoriescontroller"><code>ConferenceCategoriesController</code></a>,
-          <a href="#sponsorscontroller"><code>SponsorsController</code></a>, <a href="#activitiescontroller"><code>ActivitiesController</code></a>) derive
+          <a href="#sponsorscontroller"><code>SponsorsController</code></a>, <a href="#partnerscontroller"><code>PartnersController</code></a>,
+          <a href="#activitiescontroller"><code>ActivitiesController</code></a>) derive
           from
           <a href="group-12-api-hosting-mapping.html#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest"><code>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;</code></a>
           and inherit the full read + create + delete surface, overriding actions only to add
           <code>[AllowAnonymous]</code>, an <code>[OutputCache]</code> policy, or a business rule
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:57</code>,
           <code>SpeakersController.cs:62</code>, <code>EventsController.cs:60</code>, <code>QuestionsController.cs:42</code>,
-          <code>ConferenceCategoriesController.cs:43</code>, <code>SponsorsController.cs:49</code>, <code>ActivitiesController.cs:49</code>).
+          <code>ConferenceCategoriesController.cs:43</code>, <code>SponsorsController.cs:49</code>, <code>PartnersController.cs:50</code>,
+          <code>ActivitiesController.cs:49</code>).
           <strong>Child-and-join controllers</strong> (eight: <a href="#roomscontroller"><code>RoomsController</code></a>,
           <a href="#categoryitemscontroller"><code>CategoryItemsController</code></a>,
           <a href="#eventspeakerscontroller"><code>EventSpeakersController</code></a>,
@@ -233,12 +235,13 @@
           every read action (both list overloads, the lookup, the by-id read and the CSV export) calls it
           (<code>EntityControllerBase.cs:115,170,264,378,422</code>). Its default answer is the synchronous half,
           <code>GetExportSpecification</code> (<code>EntityControllerBase.cs:626</code>), itself <code>null</code>, so a controller that
-          overrides neither reads unscoped. Twelve of the eighteen Conference controllers override one of the
-          two. Nine override the asynchronous hook because their rule is resolved through a query handler:
+          overrides neither reads unscoped. Thirteen of the nineteen Conference controllers override one of the
+          two. Ten override the asynchronous hook because their rule is resolved through a query handler:
           <a href="#sessionscontroller"><code>SessionsController</code></a> (<code>SessionsController.cs:77</code>),
           <a href="#speakerscontroller"><code>SpeakersController</code></a> (<code>SpeakersController.cs:105</code>),
           <a href="#roomscontroller"><code>RoomsController</code></a> (<code>RoomsController.cs:120</code>),
           <a href="#sponsorscontroller"><code>SponsorsController</code></a> (<code>SponsorsController.cs:69</code>),
+          <a href="#partnerscontroller"><code>PartnersController</code></a> (<code>PartnersController.cs:66</code>),
           <a href="#activitiescontroller"><code>ActivitiesController</code></a> (<code>ActivitiesController.cs:69</code>) and the four join
           controllers (<a href="#eventspeakerscontroller"><code>EventSpeakersController</code></a> <code>:72</code>,
           <a href="#sessionspeakerscontroller"><code>SessionSpeakersController</code></a> <code>:73</code>,
@@ -265,10 +268,12 @@
           so a missing claim is an authorization answer instead of a dereference. <code>[Rubric §11, Security]</code> is the lens, and
           <a href="https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html" target="_blank" rel="noopener">ADR-078</a> is the record: the hook
           exists so an export can no longer drift wider than the list it mirrors.</p>
-          <p>The CSV export keeps a second, blunter guard on top of the hook. Eleven controllers override
+          <p>The CSV export keeps a second, blunter guard on top of the hook. Twelve controllers override
           <code>ExportAsync</code> and return <code>Forbid()</code> outright for a caller who is not a privileged reader, rather than
           serving a scoped file: <code>SessionsController.cs:241-251</code>, <code>SpeakersController.cs:291-301</code>,
           <code>EventsController.cs:134-144</code>, <code>SponsorsController.cs:145-155</code>, <code>ActivitiesController.cs:145-155</code>,
+          <code>PartnersController.cs:136-150</code> (which belts the guard with a capability attribute on the export
+          action itself, <code>[HasPermission(ConferencePermissions.PartnersManage)]</code> at <code>PartnersController.cs:135</code>),
           the four join controllers (<code>EventSpeakersController.cs:139-149</code>,
           <code>SessionSpeakersController.cs:140-150</code>, <code>SessionCategoryItemsController.cs:140-150</code>,
           <code>SpeakerCategoryItemsController.cs:140-150</code>) and the two answer controllers against the Organizer role
@@ -291,9 +296,9 @@
           (<code>SpeakerCategoryItemsController.cs:47</code>) and <code>SessionSelectionManage</code>
           (<code>SessionSelectionController.cs:30</code>). Reads are then re-opened action by action with
           <code>[AllowAnonymous]</code> (BR-43 public browse, for example <code>SessionsController.cs:137</code>,
-          <code>RoomsController.cs:137</code>). Ten capability constants exist in total, declared once in
+          <code>RoomsController.cs:137</code>). Eleven capability constants exist in total, declared once in
           <code>ConferencePermissions.All</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:49-58</code>).</p>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:51-61</code>).</p>
           <p>Four shapes break that pattern, and knowing why saves you from &quot;fixing&quot; them.
           <a href="#speakerscontroller"><code>SpeakersController</code></a> carries only a plain <code>[Authorize]</code> at class level
           (<code>SpeakersController.cs:46</code>) and pushes <code>[HasPermission(ConferencePermissions.SpeakersManage)]</code> down
@@ -303,9 +308,11 @@
           organizer or the speaker themselves, comparing the <code>speaker_id</code> JWT claim to the route id
           (<code>SpeakersController.cs:344-347</code>) and passing the answer down as <code>CallerIsOrganizer</code> so the handler
           can refuse a self-edit of the organizer-only <code>IsTopSpeaker</code> field (<code>SpeakersController.cs:352</code>).
-          <a href="#sponsorscontroller"><code>SponsorsController</code></a> and <a href="#activitiescontroller"><code>ActivitiesController</code></a> copy
+          <a href="#sponsorscontroller"><code>SponsorsController</code></a>, <a href="#partnerscontroller"><code>PartnersController</code></a> and
+          <a href="#activitiescontroller"><code>ActivitiesController</code></a> copy
           the class-level-<code>[Authorize]</code>-plus-per-action-capability shape (<code>SponsorsController.cs:39</code> with
-          <code>SponsorsManage</code> at <code>:143,162,181,206</code>; <code>ActivitiesController.cs:39</code> with <code>ActivitiesManage</code> at
+          <code>SponsorsManage</code> at <code>:143,162,181,206</code>; <code>PartnersController.cs:40</code> with <code>PartnersManage</code> at
+          <code>:135,154,172,197</code>; <code>ActivitiesController.cs:39</code> with <code>ActivitiesManage</code> at
           <code>:143,162,181,206</code>). And <a href="#eventquestionanswerscontroller"><code>EventQuestionAnswersController</code></a> and
           <a href="#sessionquestionanswerscontroller"><code>SessionQuestionAnswersController</code></a> carry a bare <code>[Authorize]</code>
           (<code>EventQuestionAnswersController.cs:56</code>, <code>SessionQuestionAnswersController.cs:77</code>), because <em>any</em>
@@ -320,7 +327,7 @@
           <code>IsPrivileged</code>, an <code>IPermissionRegistry.HasPermission(..., ConferencePermissions.SessionAssetsManage)</code>
           answer (<code>:66-67</code>); it stamps both onto every command (<code>:123,231,255</code>) and the handlers in
           <a href="group-18-conference-application.html">G18</a> make the decision against the session&#39;s speakers. The
-          <code>SessionAssetsManage</code> capability (<code>ConferencePermissions.cs:44</code>) therefore means &quot;may manage the
+          <code>SessionAssetsManage</code> capability (<code>ConferencePermissions.cs:47</code>) therefore means &quot;may manage the
           materials of a session you do <strong>not</strong> present&quot;, which is why it sits inside the ContentEditor subset.
           Which roles hold which capability is declared once in
           <a href="group-17-conference-domain.html#conferencepermissiongrants"><code>ConferencePermissionGrants</code></a> (below), the
@@ -345,11 +352,12 @@
           ends by evicting the <code>conference:sessions</code> and <code>conference</code> cache tags (<code>:279-280</code>), because the
           public list it just invalidated is cached under the sessions policy that a session edit also clears.</p>
           <p>Orthogonal to all three shapes is the <strong>read audience</strong>, which no attribute can express because it
-          changes the <em>rows</em> rather than the verdict. Ten controllers ask
+          changes the <em>rows</em> rather than the verdict. Eleven controllers ask
           <a href="#currentuserserviceextensions"><code>CurrentUserServiceExtensions</code></a><code>.IsPrivilegedConferenceReader()</code>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:24-25</code>)
           and turn the answer into a specification or <code>null</code>: <code>SessionsController.cs:61</code>,
           <code>SpeakersController.cs:66</code>, <code>EventsController.cs:76</code>, <code>SponsorsController.cs:53</code>,
+          <code>PartnersController.cs:57</code>,
           <code>ActivitiesController.cs:53</code>, <code>RoomsController.cs:104</code>, <code>EventSpeakersController.cs:58</code>,
           <code>SessionSpeakersController.cs:59</code>, <code>SessionCategoryItemsController.cs:59</code> and
           <code>SpeakerCategoryItemsController.cs:59</code>. The helper is one line over <code>ICurrentUserService</code> answering
@@ -430,15 +438,18 @@
           on the session update (<code>SessionsController.cs:320</code>), the event update, publish and unpublish
           (<code>EventsController.cs:221,265,298</code>), the speaker update (<code>SpeakersController.cs:334</code>), the category
           update (<code>ConferenceCategoriesController.cs:115</code>), the question update (<code>QuestionsController.cs:114</code>)
-          and the sponsor and activity updates (<code>SponsorsController.cs:183</code>, <code>ActivitiesController.cs:183</code>), and
+          and the sponsor, partner and activity updates (<code>SponsorsController.cs:183</code>,
+          <code>PartnersController.cs:173</code>, <code>ActivitiesController.cs:183</code>), and
           each action pulls the token with <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code>
           (<code>SessionsController.cs:329</code>, <code>EventsController.cs:230,273,306</code>, <code>SpeakersController.cs:349</code>,
-          <code>SponsorsController.cs:192</code>): a request with no header answers <strong>428 Precondition Required</strong> and a
+          <code>SponsorsController.cs:192</code>, <code>PartnersController.cs:182</code>): a request with no header answers
+          <strong>428 Precondition Required</strong> and a
           stale token answers <strong>412 Precondition Failed</strong>
-          (<a href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html" target="_blank" rel="noopener">ADR-035</a>). Sponsors and
-          activities take that one step further and dispatch the framework&#39;s generic
+          (<a href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html" target="_blank" rel="noopener">ADR-035</a>). Sponsors, partners
+          and activities take that one step further and dispatch the framework&#39;s generic
           <a href="group-05-cqrs-pipeline.html#updateentitycommandtentity-tupdaterequest-tidentifiertype"><code>UpdateEntityCommand&lt;TEntity, TUpdateRequest, TIdentifierType&gt;</code></a>
-          rather than a bespoke command (<code>SponsorsController.cs:195</code>, <code>ActivitiesController.cs:195</code>), so their
+          rather than a bespoke command (<code>SponsorsController.cs:195</code>, <code>PartnersController.cs:185</code>,
+          <code>ActivitiesController.cs:195</code>), so their
           update path is generic end to end.</p>
           <p>Three more read-path carve-outs are worth internalizing before you touch these files. First,
           <a href="#speakerscontroller"><code>SpeakersController</code></a><code>.GetAllForLookupAsync</code> constrains the <em>label</em> as well as
@@ -495,7 +506,7 @@
           writing a <code>[LoggerMessage]</code>-sourced structured log and returning <code>202 Accepted</code> (<code>:125-126,128-129</code>,
           <code>[Rubric §13, Observability &amp; Operability]</code>). The row is picked up off the request path by the
           framework&#39;s internal-command processor from <a href="group-14-module-system-composition.html">G14</a>
-          (<a href="https://ivanball.github.io/docs/adr/114-durable-internal-commands.html" target="_blank" rel="noopener">ADR-114</a>), which keeps the
+          (<a href="https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html" target="_blank" rel="noopener">ADR-114</a>), which keeps the
           controller free of any scope-lifetime handling and makes the pass survive a replica restart. A
           duplicate trigger is cheap rather than forbidden: the durable handler takes a per-event claim before
           it starts, so a second pass for an event already being scored logs and completes instead of paying
@@ -524,7 +535,7 @@
           <code>ContentEditor</code> only the six-capability <code>ContentManagement</code> curation subset with no event structure,
           rooms, questions or session selection
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissionGrants.cs:47-48</code>;
-          the subset itself is <code>ConferencePermissions.cs:68-73</code>). Attendees are granted nothing, so
+          the subset itself is <code>ConferencePermissions.cs:72-78</code>). Attendees are granted nothing, so
           attendee-facing endpoints stay on a plain <code>[Authorize]</code> that carries no capability
           (<code>ConferencePermissionGrants.cs:30-32</code>), and a speaker needs no grant at all to manage their own
           session&#39;s materials (<code>ConferencePermissionGrants.cs:38-40</code>). And
@@ -620,7 +631,7 @@
           also consumes Engagement&#39;s
           <a href="group-22-engagement-module.html#ibookmarkcountservice"><code>IBookmarkCountService</code></a>, so the Conference host
           registers <code>AddEngagementBookmarkCountClient()</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:384</code>) and the AppHost deliberately
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:392</code>) and the AppHost deliberately
           gives only the Engagement-to-Conference edge a startup <code>WaitFor</code>, leaving the reverse edge a plain
           <code>WithReference</code> so the pair cannot deadlock; transient &quot;peer not ready&quot; errors self-heal through the
           resilience pipeline (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:271,274</code>;
@@ -649,24 +660,25 @@
           <a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>,
           <a href="https://ivanball.github.io/docs/adr/019-rate-limiting.html" target="_blank" rel="noopener">ADR-019</a>,
           <a href="https://ivanball.github.io/docs/adr/079-shared-http-middleware-pipeline.html" target="_blank" rel="noopener">ADR-079</a>).</p>
-          <p>Output caching is where this host carries the most bespoke configuration (<code>Program.cs:204-274</code>). The
-          base policy is deny-by-default <code>NoCache</code> (<code>:177</code>), so only explicitly decorated endpoints cache at all.
+          <p>Output caching is where this host carries the most bespoke configuration (<code>Program.cs:211-280</code>). The
+          base policy is deny-by-default <code>NoCache</code> (<code>:213</code>), so only explicitly decorated endpoints cache at all.
           <code>ConferenceCache</code> stays on the built-in default semantics because the permission-gated
           <a href="#sessionselectioncontroller"><code>SessionSelectionController</code></a> references it, and
           <a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a>&#39;s
           public policy must never back a permission-gated endpoint since a cached hit is served before MVC&#39;s
-          filters run (<code>:179-185</code>). Nine further policies (<code>ConferencePublicCache</code>, <code>EventsCache</code>,
+          filters run (<code>:215-221</code>). Ten further policies (<code>ConferencePublicCache</code>, <code>EventsCache</code>,
           <code>SessionsCache</code>, <code>SpeakersCache</code>, <code>RoomsCache</code>, <code>CategoriesCache</code>, <code>QuestionsCache</code>, <code>SponsorsCache</code>,
-          <code>ActivitiesCache</code>) are registered through <code>AddPublicEndpointPolicy</code> at a 5-minute TTL with hierarchical
-          tags (<code>:215-228</code>), and each <strong>bypasses the cache entirely for the privileged read audience</strong> (<code>:214</code>,
+          <code>PartnersCache</code>, <code>ActivitiesCache</code>) are registered through <code>AddPublicEndpointPolicy</code> at a 5-minute TTL
+          with hierarchical
+          tags (<code>:251-265</code>), and each <strong>bypasses the cache entirely for the privileged read audience</strong> (<code>:250</code>,
           the bypass list built from <code>ConferenceReadAudience.PrivilegedRoles</code> so it can never diverge from the
-          API-layer visibility checks), for two reasons spelled out in the source (<code>:187-213</code>): privileged
+          API-layer visibility checks), for two reasons spelled out in the source (<code>:229-246</code>): privileged
           responses include unpublished rows that must never land in a shared public entry, and admin surfaces
           read back immediately after writing, where a stale cached row version would make the next save throw
           <code>DbUpdateConcurrencyException</code>. Two policies then sit at a 60-second TTL for different reasons:
           <code>NowNextCache</code> because its payload changes with the clock and is identical for every role, so it takes
-          no bypass at all (<code>:231</code>), and <code>BookmarkCountsCache</code> because bookmark counts are owned by Engagement in
-          another process (<code>:233-243</code>). All of this is
+          no bypass at all (<code>:268</code>), and <code>BookmarkCountsCache</code> because bookmark counts are owned by Engagement in
+          another process (<code>:271-280</code>). All of this is
           <a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a>:
           <a href="group-12-api-hosting-mapping.html#publicendpointoutputcachepolicy"><code>PublicEndpointOutputCachePolicy</code></a>
           exists because the UI attaches a Bearer token to every request and the built-in default policy refuses
@@ -674,7 +686,7 @@
           real traffic.</p>
           <p>Two mechanisms close the distance that TTLs alone cannot. First, at two replicas the store itself must
           be shared: when a Redis connection string is present the host backs the <strong>output</strong> cache with Redis as
-          well as the distributed cache (<code>Program.cs:159,169</code>), because the default per-replica memory store
+          well as the distributed cache (<code>Program.cs:166,176</code>), because the default per-replica memory store
           meant an eviction reached only the replica that served the mutation while the other kept serving the
           pre-edit payload for the full TTL; the same branch adds a two-level cache, an in-process L1 over the
           Redis L2 under a disjoint keyspace, so a repeat read inside one replica never leaves the process while
@@ -691,7 +703,7 @@
           <a href="group-12-api-hosting-mapping.html#errorlocalizer"><code>ErrorLocalizer</code></a>
           (<a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>).</p>
           <p>One more startup extension point matters: <a href="#selfhttpoutputcachewarmuptask"><code>SelfHttpOutputCacheWarmupTask</code></a>,
-          registered via <code>AddWarmupTask&lt;T&gt;()</code> (<code>Program.cs:285</code>) as an
+          registered via <code>AddWarmupTask&lt;T&gt;()</code> (<code>Program.cs:293</code>) as an
           <a href="https://ivanball.github.io/docs/adr/025-startup-warmup-readiness.html" target="_blank" rel="noopener">ADR-025</a>
           <a href="group-16-aspire-orchestration.html#iwarmuptask"><code>IWarmupTask</code></a>. The task itself is almost empty: it
           derives from <a href="group-16-aspire-orchestration.html#selfhttpwarmuptaskbase"><code>SelfHttpWarmupTaskBase</code></a>
@@ -707,7 +719,7 @@
           caller. Every path is <code>[AllowAnonymous]</code>, so the base&#39;s require-success loop sees <code>200</code> and skips
           nothing.</p>
           <h2 id="the-runtime-picture-one-host-two-transports">The runtime picture, one host, two transports</h2>
-          <p>After module discovery (<code>Program.cs:342-346</code>) the host wires the Engagement gRPC client (<code>:349</code>), the
+          <p>After module discovery (<code>Program.cs:350-354</code>) the host wires the Engagement gRPC client (<code>:349</code>), the
           broker (<code>AddBrokerMessaging</code> registering the <code>UserRegistered</code> integration-event consumer that drives
           the BR-207 email-match speaker auto-link through
           <a href="group-18-conference-application.html#userregisteredhandler"><code>UserRegisteredHandler</code></a>, <code>:350-352</code>), the
@@ -921,7 +933,7 @@
           re-validation in the handler.</li>
           <li>All three mutations end with <code>outputCacheStore.EvictTagsAsync(cancellationToken, &quot;conference:categories&quot;, &quot;conference&quot;)</code> (<code>:147, 174, 194</code>), and all three return <code>HandleFailure</code>
           <em>before</em> the eviction, so a rejected command never disturbs the cache. <code>[Rubric §12, Performance &amp; Scalability]</code>: without that call the cached reads would serve the pre-edit item list for the full
-          5-minute policy TTL (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:254</code>), so an
+          5-minute policy TTL (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:261</code>), so an
           organizer renaming a track would not see it on the public session pages until the entry expired.</li>
           </ul>
           </li>
@@ -930,7 +942,7 @@
           base cannot model&quot; distinction the group overview draws. Reads are anonymous because the taxonomy is
           public (BR-43); writes are capability-gated (BR-41) at the class level, and <code>CategoriesManage</code> is one of
           the five permissions in the <code>ContentManagement</code> curation subset
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:66-74</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:70-79</code>),
           so a content editor can edit the taxonomy without holding event, room or question rights.</li>
           <li><strong>Where it&#39;s used</strong>: mounted by the Conference service host and reached through the YARP Gateway route
           <code>/CategoryItems/{**catch-all}</code> (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:98</code>); the
@@ -1505,12 +1517,12 @@
           the case the base&#39;s remarks describe (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:571-579</code>).
           <code>[Rubric §12, Performance &amp; Scalability]</code>: the reads are cached under the <code>EventsCache</code> policy (5-minute
           TTL, tags <code>conference</code> and <code>conference:events</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:245</code>), which is exactly why the writes
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:252</code>), which is exactly why the writes
           must evict. That policy is a
           <a href="group-12-api-hosting-mapping.html#publicendpointoutputcachepolicy"><code>PublicEndpointOutputCachePolicy</code></a>
           registration and it bypasses the cache entirely for the privileged read audience
           (<a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a>,
-          <code>Program.cs:216-243</code>), which is what keeps an organizer&#39;s everything-inclusive payload out of the shared
+          <code>Program.cs:223-250</code>), which is what keeps an organizer&#39;s everything-inclusive payload out of the shared
           public entry.</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>GetReadSpecificationAsync</code> (<code>EventSpeakersController.cs:72-82</code>) is the one place the rule lives; the
@@ -1593,7 +1605,7 @@
           assesses caching strategy: every read here is decorated <code>[OutputCache(PolicyName = &quot;RoomsCache&quot;)]</code>
           (<code>RoomsController.cs:138,154,175,188</code>), so anonymous room reads are served from a 5-minute entry
           tagged <code>conference</code> and <code>conference:rooms</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:253</code>). The correctness half is
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:260</code>). The correctness half is
           eviction: each mutation ends by calling
           <code>outputCacheStore.EvictTagsAsync(cancellationToken, &quot;conference:rooms&quot;)</code> (<code>:225, 254, 272</code>),
           invalidating exactly the room reads and nothing else. <code>[Rubric §3, Clean Architecture]</code>: the eviction
@@ -1700,9 +1712,9 @@
           <li><code>GetNowNextAsync</code> (<code>:173-179</code>) and <code>GetCurrentNowNextAsync</code> (<code>:188-193</code>) serve the now/next snapshot for
           a given event or, with <code>new GetNowNextQuery(EventId: null)</code> (<code>:191</code>), for the current one; both use the
           short-TTL <code>NowNextCache</code> policy (60 seconds,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:260</code>) because the payload changes with
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:268</code>) because the payload changes with
           the clock. That policy is registered without the privileged-reader bypass, because the snapshot is
-          identical for every role (<code>Program.cs:258-260</code>).</li>
+          identical for every role (<code>Program.cs:266-268</code>).</li>
           <li><code>CreateAsync</code> (<code>:202-209</code>) is an override marked <code>[Idempotent]</code> (<code>:201</code>), so a retried POST carrying
           the same <code>Idempotency-Key</code> is deduplicated; it calls <code>base.CreateAsync</code> then evicts. The attribute is
           single-use, so declaring it here coincides with the inherited one instead of duplicating it (doc
@@ -1918,7 +1930,7 @@
           translations therefore needs some type to name, and that type needs no behavior whatsoever. This class is
           exactly that anchor. The host registers it once
           (<code>services.AddErrorResources&lt;ConferenceErrorResources&gt;()</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:349</code>) and every Conference error code
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:357</code>) and every Conference error code
           becomes translatable from then on, with no per-error registration and no <code>switch</code> anywhere.
           <code>[Rubric §27, i18n]</code> assesses whether localization is a structural property of the system rather than a
           per-screen retrofit: because errors travel as stable machine-readable <strong>codes</strong> through
@@ -1948,7 +1960,7 @@
           module&#39;s translations inside the module&#39;s own assembly, which is what lets the Conference module boot in
           its own service host and still carry its language support with it.</li>
           <li><strong>Where it&#39;s used</strong>: registered in the extracted Conference host
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:349</code>) and in the localization test&#39;s
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:357</code>) and in the localization test&#39;s
           service collection (<code>ConferenceErrorResourcesTests.cs:22</code>). No other code names it.</li>
           </ul>
           <h3 id="batchaddsessionquestionanswersrequest">BatchAddSessionQuestionAnswersRequest</h3>
@@ -2075,7 +2087,7 @@
           a capability the content-curation subset deliberately excludes (<code>SessionSelectionManage</code> is in
           <a href="group-17-conference-domain.html#conferencepermissions"><code>ConferencePermissions</code></a><code>.All</code> but absent from its
           <code>ContentManagement</code> subset, so a content-editor role granted <code>ContentManagement</code> cannot reach it:
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:30,47-59,66-74</code>;
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:30,50-63,70-79</code>;
           the concrete role-to-permission grants live in the module&#39;s registration, not in this file). It exposes
           four read endpoints (composite dashboard, category distribution, speaker overlap, content similarity)
           plus one endpoint that <strong>schedules</strong> AI scoring of an event&#39;s sessions on the framework&#39;s durable
@@ -2192,7 +2204,7 @@
           <code>IsPrivileged</code> (<code>:59</code>) short-circuiting for Organizer and ContentEditor.</li>
           <li><strong>Walkthrough</strong>: shape-for-shape the same as <a href="#eventspeakerscontroller"><code>EventSpeakersController</code></a>, with
           the <code>SpeakersCache</code> policy instead of <code>EventsCache</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:252</code>). The four reads are
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:259</code>). The four reads are
           <code>[AllowAnonymous]</code> + <code>[OutputCache(PolicyName = &quot;SpeakersCache&quot;)]</code> passthroughs
           (<code>SpeakerCategoryItemsController.cs:85,95,114,122</code>, the last carrying the named route
           <code>&quot;GetSpeakerCategoryItemById&quot;</code>), all scoped by the hook. <code>ExportAsync</code> (<code>[HttpGet(&quot;export&quot;)]</code> at <code>:139</code>)
@@ -2323,10 +2335,10 @@
           count endpoints stay <code>[AllowAnonymous]</code>: <code>GetSessionBookmarkCountAsync</code> (<code>:442-454</code>) and the batched
           <code>GetSessionBookmarkCountsAsync</code> (<code>:462-474</code>) run under <code>BookmarkCountsCache</code>, a 60-second policy tagged
           <code>conference</code> and <code>conference:sessions</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:272</code>). <code>[Rubric §7, Microservices Readiness]</code>: bookmark counts are owned by the Engagement service, in another process, whose writes have
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:280</code>). <code>[Rubric §7, Microservices Readiness]</code>: bookmark counts are owned by the Engagement service, in another process, whose writes have
           no handle on this host&#39;s cache store, so Engagement&#39;s bookmark handler publishes an eviction request
           over the broker that this host turns into a tag drop, and the short TTL stays as the backstop for a
-          message that never lands (<code>Program.cs:262-272</code>).</li>
+          message that never lands (<code>Program.cs:270-280</code>).</li>
           <li>Every mutation ends at
           <code>EvictTagsAsync(cancellationToken, &quot;conference:speakers&quot;, &quot;conference&quot;)</code> (<code>:314, 357, 369, 388, 406</code>).</li>
           </ul>
@@ -2537,7 +2549,7 @@
           <a href="group-03-querying-specifications.html#specificationtentity-tidentifiertype"><code>Specification&lt;TEntity, TIdentifierType&gt;</code></a>
           the query service can apply; privileged readers get <code>null</code>.
           <code>[Rubric §12, Performance &amp; Scalability]</code>: reads are <code>[OutputCache(PolicyName = &quot;SessionsCache&quot;)]</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:251</code>) and the default sort is the
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:258</code>) and the default sort is the
           <code>&quot;StartsAt,RoomId&quot;</code> constant (<code>:133</code>), which sorts the schedule chronologically then by room. The comment
           above it (<code>:131-132</code>) records the mechanism: the &quot;ascending&quot; suffix <code>QueryFieldService.ApplySorting</code>
           appends binds only to the last column in Dynamic LINQ, and the leading column defaults to ascending, so
@@ -2727,7 +2739,7 @@
           fail.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: registered as <code>services.AddWarmupTask&lt;SelfHttpOutputCacheWarmupTask&gt;()</code> in the
-          Conference host (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:285</code>) and executed by
+          Conference host (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:293</code>) and executed by
           the warm-up runner that <code>AddServiceDefaults()</code> installs. Three sibling copies of the same pattern live in
           the Store services; each differs only in its <code>Paths</code> list.</p>
           </li>
@@ -2767,8 +2779,8 @@
           <li><strong>Concept introduced, the shared-list invariant between visibility and cache keys.</strong> The same
           <code>ConferenceReadAudience.PrivilegedRoles</code> list is spread into the output-cache bypass roles in the host
           (<code>string[] adminBypassRoles = [.. ConferenceReadAudience.PrivilegedRoles];</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:243</code>), and the comment right above it
-          names this helper as the other half of the pair (<code>Program.cs:241-243</code>). The reason is a real correctness
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:250</code>), and the comment right above it
+          names this helper as the other half of the pair (<code>Program.cs:248-250</code>). The reason is a real correctness
           hazard, not tidiness: if the visibility check and the cache-bypass list ever named different roles, a
           privileged reader&#39;s unfiltered payload would be written into a shared cache entry and then served to the
           public. Declaring the roles once makes that class of bug impossible rather than merely unlikely
@@ -2847,11 +2859,11 @@
           (<code>QuestionsController.cs:34</code>), a capability granted to Organizer and Admin only
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43-44</code>); it is
           absent from the ContentEditor subset
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:66-74</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:70-79</code>),
           so a content editor curates sessions and speakers but cannot rewrite the feedback form.</li>
           <li>All four reads (<code>:44-91</code>) re-open with <code>[AllowAnonymous]</code> and attach
           <code>[OutputCache(PolicyName = &quot;QuestionsCache&quot;)]</code> (5-minute TTL, tags <code>conference</code> and
-          <code>conference:questions</code>, <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:255</code>), then
+          <code>conference:questions</code>, <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:262</code>), then
           delegate; <code>GetByIdAsync</code> carries the named route <code>&quot;GetQuestionById&quot;</code> (<code>:77</code>).</li>
           <li><code>CreateAsync</code> (<code>:95-102</code>) and <code>DeleteAsync</code> (<code>:137-144</code>) are thin overrides: call the base, then
           <code>EvictTagsAsync(cancellationToken, &quot;conference:questions&quot;)</code> (<code>:100, 142</code>), then return the base&#39;s
@@ -3050,8 +3062,8 @@
           </li>
           <li><p><strong>Where it&#39;s used</strong>: mapped in the Conference host as
           <code>app.MapGrpcService&lt;SessionBookmarksGrpcService&gt;().RequireAuthorization()</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:435</code>). The <code>RequireAuthorization()</code> is
-          deliberate and explained inline (<code>Program.cs:428-434</code>): these RPCs answer conference-state questions
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:443</code>). The <code>RequireAuthorization()</code> is
+          deliberate and explained inline (<code>Program.cs:436-442</code>): these RPCs answer conference-state questions
           raised on behalf of a specific end user, so internal-only ingress is not considered sufficient. Every
           caller is an Engagement handler sitting behind an authenticated controller, so an inbound bearer token is
           always present for
@@ -3165,12 +3177,12 @@
           attribute-plus-imperative export gate, at the same line numbers in both files. What differs is the
           vocabulary. <code>[Rubric §11, Security]</code>: the class carries <code>[Authorize]</code> (<code>ActivitiesController.cs:39</code>) and
           each mutation re-asserts <code>[HasPermission(ConferencePermissions.ActivitiesManage)]</code> (<code>:143, 162, 181, 206</code>), the capability declared at
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:36</code>
-          and included in the <code>ContentManagement</code> curation subset (<code>ConferencePermissions.cs:66-74</code>), so a content
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:39</code>
+          and included in the <code>ContentManagement</code> curation subset (<code>ConferencePermissions.cs:70-79</code>), so a content
           editor can run the social programme without holding event, room or question rights.
           <code>[Rubric §12, Performance &amp; Scalability]</code>: reads run under the <code>ActivitiesCache</code> policy (5-minute TTL,
           tags <code>conference</code> and <code>conference:activities</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:257</code>) and every mutation evicts both
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:265</code>) and every mutation evicts both
           tags.</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>IsPrivileged</code> (<code>ActivitiesController.cs:53</code>) is the shared
@@ -3211,6 +3223,82 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicActivityList.razor</code>) and
           the organizer list, create and detail pages under
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activity/</code>.</li>
+          </ul>
+          <h3 id="partnerscontroller">PartnersController</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers.Partners</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Partners/PartnersController.cs:41</code> · Level 10 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the REST controller for the <code>Partner</code> aggregate root (<code>/Partners</code>), the conference&#39;s
+          partner organizations. Anonymous reads scoped to published events, and create / update / delete / export
+          behind the partners-manage capability (<code>PartnersController.cs:37-38</code>).</li>
+          <li><strong>Depends on</strong>:
+          <a href="group-12-api-hosting-mapping.html#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest"><code>AggregateRootEntityControllerBase</code></a>
+          (<code>PartnersController.cs:50-51</code>); the
+          <a href="group-03-querying-specifications.html#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService</code></a>
+          (<code>:42</code>); three <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler</code></a>s for
+          <a href="group-18-conference-application.html#partnercreaterequest"><code>PartnerCreateRequest</code></a>, the framework&#39;s
+          <a href="group-05-cqrs-pipeline.html#updateentitycommandtentity-tupdaterequest-tidentifiertype"><code>UpdateEntityCommand&lt;TEntity, TUpdateRequest, TIdentifierType&gt;</code></a>
+          and
+          <a href="group-05-cqrs-pipeline.html#deleteentitycommandtentity-tidentifiertype"><code>DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;</code></a>
+          (<code>:43-45</code>); an <a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler</code></a> for
+          <code>GetPublicPartnerFilterQuery</code> (<code>:46</code>); <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a> plus
+          the <a href="#currentuserserviceextensions"><code>CurrentUserServiceExtensions</code></a> read-audience helper (<code>:47, 57</code>);
+          <code>IOutputCacheStore</code> (<code>:48</code>); the <code>PartnerDTO</code>; <code>PartnerUpdateRequest</code> as the PUT body (<code>:163</code>); the
+          <a href="group-08-auth.html#haspermissionattribute"><code>HasPermissionAttribute</code></a> with the
+          <a href="group-17-conference-domain.html#conferencepermissions"><code>ConferencePermissions</code></a> catalog; the
+          <a href="group-12-api-hosting-mapping.html#supportsifmatchattribute"><code>SupportsIfMatchAttribute</code></a>; and the
+          <a href="group-12-api-hosting-mapping.html#queryfiltermodelbinder"><code>QueryFilterModelBinder</code></a>.</li>
+          <li><strong>Concept introduced</strong>: none new. This is the third structural twin in the group, alongside
+          <a href="#activitiescontroller"><code>ActivitiesController</code></a> and <a href="#sponsorscontroller"><code>SponsorsController</code></a>: the same
+          bare <code>[Authorize]</code> class gate with a per-mutation capability, the same real-<code>EventId</code>-column scoping (the
+          paged action&#39;s doc comment states it directly, <code>PartnersController.cs:73-74</code>), and the same
+          attribute-plus-imperative export gate. <code>[Rubric #11, Security]</code>: the class carries <code>[Authorize]</code>
+          (<code>PartnersController.cs:36</code>) and each mutation re-asserts <code>[HasPermission(ConferencePermissions.PartnersManage)]</code>
+          (<code>:119, 138, 156, 181</code>), the capability declared at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:36</code>
+          and included in the <code>ContentManagement</code> curation subset (<code>ConferencePermissions.cs:76</code>), so a content
+          editor can manage the partner roster without holding event, room or question rights.
+          <code>[Rubric #12, Performance &amp; Scalability]</code>: reads run under the <code>PartnersCache</code> policy (5-minute TTL, tags
+          <code>conference</code> and <code>conference:partners</code>,
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:264</code>) and every mutation evicts both tags.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>IsPrivileged</code> (<code>PartnersController.cs:57</code>) is the shared <code>currentUserService.IsPrivilegedConferenceReader()</code>
+          read-audience check; <code>GetReadSpecificationAsync</code> (<code>:66-76</code>) returns <code>null</code> for a privileged reader and
+          otherwise the specification the <code>GetPublicPartnerFilterQuery</code> handler resolves (<code>:72-75</code>), degrading to
+          <code>null</code> on a failed result.</li>
+          <li>The four reads (<code>:78, 95, 110, 121</code>, the last under the named route <code>&quot;GetPartnerById&quot;</code> at <code>:118</code>) are
+          <code>[AllowAnonymous]</code> + <code>[OutputCache(PolicyName = &quot;PartnersCache&quot;)]</code> passthroughs; the by-id doc comment
+          states that a partner of an unpublished event is a 404 for a non-privileged caller (<code>:115-116</code>).</li>
+          <li><code>ExportAsync</code> (<code>:134-150</code>) pairs the declarative <code>[HasPermission(ConferencePermissions.PartnersManage)]</code>
+          (<code>:135</code>) with the imperative <code>if (!IsPrivileged) return Forbid();</code> (<code>:144-147</code>), then delegates to the
+          base (<code>:149</code>). The doc comment names the leak an unscoped CSV would be, a non-privileged caller receiving
+          partners of unpublished events (<code>:129-132</code>).</li>
+          <li><code>CreateAsync</code> (<code>:152-162</code>) and <code>DeleteAsync</code> (<code>:195-205</code>) are thin overrides that call the base and then
+          evict; <code>UpdateAsync</code> (<code>:164-193</code>) is the hand-rolled action the base does not supply, reading the required
+          <code>If-Match</code> token via <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code> (<code>:182</code>), dispatching
+          <code>new UpdateEntityCommand&lt;Partner, PartnerUpdateRequest, PartnerIdentifierType&gt;(id, request, rowVersion)</code>
+          (<code>:184-186</code>), folding a failure through <code>HandleFailure</code> (<code>:188-189</code>), evicting (<code>:191</code>) and returning
+          <code>Ok(result.Value)</code> (<code>:192</code>).</li>
+          <li>Every eviction clears <code>conference:partners</code> and the broad <code>conference</code> tag (<code>:160, 191, 203</code>).</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: partners share the same publish-gated visibility as the rest of the catalog,
+          so the controller reuses the specification hook rather than inventing a partner-specific visibility flag,
+          and because <code>Partner</code> owns a real <code>EventId</code> column none of that scoping needs a virtual key, the same
+          reasoning <a href="#sponsorscontroller"><code>SponsorsController</code></a> is built on.</li>
+          <li><strong>Where it&#39;s used</strong>: the Conference service host behind the Gateway route <code>/Partners/{**catch-all}</code>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:214</code>). The organizer list, create, detail and
+          form-fields pages live under
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Partners/</code>. Tests cover the controller
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Controllers/Partners/PartnersControllerTests.cs</code>,
+          10 tests), its anonymous endpoints
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/AnonymousEndpointTests.cs</code>, 3 tests), its
+          export authorization
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Conventions/EntityExportAuthorizationTests.cs</code>,
+          2 tests) and <code>UpdateAsync</code>&#39;s conditional-write contract
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Conventions/ConditionalWriteConventionTests.cs</code>,
+          1 test).</li>
           </ul>
           <hr>
           <h3 id="sponsorscontroller">SponsorsController</h3>
@@ -3255,9 +3343,9 @@
           <code>[HasPermission(ConferencePermissions.SponsorsManage)]</code> (<code>:143, 162, 181, 206</code>), the capability declared
           at
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:33</code>
-          and included in the <code>ContentManagement</code> curation subset (<code>ConferencePermissions.cs:66-74</code>), so a content
+          and included in the <code>ContentManagement</code> curation subset (<code>ConferencePermissions.cs:70-79</code>), so a content
           editor can manage the sponsor roster without holding event, room or question rights. <code>[Rubric §12, Performance &amp; Scalability]</code>: reads run under the <code>SponsorsCache</code> policy (5-minute TTL, tags <code>conference</code>
-          and <code>conference:sponsors</code>, <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:256</code>) and
+          and <code>conference:sponsors</code>, <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:263</code>) and
           every mutation evicts both tags (<code>:168, 200, 212</code>).</li>
           <li><strong>Walkthrough</strong>: the file is line-for-line the structural twin of
           <a href="#activitiescontroller"><code>ActivitiesController</code></a>, so every member sits at the same line number in both.
@@ -3357,10 +3445,10 @@
           the transport class keeps the domain read models free of any serialization concern.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: mapped as <code>app.MapGrpcService&lt;EventLiveValidationGrpcService&gt;().RequireAuthorization()</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:436</code>). The named callers are
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:444</code>). The named callers are
           Engagement&#39;s <a href="group-23-engagement-live-layer.html#livepollscontroller">LivePollsController</a> and
           <a href="group-23-engagement-live-layer.html#sessionquestionscontroller">SessionQuestionsController</a> handlers
-          (<code>Program.cs:431-433</code>).</p>
+          (<code>Program.cs:439-441</code>).</p>
           </li>
           </ul>
           <h3 id="eventlivevalidationservicegrpcadapter">EventLiveValidationServiceGrpcAdapter</h3>

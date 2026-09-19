@@ -478,14 +478,14 @@
           </ul>
           <h2 id="smart-enumerations-a-closed-set-that-can-carry-behavior">Smart enumerations, a closed set that can carry behavior</h2>
           <p><a href="#enumerationtenumeration"><code>Enumeration&lt;TEnumeration&gt;</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:71</code>) is the answer to a
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:76</code>) is the answer to a
           recurring shape a CLR <code>enum</code> handles badly: a closed set of named members that need behavior hanging off
           them (policies, rates, display rules) instead of a <code>switch</code> statement somewhere else
           (<code>Enumeration.cs:13-18</code>). Members are declared as <code>public static readonly</code> fields on the derived type and
           discovered by reflection over that type&#39;s own declared fields on first use, then frozen into a
           <code>ReadOnlyCollection</code> plus two <code>FrozenDictionary</code> lookups keyed by value and by name
-          (<code>Enumeration.cs:74-82</code>, <code>Enumeration.cs:165</code>); <code>All</code>, <code>FromValue</code>, and <code>FromName</code> read from those
-          (<code>Enumeration.cs:105</code>, <code>:115</code>, <code>:136</code>). The two resolvers return
+          (<code>Enumeration.cs:79-87</code>, <code>Enumeration.cs:170</code>); <code>All</code>, <code>FromValue</code>, and <code>FromName</code> read from those
+          (<code>Enumeration.cs:110</code>, <code>:115</code>, <code>:136</code>). The two resolvers return
           <a href="group-01-result-error-handling.html#result"><code>Result&lt;TEnumeration&gt;</code></a> with <code>Enumeration.UnknownValue</code> /
           <code>Enumeration.UnknownName</code> codes rather than throwing, which is the same contract every value-object
           factory in this group honors. Plain CLR enums stay the default, and this base is the documented opt-in
@@ -497,18 +497,18 @@
           forces every <code>ValueObject</code> derivative to be a sealed record in the Shared layer, which would forbid the
           static-member idiom this type exists for (<code>Enumeration.cs:26-29</code>). It also does not implement
           <code>IEquatable&lt;T&gt;</code>, for the same S4035 reason <a href="#baseentitytidentifiertype"><code>BaseEntity&lt;TIdentifierType&gt;</code></a>
-          does not; equality is a type-guarded <code>Equals(object?)</code> override instead (<code>Enumeration.cs:37-42</code>,
-          <code>Enumeration.cs:152</code>). On the wire, <a href="#enumerationjsonconverterfactory"><code>EnumerationJsonConverterFactory</code></a>
-          (<code>Enumeration.cs:195</code>) walks the base chain to confirm a type is the self-referencing closed type and no
-          further derivative (<code>Enumeration.cs:198-199</code>, <code>:213-222</code>), then builds the private nested
-          <a href="#enumerationconvertertenumeration"><code>EnumerationConverter&lt;TEnumeration&gt;</code></a> (<code>Enumeration.cs:224</code>), which
+          does not; equality is a type-guarded <code>Equals(object?)</code> override instead (<code>Enumeration.cs:42-47</code>,
+          <code>Enumeration.cs:157</code>). On the wire, <a href="#enumerationjsonconverterfactory"><code>EnumerationJsonConverterFactory</code></a>
+          (<code>Enumeration.cs:200</code>) walks the base chain to confirm a type is the self-referencing closed type and no
+          further derivative (<code>Enumeration.cs:203-204</code>, <code>:213-222</code>), then builds the private nested
+          <a href="#enumerationconvertertenumeration"><code>EnumerationConverter&lt;TEnumeration&gt;</code></a> (<code>Enumeration.cs:229</code>), which
           writes the member&#39;s <code>Name</code> and reads it back through <code>FromName</code>, throwing <code>JsonException</code> on a non-string
-          token or an unknown name (<code>Enumeration.cs:227-242</code>) exactly the way <code>CurrencyJsonConverter</code> does, so the
+          token or an unknown name (<code>Enumeration.cs:232-247</code>) exactly the way <code>CurrencyJsonConverter</code> does, so the
           non-MVC paths (cache, outbox, integration events, typed <code>HttpClient</code> calls) fail the same way MVC model
           binding does. Note the registration gotcha the doc comment calls out: System.Text.Json reads
           <code>[JsonConverter]</code> off the type being converted without walking base types, so a concrete enumeration
           either repeats the attribute or the host registers the factory once in <code>JsonSerializerOptions.Converters</code>
-          (<code>Enumeration.cs:44-49</code>). This is a [Rubric §9, API &amp; Contract Design] and [Rubric §15, Best Practices &amp;
+          (<code>Enumeration.cs:49-54</code>). This is a [Rubric §9, API &amp; Contract Design] and [Rubric §15, Best Practices &amp;
           Code Quality] decision: one serialization shape, chosen once, with the trade-off written down where the
           next reader will find it.</p>
           <h2 id="governance-markers-metadata-that-other-layers-act-on">Governance markers, metadata that other layers act on</h2>
@@ -868,7 +868,7 @@
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:12,16</code>).
           The opting-in hosts are the three ADC services
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:239</code>,
-          <code>MMCA.ADC.Conference.Service/Program.cs:325</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:198</code>) and the
+          <code>MMCA.ADC.Conference.Service/Program.cs:333</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:198</code>) and the
           Helpdesk web host (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: retention is not automatic. <code>AuditTrailSettings.RetentionDays</code> defaults
           to 90 (<code>AuditTrailSettings.cs:38</code>), but the doc comment states the purge only happens if the host
@@ -1717,7 +1717,7 @@
           </ul>
           <h3 id="enumerationtenumeration">Enumeration&lt;TEnumeration&gt;</h3>
           <blockquote>
-          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:71</code> · Level 3 · class (abstract, generic)</p>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:76</code> · Level 3 · class (abstract, generic)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the abstract base for a <strong>smart enumeration</strong>: a closed set of named, integer-valued
@@ -1727,48 +1727,48 @@
           <li><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#error"><code>Error</code></a>,
           <a href="group-01-result-error-handling.html#result"><code>Result</code></a>, and
           <a href="#enumerationjsonconverterfactory"><code>EnumerationJsonConverterFactory</code></a> (mutual: the base carries
-          <code>[JsonConverter(typeof(EnumerationJsonConverterFactory))]</code> at <code>Enumeration.cs:66</code> while the factory
+          <code>[JsonConverter(typeof(EnumerationJsonConverterFactory))]</code> at <code>Enumeration.cs:71</code> while the factory
           is constrained on <code>Enumeration&lt;T&gt;</code>). Externals: <code>System.Collections.Frozen</code>,
           <code>System.Collections.ObjectModel</code>, <code>System.Reflection</code>, <code>System.Text.Json</code>.</li>
           <li><strong>Concept introduced, the self-referencing generic (curiously recurring) constraint.</strong> <code>[Rubric §4, DDD]</code> (a closed domain vocabulary that carries behaviour) and <code>[Rubric §1, SOLID]</code> (open for
           extension: adding a member is a field, not a new <code>case</code> in every switch). The declaration is
           <code>abstract class Enumeration&lt;TEnumeration&gt; where TEnumeration : Enumeration&lt;TEnumeration&gt;</code>
-          (<code>Enumeration.cs:71-72</code>). The type parameter is the concrete type itself, which is what lets <code>All</code>,
+          (<code>Enumeration.cs:76-77</code>). The type parameter is the concrete type itself, which is what lets <code>All</code>,
           <code>FromValue</code> and <code>FromName</code> be <strong>per-enumeration</strong> and strongly typed: <code>Priority.FromValue(2)</code>
           returns <code>Result&lt;Priority&gt;</code> with no type argument written by hand, and each closed type gets its own
           static lookup tables (static fields on a generic type are per-constructed-type). The
-          <code>CA1000</code> suppression (<code>Enumeration.cs:67-70</code>) exists for exactly this and states the reasoning: a
+          <code>CA1000</code> suppression (<code>Enumeration.cs:72-75</code>) exists for exactly this and states the reasoning: a
           non-generic sibling would return the base type and force a cast at every call site.</li>
-          <li><strong>Concept introduced, lazy reflection frozen into a lookup.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code>. Three <code>Lazy&lt;T&gt;</code> statics (<code>Enumeration.cs:74-82</code>) build the member set once per closed
+          <li><strong>Concept introduced, lazy reflection frozen into a lookup.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code>. Three <code>Lazy&lt;T&gt;</code> statics (<code>Enumeration.cs:79-87</code>) build the member set once per closed
           type on first touch: <code>MembersLazy</code> runs <code>DiscoverMembers</code>, <code>ByValueLazy</code> and <code>ByNameLazy</code> project it
           into <code>FrozenDictionary</code> instances (the name dictionary using <code>StringComparer.OrdinalIgnoreCase</code>).
           <code>FrozenDictionary</code> is the right structure for a build-once, read-forever table: construction is more
           expensive, lookups are faster than <code>Dictionary</code>. <code>ToFrozenDictionary</code> also throws <code>ArgumentException</code>
           on a duplicate key, which turns two members sharing a <code>Value</code> or a <code>Name</code> into a fail-fast at first
-          use rather than a silent shadowing bug (<code>Enumeration.cs:30-35</code>).</li>
+          use rather than a silent shadowing bug (<code>Enumeration.cs:35-40</code>).</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>protected Enumeration(int value, string name)</code> (<code>Enumeration.cs:87</code>): the only constructor;
+          <li><code>protected Enumeration(int value, string name)</code> (<code>Enumeration.cs:92</code>): the only constructor;
           derived types keep theirs private and expose members as static fields.</li>
-          <li><code>Name</code> (<code>Enumeration.cs:95</code>) and <code>Value</code> (<code>Enumeration.cs:99</code>): getter-only, tagged
+          <li><code>Name</code> (<code>Enumeration.cs:100</code>) and <code>Value</code> (<code>Enumeration.cs:104</code>): getter-only, tagged
           <code>[DataMember(Order = 1)]</code> and <code>[DataMember(Order = 2)]</code> under the class-level <code>[DataContract]</code>
-          (<code>Enumeration.cs:65</code>). The split is intentional and documented: <code>Value</code> is the <strong>persisted</strong>
+          (<code>Enumeration.cs:70</code>). The split is intentional and documented: <code>Value</code> is the <strong>persisted</strong>
           representation, <code>Name</code> is the <strong>serialized/display</strong> one.</li>
-          <li><code>All</code> (<code>Enumeration.cs:105</code>): <code>IReadOnlyCollection&lt;TEnumeration&gt;</code>, ordered by <code>Value</code>, cached for
+          <li><code>All</code> (<code>Enumeration.cs:110</code>): <code>IReadOnlyCollection&lt;TEnumeration&gt;</code>, ordered by <code>Value</code>, cached for
           the lifetime of the closed type.</li>
-          <li><code>FromValue(int value)</code> (<code>Enumeration.cs:115</code>): <code>TryGetValue</code> on the frozen by-value map, else
+          <li><code>FromValue(int value)</code> (<code>Enumeration.cs:120</code>): <code>TryGetValue</code> on the frozen by-value map, else
           <code>Error.Invariant(code: &quot;Enumeration.UnknownValue&quot;, ...)</code> naming the concrete type in the message
-          (<code>Enumeration.cs:120-124</code>).</li>
-          <li><code>FromName(string name)</code> (<code>Enumeration.cs:136</code>): the case-insensitive twin, null-coalescing the
-          argument to <code>string.Empty</code> first (<code>Enumeration.cs:138</code>), else
+          (<code>Enumeration.cs:125-129</code>).</li>
+          <li><code>FromName(string name)</code> (<code>Enumeration.cs:141</code>): the case-insensitive twin, null-coalescing the
+          argument to <code>string.Empty</code> first (<code>Enumeration.cs:143</code>), else
           <code>Error.Invariant(code: &quot;Enumeration.UnknownName&quot;, ...)</code>.</li>
-          <li><code>ToString()</code> (<code>Enumeration.cs:149</code>): returns <code>Name</code>.</li>
-          <li><code>Equals(object?)</code> (<code>Enumeration.cs:152-155</code>) and <code>GetHashCode()</code> (<code>Enumeration.cs:158</code>):
+          <li><code>ToString()</code> (<code>Enumeration.cs:154</code>): returns <code>Name</code>.</li>
+          <li><code>Equals(object?)</code> (<code>Enumeration.cs:157-160</code>) and <code>GetHashCode()</code> (<code>Enumeration.cs:163</code>):
           type-guarded equality, <code>GetType() == other.GetType() &amp;&amp; Value == other.Value</code>, hashed as
           <code>HashCode.Combine(GetType(), Value)</code>. The class deliberately does <strong>not</strong> implement
-          <code>IEquatable&lt;T&gt;</code>: the remark at <code>Enumeration.cs:36-42</code> cites Sonar S4035 (an unsealed
+          <code>IEquatable&lt;T&gt;</code>: the remark at <code>Enumeration.cs:41-47</code> cites Sonar S4035 (an unsealed
           <code>IEquatable&lt;T&gt;</code> breaks the equality contract for subclasses) and leaves that to a sealed derived
           type. <code>[Rubric §15, Best Practices &amp; Code Quality]</code>.</li>
-          <li><code>DiscoverMembers()</code> (<code>Enumeration.cs:165-174</code>): reflects over
+          <li><code>DiscoverMembers()</code> (<code>Enumeration.cs:170-179</code>): reflects over
           <code>BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly</code>, keeps fields that are
           <code>IsInitOnly</code> (that is, <code>readonly</code>) and assignable to <code>TEnumeration</code>, reads their values, orders by
           <code>Value</code> and freezes to a <code>ReadOnlyCollection</code>. <code>DeclaredOnly</code> is the load-bearing flag: a derived
@@ -1796,18 +1796,18 @@
           types in the workspace are the fixtures in <code>MMCA.Common.Shared.Tests/ValueObjects/EnumerationTests.cs</code>
           and <code>EnumerationSerializationTests.cs</code>, plus
           <code>MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs</code>. Treat
-          the <code>Priority</code> sample in the doc comment (<code>Enumeration.cs:50-62</code>) as the usage template.</li>
+          the <code>Priority</code> sample in the doc comment (<code>Enumeration.cs:55-67</code>) as the usage template.</li>
           </ul>
           <h3 id="enumerationconvertertenumeration">EnumerationConverter&lt;TEnumeration&gt;</h3>
           <blockquote>
-          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:224</code> · Level 3 · class (private nested, sealed)</p>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:229</code> · Level 3 · class (private nested, sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the actual <code>JsonConverter&lt;TEnumeration&gt;</code> for one closed enumeration type. It is a
           <strong>private nested class</strong> inside
-          <a href="#enumerationjsonconverterfactory"><code>EnumerationJsonConverterFactory</code></a> (<code>Enumeration.cs:224-243</code>),
+          <a href="#enumerationjsonconverterfactory"><code>EnumerationJsonConverterFactory</code></a> (<code>Enumeration.cs:229-248</code>),
           constrained the same way as the base: <code>where TEnumeration : Enumeration&lt;TEnumeration&gt;</code>
-          (<code>Enumeration.cs:225</code>).</li>
+          (<code>Enumeration.cs:230</code>).</li>
           <li><strong>Depends on</strong>: <a href="#enumerationtenumeration"><code>Enumeration&lt;TEnumeration&gt;</code></a> (it calls
           <code>Enumeration&lt;TEnumeration&gt;.FromName</code>) and <code>System.Text.Json</code>.</li>
           <li><strong>Concept, the generic worker behind a converter factory.</strong> <code>[Rubric §2, Design Patterns]</code>
@@ -1816,54 +1816,54 @@
           to obtain one is through <code>CreateConverter</code>, which guarantees the generic argument is a legal closed
           enumeration.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>Read</code> (<code>Enumeration.cs:227</code>): rejects a non-string token with
+          <li><code>Read</code> (<code>Enumeration.cs:232</code>): rejects a non-string token with
           <code>throw new JsonException($&quot;{typeof(TEnumeration).Name} must be a string.&quot;)</code>
-          (<code>Enumeration.cs:229-230</code>), reads the string (<code>Enumeration.cs:232</code>), resolves it through
-          <code>Enumeration&lt;TEnumeration&gt;.FromName(name)</code> (<code>Enumeration.cs:234</code>) and throws a naming
-          <code>JsonException</code> when that fails (<code>Enumeration.cs:235-236</code>). Identical failure behaviour to
+          (<code>Enumeration.cs:234-235</code>), reads the string (<code>Enumeration.cs:237</code>), resolves it through
+          <code>Enumeration&lt;TEnumeration&gt;.FromName(name)</code> (<code>Enumeration.cs:239</code>) and throws a naming
+          <code>JsonException</code> when that fails (<code>Enumeration.cs:240-241</code>). Identical failure behaviour to
           <a href="#currencyjsonconverter"><code>CurrencyJsonConverter</code></a>, which is deliberate.</li>
-          <li><code>Write</code> (<code>Enumeration.cs:241-242</code>): <code>writer.WriteStringValue(value.Name)</code>. The wire shape is the
+          <li><code>Write</code> (<code>Enumeration.cs:246-247</code>): <code>writer.WriteStringValue(value.Name)</code>. The wire shape is the
           member name, never the integer, so a JSON payload stays readable and a renumbering is not a
           breaking API change (the integer is the <em>persistence</em> representation, handled by
           <a href="group-07-persistence-ef-core.html#enumerationvalueconvertertenumeration"><code>EnumerationValueConverter&lt;TEnumeration&gt;</code></a>).</li>
           </ul>
           </li>
           <li><strong>Where it&#39;s used</strong>: instantiated reflectively by
-          <code>EnumerationJsonConverterFactory.CreateConverter</code> (<code>Enumeration.cs:202-204</code>). It has no other
+          <code>EnumerationJsonConverterFactory.CreateConverter</code> (<code>Enumeration.cs:207-209</code>). It has no other
           caller and no public surface.</li>
           </ul>
           <h3 id="enumerationjsonconverterfactory">EnumerationJsonConverterFactory</h3>
           <blockquote>
-          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:195</code> · Level 3 · class (sealed)</p>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:200</code> · Level 3 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a <code>JsonConverterFactory</code> that hands System.Text.Json a
           <a href="#enumerationconvertertenumeration"><code>EnumerationConverter&lt;TEnumeration&gt;</code></a> for any concrete smart
           enumeration, so every member serializes as its <code>Name</code>.</li>
           <li><strong>Depends on</strong>: <a href="#enumerationtenumeration"><code>Enumeration&lt;TEnumeration&gt;</code></a> (mutual: the base type
-          carries <code>[JsonConverter(typeof(EnumerationJsonConverterFactory))]</code> at <code>Enumeration.cs:66</code>),
+          carries <code>[JsonConverter(typeof(EnumerationJsonConverterFactory))]</code> at <code>Enumeration.cs:71</code>),
           <a href="#enumerationconvertertenumeration"><code>EnumerationConverter&lt;TEnumeration&gt;</code></a>, and
           <code>System.Text.Json.Serialization</code>.</li>
           <li><strong>Concept introduced, why an <em>open generic</em> needs a factory.</strong> <code>[Rubric §9, API &amp; Contract Design]</code>. A <code>JsonConverter&lt;T&gt;</code> is closed over one <code>T</code>; there is no way to write one converter that
           serves <code>Priority</code>, <code>Severity</code> and every future enumeration. <code>JsonConverterFactory</code> is the
           System.Text.Json extension point for exactly that: <code>CanConvert</code> answers &quot;is this type mine?&quot; and
           <code>CreateConverter</code> builds the closed converter on demand. There is a second, subtler reason the
-          factory has to exist at all, documented at <code>Enumeration.cs:43-49</code> and again at <code>Enumeration.cs:184-188</code>:
+          factory has to exist at all, documented at <code>Enumeration.cs:48-54</code> and again at <code>Enumeration.cs:189-193</code>:
           System.Text.Json reads <code>[JsonConverter]</code> off the type it is converting <strong>without walking base
           types</strong>, so the attribute on <code>Enumeration&lt;T&gt;</code> does not reach <code>Priority</code>. A host therefore either
           repeats the attribute on each concrete type or registers this factory once. <code>AddAPI</code> takes the
           second route (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:59</code>, with the
           inline comment explaining the <code>inherit: false</code> behaviour).</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>CanConvert(Type typeToConvert)</code> (<code>Enumeration.cs:198-199</code>):
+          <li><code>CanConvert(Type typeToConvert)</code> (<code>Enumeration.cs:203-204</code>):
           <code>GetEnumerationArgument(typeToConvert) == typeToConvert</code>. Read that carefully: it is true only
           when the type <em>is</em> the type argument of its own <code>Enumeration&lt;T&gt;</code> base, that is, only for the
           self-referencing closed type. A class deriving further from a concrete enumeration is left to the
-          default converter rather than being silently serialized as its base (<code>Enumeration.cs:206-212</code>).</li>
-          <li><code>CreateConverter(...)</code> (<code>Enumeration.cs:202-204</code>):
+          default converter rather than being silently serialized as its base (<code>Enumeration.cs:211-217</code>).</li>
+          <li><code>CreateConverter(...)</code> (<code>Enumeration.cs:207-209</code>):
           <code>Activator.CreateInstance(typeof(EnumerationConverter&lt;&gt;).MakeGenericType(typeToConvert))</code> cast to
           <code>JsonConverter</code>. Reflection runs once per type; System.Text.Json caches the resulting converter.</li>
-          <li><code>GetEnumerationArgument(Type?)</code> (<code>Enumeration.cs:213-222</code>): walks <code>type.BaseType</code> upward looking
+          <li><code>GetEnumerationArgument(Type?)</code> (<code>Enumeration.cs:218-227</code>): walks <code>type.BaseType</code> upward looking
           for a generic type whose definition is <code>typeof(Enumeration&lt;&gt;)</code>, returning its single generic
           argument, or <code>null</code> at the top of the chain.</li>
           </ul>
@@ -1872,12 +1872,12 @@
           uniform name-based JSON for every enumeration across the whole API surface, including the non-MVC
           paths (cache entries, outbox payloads, integration events, typed <code>HttpClient</code> calls) that never see
           MVC model binding. The <code>HandleNull</code> default of <code>false</code> is left alone on purpose
-          (<code>Enumeration.cs:189-193</code>) so nullable members still deserialize to <code>null</code>.</li>
+          (<code>Enumeration.cs:194-198</code>) so nullable members still deserialize to <code>null</code>.</li>
           <li><strong>Where it&#39;s used</strong>: registered in <code>AddAPI</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:59</code>), named in that
           method&#39;s doc comment alongside <code>CurrencyJsonConverter</code>
           (<code>.../DependencyInjection.cs:30-31</code>); also reachable via the <code>[JsonConverter]</code> attribute on
-          <a href="#enumerationtenumeration"><code>Enumeration&lt;TEnumeration&gt;</code></a> (<code>Enumeration.cs:66</code>) for a member typed as
+          <a href="#enumerationtenumeration"><code>Enumeration&lt;TEnumeration&gt;</code></a> (<code>Enumeration.cs:71</code>) for a member typed as
           the base itself.</li>
           </ul>
           <h3 id="phonenumberinvariants">PhoneNumberInvariants</h3>

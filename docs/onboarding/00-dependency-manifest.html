@@ -159,10 +159,10 @@
           is still linked (only one possible target). Names that are neither visible nor unique are
           dropped as unresolvable without full semantic binding.</p>
           <ul>
-          <li>Edges resolved by namespace visibility: <strong>17598</strong> (~96%)</li>
-          <li>Edges resolved by globally-unique name (fallback): <strong>724</strong></li>
+          <li>Edges resolved by namespace visibility: <strong>17963</strong> (~96%)</li>
+          <li>Edges resolved by globally-unique name (fallback): <strong>736</strong></li>
           <li>References dropped as ambiguous (matched &gt;1 type, none visible): <strong>101</strong></li>
-          <li>Sensitivity: <strong>982 / 4818</strong> type levels would change if the globally-unique fallback
+          <li>Sensitivity: <strong>998 / 4905</strong> type levels would change if the globally-unique fallback
           were excluded; the fallback is retained because a globally-unique first-party name is
           unambiguous, so excluding it would under-count real dependencies.</li>
           </ul>
@@ -180,55 +180,55 @@
           </thead>
           <tbody><tr>
           <td>0</td>
-          <td>913</td>
+          <td>927</td>
           </tr>
           <tr>
           <td>1</td>
-          <td>588</td>
+          <td>601</td>
           </tr>
           <tr>
           <td>2</td>
-          <td>374</td>
+          <td>383</td>
           </tr>
           <tr>
           <td>3</td>
-          <td>343</td>
+          <td>350</td>
           </tr>
           <tr>
           <td>4</td>
-          <td>435</td>
+          <td>438</td>
           </tr>
           <tr>
           <td>5</td>
-          <td>366</td>
+          <td>370</td>
           </tr>
           <tr>
           <td>6</td>
-          <td>190</td>
+          <td>191</td>
           </tr>
           <tr>
           <td>7</td>
-          <td>147</td>
+          <td>152</td>
           </tr>
           <tr>
           <td>8</td>
-          <td>234</td>
+          <td>236</td>
           </tr>
           <tr>
           <td>9</td>
-          <td>274</td>
+          <td>282</td>
           </tr>
           <tr>
           <td>10</td>
-          <td>250</td>
+          <td>263</td>
           </tr>
           <tr>
           <td>11</td>
-          <td>101</td>
+          <td>104</td>
           </tr>
           <tr>
           <td>12</td>
-          <td>87</td>
+          <td>88</td>
           </tr>
           <tr>
           <td>13</td>
@@ -240,7 +240,7 @@
           </tr>
           <tr>
           <td>15</td>
-          <td>164</td>
+          <td>168</td>
           </tr>
           <tr>
           <td>16</td>
@@ -712,6 +712,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>GetPublicPartnerFilterQuery</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>GetPublicRoomFilterQuery</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>0</td>
@@ -1125,6 +1132,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>PartnerType</code></td>
+          <td>MMCA.ADC.Conference.Shared</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>QuestionModerationDefault</code></td>
           <td>MMCA.ADC.Conference.Shared</td>
           <td>0</td>
@@ -1293,6 +1307,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>IanaTimeZoneAttribute</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>KeynoteSpeakerInfo</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>0</td>
@@ -1315,6 +1336,13 @@
           <tr>
           <td>0</td>
           <td><code>ScorePollSignal</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>SessionAssetComposer</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>0</td>
           <td>(none)</td>
@@ -1350,6 +1378,13 @@
           <tr>
           <td>0</td>
           <td><code>SpeakerInfo</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>VenueMapLinks</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>0</td>
           <td>(none)</td>
@@ -2434,6 +2469,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>GuardrailVerdict</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>IAiTokenEstimator</code></td>
           <td>MMCA.Common.AI</td>
           <td>0</td>
@@ -2443,6 +2485,13 @@
           <td>0</td>
           <td><code>PromptContract</code></td>
           <td>MMCA.Common.AI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>DurationMeasurement</code></td>
+          <td>MMCA.Common.AI.Tests</td>
           <td>0</td>
           <td>(none)</td>
           </tr>
@@ -3939,6 +3988,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>GetFixturePreferencesQuery</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>IBadgeGranter</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>0</td>
@@ -5269,6 +5325,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>SqlClientEntraAuthenticationTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>StubHostEnvironment</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>0</td>
@@ -6221,6 +6284,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>BuiltInStrings</code></td>
+          <td>MMCA.Common.UI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>CachedPage</code></td>
           <td>MMCA.Common.UI</td>
           <td>0</td>
@@ -6683,6 +6753,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>StringLocalizerPluralExtensions</code></td>
+          <td>MMCA.Common.UI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>ToastSeverity</code></td>
           <td>MMCA.Common.UI</td>
           <td>0</td>
@@ -6795,6 +6872,20 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>CultureScope</code></td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>FakeLocalizer</code></td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>FakeStringLocalizer</code></td>
           <td>MMCA.Common.UI.Tests</td>
           <td>0</td>
@@ -6874,6 +6965,13 @@
           <td>0</td>
           <td><code>WidgetRow</code></td>
           <td>MMCA.Common.UI.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>BlazorCspSettings</code></td>
+          <td>MMCA.Common.UI.Web</td>
           <td>0</td>
           <td>(none)</td>
           </tr>
@@ -6974,6 +7072,27 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>2</td>
           <td>IEventFieldsRequest, QuestionModerationDefault</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>IPartnerFieldsRequest</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>1</td>
+          <td>PartnerType</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>PartnerEventIdRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>1</td>
+          <td>RequiredIdRules&lt;T, TId&gt;</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>PartnerSortRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>1</td>
+          <td>NonNegativeIntRules&lt;T&gt;</td>
           </tr>
           <tr>
           <td>1</td>
@@ -7187,6 +7306,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>PartnerDTO</code></td>
+          <td>MMCA.ADC.Conference.Shared</td>
+          <td>3</td>
+          <td>IBaseDTO&lt;TIdentifierType&gt;, IConcurrencyAware, PartnerType</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>QuestionDTO</code></td>
           <td>MMCA.ADC.Conference.Shared</td>
           <td>2</td>
@@ -7285,6 +7411,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>ADCPartnerInfo</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>1</td>
+          <td>PartnerType</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>ADCSponsorInfo</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>1</td>
@@ -7296,6 +7429,13 @@
           <td>MMCA.ADC.Conference.UI</td>
           <td>1</td>
           <td>ScorePollSignal</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SessionizeCodeAttribute</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>1</td>
+          <td>SessionizeCodeFormat</td>
           </tr>
           <tr>
           <td>1</td>
@@ -7324,6 +7464,13 @@
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td>1</td>
           <td>IPublicLinkBuilder</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>VenueMapLinksTests</code></td>
+          <td>MMCA.ADC.Conference.UI.Tests</td>
+          <td>1</td>
+          <td>VenueMapLinks</td>
           </tr>
           <tr>
           <td>1</td>
@@ -7793,6 +7940,20 @@
           <td>MMCA.Common.AI</td>
           <td>1</td>
           <td>AiProvider</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>ChatGuardrailException</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>1</td>
+          <td>GuardrailVerdict</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>IChatGuardrail</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>1</td>
+          <td>GuardrailVerdict</td>
           </tr>
           <tr>
           <td>1</td>
@@ -8913,6 +9074,13 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>1</td>
           <td>LeftModelBase</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SampleDeploymentObservabilityTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>1</td>
+          <td>ObservabilityConventionTestsBase</td>
           </tr>
           <tr>
           <td>1</td>
@@ -10372,6 +10540,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>InvariantMudLocalizationInterceptor</code></td>
+          <td>MMCA.Common.UI</td>
+          <td>1</td>
+          <td>BuiltInStrings</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>IPushDeviceTokenProvider</code></td>
           <td>MMCA.Common.UI</td>
           <td>1</td>
@@ -10939,6 +11114,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>StringLocalizerPluralExtensionsTests</code></td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td>1</td>
+          <td>FakeLocalizer</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>StubHttpMessageHandler</code></td>
           <td>MMCA.Common.UI.Tests</td>
           <td>2</td>
@@ -10988,6 +11170,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>BlazorCspSettingsValidator</code></td>
+          <td>MMCA.Common.UI.Web</td>
+          <td>1</td>
+          <td>BlazorCspSettings</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>WebFormFactor</code></td>
           <td>MMCA.Common.UI.Web</td>
           <td>1</td>
@@ -11027,6 +11216,13 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>2</td>
           <td>SessionScoringInput, SessionScoringResult</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>PartnerUpdateRequest</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>IPartnerFieldsRequest, PartnerType</td>
           </tr>
           <tr>
           <td>2</td>
@@ -11254,6 +11450,13 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>ADCPartnerCollectionResult</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>1</td>
+          <td>ADCPartnerInfo</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>ADCSponsorCollectionResult</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>1</td>
@@ -11265,6 +11468,13 @@
           <td>MMCA.ADC.Conference.UI</td>
           <td>1</td>
           <td>CategoryItemDTO</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>PartnerFormModel</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>2</td>
+          <td>PartnerDTO, PartnerType</td>
           </tr>
           <tr>
           <td>2</td>
@@ -11353,6 +11563,27 @@
           <tr>
           <td>2</td>
           <td><code>HappeningNowPage</code></td>
+          <td>MMCA.ADC.E2E.Tests</td>
+          <td>1</td>
+          <td>State</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>PartnerCreatePage</code></td>
+          <td>MMCA.ADC.E2E.Tests</td>
+          <td>1</td>
+          <td>State</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>PartnerDetailPage</code></td>
+          <td>MMCA.ADC.E2E.Tests</td>
+          <td>1</td>
+          <td>State</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>PartnerListPage</code></td>
           <td>MMCA.ADC.E2E.Tests</td>
           <td>1</td>
           <td>State</td>
@@ -11793,6 +12024,13 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>GuardrailChatClient</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>3</td>
+          <td>ChatGuardrailException, GuardrailVerdict, IChatGuardrail</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>UsageRecordingChatClient</code></td>
           <td>MMCA.Common.AI</td>
           <td>3</td>
@@ -11807,10 +12045,17 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>UsageRecorder</code></td>
+          <td><code>StubGuardrail</code></td>
           <td>MMCA.Common.AI.Tests</td>
           <td>2</td>
-          <td>AiUsageMeter, Measurement</td>
+          <td>GuardrailVerdict, IChatGuardrail</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>UsageRecorder</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>3</td>
+          <td>AiUsageMeter, DurationMeasurement, Measurement</td>
           </tr>
           <tr>
           <td>2</td>
@@ -13501,6 +13746,13 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>InvariantMudLocalizationInterceptorTests</code></td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td>1</td>
+          <td>InvariantMudLocalizationInterceptor</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>JwtAuthenticationStateProviderTests</code></td>
           <td>MMCA.Common.UI.Tests</td>
           <td>2</td>
@@ -13594,15 +13846,15 @@
           <td>2</td>
           <td><code>BlazorCspPolicyProvider</code></td>
           <td>MMCA.Common.UI.Web</td>
-          <td>3</td>
-          <td>ApiSettings, CspPolicy, ICspPolicyProvider</td>
+          <td>5</td>
+          <td>ApiSettings, BlazorCspSettings, BlazorCspSettingsValidator, CspPolicy, ICspPolicyProvider</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>BlazorCspPolicyProviderTests</code></td>
           <td>MMCA.Common.UI.Web.Tests</td>
-          <td>3</td>
-          <td>ApiSettings, CspPolicy, ICspPolicyProvider</td>
+          <td>4</td>
+          <td>ApiSettings, BlazorCspSettings, CspPolicy, ICspPolicyProvider</td>
           </tr>
           <tr>
           <td>2</td>
@@ -13698,6 +13950,13 @@
           <tr>
           <td>3</td>
           <td><code>EventChanged</code></td>
+          <td>MMCA.ADC.Conference.Domain</td>
+          <td>3</td>
+          <td>DomainEntityState, EntityChangedEvent&lt;TIdentifierType&gt;, State</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>PartnerChanged</code></td>
           <td>MMCA.ADC.Conference.Domain</td>
           <td>3</td>
           <td>DomainEntityState, EntityChangedEvent&lt;TIdentifierType&gt;, State</td>
@@ -13960,6 +14219,20 @@
           <td>MMCA.ADC.Conference.UI</td>
           <td>2</td>
           <td>Result, SpeakerInfo</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>PartnerCreateModel</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>3</td>
+          <td>PartnerDTO, PartnerFormModel, PartnerType</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>PartnerEditModel</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>3</td>
+          <td>PartnerDTO, PartnerFormModel, PartnerType</td>
           </tr>
           <tr>
           <td>3</td>
@@ -14301,15 +14574,15 @@
           <td>3</td>
           <td><code>AiServiceCollectionExtensions</code></td>
           <td>MMCA.Common.AI</td>
-          <td>5</td>
-          <td>AiProvider, AiSettings, AiUsageMeter, BoundedChatClient, UsageRecordingChatClient</td>
+          <td>7</td>
+          <td>AiProvider, AiSettings, AiUsageMeter, BoundedChatClient, GuardrailChatClient, IChatGuardrail, UsageRecordingChatClient</td>
           </tr>
           <tr>
           <td>3</td>
           <td><code>AiServiceCollectionExtensionsTests</code></td>
           <td>MMCA.Common.AI.Tests</td>
-          <td>4</td>
-          <td>AiSettings, BoundedChatClient, StubChatClient, UsageRecordingChatClient</td>
+          <td>7</td>
+          <td>AiSettings, BoundedChatClient, GuardrailChatClient, IChatGuardrail, StubChatClient, StubGuardrail, UsageRecordingChatClient</td>
           </tr>
           <tr>
           <td>3</td>
@@ -14317,6 +14590,13 @@
           <td>MMCA.Common.AI.Tests</td>
           <td>4</td>
           <td>AiSettings, BoundedChatClient, FixedTokenEstimator, StubChatClient</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>GuardrailChatClientTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>5</td>
+          <td>ChatGuardrailException, GuardrailChatClient, GuardrailVerdict, StubChatClient, StubGuardrail</td>
           </tr>
           <tr>
           <td>3</td>
@@ -14964,6 +15244,20 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>GetFixtureEntityHandlerBase&lt;TQuery&gt;</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>2</td>
+          <td>IQueryHandler&lt;in TQuery, TResult&gt;, Result</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>GetFixturePreferencesHandlerBase</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>3</td>
+          <td>GetFixturePreferencesQuery, IQueryHandler&lt;in TQuery, TResult&gt;, Result</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>MutableFixtureId</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>1</td>
@@ -15003,6 +15297,13 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>3</td>
           <td>ICommandHandler&lt;in TCommand, TResult&gt;, ReopenTicketCommand, Result</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>StrandedFixtureHandlerBase</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>3</td>
+          <td>GetFixturePreferencesQuery, IQueryHandler&lt;in TQuery, TResult&gt;, Result</td>
           </tr>
           <tr>
           <td>3</td>
@@ -16182,6 +16483,13 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>IPartnerUIService</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>2</td>
+          <td>IEntityService&lt;TEntityDTO, TIdentifierType&gt;, PartnerDTO</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>IQuestionUIService</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>2</td>
@@ -16310,8 +16618,8 @@
           <td>4</td>
           <td><code>AccessibilityTests</code></td>
           <td>MMCA.ADC.E2E.Tests</td>
-          <td>39</td>
-          <td>CheckInScanPage, ConferenceCategoryCreatePage, ConferenceCategoryListPage, E2ETestBase, E2ETestCollection, EventCreatePage, EventDetailPage, EventListPage, HappeningNowPage, MyBadgePage, MyPointsPage, OrganizerAttendancePage, OrganizerPointsOverviewPage, PlaywrightFixture, PublicEventDetailPage, PublicEventListPage, PublicSessionDetailPage, PublicSessionListPage, PublicSpeakerDetailPage, PublicSpeakerListPage …(+19)</td>
+          <td>42</td>
+          <td>CheckInScanPage, ConferenceCategoryCreatePage, ConferenceCategoryListPage, E2ETestBase, E2ETestCollection, EventCreatePage, EventDetailPage, EventListPage, HappeningNowPage, MyBadgePage, MyPointsPage, OrganizerAttendancePage, OrganizerPointsOverviewPage, PartnerCreatePage, PartnerDetailPage, PartnerListPage, PlaywrightFixture, PublicEventDetailPage, PublicEventListPage, PublicSessionDetailPage …(+22)</td>
           </tr>
           <tr>
           <td>4</td>
@@ -16396,6 +16704,13 @@
           <td>MMCA.ADC.E2E.Tests</td>
           <td>11</td>
           <td>E2ETestBase, E2ETestCollection, EventCreatePage, EventDetailPage, EventFeedbackPage, OrganizerEventFeedbackPage, OrganizerSessionFeedbackPage, PlaywrightFixture, PublicEventDetailPage, SessionCreatePage, SessionDetailPage</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>OrganizerPartnerManagementTests</code></td>
+          <td>MMCA.ADC.E2E.Tests</td>
+          <td>7</td>
+          <td>E2ETestBase, E2ETestCollection, EventCreatePage, PartnerCreatePage, PartnerDetailPage, PartnerListPage, PlaywrightFixture</td>
           </tr>
           <tr>
           <td>4</td>
@@ -17649,6 +17964,13 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>1</td>
           <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>FixtureApplicationMap</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>4</td>
+          <td>ArchitectureMapBase, GetFixturePreferencesQuery, Layer, LayerRef</td>
           </tr>
           <tr>
           <td>4</td>
@@ -19227,6 +19549,13 @@
           </tr>
           <tr>
           <td>5</td>
+          <td><code>PartnerService</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>4</td>
+          <td>EntityServiceBase&lt;TEntityDTO, TIdentifierType&gt;, IPartnerUIService, ITokenStorageService, PartnerDTO</td>
+          </tr>
+          <tr>
+          <td>5</td>
           <td><code>PublicSessionListView</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>10</td>
@@ -19271,8 +19600,15 @@
           <td>5</td>
           <td><code>SessionAssetsPanel</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>8</td>
-          <td>ISessionAssetUIService, Result, SessionAssetDisplay, SessionAssetDTO, SessionAssetLimits, SessionAssetLinkRequest, SessionAssetService, SessionAssetUpdateRequest</td>
+          <td>9</td>
+          <td>ISessionAssetUIService, Result, SessionAssetComposer, SessionAssetDisplay, SessionAssetDTO, SessionAssetLimits, SessionAssetLinkRequest, SessionAssetService, SessionAssetUpdateRequest</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>SessionBookmarkButton</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>4</td>
+          <td>BookmarkService, IHapticFeedbackService, ISessionBookmarkUIService, IToastService</td>
           </tr>
           <tr>
           <td>5</td>
@@ -19357,6 +19693,13 @@
           <td>MMCA.ADC.Conference.UI</td>
           <td>4</td>
           <td>EntityServiceBase&lt;TEntityDTO, TIdentifierType&gt;, ISponsorUIService, ITokenStorageService, SponsorDTO</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>ClientEventFormatValidationTests</code></td>
+          <td>MMCA.ADC.Conference.UI.Tests</td>
+          <td>4</td>
+          <td>EventCreateModel, EventEditModel, EventFormModel, SessionizeCodeFormat</td>
           </tr>
           <tr>
           <td>5</td>
@@ -20442,6 +20785,13 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>3</td>
           <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, CascadeChildFixture, Result</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>SliceCohesionFitnessTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>5</td>
+          <td>ArchitectureRules, FixtureApplicationMap, GetFixtureEntityHandlerBase&lt;TQuery&gt;, GetFixturePreferencesHandlerBase, StrandedFixtureHandlerBase</td>
           </tr>
           <tr>
           <td>5</td>
@@ -21532,8 +21882,8 @@
           <td>5</td>
           <td><code>AuthModelValidationTests</code></td>
           <td>MMCA.Common.UI.Tests</td>
-          <td>3</td>
-          <td>Email, LoginModel, RegisterModel</td>
+          <td>4</td>
+          <td>Email, LoginModel, RegisterModel, ResetPasswordModel</td>
           </tr>
           <tr>
           <td>5</td>
@@ -21574,8 +21924,8 @@
           <td>5</td>
           <td><code>MoneyExtensionsTests</code></td>
           <td>MMCA.Common.UI.Tests</td>
-          <td>2</td>
-          <td>Currency, Money</td>
+          <td>3</td>
+          <td>CultureScope, Currency, Money</td>
           </tr>
           <tr>
           <td>5</td>
@@ -21616,8 +21966,8 @@
           <td>5</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.Common.UI.Web</td>
-          <td>9</td>
-          <td>ApiSettings, BlazorCspPolicyProvider, GatewayRateLimitingSettings, ICspPolicyProvider, IFormFactor, ITokenStorageService, ServerTokenStorageService, TrustedCallerHandler, WebFormFactor</td>
+          <td>11</td>
+          <td>ApiSettings, BlazorCspPolicyProvider, BlazorCspSettings, BlazorCspSettingsValidator, GatewayRateLimitingSettings, ICspPolicyProvider, IFormFactor, ITokenStorageService, ServerTokenStorageService, TrustedCallerHandler, WebFormFactor</td>
           </tr>
           <tr>
           <td>5</td>
@@ -21723,6 +22073,13 @@
           <td>MMCA.ADC.Conference.Domain</td>
           <td>5</td>
           <td>CommonInvariants, Error, EventDTO, Result, RoomDTO</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>PartnerInvariants</code></td>
+          <td>MMCA.ADC.Conference.Domain</td>
+          <td>3</td>
+          <td>CommonInvariants, PartnerDTO, Result</td>
           </tr>
           <tr>
           <td>6</td>
@@ -21868,8 +22225,8 @@
           <td>6</td>
           <td><code>ClientUrlValidationTests</code></td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
-          <td>5</td>
-          <td>EventCreateModel, EventEditModel, SpeakerCreateModel, SpeakerEditModel, SponsorCreateModel</td>
+          <td>9</td>
+          <td>ActivityCreateModel, ActivityEditModel, EventCreateModel, EventEditModel, PartnerCreateModel, PartnerEditModel, SpeakerCreateModel, SpeakerEditModel, SponsorCreateModel</td>
           </tr>
           <tr>
           <td>6</td>
@@ -23084,6 +23441,27 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>PartnerDescriptionRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>OptionalStringRules&lt;T&gt;, PartnerInvariants</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>PartnerNameRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>PartnerInvariants, RequiredStringRules&lt;T&gt;</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>PartnerOptionalUrlRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>1</td>
+          <td>AbsoluteUrlRules&lt;T&gt;</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>QuestionTextRules&lt;T&gt;</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>1</td>
@@ -23392,6 +23770,13 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>PartnerInvariantsTests</code></td>
+          <td>MMCA.ADC.Conference.Domain.Tests</td>
+          <td>1</td>
+          <td>PartnerInvariants</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>QuestionInvariantsTests</code></td>
           <td>MMCA.ADC.Conference.Domain.Tests</td>
           <td>1</td>
@@ -23487,6 +23872,13 @@
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td>9</td>
           <td>BunitTestBase, Error, ISessionAssetUIService, Result, SessionAssetDTO, SessionAssetKind, SessionAssetLimits, SessionAssetLinkRequest, SessionAssetsPanel</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>SessionBookmarkButtonTests</code></td>
+          <td>MMCA.ADC.Conference.UI.Tests</td>
+          <td>6</td>
+          <td>AuthClaimTypes, BunitTestBase, ISessionBookmarkUIService, IToastService, Result, SessionBookmarkButton</td>
           </tr>
           <tr>
           <td>7</td>
@@ -23947,8 +24339,8 @@
           <td>7</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.Common.UI</td>
-          <td>43</td>
-          <td>ApiSettings, ApiUserPreferenceReader, ApiUserPreferenceWriter, AuthDelegatingHandler, AuthUIService, CultureDelegatingHandler, DefaultOAuthUISettings, EndpointCultureApplier, HttpResilienceDefaults, IAppDialogService, IAuthUIService, ICultureApplier, IEntityService&lt;TEntityDTO, TIdentifierType&gt;, IFormFactor, IOAuthUISettings, IPublicLinkBuilder, IRoleAdminUIService, ISessionCookieSync, IToastService, IUIModule …(+23)</td>
+          <td>44</td>
+          <td>ApiSettings, ApiUserPreferenceReader, ApiUserPreferenceWriter, AuthDelegatingHandler, AuthUIService, CultureDelegatingHandler, DefaultOAuthUISettings, EndpointCultureApplier, HttpResilienceDefaults, IAppDialogService, IAuthUIService, ICultureApplier, IEntityService&lt;TEntityDTO, TIdentifierType&gt;, IFormFactor, InvariantMudLocalizationInterceptor, IOAuthUISettings, IPublicLinkBuilder, IRoleAdminUIService, ISessionCookieSync, IToastService …(+24)</td>
           </tr>
           <tr>
           <td>7</td>
@@ -24117,6 +24509,13 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>3</td>
           <td>ICacheInvalidating, ITransactional, Speaker</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>PartnerFieldRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>6</td>
+          <td>IPartnerFieldsRequest, PartnerDescriptionRules&lt;T&gt;, PartnerInvariants, PartnerNameRules&lt;T&gt;, PartnerOptionalUrlRules&lt;T&gt;, PartnerSortRules&lt;T&gt;</td>
           </tr>
           <tr>
           <td>8</td>
@@ -24404,6 +24803,13 @@
           <td>MMCA.ADC.Conference.Domain</td>
           <td>6</td>
           <td>ActivityChanged, ActivityInvariants, AuditableAggregateRootEntity&lt;TIdentifierType&gt;, DomainEntityState, Event, Result</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>Partner</code></td>
+          <td>MMCA.ADC.Conference.Domain</td>
+          <td>7</td>
+          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, DomainEntityState, Event, PartnerChanged, PartnerInvariants, PartnerType, Result</td>
           </tr>
           <tr>
           <td>8</td>
@@ -25961,6 +26367,34 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>PartnerCreateRequest</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>5</td>
+          <td>ICacheInvalidating, ICreateRequest, IPartnerFieldsRequest, Partner, PartnerType</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>PartnerDTOMapper</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>3</td>
+          <td>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;, Partner, PartnerDTO</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>PartnerUpdateApplier</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>4</td>
+          <td>IEntityUpdateApplier&lt;TEntity, TUpdateRequest, TIdentifierType&gt;, Partner, PartnerUpdateRequest, Result</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>PartnerUpdateRequestValidator</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>PartnerFieldRules&lt;T&gt;, PartnerUpdateRequest</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>PublicSessionStatusSpecification</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>3</td>
@@ -26355,8 +26789,8 @@
           <td>9</td>
           <td><code>IEventCascadeDeletionDomainService</code></td>
           <td>MMCA.ADC.Conference.Domain</td>
-          <td>6</td>
-          <td>Activity, Event, Result, Session, SessionAsset, Sponsor</td>
+          <td>7</td>
+          <td>Activity, Event, Partner, Result, Session, SessionAsset, Sponsor</td>
           </tr>
           <tr>
           <td>9</td>
@@ -26364,6 +26798,13 @@
           <td>MMCA.ADC.Conference.Domain.Tests</td>
           <td>2</td>
           <td>Activity, EntityBuilderBase&lt;TBuilder, TEntity&gt;</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>PartnerBuilder</code></td>
+          <td>MMCA.ADC.Conference.Domain.Tests</td>
+          <td>3</td>
+          <td>EntityBuilderBase&lt;TBuilder, TEntity&gt;, Partner, PartnerType</td>
           </tr>
           <tr>
           <td>9</td>
@@ -26404,8 +26845,15 @@
           <td>9</td>
           <td><code>ConferenceModuleDbSeeder</code></td>
           <td>MMCA.ADC.Conference.Infrastructure</td>
-          <td>12</td>
-          <td>Activity, DbSeeder, Event, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Question, QuestionInvariants, Session, SessionInvariants, Speaker, Sponsor, SponsorTier</td>
+          <td>14</td>
+          <td>Activity, DbSeeder, Event, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Partner, PartnerType, Question, QuestionInvariants, Session, SessionInvariants, Speaker, Sponsor, SponsorTier</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>PartnerConfiguration</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure</td>
+          <td>3</td>
+          <td>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, Partner, PartnerInvariants</td>
           </tr>
           <tr>
           <td>9</td>
@@ -26495,8 +26943,8 @@
           <td>9</td>
           <td><code>ADCHome</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>8</td>
-          <td>ADCCollectionResult, ADCEventInfo, ADCHomeContent, ADCSponsorCollectionResult, ADCSponsorInfo, CurrentEventSelector, EventPhase, SponsorTier</td>
+          <td>11</td>
+          <td>ADCCollectionResult, ADCEventInfo, ADCHomeContent, ADCPartnerCollectionResult, ADCPartnerInfo, ADCSponsorCollectionResult, ADCSponsorInfo, CurrentEventSelector, EventPhase, PartnerType, SponsorTier</td>
           </tr>
           <tr>
           <td>9</td>
@@ -26504,6 +26952,20 @@
           <td>MMCA.ADC.Conference.UI</td>
           <td>5</td>
           <td>CurrentEventSelector, DataGridListPageBase&lt;TDto&gt;, EventInfo, EventLookupService, IEventLookupService</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>PartnerCreate</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>12</td>
+          <td>ConferenceRoutePaths, CurrentEventSelector, DataAnnotationsModelValidator, ErrorMessages, EventInfo, EventLookupService, IEventLookupService, IPartnerUIService, IToastService, ModelValidation, PartnerCreateModel, PartnerService</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>PartnerDetail</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>14</td>
+          <td>ConferenceRoutePaths, DataAnnotationsModelValidator, ErrorMessages, EventInfo, EventLookupService, IEventLookupService, IPartnerUIService, IToastService, ModelValidation, Partner, PartnerDTO, PartnerEditModel, PartnerService, PartnerType</td>
           </tr>
           <tr>
           <td>9</td>
@@ -26523,8 +26985,8 @@
           <td>9</td>
           <td><code>PublicSessionDetail</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>17</td>
-          <td>BookmarkService, ConferenceRoutePaths, ICategoryItemLookupService, IHapticFeedbackService, IRoomUIService, ISessionBookmarkUIService, ISessionLiveUIService, ISessionUIService, ISpeakerLookupService, ITextToSpeechService, IToastService, RoomDTO, RoomService, Session, SessionDTO, SessionLive, SessionService</td>
+          <td>14</td>
+          <td>ConferenceRoutePaths, ICategoryItemLookupService, IRoomUIService, ISessionLiveUIService, ISessionUIService, ISpeakerLookupService, ITextToSpeechService, IToastService, RoomDTO, RoomService, Session, SessionDTO, SessionLive, SessionService</td>
           </tr>
           <tr>
           <td>9</td>
@@ -27578,6 +28040,13 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>PartnersController</code></td>
+          <td>MMCA.ADC.Conference.API</td>
+          <td>21</td>
+          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, GetPublicPartnerFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, PagedCollectionResult&lt;T&gt;, Partner, PartnerCreateRequest, PartnerDTO, PartnerUpdateRequest, QueryFilterModelBinder, Result, Route, Specification&lt;TEntity, TIdentifierType&gt;, SupportsIfMatchAttribute …(+1)</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>SessionCategoryItemsController</code></td>
           <td>MMCA.ADC.Conference.API</td>
           <td>19</td>
@@ -27767,6 +28236,13 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>CreatePartnerHandler</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>7</td>
+          <td>CreateEntityHandlerBase&lt;TCreateRequest, TEntity, TIdentifierType, TEntityDTO&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IUnitOfWork, Partner, PartnerCreateRequest, PartnerDTO, PartnerDTOMapper</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>CreateSpeakerHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>7</td>
@@ -27783,8 +28259,8 @@
           <td>10</td>
           <td><code>DeleteEventHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>13</td>
-          <td>Activity, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteSessionAssetBlobInternalCommand, Error, Event, ICommandHandler&lt;in TCommand, TResult&gt;, IEventCascadeDeletionDomainService, IInternalCommandScheduler, IUnitOfWork, Result, Session, SessionAsset, Sponsor</td>
+          <td>14</td>
+          <td>Activity, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteSessionAssetBlobInternalCommand, Error, Event, ICommandHandler&lt;in TCommand, TResult&gt;, IEventCascadeDeletionDomainService, IInternalCommandScheduler, IUnitOfWork, Partner, Result, Session, SessionAsset, Sponsor</td>
           </tr>
           <tr>
           <td>10</td>
@@ -27841,6 +28317,27 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>9</td>
           <td>CrossSourceSpecification, Event, GetPublicSessionFilterQuery, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, PublicSessionStatusSpecification, Result, Session, Specification&lt;TEntity, TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>PartnerCreateRequestMapper</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>4</td>
+          <td>IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, Partner, PartnerCreateRequest, Result</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>PartnerCreateRequestValidator</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>3</td>
+          <td>PartnerCreateRequest, PartnerEventIdRules&lt;T&gt;, PartnerFieldRules&lt;T&gt;</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>PartnerNavigationPopulator</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>5</td>
+          <td>DeclarativeNavigationPopulator&lt;TEntity&gt;, Event, FKNavigationDescriptor&lt;TEntity, TChild, TChildId&gt;, IUnitOfWork, Partner</td>
           </tr>
           <tr>
           <td>10</td>
@@ -28173,6 +28670,20 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>PartnerDTOMapperTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>3</td>
+          <td>Partner, PartnerDTOMapper, PartnerType</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>PartnerUpdateRequestValidatorTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>4</td>
+          <td>PartnerInvariants, PartnerType, PartnerUpdateRequest, PartnerUpdateRequestValidator</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>QuestionCreateRequestValidatorTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>3</td>
@@ -28294,8 +28805,8 @@
           <td>10</td>
           <td><code>EventCascadeDeletionDomainService</code></td>
           <td>MMCA.ADC.Conference.Domain</td>
-          <td>7</td>
-          <td>Activity, Event, IEventCascadeDeletionDomainService, Result, Session, SessionAsset, Sponsor</td>
+          <td>8</td>
+          <td>Activity, Event, IEventCascadeDeletionDomainService, Partner, Result, Session, SessionAsset, Sponsor</td>
           </tr>
           <tr>
           <td>10</td>
@@ -28303,6 +28814,13 @@
           <td>MMCA.ADC.Conference.Domain.Tests</td>
           <td>6</td>
           <td>Activity, ActivityBuilder, ActivityChanged, ActivityInvariants, DomainEntityState, Result</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>PartnerTests</code></td>
+          <td>MMCA.ADC.Conference.Domain.Tests</td>
+          <td>7</td>
+          <td>DomainEntityState, Partner, PartnerBuilder, PartnerChanged, PartnerInvariants, PartnerType, Result</td>
           </tr>
           <tr>
           <td>10</td>
@@ -28369,6 +28887,13 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>PartnerList</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>10</td>
+          <td>ConferenceRoutePaths, ErrorMessages, EventFilteredListPageBase&lt;TDto&gt;, IPartnerUIService, ListPageActions, MobileInfiniteScrollList&lt;TItem&gt;, PartnerDTO, PartnerService, PartnerType, Result</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>PublicSessionList</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>18</td>
@@ -28432,6 +28957,13 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>ADCHomePartnersTests</code></td>
+          <td>MMCA.ADC.Conference.UI.Tests</td>
+          <td>5</td>
+          <td>ADCHome, BunitTestBase, CapturingHttpMessageHandler, HttpTestDoubles, Partner</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>ADCHomeTests</code></td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td>2</td>
@@ -28443,6 +28975,20 @@
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td>4</td>
           <td>ADCHome, BunitTestBase, CapturingHttpMessageHandler, HttpTestDoubles</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>PartnerCreateTests</code></td>
+          <td>MMCA.ADC.Conference.UI.Tests</td>
+          <td>7</td>
+          <td>BunitTestBase, EventInfo, IEventLookupService, IPartnerUIService, PartnerCreate, PartnerDTO, PartnerType</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>PartnerDetailTests</code></td>
+          <td>MMCA.ADC.Conference.UI.Tests</td>
+          <td>10</td>
+          <td>BunitTestBase, Error, EventInfo, IEventLookupService, IPartnerUIService, Partner, PartnerDetail, PartnerDTO, PartnerType, Result</td>
           </tr>
           <tr>
           <td>10</td>
@@ -28476,8 +29022,8 @@
           <td>10</td>
           <td><code>PublicSessionDetailTests</code></td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
-          <td>15</td>
-          <td>BunitTestBase, CategoryItemInfo, Error, ICategoryItemLookupService, IHapticFeedbackService, IRoomUIService, ISessionBookmarkUIService, ISessionLiveUIService, ISessionUIService, ISpeakerLookupService, PublicSessionDetail, Result, SessionDTO, SpeakerInfo, UserSessionBookmarkDTO</td>
+          <td>16</td>
+          <td>BunitTestBase, CategoryItemInfo, Error, ICategoryItemLookupService, IHapticFeedbackService, IRoomUIService, ISessionBookmarkUIService, ISessionLiveUIService, ISessionUIService, ISpeakerLookupService, PublicSessionDetail, Result, SessionCategoryItemDTO, SessionDTO, SpeakerInfo, UserSessionBookmarkDTO</td>
           </tr>
           <tr>
           <td>10</td>
@@ -28485,6 +29031,13 @@
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td>10</td>
           <td>BunitTestBase, Error, EventInfo, HttpResultExecutor, IEventLookupService, ISponsorUIService, PublicSponsorList, Result, SponsorDTO, SponsorTier</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>SessionDetailCategoryChipTests</code></td>
+          <td>MMCA.ADC.Conference.UI.Tests</td>
+          <td>18</td>
+          <td>BunitTestBase, CategoryItemInfo, EventInfo, ICategoryItemLookupService, IEventLookupService, IRoomUIService, ISessionCategoryItemUIService, ISessionSpeakerUIService, ISessionUIService, ISpeakerLookupService, Result, RoleNames, RoomDTO, SessionCategoryItemDTO, SessionDetail, SessionDTO, SpeakerInfo, TestPrincipal</td>
           </tr>
           <tr>
           <td>10</td>
@@ -29309,15 +29862,15 @@
           <td>11</td>
           <td><code>ConditionalWriteConventionTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
-          <td>9</td>
-          <td>ActivitiesController, ConferenceCategoriesController, EventsController, QuestionsController, SessionAssetsController, SessionsController, SpeakersController, SponsorsController, SupportsIfMatchAttribute</td>
+          <td>10</td>
+          <td>ActivitiesController, ConferenceCategoriesController, EventsController, PartnersController, QuestionsController, SessionAssetsController, SessionsController, SpeakersController, SponsorsController, SupportsIfMatchAttribute</td>
           </tr>
           <tr>
           <td>11</td>
           <td><code>EntityExportAuthorizationTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
-          <td>13</td>
-          <td>ActivitiesController, ConferencePermissions, EventQuestionAnswersController, EventsController, EventSpeakersController, HasPermissionAttribute, SessionCategoryItemsController, SessionQuestionAnswersController, SessionsController, SessionSpeakersController, SpeakerCategoryItemsController, SpeakersController, SponsorsController</td>
+          <td>14</td>
+          <td>ActivitiesController, ConferencePermissions, EventQuestionAnswersController, EventsController, EventSpeakersController, HasPermissionAttribute, PartnersController, SessionCategoryItemsController, SessionQuestionAnswersController, SessionsController, SessionSpeakersController, SpeakerCategoryItemsController, SpeakersController, SponsorsController</td>
           </tr>
           <tr>
           <td>11</td>
@@ -29332,6 +29885,13 @@
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td>31</td>
           <td>BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, ErrorType, Event, EventCreateRequest, EventDTO, EventsController, EventUpdateRequest, ExportEventCalendarQuery, GetNowNextQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;, NowNextDTO, PagedCollectionResult&lt;T&gt;, PaginationMetadata …(+11)</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>PartnersControllerTests</code></td>
+          <td>MMCA.ADC.Conference.API.Tests</td>
+          <td>22</td>
+          <td>ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetPublicPartnerFilterQuery, HasPermissionAttribute, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, PagedCollectionResult&lt;T&gt;, Partner, PartnerCreateRequest, PartnerDTO, PartnersController, PartnerType, PartnerUpdateRequest, Result, RoleNames, Specification&lt;TEntity, TIdentifierType&gt; …(+2)</td>
           </tr>
           <tr>
           <td>11</td>
@@ -29381,6 +29941,13 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>8</td>
           <td>EventSpeaker, GetPublicEventSpeakerFilterQuery, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, PublicConferenceVisibility, Result, Specification&lt;TEntity, TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>GetPublicPartnerFilterHandler</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>8</td>
+          <td>GetPublicPartnerFilterQuery, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, Partner, PublicConferenceVisibility, Result, Specification&lt;TEntity, TIdentifierType&gt;</td>
           </tr>
           <tr>
           <td>11</td>
@@ -29538,6 +30105,13 @@
           </tr>
           <tr>
           <td>11</td>
+          <td><code>PartnerCreateRequestValidatorTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>4</td>
+          <td>PartnerCreateRequest, PartnerCreateRequestValidator, PartnerInvariants, PartnerType</td>
+          </tr>
+          <tr>
+          <td>11</td>
           <td><code>SessionCreateRequestMapperTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>2</td>
@@ -29575,8 +30149,8 @@
           <td>11</td>
           <td><code>EventCascadeDeletionDomainServiceTests</code></td>
           <td>MMCA.ADC.Conference.Domain.Tests</td>
-          <td>5</td>
-          <td>ActivityBuilder, Event, EventCascadeDeletionDomainService, Session, SponsorBuilder</td>
+          <td>7</td>
+          <td>ActivityBuilder, Event, EventCascadeDeletionDomainService, PartnerBuilder, PartnerType, Session, SponsorBuilder</td>
           </tr>
           <tr>
           <td>11</td>
@@ -30030,8 +30604,8 @@
           <td>12</td>
           <td><code>ModuleApplicationDbContext</code></td>
           <td>MMCA.ADC.Conference.Infrastructure</td>
-          <td>19</td>
-          <td>Activity, ApplicationDbContext, Category, CategoryItem, Event, EventQuestionAnswer, EventSpeaker, IEntityConfigurationAssemblyProvider, PhysicalDataSource, Question, Room, Session, SessionAsset, SessionCategoryItem, SessionQuestionAnswer, SessionSpeaker, Speaker, SpeakerCategoryItem, Sponsor</td>
+          <td>20</td>
+          <td>Activity, ApplicationDbContext, Category, CategoryItem, Event, EventQuestionAnswer, EventSpeaker, IEntityConfigurationAssemblyProvider, Partner, PhysicalDataSource, Question, Room, Session, SessionAsset, SessionCategoryItem, SessionQuestionAnswer, SessionSpeaker, Speaker, SpeakerCategoryItem, Sponsor</td>
           </tr>
           <tr>
           <td>12</td>
@@ -30200,6 +30774,13 @@
           <td>MMCA.Common.Aspire.Hosting.Tests</td>
           <td>3</td>
           <td>Extensions, Extensions, ServiceBusEmulatorResource</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>AiTelemetryExportTests</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
+          <td>1</td>
+          <td>Extensions</td>
           </tr>
           <tr>
           <td>12</td>
@@ -32046,8 +32627,8 @@
           <td>14</td>
           <td><code>DependencyInjectionBrokerMessagingTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>5</td>
-          <td>EfInboxStore, IInboxStore, InboxDisabledWarningService, NoOpInboxStore, OrderPlacedConsumer</td>
+          <td>6</td>
+          <td>EfInboxStore, IInboxStore, InboxDisabledWarningService, MessageBusSettings, NoOpInboxStore, OrderPlacedConsumer</td>
           </tr>
           <tr>
           <td>14</td>
@@ -32284,8 +32865,8 @@
           <td>15</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>83</td>
-          <td>Activity, ActivityCreateRequest, ActivityDTO, ActivityNavigationPopulator, ActivityUpdateRequest, ApplicationSettings, Category, CategoryItem, CategoryItemDTO, CategoryItemNavigationPopulator, ClassReference, ClassReference, ConferenceCategoryCreateRequest, ConferenceCategoryDTO, ConferenceCategoryEntityQueryService, ConferenceCategoryNavigationPopulator, ConferenceCategoryUpdateRequest, DeleteConferenceCategoryHandler, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteEntityHandler&lt;TEntity, TIdentifierType&gt; …(+63)</td>
+          <td>88</td>
+          <td>Activity, ActivityCreateRequest, ActivityDTO, ActivityNavigationPopulator, ActivityUpdateRequest, ApplicationSettings, Category, CategoryItem, CategoryItemDTO, CategoryItemNavigationPopulator, ClassReference, ClassReference, ConferenceCategoryCreateRequest, ConferenceCategoryDTO, ConferenceCategoryEntityQueryService, ConferenceCategoryNavigationPopulator, ConferenceCategoryUpdateRequest, DeleteConferenceCategoryHandler, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteEntityHandler&lt;TEntity, TIdentifierType&gt; …(+68)</td>
           </tr>
           <tr>
           <td>15</td>
@@ -32410,8 +32991,8 @@
           <td>15</td>
           <td><code>ConferenceCrudRegistrationTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>26</td>
-          <td>Activity, ActivityCreateRequest, ActivityDTO, ActivityUpdateRequest, ApplicationSettings, Category, CommandRequestValidator&lt;TCommand, TRequest&gt;, ConferenceCategoryDTO, ConferenceCategoryUpdateRequest, CreateActivityHandler, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteSessionHandler, ICommandHandler&lt;in TCommand, TResult&gt;, IEntityUpdateApplier&lt;TEntity, TUpdateRequest, TIdentifierType&gt;, IEntityUpdateCommandApplier&lt;TEntity, TUpdateRequest, TIdentifierType, in TCommand&gt;, Result, Session, Speaker, SpeakerDTO, SpeakerUpdateRequest …(+6)</td>
+          <td>29</td>
+          <td>Activity, ActivityCreateRequest, ActivityDTO, ActivityUpdateRequest, ApplicationSettings, Category, CommandRequestValidator&lt;TCommand, TRequest&gt;, ConferenceCategoryDTO, ConferenceCategoryUpdateRequest, CreateActivityHandler, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteSessionHandler, ICommandHandler&lt;in TCommand, TResult&gt;, IEntityUpdateApplier&lt;TEntity, TUpdateRequest, TIdentifierType&gt;, IEntityUpdateCommandApplier&lt;TEntity, TUpdateRequest, TIdentifierType, in TCommand&gt;, Partner, PartnerDTO, PartnerUpdateRequest, Result, Session …(+9)</td>
           </tr>
           <tr>
           <td>15</td>
@@ -32433,6 +33014,13 @@
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>13</td>
           <td>CreateEventHandler, Error, Event, EventCreateRequest, EventDTOMapper, EventQuestionAnswerDTOMapper, EventSpeakerDTOMapper, HandlerTestBase&lt;THandler&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Result, RoomDTOMapper, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>15</td>
+          <td><code>CreatePartnerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>12</td>
+          <td>CreatePartnerHandler, Error, HandlerTestBase&lt;THandler&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Partner, PartnerCreateRequest, PartnerCreateRequestMapper, PartnerDTOMapper, PartnerType, Result, UnitOfWork</td>
           </tr>
           <tr>
           <td>15</td>
@@ -32466,8 +33054,8 @@
           <td>15</td>
           <td><code>DeleteEventHandlerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>14</td>
-          <td>Activity, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteEventHandler, ErrorType, Event, EventCascadeDeletionDomainService, HandlerTestBase&lt;THandler&gt;, IInternalCommandScheduler, IRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionAsset, Sponsor, SponsorTier, UnitOfWork</td>
+          <td>16</td>
+          <td>Activity, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteEventHandler, ErrorType, Event, EventCascadeDeletionDomainService, HandlerTestBase&lt;THandler&gt;, IInternalCommandScheduler, IRepository&lt;TEntity, TIdentifierType&gt;, Partner, PartnerType, Session, SessionAsset, Sponsor, SponsorTier, UnitOfWork</td>
           </tr>
           <tr>
           <td>15</td>
@@ -32538,6 +33126,13 @@
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>10</td>
           <td>Event, EventSpeaker, GetPublicEventSpeakerFilterHandler, GetPublicEventSpeakerFilterQuery, HandlerTestBase&lt;THandler&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;, Session, SessionSpeaker, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>15</td>
+          <td><code>GetPublicPartnerFilterHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>Event, GetPublicPartnerFilterHandler, GetPublicPartnerFilterQuery, HandlerTestBase&lt;THandler&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, Partner, PartnerType, UnitOfWork</td>
           </tr>
           <tr>
           <td>15</td>
@@ -32629,6 +33224,20 @@
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>8</td>
           <td>ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, LinkUserToSpeakerCommand, LinkUserToSpeakerHandler, Speaker, SpeakerLinkedToUser, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>15</td>
+          <td><code>PartnerNavigationPopulatorTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>6</td>
+          <td>HandlerTestBase&lt;THandler&gt;, INavigationPopulator&lt;in TEntity&gt;, NavigationMetadata, Partner, PartnerNavigationPopulator, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>15</td>
+          <td><code>PartnerUpdateApplierTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>12</td>
+          <td>ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Partner, PartnerDTO, PartnerDTOMapper, PartnerType, PartnerUpdateApplier, PartnerUpdateRequest, UnitOfWork, UpdateEntityCommand&lt;TEntity, TUpdateRequest, TIdentifierType&gt;, UpdateEntityHandler&lt;TEntity, TEntityDTO, TIdentifierType, TUpdateRequest&gt;</td>
           </tr>
           <tr>
           <td>15</td>
@@ -34132,8 +34741,8 @@
           <td>18</td>
           <td><code>EmailConfirmationFlowTests</code></td>
           <td>MMCA.ADC.Identity.IntegrationTests</td>
-          <td>4</td>
-          <td>Email, IdentityIntegrationTestBase, IdentityIntegrationTestFixture, IEmailConfirmationTokenService</td>
+          <td>5</td>
+          <td>Email, IdentityIntegrationTestBase, IdentityIntegrationTestFixture, IEmailConfirmationTokenService, IInternalCommandAdministration</td>
           </tr>
           <tr>
           <td>18</td>

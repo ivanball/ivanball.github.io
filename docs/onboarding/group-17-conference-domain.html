@@ -150,12 +150,13 @@
           <strong>Conference bounded context</strong>, the largest and richest domain in MMCA.ADC. It models everything an
           organizer curates and an attendee browses: the <strong>Event</strong> (the conference itself, with its rooms,
           speaker roster, and venue details), the <strong>Session</strong> (a talk on the schedule), the <strong>Speaker</strong>, the
-          <strong>Sponsor</strong> (the sold sponsorship and expo-booth record), the <strong>Activity</strong> (the party, coffee connect,
-          or closing ceremony that is deliberately not a session), the <strong>Category</strong>/<strong>CategoryItem</strong> taxonomy
-          (tracks, levels, session formats), the <strong>Question</strong>/answer machinery that captures structured
+          <strong>Sponsor</strong> (the sold sponsorship and expo-booth record), the <strong>Partner</strong> (the community organization
+          or venue host that supports the event without buying a package), the <strong>Activity</strong> (the party, coffee
+          connect, or closing ceremony that is deliberately not a session), the <strong>Category</strong>/<strong>CategoryItem</strong>
+          taxonomy (tracks, levels, session formats), the <strong>Question</strong>/answer machinery that captures structured
           metadata about events, sessions, and speakers, and the <strong>SessionAsset</strong> (the deck, handout, or
-          external link published against a talk). Nine aggregate roots (one of them an AI scorecard),
-          nine child entities, the static <strong>invariant</strong> classes that guard their business rules, the seventeen
+          external link published against a talk). Ten aggregate roots (one of them an AI scorecard),
+          nine child entities, the static <strong>invariant</strong> classes that guard their business rules, the eighteen
           <strong>domain events</strong> every mutation raises, a pure <strong>domain service</strong> that coordinates the
           cross-aggregate cascade delete, and, in the module&#39;s <code>MMCA.ADC.Conference.Shared</code> project, the <strong>DTO
           contracts</strong>, the cross-module <strong>service interfaces</strong> the Engagement module calls, the <strong>integration
@@ -220,7 +221,7 @@
           it: it pins the Conference domain assembly through a real type instead,
           <code>typeof(Conference.Domain.Events.Event).Assembly</code>
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:36</code>).</p>
-          <h2 id="nine-aggregates-and-their-ownership-boundaries">Nine aggregates and their ownership boundaries</h2>
+          <h2 id="ten-aggregates-and-their-ownership-boundaries">Ten aggregates and their ownership boundaries</h2>
           <p>An <strong>aggregate</strong> is a root entity plus the children it exclusively owns; invariants are enforced
           <em>inside</em> the boundary, and references <em>across</em> aggregates are by ID, never by object graph. Every root
           here derives from
@@ -267,6 +268,22 @@
           booth (<code>IsExhibitor</code>/<code>BoothNumber</code>, <code>Sponsor.cs:52,58</code>); its <code>Id</code> is database-generated
           (<code>Sponsor.cs:17</code>) because sponsors are sold, not imported from Sessionize. Moving a sponsor between
           events is deliberately not an update: <code>Update</code> omits the event entirely (<code>Sponsor.cs:153-163</code>).</li>
+          <li><a href="#partner"><code>Partner</code></a>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Partners/Partner.cs:19</code>) is the
+          non-commercial counterpart to <code>Sponsor</code>: the community user group, meetup, or nonprofit, and the
+          special partner such as the venue host, that supports an event without buying a sponsorship package
+          (<code>Partner.cs:12-17</code>). It is flat like <code>Sponsor</code>, belongs to exactly one event by scalar <code>EventId</code>
+          with a private-setter <code>[Navigation]</code> <code>Event</code> for public visibility filtering
+          (<code>Partner.cs:40,43-44</code>), and takes a database-generated id (<code>Partner.cs:18</code>). Its
+          <a href="#partnertype"><code>PartnerType</code></a> (<code>Community = 0</code>/<code>Special = 1</code>,
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Partners/PartnerType.cs:12-19</code>) is
+          both the grouping and the display order of the public partners band, and <code>Community</code> holds the zero
+          value on purpose: it is the common case and, unlike a sponsorship tier, carries no commercial
+          weight, so an omitted type landing on it is harmless (<code>PartnerType.cs:7-11</code>). <code>Sort</code> orders
+          partners within their type (<code>Partner.cs:37</code>). Moving a partner between events is a create plus a
+          delete rather than an update, exactly as for <code>Sponsor</code> and <code>Activity</code> (<code>Partner.cs:107,116-122</code>),
+          and the three lifecycle points each raise a <a href="#partnerchanged"><code>PartnerChanged</code></a>
+          (<code>Partner.cs:100,135,147</code>).</li>
           <li><a href="#activity"><code>Activity</code></a>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Activities/Activity.cs:20</code>) is the
           social and networking programme: the pre-conference party, the morning coffee connect, the
@@ -341,8 +358,8 @@
           <code>Session</code> (<code>Session.cs:22</code>), and <code>Speaker</code> (<code>Speaker.cs:22</code>). The in-code rationale is worth reading
           (<code>Event.cs:17-21</code>, <code>Session.cs:16-20</code>, <code>Speaker.cs:15-20</code>): these three are written by organizers <em>and</em>
           overwritten by the Sessionize sync, and &quot;which edit moved this, and was it a person or the importer&quot; is
-          a question that only a history answers. Sponsors, activities, categories, and questions do not carry
-          that cost.</p>
+          a question that only a history answers. Sponsors, partners, activities, categories, and questions do
+          not carry that cost.</p>
           <h2 id="the-aggregate-shape-taught-once">The aggregate shape, taught once</h2>
           <p>Open any of the roots and you will see the <em>same</em> skeleton; this repetition is the point, and it is
           what makes the per-type sections that follow read quickly. The shape, using <a href="#event"><code>Event</code></a> as the
@@ -418,7 +435,8 @@
           <p>Each aggregate has a co-located static <strong>invariant class</strong>, <a href="#eventinvariants"><code>EventInvariants</code></a>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:14</code>),
           <a href="#sessioninvariants"><code>SessionInvariants</code></a>, <a href="#speakerinvariants"><code>SpeakerInvariants</code></a>,
-          <a href="#sponsorinvariants"><code>SponsorInvariants</code></a>, <a href="#activityinvariants"><code>ActivityInvariants</code></a>,
+          <a href="#sponsorinvariants"><code>SponsorInvariants</code></a>, <a href="#partnerinvariants"><code>PartnerInvariants</code></a>,
+          <a href="#activityinvariants"><code>ActivityInvariants</code></a>,
           <a href="#categoryinvariants"><code>CategoryInvariants</code></a>, <a href="#questioninvariants"><code>QuestionInvariants</code></a>, and
           <a href="#sessionassetinvariants"><code>SessionAssetInvariants</code></a>, whose
           methods each return a <a href="group-01-result-error-handling.html#result"><code>Result</code></a> and are combined with
@@ -429,8 +447,8 @@
           invariant constant is an alias of a constant declared on the matching DTO in <code>Conference.Shared</code>
           (<code>public const int NameMaxLength = EventDTO.NameMaxLength;</code>, <code>EventInvariants.cs:17-58</code>, and the same
           pattern at <code>SessionInvariants.cs:16-34</code>, <code>SpeakerInvariants.cs:16-40</code>, <code>SponsorInvariants.cs:16-34</code>,
-          <code>ActivityInvariants.cs:16-28</code>, <code>CategoryInvariants.cs:18-24</code>, <code>QuestionInvariants.cs:16-25</code>, and
-          <code>SessionAssetInvariants.cs:16-25</code>). The DTO
+          <code>PartnerInvariants.cs:16-25</code>, <code>ActivityInvariants.cs:16-28</code>, <code>CategoryInvariants.cs:18-24</code>,
+          <code>QuestionInvariants.cs:16-25</code>, and <code>SessionAssetInvariants.cs:16-25</code>). The DTO
           is the lowest layer the domain, the EF configuration, and the Blazor pages can all reach, so a field
           cap is declared once on <a href="#eventdto"><code>EventDTO</code></a> and consumed by the domain rule, the column
           constraint, and the input&#39;s character counter alike (<code>EventInvariants.cs:9-12</code> records the reasoning).
@@ -451,7 +469,12 @@
           (<code>QuestionInvariants.cs:28,147</code>), and Email must parse as a <code>System.Net.Mail.MailAddress</code>
           (<code>QuestionInvariants.cs:163</code>). <code>ActivityInvariants</code> is the compact newcomer: name, venue name, venue
           address, and venue URL length checks plus a start-before-end time-range rule
-          (<code>ActivityInvariants.cs:36,48,58,68,79</code>). <code>SessionAssetInvariants</code> is where the asset rules that are
+          (<code>ActivityInvariants.cs:36,48,58,68,79</code>). <code>PartnerInvariants</code> is smaller still: a name
+          presence-and-length rule plus optional-length rules for the logo and website URLs
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Partners/PartnerInvariants.cs:33,45,55</code>),
+          which is three rules against the four caps it aliases, because <code>DescriptionMaxLength</code>
+          (<code>PartnerInvariants.cs:22</code>) is carried for the layers downstream and has no matching domain check.
+          <code>SessionAssetInvariants</code> is where the asset rules that are
           not lengths live: the URL has to be an absolute <code>http</code> or <code>https</code> URL, refused at the domain boundary
           rather than sanitized at each render site because it becomes a download link on an anonymous page
           (<code>&quot;SessionAsset.Url.NotAbsoluteHttp&quot;</code>,
@@ -488,10 +511,12 @@
           externally sourced data).</p>
           <h2 id="domain-events-and-the-outbox-spine">Domain events and the outbox spine</h2>
           <p>Every state-changing method raises a domain event through the inherited <code>AddDomainEvent(...)</code>, and the
-          seventeen events come in two shapes with two different base types. The eight <strong>aggregate-level</strong> ones,
+          eighteen events come in two shapes with two different base types. The nine <strong>aggregate-level</strong> ones,
           <a href="#eventchanged"><code>EventChanged</code></a>, <a href="#sessionchanged"><code>SessionChanged</code></a>, <a href="#speakerchanged"><code>SpeakerChanged</code></a>,
           <a href="#categorychanged"><code>CategoryChanged</code></a>, <a href="#questionchanged"><code>QuestionChanged</code></a>,
-          <a href="#sponsorchanged"><code>SponsorChanged</code></a>, <a href="#activitychanged"><code>ActivityChanged</code></a>, and
+          <a href="#sponsorchanged"><code>SponsorChanged</code></a>, <a href="#partnerchanged"><code>PartnerChanged</code></a>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Partners/DomainEvents/PartnerChanged.cs:12-16</code>),
+          <a href="#activitychanged"><code>ActivityChanged</code></a>, and
           <a href="#sessionassetchanged"><code>SessionAssetChanged</code></a>, derive from
           <a href="group-04-events-outbox.html#entitychangedeventtidentifiertype"><code>EntityChangedEvent&lt;TIdentifierType&gt;</code></a>
           and carry the <a href="group-02-domain-building-blocks.html#domainentitystate"><code>DomainEntityState</code></a>
@@ -531,39 +556,42 @@
           already nulled within Conference (BR-70).</p>
           <h2 id="the-cross-aggregate-cascade-a-pure-domain-service">The cross-aggregate cascade: a pure domain service</h2>
           <p>One business rule cannot live inside a single aggregate: deleting an <code>Event</code> must also delete every
-          <code>Session</code> belonging to it (BR-127), every <code>Sponsor</code> sold against it, every <code>Activity</code> planned for it,
-          and every <code>SessionAsset</code> published under it, but sessions, sponsors, activities, and session assets
+          <code>Session</code> belonging to it (BR-127), every <code>Sponsor</code> sold against it, every <code>Partner</code> supporting it,
+          every <code>Activity</code> planned for it, and every <code>SessionAsset</code> published under it, but sessions, sponsors,
+          partners, activities, and session assets
           are <em>separate</em> aggregates (referenced by <code>EventId</code>, not owned). Putting a <code>List&lt;Session&gt;</code> inside <code>Event</code> would violate the aggregate boundary. The answer is a
           <strong>domain service</strong>, <a href="#ieventcascadedeletiondomainservice"><code>IEventCascadeDeletionDomainService</code></a>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/IEventCascadeDeletionDomainService.cs:15</code>)
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/IEventCascadeDeletionDomainService.cs:16</code>)
           and its implementation <a href="#eventcascadedeletiondomainservice"><code>EventCascadeDeletionDomainService</code></a>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventCascadeDeletionDomainService.cs:15</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventCascadeDeletionDomainService.cs:16</code>),
           a pure, infrastructure-free coordinator that takes the pre-fetched <code>Event</code> plus its already-loaded
-          <code>Session</code>, <code>Sponsor</code>, <code>Activity</code>, and <code>SessionAsset</code> collections
-          (<code>IEventCascadeDeletionDomainService.cs:29-34</code>) and orchestrates the deletes: soft-delete each session
-          first (BR-55 cascades to <em>its</em> children), then each sponsor, then each activity, then each session
-          asset, then the event itself (BR-72 cascades to rooms, event speakers, and event answers)
-          (<code>EventCascadeDeletionDomainService.cs:28-66</code>). The ordering is what makes the failure path
-          safe: the first child that refuses to delete short-circuits the cascade and returns its own failure
-          unchanged, so the event is never deleted and the caller (which saves only on success) discards the
-          aborted in-memory mutations rather than persisting a half-deleted graph
-          (<code>EventCascadeDeletionDomainService.cs:25-33</code>). Activities were folded into the same cascade for the
-          reason recorded beside the loop: leaving them behind would orphan rows the public activities page still
-          reads (<code>EventCascadeDeletionDomainService.cs:44-46</code>). Session assets are deleted here rather than
-          through the per-session cascade, and the comment beside that loop says why: they hang off the event by
+          <code>Session</code>, <code>Sponsor</code>, <code>Partner</code>, <code>Activity</code>, and <code>SessionAsset</code> collections
+          (<code>IEventCascadeDeletionDomainService.cs:31-37</code>) and orchestrates the deletes: soft-delete each session
+          first (BR-55 cascades to <em>its</em> children), then each sponsor, then each partner, then each activity,
+          then each session asset, then the event itself (BR-72 cascades to rooms, event speakers, and event
+          answers) (<code>EventCascadeDeletionDomainService.cs:39-52</code>, each step running through one private
+          <code>DeleteAll</code> helper that returns the first failure it meets, <code>:56-66</code>). The ordering is what makes the
+          failure path safe: the first child that refuses to delete short-circuits the cascade and returns its
+          own failure unchanged, so the event is never deleted and the caller (which saves only on success)
+          discards the aborted in-memory mutations rather than persisting a half-deleted graph
+          (<code>EventCascadeDeletionDomainService.cs:27-29,48-49</code>). Sponsors, partners, and activities share one
+          reason for being in the cascade, recorded above the calls: each is its own aggregate rooted on the
+          event, and leaving one behind would orphan rows the public pages still read
+          (<code>EventCascadeDeletionDomainService.cs:31-33</code>). Session assets are deleted here rather than
+          through the per-session cascade, and the comment says why: they hang off the event by
           the denormalized <code>EventId</code> their blob names are scoped by, so the caller loads them once for the whole
           event, and the blob behind each file row is removed afterwards by the caller&#39;s scheduled delete command
-          (<code>EventCascadeDeletionDomainService.cs:54-63</code>). This is <code>[Rubric §4, Domain-Driven Design]</code>&#39;s
+          (<code>EventCascadeDeletionDomainService.cs:35-38</code>). This is <code>[Rubric §4, Domain-Driven Design]</code>&#39;s
           textbook &quot;domain service for behavior that spans aggregates and belongs to no single one,&quot; and <code>[Rubric §3, Clean Architecture]</code>&#39;s purity discipline: the service does no I/O; the <em>application</em> layer fetches
           the aggregates and saves them. It is the highest-level type in the chapter precisely because it depends
-          on five aggregates at once.</p>
+          on six aggregates at once.</p>
           <h2 id="read-models-and-the-ai-decision-support-feature">Read models and the AI decision-support feature</h2>
           <p>The largest cluster in <code>Conference.Shared</code> is the <strong>DTO</strong> layer, the wire contracts that decouple the
           API from the domain entities (<code>[Rubric §9, API &amp; Contract Design]</code>;
           <a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a> chose manual/Mapperly
           mapping over reflection-based AutoMapper). Most are straightforward projections:
           <a href="#eventdto"><code>EventDTO</code></a>, <a href="#sessiondto"><code>SessionDTO</code></a>, <a href="#speakerdto"><code>SpeakerDTO</code></a>,
-          <a href="#sponsordto"><code>SponsorDTO</code></a>, <a href="#activitydto"><code>ActivityDTO</code></a>,
+          <a href="#sponsordto"><code>SponsorDTO</code></a>, <a href="#partnerdto"><code>PartnerDTO</code></a>, <a href="#activitydto"><code>ActivityDTO</code></a>,
           <a href="#conferencecategorydto"><code>ConferenceCategoryDTO</code></a>, <a href="#categoryitemdto"><code>CategoryItemDTO</code></a>,
           <a href="#questiondto"><code>QuestionDTO</code></a>, <a href="#roomdto"><code>RoomDTO</code></a>, <a href="#sessionassetdto"><code>SessionAssetDTO</code></a>, and the
           per-child join DTOs
@@ -578,11 +606,12 @@
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/SessionFeedbackDTO.cs:6,22,38</code>).
           They carry the entity&#39;s <code>Id</code> via the framework&#39;s
           <a href="group-12-api-hosting-mapping.html#ibasedtotidentifiertype"><code>IBaseDTO&lt;TIdentifierType&gt;</code></a> contract and
-          <code>required init</code>-only properties: read contracts, immutable after construction. Eight of them also
+          <code>required init</code>-only properties: read contracts, immutable after construction. Nine of them also
           implement <a href="group-12-api-hosting-mapping.html#iconcurrencyaware"><code>IConcurrencyAware</code></a> and round-trip the
           <code>RowVersion</code> token
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventDTO.cs:16,52</code>, and the same
           pair on <code>Sessions/SessionDTO.cs:15,42</code>, <code>Speakers/SpeakerDTO.cs:18,58</code>, <code>Sponsors/SponsorDTO.cs:15,42</code>,
+          <code>Partners/PartnerDTO.cs:15,33</code>,
           <code>Activities/ActivityDTO.cs:15,36</code>, <code>Questions/QuestionDTO.cs:14,32</code>,
           <code>Categories/ConferenceCategoryDTO.cs:14,26</code>, and <code>SessionAssets/SessionAssetDTO.cs:15,33</code>). The client
           sends that token straight back in the <code>If-Match</code>
@@ -680,16 +709,19 @@
           <p>Two more <code>Shared</code> helpers deserve a mention because they encode policy the whole module relies on.
           <a href="#conferencepermissions"><code>ConferencePermissions</code></a>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:9</code>)
-          is the catalogue of the module&#39;s ten <strong>capability permissions</strong> (<code>conference:events:manage</code>,
-          <code>conference:sessions:manage</code>, <code>conference:sponsors:manage</code>, <code>conference:activities:manage</code>,
-          <code>conference:session-assets:manage</code>, and so on,
-          <code>ConferencePermissions.cs:12-44</code>), the stable string identifiers endpoints require via
+          is the catalogue of the module&#39;s eleven <strong>capability permissions</strong> (<code>conference:events:manage</code>,
+          <code>conference:sessions:manage</code>, <code>conference:sponsors:manage</code>, <code>conference:partners:manage</code>,
+          <code>conference:activities:manage</code>, <code>conference:session-assets:manage</code>, and so on,
+          <code>ConferencePermissions.cs:12-47</code>, the partners capability at <code>ConferencePermissions.cs:36</code>), the
+          stable string identifiers endpoints require via
           <a href="group-08-auth.html#haspermissionattribute"><code>HasPermissionAttribute</code></a> rather than by role name. The <code>All</code>
-          and <code>ContentManagement</code> subsets (<code>ConferencePermissions.cs:47,66</code>) let a role grant an entire
-          capability set or the narrower catalog-curation slice (sessions, speakers, sponsors, activities, session
-          assets, and the category taxonomy) at once, a distinction capability checks express centrally and role
+          and <code>ContentManagement</code> subsets (<code>ConferencePermissions.cs:50,70</code>) let a role grant an entire
+          capability set or the narrower catalog-curation slice (sessions, speakers, sponsors, partners,
+          activities, session
+          assets, and the category taxonomy, <code>ConferencePermissions.cs:72-78</code>) at once, a distinction capability
+          checks express centrally and role
           checks cannot. The session-asset capability is the clearest example of the model&#39;s limit and is
-          documented as such on the constant itself (<code>ConferencePermissions.cs:38-44</code>): a speaker needs no
+          documented as such on the constant itself (<code>ConferencePermissions.cs:41-46</code>): a speaker needs no
           capability at all to manage the materials of a session they present, because the handlers accept them on
           the strength of the session&#39;s own speaker list, and the capability exists for the organizer or content
           editor doing the same for a session they do not present. This is the permission-based authorization
@@ -883,7 +915,7 @@
           <li><strong>Depends on</strong>: nothing first-party; only <code>System.Reflection</code> (<code>AssemblyReference.cs:1</code>).</li>
           <li><strong>Concept introduced, the assembly-marker pattern.</strong> <code>[Rubric §2, Design Patterns]</code> (assesses whether the patterns in use are idiomatic and solve a real problem): instead of hard-coding an assembly-name string, a scanner takes a <code>typeof(...)</code> from a type it knows lives in the target assembly, so renaming the assembly cannot silently break discovery. Every layer of every ADC module ships this same pair (see the sibling pairs in <a href="group-18-conference-application.html#assemblyreference">group-18 Conference.Application</a>, <a href="group-19-conference-infrastructure.html#assemblyreference">group-19 Conference.Infrastructure</a>, and <a href="group-20-conference-api-grpc.html#assemblyreference">group-20 Conference.API</a>), so registration and discovery code reads the same way in every project. MMCA.Common ships the same pair in its own layers (for example <code>MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:8,18</code>), and its doc comment there records the split explicitly: <code>ClassReference</code> is the anchor for the case where a <em>static</em> type cannot be used.</li>
           <li><strong>Walkthrough</strong>: <code>AssemblyReference.Assembly</code> (<code>AssemblyReference.cs:7</code>) is a <code>public static readonly Assembly</code>; <code>AssemblyName</code> (<code>AssemblyReference.cs:8</code>) is its short name, falling back to <code>string.Empty</code> when reflection returns null. <code>ClassReference</code> (<code>AssemblyReference.cs:11</code>) has no members at all.</li>
-          <li><strong>Why it&#39;s built this way</strong>: a <code>typeof()</code> handle is refactor-safe where a magic string is not, and a non-static <code>ClassReference</code> can be passed where a static class cannot. A C# static type is not a legal generic type argument, so a generic scanning API such as <code>services.ScanModuleApplicationServices&lt;ClassReference&gt;()</code> (used by the Application-layer sibling at <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:138</code>) needs the non-static form.</li>
+          <li><strong>Why it&#39;s built this way</strong>: a <code>typeof()</code> handle is refactor-safe where a magic string is not, and a non-static <code>ClassReference</code> can be passed where a static class cannot. A C# static type is not a legal generic type argument, so a generic scanning API such as <code>services.ScanModuleApplicationServices&lt;ClassReference&gt;()</code> (used by the Application-layer sibling at <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:146</code>) needs the non-static form.</li>
           <li><strong>Where it&#39;s used</strong>: the <em>Domain</em> pair has no call site in <code>MMCA.ADC/Source</code> today. The layer pairs that are actually consumed are the Application one (<code>Conference.Application/DependencyInjection.cs:130</code>) and the framework&#39;s own (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:145</code>, <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:51</code>). The Domain pair exists so the layer-parallel convention holds across all five layers of the module.</li>
           <li><strong>Caveats / not-in-source</strong>: whether the convention is <em>enforced</em> (an architecture fitness rule requiring one pair per project) is not visible from these files; no test in <code>MMCA.ADC/Tests</code> references either type.</li>
           </ul>
@@ -893,13 +925,13 @@
           <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Authorization</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:9</code> · Level 0 · class (static)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the Conference module&#39;s <strong>capability permission catalog</strong>: the stable string identifiers its endpoints require through <a href="group-08-auth.html#haspermissionattribute"><code>[HasPermission(...)]</code></a> instead of role names. Ten <code>manage</code> capabilities plus two curated groupings of them.</li>
+          <li><strong>What it is</strong>: the Conference module&#39;s <strong>capability permission catalog</strong>: the stable string identifiers its endpoints require through <a href="group-08-auth.html#haspermissionattribute"><code>[HasPermission(...)]</code></a> instead of role names. Eleven <code>manage</code> capabilities plus two curated groupings of them.</li>
           <li><strong>Depends on</strong>: nothing first-party.</li>
           <li><strong>Concept reinforced, capability permissions over role names (the consumer side).</strong> <code>[Rubric §11, Security]</code> (assesses whether authorization is expressed as fine-grained capabilities rather than coarse role checks scattered through controllers). This is ADC&#39;s use of the framework mechanism taught in <a href="group-08-auth.html">G08</a> (<a href="group-08-auth.html#ipermissionregistry"><code>IPermissionRegistry</code></a>, <a href="group-08-auth.html#haspermissionattribute"><code>HasPermissionAttribute</code></a>) and decided in <a href="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html" target="_blank" rel="noopener">ADR-020</a>. The class doc comment (<code>ConferencePermissions.cs:3-8</code>) states the two properties that make the catalog work: who-can-do-what is decided by the role-to-permission grants declared in the module&#39;s registration rather than by controller attributes, and the values are deliberately stable strings because they may end up inside tokens or logs.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li>Nine <code>public const string</code> capabilities named <code>EventsManage</code> = <code>conference:events:manage</code> (<code>ConferencePermissions.cs:12</code>), <code>SessionsManage</code> (<code>:15</code>), <code>SpeakersManage</code> (<code>:18</code>), <code>RoomsManage</code> (<code>:21</code>), <code>CategoriesManage</code> (<code>:24</code>), <code>QuestionsManage</code> (<code>:27</code>), <code>SessionSelectionManage</code> = <code>conference:session-selection:manage</code> (<code>:30</code>), <code>SponsorsManage</code> = <code>conference:sponsors:manage</code> (<code>:33</code>), and <code>ActivitiesManage</code> = <code>conference:activities:manage</code> (<code>:36</code>), plus a tenth added under <a href="https://ivanball.github.io/docs/adr/123-speaker-session-assets.html" target="_blank" rel="noopener">ADR-123</a>, <code>SessionAssetsManage</code> = <code>conference:session-assets:manage</code> (<code>:44</code>). The <code>{module}:{resource}:{verb}</code> shape keeps the namespace collision-free across modules. <code>SessionAssetsManage</code>&#39;s doc comment (<code>:38-43</code>) states the asymmetry that makes it necessary: a speaker needs no capability to manage the materials of a session they present, because the handlers accept them on the strength of the session&#39;s own speaker list, and this capability is what lets an organizer or content editor do the same for a session they do not present.</li>
-          <li><code>All</code> (<code>ConferencePermissions.cs:47-59</code>): an <code>IReadOnlyList&lt;string&gt;</code> collection expression naming all ten, for granting the entire capability set to a role in one line.</li>
-          <li><code>ContentManagement</code> (<code>ConferencePermissions.cs:66-74</code>): the catalog-curation subset, <code>SessionsManage</code> + <code>SpeakersManage</code> + <code>CategoriesManage</code> + <code>SponsorsManage</code> + <code>ActivitiesManage</code> + <code>SessionAssetsManage</code>. Its doc comment (<code>ConferencePermissions.cs:61-65</code>) is the load-bearing part: a content-editor role holds these but <em>not</em> event structure, rooms, questions, or session selection, a distinction that capability checks express centrally and role checks cannot.</li>
+          <li>Ten <code>public const string</code> capabilities named <code>EventsManage</code> = <code>conference:events:manage</code> (<code>ConferencePermissions.cs:12</code>), <code>SessionsManage</code> (<code>:15</code>), <code>SpeakersManage</code> (<code>:18</code>), <code>RoomsManage</code> (<code>:21</code>), <code>CategoriesManage</code> (<code>:24</code>), <code>QuestionsManage</code> (<code>:27</code>), <code>SessionSelectionManage</code> = <code>conference:session-selection:manage</code> (<code>:30</code>), <code>SponsorsManage</code> = <code>conference:sponsors:manage</code> (<code>:33</code>), <code>PartnersManage</code> = <code>conference:partners:manage</code> (<code>:36</code>), and <code>ActivitiesManage</code> = <code>conference:activities:manage</code> (<code>:39</code>), plus an eleventh added under <a href="https://ivanball.github.io/docs/adr/123-speaker-session-assets.html" target="_blank" rel="noopener">ADR-123</a>, <code>SessionAssetsManage</code> = <code>conference:session-assets:manage</code> (<code>:47</code>). The <code>{module}:{resource}:{verb}</code> shape keeps the namespace collision-free across modules. <code>SessionAssetsManage</code>&#39;s doc comment (<code>:41-46</code>) states the asymmetry that makes it necessary: a speaker needs no capability to manage the materials of a session they present, because the handlers accept them on the strength of the session&#39;s own speaker list, and this capability is what lets an organizer or content editor do the same for a session they do not present.</li>
+          <li><code>All</code> (<code>ConferencePermissions.cs:53-67</code>): an <code>IReadOnlyList&lt;string&gt;</code> collection expression naming all eleven, for granting the entire capability set to a role in one line.</li>
+          <li><code>ContentManagement</code> (<code>ConferencePermissions.cs:74-84</code>): the catalog-curation subset, <code>SessionsManage</code> + <code>SpeakersManage</code> + <code>CategoriesManage</code> + <code>SponsorsManage</code> + <code>PartnersManage</code> + <code>ActivitiesManage</code> + <code>SessionAssetsManage</code>. Its doc comment (<code>ConferencePermissions.cs:69-73</code>) is the load-bearing part: a content-editor role holds these but <em>not</em> event structure, rooms, questions, or session selection, a distinction that capability checks express centrally and role checks cannot.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: a per-module catalog keeps each module&#39;s capability vocabulary self-contained (the Conference module can add a capability without touching Identity), and pairing the constants with named subsets makes the grants read declaratively at the registration site instead of as a hand-maintained string list. Adding a capability is then a two-line change: the constant, and its entry in whichever subsets should carry it, exactly the shape <code>SessionAssetsManage</code> followed when session assets shipped.</li>
@@ -964,7 +996,7 @@
           </li>
           <li><p><strong>Where it&#39;s used</strong>: three layers, one definition.</p>
           <ul>
-          <li>The Conference service host spreads it into <code>adminBypassRoles</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:243</code>) and hands that array to ten named output-cache policies (<code>Program.cs:244-272</code>: <code>ConferencePublicCache</code>, <code>EventsCache</code>, <code>SessionsCache</code>, <code>SpeakersCache</code>, <code>RoomsCache</code>, <code>CategoriesCache</code>, <code>QuestionsCache</code>, <code>SponsorsCache</code>, <code>ActivitiesCache</code>, <code>BookmarkCountsCache</code>). The comment directly above states the single-source-of-truth rule and its consequence: if the two lists ever named different roles, a privileged payload would be cached and served to the public (<code>Program.cs:240-242</code>). One policy deliberately takes no bypass list, <code>NowNextCache</code> (<code>Program.cs:260</code>), because its payload is identical for every role.</li>
+          <li>The Conference service host spreads it into <code>adminBypassRoles</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:250</code>) and hands that array to ten named output-cache policies (<code>Program.cs:251-280</code>: <code>ConferencePublicCache</code>, <code>EventsCache</code>, <code>SessionsCache</code>, <code>SpeakersCache</code>, <code>RoomsCache</code>, <code>CategoriesCache</code>, <code>QuestionsCache</code>, <code>SponsorsCache</code>, <code>ActivitiesCache</code>, <code>BookmarkCountsCache</code>). The comment directly above states the single-source-of-truth rule and its consequence: if the two lists ever named different roles, a privileged payload would be cached and served to the public (<code>Program.cs:247-249</code>). One policy deliberately takes no bypass list, <code>NowNextCache</code> (<code>Program.cs:268</code>), because its payload is identical for every role.</li>
           <li>The API layer wraps it as the <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a> extension <code>IsPrivilegedConferenceReader()</code> (<code>CurrentUserServiceExtensions.cs:24-25</code>), which the controllers use to decide whether to apply a public filter specification at all: <code>EventsController</code> picks <code>null</code> or a <a href="group-18-conference-application.html#publishedeventspecification"><code>PublishedEventSpecification</code></a> from it (<code>.../Controllers/EventsController.cs:75</code>, with a second guard at <code>:141</code>), and <code>SessionsController</code> (<code>:60</code>), <code>SpeakersController</code> (<code>:65</code>), <code>SponsorsController</code> (<code>:52</code>), <code>ActivitiesController</code> (<code>:52</code>), <code>RoomsController</code> (<code>:104</code>), <code>SessionSpeakersController</code> (<code>:59</code>), <code>SessionCategoryItemsController</code> (<code>:59</code>), <code>SpeakerCategoryItemsController</code> (<code>:59</code>), and <code>EventSpeakersController</code> (<code>:58</code>) each expose it as a private <code>IsPrivileged</code> property.</li>
           <li>The Blazor UI reads it directly when sizing its filters and detail views: <code>.../MMCA.ADC.Conference.UI/Pages/Public/PublicSessionList.razor.cs:121</code>, <code>.../PublicSpeakerList.razor.cs:101</code>, <code>.../PublicEventList.razor.cs:77</code>, <code>.../PublicEventDetail.razor.cs:64</code>, and <code>.../PublicSpeakerDetail.razor.cs:205</code>.</li>
           </ul>
@@ -980,7 +1012,7 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: an aggregate root holding the AI-generated score for one session across seven criteria (overall, topic relevance, description quality, novelty, actionable takeaways, depth or insight quality, credibility and experience), plus the model&#39;s free-text <code>Reasoning</code>, the <code>ModelUsed</code> identifier, and the <code>PromptVersion</code> of the scoring contract that produced the numbers. One live score per session.</li>
-          <li><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a> bound to <code>SessionAiScoreIdentifierType</code>, <a href="group-02-domain-building-blocks.html#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a>, and <a href="group-01-result-error-handling.html#result"><code>Result</code></a> / <a href="group-01-result-error-handling.html#error"><code>Error</code></a> (G01). The alias resolves to <code>int</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:15</code>), per <a href="https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html" target="_blank" rel="noopener">ADR-048</a>.</li>
+          <li><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a> bound to <code>SessionAiScoreIdentifierType</code>, <a href="group-02-domain-building-blocks.html#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a>, and <a href="group-01-result-error-handling.html#result"><code>Result</code></a> / <a href="group-01-result-error-handling.html#error"><code>Error</code></a> (G01). The alias resolves to <code>int</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:16</code>), per <a href="https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html" target="_blank" rel="noopener">ADR-048</a>.</li>
           <li><strong>Concept</strong>: the private-constructor plus <code>static Result&lt;T&gt; Create</code> factory pattern was introduced in <a href="group-02-domain-building-blocks.html#auditableaggregaterootentitytidentifiertype">G02</a>. What this type adds to the discussion is <em>where you validate machine output</em>. <code>[Rubric §4, DDD]</code> and <code>[Rubric §11, Security]</code> overlap here: the 1.0 to 10.0 range check runs inside the domain, so a hallucinated or out-of-range model response is rejected before it can reach the database, even though nothing about the data&#39;s origin is visible to the entity. The <code>[IdValueGenerated]</code> attribute (<code>SessionAiScore.cs:12</code>) marks the identity as database-generated. Storing <code>ModelUsed</code> and <code>PromptVersion</code> on the row is the governance half of the same idea: the entity cannot tell whether a number is trustworthy, so it records exactly which model and which prompt contract produced it, per <a href="https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html" target="_blank" rel="noopener">ADR-111</a>.</li>
           <li><strong>Walkthrough</strong><ul>
           <li>Eleven <code>private set</code> properties (<code>SessionAiScore.cs:16-52</code>): the FK <code>SessionId</code>, seven <code>decimal</code> scores, the <code>Reasoning</code> / <code>ModelUsed</code> text, and <code>PromptVersion</code> (<code>:52</code>). <code>decimal</code> rather than <code>double</code> keeps the stored values exactly as the model reported them.</li>
@@ -1120,6 +1152,19 @@
           <li><strong>Where it&#39;s used</strong>: produced by the real <a href="group-18-conference-application.html#eventlivevalidationservice"><code>EventLiveValidationService</code></a> (Conference.Application) behind <a href="#ieventlivevalidationservice"><code>IEventLiveValidationService.GetEventLiveInfoAsync</code></a> (<code>EventLiveValidationService.cs:27</code>, built at <code>:44</code>), and across the process boundary by the <a href="group-20-conference-api-grpc.html#eventlivevalidationservicegrpcadapter"><code>EventLiveValidationServiceGrpcAdapter</code></a> (<code>EventLiveValidationServiceGrpcAdapter.cs:37-63</code>). The fail-open stub <a href="#disabledeventlivevalidationservice"><code>DisabledEventLiveValidationService</code></a> returns <code>new EventLiveInfo(true, DateTime.MinValue, DateTime.MaxValue)</code> (<code>DisabledEventLiveValidationService.cs:27</code>). It is consumed by the Engagement event-wide <a href="group-23-engagement-live-layer.html#livepoll"><code>LivePoll</code></a> paths: <a href="group-23-engagement-live-layer.html#createlivepollhandler"><code>CreateLivePollHandler</code></a> reads <code>IsPublished</code> to enforce BR-222 (<code>CreateLivePollHandler.cs:69-84</code>), and <a href="group-23-engagement-live-layer.html#openlivepollhandler"><code>OpenLivePollHandler</code></a> reads the two window bounds for an event-wide poll (<code>OpenLivePollHandler.cs:67-72</code>). The Engagement check-in path uses it too: <a href="group-22-engagement-module.html#checkinprocessor"><code>CheckInProcessor</code></a> fetches it for an event-scope check-in and rejects an unpublished event (<code>CheckInProcessor.cs:180-184</code>).</li>
           </ul>
           <hr>
+          <h3 id="partnertype">PartnerType</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Partners</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Partners/PartnerType.cs:12</code> · Level 0 · enum</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a two-value enum classifying a <a href="#partner"><code>Partner</code></a> as a <code>Community</code> partner (a user group, meetup, or nonprofit supporting the event) or a <code>Special</code> partner (the venue host or a similarly distinguished partner shown in its own group).</li>
+          <li><strong>Depends on</strong>: nothing first-party.</li>
+          <li><strong>Concept introduced, the numeric value doubling as display order.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> (a small, purpose-built enum rather than a bare <code>bool</code> or free-text string): the doc comment states the numbers are not arbitrary, they <em>are</em> the display order of the public partners band, community first, then special (<code>PartnerType.cs:3-5</code>). <code>Community</code> is deliberately the zero value: it is the common case and, unlike a sponsorship tier, carries no commercial weight, so an omitted type landing on it is harmless (remarks, <code>PartnerType.cs:7-10</code>).</li>
+          <li><strong>Walkthrough</strong>: two explicitly numbered members, <code>Community = 0</code> (<code>PartnerType.cs:15</code>) and <code>Special = 1</code> (<code>PartnerType.cs:18</code>). Explicit numbering keeps the wire meaning and the display order stable if the members are ever reordered in source.</li>
+          <li><strong>Why it&#39;s built this way</strong>: making the enum&#39;s numeric order the sort key means a consumer that groups by <code>PartnerType</code> and orders ascending gets the correct display order for free, with no separate lookup table to keep in sync.</li>
+          <li><strong>Where it&#39;s used</strong>: carried on <a href="#partner"><code>Partner.PartnerType</code></a> (<code>Partner.cs:25</code>, set in both create and reconstitute constructors, <code>Partner.cs:51,59,82,118,129</code>) and on <a href="#partnerdto"><code>PartnerDTO.PartnerType</code></a>. Seeded by <code>ConferenceModuleDbSeeder</code>&#39;s sample partners, two <code>Community</code> and one <code>Special</code> (<code>ConferenceModuleDbSeeder.cs:424-429</code>). Read by the ADC home page&#39;s partner band: <code>ADCHome</code> groups the fetched partners by <code>PartnerType</code>, orders the groups ascending so <code>Community</code> renders first, and orders each group by <code>Sort</code> then <code>Name</code> (<code>ADCHome.razor.cs:269-278</code>). Exercised across the full CRUD test surface for <code>Partner</code> (domain, application, API, and UI test projects for creation, update, and validation).</li>
+          </ul>
+          <hr>
           <h3 id="questionmoderationdefault">QuestionModerationDefault</h3>
           <blockquote>
           <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Events.Live</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/Live/QuestionModerationDefault.cs:7</code> · Level 0 · enum</p>
@@ -1144,19 +1189,6 @@
           <li><strong>Walkthrough</strong>: eight <code>required init</code> properties (<code>RefreshFromSessionizeResultDTO.cs:10-31</code>). Six are <code>int</code> counts, <code>CategoriesSynced</code> (line 10), <code>CategoryItemsSynced</code> (line 13), <code>RoomsSynced</code> (line 16), <code>QuestionsSynced</code> (line 19), <code>SpeakersSynced</code> (line 22), and <code>SessionsSynced</code> (line 25). <code>SkippedSoftDeleted</code> (line 28) counts entities that a sync re-encountered but did not restore because the app had soft-deleted them (BR-136). <code>Warnings</code> (line 31) is an <code>IReadOnlyList&lt;string&gt;</code> of non-fatal issues such as a duration violation or a date-range mismatch. Every property is <code>required</code>, so a partial or forgotten field cannot be constructed.</li>
           <li><strong>Why it&#39;s built this way</strong>: <code>SkippedSoftDeleted</code> is surfaced explicitly because an organizer who soft-deleted a session and then re-ran a sync would otherwise be puzzled why the count does not match Sessionize. The handler even folds that count into the warning list when it is non-zero (<code>RefreshFromSessionizeHandler.cs:158-161</code>).</li>
           <li><strong>Where it&#39;s used</strong>: built by the <a href="group-18-conference-application.html#refreshfromsessionizecommand"><code>RefreshFromSessionizeCommand</code></a> handler, which reads the per-strategy <a href="group-18-conference-application.html#sessionizesyncresult"><code>SessionizeSyncResult</code></a> values and the shared sync context into it (<code>RefreshFromSessionizeHandler.cs:173-183</code>), with an all-zero instance returned when Sessionize sends an empty response (<code>RefreshFromSessionizeHandler.cs:130-140</code>). Returned by <a href="group-20-conference-api-grpc.html#eventscontroller"><code>EventsController.RefreshAsync</code></a> (<code>EventsController.cs:329</code>, whose <code>[Idempotent]</code> attribute replays the first response for a retried <code>Idempotency-Key</code> rather than starting a second import, <code>EventsController.cs:328</code>) and surfaced to the organizer UI through <a href="group-21-conference-ui.html#eventservice"><code>EventService.RefreshFromSessionizeAsync</code></a> (<code>EventService.cs:43-51</code>), which the <a href="group-21-conference-ui.html#eventdetail"><code>EventDetail</code></a> page holds as <code>_refreshResult</code> (<code>EventDetail.razor.cs:63</code>, assigned at <code>:254</code>).</li>
-          </ul>
-          <hr>
-          <h3 id="roomsessioninfo">RoomSessionInfo</h3>
-          <blockquote>
-          <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Rooms</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Rooms/RoomSessionInfo.cs:20</code> · Level 0 · record (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the answer to &quot;which session is this room hosting right now&quot;: the resolved session id and title, the owning event, and that event&#39;s published flag. It is what the Engagement room check-in flow gets back when an attendee scans a printed room QR.</li>
-          <li><strong>Depends on</strong>: the <code>SessionIdentifierType</code> and <code>EventIdentifierType</code> aliases; BCL otherwise. No first-party types.</li>
-          <li><strong>Concept introduced, the server-resolved target (never trust a client-supplied id).</strong> <code>[Rubric §11, Security]</code> (assesses whether authorization-relevant inputs are decided server-side): the attendee&#39;s device sends a <strong>room</strong> id, not a session id, and Conference resolves which session that room is hosting at the call instant. A tampered QR therefore cannot record a check-in against an arbitrary session. <code>[Rubric §9, API &amp; Contract Design]</code> also applies in a subtle way: <code>SessionTitle</code> rides along so the caller can render a confirmation without a second cross-module call, and the <strong>grace window travels in the request</strong> rather than living on this record, because &quot;how early does a scan count&quot; is check-in policy owned by Engagement, not schedule data owned by Conference (doc comment, <code>RoomSessionInfo.cs:10-14</code>, and the same split restated on the interface, <code>IEventLiveValidationService.cs:52-55</code>).</li>
-          <li><strong>Walkthrough</strong>: a positional <code>sealed record</code> with four parameters (<code>RoomSessionInfo.cs:20-24</code>), <code>SessionId</code> (the session the room is hosting at the query instant, line 19), <code>SessionTitle</code> (line 20), <code>EventId</code> (the owning event, line 21), and <code>IsPublished</code> (line 22). No behavior.</li>
-          <li><strong>Why it&#39;s built this way</strong>: bundling the title and the published flag with the id keeps the door-scan path to a single cross-module round-trip, and keeping the grace window out of the record preserves the boundary: Conference answers the schedule question, Engagement decides the policy.</li>
-          <li><strong>Where it&#39;s used</strong>: produced by <a href="group-18-conference-application.html#eventlivevalidationservice"><code>EventLiveValidationService.GetCurrentRoomSessionInfoAsync</code></a> (<code>EventLiveValidationService.cs:145</code>), which excludes unscheduled sessions (<code>EventLiveValidationService.cs:157-167</code>), resolves the event&#39;s zone without a fallback (<code>EventLiveValidationService.cs:182-186</code>), converts session wall-clock times through <a href="group-18-conference-application.html#calendarexportmapper"><code>CalendarExportMapper.ToUtc</code></a> (<code>EventLiveValidationService.cs:191-199</code>), and prefers an in-progress session over an upcoming one inside the grace window (<code>EventLiveValidationService.cs:203-210</code>) before building the record (<code>EventLiveValidationService.cs:218-222</code>). Carried over the wire by <a href="group-20-conference-api-grpc.html#eventlivevalidationservicegrpcadapter"><code>EventLiveValidationServiceGrpcAdapter</code></a> (<code>EventLiveValidationServiceGrpcAdapter.cs:128</code>) against the <code>GetCurrentRoomSessionInfo</code> rpc (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/Protos/event_live_validation.proto:47</code>). Consumed by the Engagement <a href="group-22-engagement-module.html#recordroomcheckinhandler"><code>RecordRoomCheckInHandler</code></a>, which passes the configured grace window (<code>RecordRoomCheckInHandler.cs:52-54</code>, from <code>CheckInSettings.RoomCheckInGraceMinutes</code>, default 15, <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/CheckIns/CheckInSettings.cs:21</code>), collapses a <code>NotFound</code> into a generic &quot;no session is starting here&quot; message so room ids do not leak while still propagating transport failures unchanged (<code>RecordRoomCheckInHandler.cs:55-65</code>, <code>:98-102</code>), rejects an unpublished event (<code>RecordRoomCheckInHandler.cs:68-69</code>), and uses the resolved <code>SessionId</code>/<code>SessionTitle</code> for the check-in row and its response (<code>RecordRoomCheckInHandler.cs:73</code>, <code>:91-92</code>).</li>
           </ul>
           <hr>
           <h3 id="sessionizecodeformat">SessionizeCodeFormat</h3>
@@ -1216,23 +1248,17 @@
           <li><strong>Where it&#39;s used</strong>: nested in <a href="#eventdto"><code>EventDTO.EventSpeakers</code></a> (<code>EventDTO.cs:106</code>); mapped from the <a href="#eventspeaker"><code>EventSpeaker</code></a> entity by <a href="group-18-conference-application.html#eventspeakerdtomapper"><code>EventSpeakerDTOMapper</code></a> (group-18).</li>
           </ul>
           <hr>
-          <h3 id="roomdto">RoomDTO</h3>
+          <h3 id="partnerdto">PartnerDTO</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Rooms</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Rooms/RoomDTO.cs:13</code> · Level 1 · record (class)</p>
+          <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Partners</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Partners/PartnerDTO.cs:15</code> · Level 1 · record (class)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the richest of the event child DTOs, a conference room within an event&#39;s venue, with display and accessibility metadata. It also declares the four room field-length caps that the rest of the stack reads.</li>
-          <li><strong>Depends on</strong>: <a href="group-12-api-hosting-mapping.html#ibasedtotidentifiertype"><code>IBaseDTO&lt;TIdentifierType&gt;</code></a> (<code>RoomDTO.cs:1,13</code>) closed over <code>RoomIdentifierType</code>; the foreign key uses <code>EventIdentifierType</code>.</li>
-          <li><strong>Concept introduced, the DTO as the lowest common home for a shared constant.</strong> The child-DTO shape itself is the one <a href="#eventquestionanswerdto"><code>EventQuestionAnswerDTO</code></a> introduces; what is new here is that the DTO owns the length constants. <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses whether a fact is written once): the domain invariants sit in Conference.Domain, the EF configuration in Conference.Infrastructure, and the form model in Conference.UI, and none of those three can reference the other two. The <code>*.Shared</code> project is the only assembly all of them already depend on, so the caps live on the DTO and everyone re-exports rather than re-types them (doc comment, <code>RoomDTO.cs:6-11</code>). <code>[Rubric §21, Accessibility]</code> is worth naming too, because accessibility data is modelled as first-class room data (<code>AccessibilityInfo</code>, <code>RoomDTO.cs:46</code>) rather than being buried in a free-text description.</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li>Length constants (<code>RoomDTO.cs:16-25</code>): <code>NameMaxLength = 255</code> (line 16), <code>FloorMaxLength = 100</code> (line 19), <code>LocationMaxLength = 255</code> (line 22), <code>AccessibilityInfoMaxLength = 500</code> (line 25).</li>
-          <li>Three <code>required</code> members, <code>Id</code> (<code>RoomDTO.cs:28</code>), <code>Name</code> (<code>RoomDTO.cs:31</code>), and <code>EventId</code> (<code>RoomDTO.cs:49</code>, the parent foreign key).</li>
-          <li><code>Sort</code> (<code>RoomDTO.cs:34</code>) is a plain <code>int</code> display order that defaults to zero. Four optional members follow, <code>Capacity</code> (<code>int?</code>, line 37), <code>Floor</code> (<code>string?</code>, line 40), <code>Location</code> (<code>string?</code>, line 43), and <code>AccessibilityInfo</code> (<code>string?</code>, line 46), each null when absent.</li>
-          <li><code>EventName</code> (<code>string?</code>, <code>RoomDTO.cs:60</code>, declared last in the file): the parent event&#39;s name, flattened from the <code>Event</code> navigation. It exists purely for sorting, the room grid orders by event name, and the query service maps this field to the <code>Event.Name</code> entity path so the database does the ordering rather than the client (doc comment, <code>RoomDTO.cs:51-59</code>). It is populated only when the read asks for FK navigations (<code>includeFKs=true</code>), which list reads do not, so a UI that needs to display the event name resolves it from its own lookup instead of relying on this field.</li>
-          </ul>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: a room imported from Sessionize often has nothing beyond a name and a sort order, so everything past those is nullable. Making <code>EventId</code> required keeps a room from existing on the wire without an owning event. The constants live here so the same number reaches the database column, the domain guard, and the input counter from one declaration. <code>EventName</code> is opt-in rather than always-populated because most reads (list pages) do not need it, and always joining the event just to flatten a name would be a needless query cost on the common path.</li>
-          <li><strong>Where it&#39;s used</strong>: nested in <a href="#eventdto"><code>EventDTO.Rooms</code></a> (<code>EventDTO.cs:103</code>); mapped from the <a href="#room"><code>Room</code></a> entity by <a href="group-18-conference-application.html#roomdtomapper"><code>RoomDTOMapper</code></a> (group-18). The constants are re-exported by <a href="#eventinvariants"><code>EventInvariants</code></a> as <code>RoomNameMaxLength</code>, <code>RoomFloorMaxLength</code>, <code>RoomLocationMaxLength</code>, and <code>RoomAccessibilityInfoMaxLength</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:46-56</code>), which the guard itself uses (<code>EventInvariants.cs:138</code>) and which <code>RoomConfiguration</code> turns into EF <code>HasMaxLength</code> calls (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Events/RoomConfiguration.cs:20</code>, <code>:30</code>); the UI reads them straight off the DTO in <code>RoomFormModel</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Rooms/RoomFormModel.cs:35</code>, <code>:45</code>, <code>:49</code>, <code>:53</code>). <code>EventName</code> is what the room grid (<a href="group-21-conference-ui.html#roomlist"><code>RoomList</code></a>) sorts and displays by.</li>
+          <li><strong>What it is</strong>: the wire DTO for a <a href="#partner"><code>Partner</code></a>, the community organization or special partner shown in the ADC home page&#39;s public partners band.</li>
+          <li><strong>Depends on</strong>: <code>IBaseDTO&lt;TIdentifierType&gt;</code> and <code>IConcurrencyAware</code> (both implemented, <code>PartnerDTO.cs:15</code>), closed over <code>PartnerIdentifierType</code>; <a href="#partnertype"><code>PartnerType</code></a> (<code>PartnerDTO.cs:39</code>); the <code>EventIdentifierType</code> alias for its foreign key (<code>PartnerDTO.cs:54</code>).</li>
+          <li><strong>Concept</strong>: the same aggregate-DTO shape <a href="#eventdto"><code>EventDTO</code></a> uses at a smaller scale, length constants and a concurrency token living on the DTO because, per its own doc comment, it is the lowest layer the domain invariants, EF configuration, and UI can all reach (<code>PartnerDTO.cs:9-12</code>). <code>[Rubric §9, API &amp; Contract Design]</code> (a stable, purpose-built contract) and <code>[Rubric §8, Data Architecture]</code> (<code>IConcurrencyAware</code> round-trips the EF <code>RowVersion</code> token so a concurrent edit is detected instead of silently overwritten).</li>
+          <li><strong>Walkthrough</strong>: four length constants, <code>NameMaxLength = 200</code> (<code>PartnerDTO.cs:18</code>), <code>LogoUrlMaxLength = 2000</code> (<code>PartnerDTO.cs:21</code>), <code>DescriptionMaxLength = 2000</code> (<code>PartnerDTO.cs:24</code>), and <code>WebsiteUrlMaxLength = 2000</code> (<code>PartnerDTO.cs:27</code>); identity and concurrency, <code>Id</code> (<code>required</code>, <code>PartnerDTO.cs:30</code>) and <code>RowVersion</code> (<code>byte[]</code> defaulting to <code>[]</code>, <code>PartnerDTO.cs:33</code>); <code>Name</code> (<code>required string</code>, <code>PartnerDTO.cs:36</code>) and <code>PartnerType</code> (<code>PartnerDTO.cs:39</code>); optional scalars <code>LogoUrl</code>, <code>Description</code>, and <code>WebsiteUrl</code> (all <code>string?</code>, <code>PartnerDTO.cs:42,45,48</code>); <code>Sort</code> (<code>int</code>, the display order within the partner&#39;s type group, <code>PartnerDTO.cs:51</code>); and <code>EventId</code> (the owning event&#39;s foreign key, <code>PartnerDTO.cs:54</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping the four length constants on the DTO rather than duplicating them in the domain lets <code>PartnerInvariants</code> re-export them by reference (<code>NameMaxLength = PartnerDTO.NameMaxLength</code> and the same pattern for the other three, <code>PartnerInvariants.cs:16,19,22,25</code>) instead of restating the numbers, so the UI, the domain guard, and the EF configuration all read one source of truth.</li>
+          <li><strong>Where it&#39;s used</strong>: mapped from <a href="#partner"><code>Partner</code></a> by the Mapperly-generated <code>PartnerDTOMapper.MapToDTO</code> (<code>PartnerDTOMapper.cs:17</code>, per <a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a>); it is the DTO type parameter of <code>CreatePartnerHandler</code> (<code>CreatePartnerHandler.cs:15-20</code>, built over <code>CreateEntityHandlerBase&lt;PartnerCreateRequest, Partner, PartnerIdentifierType, PartnerDTO&gt;</code>) and of <code>PartnersController</code>, so its inherited GetAll/GetById/Create/paged/lookup/export actions all speak it (<code>PartnersController.cs:38-41,78-153</code>). Read by the ADC home page&#39;s partner band, grouped and sorted client-side (<code>ADCHome.razor.cs:267-278</code>), and bound by the UI&#39;s <code>PartnerFormModel</code>/<code>PartnerEditModel</code>.</li>
           </ul>
           <hr>
           <h3 id="sessionliveinfo">SessionLiveInfo</h3>
@@ -1266,7 +1292,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: composing the children inline lets a single <code>GET /Events/{id}</code> return the whole event graph without follow-up calls, and defaulting the collections to <code>[]</code> avoids null checks in the UI. The <code>IConcurrencyAware</code> token is the write-path guard that turns a lost update into a conflict instead of a silent overwrite. The constants live on the DTO for the reason its doc comment gives (<code>EventDTO.cs:10-14</code>): it is the lowest layer the domain, EF configuration, and Blazor pages can all reach.</li>
-          <li><strong>Where it&#39;s used</strong>: produced by <a href="group-18-conference-application.html#eventdtomapper"><code>EventDTOMapper</code></a> (group-18); it is the DTO type parameter of <a href="group-20-conference-api-grpc.html#eventscontroller"><code>EventsController</code></a> itself (<code>EventsController.cs:48-60</code>), so every inherited GetAll/GetById/Create action speaks it, and the same type parameter drives the UI&#39;s <code>EntityServiceBase</code> in <a href="group-21-conference-ui.html#eventservice"><code>EventService</code></a> (<code>EventService.cs:15-17</code>). It is the concrete event model that <a href="#currenteventdefaults"><code>CurrentEventDefaults</code></a> binds <a href="#currenteventselector"><code>CurrentEventSelector</code></a> to. Its constants are re-exported by <a href="#eventinvariants"><code>EventInvariants</code></a> (<code>EventInvariants.cs:17-44</code>) and bound by the UI&#39;s <code>EventFormModel</code> <code>[MaxLength]</code> attributes (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Events/EventFormModel.cs:45-85</code>) and the <code>EventFormFields</code> input counters (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Event/EventFormFields.razor:21</code>, <code>:28</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: produced by <a href="group-18-conference-application.html#eventdtomapper"><code>EventDTOMapper</code></a> (group-18); it is the DTO type parameter of <a href="group-20-conference-api-grpc.html#eventscontroller"><code>EventsController</code></a> itself (<code>EventsController.cs:48-60</code>), so every inherited GetAll/GetById/Create action speaks it, and the same type parameter drives the UI&#39;s <code>EntityServiceBase</code> in <a href="group-21-conference-ui.html#eventservice"><code>EventService</code></a> (<code>EventService.cs:15-17</code>). It is the concrete event model that <a href="#currenteventdefaults"><code>CurrentEventDefaults</code></a> binds <a href="#currenteventselector"><code>CurrentEventSelector</code></a> to. Its constants are re-exported by <a href="#eventinvariants"><code>EventInvariants</code></a> (<code>EventInvariants.cs:17-44</code>) and bound by the UI&#39;s <code>EventFormModel</code> <code>[MaxLength]</code> attributes (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Events/EventFormModel.cs:45-88</code>) and the <code>EventFormFields</code> input counters (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Event/EventFormFields.razor:21</code>, <code>:28</code>).</li>
           </ul>
           <hr>
           <h3 id="ieventlivevalidationservice">IEventLiveValidationService</h3>
@@ -1322,8 +1348,8 @@
           <li><code>ToUtc(localWallClock, timeZone)</code> (<code>CurrentEventSelector.cs:89-100</code>): the DST guard. Both window boundaries land on <strong>local midnight</strong>, which is inside the spring-forward gap in zones that transition at 00:00 (the doc comment names America/Santiago and Asia/Beirut, <code>CurrentEventSelector.cs:79-84</code>); that wall time never existed, so a raw <code>TimeZoneInfo.ConvertTimeToUtc</code> would throw. The method null-guards the zone (<code>CurrentEventSelector.cs:91</code>), re-kinds the input as <code>Unspecified</code> (<code>CurrentEventSelector.cs:93</code>), and shifts an invalid time forward by one hour into the hour that did exist (<code>CurrentEventSelector.cs:94-97</code>) before converting (<code>CurrentEventSelector.cs:99</code>). Ambiguous (fall-back) times resolve to the zone&#39;s standard offset, which is <code>ConvertTimeToUtc</code>&#39;s own behavior.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: the accessor-delegate design lets one vetted implementation of the &quot;current event&quot; rule serve every surface, so the home page, the live layer, and the list-page default filter can never disagree about which event is featured. Colocating <code>GetLiveWindowUtc</code> here keeps the window definition identical to the one <a href="#eventliveinfo"><code>EventLiveInfo</code></a> advertises (its doc comment points at that record, <code>CurrentEventSelector.cs:7</code>), and making <code>ToUtc</code> public means the same spring-forward-gap fix is reused rather than re-derived: the home page&#39;s countdown calls it directly for that reason (<code>ADCHome.razor.cs:253-259</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: the Conference <a href="group-21-conference-ui.html#adchome"><code>ADCHome</code></a> page (<code>ADCHome.razor.cs:179</code> for the selection, <code>ADCHome.razor.cs:258-259</code> for <code>ToUtc</code>); the shared <code>EventFilteredListPageBase</code>, which resolves the default event filter once for every list page that derives from it (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:180-188</code>); the pages that call it directly, <a href="group-21-conference-ui.html#activitycreate"><code>ActivityCreate</code></a> (<code>ActivityCreate.razor.cs:62</code>), <a href="group-21-conference-ui.html#publicactivitylist"><code>PublicActivityList</code></a> (<code>PublicActivityList.razor.cs:55</code>), <a href="group-21-conference-ui.html#publiceventlist"><code>PublicEventList</code></a> (<code>PublicEventList.razor.cs:102</code>), <a href="group-21-conference-ui.html#publicsponsorlist"><code>PublicSponsorList</code></a> (<code>PublicSponsorList.razor.cs:54</code>), <a href="group-21-conference-ui.html#sponsorcreate"><code>SponsorCreate</code></a> (<code>SponsorCreate.razor.cs:61</code>), <a href="group-21-conference-ui.html#speakerdashboard"><code>SpeakerDashboard</code></a> (<code>SpeakerDashboard.razor.cs:170</code>), and <a href="group-21-conference-ui.html#sessionselectiondashboard"><code>SessionSelectionDashboard</code></a> (<code>SessionSelectionDashboard.razor.cs:68</code>); the Engagement <a href="group-22-engagement-module.html#liveeventservice"><code>LiveEventService</code></a>, which uses both <code>SelectCurrentOrNext</code> and <code>GetLiveWindowUtc</code> (<code>LiveEventService.cs:27</code>, <code>LiveEventService.cs:38</code>); and server-side by <a href="group-18-conference-application.html#getnownexthandler"><code>GetNowNextHandler</code></a>, which resolves the current event and its window for the Now/Next query (<code>GetNowNextHandler.cs:101</code>, <code>GetNowNextHandler.cs:68</code>) and by <a href="group-18-conference-application.html#eventlivevalidationservice"><code>EventLiveValidationService</code></a> itself, which delegates rather than repeating the math (<code>EventLiveValidationService.cs:229</code>). Callers holding an <a href="#eventdto"><code>EventDTO</code></a> usually go through the <a href="#currenteventdefaults"><code>CurrentEventDefaults</code></a> wrapper instead.</li>
+          <li><strong>Why it&#39;s built this way</strong>: the accessor-delegate design lets one vetted implementation of the &quot;current event&quot; rule serve every surface, so the home page, the live layer, and the list-page default filter can never disagree about which event is featured. Colocating <code>GetLiveWindowUtc</code> here keeps the window definition identical to the one <a href="#eventliveinfo"><code>EventLiveInfo</code></a> advertises (its doc comment points at that record, <code>CurrentEventSelector.cs:7</code>), and making <code>ToUtc</code> public means the same spring-forward-gap fix is reused rather than re-derived: the home page&#39;s countdown calls it directly for that reason (<code>ADCHome.razor.cs:299-305</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: the Conference <a href="group-21-conference-ui.html#adchome"><code>ADCHome</code></a> page (<code>ADCHome.razor.cs:184</code> for the selection, <code>ADCHome.razor.cs:304-305</code> for <code>ToUtc</code>); the shared <code>EventFilteredListPageBase</code>, which resolves the default event filter once for every list page that derives from it (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Common/EventFilteredListPageBase.cs:180-188</code>); the pages that call it directly, <a href="group-21-conference-ui.html#activitycreate"><code>ActivityCreate</code></a> (<code>ActivityCreate.razor.cs:62</code>), <a href="group-21-conference-ui.html#publicactivitylist"><code>PublicActivityList</code></a> (<code>PublicActivityList.razor.cs:55</code>), <a href="group-21-conference-ui.html#publiceventlist"><code>PublicEventList</code></a> (<code>PublicEventList.razor.cs:102</code>), <a href="group-21-conference-ui.html#publicsponsorlist"><code>PublicSponsorList</code></a> (<code>PublicSponsorList.razor.cs:54</code>), <a href="group-21-conference-ui.html#sponsorcreate"><code>SponsorCreate</code></a> (<code>SponsorCreate.razor.cs:61</code>), <a href="group-21-conference-ui.html#speakerdashboard"><code>SpeakerDashboard</code></a> (<code>SpeakerDashboard.razor.cs:170</code>), and <a href="group-21-conference-ui.html#sessionselectiondashboard"><code>SessionSelectionDashboard</code></a> (<code>SessionSelectionDashboard.razor.cs:68</code>); the Engagement <a href="group-22-engagement-module.html#liveeventservice"><code>LiveEventService</code></a>, which uses both <code>SelectCurrentOrNext</code> and <code>GetLiveWindowUtc</code> (<code>LiveEventService.cs:27</code>, <code>LiveEventService.cs:38</code>); and server-side by <a href="group-18-conference-application.html#getnownexthandler"><code>GetNowNextHandler</code></a>, which resolves the current event and its window for the Now/Next query (<code>GetNowNextHandler.cs:101</code>, <code>GetNowNextHandler.cs:68</code>) and by <a href="group-18-conference-application.html#eventlivevalidationservice"><code>EventLiveValidationService</code></a> itself, which delegates rather than repeating the math (<code>EventLiveValidationService.cs:229</code>). Callers holding an <a href="#eventdto"><code>EventDTO</code></a> usually go through the <a href="#currenteventdefaults"><code>CurrentEventDefaults</code></a> wrapper instead.</li>
           </ul>
           <hr>
           <h3 id="currenteventdefaults">CurrentEventDefaults</h3>
@@ -1442,6 +1468,19 @@
           wired into request-size limits on the Gateway&#39;s <code>Program.cs</code>. Introduced with speaker session assets
           (<a href="https://ivanball.github.io/docs/adr/123-speaker-session-assets.html" target="_blank" rel="noopener">ADR-123</a>).</li>
           </ul>
+          <h3 id="roomsessioninfo">RoomSessionInfo</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Rooms</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Rooms/RoomSessionInfo.cs:20</code> · Level 0 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the answer to &quot;which session is this room hosting right now&quot;: the resolved session id and title, the owning event, and that event&#39;s published flag. It is what the Engagement room check-in flow gets back when an attendee scans a printed room QR.</li>
+          <li><strong>Depends on</strong>: the <code>SessionIdentifierType</code> and <code>EventIdentifierType</code> aliases; BCL otherwise. No first-party types.</li>
+          <li><strong>Concept introduced, the server-resolved target (never trust a client-supplied id).</strong> <code>[Rubric §11, Security]</code> (assesses whether authorization-relevant inputs are decided server-side): the attendee&#39;s device sends a <strong>room</strong> id, not a session id, and Conference resolves which session that room is hosting at the call instant. A tampered QR therefore cannot record a check-in against an arbitrary session. <code>[Rubric §9, API &amp; Contract Design]</code> also applies in a subtle way: <code>SessionTitle</code> rides along so the caller can render a confirmation without a second cross-module call, and the <strong>grace window travels in the request</strong> rather than living on this record, because &quot;how early does a scan count&quot; is check-in policy owned by Engagement, not schedule data owned by Conference (doc comment, <code>RoomSessionInfo.cs:10-14</code>, and the same split restated on the interface, <code>IEventLiveValidationService.cs:52-55</code>).</li>
+          <li><strong>Walkthrough</strong>: a positional <code>sealed record</code> with four parameters (<code>RoomSessionInfo.cs:20-24</code>), <code>SessionId</code> (the session the room is hosting at the query instant, line 19), <code>SessionTitle</code> (line 20), <code>EventId</code> (the owning event, line 21), and <code>IsPublished</code> (line 22). No behavior.</li>
+          <li><strong>Why it&#39;s built this way</strong>: bundling the title and the published flag with the id keeps the door-scan path to a single cross-module round-trip, and keeping the grace window out of the record preserves the boundary: Conference answers the schedule question, Engagement decides the policy.</li>
+          <li><strong>Where it&#39;s used</strong>: produced by <a href="group-18-conference-application.html#eventlivevalidationservice"><code>EventLiveValidationService.GetCurrentRoomSessionInfoAsync</code></a> (<code>EventLiveValidationService.cs:145</code>), which excludes unscheduled sessions (<code>EventLiveValidationService.cs:157-167</code>), resolves the event&#39;s zone without a fallback (<code>EventLiveValidationService.cs:182-186</code>), converts session wall-clock times through <a href="group-18-conference-application.html#calendarexportmapper"><code>CalendarExportMapper.ToUtc</code></a> (<code>EventLiveValidationService.cs:191-199</code>), and prefers an in-progress session over an upcoming one inside the grace window (<code>EventLiveValidationService.cs:203-210</code>) before building the record (<code>EventLiveValidationService.cs:218-222</code>). Carried over the wire by <a href="group-20-conference-api-grpc.html#eventlivevalidationservicegrpcadapter"><code>EventLiveValidationServiceGrpcAdapter</code></a> (<code>EventLiveValidationServiceGrpcAdapter.cs:128</code>) against the <code>GetCurrentRoomSessionInfo</code> rpc (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Contracts/Protos/event_live_validation.proto:47</code>). Consumed by the Engagement <a href="group-22-engagement-module.html#recordroomcheckinhandler"><code>RecordRoomCheckInHandler</code></a>, which passes the configured grace window (<code>RecordRoomCheckInHandler.cs:52-54</code>, from <code>CheckInSettings.RoomCheckInGraceMinutes</code>, default 15, <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/CheckIns/CheckInSettings.cs:21</code>), collapses a <code>NotFound</code> into a generic &quot;no session is starting here&quot; message so room ids do not leak while still propagating transport failures unchanged (<code>RecordRoomCheckInHandler.cs:55-65</code>, <code>:98-102</code>), rejects an unpublished event (<code>RecordRoomCheckInHandler.cs:68-69</code>), and uses the resolved <code>SessionId</code>/<code>SessionTitle</code> for the check-in row and its response (<code>RecordRoomCheckInHandler.cs:73</code>, <code>:91-92</code>).</li>
+          </ul>
+          <hr>
           <h3 id="nownextdto">NowNextDTO</h3>
           <blockquote>
           <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Sessions</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/NowNextDTO.cs:14</code> · Level 1 · record</p>
@@ -1661,6 +1700,25 @@
           collection to check first when a session list renders without speaker names.</p>
           </li>
           </ul>
+          <h3 id="roomdto">RoomDTO</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Rooms</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Rooms/RoomDTO.cs:13</code> · Level 1 · record (class)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the richest of the event child DTOs, a conference room within an event&#39;s venue, with display and accessibility metadata. It also declares the four room field-length caps that the rest of the stack reads.</li>
+          <li><strong>Depends on</strong>: <a href="group-12-api-hosting-mapping.html#ibasedtotidentifiertype"><code>IBaseDTO&lt;TIdentifierType&gt;</code></a> (<code>RoomDTO.cs:1,13</code>) closed over <code>RoomIdentifierType</code>; the foreign key uses <code>EventIdentifierType</code>.</li>
+          <li><strong>Concept introduced, the DTO as the lowest common home for a shared constant.</strong> The child-DTO shape itself is the one <a href="#eventquestionanswerdto"><code>EventQuestionAnswerDTO</code></a> introduces; what is new here is that the DTO owns the length constants. <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses whether a fact is written once): the domain invariants sit in Conference.Domain, the EF configuration in Conference.Infrastructure, and the form model in Conference.UI, and none of those three can reference the other two. The <code>*.Shared</code> project is the only assembly all of them already depend on, so the caps live on the DTO and everyone re-exports rather than re-types them (doc comment, <code>RoomDTO.cs:6-11</code>). <code>[Rubric §21, Accessibility]</code> is worth naming too, because accessibility data is modelled as first-class room data (<code>AccessibilityInfo</code>, <code>RoomDTO.cs:46</code>) rather than being buried in a free-text description.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>Length constants (<code>RoomDTO.cs:16-25</code>): <code>NameMaxLength = 255</code> (line 16), <code>FloorMaxLength = 100</code> (line 19), <code>LocationMaxLength = 255</code> (line 22), <code>AccessibilityInfoMaxLength = 500</code> (line 25).</li>
+          <li>Three <code>required</code> members, <code>Id</code> (<code>RoomDTO.cs:28</code>), <code>Name</code> (<code>RoomDTO.cs:31</code>), and <code>EventId</code> (<code>RoomDTO.cs:49</code>, the parent foreign key).</li>
+          <li><code>Sort</code> (<code>RoomDTO.cs:34</code>) is a plain <code>int</code> display order that defaults to zero. Four optional members follow, <code>Capacity</code> (<code>int?</code>, line 37), <code>Floor</code> (<code>string?</code>, line 40), <code>Location</code> (<code>string?</code>, line 43), and <code>AccessibilityInfo</code> (<code>string?</code>, line 46), each null when absent.</li>
+          <li><code>EventName</code> (<code>string?</code>, <code>RoomDTO.cs:60</code>, declared last in the file): the parent event&#39;s name, flattened from the <code>Event</code> navigation. It exists purely for sorting, the room grid orders by event name, and the query service maps this field to the <code>Event.Name</code> entity path so the database does the ordering rather than the client (doc comment, <code>RoomDTO.cs:51-59</code>). It is populated only when the read asks for FK navigations (<code>includeFKs=true</code>), which list reads do not, so a UI that needs to display the event name resolves it from its own lookup instead of relying on this field.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: a room imported from Sessionize often has nothing beyond a name and a sort order, so everything past those is nullable. Making <code>EventId</code> required keeps a room from existing on the wire without an owning event. The constants live here so the same number reaches the database column, the domain guard, and the input counter from one declaration. <code>EventName</code> is opt-in rather than always-populated because most reads (list pages) do not need it, and always joining the event just to flatten a name would be a needless query cost on the common path.</li>
+          <li><strong>Where it&#39;s used</strong>: nested in <a href="#eventdto"><code>EventDTO.Rooms</code></a> (<code>EventDTO.cs:103</code>); mapped from the <a href="#room"><code>Room</code></a> entity by <a href="group-18-conference-application.html#roomdtomapper"><code>RoomDTOMapper</code></a> (group-18). The constants are re-exported by <a href="#eventinvariants"><code>EventInvariants</code></a> as <code>RoomNameMaxLength</code>, <code>RoomFloorMaxLength</code>, <code>RoomLocationMaxLength</code>, and <code>RoomAccessibilityInfoMaxLength</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:46-56</code>), which the guard itself uses (<code>EventInvariants.cs:138</code>) and which <code>RoomConfiguration</code> turns into EF <code>HasMaxLength</code> calls (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Events/RoomConfiguration.cs:20</code>, <code>:30</code>); the UI reads them straight off the DTO in <code>RoomFormModel</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Rooms/RoomFormModel.cs:35</code>, <code>:45</code>, <code>:49</code>, <code>:53</code>). <code>EventName</code> is what the room grid (<a href="group-21-conference-ui.html#roomlist"><code>RoomList</code></a>) sorts and displays by.</li>
+          </ul>
+          <hr>
           <h3 id="sessiondto">SessionDTO</h3>
           <blockquote>
           <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Sessions</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/SessionDTO.cs:15</code> · Level 2 · record</p>
@@ -2185,7 +2243,7 @@
           same constant to both the input cap and the character counter
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activity/ActivityFormFields.razor:21</code>)
           and to its <code>[MaxLength]</code> data annotation
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activities/ActivityFormModel.cs:36</code>).
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activities/ActivityFormModel.cs:37</code>).
           A cap can therefore never disagree between the counter a user sees, the invariant that rejects, and the
           column that truncates.</li>
           <li><strong>Concept, the event-local wall-clock DTO.</strong> <code>[Rubric §8, Data Architecture]</code> (assesses how time and
@@ -2649,7 +2707,7 @@
           <a href="#speakercategoryitemdto"><code>SpeakerCategoryItemDTO</code></a>,
           <a href="#speakerquestionanswerdto"><code>SpeakerQuestionAnswerDTO</code></a>; the aliases <code>SpeakerIdentifierType</code> (a
           <code>System.Guid</code>, because speakers are imported with Sessionize-assigned identity per BR-61,
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:3,22</code>)
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:3,23</code>)
           and <code>UserIdentifierType</code> (an <code>int</code>, owned by Identity).</li>
           <li><strong>Concept, the cross-context read DTO and the redacting mapper.</strong> <code>[Rubric §7, Microservices Readiness]</code>, <code>[Rubric §8, Data Architecture]</code>, <code>[Rubric §11, Security]</code>. Three things make this DTO
           worth studying beyond its size:<ol>
@@ -2821,7 +2879,7 @@
           <a href="group-02-domain-building-blocks.html#domainentitystate"><code>DomainEntityState</code></a>; aliases <code>EventIdentifierType</code>,
           <code>EventSpeakerIdentifierType</code>, <code>SpeakerIdentifierType</code> (the last is <code>System.Guid</code>, not <code>int</code>, because
           speakers carry Sessionize-assigned GUIDs per BR-61,
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:22</code>).</li>
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:23</code>).</li>
           <li><strong>Concept</strong>: the child-change domain event introduced by
           <a href="#eventquestionanswerchanged"><code>EventQuestionAnswerChanged</code></a>, here for a <em>join</em> entity.
           <code>[Rubric §6, CQRS &amp; Event-Driven]</code>. The XML doc says &quot;added or removed&quot; with no update case
@@ -3067,75 +3125,36 @@
           <li><strong>Caveats / not-in-source</strong>: no handler subscribes today.</li>
           </ul>
           <hr>
-          <h3 id="eventfeedbacksubmitted">EventFeedbackSubmitted</h3>
+          <h3 id="partnerchanged">PartnerChanged</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Events.IntegrationEvents</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:20</code> · Level 3 · record (sealed)</p>
+          <p>MMCA.ADC.Conference.Domain · <code>MMCA.ADC.Conference.Domain.Partners.DomainEvents</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Partners/DomainEvents/PartnerChanged.cs:12</code> · Level 3 · record (sealed)</p>
           </blockquote>
           <ul>
-          <li><p><strong>What it is</strong>: the cross-module <strong>integration event</strong> Conference raises when an attendee submits feedback on
-          an event. The Engagement module subscribes and awards the attendee points for the feedback.</p>
-          </li>
-          <li><p><strong>Depends on</strong>: <a href="group-04-events-outbox.html#baseintegrationevent"><code>BaseIntegrationEvent</code></a> (the base record)
-          and <a href="group-02-domain-building-blocks.html#eventnameattribute"><code>EventNameAttribute</code></a> (applied on line 19);
-          aliases <code>UserIdentifierType</code>, <code>EventIdentifierType</code>; BCL <code>DateTime</code>.</p>
-          </li>
-          <li><p><strong>Concept introduced, the integration event (as distinct from the domain event).</strong>
-          <code>[Rubric §7, Microservices Readiness]</code> (assesses whether cross-module coupling runs through a published
-          contract a peer can consume without a code reference back into the producer&#39;s domain) and
-          <code>[Rubric §9, API &amp; Contract Design]</code> (the async message <em>is</em> a public contract, versioned like one). Three
-          things separate it from every event above.</p>
-          <ol>
-          <li><strong>It derives from <a href="group-04-events-outbox.html#baseintegrationevent"><code>BaseIntegrationEvent</code></a></strong>, which adds
-          a virtual <code>SchemaVersion</code> defaulting to <code>1</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:32</code>) and implements
-          <code>IIntegrationEvent</code>, the marker the save-changes interceptor branches on: an integration event still gets
-          an outbox row, but it is deliberately <em>not</em> dispatched in process, so its row stays unprocessed
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:244-257</code>)
-          and the <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> publishes it through
-          <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> instead, wrapped in a broker-publish resilience
-          pipeline
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:622-635</code>).
-          The registered transport then decides delivery: in-process for the monolith, MassTransit broker for the
-          extracted services.</li>
-          <li><strong>It carries an explicit wire name.</strong> <code>[EventName(&quot;Conference.EventFeedbackSubmitted.v1&quot;)]</code>
-          (<code>EventFeedbackSubmitted.cs:19</code>) pins the serialized message-type name, so renaming the C# record does
-          not silently break an already-deployed consumer.</li>
-          <li><strong>It lives in the <code>.Shared</code> project, not <code>.Domain</code></strong>, precisely so a subscribing module can reference the
-          contract without pulling in Conference&#39;s domain model.</li>
-          </ol>
-          <p><a href="https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html" target="_blank" rel="noopener">ADR-010</a> is the rule for
-          evolving it: additive changes keep the version, a breaking change means a new type plus a consumer-side
-          upcaster registered per <a href="https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html" target="_blank" rel="noopener">ADR-090</a>.</p>
-          </li>
-          <li><p><strong>Walkthrough</strong>: three positional members
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:20-24</code>):
-          <code>UserId</code> (the attendee, line 21), <code>EventId</code> (the subject, line 22), and <code>SubmittedOnUtc</code> (when the answer was
-          recorded, in UTC, line 23). The producer supplies that instant from an injected <code>TimeProvider</code>, never an
-          ambient clock
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/AddEventQuestionAnswer/AddEventQuestionAnswerHandler.cs:113</code>).</p>
-          </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: the delivery semantics are the interesting part, and the XML doc states them
-          (<code>EventFeedbackSubmitted.cs:9-14</code>). Event feedback is an upsert writing one row per form question (BR-107),
-          so one submitted form raises this event once per <em>newly created</em> answer, and only on the create path: the
-          update branch of the same handler raises nothing (<code>AddEventQuestionAnswerHandler.cs:82-95</code> for the update
-          path versus <code>:96-117</code> for the create path). Because at-least-once outbox delivery and a multi-question form
-          both mean the consumer can see the message more than once, the consumer is idempotent on its own side: it
-          collapses everything onto one subject key and lets the awarder&#39;s uniqueness rule reject the duplicates
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/IntegrationEventHandlers/EventFeedbackSubmittedPointsHandler.cs:40-47</code>).
-          That is the standard posture for <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>
-          and <a href="https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html" target="_blank" rel="noopener">ADR-021</a>: the producer
-          guarantees the fact was recorded atomically with the data, the consumer guarantees the effect happens once.</p>
-          </li>
-          <li><p><strong>Where it&#39;s used</strong>: raised on the aggregate pre-save by
-          <a href="group-18-conference-application.html#addeventquestionanswerhandler"><code>AddEventQuestionAnswerHandler</code></a>
-          (<code>:112</code>), so the outbox captures it in the same <code>SaveChangesAsync</code>; consumed by
-          <a href="group-22-engagement-module.html#eventfeedbacksubmittedpointshandler"><code>EventFeedbackSubmittedPointsHandler</code></a>,
-          which maps it onto an event subject key via
-          <a href="group-22-engagement-module.html#pointssubjectkeys"><code>PointsSubjectKeys</code></a> and calls
-          <a href="group-22-engagement-module.html#ipointsawarder"><code>IPointsAwarder</code></a>
-          (<code>EventFeedbackSubmittedPointsHandler.cs:40-47</code>); registered as a broker consumer in the Engagement service
-          host (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:288</code>).</p>
-          </li>
+          <li><strong>What it is</strong>: the aggregate-root lifecycle event for a <a href="#partner"><code>Partner</code></a> (a conference sponsor/partner
+          listing scoped to one event): raised when it is created, updated, or soft-deleted. Carries the partner id
+          and display name.</li>
+          <li><strong>Depends on</strong>:
+          <a href="group-04-events-outbox.html#entitychangedeventtidentifiertype"><code>EntityChangedEvent&lt;TIdentifierType&gt;</code></a> (the
+          base record), <a href="group-02-domain-building-blocks.html#domainentitystate"><code>DomainEntityState</code></a>; alias
+          <code>PartnerIdentifierType</code>.</li>
+          <li><strong>Concept</strong>: the aggregate-root lifecycle event (<a href="#eventchanged"><code>EventChanged</code></a>).
+          <code>[Rubric section 6, CQRS &amp; Event-Driven]</code> and <code>[Rubric section 15, Best Practices &amp; Code Quality]</code> (a recurring shape
+          factored once, not copied). Structurally the same shape as <a href="#sponsorchanged"><code>SponsorChanged</code></a>: three
+          members, no descriptor beyond the display name. Like <a href="#activitychanged"><code>ActivityChanged</code></a>,
+          <a href="#partner"><code>Partner</code></a> owns an <code>EventId</code> property
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Partners/Partner.cs:64</code>), yet
+          <code>PartnerChanged</code> does not publish it, so a subscriber that needs the owning event has to reload the
+          entity. The XML doc on <code>Update</code> is explicit that the owning event is deliberately not updatable: moving a
+          partner between events is modeled as a create plus a delete, not a field edit
+          (<code>Partner.cs:107</code>).</li>
+          <li><strong>Walkthrough</strong>: three positional members (<code>PartnerChanged.cs:12-16</code>): <code>State</code>, <code>PartnerId</code>, and <code>Name</code>,
+          with <code>(State, PartnerId)</code> forwarded to <code>EntityChangedEvent&lt;PartnerIdentifierType&gt;</code> on line 16.</li>
+          <li><strong>Where it&#39;s used</strong>: raised from <a href="#partner"><code>Partner</code></a>&#39;s <code>Create</code> factory (declared at <code>Partner.cs:79</code>,
+          raises <code>Added</code> at <code>:100</code>), its <code>Update</code> method (<code>:116</code>, raises <code>Updated</code> at <code>:135</code>), and its <code>Delete</code>
+          override, which calls the base soft-delete first and raises the event only when that base call returned
+          success (<code>:142-149</code>, raise at <code>:147</code>); dispatched in-process.</li>
+          <li><strong>Caveats / not-in-source</strong>: no handler subscribes today (see
+          <a href="#eventquestionanswerchanged"><code>EventQuestionAnswerChanged</code></a>).</li>
           </ul>
           <hr>
           <h3 id="questionchanged">QuestionChanged</h3>
@@ -3397,6 +3416,77 @@
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/IntegrationEventHandlers/SessionFeedbackSubmittedPointsHandler.cs:42-49</code>),
           and is registered as a broker consumer in the Engagement service host
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:287</code>).</li>
+          </ul>
+          <hr>
+          <h3 id="eventfeedbacksubmitted">EventFeedbackSubmitted</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Shared · <code>MMCA.ADC.Conference.Shared.Events.IntegrationEvents</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:20</code> · Level 3 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: the cross-module <strong>integration event</strong> Conference raises when an attendee submits feedback on
+          an event. The Engagement module subscribes and awards the attendee points for the feedback.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: <a href="group-04-events-outbox.html#baseintegrationevent"><code>BaseIntegrationEvent</code></a> (the base record)
+          and <a href="group-02-domain-building-blocks.html#eventnameattribute"><code>EventNameAttribute</code></a> (applied on line 19);
+          aliases <code>UserIdentifierType</code>, <code>EventIdentifierType</code>; BCL <code>DateTime</code>.</p>
+          </li>
+          <li><p><strong>Concept introduced, the integration event (as distinct from the domain event).</strong>
+          <code>[Rubric §7, Microservices Readiness]</code> (assesses whether cross-module coupling runs through a published
+          contract a peer can consume without a code reference back into the producer&#39;s domain) and
+          <code>[Rubric §9, API &amp; Contract Design]</code> (the async message <em>is</em> a public contract, versioned like one). Three
+          things separate it from every event above.</p>
+          <ol>
+          <li><strong>It derives from <a href="group-04-events-outbox.html#baseintegrationevent"><code>BaseIntegrationEvent</code></a></strong>, which adds
+          a virtual <code>SchemaVersion</code> defaulting to <code>1</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:32</code>) and implements
+          <code>IIntegrationEvent</code>, the marker the save-changes interceptor branches on: an integration event still gets
+          an outbox row, but it is deliberately <em>not</em> dispatched in process, so its row stays unprocessed
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:244-257</code>)
+          and the <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> publishes it through
+          <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> instead, wrapped in a broker-publish resilience
+          pipeline
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:622-635</code>).
+          The registered transport then decides delivery: in-process for the monolith, MassTransit broker for the
+          extracted services.</li>
+          <li><strong>It carries an explicit wire name.</strong> <code>[EventName(&quot;Conference.EventFeedbackSubmitted.v1&quot;)]</code>
+          (<code>EventFeedbackSubmitted.cs:19</code>) pins the serialized message-type name, so renaming the C# record does
+          not silently break an already-deployed consumer.</li>
+          <li><strong>It lives in the <code>.Shared</code> project, not <code>.Domain</code></strong>, precisely so a subscribing module can reference the
+          contract without pulling in Conference&#39;s domain model.</li>
+          </ol>
+          <p><a href="https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html" target="_blank" rel="noopener">ADR-010</a> is the rule for
+          evolving it: additive changes keep the version, a breaking change means a new type plus a consumer-side
+          upcaster registered per <a href="https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html" target="_blank" rel="noopener">ADR-090</a>.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: three positional members
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:20-24</code>):
+          <code>UserId</code> (the attendee, line 21), <code>EventId</code> (the subject, line 22), and <code>SubmittedOnUtc</code> (when the answer was
+          recorded, in UTC, line 23). The producer supplies that instant from an injected <code>TimeProvider</code>, never an
+          ambient clock
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/AddEventQuestionAnswer/AddEventQuestionAnswerHandler.cs:113</code>).</p>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: the delivery semantics are the interesting part, and the XML doc states them
+          (<code>EventFeedbackSubmitted.cs:9-14</code>). Event feedback is an upsert writing one row per form question (BR-107),
+          so one submitted form raises this event once per <em>newly created</em> answer, and only on the create path: the
+          update branch of the same handler raises nothing (<code>AddEventQuestionAnswerHandler.cs:82-95</code> for the update
+          path versus <code>:96-117</code> for the create path). Because at-least-once outbox delivery and a multi-question form
+          both mean the consumer can see the message more than once, the consumer is idempotent on its own side: it
+          collapses everything onto one subject key and lets the awarder&#39;s uniqueness rule reject the duplicates
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/IntegrationEventHandlers/EventFeedbackSubmittedPointsHandler.cs:40-47</code>).
+          That is the standard posture for <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>
+          and <a href="https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html" target="_blank" rel="noopener">ADR-021</a>: the producer
+          guarantees the fact was recorded atomically with the data, the consumer guarantees the effect happens once.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: raised on the aggregate pre-save by
+          <a href="group-18-conference-application.html#addeventquestionanswerhandler"><code>AddEventQuestionAnswerHandler</code></a>
+          (<code>:112</code>), so the outbox captures it in the same <code>SaveChangesAsync</code>; consumed by
+          <a href="group-22-engagement-module.html#eventfeedbacksubmittedpointshandler"><code>EventFeedbackSubmittedPointsHandler</code></a>,
+          which maps it onto an event subject key via
+          <a href="group-22-engagement-module.html#pointssubjectkeys"><code>PointsSubjectKeys</code></a> and calls
+          <a href="group-22-engagement-module.html#ipointsawarder"><code>IPointsAwarder</code></a>
+          (<code>EventFeedbackSubmittedPointsHandler.cs:40-47</code>); registered as a broker consumer in the Engagement service
+          host (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:288</code>).</p>
+          </li>
           </ul>
           <hr>
           <h3 id="activityinvariants">ActivityInvariants</h3>
@@ -4097,15 +4187,15 @@
           </ul>
           <h3 id="ieventcascadedeletiondomainservice">IEventCascadeDeletionDomainService</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.Domain · <code>MMCA.ADC.Conference.Domain.Events</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/IEventCascadeDeletionDomainService.cs:15</code> · Level 9 · interface</p>
+          <p>MMCA.ADC.Conference.Domain · <code>MMCA.ADC.Conference.Domain.Events</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/IEventCascadeDeletionDomainService.cs:16</code> · Level 9 · interface</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a pure domain-service abstraction that coordinates the cascade soft-delete of an
           <a href="#event"><code>Event</code></a> together with its <a href="#session"><code>Session</code></a>s (BR-127), its <a href="#sponsor"><code>Sponsor</code></a>s, its
-          <a href="#activity"><code>Activity</code></a>s, and its <a href="#sessionasset"><code>SessionAsset</code></a>s. All four are <em>separate</em>
-          aggregates from <code>Event</code>, so <code>Event.Delete()</code> alone cannot reach them.</li>
+          <a href="#partner"><code>Partner</code></a>s, its <a href="#activity"><code>Activity</code></a>s, and its <a href="#sessionasset"><code>SessionAsset</code></a>s. All
+          five are <em>separate</em> aggregates from <code>Event</code>, so <code>Event.Delete()</code> alone cannot reach them.</li>
           <li><strong>Depends on</strong>: <a href="#event"><code>Event</code></a> (Level 7), <a href="#session"><code>Session</code></a> (Level 8),
-          <a href="#sponsor"><code>Sponsor</code></a> (Level 8), <a href="#activity"><code>Activity</code></a> (Level 8),
+          <a href="#sponsor"><code>Sponsor</code></a> (Level 8), <a href="#partner"><code>Partner</code></a> (Level 8), <a href="#activity"><code>Activity</code></a> (Level 8),
           <a href="#sessionasset"><code>SessionAsset</code></a> (Level 7),
           <a href="group-01-result-error-handling.html#result"><code>Result</code></a> (Level 2). Nothing else: no repository, no
           <code>DbContext</code>, no logger, and the five <code>using</code> directives (<code>:1-5</code>) confirm it.</li>
@@ -4113,84 +4203,87 @@
           instead of leaking into a handler) and <code>[Rubric §3, Clean Architecture]</code> (assesses whether the Domain
           layer stays free of outward dependencies). When a business operation spans two or more aggregate
           boundaries it belongs in a <strong>domain service</strong>. Deleting an event must also soft-delete its sessions
-          (BR-127, BR-55), its sponsors, its activities, and its session assets, but all five have separate
-          identity and lifecycle, so no one of them can own the rule. The interface takes <strong>pre-fetched
+          (BR-127, BR-55), its sponsors, its partners, its activities, and its session assets, but all six have
+          separate identity and lifecycle, so no one of them can own the rule. The interface takes <strong>pre-fetched
           aggregates</strong>, and the doc comment (<code>:12-13</code>) says so: &quot;Operates on pre-fetched aggregates with no
           infrastructure dependencies.&quot; That is what keeps the abstraction in the Domain layer: loading is the
           caller&#39;s job, orchestration is this type&#39;s job. Both the interface and its implementation live in
           <code>MMCA.ADC.Conference.Domain.Services</code>, not in Infrastructure, because neither needs anything the
           Domain layer cannot reference.</li>
-          <li><strong>Walkthrough</strong>: one member, <code>Result CascadeDelete(Event @event, IReadOnlyCollection&lt;Session&gt; sessions, IReadOnlyCollection&lt;Sponsor&gt; sponsors, IReadOnlyCollection&lt;Activity&gt; activities, IReadOnlyCollection&lt;SessionAsset&gt; sessionAssets)</code> (<code>:29-34</code>). The four child parameters are
-          read-only collections, which states that the service will mutate the <em>entities</em> but never the
-          collections. The contract documented at <code>:17-28</code> is the important part: the first session, sponsor,
-          activity, or session asset that fails to delete aborts the cascade, so the event is not deleted when
-          any child aggregate delete fails, and the returned <code>Result</code> is either that failing child result or
-          the result of the event deletion.</li>
+          <li><strong>Walkthrough</strong>: one member, <code>Result CascadeDelete(Event @event, IReadOnlyCollection&lt;Session&gt; sessions, IReadOnlyCollection&lt;Sponsor&gt; sponsors, IReadOnlyCollection&lt;Partner&gt; partners, IReadOnlyCollection&lt;Activity&gt; activities, IReadOnlyCollection&lt;SessionAsset&gt; sessionAssets)</code>
+          (<code>:29-38</code>). The five child parameters are read-only collections, which states that the service will
+          mutate the <em>entities</em> but never the collections. The contract documented at <code>:17-28</code> is the important
+          part: the first session, sponsor, partner, activity, or session asset that fails to delete aborts the
+          cascade, so the event is not deleted when any child aggregate delete fails, and the returned <code>Result</code>
+          is either that failing child result or the result of the event deletion.</li>
           <li><strong>Why it&#39;s built this way</strong>: an interface here buys two things. <code>[Rubric §14, Testability]</code>: the
           concrete service can be unit-tested with plain domain objects, and
           <a href="group-18-conference-application.html#deleteeventhandler"><code>DeleteEventHandler</code></a> can be tested against a
           stub without constructing a real cascade. <code>[Rubric §1, SOLID]</code>: the handler depends on the
           abstraction and stays a thin fetch, coordinate, persist slice. The signature is also the honest
           record of a design cost: each new event-rooted aggregate (sponsors and activities were both added
-          after sessions, and session assets most recently, per ADR-123) widens this contract, which is a
-          visible, compile-checked change rather than a silent gap in the cascade.</li>
+          after sessions, partners after that, and session assets most recently, per ADR-123) widens this
+          contract, which is a visible, compile-checked change rather than a silent gap in the cascade.</li>
           <li><strong>Where it&#39;s used</strong>: injected into
           <a href="group-18-conference-application.html#deleteeventhandler"><code>DeleteEventHandler</code></a>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/Delete/DeleteEventHandler.cs:24</code>)
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/Delete/DeleteEventHandler.cs:25</code>)
           and invoked at <code>:64</code> of that file. Registered as a singleton in the Conference Application DI,
           <code>services.TryAddSingleton&lt;IEventCascadeDeletionDomainService, EventCascadeDeletionDomainService&gt;()</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:59</code>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:64</code>,
           under the &quot;Domain services&quot; banner comment at <code>:54</code>).</li>
           </ul>
           <h3 id="eventcascadedeletiondomainservice">EventCascadeDeletionDomainService</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.Domain · <code>MMCA.ADC.Conference.Domain.Events</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventCascadeDeletionDomainService.cs:15</code> · Level 10 · class (sealed)</p>
+          <p>MMCA.ADC.Conference.Domain · <code>MMCA.ADC.Conference.Domain.Events</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventCascadeDeletionDomainService.cs:16</code> · Level 10 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><p><strong>What it is</strong>: the one implementation of
           <a href="#ieventcascadedeletiondomainservice"><code>IEventCascadeDeletionDomainService</code></a>. A stateless class that
           soft-deletes an event&#39;s <a href="#session"><code>Session</code></a>s, then its <a href="#sponsor"><code>Sponsor</code></a>s, then its
-          <a href="#activity"><code>Activity</code></a>s, then its <a href="#sessionasset"><code>SessionAsset</code></a>s, then the <a href="#event"><code>Event</code></a>
-          itself.</p>
+          <a href="#partner"><code>Partner</code></a>s, then its <a href="#activity"><code>Activity</code></a>s, then its <a href="#sessionasset"><code>SessionAsset</code></a>s,
+          then the <a href="#event"><code>Event</code></a> itself.</p>
           </li>
           <li><p><strong>Depends on</strong>: <a href="#ieventcascadedeletiondomainservice"><code>IEventCascadeDeletionDomainService</code></a>
-          (Level 9), <a href="#event"><code>Event</code></a>, <a href="#session"><code>Session</code></a>, <a href="#sponsor"><code>Sponsor</code></a>, <a href="#activity"><code>Activity</code></a>,
-          <a href="#sessionasset"><code>SessionAsset</code></a>, <a href="group-01-result-error-handling.html#result"><code>Result</code></a>. Its five
-          <code>using</code> directives (<code>:1-5</code>) are the whole dependency list, and none of them is an infrastructure
-          namespace.</p>
+          (Level 9), <a href="#event"><code>Event</code></a>, <a href="#session"><code>Session</code></a>, <a href="#sponsor"><code>Sponsor</code></a>, <a href="#partner"><code>Partner</code></a>,
+          <a href="#activity"><code>Activity</code></a>, <a href="#sessionasset"><code>SessionAsset</code></a>,
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>. Its five <code>using</code> directives (<code>:1-5</code>) are the
+          whole dependency list, and none of them is an infrastructure namespace.</p>
           </li>
           <li><p><strong>Concept</strong>: see <a href="#ieventcascadedeletiondomainservice"><code>IEventCascadeDeletionDomainService</code></a> for the
           domain-service rationale. This class is the smallest possible realization of it: no fields, no
-          constructor, one method. The class doc states the property that makes it safe to register as a
-          singleton, &quot;Pure domain service -- no infrastructure dependencies&quot; (<code>:11</code>), and being stateless it is
-          thread-safe by construction.</p>
+          constructor, a public <code>CascadeDelete</code> method plus one private helper. The class doc states the
+          property that makes it safe to register as a singleton, &quot;Pure domain service -- no infrastructure
+          dependencies&quot; (<code>:11</code>), and being stateless it is thread-safe by construction.</p>
           </li>
-          <li><p><strong>Walkthrough</strong>: <code>CascadeDelete(Event @event, IReadOnlyCollection&lt;Session&gt; sessions, IReadOnlyCollection&lt;Sponsor&gt; sponsors, IReadOnlyCollection&lt;Activity&gt; activities, IReadOnlyCollection&lt;SessionAsset&gt; sessionAssets)</code> (<code>:18-23</code>) runs five phases in a fixed order:</p>
+          <li><p><strong>Walkthrough</strong>: <code>CascadeDelete(Event @event, IReadOnlyCollection&lt;Session&gt; sessions, IReadOnlyCollection&lt;Sponsor&gt; sponsors, IReadOnlyCollection&lt;Partner&gt; partners, IReadOnlyCollection&lt;Activity&gt; activities, IReadOnlyCollection&lt;SessionAsset&gt; sessionAssets)</code>
+          (<code>:19-25</code>) runs five child phases through a shared helper, then the event, in a fixed order:</p>
           <ol>
-          <li><strong>Sessions first</strong> (<code>:28-33</code>): <code>foreach</code> session, call <code>session.Delete()</code> (BR-127; each session in
-          turn cascades to its own children per BR-55, per the inline comment at <code>:30</code>). The per-session
-          <code>Result</code> <strong>is</strong> inspected: <code>if (sessionResult.IsFailure) return sessionResult;</code> (<code>:31-32</code>) exits
-          immediately with that child&#39;s error.</li>
-          <li><strong>Then sponsors</strong> (<code>:37-42</code>): the identical shape over <code>sponsor.Delete()</code>, with the same
-          short-circuit (<code>:40-41</code>). The comment at <code>:35-36</code> records the intent: a sponsor that refuses to
-          delete leaves the event untouched.</li>
-          <li><strong>Then activities</strong> (<code>:47-52</code>): the same shape again over <code>activity.Delete()</code> (<code>:50-51</code>); the
-          comment at <code>:44-46</code> notes that leaving them behind would orphan rows the public activities page
-          still reads.</li>
-          <li><strong>Then session assets</strong> (<code>:58-63</code>, comment at <code>:54-57</code>): the same shape again over
-          <code>sessionAsset.Delete()</code>. Unlike the other three, session assets are not cascade-deleted through
-          the per-session loop in phase 1; the comment explains that they are their own aggregate, rooted on
-          the event through the denormalized <code>EventId</code> their blob names are also scoped by, and are deleted
-          here instead so the caller loads them once for the whole event rather than once per session. The
-          blob behind each file row is removed afterwards by the caller&#39;s scheduled delete command, not by
-          this method.</li>
-          <li><strong>Then the event</strong> (<code>:66</code>): <code>return @event.Delete()</code>, which itself cascades to the event&#39;s owned
+          <li><strong>Sessions first</strong>: <code>childResult = DeleteAll(sessions, s =&gt; s.Delete())</code> (<code>:39</code>; BR-127, each
+          session cascades to its own children per BR-55).</li>
+          <li><strong>Then sponsors</strong> (<code>:40-41</code>), <strong>then partners</strong> (<code>:42-43</code>), and <strong>then activities</strong> (<code>:44-45</code>):
+          the same shape over <code>sponsor.Delete()</code>, <code>partner.Delete()</code>, and <code>activity.Delete()</code>, each guarded
+          by <code>if (childResult.IsSuccess)</code> so the chain short-circuits on the first failure. The comment at
+          <code>:31-33</code> records the intent: sponsors, partners, and activities are all separate aggregates rooted
+          on the event, and one that refuses to delete leaves the event untouched, orphaning rows the public
+          pages still read.</li>
+          <li><strong>Then session assets</strong> (<code>:46-47</code>, comment at <code>:35-38</code>): <code>DeleteAll(sessionAssets, a =&gt; a.Delete())</code>. Unlike the other four, session assets are not cascade-deleted through the
+          per-session loop in phase 1; the comment explains that they are their own aggregate, rooted on the
+          event through the denormalized <code>EventId</code> their blob names are also scoped by, and are deleted here
+          instead so the caller loads them once for the whole event rather than once per session. The blob
+          behind each file row is removed afterwards by the caller&#39;s scheduled delete command, not by this
+          method.</li>
+          <li><strong>Failure check</strong> (<code>:48-49</code>): <code>if (childResult.IsFailure) return childResult;</code> exits with the
+          first child&#39;s error once all five phases have run.</li>
+          <li><strong>Then the event</strong> (<code>:52</code>): <code>return @event.Delete()</code>, which itself cascades to the event&#39;s owned
           children (rooms, event speakers, event question answers) per BR-72, and that <code>Result</code> becomes the
           method&#39;s return value.</li>
           </ol>
-          <p>Each <code>Delete()</code> also queues its aggregate&#39;s domain event
+          <p>The private static helper, <code>DeleteAll&lt;T&gt;(IEnumerable&lt;T&gt; items, Func&lt;T, Result&gt; delete)</code>
+          (<code>:55-66</code>), replaces what used to be four separately hand-rolled <code>foreach</code> loops: it iterates,
+          calls the supplied <code>delete</code> delegate, and returns the first failing <code>Result</code> or <code>Result.Success()</code>.
+          Each <code>Delete()</code> also queues its aggregate&#39;s domain event
           (<a href="#sponsorchanged"><code>SponsorChanged(Deleted)</code></a> for a sponsor, and the equivalent for sessions,
-          activities, session assets, and the event), which the unit of work dispatches after
+          partners, activities, session assets, and the event), which the unit of work dispatches after
           <code>SaveChangesAsync</code>.</p>
           </li>
           <li><p><strong>Why it&#39;s built this way</strong>: <code>[Rubric §8, Data Architecture]</code> (assesses whether a multi-entity write
@@ -4198,26 +4291,78 @@
           consistency story. The service aborts in memory, and
           <a href="group-18-conference-application.html#deleteeventhandler"><code>DeleteEventHandler</code></a> calls
           <code>SaveChangesAsync</code> <strong>only</strong> when the returned <code>Result</code> is a success
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/Delete/DeleteEventHandler.cs:82-84</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/Delete/DeleteEventHandler.cs:92-94</code>),
           so the already-applied <code>IsDeleted</code> flags on the earlier aggregates are discarded with the scoped
-          <code>DbContext</code> instead of being persisted. The inline comment at <code>:25-27</code> spells that contract out,
-          which matters: the safety depends on the <em>caller</em>, so a future consumer that saves unconditionally
-          would persist a half-deleted graph. <code>[Rubric §14, Testability]</code>: with no infrastructure to stub, the
-          whole behavior is exercised by passing domain objects and asserting <code>IsDeleted</code> and the queued domain
-          events.</p>
+          <code>DbContext</code> instead of being persisted. <code>[Rubric §1, SOLID]</code>: extracting <code>DeleteAll&lt;T&gt;</code> collapsed
+          four near-identical loops into one generic helper, so adding partners as a fifth cascaded child
+          aggregate needed one new call rather than a fifth copy of the loop body. <code>[Rubric §14, Testability]</code>:
+          with no infrastructure to stub, the whole behavior is exercised by passing domain objects and
+          asserting <code>IsDeleted</code> and the queued domain events.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: resolved through the interface by
           <a href="group-18-conference-application.html#deleteeventhandler"><code>DeleteEventHandler</code></a>, which loads the event
-          with its owned children (<code>DeleteEventHandler.cs:34-38</code>), its active sessions with their children
-          (<code>:38-43</code>), its active sponsors (<code>:47-52</code>), its active activities (<code>:56-61</code>), and its active session
-          assets, all <code>asTracking: true</code>, before calling <code>CascadeDelete</code> (<code>:64</code>). Unit-tested by
+          with its owned children (<code>DeleteEventHandler.cs:35-39</code>), its active sessions with their children
+          (<code>:38-43</code>), its active sponsors (<code>:47-52</code>), its active partners (<code>:60-63</code>), its active activities
+          (<code>:56-61</code>), and its active session assets, all <code>asTracking: true</code>, before calling <code>CascadeDelete</code>
+          (<code>:91</code>). Unit-tested by
           <a href="group-28-testing-infrastructure.html#eventcascadedeletiondomainservicetests"><code>EventCascadeDeletionDomainServiceTests</code></a>.</p>
           </li>
-          <li><p><strong>Caveats / not-in-source</strong>: the ordering (sessions, then sponsors, then activities, then session
-          assets, then event) is fixed by the method body and is not configurable; nothing in the source
-          explains why sessions precede sponsors, activities, and session assets, and since all four are
-          short-circuiting the choice only affects which error a caller sees when more than one would fail.</p>
+          <li><p><strong>Caveats / not-in-source</strong>: the ordering (sessions, then sponsors, then partners, then activities,
+          then session assets, then event) is fixed by the method body and is not configurable; nothing in the
+          source explains why sessions precede sponsors, partners, activities, and session assets, and since
+          all five are short-circuiting the choice only affects which error a caller sees when more than one
+          would fail.</p>
           </li>
+          </ul>
+          <h3 id="partnerinvariants">PartnerInvariants</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Domain · <code>MMCA.ADC.Conference.Domain.Partners</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Partners/PartnerInvariants.cs:13</code> · Level 6 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the domain rule set for the <a href="#partner"><code>Partner</code></a> aggregate. Four field-length
+          constants for a partner record and three <code>EnsureXxx</code> guards the aggregate calls before it mutates
+          anything.</li>
+          <li><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#commoninvariants"><code>CommonInvariants</code></a> (Level 5),
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> (Level 2), and <a href="#partnerdto"><code>PartnerDTO</code></a>
+          (Level 1) for the numbers.</li>
+          <li><strong>Concept</strong>: the same three-layer constant chain <a href="#speakerinvariants"><code>SpeakerInvariants</code></a>
+          introduces, with the identical doc comment stating it (<code>PartnerInvariants.cs:7-11</code>). All four
+          constants forward to <a href="#partnerdto"><code>PartnerDTO</code></a> rather than holding a literal, so the storage
+          schema and the domain rule cannot drift apart. Coverage is the notable gap here: only three of the
+          four constants have a matching guard, the same shortfall the Speaker and Sponsor siblings show.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><strong>Constants</strong> (<code>PartnerInvariants.cs:16-25</code>): <code>NameMaxLength</code> 200 (<code>:16</code>), <code>LogoUrlMaxLength</code> 2000
+          (<code>:19</code>), <code>DescriptionMaxLength</code> 2000 (<code>:22</code>), <code>WebsiteUrlMaxLength</code> 2000 (<code>:25</code>). The literals live
+          on <a href="#partnerdto"><code>PartnerDTO</code></a>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Partners/PartnerDTO.cs:18,21,24,27</code>).</li>
+          <li><code>EnsureNameIsValid(string name, string source)</code> (<code>:33-36</code>): the only <em>required</em> field check. A
+          <code>Result.Combine</code> of <code>CommonInvariants.EnsureStringIsNotEmpty</code> (<code>Partner.Name.Empty</code>) and
+          <code>CommonInvariants.EnsureStringMaxLength</code> (<code>Partner.Name.TooLong</code>).</li>
+          <li><code>EnsureLogoUrlIsValid(string? logoUrl, string source)</code> (<code>:45-46</code>): the <strong>optional-field shape</strong>, a
+          single call to <code>CommonInvariants.EnsureOptionalStringMaxLength</code> (<code>Partner.LogoUrl.TooLong</code>), so
+          absence is legal by construction and only a supplied value is length-checked.</li>
+          <li><code>EnsureWebsiteUrlIsValid(string? websiteUrl, string source)</code> (<code>:55-56</code>): the identical optional
+          shape against <code>WebsiteUrlMaxLength</code> (<code>Partner.WebsiteUrl.TooLong</code>). The value is a plain URL
+          string with no upload pipeline behind it, so only the storage constraint is enforced here.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: same rationale as <a href="#speakerinvariants"><code>SpeakerInvariants</code></a> and
+          <a href="#sponsorinvariants"><code>SponsorInvariants</code></a>: a <code>const int</code> reachable from the Domain layer lets the
+          outer layers depend inward on it rather than each re-typing a number, and the optional-field helper
+          keeps each single-rule guard to one expression instead of a hand-written null check.
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code>.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="#partner"><code>Partner</code></a>&#39;s private <code>Validate</code> helper, called from both <code>Create</code>
+          (<code>Partner.cs:159</code>) and <code>Update</code> (<code>Partner.cs:194</code>); the constants additionally feed
+          <code>PartnerConfiguration</code>&#39;s <code>HasMaxLength</code> calls
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Partners/PartnerConfiguration.cs</code>,
+          4 call sites) and <code>PartnerValidationRules</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Partners/Validation/PartnerValidationRules.cs</code>,
+          6 call sites). Unit-tested directly by <code>PartnerInvariantsTests</code>
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Domain.Tests/Partners/PartnerInvariantsTests.cs</code>).</li>
+          <li><strong>Caveats / not-in-source</strong>: <code>Description</code> has no matching <code>EnsureXxx</code> guard. It is enforced by the
+          application validator and the EF column width, not by a domain guard, so a caller that constructs a
+          <code>Partner</code> through the domain factory alone can exceed 2000 characters and only fail at
+          <code>SaveChangesAsync</code>.</li>
           </ul>
           <h3 id="speakerinvariants">SpeakerInvariants</h3>
           <blockquote>
@@ -4499,7 +4644,7 @@
           <a href="group-02-domain-building-blocks.html#domainentitystate"><code>DomainEntityState</code></a> and
           <a href="group-11-navigation-populators.html#navigationattribute"><code>NavigationAttribute</code></a> (Level 0). The
           identifier alias is <code>SpeakerIdentifierType = System.Guid</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:22</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:23</code>),
           the only Guid identity in the Conference module.</p>
           </li>
           <li><p><strong>Concept introduced, the cross-context link maintained by events rather than a foreign key.</strong>
@@ -4642,7 +4787,7 @@
           <a href="group-02-domain-building-blocks.html#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a> and
           <a href="group-11-navigation-populators.html#navigationattribute"><code>NavigationAttribute</code></a> (Level 0). Alias
           <code>SpeakerCategoryItemIdentifierType = int</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:21</code>).</li>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:22</code>).</li>
           <li><strong>Concept introduced, reactivation as an explicit contract.</strong> <code>[Rubric §8, Data Architecture]</code>
           assesses the interplay of soft delete with re-entry of the same logical row. The join implements
           <a href="group-02-domain-building-blocks.html#ireactivatable"><code>IReactivatable</code></a> (<code>:14</code>), and <code>Reactivate()</code>
@@ -4701,7 +4846,7 @@
           <a href="group-02-domain-building-blocks.html#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a> and
           <a href="group-11-navigation-populators.html#navigationattribute"><code>NavigationAttribute</code></a> (Level 0). Alias
           <code>SpeakerQuestionAnswerIdentifierType = int</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:23</code>).</li>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:24</code>).</li>
           <li><strong>Concept</strong>: the same child-entity shape as <a href="#speakercategoryitem"><code>SpeakerCategoryItem</code></a>, with one
           difference that is worth naming. This child <strong>does</strong> carry a mutable payload (<code>AnswerValue</code>), so it
           owns a validating <code>UpdateAnswer</code> method and re-runs the guard on every write. It does <strong>not</strong>
@@ -4814,7 +4959,7 @@
           <a href="group-01-result-error-handling.html#error"><code>Error</code></a> (Level 2),
           <a href="group-02-domain-building-blocks.html#domainentitystate"><code>DomainEntityState</code></a> (Level 0). The identifier
           alias is <code>SessionAssetIdentifierType = System.Guid</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:16</code>).
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17</code>).
           <code>EventId</code> and <code>SessionId</code> are scalar FKs to <a href="#event"><code>Event</code></a> and <a href="#session"><code>Session</code></a>;
           <code>UploadedBySpeakerId</code> is a nullable scalar FK to <a href="#speaker"><code>Speaker</code></a>.</li>
           <li><strong>Concept, a third identity pattern.</strong> <code>[Rubric §8, Data Architecture]</code> assesses how an aggregate&#39;s
@@ -4874,6 +5019,89 @@
           <code>DeleteSessionHandlerTests</code>. Unit-tested by <code>SessionAssetTests</code>
           (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Domain.Tests/SessionAssets/SessionAssetTests.cs</code>).</li>
           </ul>
+          <h3 id="partner">Partner</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Domain . <code>MMCA.ADC.Conference.Domain.Partners</code> . <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Partners/Partner.cs:19</code> . Level 8 . class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the aggregate root for a conference partner, a community organization or a special
+          partner (for example the venue host) that supports an event without buying a sponsorship package
+          (class doc, <code>Partner.cs:12-16</code>). A partner belongs to exactly one <a href="#event"><code>Event</code></a>, carries a
+          <a href="#partnertype"><code>PartnerType</code></a> (<code>Community</code> or <code>Special</code>) that drives which group of the public
+          partners band it appears in, and carries no children of its own.</li>
+          <li><strong>Depends on</strong>:
+          <a href="group-02-domain-building-blocks.html#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>
+          (Level 4), <a href="#partnerinvariants"><code>PartnerInvariants</code></a> (Level 6), <a href="#partnertype"><code>PartnerType</code></a>
+          (Level 0), <a href="#event"><code>Event</code></a> (Level 7, navigation only), <a href="#partnerchanged"><code>PartnerChanged</code></a>
+          (Level 3), <a href="group-01-result-error-handling.html#result"><code>Result</code></a> (Level 2),
+          <a href="group-02-domain-building-blocks.html#domainentitystate"><code>DomainEntityState</code></a> (Level 0),
+          <a href="group-02-domain-building-blocks.html#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a>
+          (Level 0), <a href="group-11-navigation-populators.html#navigationattribute"><code>NavigationAttribute</code></a>
+          (Level 0). The identifier alias is <code>PartnerIdentifierType = int</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:13</code>).</li>
+          <li><strong>Concept</strong>: the aggregate-root mechanics, the flat-childless shape, and the database-generated
+          identity are the same pattern <a href="#sponsor"><code>Sponsor</code></a> teaches, applied to a second, simpler kind of
+          event supporter. The class carries <code>[IdValueGenerated]</code> (<code>:18</code>), so partner IDs come from the
+          database rather than an externally supplied value. What is new for this part is the generic
+          write-side CRUD adoption: ADC&#39;s Conference module registers <code>Partner</code> as a fourth <code>AddEntityCrud</code>
+          aggregate alongside <code>Category</code>, <code>Activity</code>, and <code>Sponsor</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:159</code>),
+          which is the mechanism ADR-099 (Generic Write-Side Entity Commands) adds: the create, update, and
+          delete handlers come from the framework rather than being hand-written per aggregate, and a
+          <code>PartnerUpdateApplier</code> supplies the piece that is still aggregate-specific, translating the generic
+          update request into the guarded <code>Partner.Update(...)</code> call. The aggregate&#39;s own factory methods below
+          are unaffected: whichever caller reaches them, the same domain guards run.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><strong>Scalar state</strong> (<code>:21-40</code>), every setter <code>private set</code>: <code>Name</code> (<code>:21</code>), <code>PartnerType</code> (<code>:24</code>),
+          <code>LogoUrl</code> (<code>:27</code>), <code>Description</code> (<code>:30</code>), <code>WebsiteUrl</code> (<code>:33</code>), <code>Sort</code> (<code>:36</code>, display order within
+          the partner type), <code>EventId</code> (<code>:39</code>, the FK to the owning event).</li>
+          <li><strong>Navigation</strong> (<code>:42-43</code>): <code>[Navigation] public Event? Event { get; private set; }</code>, assigned by
+          <code>SetEvent(Event? @event)</code> (<code>:221</code>), the populator hook, the same shape <code>Sponsor</code> uses.</li>
+          <li><strong>EF constructor</strong> (<code>:46</code>): private, parameterless, assigns <code>Name = string.Empty</code> for definite
+          assignment. <strong>Private seven-parameter constructor</strong> (<code>:48-64</code>): reachable only through the factory.</li>
+          <li><code>Create(...)</code> (<code>:78-102</code>): validates through the private <code>Validate</code> helper (<code>:158</code>), returning
+          <code>Result.Failure&lt;Partner&gt;(result.Errors)</code> on any failure; reads <code>typeof(Partner).IsIdValueGenerated</code>
+          (<code>:92</code>) to decide whether the caller&#39;s <code>id</code> or a database-assigned value is used
+          (<code>Id = isIdValueGenerated ? default : id!.Value</code>, <code>:96</code>); raises
+          <code>PartnerChanged(DomainEntityState.Added, partner.Id, partner.Name)</code> (<code>:99</code>).</li>
+          <li><code>Update(...)</code> (<code>:115-137</code>): re-runs the same <code>Validate</code> call, assigns the six mutable fields, and
+          raises <code>PartnerChanged(Updated, ...)</code>. <code>EventId</code> is absent from the parameter list, so the owning
+          event is not updatable: moving a partner between events is a create plus a delete, not an update,
+          the same rule <a href="#sponsor"><code>Sponsor</code></a> enforces for the same reason.</li>
+          <li><code>Delete()</code> (<code>:141-149</code>): overrides the base soft-delete, calling <code>base.Delete()</code> first and only
+          raising <code>PartnerChanged(Deleted, Id, Name)</code> when that succeeded. No child cascade, because the
+          aggregate owns no children.</li>
+          <li><code>Validate(string name, string? logoUrl, string? websiteUrl, string source)</code> (<code>:154-158</code>), private:
+          a three-way <code>Result.Combine</code> of <code>PartnerInvariants.EnsureNameIsValid</code>,
+          <code>PartnerInvariants.EnsureLogoUrlIsValid</code>, and <code>PartnerInvariants.EnsureWebsiteUrlIsValid</code>. Called
+          identically from <code>Create</code> and <code>Update</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: a flat, childless aggregate sized to its own transaction (the same
+          rationale <a href="#sponsor"><code>Sponsor</code></a> states): partners are added and edited on their own cadence, so
+          pulling one into an event&#39;s transaction would widen it for no benefit. All three lifecycle
+          transitions raise the same <code>PartnerChanged</code> record differing only by <code>DomainEntityState</code>, so one
+          handler can react to any change; that shape plus a database-assigned id is exactly the surface the
+          generic <code>AddEntityCrud</code> registration expects, which is why <code>Partner</code> was a low-friction fourth
+          aggregate to add to it.</li>
+          <li><strong>Where it&#39;s used</strong>: created and updated through the generic ADR-099 commands, with
+          <code>PartnerUpdateApplier</code> supplying the update-side translation to <code>Partner.Update</code>; exposed over REST
+          by <code>PartnersController</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Partners/PartnersController.cs</code>);
+          filtered for public display by <code>GetPublicPartnerFilterHandler</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Partners/UseCases/GetPublicPartnerFilter/GetPublicPartnerFilterHandler.cs</code>);
+          projected to <a href="#partnerdto"><code>PartnerDTO</code></a> by <code>PartnerDTOMapper</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Partners/DTOs/PartnerDTOMapper.cs</code>);
+          persisted by <code>PartnerConfiguration</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Partners/PartnerConfiguration.cs</code>);
+          rendered by <code>PartnerDetail.razor.cs</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Partners/PartnerDetail.razor.cs</code>)
+          and surfaced on the home page, per <code>ADCHomeTests</code>. Cascade-deleted alongside its owning event, per
+          <code>DeleteEventHandlerTests</code>. Unit-tested by <code>PartnerTests</code>
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Domain.Tests/Partners/PartnerTests.cs</code>).</li>
+          <li><strong>ADRs</strong>: ADR-099 (Generic Write-Side Entity Commands), for the <code>AddEntityCrud</code> registration
+          (<code>Website/docs-src/adr/099-generic-write-side-entity-commands.md:20</code>).</li>
+          </ul>
           <h3 id="sponsor">Sponsor</h3>
           <blockquote>
           <p>MMCA.ADC.Conference.Domain · <code>MMCA.ADC.Conference.Domain.Sponsors</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sponsors/Sponsor.cs:18</code> · Level 8 · class (sealed)</p>
@@ -4892,7 +5120,7 @@
           <a href="group-02-domain-building-blocks.html#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a> (Level 0),
           <a href="group-11-navigation-populators.html#navigationattribute"><code>NavigationAttribute</code></a> (Level 0). The
           identifier alias is <code>SponsorIdentifierType = int</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:24</code>).</p>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:25</code>).</p>
           </li>
           <li><p><strong>Concept</strong>: the aggregate-root mechanics are taught on <a href="#category"><code>Category</code></a>; this section covers
           what is different here. <code>[Rubric §4, Domain-Driven Design]</code> (assesses whether each aggregate owns a
@@ -4996,7 +5224,7 @@
             <p class="doc-toc-title">On this page</p>
             <ul>
             <li><a href="#two-packages-one-bounded-context">Two packages, one bounded context</a></li>
-            <li><a href="#nine-aggregates-and-their-ownership-boundaries">Nine aggregates and their ownership boundaries</a></li>
+            <li><a href="#ten-aggregates-and-their-ownership-boundaries">Ten aggregates and their ownership boundaries</a></li>
             <li><a href="#the-aggregate-shape-taught-once">The aggregate shape, taught once</a></li>
             <li><a href="#invariants-business-rules-as-testable-units">Invariants, business rules as testable units</a></li>
             <li><a href="#domain-events-and-the-outbox-spine">Domain events and the outbox spine</a></li>

@@ -662,7 +662,7 @@ notifications capability, taught in G10.
 flowchart LR
     subgraph CONF["Conference (G17-G21)"]
         direction TB
-        C_D["Domain: Event/Session/Speaker/Category/Question/<br/>Sponsor/Activity aggregates"]
+        C_D["Domain: Event/Session/Speaker/Category/Question/<br/>Sponsor/Activity/Partner aggregates"]
         C_A["Application: CQRS handlers, validators, DTOs, Sessionize import, analytics"]
         C_I["Infrastructure: DbContext reg, EF configs, seeding"]
         C_P["API + .Contracts gRPC + extractable service host"]

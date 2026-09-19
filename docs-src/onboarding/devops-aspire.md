@@ -1308,25 +1308,30 @@ cluster, so adding or repointing a route is an appsettings edit plus a matching 
 
 ### The route table
 
-`Gateway/appsettings.json:80-256` declares **32 routes across 5 clusters** (clusters at
-appsettings.json:257-295), every destination an in-cluster service-discovery name over cleartext, never a
+`Gateway/appsettings.json:80-260` declares **33 routes across 5 clusters** (clusters at
+appsettings.json:262-300), every destination an in-cluster service-discovery name over cleartext, never a
 public URL:
 
-- Eight Identity routes to cluster `identity` (`http://identity`, appsettings.json:90-135, 258-266):
+- Eight Identity routes to cluster `identity` (`http://identity`, appsettings.json:90-135, 263-271):
   `/Auth/login` and `/Auth/register` (90-103), the `/Auth/{**catch-all}` that carries everything else
   (106-110), `/Users` (111-115), `/UserClaims` (116-120), `/Admin/Users` (121-125), `/Admin/Roles`
   (126-130) and `/.well-known/*` (131-135). Only the two credential-submission routes carry
   `"RateLimiterPolicy": "auth-tight"`, and they carry `"Order": -1` to win over the catch-all explicitly
   rather than by route-precedence inference (lines 94-95, 101-102).
-- Seventeen Conference prefixes (`/Events`, `/Sessions`, `/Speakers`, `/Rooms`, `/ConferenceCategories`,
+- Eighteen Conference prefixes (`/Events`, `/Sessions`, `/Speakers`, `/Rooms`, `/ConferenceCategories`,
   `/CategoryItems`, `/SessionSpeakers`, `/EventSpeakers`, `/SessionCategoryItems`,
   `/SessionQuestionAnswers`, `/EventQuestionAnswers`, `/SpeakerCategoryItems`, `/SessionSelection`,
-  `/Questions`, `/Sponsors`, `/Activities`, `/SessionAssets`) to cluster `conference`
-  (appsettings.json:136-220, 267-275).
+  `/Questions`, `/Sponsors`, `/Partners`, `/Activities`, `/SessionAssets`) to cluster `conference`
+  (appsettings.json:136-225, 272-280). `/Partners` is the newest of them
+  (`conference-partners`, appsettings.json:211-215), and it is the shape every new aggregate takes at the
+  edge: one prefix route, `"AuthorizationPolicy": "anonymous"`, the same `conference` cluster, no
+  forwarder config of its own, and a matching row in the test that pins the table
+  (`Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:162`). Nothing in the gateway image or its
+  `Program.cs` changed to carry it.
 - Five Engagement prefixes (`/Bookmarks`, `/CheckIns`, `/LivePolls`, `/Points`, `/SessionQuestions`) to
-  cluster `engagement` (appsettings.json:221-245, 276-284).
+  cluster `engagement` (appsettings.json:226-250, 281-289).
 - `/Notifications` to cluster `notification-rest` and `/hubs/*` to cluster `notification-hub`
-  (appsettings.json:246-255, 285-294). Both point at the same `http://notification` destination; they are
+  (appsettings.json:251-260, 290-299). Both point at the same `http://notification` destination; they are
   two clusters because a cluster is what carries the forwarder request config, and these two need
   different ones.
 
@@ -1360,7 +1365,7 @@ comment enumerates them, Gateway/Program.cs:15-31).
 
 The `identity`, `conference` and `engagement` clusters each state
 `"Version": "2.0"` with `"VersionPolicy": "RequestVersionExact"` in their own `HttpRequest` block
-(appsettings.json:262-265, 271-274, 280-283). Exact is load-bearing: on cleartext there is no ALPN to
+(appsettings.json:267-270, 276-279, 285-288). Exact is load-bearing: on cleartext there is no ALPN to
 negotiate, so `RequestVersionOrLower` silently downgrades to HTTP/1.1 and the `Http2`-only backend
 rejects it. That pair stays per-cluster rather than moving into the shared defaults, because **which**
 clusters speak h2c is a per-cluster fact, not a default (Program.cs:42-43).

@@ -252,7 +252,7 @@
           </li>
           <li><strong>Why it&#39;s built this way</strong>: a host exports the counter by registering the meter name, and the
           Aspire service defaults do that already (<code>AddMeter(&quot;MMCA.Common.BestEffort&quot;)</code> at
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:205</code>). Note the meter name is
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:219</code>). Note the meter name is
           duplicated there as a string literal rather than referenced, because the Aspire package has no
           reference to Application; the class doc (<code>BestEffort.cs:90-91</code>) records that duplication as
           deliberate.</li>
