@@ -1,7 +1,7 @@
 # ADR-010: Integration-Event Schema Versioning & Upcaster Policy
 
 ## Status
-Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, `OutputCacheEvictionRequested`, so the framework's convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see [ADR-090](090-event-upcaster-registration.md). Amended 2026-09-11: **payload purity** is now part of the contract and is build-gated, so an integration event may neither ship from outside a `*.Shared` assembly nor expose a type declared in a `*.Domain` assembly on its wire shape (see the amendment section at the end).
+Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, `OutputCacheEvictionRequested`, so the framework's convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see [ADR-090](090-event-upcaster-registration.md). Amended 2026-09-11: **payload purity** is now part of the contract and is build-gated, so an integration event may neither ship from outside a `*.Shared` assembly nor expose a type declared in a `*.Domain` assembly on its wire shape (see the amendment section at the end). Updated 2026-09-19 (Store now ships four concrete integration events, not one: `ProductVariantChanged`, `ProductInfoChanged`, `OrderFulfilled` and `CustomerErased`).
 
 ## Context
 Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
@@ -69,7 +69,17 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
   `EventConventionTestsBase` and run the identical rules against their own event assemblies:
   `EventConventionTests` in `MMCA.ADC.Architecture.Tests` (ADC's seven events, spread across the
   Identity, Conference and Engagement Shared assemblies the map registers) and
-  `MMCA.Store.Architecture.Tests` (Store's one), a matching `EventConventionTests` in
+  `MMCA.Store.Architecture.Tests`
+  (`Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/EventConventionTests.cs:3`, Store's
+  four events across three modules: `ProductVariantChanged`
+  (`Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:41`)
+  and `ProductInfoChanged`
+  (`Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductInfoChanged.cs:31`)
+  in Catalog Shared, `OrderFulfilled`
+  (`Source/Modules/Sales/MMCA.Store.Sales.Shared/Orders/IntegrationEvents/OrderFulfilled.cs:28`) in
+  Sales Shared, and `CustomerErased`
+  (`Source/Modules/Identity/MMCA.Store.Identity.Shared/Customers/IntegrationEvents/CustomerErased.cs:22`)
+  in Identity Shared), a matching `EventConventionTests` in
   `MMCA.Helpdesk.Architecture.Tests` (`ArchitectureTests.cs`) that gates the seed's
   `TicketOpenedIntegrationEvent`, and one in the two-module `MMCA.ECommerce` sample
   (`Tests/Architecture/MMCA.ECommerce.Architecture.Tests/ArchitectureTests.cs:38`, a local-only sample

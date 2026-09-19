@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-006: Database per Service · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-07). Supersedes the earlier &quot;deliberately one shared database&quot; stance. Clarified 2026-06-27: the single context class became one…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/006-database-per-service.html">
+  <title>ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-19).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/125-parameterized-sql-only.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-006: Database per Service">
-  <meta property="og:description" content="Accepted (2026-06-07). Supersedes the earlier &quot;deliberately one shared database&quot; stance. Clarified 2026-06-27: the single context class became one…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/006-database-per-service.html">
+  <meta property="og:title" content="ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate">
+  <meta property="og:description" content="Accepted (2026-09-19).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/125-parameterized-sql-only.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-006: Database per Service">
-  <meta name="twitter:description" content="Accepted (2026-06-07). Supersedes the earlier &quot;deliberately one shared database&quot; stance. Clarified 2026-06-27: the single context class became one…">
+  <meta name="twitter:title" content="ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate">
+  <meta name="twitter:description" content="Accepted (2026-09-19).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"006 · Database per Service","item":"https://ivanball.github.io/docs/adr/006-database-per-service.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"125 · Parameterized SQL Only, Enforced by a Fitness Gate","item":"https://ivanball.github.io/docs/adr/125-parameterized-sql-only.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">006 · Database per Service</span>
+        <span class="current">125 · Parameterized SQL Only, Enforced by a Fitness Gate</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -105,7 +105,7 @@
         <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
         <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
         <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
-        <li><a href="006-database-per-service.html" aria-current="page">006 · Database per Service</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
         <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
         <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
         <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
@@ -224,79 +224,167 @@
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
         <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
-        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="125-parameterized-sql-only.html" aria-current="page">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-006-database-per-service">ADR-006: Database per Service</h1>
+          <h1 id="adr-125-parameterized-sql-only-enforced-by-a-fitness-gate">ADR-125: Parameterized SQL Only, Enforced by a Fitness Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-07). Supersedes the earlier &quot;deliberately one shared database&quot; stance.
-          Clarified 2026-06-27: the single context class became <strong>one sealed context class per engine</strong> when
-          ADR-018 added the orthogonal engine axis (the <code>Name</code>/database axis here is unchanged).
-          Updated 2026-09-03: the legacy <code>AtlDevCon</code> archive database no longer exists (dropped 2026-09-02);
-          rollback now restores from a bacpac blob.
-          Revised 2026-09-09: PostgreSQL is a fourth engine
-          (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>), so the per-engine context set is
-          SQL Server / Cosmos / SQLite / PostgreSQL; the one-instance-per-database rule below is unchanged.</p>
+          <p>Accepted (2026-09-19).</p>
           <h2 id="context">Context</h2>
-          <p>When the modules were first extracted into independently-deployable services, all services in an
-          app still pointed at a <strong>single shared SQL database</strong> with a single <code>OutboxMessages</code> table. That
-          left one significant defect: every service&#39;s <code>OutboxProcessor</code> polled the same outbox table with no
-          origin filter, so the services <strong>raced</strong> to claim each other&#39;s rows (ADR-003 / ArchitecturalAnalysis
-          §4.4 #5). It also undermined the data-autonomy half of &quot;microservices&quot;: services that share a
-          database are not independently evolvable at the schema level.</p>
-          <p>MMCA.Common already provided the machinery for multiple physical data sources (<code>DataSourceResolver</code>,
-          <code>EntityDataSourceRegistry</code>, <code>DbContextFactory</code>, <code>CrossDataSourceDegradeConvention</code>), so the move was
-          a configuration/deployment change, not a framework rewrite.</p>
+          <p>The supported way to read data is the repository plus specification contract
+          (<a href="055-repository-and-specification-contract.html">ADR-055</a>), and LINQ answers almost everything. It does
+          not answer a window function, a recursive CTE or a vendor-specific operator, so a framework that
+          refuses hand-written SQL outright pushes those reads into whatever each module improvises. The
+          question is not whether raw SQL exists, it is what shape the one supported door has.</p>
+          <p>EF Core offers the dangerous and the safe form of every raw call as overloads that differ by one
+          word: <code>FromSqlRaw</code> beside <code>FromSql</code>, <code>SqlQueryRaw</code> beside <code>SqlQuery</code>, <code>ExecuteSqlRaw</code> and
+          <code>ExecuteSqlRawAsync</code> beside <code>ExecuteSql</code> and <code>ExecuteSqlInterpolated</code>. The <code>*Raw</code> half takes a plain
+          <code>string</code>, so a statement built by concatenating a caller-supplied value into a <code>WHERE</code> clause compiles
+          and runs, which makes injection a code-review question rather than a build failure, and every distinct
+          value produces its own statement text, so the server cannot reuse a plan. The interpolated half takes
+          a <code>FormattableString</code> and turns every hole into a command parameter. Worse, handing a
+          <code>FormattableString</code> to a raw overload compiles too and silently loses the parameters, which is exactly
+          the mistake a reviewer skims past
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/RawSqlConventionTestsBase.cs:12-19</code>).
+          Two call sites that look identical, opposite safety, and the difference is three letters.</p>
+          <p>The framework also runs on four engines (<a href="018-polyglot-persistence.html">ADR-018</a>), and one of them has
+          no SQL command surface at all, so &quot;raw SQL&quot; cannot be offered as a capability every host has. Before
+          v1.192.0 the landing shape for a raw scalar read was four keyless <code>ValReturn&lt;T&gt;</code> entities mapped to no
+          table and queried by nobody (<code>MMCA.Common/CHANGELOG.md:645-651</code>); the pair of additions this record
+          covers shipped in v1.192.0 (<code>MMCA.Common/CHANGELOG.md:530</code>, the interface at <code>:600-609</code> and the
+          fitness base at <code>:610-613</code>).</p>
           <h2 id="decision">Decision</h2>
-          <p>Adopt <strong>database-per-service</strong>: each service owns its own physical database with its own
-          <code>OutboxMessages</code> table.</p>
+          <p>Give raw SQL exactly one door whose signature makes the unsafe call uncompilable, and ban the four raw
+          EF members in module code with a fitness test rather than a guideline.</p>
           <ul>
-          <li><strong>One sealed concrete context class <em>per engine</em>, one instance per database.</strong> We do <strong>not</strong>
-          introduce per-module DbContext classes (see the &quot;Don&#39;t split SQLServerDbContext&quot; convention). The
-          default engine is SQL Server (<code>SQLServerDbContext</code>); ADR-018 later added <code>SqliteDbContext</code> and
-          <code>CosmosDbContext</code>, each a sealed subclass of the abstract <code>ApplicationDbContext</code>. The right context
-          class is materialized once per <code>DataSourceKey(Engine, Name)</code> by <code>PhysicalDbContextFactory</code>; entities
-          route to a physical source by logical name (<code>[UseDatabase]</code> / module namespace) via
-          <code>DataSourceResolver</code>, and to an engine by configuration base class (<code>[UseDataSource]</code>, ADR-018).
-          The forbidden split is <em>per-module</em>, not per-engine.</li>
-          <li><strong>ADC</strong> runs <code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>: locally on
-          the shared Aspire SQL container and in Azure as four Basic-tier databases. Those four are the
-          entire application data estate: the legacy <code>AtlDevCon</code> database was exported to the bacpac blob
-          <code>sql-archive/AtlDevCon-20260902.bacpac</code> and dropped on 2026-09-02, <code>infra/main.bicep</code> no longer
-          declares it, and that blob (not a live database) is the rollback source of record.</li>
-          <li><strong>Per-source outbox.</strong> Each database has its own <code>OutboxMessages</code>; the <code>OutboxProcessor</code> drains
-          only the sources its host owns, so no service ever sees another&#39;s rows.</li>
-          <li><strong>Cross-service references are scalar IDs, not FKs.</strong> <code>CrossDataSourceDegradeConvention</code> removes
-          FK constraints/navigations that would span databases; runtime joins flow through
-          <code>INavigationPopulator</code> (ADR-002), and cross-service consistency flows through the outbox + broker.</li>
-          <li>A host with no <code>DataSources</code> configuration still collapses onto one <code>Default</code> source, so the
-          single-database monolith deployment continues to work unchanged.</li>
+          <li><strong>The contract accepts <code>FormattableString</code> and nothing else.</strong> <code>IRawSqlQueryExecutor</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IRawSqlQueryExecutor.cs:23</code>)
+          has two entry points, <code>QueryAsync&lt;T&gt;</code> (<code>:31</code>) and <code>QuerySingleOrDefaultAsync&lt;T&gt;</code> (<code>:40</code>), both typed
+          <code>FormattableString</code>. A concatenated statement is a <code>string</code> and does not bind to either method, so
+          injection on this path is a compile error rather than a review item, and the statement text stays
+          stable across calls so the server keeps its plan (<code>:9-15</code>). <code>T</code> is a scalar or an unmapped DTO whose
+          properties match the selected columns by name (<code>:26</code>, <code>:34</code>). The interface lives in Application, so
+          a module reaches hand-written SQL without referencing EF Core.</li>
+          <li><strong>The relational limit is explicit and named, not implied.</strong> <code>EFRawSqlQueryExecutor</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/EFRawSqlQueryExecutor.cs:22</code>)
+          resolves the host&#39;s default physical source (<code>:45</code>) and throws <code>NotSupportedException</code> naming Cosmos
+          DB and the two alternatives when that source is not relational (<code>:46-52</code>), which is the same boundary
+          the interface documents (<code>IRawSqlQueryExecutor.cs:18-20</code>, <code>:30</code>, <code>:39</code>).</li>
+          <li><strong>The statement joins the caller&#39;s unit of work.</strong> The executor takes its context from the scoped
+          <code>IDbContextFactory</code> and calls EF&#39;s <code>Database.SqlQuery&lt;T&gt;</code> on it (<code>EFRawSqlQueryExecutor.cs:54</code>), so
+          the read shares the caller&#39;s connection and any transaction an <code>ITransactional</code> command opened. It is
+          registered scoped, one line below the singleton <code>IQueryableExecutor</code> and deliberately not a singleton
+          itself
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:126</code>, the sibling at
+          <code>:121</code> and the reason at <code>:123-125</code>), and is <code>internal</code>,
+          so the abstraction is the only public surface.</li>
+          <li><strong>The ban is a test, not a paragraph.</strong> <code>ModuleCode_UsesParameterizedSqlOnly</code>
+          (<code>RawSqlConventionTestsBase.cs:66</code>) scans the <code>.cs</code> files of every mapped module and fails on member
+          access to <code>FromSqlRaw</code>, <code>SqlQueryRaw</code>, <code>ExecuteSqlRaw</code> or <code>ExecuteSqlRawAsync</code> (<code>:115</code>), skipping
+          whole-line comment lines (<code>:105</code>). The failure message names the four members, says why they are
+          unsafe, and names the replacements (<code>:90-94</code>), so the test output is the instruction.</li>
+          <li><strong>A vacuous scan is a failure, not a pass.</strong> If the map declares no modules or the project folders
+          moved, the run finds no directories and the test fails with an explanation and a pointer to the
+          override (<code>:68-72</code>), so the gate cannot quietly stop checking anything.</li>
+          <li><strong>Scope is every project a module owns, not just its Application layer.</strong> The default scan walks the
+          repo&#39;s <code>Source/</code> tree for each project name the map attributes to a business module (<code>:48-63</code>),
+          because a raw statement is as dangerous in a module&#39;s Infrastructure as in its Application.</li>
+          <li><strong><code>AllowedFiles</code> is an adoption ratchet, and today it holds one entry across three repos.</strong> The base
+          declares it empty (<code>:39</code>) and skips a file whose name is listed (<code>:81</code>). MMCA.Common lists exactly
+          one file, <code>DbContextFactory.cs</code>, with the reason inline
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:25-32</code>):
+          the <code>SET IDENTITY_INSERT</code> statement has no parameterized form, because a T-SQL identifier cannot be a
+          command parameter, and the schema and table names are read off EF model metadata rather than caller
+          input
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:343-344</code>,
+          the OFF statement at <code>:353-354</code>). That call site also carries the matching Sonar <code>S2077</code> suppression
+          with the same reasoning (<code>:342</code>, restored at <code>:357</code>), so the exemption is stated twice and names its
+          justification in both places. MMCA.ADC declares no override, so it inherits the empty list
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:14-16</code>, with
+          the reason written in its class documentation at <code>:10-12</code>), and MMCA.Store declares the empty list
+          explicitly
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:18</code>).
+          Both application repos therefore start at zero: the rule blocks every new raw call site rather than
+          ratcheting down from an inherited set.</li>
+          <li><strong>All three repos subclass the same body.</strong> MMCA.Common declares no business modules, so its subclass
+          redirects the scan onto the framework&#39;s own Application and Infrastructure projects
+          (<code>RawSqlConventionTests.cs:17-22</code>), on the grounds that the one place shipping a raw-SQL surface is
+          the one place that must not leave a concatenated statement lying around as the example. MMCA.ADC
+          keeps the base scan and appends the thin Notification module, which is not a mapped module
+          (<code>RawSqlConventionTests.cs:24-33</code>). MMCA.Store takes the base scan unchanged
+          (<code>RawSqlConventionTests.cs:12</code>, <code>:15</code>).</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>Removes the shared-outbox race</strong> (the sharpest cost of the shared DB) without an <code>OriginService</code>
-          filter: physical isolation is simpler and stronger than a logical filter.</li>
-          <li><strong>Real data autonomy</strong>: each service can evolve and scale its schema independently; lifts the
-          former single-database scaling ceiling.</li>
-          <li><strong>Reuses existing framework extension points</strong>: no new DbContext classes, no business-logic rewrite.</li>
+          <li><strong>A signature outranks a guideline.</strong> Both halves of this decision aim at the same thing from
+          different directions: the contract removes the unsafe call from the type system, and the fitness test
+          removes the unsafe call from the code that never touches the contract. Either alone leaves a door
+          open (the interface does not stop a module calling EF directly; the test does not give a module
+          anywhere good to go), which is why both shipped in one release.</li>
+          <li><strong>Executable beats documented.</strong> This is the enforcement style
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> sets and
+          <a href="109-feature-by-folder-convention.html">ADR-109</a> applies to folder layout: a convention that exists
+          only in prose gets followed until somebody is in a hurry, while a failing test whose message names
+          the fix needs nobody to remember anything.</li>
+          <li><strong>Plan stability is the second prize and it is not small.</strong> The parameterized form keeps one
+          statement text across every value, so the server reuses its cached plan instead of compiling one per
+          distinct literal.</li>
+          <li><strong>An empty ratchet is worth stating.</strong> The <code>AllowedFiles</code> list exists so a repo with existing raw
+          call sites can adopt the rule the day it lands instead of after a cleanup. Two of the three repos
+          needed nothing, and the third needed one file for a statement T-SQL cannot parameterize at all, so
+          the exemption surface is a known, justified constant rather than a growing list.</li>
+          <li><strong>Relational-only is a stated limit rather than an assumption.</strong> Under
+          <a href="018-polyglot-persistence.html">ADR-018</a> a host can default to Cosmos DB, which speaks its own query
+          language. Naming the engine in the exception is more useful than a provider-level error, and it
+          points at the two real options (express the read with LINQ, or move the entity to a relational
+          source).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>No cross-database FKs or transactions.</strong> Relationships that span services degrade to scalar IDs;
-          consistency across services is eventual (outbox + broker), not transactional.</li>
-          <li><strong>More databases to provision, migrate, and back up.</strong> Each service has its own migrations project
-          and its own backup/restore concern.</li>
-          <li><strong>Referential integrity across services is the application&#39;s responsibility</strong> (compensating
-          indexes survive, FK enforcement does not).</li>
+          <li><strong><code>FormattableString</code> blocks the accident, not the intent.</strong> <code>FormattableStringFactory.Create</code> builds
+          a <code>FormattableString</code> out of an already-concatenated string with no interpolation holes, and the
+          executor accepts it like any other. The contract makes the careless path uncompilable and leaves a
+          deliberate one open, so this is a large reduction in exposure, not a proof of safety.</li>
+          <li><strong>Interpolating an identifier fails at the server.</strong> Every hole becomes a parameter, so a table or
+          column name interpolated into the statement produces an error at execution time rather than working.
+          That is the correct outcome and it is still a runtime failure, which is precisely why
+          <code>SET IDENTITY_INSERT</code> needed an exemption instead of a rewrite.</li>
+          <li><strong>The fitness test is a textual scan with the limits of one.</strong> The package carries no IL or Roslyn
+          dependency, and reflection cannot see member usage inside method bodies, so the rule reads source
+          text (<code>RawSqlConventionTestsBase.cs:21-28</code>). A match inside a string literal or a trailing comment is
+          a false positive that has to be parked in <code>AllowedFiles</code>, and the regex names exactly four EF members
+          (<code>:115</code>), so concatenated SQL reaching the database some other way (raw ADO.NET, a micro-ORM, a
+          stored procedure body) is not matched at all.</li>
+          <li><strong><code>AllowedFiles</code> matches on file name, not path</strong> (<code>:81</code>). Exempting <code>DbContextFactory.cs</code> exempts
+          every file with that name inside the scanned directories, which is a wider hole than the entry reads.</li>
+          <li><strong>The default scan covers module code only</strong> (<code>:48-63</code>). Host and service projects, migrations
+          projects and test projects are outside it unless a subclass adds them, which is what MMCA.Common&#39;s
+          subclass does for the framework projects and MMCA.ADC&#39;s does for its Notification module.</li>
+          <li><strong>One source, the default one.</strong> The executor resolves the host&#39;s default physical source
+          (<code>EFRawSqlQueryExecutor.cs:45</code>), so a statement that must run against a named non-default source has
+          no route through this interface today.</li>
+          <li><strong>The Cosmos refusal is discovered at runtime</strong> (<code>:46-52</code>). Nothing at compile time tells a module
+          author that the host it will be deployed into defaults to a non-relational engine.</li>
           </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="055-repository-and-specification-contract.html">ADR-055</a> (the repository plus specification path this
+          escape hatch sits beside, and the reason the hatch stays narrow),
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function style this rule is written in,
+          including the shared <code>*TestsBase</code> package all three repos subclass),
+          <a href="018-polyglot-persistence.html">ADR-018</a> (the four-engine model that makes &quot;relational only&quot; a real
+          constraint rather than a formality),
+          <a href="109-feature-by-folder-convention.html">ADR-109</a> (the same move applied to folder layout: a convention
+          becomes a test rather than a paragraph), ADR-006 (one context class per engine and one instance per
+          database, which is what the executor resolves its context through). Framework version and package
+          figures live in <code>MMCA.Common/FACTS.md</code>.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/006-database-per-service.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/125-parameterized-sql-only.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">
@@ -308,6 +396,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
             </ul>
           </nav>
         </aside>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -237,7 +239,8 @@
           ephemeral half continues unchanged in ADR-121; the body below is left in place as history.</p>
           <p>Previously: Accepted (2026-07-24). Revised 2026-08-23 (post-commit enqueue is recorded as two patterns, not one)
           and 2026-08-31 (three of the four command-handler enqueue sites inherit the save-then-enqueue
-          ordering from a shared base class instead of writing it): see the revisions at the end.</p>
+          ordering from a shared base class instead of writing it) and 2026-09-19 (the fourth site moved its
+          save into a distributed-lock helper): see the revisions at the end.</p>
           <h2 id="context">Context</h2>
           <p>Some requests trigger work that cannot run inside the request: an AI scoring pass over an event&#39;s
           sessions takes minutes and issues one paid API call per session, and a live-channel broadcast must
@@ -424,7 +427,9 @@
           sequence: it awaits <code>unitOfWork.SaveChangesAsync</code> at <code>:103</code>, logs at <code>:105</code>, and awaits
           <code>EnqueueSubmittedAsync(question)</code> at <code>:107</code>, whose <code>BestEffort.ExecuteAsync</code> body (<code>:130-131</code>)
           writes the queue at <code>:142</code> (approved) and <code>:157</code> (pending count). This is the one handler where an
-          edit that lifted the enqueue above the save would break the property with nothing to catch it.</li>
+          edit that lifted the enqueue above the save would break the property with nothing to catch it.
+          (<strong>Superseded by the Revision (2026-09-19)</strong>: the save named here is no longer a statement in
+          <code>HandleAsync</code>. The text is left in place as the record of what was true when written.)</li>
           <li><strong>Point 3 above is narrowed, not withdrawn.</strong> Its premise still holds:
           <code>TransactionalCommandDecorator</code> wraps only commands implementing <code>ITransactional</code> and passes
           everything else straight through
@@ -433,6 +438,35 @@
           <code>SaveChangesAsync</code> is the commit for all four sites. What no longer holds is its closing sentence:
           for the three base-class handlers a pipeline does keep the ordering, and the rule a future edit
           has to keep by hand lives in <code>SubmitQuestionHandler</code> alone.</li>
+          </ol>
+          <h2 id="revision-2026-09-19">Revision (2026-09-19)</h2>
+          <p><strong>The decision and the safety property are unchanged: post-commit work is still enqueued only once
+          the write is durable.</strong> What changed is where the save sits in the one remaining hand-written site.
+          The per-user open-question cap in <code>SubmitQuestionHandler</code> did not hold under a burst from one
+          account, because the count read and the insert are not one atomic statement, so the count, the
+          creation and the save moved together into a private helper that runs under a cross-replica claim on
+          (session, user) (<a href="108-distributed-lock-primitive.html">ADR-108</a>).</p>
+          <ol>
+          <li><strong><code>SubmitQuestionHandler</code> no longer saves inline in <code>HandleAsync</code>.</strong> It takes <code>IDistributedLock</code>
+          as a constructor parameter
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34</code>,
+          interface at <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IDistributedLock.cs:30</code>)
+          and calls <code>CreateUnderClaimAsync</code> at <code>:91</code>. That helper (<code>:142</code>) acquires the claim with
+          <code>TryAcquireAsync</code> at <code>:148</code> on the key built by <code>ClaimKey</code> at <code>:107</code>, answers a refused claim with
+          the same cap error as a refused count (<code>:151-154</code>), counts the open questions at <code>:159</code>, creates
+          and adds the question at <code>:172</code> and <code>:182</code>, and awaits <code>unitOfWork.SaveChangesAsync</code> at <code>:184</code>.</li>
+          <li><strong>The ordering is still written by hand, one level up.</strong> <code>HandleAsync</code> logs at <code>:97</code> and awaits
+          <code>EnqueueSubmittedAsync(question)</code> at <code>:99</code>, below the <code>CreateUnderClaimAsync</code> call that now
+          contains the save; the enqueue helper&#39;s <code>BestEffort.ExecuteAsync</code> body (<code>:205-206</code>) writes the queue at
+          <code>:217-218</code> (approved) and <code>:232-233</code> (pending count). Point 2 of the Revision (2026-08-31) holds
+          in substance: this is still the one site where the property lives in statement order rather than
+          in a base class, and the statement the enqueue has to stay below is now the helper call.</li>
+          <li><strong>The claim is scoped so the post-commit rule survives it.</strong> It is taken after the gRPC
+          live-window lookup, so no lock is held across a cross-service call, and it is released when the
+          helper&#39;s handle is disposed, before anything is enqueued (<code>:126-132</code> state both), with a
+          30-second time to live (<code>:50</code>) as the crash backstop. With no Redis configured the lock falls
+          back to its in-process implementation, so exclusion is per replica again (<code>:134-140</code>), which is
+          the same honest limit the &quot;dedup is per replica&quot; trade-off above states for in-process dedup.</li>
           </ol>
           
         <div class="doc-foot btn-row">
@@ -452,6 +486,7 @@
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-23">Revision (2026-08-23)</a></li>
             <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
+            <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             </ul>
           </nav>
         </aside>

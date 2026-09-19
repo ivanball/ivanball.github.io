@@ -5,6 +5,8 @@ Accepted (2026-07-06; revised 2026-07-21).
 Revised 2026-09-07 (MMCA.Common pins every action by commit SHA and every global tool by version,
 restores in locked mode, fails the vulnerability gate closed, and gates the release behind a
 protected environment plus a merged-main assertion).
+Revised 2026-09-19 (locked-mode restore described at its actual scope: the two explicit restore steps,
+CI `build-and-test` and release `publish`, not every job in either workflow).
 ## Context
 MMCA.Common is a published framework: it packs its NuGet packages and pushes them to GitHub Packages
 on every `v*` tag (release.yml:3-5), where the two production apps and the reference seed consume
@@ -117,10 +119,24 @@ The provenance chain gained the controls that make it reproducible under an atta
    `--version 18.11.0` in CI (`ci.yml:172`, `:336`). The SBOM generator in particular ran unpinned
    inside the job that goes on to publish, which put an unreviewed binary upstream of the artifact
    the SBOM describes.
-3. **Restores run in locked mode** (SEC-Common-63 / SEC-ADC-34). `dotnet restore MMCA.Common.slnx --locked-mode`
-   in CI (`ci.yml:129`, and the same flag on the other restore steps at `:103`, `:217`, `:296`) and
-   in the release (`release.yml:62`, `:163`). The lock files were committed but never enforced, so a
-   drifted graph silently re-resolved rather than failing.
+3. **The two gating restores run in locked mode** (SEC-Common-63 / SEC-ADC-34).
+   `dotnet restore MMCA.Common.slnx --locked-mode` is an explicit step in exactly two jobs: CI's
+   `build-and-test` (`ci.yml:120-129`, whose Build then runs `--no-restore` at `:133`) and the
+   release's `publish` (`release.yml:57-62`, whose Build runs `--no-restore` at `:69` and whose Test
+   and Pack then run `--no-build` at `:72` and `:75`). Those are the only two `--locked-mode`
+   restores in either workflow: the identical sentence at
+   `ci.yml:103`, `:217`, `:296`, `:395`, `:559`, `:714`, `:829` and at
+   `release.yml:163` is a comment inside a `setup-dotnet` cache block explaining the cache key, not a
+   restore command. Every other job that compiles restores implicitly, without the flag, from its
+   build, run, test or pack command: `build-maui` (`ci.yml:263`), `ui-e2e` (`:309`),
+   `performance-smoke` (`:410`), `consumer-source-build` (`:587`), `package-consumption` (`:725`),
+   `redis-integration` (`:845`), `postgresql-integration` (`:880`), `apphost-testing` (`:939`), and
+   the release's `publish-maui`, which has no restore step at all (`release.yml:178`). The FACTS
+   drift gate inside `build-and-test` restores implicitly too (`ci.yml:118`), because `build/facts`
+   sits outside `MMCA.Common.slnx` and carries no lock file. So the enforcement is deliberately
+   placed rather than universal: it covers the graph that gets built, audited, SBOM'd, packed and
+   pushed. The lock files were committed but never enforced anywhere, so a drifted graph silently
+   re-resolved on that path rather than failing.
 4. **The vulnerability gate fails closed** (SEC-Common-62). The audit step captures the tool's exit
    code and fails the job when `dotnet list --vulnerable` itself errors (`ci.yml:146-149`) instead of
    reading an empty log as a clean result, and it honors the same accepted-advisory list the build

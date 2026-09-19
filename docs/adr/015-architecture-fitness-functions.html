@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -258,7 +260,11 @@
           <code>:51</code>), is generated from source by <code>FactsGenerator</code> and is drift-gated in CI, so a figure transcribed
           here goes stale between audits while the generated one cannot. What this record states instead is the
           structure the figures describe: one shared rule library of abstract <code>*TestsBase</code> classes, subclassed
-          per repo. Six citations that moved are re-anchored. See Revision (2026-09-11) at the end.</p>
+          per repo. Six citations that moved are re-anchored. See Revision (2026-09-11) at the end.
+          Revised 2026-09-19: the public API gate covers two more projects than this record said, so the baseline
+          file count, the header-only list and the unshipped declaration figure are corrected in the live text
+          (eighteen baseline pairs, still one per published package except <code>MMCA.Common.UI.Maui</code>). See
+          Revision (2026-09-19) at the end.</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -405,7 +411,7 @@
           with a committed baseline</strong>, <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> 5.6.0
           (<code>MMCA.Common/Directory.Packages.props:226</code>), applied to every <code>Source</code> project through one
           <code>Directory.Build.props</code> ItemGroup rather than per csproj (<code>:86-93</code>), with <code>PublicAPI.Shipped.txt</code> and
-          <code>PublicAPI.Unshipped.txt</code> added as <code>AdditionalFiles</code> (<code>:91-92</code>). Sixteen projects carry the pair, one
+          <code>PublicAPI.Unshipped.txt</code> added as <code>AdditionalFiles</code> (<code>:91-92</code>). Eighteen projects carry the pair, one
           for every published package except the single exclusion below.
           <strong><code>MMCA.Common.UI.Maui</code> is deliberately excluded</strong> and the condition says why (<code>:82-84</code>): it lives
           outside <code>MMCA.Common.slnx</code> and builds only on the windows <code>build-maui</code> job across four MAUI TFMs
@@ -418,14 +424,15 @@
           <code>Directory.Build.props:7</code>), so they are errors by inheritance rather than by their own entry.
           Widening or breaking a package&#39;s shipped surface therefore becomes a reviewable diff in a text file
           instead of something a consumer discovers after the release.</p>
-          <p>The shipped baselines hold <strong>5,034 declarations</strong> across the sixteen files (5,050 non-empty lines, each
-          file opening with a <code>#nullable enable</code> header; two of them, <code>MMCA.Common.Gateway</code> and the <code>MMCA.Common</code>
-          metapackage, hold the header alone). The <code>PublicAPI.Unshipped.txt</code> files are no longer header-only
-          stubs: fourteen of the sixteen now carry <strong>1,486 declarations</strong> of surface added since their shipped
-          baseline was last written, the two exceptions being <code>MMCA.Common.UI.Web</code> and the <code>MMCA.Common</code>
+          <p>The shipped baselines hold <strong>5,034 declarations</strong> across the eighteen files (5,052 non-empty lines, each
+          file opening with a <code>#nullable enable</code> header; four of them, <code>MMCA.Common.AI</code>, <code>MMCA.Common.Gateway</code>,
+          <code>MMCA.Common.Testing.Aspire</code> and the <code>MMCA.Common</code> metapackage, hold the header alone). The
+          <code>PublicAPI.Unshipped.txt</code> files are no longer header-only
+          stubs: seventeen of the eighteen now carry <strong>2,710 declarations</strong> of surface added since their shipped
+          baseline was last written (2,728 non-empty lines), the one exception being the <code>MMCA.Common</code>
           metapackage. <strong>What is baselined is the surface as of this branch</strong>, which is whichever release
-          <code>MMCA.Common/FACTS.md:14</code> currently names (v1.154.0 when this revision was written; the figures above
-          were re-counted on 2026-09-03), so they cover the Section A additions this
+          <code>MMCA.Common/FACTS.md:14</code> currently names (v1.154.0 when this revision was first written; the figures
+          above were re-counted on 2026-09-19), so they cover the Section A additions this
           revision described plus every wave that followed, not a frozen picture of one release. The
           start version is no longer uncited: the gate shipped in v1.153.0, whose changelog entry names
           <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> on every in-slnx Source project with committed baselines as
@@ -690,6 +697,33 @@
           <p><strong>One figure stays unverified rather than corrected.</strong> The &quot;roughly 2,254&quot; suite size beside the 2,000
           floor is the CI step&#39;s own comment, not something a static read can confirm, and it is left as the
           estimate it always was. The floor itself is live.</p>
+          <h2 id="revision-2026-09-19-the-gate-covers-eighteen-projects-and-the-unshipped-side-nearly-doubled">Revision (2026-09-19): the gate covers eighteen projects, and the unshipped side nearly doubled</h2>
+          <p>No rule family joined or left the library in this entry and no decision changed. It corrects the
+          public-API gate&#39;s file and declaration figures, which had gone stale in the direction the gate&#39;s own
+          design predicts.</p>
+          <p><strong>The pair count is eighteen, not sixteen.</strong> <code>PublicAPI.Shipped.txt</code> / <code>PublicAPI.Unshipped.txt</code> pairs
+          now exist under seventeen <code>Source/&lt;tier&gt;/&lt;package&gt;/</code> directories plus <code>Source/MMCA.Common/</code> for the
+          metapackage. That is still every project under <code>Source/</code> except <code>MMCA.Common.UI.Maui</code>, which the
+          <code>Directory.Build.props</code> ItemGroup condition continues to exclude by name for the reason quoted in the
+          live text, so the rule the record states did not change: the two additions are new packages picking up
+          the gate automatically, not a widening of its scope. The published-package total stays with
+          <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> (<code>FACTS.md:19</code>) rather than being
+          transcribed here.</p>
+          <p><strong>Four shipped baselines are header-only now, not two.</strong> <code>MMCA.Common.AI</code> and
+          <code>MMCA.Common.Testing.Aspire</code> join <code>MMCA.Common.Gateway</code> and the <code>MMCA.Common</code> metapackage in holding
+          the <code>#nullable enable</code> header and nothing else. For the two new ones that is the expected state of a
+          package whose whole surface postdates the last baseline roll: everything they expose sits in their
+          unshipped file (104 and 94 declarations) waiting for a release to move it across.</p>
+          <p><strong>The unshipped side carries 2,710 declarations across seventeen of the eighteen files</strong>, where the
+          2026-09-03 entry read 1,486 across fourteen of sixteen, and the shipped side is unchanged at 5,034
+          declarations (the non-empty line total moves from 5,050 to 5,052 only because two more header lines
+          exist). <code>MMCA.Common.UI.Web</code> is no longer an exception: its unshipped file holds eight declarations, so
+          the only header-only unshipped file left is the metapackage&#39;s. The pattern the 2026-09-03 entry
+          described is now visible at scale: the shipped figure holds flat between releases while the unshipped
+          figure absorbs every wave, which is what a baseline that rolls over at release time is supposed to look
+          like.</p>
+          <p><strong>No citation was re-anchored in this entry</strong>, and the dated figures inside the earlier revisions stay
+          as they are, under the convention this record has used since 2026-09-01.</p>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
@@ -721,6 +755,7 @@
             <li><a href="#revision-2026-09-01-the-public-api-gates-real-coverage-and-re-anchored-citations">Revision (2026-09-01): the public API gate&#39;s real coverage, and re-anchored citations</a></li>
             <li><a href="#revision-2026-09-03-the-accepted-cycles-middle-node-the-feature-folder-move-re-anchored-citations">Revision (2026-09-03): the accepted cycle&#39;s middle node, the feature-folder move, re-anchored citations</a></li>
             <li><a href="#revision-2026-09-11-the-restated-counts-come-out-six-citations-move">Revision (2026-09-11): the restated counts come out, six citations move</a></li>
+            <li><a href="#revision-2026-09-19-the-gate-covers-eighteen-projects-and-the-unshipped-side-nearly-doubled">Revision (2026-09-19): the gate covers eighteen projects, and the unshipped side nearly doubled</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

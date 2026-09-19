@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -251,7 +253,10 @@
           runs ahead of the sweep, and the sweep&#39;s expiry pass is described as the backstop it now is; every
           <code>PaymentReconciliationService</code>, <code>CheckOutHandler</code> and <code>OrderPaymentFailedSagaHandler</code> citation is
           re-anchored, and the two sentences describing that saga handler as an inline notification are
-          corrected. See the Revision below.</p>
+          corrected. See the Revision below. Revised (2026-09-19): <code>CancelOrderHandler</code> no longer performs the
+          guarded transition and nothing else, so the compensation bullet records the one compensating action
+          that now runs inside the command (retiring the provider&#39;s checkout session) and the already-paid case
+          that refuses the cancellation outright; the <code>CancelOrderHandler</code> citations are re-anchored with it.</p>
           <h2 id="context">Context</h2>
           <p>Checkout spans a boundary no transaction covers. <code>CheckOutHandler</code> commits the order insert, the cart
           transition and the atomic conditional stock decrements in one local transaction
@@ -275,13 +280,27 @@
           or compensating action lives in its own handler. A <strong>periodic reconciliation sweep</strong> is the
           saga-timeout backstop for steps that depend on an external system.</p>
           <ul>
-          <li><strong>Compensation is a domain-event handler, never code in the command handler.</strong> <code>CancelOrderHandler</code>
-          performs the guarded transition and saves, and nothing else
-          (<code>.../Orders/UseCases/Cancel/CancelOrderHandler.cs:42-49</code>); restoring stock is
+          <li><strong>Compensation is a domain-event handler, and the one exception has to run before the commit.</strong>
+          <code>CancelOrderHandler</code> performs the guarded transition and saves
+          (<code>.../Orders/UseCases/Cancel/CancelOrderHandler.cs:55-67</code>), and owns exactly one compensating
+          action itself: retiring the payment provider&#39;s checkout session
+          (<code>CancelOrderHandler.cs:60</code>, <code>RetirePaymentSessionAsync</code> at <code>CancelOrderHandler.cs:90-124</code>). That
+          call runs only for an order still in <code>PaymentInitiated</code> with a session id
+          (<code>CancelOrderHandler.cs:92-95</code>); it asks the provider for the session&#39;s authoritative status and,
+          when the session is already paid, <strong>refuses the cancellation</strong> with
+          <code>OrderCancellationErrorCodes.PaymentAlreadyCompleted</code> instead of transitioning
+          (<code>CancelOrderHandler.cs:101-109</code>, the code at <code>.../Cancel/OrderCancellationErrorCodes.cs:18</code>), so
+          a paid order is left alone for a refund. Every other outcome (already expired, session gone,
+          provider unreachable) is a Warning and the cancellation proceeds, with the hosted page expired
+          best-effort on the way out (<code>CancelOrderHandler.cs:111-123</code>). It sits in the command rather than a
+          saga step because a saga step runs <em>after</em> the commit and could only discover the money once the
+          order was already <code>Cancelled</code> and a manual refund was the only remedy left. Everything that
+          compensates after the fact is still its own handler: restoring stock is
           <code>OrderCancelledSagaHandler : IDomainEventHandler&lt;OrderCancelled&gt;</code>
           (<code>.../Orders/Saga/OrderCancelledSagaHandler.cs:30-34</code>) and notifying the customer of a failed
           payment is <code>OrderPaymentFailedSagaHandler</code> (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:20-22</code>).
-          A new compensating action is a new handler, not an edit to the command.</li>
+          A new compensating action is a new handler unless it has to decide whether the commit may happen
+          at all.</li>
           <li><strong>Each handler runs in its own DI scope.</strong> Domain-event handlers are registered as singletons
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:184-189</code>), so every one
           opens its own scope through <code>IServiceScopeFactory</code> (<code>OrderCancelledSagaHandler.cs:40</code>,

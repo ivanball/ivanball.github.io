@@ -11,7 +11,9 @@ six in Store), eighteen of them routable. Revised 2026-09-03: re-anchored the ho
 AppHost, Helpdesk, gallery, cross-ADR and E2E citations to their current lines and folders (Engagement
 `CheckIns`, Conference `Public/Sessions` and `Public/Speakers`, Sales `Orders` and `ShoppingCarts`); split
 the prerender-skip guard into the three reasons its pages now state and listed the pages that were
-missing from it; and quoted ADR-051's invariant verbatim.
+missing from it; and quoted ADR-051's invariant verbatim. Revised 2026-09-19: recounted the list-page
+inheritors from source and set the count to twenty (thirteen in ADC, seven in Store), nineteen of them
+routable, matching the inventory ADR-094 records.
 
 ## Context
 Both web applications are Blazor Web Apps: a static server-rendered (SSR) prerender pass produces the
@@ -72,8 +74,8 @@ layer rather than by weakening the render mode.
   clears it instead of issuing a redundant API round-trip (`DataGridListPageBase.cs:513-522`), which the
   base's own comment records as the fix for the visible cancel-retry cycle caused by the
   SSR to Server to WASM transition (`DataGridListPageBase.cs:167-170`). The payload is a
-  `PersistedGridState` record of items plus total (`DataGridListPageBase.cs:1034`). **Nineteen types
-  inherit this base** (thirteen in ADC, six in Store), eighteen of them routable list pages plus ADC's
+  `PersistedGridState` record of items plus total (`DataGridListPageBase.cs:1034`). **Twenty types
+  inherit this base** (thirteen in ADC, seven in Store), nineteen of them routable list pages plus ADC's
   non-routable Engagement `AttendeeSearchPanel`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/AttendeeSearchPanel.razor.cs:16`),
   so the policy is written once and adopted by inheritance.
@@ -166,7 +168,7 @@ layer rather than by weakening the render mode.
   entire reason ADR-022's SSR cookie scheme exists, and it is what makes public browse pages render
   without waiting on a runtime boot. Disabling it would have removed the duplicate fetch by removing the
   feature; persisting the prerender result keeps both.
-- **Encoding the policy in a base class beats documenting it.** Nineteen types inherit the
+- **Encoding the policy in a base class beats documenting it.** Twenty types inherit the
   persist/restore path, the explicit render-mode registration, and the bounded prerender fetch by
   inheriting one type; the alternative was the same 30 lines repeated per page, which is what
   `CatalogBrowse` shows happening the moment a page falls outside the family.

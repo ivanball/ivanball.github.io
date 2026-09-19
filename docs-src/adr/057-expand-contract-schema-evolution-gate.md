@@ -3,7 +3,12 @@
 ## Status
 Accepted (2026-07-28). Revised 2026-08-01: the diff now fails **closed** in both repos (the `|| true`
 is gone and MMCA.Store's `build-and-test` checkout sets `fetch-depth: 0`), so the fail-open trade-off
-recorded on acceptance is now history rather than current behavior.
+recorded on acceptance is now history rather than current behavior. Revised 2026-09-19: the
+combined-archive migration projects the pathspec carve-out described have been deleted (both repos
+are per-module migration projects only), the guard steps are additionally gated on
+`needs.changes.outputs.code`, MMCA.Helpdesk's CI now has four jobs and one of them applies a
+migration in a generated seed app, and MMCA.Common now commits one real EF Core migration as a test
+fixture. The decision itself is unchanged.
 
 ## Context
 ADR-030 decides **who** applies a migration: every service host runs `DatabaseInitStrategy = Migrate`
@@ -55,8 +60,11 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
   `MMCA.ADC/.github/workflows/deploy.yml:225-226`). `*.Designer.cs` files are skipped explicitly
   (`MMCA.Store/.github/workflows/deploy.yml:313-315`, `MMCA.ADC/.github/workflows/deploy.yml:237-239`),
   the model snapshot is a modification rather than an addition so it never enters the list, and the
-  frozen combined-archive projects (`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer/`,
-  `MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer/`) fall outside the pathspec.
+  dot before the wildcard means only per-module migration projects match. Today that is every
+  migration project in both repos: `MMCA.Store.Migrations.SqlServer.{Catalog,Identity,Sales}` and
+  `MMCA.ADC.Migrations.SqlServer.{Conference,Engagement,Identity,Notification}`
+  (`MMCA.Store/Source/Hosting/`, `MMCA.ADC/Source/Hosting/`), so nothing in either tree sits outside
+  the pathspec.
 - **Only the `Up()` body is scanned.** The body is extracted with
   `awk '/protected override void Up\(/{flag=1} /protected override void Down\(/{flag=0} flag'`
   (`MMCA.Store/.github/workflows/deploy.yml:316`, `MMCA.ADC/.github/workflows/deploy.yml:240`), because
@@ -66,7 +74,13 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
   repos run only on `pull_request` (`MMCA.Store/.github/workflows/deploy.yml:178`,
   `MMCA.ADC/.github/workflows/deploy.yml:194`) and document as a required merge check
   (`MMCA.Store/CONTRIBUTING.md:37-38`, `MMCA.ADC/CONTRIBUTING.md:37-38`). Nothing re-checks the shape
-  on the push to `main` that deploys.
+  on the push to `main` that deploys. The step also carries the repo-wide change filter
+  `if: needs.changes.outputs.code == 'true'`
+  (`MMCA.Store/.github/workflows/deploy.yml:304`, `MMCA.ADC/.github/workflows/deploy.yml:227`), so a
+  PR the `changes` job classifies as docs-only skips the guard entirely. That is not a hole: `code`
+  goes false only when every changed file is Markdown
+  (`MMCA.Store/.github/workflows/deploy.yml:140`), and a PR that adds a migration `.cs` file always
+  sets it true.
 - **The common legitimate override is an index rebuilt in place.** Adding INCLUDE columns or a filter
   emits a `DropIndex` immediately followed by a `CreateIndex` under the same name, which a
   one-release-back revision reads as a superset of what it expects
@@ -79,16 +93,27 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
   `MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260725044543_AddOrderStatusAndCreatedOnIndexes.cs:13-17`.
 
 **Adoption is partial, and deliberately so at the deployed repos only.** MMCA.ADC and MMCA.Store both
-run the gate, in identical form. **MMCA.Helpdesk does not have it**: neither of its two CI jobs runs a
-migration step (`build-and-test` at `MMCA.Helpdesk/.github/workflows/ci.yml:14-60`, `template-smoke`
-at `:76-89`), and its tree
+run the gate, in identical form. **MMCA.Helpdesk does not have it**: none of its four CI jobs carries
+an expand/contract step (`changes` at `MMCA.Helpdesk/.github/workflows/ci.yml:17`, `build-and-test`
+at `:58`, `template-smoke` at `:120`, `postgresql-canary` at `:146`). One of them does run
+migrations: `postgresql-canary` installs `dotnet-ef` (`:180-186`) and then runs
+`build/templates/canary-postgresql.ps1` (`:191-193`), which scaffolds an `InitialCreate` and applies
+it against a real PostgreSQL service container
+(`MMCA.Helpdesk/build/templates/canary-postgresql.ps1:197`, `:222`). That proves a generated seed
+app migrates on a second engine; it says nothing about the shape of migrations this repo commits.
+Helpdesk's own tree
 already carries an unmarked `DropIndex` in an `Up()` body
 (`MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/Migrations/20260725121253_AddOutboxInboxRetentionIndexes.cs:13-16`),
 which is consistent: Helpdesk has no deploy workflow and therefore no revision-rollback model to
-protect. **MMCA.Common does not have it either, and cannot**: the framework owns no migrations
-(there is no `Migrations` directory anywhere in the repo) even though consumer migrations create the
-shared `OutboxMessages` / `InboxMessages` tables it defines, so a framework-driven shape change lands
-as an added migration in each consumer, which is where the gate sees it.
+protect. **MMCA.Common does not have it either, and cannot**: the framework ships no consumer-facing
+migrations, and there is no `Migrations` directory anywhere in the repo. The one real EF Core
+migration it commits is a test fixture, `CreateMigrationProofTable`
+(`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests.MigrationsFixture/CreateMigrationProofTable.cs:23-27`),
+a single additive `CreateTable` against the framework's SQLite context, kept in its own tiny library
+outside the test assembly so that only tests naming that assembly as their migrations assembly ever
+see it. Nothing a consumer deploys applies it. Consumer migrations still create the shared
+`OutboxMessages` / `InboxMessages` tables the framework defines, so a framework-driven shape change
+lands as an added migration in each consumer, which is where the gate sees it.
 
 ## Rationale
 - **Rollback is one-way for schema, so the check belongs where the drop is still cheap.** The only

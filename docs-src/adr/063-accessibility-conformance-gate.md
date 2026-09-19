@@ -14,7 +14,10 @@ source (fifteen assertions across nine classes), which adds the virtualized-grid
 `GridPageE2ETests` (a class the record had never listed) and the two notification inbox deep-link scans,
 corrects the signed-in set (the notification scans seed the fake auth cookie too, not the sessions scan
 alone), and refreshes the `E2ETestBase` helper, ADC `deploy.yml`, and Store `deploy.yml` deploy-job line
-anchors; no decision changed.
+anchors; no decision changed. Revised 2026-09-19: all three suite counts are re-measured from source
+(ADC now 45 scans, Store now 32, the gallery seventeen assertions across eleven classes), and the two
+shell-level gallery classes the record had never listed, `ShellPagesE2ETests` and
+`MobileNavKeyboardE2ETests`, are added to the narrative; no decision changed.
 
 ## Context
 Accessibility was documented before it was enforced. The narrative guide
@@ -92,7 +95,7 @@ the package's own workflow bases, and wire it as a required merge check and a de
   surface ratio (`.../MMCA.Common.UI/Theme/BrandColors.cs:26`, rationale at `:22-24`).
 
 Adoption differs per repo and is uneven on purpose. **MMCA.Common** scans its own backend-less gallery:
-fifteen assertions across nine classes over `GalleryAxeTestBase`
+seventeen assertions across eleven classes over `GalleryAxeTestBase`
 (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Infrastructure/GalleryAxeTestBase.cs:14`),
 covering login (`LoginPageE2ETests.cs:34`), register (`RegisterPageE2ETests.cs:36`), the primitives
 showcase (`ComponentsPageE2ETests.cs:80`), both dark-mode states (`DarkModeE2ETests.cs:30,:40`), the
@@ -104,12 +107,18 @@ other gallery page (`GridPageE2ETests.cs:82`, class at `:16`), and the password-
 pages added with [ADR-091](091-cache-backed-password-reset.md): forgot-password in both its form state and
 its confirmation state, which replaces the form and is therefore a distinct rendering
 (`ForgotPasswordPageE2ETests.cs:46` and `:60`), plus reset-password (`ResetPasswordPageE2ETests.cs:48`).
+Two shell-level classes cover states no page-specific test reaches: `Layout/ShellPagesE2ETests.cs:31`
+(class at `:16`) asserts the strict options over the three framework-owned shell routes in one theory
+(`/`, `/not-found`, `/forbidden`), so the seventeen assertions scan nineteen page states in total, and
+`Layout/MobileNavKeyboardE2ETests.cs:36` (class at `:16`) scans the home page at a 390x844 phone
+viewport with the hamburger menu open, the one state the rest of the suite misses because it runs at
+desktop width.
 The notification and sessions scans are the signed-in ones: both the notification pages and the shared
 devices/sessions page (`SessionsPageE2ETests.cs:34`, class at `:13`) carry a real `[Authorize]`, so those
 tests seed the gallery's cookie-toggled fake authentication scheme before navigating
-(`NotificationPagesE2ETests.cs:92`, `SessionsPageE2ETests.cs:39`) while the login, register, components
-and grid scans stay deliberately anonymous. The sessions scan covers the populated table, its
-current-device marker, and the per-device sign-out buttons under the strict options.
+(`NotificationPagesE2ETests.cs:92`, `SessionsPageE2ETests.cs:39`) while the login, register, components,
+grid, shell and mobile-nav scans stay deliberately anonymous. The sessions scan covers the populated
+table, its current-device marker, and the per-device sign-out buttons under the strict options.
 **MMCA.Store** subclasses all four Identity bases
 (`Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5`,
 `UserRegistrationTests.cs:5`, `ProfileManagementTests.cs:5`, `PasswordResetTests.cs:5`). **MMCA.ADC**
@@ -119,9 +128,9 @@ subclasses three of the four
 `E2ETestBase` directly
 (`ProfileManagementTests.cs:8`) because the ADC profile page supports only password change and account
 deletion, so it does not inherit the base's profile scan. Beyond the Identity bases each app carries a
-dedicated suite: ADC's `Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:27` holds 31 page
-scans (10 through `ScanGridAsync`, 21 strict) and Store's
-`Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17` holds 23 (6 grid, 17 strict).
+dedicated suite: ADC's `Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:27` holds 45 page
+scans (13 through `ScanGridAsync`, 32 strict) and Store's
+`Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17` holds 32 (9 grid, 23 strict).
 **MMCA.Helpdesk adopts none of it**: it pins the package version
 (`MMCA.Helpdesk/Directory.Packages.props:84`) but no project references it, and the repo has no E2E
 test project at all (`Tests/` holds only `Architecture` and `Modules`), so the seed has no browser
@@ -170,7 +179,7 @@ accessibility gate today.
   is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
   gate as backstop, but it does mean "deployed" does not always mean "axe ran on this commit".
 - **Consumer breadth is hand-maintained.** Nothing forces a new page into `AccessibilityTests`, so
-  coverage grows by discipline: 31 scans in ADC and 23 in Store today, against far larger page inventories.
+  coverage grows by discipline: 45 scans in ADC and 32 in Store today, against far larger page inventories.
 - **MMCA.Helpdesk has no accessibility gate.** The reference app demonstrates the framework's layers but
   not this contract, so a reader following the seed sees no worked example of adopting the scan.
 

@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-006: Database per Service · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-07). Supersedes the earlier &quot;deliberately one shared database&quot; stance. Clarified 2026-06-27: the single context class became one…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/006-database-per-service.html">
+  <title>ADR-124: The Server-Rendered UI Host Is Its Own Hardened Edge · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-09-19).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/124-blazor-circuit-ceiling-ui-edge.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-006: Database per Service">
-  <meta property="og:description" content="Accepted (2026-06-07). Supersedes the earlier &quot;deliberately one shared database&quot; stance. Clarified 2026-06-27: the single context class became one…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/006-database-per-service.html">
+  <meta property="og:title" content="ADR-124: The Server-Rendered UI Host Is Its Own Hardened Edge">
+  <meta property="og:description" content="Accepted (2026-09-19).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/124-blazor-circuit-ceiling-ui-edge.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-006: Database per Service">
-  <meta name="twitter:description" content="Accepted (2026-06-07). Supersedes the earlier &quot;deliberately one shared database&quot; stance. Clarified 2026-06-27: the single context class became one…">
+  <meta name="twitter:title" content="ADR-124: The Server-Rendered UI Host Is Its Own Hardened Edge">
+  <meta name="twitter:description" content="Accepted (2026-09-19).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"006 · Database per Service","item":"https://ivanball.github.io/docs/adr/006-database-per-service.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"124 · The Server-Rendered UI Host Is Its Own Hardened Edge","item":"https://ivanball.github.io/docs/adr/124-blazor-circuit-ceiling-ui-edge.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">006 · Database per Service</span>
+        <span class="current">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -105,7 +105,7 @@
         <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
         <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
         <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
-        <li><a href="006-database-per-service.html" aria-current="page">006 · Database per Service</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
         <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
         <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
         <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
@@ -223,7 +223,7 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
-        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html" aria-current="page">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
@@ -231,72 +231,217 @@
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-006-database-per-service">ADR-006: Database per Service</h1>
+          <h1 id="adr-124-the-server-rendered-ui-host-is-its-own-hardened-edge">ADR-124: The Server-Rendered UI Host Is Its Own Hardened Edge</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-07). Supersedes the earlier &quot;deliberately one shared database&quot; stance.
-          Clarified 2026-06-27: the single context class became <strong>one sealed context class per engine</strong> when
-          ADR-018 added the orthogonal engine axis (the <code>Name</code>/database axis here is unchanged).
-          Updated 2026-09-03: the legacy <code>AtlDevCon</code> archive database no longer exists (dropped 2026-09-02);
-          rollback now restores from a bacpac blob.
-          Revised 2026-09-09: PostgreSQL is a fourth engine
-          (<a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a>), so the per-engine context set is
-          SQL Server / Cosmos / SQLite / PostgreSQL; the one-instance-per-database rule below is unchanged.</p>
+          <p>Accepted (2026-09-19).</p>
           <h2 id="context">Context</h2>
-          <p>When the modules were first extracted into independently-deployable services, all services in an
-          app still pointed at a <strong>single shared SQL database</strong> with a single <code>OutboxMessages</code> table. That
-          left one significant defect: every service&#39;s <code>OutboxProcessor</code> polled the same outbox table with no
-          origin filter, so the services <strong>raced</strong> to claim each other&#39;s rows (ADR-003 / ArchitecturalAnalysis
-          §4.4 #5). It also undermined the data-autonomy half of &quot;microservices&quot;: services that share a
-          database are not independently evolvable at the schema level.</p>
-          <p>MMCA.Common already provided the machinery for multiple physical data sources (<code>DataSourceResolver</code>,
-          <code>EntityDataSourceRegistry</code>, <code>DbContextFactory</code>, <code>CrossDataSourceDegradeConvention</code>), so the move was
-          a configuration/deployment change, not a framework rewrite.</p>
+          <p><a href="019-rate-limiting.html">ADR-019</a> layers rate limiting, and <a href="088-gateway-edge-responsibilities.html">ADR-088</a>
+          makes the Gateway the layer that carries the outermost one. Both records describe traffic that arrives
+          through the Gateway. The server-rendered Blazor UI host is the case neither covers: it is a <strong>separate
+          externally reachable origin</strong> on its own Container Apps FQDN, so the Gateway&#39;s edge limiter guards the
+          Gateway&#39;s own hostname and never sees a single request to the front door a browser actually loads
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:11-16</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/UiRateLimitingSettings.cs:11-15</code>, and the same
+          statement at the registration site in <code>MMCA.ADC.UI.Web/Program.cs:118-121</code> and
+          <code>MMCA.Store.UI.Web/Program.cs:101-103</code>).</p>
+          <p>Two properties of this origin make that gap expensive rather than cosmetic.</p>
+          <p><strong>A page load here is not a cheap request.</strong> Under <a href="056-blazor-render-mode-strategy.html">ADR-056</a>&#39;s
+          Interactive Auto strategy the first render is always a Server circuit, so every page load opens one and
+          each open circuit holds live render state for as long as the connection lives
+          (<code>MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:13-19</code>, <code>MMCA.Store.UI.Web/Hardening/BoundedCircuitHandler.cs:13-19</code>).
+          An unauthenticated loop over the page and negotiate endpoints therefore accumulates server memory, not
+          just request volume, and the container it accumulates in is 0.25 vCPU / 0.5 GiB
+          (<code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:27-28</code>,
+          <code>MMCA.Store.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:27-28</code>).</p>
+          <p><strong>The framework knob that looks like the answer is not one.</strong> <code>CircuitOptions</code> exposes
+          <code>DisconnectedCircuitMaxRetained</code> and <code>DisconnectedCircuitRetentionPeriod</code>, and both bound only circuits
+          that have already DROPPED their connection and are being held for reconnect; nothing in <code>CircuitOptions</code>
+          bounds circuits that are open and connected (<code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:13-15</code>,
+          <code>MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:13-15</code>). A rate limiter does not close the gap either,
+          from the other direction: it bounds how fast requests ARRIVE, while a caller who opens circuits slowly
+          enough to stay inside the window still accumulates them
+          (<code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:10-13</code>).</p>
           <h2 id="decision">Decision</h2>
-          <p>Adopt <strong>database-per-service</strong>: each service owns its own physical database with its own
-          <code>OutboxMessages</code> table.</p>
+          <p>The server-rendered UI host defends itself, in three layers bound from two configuration sections the
+          host owns, in both ADC and Store.</p>
           <ul>
-          <li><strong>One sealed concrete context class <em>per engine</em>, one instance per database.</strong> We do <strong>not</strong>
-          introduce per-module DbContext classes (see the &quot;Don&#39;t split SQLServerDbContext&quot; convention). The
-          default engine is SQL Server (<code>SQLServerDbContext</code>); ADR-018 later added <code>SqliteDbContext</code> and
-          <code>CosmosDbContext</code>, each a sealed subclass of the abstract <code>ApplicationDbContext</code>. The right context
-          class is materialized once per <code>DataSourceKey(Engine, Name)</code> by <code>PhysicalDbContextFactory</code>; entities
-          route to a physical source by logical name (<code>[UseDatabase]</code> / module namespace) via
-          <code>DataSourceResolver</code>, and to an engine by configuration base class (<code>[UseDataSource]</code>, ADR-018).
-          The forbidden split is <em>per-module</em>, not per-engine.</li>
-          <li><strong>ADC</strong> runs <code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>: locally on
-          the shared Aspire SQL container and in Azure as four Basic-tier databases. Those four are the
-          entire application data estate: the legacy <code>AtlDevCon</code> database was exported to the bacpac blob
-          <code>sql-archive/AtlDevCon-20260902.bacpac</code> and dropped on 2026-09-02, <code>infra/main.bicep</code> no longer
-          declares it, and that blob (not a live database) is the rollback source of record.</li>
-          <li><strong>Per-source outbox.</strong> Each database has its own <code>OutboxMessages</code>; the <code>OutboxProcessor</code> drains
-          only the sources its host owns, so no service ever sees another&#39;s rows.</li>
-          <li><strong>Cross-service references are scalar IDs, not FKs.</strong> <code>CrossDataSourceDegradeConvention</code> removes
-          FK constraints/navigations that would span databases; runtime joins flow through
-          <code>INavigationPopulator</code> (ADR-002), and cross-service consistency flows through the outbox + broker.</li>
-          <li>A host with no <code>DataSources</code> configuration still collapses onto one <code>Default</code> source, so the
-          single-database monolith deployment continues to work unchanged.</li>
+          <li><p><strong>A ceiling on concurrently ACTIVE circuits, held by a singleton <code>CircuitHandler</code>.</strong>
+          <code>BoundedCircuitHandler</code> counts opens and closes and refuses the ones past <code>MaxActiveCircuits</code>
+          (<code>MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:37-39,53-71</code>,
+          <code>MMCA.Store.UI.Web/Hardening/BoundedCircuitHandler.cs:37-39,53-71</code>). It is registered as a <strong>singleton</strong>
+          so one count spans the replica: circuit handlers are resolved from each circuit&#39;s own scope, so a scoped
+          registration would count to one and cap nothing
+          (<code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:44-47,58</code>,
+          <code>MMCA.Store.UI.Web/Program.cs:93-94,99</code>). It runs last among the registered handlers
+          (<code>Order =&gt; int.MaxValue</code>), so a refusal happens after cheaper handlers have done their work rather than
+          in the middle of it (<code>MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:46-50</code>,
+          <code>MMCA.Store.UI.Web/Hardening/BoundedCircuitHandler.cs:46-50</code>).</p>
+          </li>
+          <li><p><strong>The refusal is a thrown exception, and that is the one place the <code>Result</code> pattern does not apply.</strong>
+          <code>CircuitHandler.OnCircuitOpenedAsync</code> returns <code>Task</code> and has no &quot;refuse&quot; return value, so a faulted task
+          is the only way to stop a circuit from starting; the code says so where it does it
+          (<code>MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:22-27</code>, the <code>Task.FromException</code> at <code>:65-67</code>, and the
+          same pair at <code>MMCA.Store.UI.Web/Hardening/BoundedCircuitHandler.cs:22-27,65-67</code>). The contract being
+          implemented belongs to the framework, so the framework&#39;s refusal vocabulary wins over the codebase&#39;s.
+          Refusal is observable: one Warning per refusal naming the ceiling
+          (<code>MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:88-91</code>, <code>MMCA.Store.UI.Web/Hardening/BoundedCircuitHandler.cs:88-91</code>).</p>
+          </li>
+          <li><p><strong>The count is race-safe by construction and cannot leak permits in either direction.</strong> The open path
+          increments first and rolls back on refusal, because reading and then incrementing would let two
+          simultaneous opens both observe the last free slot and both take it
+          (<code>MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:57-62</code>). The close path floors at zero rather than
+          trusting the pairing, because a close without a counted open would otherwise drive the count negative and
+          hand out permits forever (<code>:74-83</code>). Both are identical in Store
+          (<code>MMCA.Store.UI.Web/Hardening/BoundedCircuitHandler.cs:57-62,74-83</code>).</p>
+          </li>
+          <li><p><strong>Disconnected-circuit retention is tightened from the same section, as defence in depth.</strong>
+          <code>DisconnectedCircuitMaxRetained</code> drops from the framework&#39;s 100 to <strong>25</strong> in both hosts, because a retained
+          circuit holds the same state an active one does while serving nobody
+          (<code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:42-48</code>,
+          <code>MMCA.Store.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:41-47</code>). The retention <strong>period</strong> is where the two
+          apps deliberately differ: ADC keeps the framework&#39;s three minutes because a conference venue&#39;s shared wifi
+          drops connections for far longer than a home network does and an attendee walking between rooms should come
+          back to the session state they left (<code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:50-58</code>, 180
+          seconds), while Store cuts it to 60 seconds because a shopper who really did drop off wifi reconnects within
+          seconds (<code>MMCA.Store.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:49-55</code>).</p>
+          </li>
+          <li><p><strong>A UI-host-local per-IP fixed window CHAINED with a replica-wide concurrency ceiling, both rejecting 429.</strong>
+          The two limiters answer different questions, so a request must satisfy both:
+          <code>PartitionedRateLimiter.CreateChained</code> over a per-client-IP fixed window and a single-partition concurrency
+          limiter (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:157-163</code>,
+          <code>MMCA.Store.UI.Web/Hardening/UiRateLimitingExtensions.cs:152-158</code>). The rejection status is 429
+          (<code>.../UiRateLimitingExtensions.cs:150</code> ADC, <code>:145</code> Store). The concurrency half queues nothing
+          (<code>QueueLimit = 0</code>), so a saturated host sheds load instead of growing latency
+          (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:115-120</code>,
+          <code>MMCA.Store.UI.Web/Hardening/UiRateLimitingExtensions.cs:110-115</code>, rationale at
+          <code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:66-74</code>).</p>
+          </li>
+          <li><p><strong>Exemptions are what keep the limiter off the first real visitor rather than off the attacker.</strong> Health and
+          liveness probes are exempt, because throttling them turns a traffic spike into a failed probe and a container
+          restart; so are the two framework asset roots and any path whose last segment carries a file extension, since
+          a single page load pulls dozens of static files served from disk with an ETag
+          (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:24-35,51-60</code>,
+          <code>MMCA.Store.UI.Web/Hardening/UiRateLimitingExtensions.cs:24-30,46-55</code>). <code>/_blazor</code> deliberately has no
+          extension and no exemption, because the negotiate endpoint is exactly what opens a circuit
+          (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:48-49</code>,
+          <code>MMCA.Store.UI.Web/Hardening/UiRateLimitingExtensions.cs:43-44</code>). An unresolvable client IP <strong>fails open</strong>
+          rather than collapsing every unattributable request into one shared bucket, which would throttle an
+          in-process <code>TestServer</code> to a standstill (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:81-87</code>,
+          <code>MMCA.Store.UI.Web/Hardening/UiRateLimitingExtensions.cs:76-82</code>).</p>
+          </li>
+          <li><p><strong>Both limiters go in after forwarded headers and before anything that opens a circuit or renders a page.</strong>
+          <code>AddUiRateLimiting</code> at registration and <code>UseUiRateLimiting()</code> in the pipeline, so the partition key is the
+          caller&#39;s IP rather than the ingress&#39;s (<code>MMCA.ADC.UI.Web/Program.cs:127</code> and <code>:194-197</code>,
+          <code>MMCA.Store.UI.Web/Program.cs:107</code> and <code>:236-239</code>). The circuit ceiling is registered beside it, with the
+          retention half applied to <code>AddInteractiveServerComponents</code> from the same section so the two numbers cannot
+          drift apart (<code>MMCA.ADC.UI.Web/Program.cs:53,62</code> through
+          <code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:26-39,49-59</code>;
+          <code>MMCA.Store.UI.Web/Program.cs:78-88,95-99</code>).</p>
+          </li>
+          <li><p><strong>ADC and Store each ship their own copy, with the same section names and the same shape.</strong> Both bind
+          <code>UiRateLimiting</code> (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:36</code>,
+          <code>MMCA.Store.UI.Web/Hardening/UiRateLimitingSettings.cs:34</code>) and <code>BlazorCircuitLimits</code>
+          (<code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:20</code>,
+          <code>MMCA.Store.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:20</code>), both ship the limiter <strong>enabled</strong> by default
+          with one escape hatch for a load or capacity proof driven from a single runner IP
+          (<code>.../UiRateLimitingSettings.cs:38-43</code> ADC, <code>:36-41</code> Store; the early return that honours it at
+          <code>.../UiRateLimitingExtensions.cs:152-155</code> ADC, <code>:147-150</code> Store), and both carry <code>MaxActiveCircuits = 200</code>
+          and <code>GlobalConcurrencyLimit = 200</code>
+          (<code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:39-40</code>,
+          <code>MMCA.Store.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:38-39</code>,
+          <code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:75-76</code>,
+          <code>MMCA.Store.UI.Web/Hardening/UiRateLimitingSettings.cs:67-68</code>). The duplication is stated in the code as a
+          choice rather than an oversight: the shape is copied from the Gateway kit and declared locally <strong>because
+          <code>MMCA.Common.Gateway</code> is the reverse-proxy kit and a UI host is not a reverse proxy</strong>
+          (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:19-24</code>, which also names Store&#39;s copy as the identical
+          shape for the identical reason; <code>MMCA.Store.UI.Web/Hardening/UiRateLimitingSettings.cs:18-22</code>).</p>
+          </li>
+          <li><p><strong>The two copies are tuned differently, and the tuning is the point.</strong> ADC&#39;s per-IP window is <strong>1200 per
+          minute</strong>, four times the storefront&#39;s, because on conference day the attendees are physically in one venue
+          behind one NAT and present to this limiter as a SINGLE client IP rather than as 67 of them
+          (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:45-60</code>, window at <code>:62-64</code>). Store&#39;s is <strong>300 per
+          minute</strong>, set well above a single shopper because an office or mobile-carrier NAT presents many shoppers as
+          one IP (<code>MMCA.Store.UI.Web/Hardening/UiRateLimitingSettings.cs:43-54</code>, window at <code>:56-58</code>). ADC additionally
+          exempts <code>/hubs</code>, declared so the exemption stays true if a SignalR hub is ever fronted on this origin even
+          though nothing under it is served by this host today
+          (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:26-35</code>); Store&#39;s exempt list has no such entry
+          (<code>MMCA.Store.UI.Web/Hardening/UiRateLimitingExtensions.cs:30</code>). Every default is also written out explicitly
+          in each host&#39;s <code>appsettings.json</code>, so the deployed posture is stated rather than inherited
+          (<code>MMCA.ADC.UI.Web/appsettings.json:19-24,28-32</code>, <code>MMCA.Store.UI.Web/appsettings.json:20-25,35-39</code>).</p>
+          </li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>Removes the shared-outbox race</strong> (the sharpest cost of the shared DB) without an <code>OriginService</code>
-          filter: physical isolation is simpler and stronger than a logical filter.</li>
-          <li><strong>Real data autonomy</strong>: each service can evolve and scale its schema independently; lifts the
-          former single-database scaling ceiling.</li>
-          <li><strong>Reuses existing framework extension points</strong>: no new DbContext classes, no business-logic rewrite.</li>
+          <li><strong>A separate origin is a separate edge.</strong> The Gateway cannot defend a hostname it never receives a request
+          for, so the choice was between routing the UI through the Gateway and letting the UI carry its own limiter.
+          The host carries it, which leaves the browser&#39;s front door as the direct origin it already is
+          (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:11-16</code>).</li>
+          <li><strong>A circuit is resident state, so it needs a count and not a rate.</strong> The rate limiter and the circuit ceiling
+          bound different resources, and each leaves the other&#39;s failure mode open: this is why both exist rather than
+          one (<code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:9-15</code>).</li>
+          <li><strong><code>CircuitHandler</code> is the documented extension point that sees a circuit open and close</strong>, which is why the
+          count lives there rather than in middleware or in <code>CircuitOptions</code>
+          (<code>MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:18-19</code>).</li>
+          <li><strong>Throwing is the framework&#39;s own refusal vocabulary here.</strong> The client sees the standard Blazor reconnect UI
+          rather than a crashed page, and the count is decremented before the throw so a refusal never leaks a permit
+          (<code>MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:25-27,62-67</code>).</li>
+          <li><strong>The ceilings are abuse ceilings, not capacity plans.</strong> 200 active circuits per replica is derived from the
+          container the host runs in (0.25 vCPU / 0.5 GiB, up to two replicas, roughly 300 MiB left for circuit state
+          against a MudBlazor render tree of a few hundred kilobytes up to about a megabyte), and it sits far above real
+          demand because Interactive Auto moves a returning session to the WebAssembly runtime after the first render;
+          the busiest measured conference day peaked near 67 concurrent users against 76 accounts. The instruction that
+          follows from that framing is written next to the number: raise it only together with the container&#39;s memory
+          (<code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:26-40</code>,
+          <code>MMCA.Store.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:26-39</code>).</li>
+          <li><strong>Binding is validated at startup, and the hot path does not pay for it.</strong> Both sections go through
+          <code>ValidateDataAnnotations().ValidateOnStart()</code>, and the limiter then closes over the already-bound instance
+          rather than resolving <code>IOptions</code> on every request, precisely because an out-of-range value has already failed
+          the start-up validation (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:137-146</code>,
+          <code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:53-56</code>,
+          <code>MMCA.Store.UI.Web/Hardening/UiRateLimitingExtensions.cs:132-141</code>, <code>MMCA.Store.UI.Web/Program.cs:95-98</code>).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>No cross-database FKs or transactions.</strong> Relationships that span services degrade to scalar IDs;
-          consistency across services is eventual (outbox + broker), not transactional.</li>
-          <li><strong>More databases to provision, migrate, and back up.</strong> Each service has its own migrations project
-          and its own backup/restore concern.</li>
-          <li><strong>Referential integrity across services is the application&#39;s responsibility</strong> (compensating
-          indexes survive, FK enforcement does not).</li>
+          <li><strong>Both ceilings are per replica, in memory.</strong> The effective allowance is the configured number multiplied by
+          the replica count (two today), so two replicas carry an abuse ceiling of 400 circuits against a real peak of
+          well under 100. That is the same trade the Gateway kit documents and is accepted for the same reason: an edge
+          limiter has to answer in microseconds on every request, and a shared counter would put a network round trip in
+          front of the whole site (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:26-30</code>,
+          <code>MMCA.Store.UI.Web/Hardening/UiRateLimitingSettings.cs:25-28</code>,
+          <code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:35-36</code>).</li>
+          <li><strong>Two copies to keep aligned, with no mechanism keeping them aligned.</strong> The section names, the defaults, the
+          partition keys and the refusal semantics match by convention only; no test, analyzer or shared package holds
+          the two hosts to the same shape, so a fix applied to one is a fix applied to one. The copies have already
+          diverged structurally as well as numerically: ADC factored registration into
+          <code>BlazorCircuitLimitExtensions</code> (<code>MMCA.ADC.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:26,49</code>) while
+          Store still writes the same two registrations inline in <code>Program.cs</code>
+          (<code>MMCA.Store.UI.Web/Program.cs:78-88,95-99</code>), and Store has no such file.</li>
+          <li><strong>A refusal is an exception on a framework contract</strong>, so the diagnostic is a Warning log rather than a typed
+          result a caller can branch on, and the user-facing signal is the standard Blazor reconnect UI rather than a
+          message the app controls (<code>MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:22-27,88-91</code>).</li>
+          <li><strong>Fail-open on an unresolvable client IP is a deliberate hole.</strong> A caller the host cannot attribute takes the
+          no-limiter partition, which is the right call for an in-process <code>TestServer</code> and is a gap if anything else ever
+          reaches this host without a remote address (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:81-87</code>).</li>
+          <li><strong>The extension-bearing-path rule is a heuristic.</strong> Anything whose last segment has a file extension is exempt
+          from both limiters, which is how a static asset is told apart from a page route without depending on middleware
+          ordering; a page route that ever ends in a dotted segment would inherit that exemption silently
+          (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingExtensions.cs:42-59</code>).</li>
+          <li><strong>A per-IP window is the wrong shape for a venue, and is widened rather than replaced.</strong> ADC&#39;s fourfold
+          widening buys a margin over one NAT&#39;d venue at the cost of letting a single scripted client burn four times as
+          many requests before it is shed (<code>MMCA.ADC.UI.Web/Hardening/UiRateLimitingSettings.cs:48-57</code>).</li>
           </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="019-rate-limiting.html">ADR-019</a> (the layered rate-limiting posture this adds a layer to),
+          <a href="088-gateway-edge-responsibilities.html">ADR-088</a> (the Gateway edge whose limiter this host is outside of, and
+          which the registration comments name directly at <code>MMCA.ADC.UI.Web/Program.cs:118</code> and
+          <code>MMCA.Store.UI.Web/Program.cs:101</code>), <a href="056-blazor-render-mode-strategy.html">ADR-056</a> (the Interactive Auto
+          strategy that makes a first render a Server circuit and a returning session a WebAssembly one, which is what
+          makes the ceiling both necessary and generous), <a href="079-shared-http-middleware-pipeline.html">ADR-079</a> (the ordered
+          pipeline this middleware is placed into, after forwarded headers and before anything that renders).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/006-database-per-service.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/124-blazor-circuit-ceiling-ui-edge.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">
@@ -308,6 +453,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
             </ul>
           </nav>
         </aside>

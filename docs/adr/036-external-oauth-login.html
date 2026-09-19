@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange · MMCA · Ivan Ball-llovera</title>
+  <title>ADR-036: External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange · MMCA · Ivan Ball-llovera</title>
   <meta name="description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/036-external-oauth-login.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange">
+  <meta property="og:title" content="ADR-036: External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange">
   <meta property="og:description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/036-external-oauth-login.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange">
+  <meta name="twitter:title" content="ADR-036: External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange">
   <meta name="twitter:description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange","item":"https://ivanball.github.io/docs/adr/036-external-oauth-login.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange","item":"https://ivanball.github.io/docs/adr/036-external-oauth-login.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,13 +90,13 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</span>
+        <span class="current">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html" aria-current="page">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html" aria-current="page">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,19 +223,26 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-036-external-oauth-login-federated-googlegithub-with-local-jwt-exchange">ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</h1>
+          <h1 id="adr-036-external-oauth-login-federated-googlegithubapple-with-local-jwt-exchange">ADR-036: External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21, provider-email validation ahead of the by-email lookup documented 2026-07-25, one-provider-link-per-user conflict branch documented and the provider-columns migration attribution corrected 2026-09-01).
           Revised 2026-09-07 (an external account&#39;s empty credential is explicitly non-authenticating on both
-          login and change-password, an OAuth completion must match a flow this client started, and ADC&#39;s
+          login and change-password, an OAuth completion must match a flow this client started, ADC&#39;s
           link-by-email requires both a provider-verified address and a local
-          account that has no password).</p>
+          account that has no password, and ADC&#39;s speaker auto-link takes the same verified-email
+          requirement).
+          Revised 2026-09-19 (Apple joins Google and GitHub as a third config-gated provider, the by-email
+          link runs three guards rather than two, token issuance goes through the shared refresh-session
+          workflow, and an external create carries the provider&#39;s assertion into the new account&#39;s
+          confirmation state).</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s Identity story so far is entirely first-party: a user registers with an email and
           password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -246,24 +253,32 @@
           provider</strong> vouch for the user. The word &quot;federated&quot; already appears in the ADR set (ADR-007 / ADR-008),
           but it means service-to-service JWKS trust between our own hosts, not a Google or GitHub account
           signing a person in.</p>
-          <p>We wanted social sign-in (Google, GitHub) without giving up the invariant that the rest of the system
+          <p>We wanted social sign-in (Google and GitHub at the outset, Apple since) without giving up the invariant that the rest of the system
           depends on: <strong>inside the app, a user is always our local <code>User</code> carrying our own JWT.</strong> External
           identity should be an <em>entry path</em> that terminates in the same local token pair every other flow
           produces, not a parallel identity system that downstream services would have to learn to validate. It
           also had to be optional: most hosts, tests, and local dev runs have no OAuth secrets and must keep the
           JWT-only pipeline untouched, the same inert-until-configured posture as <code>AddPermissions</code> (ADR-020).</p>
           <h2 id="decision">Decision</h2>
-          <p>Add an opt-in external-login path that federates Google/GitHub sign-in at the edge and immediately
+          <p>Add an opt-in external-login path that federates Google, GitHub and Apple sign-in at the edge and immediately
           <strong>exchanges the external identity for the app&#39;s own local JWT pair</strong>, linking the external account to
           a local <code>User</code>.</p>
           <ul>
           <li><strong>Scheme registration is config-gated per provider.</strong> <code>AddExternalAuthProviders</code> reads the <code>OAuth</code>
-          section and enables Google and/or GitHub only when that provider&#39;s <code>OAuth:&lt;Provider&gt;:ClientId</code> is
-          present; with neither configured it returns without touching the pipeline, so <code>AddCommonAuthentication</code>&#39;s
-          JWT-only default is left exactly as it was. <code>AddAuthentication()</code> is called with no argument so it
-          appends schemes rather than resetting the JWT bearer default. A configured <code>ClientId</code> with a missing
-          <code>ClientSecret</code> fails fast at startup. This is the same signal the UI&#39;s <code>ConfigurationOAuthUISettings</code>
-          uses to light up the Google/GitHub buttons (<code>GoogleEnabled</code> / <code>GitHubEnabled</code>).</li>
+          section and enables Google, GitHub and/or Apple, each one only when that provider&#39;s
+          <code>OAuth:&lt;Provider&gt;:ClientId</code> is present
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:60-73</code>);
+          with none of the three configured it returns without touching the pipeline, so
+          <code>AddCommonAuthentication</code>&#39;s JWT-only default is left exactly as it was. <code>AddAuthentication()</code> is
+          called with no argument so it appends schemes rather than resetting the JWT bearer default. For
+          Google and GitHub a configured <code>ClientId</code> with a missing <code>ClientSecret</code> fails fast at startup.
+          Apple carries no static client secret: the handler mints a short-lived ES256 JWT from the
+          developer&#39;s private key (<code>GenerateClientSecret</code>, <code>ExternalAuthExtensions.cs:130</code>), so its
+          fail-fast set is <code>OAuth:Apple:TeamId</code> (<code>:131</code>), <code>OAuth:Apple:KeyId</code> (<code>:134</code>) and
+          <code>OAuth:Apple:PrivateKeyPem</code> (<code>:137</code>) instead, and its callback path is <code>/auth/callback/apple</code>
+          (<code>:143</code>). The same per-provider signal is what the UI&#39;s <code>ConfigurationOAuthUISettings</code>
+          uses to light up the Google/GitHub/Apple buttons (<code>GoogleEnabled</code> / <code>GitHubEnabled</code> /
+          <code>AppleEnabled</code>).</li>
           <li><strong>A short-lived cookie carries the external principal, nothing more.</strong> The provider callback signs
           into a dedicated <code>ExternalLogin</code> cookie scheme (<code>mmca_external_login</code>, HttpOnly, SameSite=Lax, a
           10-minute lifetime). It exists only to hand the external claims from the provider callback to the
@@ -297,24 +312,40 @@
           (<code>AuthenticationService.cs:192</code>). This address is the one email in the system no request-level
           validator has already gated (it arrives in an OAuth claim, not in a validated request), and the
           by-email lookup that follows (<code>AuthenticationService.cs:199</code>) compares against the validated <code>Email</code>
-          value object rather than the raw claim string. When an account already owns that email, two guards
-          run before anything is linked. First, <strong>one provider link per user</strong>: an account that is already
+          value object rather than the raw claim string. When an account already owns that email, three guards
+          run in <code>TryLinkProviderToExistingAccountAsync</code> before anything is linked. First, <strong>one provider link per user</strong>: an account that is already
           externally linked to a <em>different</em> provider (<code>IsExternalLogin</code> plus a <code>LoginProvider</code> mismatch,
           <code>AuthenticationService.cs:210</code>) is <strong>rejected</strong> with an <code>Error.Conflict</code> carrying code
           <code>Auth.ExternalProviderAlreadyLinked</code> (<code>AuthenticationService.cs:212</code>), because the aggregate holds a
           single <code>(LoginProvider, ProviderKey)</code> pair and linking a second provider would overwrite the first
           and strand the original login; the check runs ahead of the verifier, so saying no costs no external
           round trip. Second, the account-takeover guard: it asks
-          <code>IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync</code> (<code>AuthenticationService.cs:224</code>)
+          <code>IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync</code> (<code>AuthenticationService.cs:338-339</code>)
           whether the provider asserted the incoming email as verified, and when it did not it <strong>rejects</strong> the
-          sign-in with <code>Auth.ExternalEmailNotVerified</code> (defined inline at <code>AuthenticationService.cs:230</code>)
-          instead of linking, so an unverified provider assertion cannot claim an existing local account. Only
-          when both guards pass does it <strong>link</strong> the external provider to that account
-          (<code>User.LinkExternalProvider</code>, <code>AuthenticationService.cs:235</code>). When no account owns the email it
-          <strong>creates</strong> a new <code>Attendee</code> via <code>User.CreateExternal</code> (<code>AuthenticationService.cs:241</code>; an external
-          user has empty password hash/salt and carries <code>LoginProvider</code> / <code>ProviderKey</code>). In the link and
-          create cases it rotates the refresh token, saves, and mints the access token, so the caller receives
-          the same <code>AuthenticationResponse</code> shape as a local login.</li>
+          sign-in with <code>Auth.ExternalEmailNotVerified</code> (defined inline at <code>AuthenticationService.cs:344</code>)
+          instead of linking, so an unverified provider assertion cannot claim an existing local account.
+          Third, the <strong>pre-registration takeover guard</strong>: an account that still signs in with a password
+          (<code>User.HasLocalPassword</code>, checked at <code>AuthenticationService.cs:356</code>) is <strong>rejected</strong> with
+          <code>Auth.ExternalLinkRequiresLocalSignIn</code> (<code>:359</code>), because a provider-verified address proves only
+          the provider&#39;s side and nothing proves the local row&#39;s address was ever confirmed (the reasoning is
+          in the 2026-09-07 revision, item 3). Only
+          when all three guards pass does it <strong>link</strong> the external provider to that account
+          (<code>User.LinkExternalProvider</code>, <code>AuthenticationService.cs:364</code>). When no account owns the email it
+          <strong>creates</strong> a new <code>Attendee</code> via <code>User.CreateExternal</code> (<code>AuthenticationService.cs:272</code>; an external
+          user has empty password hash/salt and carries <code>LoginProvider</code> / <code>ProviderKey</code>). The create path
+          asks the same verifier first (<code>AuthenticationService.cs:265-266</code>), so the verifier runs on both
+          branches: the provider&#39;s assertion does not gate the create (GitHub asserts nothing, and refusing
+          would close GitHub sign-up), but it is passed to <code>User.CreateExternal</code> as a sixth <code>emailVerified</code>
+          argument and rides the <code>UserRegistered</code> event. It also settles the account&#39;s confirmation state
+          (ADR-116): a verified assertion starts the account confirmed
+          (<code>IsEmailConfirmed = emailVerified</code>,
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:271</code>), while a provider
+          that asserts nothing starts it unconfirmed and it receives a confirmation link like a local
+          registration. In the link and create cases the exchange then calls <code>IssueTokensAsync</code>
+          (<code>AuthenticationService.cs:304</code>), which opens a refresh <strong>session</strong> for the device through the
+          shared workflow (hash at rest, per-user cap, rotation chain) instead of stamping a plaintext
+          refresh token on the aggregate, so the caller receives the same <code>AuthenticationResponse</code> shape as a
+          local login.</li>
           <li><strong>The linkage is two nullable columns and a filtered unique index.</strong> <code>User.LoginProvider</code>
           (<code>varchar(50)</code>) and <code>User.ProviderKey</code> (<code>varchar(256)</code>) are null for local accounts;
           <code>IsExternalLogin</code> is derived from <code>LoginProvider is not null</code>. In ADC&#39;s per-service Identity database
@@ -322,8 +353,9 @@
           <code>InitialCreate</code> migration
           (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260606053130_InitialCreate.cs:63</code>,
           index at <code>20260606053130_InitialCreate.cs:100</code>), so two external identities cannot map to the same
-          local account while local (null,null) accounts are unconstrained. (ADC&#39;s <code>Source/Hosting/</code> carries only
-          the four per-module migration projects, Identity, Conference, Engagement and Notification, so the
+          local account while local (null,null) accounts are unconstrained. (ADC&#39;s <code>Source/Hosting/</code> carries
+          four per-module migration projects, Identity, Conference, Engagement and Notification, alongside
+          <code>MMCA.ADC.AppHost</code>, so the
           Identity database&#39;s own <code>InitialCreate</code> is the only place these columns are created: there is no
           standalone provider-fields migration and no combined single-DB migration project in the repo.)
           <code>User.Anonymize</code> clears both fields on erasure (ADR-005).</li>
@@ -385,7 +417,7 @@
           <code>email_verified</code> claim passes the guard; GitHub&#39;s OAuth flow asserts nothing, so a GitHub sign-in
           whose email matches an existing account is rejected with <code>Auth.ExternalEmailNotVerified</code>, not linked.
           The framework itself still performs no such check: <code>Auth.ExternalEmailNotVerified</code> is defined inline
-          in ADC&#39;s override (<code>AuthenticationService.cs:230</code>), and a non-adopting host (Store, Helpdesk) gets only
+          in ADC&#39;s override (<code>AuthenticationService.cs:344</code>), and a non-adopting host (Store, Helpdesk) gets only
           the framework&#39;s not-supported default (<code>Auth.ExternalLoginNotSupported</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:139</code>), so the guard is
           ADC&#39;s own edge, not a framework guarantee.</li>
@@ -401,7 +433,7 @@
           linked, or at Forgot password to set a local one (<code>AuthenticationService.cs:214</code>).</li>
           </ul>
           <h2 id="revision-2026-09-07">Revision (2026-09-07)</h2>
-          <p>Three changes from the 2026-09-07 security review.</p>
+          <p>Four changes from the 2026-09-07 security review.</p>
           <ol>
           <li><strong>The empty credential an external account carries is explicitly non-authenticating</strong>
           (SEC-Common-01). This record already said an external-login account is created with no password;

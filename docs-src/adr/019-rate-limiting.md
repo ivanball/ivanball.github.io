@@ -13,6 +13,11 @@ Revised 2026-09-07 (the gRPC exemption keys on endpoint metadata and the negotia
 instead of a caller-set header; anonymous `/hubs` traffic is metered per IP; ADC's tighter gateway
 policy is scoped to the two credential-submission routes; and a trusted-internal-caller exemption
 generalizes the synthetic-traffic bypass).
+Revised 2026-09-19 (the Decision is brought in line with the two revisions below and with the
+current `auth-ip` surface: the gRPC exemption reads endpoint metadata rather than a content type,
+anonymous hub traffic is metered before the anonymous exemption applies, the second global
+partition key is the subject claim, and `auth-ip` now covers password reset and email confirmation
+alongside login and register).
 ## Context
 Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
 Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -35,12 +40,15 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
    (`MMCA.Common.API`) installs a `GlobalLimiter` (active on every request through `UseRateLimiter`)
    that:
    - **Exempts infrastructure traffic** outright (`NoLimiter`): `/health`, `/alive`, JWKS / OIDC
-     discovery (`/.well-known/*`), and gRPC inter-service calls (`application/grpc` content type).
-     These are legitimately high-frequency.
-   - **Exempts anonymous traffic** (`NoLimiter`): unauthenticated requests are not counted, for the
-     three reasons above.
+     discovery (`/.well-known/*`), and gRPC inter-service calls, recognized from the routed
+     endpoint's gRPC metadata rather than from the caller-set `application/grpc` content type (see
+     the Revision (2026-09-07)). These are legitimately high-frequency.
+   - **Exempts anonymous traffic** (`NoLimiter`) for the three reasons above, with one metered
+     exception: an anonymous request to a configured hub path prefix is counted per client IP at
+     `AnonymousHubPermitLimit` first, and only every other anonymous request falls through to the
+     exemption (see the Revision (2026-09-07)).
    - **Caps each authenticated caller** to `globalPermitLimit` (default 300) requests per fixed
-     one-minute window, partitioned by identity name, then the `user_id` claim, then remote IP,
+     one-minute window, partitioned by identity name, then the subject (`sub`) claim, then remote IP,
      rejecting overage with `429 Too Many Requests`.
 2. **Anonymous abuse is handled by the right-shaped control, not the global limiter.** Public reads
    are served from the output cache (`UseOutputCache`; ADC's Conference service defines
@@ -52,9 +60,13 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
    also registers the named policy `RateLimitPolicyAuthIp` (`"auth-ip"`): a fixed one-minute window
    keyed on the client IP, `authIpPermitLimit` (default 30) requests, overage rejected with `429`.
    Unlike the other named policies it is not left to each app to attach. `AuthControllerBase`
-   (`MMCA.Common.API`) decorates `LoginAsync` and `RegisterAsync` with
-   `[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]`, so any consumer that
-   inherits the base gets it without opting in. **What an override inherits, settled empirically
+   (`MMCA.Common.API`) decorates `LoginAsync` and `RegisterAsync`, and
+   `PasswordResetAuthControllerBase` decorates the `forgot-password` and `reset-password` actions,
+   all four with `[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]`, so
+   any consumer that inherits either base gets them without opting in. The apps extend the same
+   policy to the two anonymous email-confirmation actions the framework bases do not own
+   (`send-email-confirmation` and `confirm-email` on each `EmailConfirmationController`, in both
+   Store and ADC Identity). **What an override inherits, settled empirically
    (2026-08-13):** `EnableRateLimitingAttribute` leaves `AttributeUsage.Inherited` at its default of
    `true`, and a derived override therefore still sees the base attribute through
    `GetCustomAttributes(inherit: true)`, so a bare override very likely retains the policy rather
@@ -65,9 +77,9 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
    both the base decoration and the inherited-on-an-override case, and a Store integration test that
    reads the booted host's `EndpointDataSource` and asserts `POST /Auth/register` carries the
    `auth-ip` policy in its metadata (the only check independent of the reflection question). It
-   exists because the other two layers leave one hole between them: the global limiter
-   no-ops for anonymous traffic and the lockout is keyed per email, so a password spray (one password,
-   many emails) from a single source was otherwise unthrottled. Three details are deliberate:
+   exists because the other two layers leave one hole between them: the global limiter no-ops for
+   anonymous traffic outside the hub paths and the lockout is keyed per email, so a password spray
+   (one password, many emails) from a single source was otherwise unthrottled. Three details are deliberate:
    `RefreshAsync` is **not** throttled (renewal is automatic and periodic, and Blazor Server circuits
    issue it server-side from the UI host's IP); a request with no attributable IP gets `NoLimiter`
    rather than sharing one bucket with every other such request, mirroring the global limiter's
@@ -96,13 +108,16 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
   behind one IP, and public reads served from the output cache, an anonymous IP cap would throttle
   legitimate visitors at scale while barely protecting an already-cached backend.
 - **Right control per threat.** Brute-force is an auth concern answered by a per-email lockout plus a
-  per-IP cap on the two endpoints that carry it; general overload is a per-user request cap;
+  per-IP cap on the anonymous credential endpoints that carry it (login, register, password reset and
+  email confirmation); general overload is a per-user request cap;
   infrastructure endpoints must never be throttled. A single global IP bucket conflates all three.
 
 ## Trade-offs
 - **The global limiter only protects the authenticated surface.** The anonymous surface is covered
-  endpoint by endpoint instead: login and register carry the `auth-ip` limiter by default and the
-  login-protection service on top of it, and public reads are served from the output cache. An
+  endpoint by endpoint instead: the anonymous credential endpoints (login, register, password reset
+  and email confirmation) carry the `auth-ip` limiter, with the login-protection service on top of
+  it for login and register; anonymous hub paths are metered per IP by the global limiter itself;
+  and public reads are served from the output cache. An
   uncached anonymous endpoint added later inherits none of that: it has no global cap and must opt
   into a named policy or its own control.
 - **The per-IP cap keys on a header a caller can set.** Trusting forwarded headers from any proxy is
@@ -153,9 +168,11 @@ changed.
    `rl:{partitionKey}:{unixMinute}` (`:129-130`), performs a `StringIncrementAsync` (`:135`), and sets
    a 65-second TTL only on the increment that created the key (`:137-143`, the 5 seconds of slack
    being deliberate clock skew, `:139-141`), admitting the request when the returned count is within
-   the permit limit (`:145`). Exactly two partitions opt in: the global limiter
-   (`WebApplicationBuilderExtensions.cs:79-104`, Redis scope `"global"` at `:99`) and `UserPolicy`
-   (`:114-128`, scope `"user"` at `:123`).
+   the permit limit (`:145`). Three partitions opt in: the global limiter
+   (`WebApplicationBuilderExtensions.cs:79-104`, Redis scope `"global"` at `:99`), `UserPolicy`
+   (`:114-128`, scope `"user"` at `:123`), and, since the 2026-09-07 revision below, the anonymous
+   hub partition (`AnonymousPartition`, scope `"hub"` at
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:96`).
 
 **`auth-ip` deliberately stays in-memory** (`allowDistributed: false`,
 `WebApplicationBuilderExtensions.cs:234`, rationale at `:143-147`), as does `FixedPolicy`
@@ -260,7 +277,8 @@ ships in the framework.** Two items, both landed.
 ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
 ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
 safeguard against client retries), ADR-029 (the per-email lockout and registration throttle that sit
-on the same two endpoints as the `auth-ip` cap, and the reason `auth-ip` stays local), ADR-026 (the
+on the login and register endpoints the `auth-ip` cap also covers, and the reason `auth-ip` stays
+local), ADR-026 (the
 Redis the distributed limiter reuses, and the `IncrementAsync` storage-format lesson the raw `INCR`
 here avoids by owning its own `rl:` keyspace), ADR-070 (the fail-fast configuration contract
 `RateLimitingSettings` binds into, and the `Distributed` degradation that sits outside it), ADR-079

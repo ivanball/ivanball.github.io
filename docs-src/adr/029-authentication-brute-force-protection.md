@@ -11,14 +11,23 @@ now sits on both endpoints by default, so the context and the ADR-019 comparison
 describe the layering instead; the lockout decision itself is unchanged).
 Revised 2026-09-07 (the account-state gate runs after the password check, a credential-less account
 cannot authenticate, and every login branch pays the same key-derivation cost).
+Updated 2026-09-19 (ADR-019's anonymous exemption now has one metered exception, the real-time hub
+paths counted per client IP, and the `auth-ip` window's algorithm is configurable with fixed as the
+default; a third `ICacheService` implementation, the opt-in `HybridCacheService`, also overrides
+`IncrementAsync`; and `ResetPasswordHandlerBase` is a second framework call site, clearing the
+failed-attempt counter after a password reset).
 ## Context
-ADR-019's global rate limiter is **authenticated-only**: it caps requests per authenticated principal
-and deliberately *exempts* anonymous traffic. The highest-value anonymous attack surface (the login
-and registration endpoints) therefore gets nothing from *that* limiter (credential stuffing, password
-spraying, registration spam). ADR-019 now puts a second, narrower limiter directly on those two
-endpoints: the named `RateLimitPolicyAuthIp` (`"auth-ip"`) policy, a fixed one-minute window keyed on
-the client IP (default 30 requests, `429` on overage), which `AuthControllerBase` applies to login and
-register by default. That caps how fast *one source address* can hammer the auth surface; it does not
+ADR-019's global rate limiter is **principal-keyed**: it caps requests per authenticated principal,
+and anonymous traffic is exempt with one metered exception, the configured real-time hub path
+prefixes, where an unauthenticated request counts per client IP instead. The highest-value anonymous
+attack surface (the login and registration endpoints) is not that exception, so it still gets nothing
+from *that* limiter (credential stuffing, password spraying, registration spam). ADR-019 now puts a
+second, narrower limiter directly on those two endpoints: the named `RateLimitPolicyAuthIp`
+(`"auth-ip"`) policy, a one-minute window keyed on the client IP (default 30 requests, `429` on
+overage), which `AuthControllerBase` applies to login and register by default. That window is
+fixed by default and sliding when `RateLimiting:Algorithm` selects it, so the counting shape is
+configuration, not a constant. That caps how fast *one source address* can hammer the auth surface;
+it does not
 cap guesses against *one account*, since an attacker spreading a run across addresses gets a fresh
 bucket per address, and its response is a middleware `429` rather than an auth outcome. Two of those
 defences also cannot live in a per-principal limiter at all:
@@ -64,7 +73,11 @@ table.
   so mixing the two formats at one key makes the next read of that counter fail with `WRONGTYPE`, which
   surfaces as a 500 on the login and registration endpoints that own it. A readable counter was worth
   more than an atomic one. `MemoryCacheService` does not override the member either, so memory mode runs
-  the same default. The accepted cost, in the code's own words: parallel attempts can overwrite each
+  the same default. `HybridCacheService`, the opt-in two-level implementation a host selects by calling
+  `AddCommonHybridCache` (which replaces whatever `ICacheService` was registered), overrides it with the
+  same read-modify-write shape and additionally forces both legs past the in-process L1: an L1 hit would
+  let a replica read a stale counter and write it back near its starting value, which is a security
+  control quietly weakened by a cache optimization. The accepted cost, in the code's own words: parallel attempts can overwrite each
   other's increments, so a burst of genuinely concurrent guesses can undercount and stay below
   `MaxFailedAttempts`. Sequential guessing, which is what a credential-stuffing run against one account
   looks like, still trips the lockout. Because every shipped implementation writes the value back with
@@ -75,11 +88,15 @@ table.
   via cache TTL: a lockout is inherently ephemeral, so expiry *is* the reset.
 - **Returns `Result` (ADR-013)**, so the HTTP edge maps every failure to a uniform `401` without the
   endpoint special-casing it.
-- **Centralized in the shared authentication base.** The call sequence lives once in
-  `AuthenticationServiceBase<TUser>` (`MMCA.Common.Application.Auth`): `CheckLockoutAsync` before
-  credential validation, `IncrementFailedAttemptsAsync` on each failed attempt,
+- **Centralized in framework code, not in consumer code.** The login and registration call sequence
+  lives in `AuthenticationServiceBase<TUser>` (`MMCA.Common.Application.Auth`): `CheckLockoutAsync`
+  before credential validation, `IncrementFailedAttemptsAsync` on each failed attempt,
   `ResetFailedAttemptsAsync` on a successful login, and `CheckRegistrationRateLimitAsync` /
-  `IncrementRegistrationCountAsync` around sign-up. Store and ADC `AuthenticationService` are sealed
+  `IncrementRegistrationCountAsync` around sign-up. One further framework call site sits outside that
+  base: `ResetPasswordHandlerBase` takes `ILoginProtectionService` as a constructor dependency and
+  calls `ResetFailedAttemptsAsync(request.Email)` once the new credential is persisted, so a user who
+  reset the password *because* of a lockout is not left locked out by it. Store and ADC
+  `AuthenticationService` are sealed
   subclasses that inject `ILoginProtectionService` into the base constructor and inherit those calls;
   neither app invokes the protection methods directly. Settings bind from the `"LoginProtection"`
   section.
@@ -114,7 +131,8 @@ table.
 - **IP-keyed registration throttle is coarse.** Shared NAT/proxy IPs throttle innocents together, and
   per-attacker IP rotation evades it; it is fail-open on a missing IP. It raises the cost of bulk signup,
   it does not stop a determined distributed attacker.
-- **Protection rides on the shared base class, not on the HTTP edge.** Because the call sequence is
+- **Protection rides on the shared base class, not on the HTTP edge.** Because the login and
+  registration call sequence is
   centralized in `AuthenticationServiceBase<TUser>`, a consumer whose `AuthenticationService`
   subclasses it inherits the lockout and registration-throttle checks automatically (both apps do), so
   it is no longer a per-flow convention that a subclass can forget. What the framework still does not do
@@ -163,8 +181,9 @@ from the 2026-09-07 security review.
   accepted final state, not a TODO: cite this section rather than re-opening the finding.
 
 ## Related
-ADR-019 (the layered limiter: an authenticated-only global cap that exempts this anonymous surface,
-plus the per-IP `auth-ip` window that now sits on the same two endpoints),
+ADR-019 (the layered limiter: a principal-keyed global cap that exempts this anonymous surface, its
+one metered anonymous exception being the real-time hub paths, plus the per-IP `auth-ip` window that
+now sits on these two endpoints and on the password-reset pair),
 ADR-026 (the `ICacheService` substrate these counters live in),
 ADR-013 (the `Result` / `Error` the checks return),
 ADR-022 (the browser session-cookie auth flow these endpoints sit behind).

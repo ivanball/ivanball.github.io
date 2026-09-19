@@ -32,6 +32,14 @@ eight files across two packages (the six that reference MassTransit types, plus 
 the emulator's entity-quota defaults), and the `MessageBusSettings.cs`, `IntegrationEventConsumer.cs`,
 `UpcastingIntegrationEventConsumer.cs` and Service-Bus-side `DependencyInjection.cs` citations are
 rebased onto their current lines. The pin, the gate and the dependency set are unchanged.
+Amended (2026-09-19): the `using MassTransit` surface in **Transport exit options** is recounted from
+source and restated as nine files across two packages, eight of them in `MMCA.Common.Infrastructure`
+(the added file is `Messaging/Consumers/ConsumerOriginRestore.cs`, which takes the consume context's
+`Headers`), which supersedes the eight-file figure in the 2026-09-01 entry; the split between
+type-referencing and quota-lowering files is corrected, because the emulator pair references
+`IServiceBusBusFactoryConfigurator` and `IBusControl` in addition to setting the statics, so every
+file in the set references a MassTransit type. The pin, the gate and the dependency set are
+unchanged, and the three candidates are unchanged.
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
@@ -126,19 +134,25 @@ The pin has a horizon. MassTransit v8 is the free major and its community suppor
 candidates are recorded now so the eventual move is a comparison and not a scramble.
 
 What makes any of them a bounded change is where MassTransit actually sits. The whole
-`using MassTransit` surface is **eight files across two packages**. Seven are in
+`using MassTransit` surface is **nine files across two packages**. Eight are in
 `MMCA.Common.Infrastructure`: `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:3`,
 `Messaging/BrokerMessageBus.cs:1`, `Messaging/Consumers/IntegrationEventConsumer.cs:1`,
 `Messaging/Consumers/IntegrationEventConsumerExtensions.cs:1`,
 `Messaging/Consumers/UpcastingIntegrationEventConsumer.cs:3`,
-`Messaging/Consumers/FaultIntegrationEventConsumer.cs:1` and `Messaging/ServiceBusEmulatorSupport.cs:4`;
-the eighth is `Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs:5`. The
+`Messaging/Consumers/FaultIntegrationEventConsumer.cs:1`,
+`Messaging/Consumers/ConsumerOriginRestore.cs:2` and `Messaging/ServiceBusEmulatorSupport.cs:4`;
+the ninth is `Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs:5`. The
 last two are the emulator test tier rather than the transport: each one lowers the process-global
 `MassTransit.AzureServiceBusTransport.Defaults` entity quotas the emulator rejects
 (`ServiceBusEmulatorSupport.cs:115-117`, `ServiceBusEmulatorFixtureBase.cs:74-76`), a v8 constraint
-that moves with that tier, not with the bus. The files that reference MassTransit **types**
-(`IConsumer<T>`, `ConsumeContext<T>`, `IPublishEndpoint`, `IBusRegistrationConfigurator`) are the
-first six, all in `MMCA.Common.Infrastructure`. Application, Domain and Shared never reference it:
+that moves with that tier, not with the bus. Every one of the nine references a MassTransit **type**,
+so none of them is an unused import: `IConsumer<T>`, `ConsumeContext<T>`, `IPublishEndpoint` and
+`IBusRegistrationConfigurator` across the seven transport-side files, where
+`ConsumerOriginRestore` takes the consume context's `Headers`
+(`Messaging/Consumers/ConsumerOriginRestore.cs:34`); the emulator pair adds
+`IServiceBusBusFactoryConfigurator` (`ServiceBusEmulatorSupport.cs:87`) and `IBusControl`
+(`ServiceBusEmulatorFixtureBase.cs:68`) on top of the quota statics.
+Application, Domain and Shared never reference it:
 `IMessageBus` is the Application-layer abstraction
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28`) and
 `BrokerMessageBus` is its only broker implementation (`BrokerMessageBus.cs:24`), which is the
@@ -197,3 +211,5 @@ ADR-066 and ADR-064). Any transport candidate has somewhere to be exercised that
 ## Related
 ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker
 transport behind the outbox and database-per-service flows).
+[ADR-118](118-message-transport-library-policy.md) revisits the exit strategy and ranks its
+candidates differently; the two lists are not reconciled, and neither has been adopted.

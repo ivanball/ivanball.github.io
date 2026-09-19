@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -238,8 +240,13 @@
           of per-device sessions hashed at rest; read ADR-097 for what ships today. Its storage, revocation,
           claim and single-session details no longer describe the code: refresh tokens are gone from <code>IAuthUser</code>
           (<code>Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:9-14</code>), <code>UpdateRefreshToken</code> and
-          <code>RevokeRefreshToken</code> no longer exist under any <code>Source/</code> tree (the names survive only on a Common test
-          double, <code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/UserUseCaseTestDoubles.cs:76,82</code>),
+          <code>RevokeRefreshToken</code> are gone from that interface and from both app <code>User</code> aggregates, so no production
+          type declares them; the source trees still carry the removal record, though, because Common&#39;s analyzer
+          ledger marks both as <code>*REMOVED*</code> (<code>Source/Core/MMCA.Common.Domain/PublicAPI.Unshipped.txt:4-5</code>) while the
+          shipped baseline still lists them (<code>PublicAPI.Shipped.txt:16-17</code>). The only callable copies left are on a
+          Common test double
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/UserUseCaseTestDoubles.cs:83,89</code>), which is
+          not dead code: <code>DeleteUserHandlerBaseTests.cs:74</code> still calls <code>UpdateRefreshToken</code> on it. Beyond that,
           the user id rides the standard <code>sub</code> claim rather than a <code>user_id</code> claim
           (<code>Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:87-90,93</code>), the one-token-per-user model
           is replaced by a per-user family of per-device sessions
@@ -251,6 +258,12 @@
           record was written (ADC revoked in <code>Delete()</code> and <code>Anonymize()</code>, Store in <code>Deactivate()</code> and
           <code>Anonymize()</code>), and stopped describing it on 2026-08-26, when the refresh-sessions sweep removed the
           refresh-token members from both aggregates. Neither transition touches refresh state today.</p>
+          <p>Note (2026-09-19): three content corrections re-verified against current source, with the body&#39;s other
+          line anchors left as they stood. The removed <code>UpdateRefreshToken</code> and <code>RevokeRefreshToken</code> are recorded
+          in Common&#39;s analyzer ledgers and are still called from a Common test, not merely surviving on a test
+          double; <code>RefreshTokenAsync</code> no longer routes through <code>IssueTokensAsync</code>, which now has only login and
+          registration as callers; and each app&#39;s subclass constructor takes an aggregate settings object whose
+          <code>RefreshSessions</code> it forwards, rather than <code>IOptions&lt;RefreshSessionSettings&gt;</code>.</p>
           <h2 id="context">Context</h2>
           <p>Identity issues two credentials on every successful sign-in: a short-lived, stateless JWT access
           token that every service validates by signature and expiry (ADR-004), and a long-lived refresh token
@@ -282,14 +295,20 @@
           (<code>TokenService.cs:118-121</code>). It carries no claims and is meaningful only by exact match against the
           stored value.</li>
           <li><strong>Rotation on every issuance.</strong> Both login (<code>AuthenticationServiceBase.cs:183</code>) and refresh
-          (<code>AuthenticationServiceBase.cs:267</code>) route through <code>IssueTokensAsync</code>
+          (<code>AuthenticationServiceBase.cs:267</code>) routed through <code>IssueTokensAsync</code>
           (<code>AuthenticationServiceBase.cs:474</code>), which mints a new access token, generates a new refresh token,
           and overwrites the stored one via <code>user.UpdateRefreshToken(...)</code> before <code>SaveChangesAsync</code>.
           Registration seeds the first refresh token the same way (<code>AuthenticationServiceBase.cs:263</code>).
           <code>UpdateRefreshToken</code> sets the token and its expiry on each app&#39;s <code>User</code> aggregate. The previous
-          refresh token is therefore invalid the moment a new one is issued. (Today that overwrite is a
-          successor session row claimed atomically through <code>IRefreshSessionStore.TryRotateAsync</code>,
-          <code>AuthenticationServiceBase.cs:686</code>.)</li>
+          refresh token is therefore invalid the moment a new one is issued. Today that shared entry point is
+          gone from the refresh path: only login (<code>AuthenticationServiceBase.cs:245</code>) and registration
+          (<code>AuthenticationServiceBase.cs:330</code>) still call <code>IssueTokensAsync</code> (body at
+          <code>AuthenticationServiceBase.cs:554</code>), while <code>RefreshTokenAsync</code> (<code>AuthenticationServiceBase.cs:334</code>)
+          does not call it at all, running <code>ResolveRotatableSessionAsync</code> (called at
+          <code>AuthenticationServiceBase.cs:379</code>, body at <code>AuthenticationServiceBase.cs:723</code>) and then <code>RotateAsync</code>
+          (called at <code>AuthenticationServiceBase.cs:387</code>, body at <code>AuthenticationServiceBase.cs:801</code>) instead.
+          (Today that overwrite is a successor session row claimed atomically through
+          <code>IRefreshSessionStore.TryRotateAsync</code>, <code>AuthenticationServiceBase.cs:686</code>.)</li>
           <li><strong>Refresh binds to the same principal via the expired access token.</strong> <code>RefreshTokenAsync</code> requires the
           client to present the expired access token alongside the refresh token and calls
           <code>TokenService.GetPrincipalFromExpiredToken</code> (<code>AuthenticationServiceBase.cs:281</code>). That method
@@ -329,8 +348,12 @@
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:22</code>,
           forwarded at <code>AuthenticationService.cs:31</code>) both pass <code>ITokenService</code> into the base constructor and
           supply only app-specific hooks (the claim set, deactivated-account gates, the registration side-effect);
-          both constructors also take <code>IRefreshSessionStore</code> and <code>IOptions&lt;RefreshSessionSettings&gt;</code> today (ADC
-          <code>AuthenticationService.cs:54,55</code>, Store <code>AuthenticationService.cs:29,30</code>).
+          both constructors also take <code>IRefreshSessionStore</code> today (ADC <code>AuthenticationService.cs:54</code>, Store
+          <code>AuthenticationService.cs:29</code>), and each takes an aggregate settings object rather than
+          <code>IOptions&lt;RefreshSessionSettings&gt;</code> directly: ADC an <code>AuthenticationServiceSettings</code>
+          (<code>AuthenticationService.cs:55</code>) and Store an <code>AuthenticationSettings</code>
+          (<code>AuthenticationService.cs:30</code>), from which the constructor forwards <code>settings.RefreshSessions</code> to the
+          base (ADC <code>AuthenticationService.cs:64</code>, Store <code>AuthenticationService.cs:39</code>).
           The rotation, reuse-detection, and lifetime logic is identical across both apps because it lives once in
           the base. ADC&#39;s external OAuth path (ADR-036) issues the same refresh credential when it exchanges an
           external identity for the local token pair, by routing into the shared <code>IssueTokensAsync</code>

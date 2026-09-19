@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-103: bUnit Component-Test Tier as a Shipped Package · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.">
+  <meta name="description" content="Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/103-bunit-component-test-tier.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-103: bUnit Component-Test Tier as a Shipped Package">
-  <meta property="og:description" content="Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.">
+  <meta property="og:description" content="Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/103-bunit-component-test-tier.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-103: bUnit Component-Test Tier as a Shipped Package">
-  <meta name="twitter:description" content="Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.">
+  <meta name="twitter:description" content="Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"103 · bUnit Component-Test Tier as a Shipped Package","item":"https://ivanball.github.io/docs/adr/103-bunit-component-test-tier.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -232,7 +234,9 @@
           <h1 id="adr-103-bunit-component-test-tier-as-a-shipped-package">ADR-103: bUnit Component-Test Tier as a Shipped Package</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the <code>AngleSharp</code> advisory
-          pin travels. See Revision (2026-09-03) at the end.</p>
+          pin travels. See Revision (2026-09-03) at the end. Revised 2026-09-19: four drifted facts refreshed
+          (the <code>bunit</code> pin, the <code>TestPrincipal</code> role shorthand, the helper&#39;s call-site count, and the lockstep
+          package count). See Revision (2026-09-19) at the end.</p>
           <h2 id="context">Context</h2>
           <p>Three test tiers in this workspace are decided in writing and one is not. ADR-015 gates <strong>structure</strong>
           with NetArchTest. ADR-058 ships the <strong>runtime conformance</strong> suites as abstract bases in
@@ -256,7 +260,7 @@
           <h2 id="decision">Decision</h2>
           <p>Ship the component-test tier as a package. <code>MMCA.Common.Testing.UI</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/MMCA.Common.Testing.UI.csproj:3-4</code>) is one of the
-          17 packages released in lockstep (<code>MMCA.Common/FACTS.md:19,37</code>), and its <code>BunitComponentTestBase</code>
+          <code>MMCA.Common.*</code> packages released in lockstep (<code>MMCA.Common/FACTS.md:19,37</code>), and its <code>BunitComponentTestBase</code>
           fixes every choice above once, in one file.</p>
           <ul>
           <li><strong>bUnit v2, with the version-specific symbols isolated to this base.</strong> The base derives from bUnit
@@ -265,9 +269,9 @@
           and its remarks state why: v2 is the line compatible with xUnit v3 and Microsoft Testing Platform,
           and derived test classes call <code>RenderUnderTest</code> / <code>RenderAs</code> and never touch the version-specific
           symbols, so a move off that line changes this file and no other
-          (<code>BunitComponentTestBase.cs:29-34</code>). The line is pinned at <code>bunit</code> 2.9.0 in each repo&#39;s central
-          package file (<code>MMCA.Common/Directory.Packages.props:205-206</code>,
-          <code>MMCA.ADC/Directory.Packages.props:30-31</code>, <code>MMCA.Store/Directory.Packages.props:50-51</code>), and the
+          (<code>BunitComponentTestBase.cs:29-34</code>). The line is pinned at <code>bunit</code> 2.11.3 in each repo&#39;s central
+          package file (<code>MMCA.Common/Directory.Packages.props:232-233</code>,
+          <code>MMCA.ADC/Directory.Packages.props:30-31</code>, <code>MMCA.Store/Directory.Packages.props:54-55</code>), and the
           package carries a direct <code>AngleSharp</code> pin because central package management does not pin
           transitives (<code>MMCA.Common.Testing.UI.csproj:13-15</code>).</li>
           <li><strong>MudBlazor services plus the ADR-067 facades, registered once.</strong> The constructor calls
@@ -290,7 +294,9 @@
           succeeds for an authenticated identity and fails otherwise (<code>:57</code>, <code>:176-186</code>). Principals come from
           the shipped <code>TestPrincipal</code> factory, which writes the user id under both <code>sub</code> and
           <code>ClaimTypes.NameIdentifier</code> because a real principal reaches a page under either name
-          (<code>Infrastructure/TestPrincipal.cs:7,22-32</code>), plus an <code>Organizer</code> shorthand (<code>TestPrincipal.cs:35-36</code>).</li>
+          (<code>Infrastructure/TestPrincipal.cs:7,22-32</code>), plus an <code>InRole(role, userId)</code> shorthand for a
+          single-role principal. The framework declares no role vocabulary of its own, so a test names the
+          role its app uses (<code>TestPrincipal.cs:41</code>).</li>
           <li><strong>Open-generic <code>IStringLocalizer</code> for ADR-027 markup.</strong> <code>Services.AddLogging()</code> and
           <code>Services.AddLocalization()</code> (<code>BunitComponentTestBase.cs:63-64</code>) let every component test render
           localized markup against the neutral resources in the component&#39;s own assembly with no per-test
@@ -303,7 +309,7 @@
           for the prerender boundary (<code>:114</code>), and calls <code>SetRendererInfo</code> <strong>last</strong> (<code>:117</code>). The rule is
           written where the helper is: <code>SetRendererInfo</code> builds and freezes the bUnit service provider, so any
           registration made after it is silently ignored and the page resolves the framework default instead
-          of the test&#39;s double (<code>:78-82</code>). Nineteen test files across MMCA.Common, MMCA.ADC and MMCA.Store
+          of the test&#39;s double (<code>:78-82</code>). Twenty-two test files across MMCA.Common, MMCA.ADC and MMCA.Store
           call the helper today; its comment records the fifteen hand-rolled copies of the block that the
           extraction replaced (<code>:81-82</code>).</li>
           <li><strong>The rest of the harness ships with it.</strong> <code>RenderMudProviders</code> renders the popover, dialog and
@@ -385,7 +391,7 @@
           so each repo&#39;s central package file names the number
           (<code>MMCA.Common/Directory.Packages.props:206</code>, <code>MMCA.ADC/Directory.Packages.props:31</code>,
           <code>MMCA.Store/Directory.Packages.props:51</code>) and three files have to agree. The <code>AngleSharp</code> advisory
-          pin does not spread that way: it is named once, in <code>MMCA.Common/Directory.Packages.props:210</code>, and
+          pin does not spread that way: it is named once, in <code>MMCA.Common/Directory.Packages.props:237</code>, and
           reaches consumers transitively through the package&#39;s own direct reference
           (<code>MMCA.Common.Testing.UI.csproj:15</code>).</li>
           </ul>
@@ -415,6 +421,20 @@
           pins it in a central package file or a project file, so consumers inherit the patched version with
           the package. The trade-off now says so. Citation anchors elsewhere in the record were refreshed at
           the same time with no change of substance.</p>
+          <h2 id="revision-2026-09-19">Revision (2026-09-19)</h2>
+          <p><strong>The decision and the mechanism are unchanged.</strong> Four facts had drifted since the record was
+          written. The <code>bunit</code> line is now pinned at 2.11.3, not 2.9.0, and all three central package files
+          still agree on that number (<code>MMCA.Common/Directory.Packages.props:233</code>,
+          <code>MMCA.ADC/Directory.Packages.props:31</code>, <code>MMCA.Store/Directory.Packages.props:55</code>). <code>TestPrincipal</code>
+          no longer carries an ADC-specific <code>Organizer</code> shorthand: it exposes a generic
+          <code>InRole(string role, string userId = &quot;1&quot;)</code> whose remarks state that the framework declares no role
+          vocabulary, so a test names the role its own app uses
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/TestPrincipal.cs:34-42</code>).
+          <code>ConfigureDataGridListPageHost</code> now has twenty-two calling test files, not nineteen (two in
+          MMCA.Common, twelve in MMCA.ADC, eight in MMCA.Store). The lockstep package count is no longer
+          restated here at all, because <code>MMCA.Common/FACTS.md</code> owns it and the number moves with every new
+          package. The <code>AngleSharp</code> claim from the 2026-09-03 revision was re-checked and still holds: the pin
+          is named only in MMCA.Common&#39;s central package file and in no consumer repo&#39;s.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -432,6 +452,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
+            <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             </ul>
           </nav>
         </aside>

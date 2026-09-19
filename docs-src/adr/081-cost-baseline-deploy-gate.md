@@ -17,6 +17,11 @@ three conditional gates (`e2e-gate`, `backend-test-gate` and `ai-eval-gate`) whi
 and both repos now carry a fourth freshness gate (`cross-browser-freshness`) beside `cost-guard` in
 `deploy.needs`. Citations re-anchored throughout (both Bicep templates, both `deploy.yml` files); the
 gate mechanism, the `2` ceiling and the per-repo SQL tier sets are unchanged.
+Revised 2026-09-19: two content corrections. ADR-064 is now described as deciding **four**
+proof-of-recency gates rather than three, matching its own 2026-09-11 revision, and the claim that the
+two `cost-guard.yml` files differ *only* in prefix, tier set, heading and drift wording is dropped,
+because Store's header carries three passages ADC's does not. The gate mechanism, the `2` ceiling and
+the per-repo SQL tier sets are unchanged.
 
 ## Context
 Both deployed apps run a deliberately small production footprint: every Container App is declared with
@@ -42,7 +47,7 @@ someone would have to look at it.
 
 This is the FinOps sibling of the deploy gates the framework already records: ADR-038 (supply-chain
 provenance), ADR-060 (the performance-regression gate against a committed baseline) and ADR-062 (SLO
-alerting as code). ADR-064 decides the three proof-of-recency gates and enumerates `cost-guard`
+alerting as code). ADR-064 decides the four proof-of-recency gates and enumerates `cost-guard`
 in passing among the jobs that "have the change itself as their subject"
 (`Website/docs-src/adr/064-deploy-recency-gates.md:21-22,44`), but it does not decide it. This record
 does.
@@ -134,10 +139,14 @@ The cost baseline is asserted by a **read-only reusable workflow** that both run
   reset (`MMCA.Store/.github/workflows/cost-guard.yml:94`,
   `MMCA.ADC/.github/workflows/cost-guard.yml:83`).
 
-**Adoption is the two deployed apps, in near-identical form.** The files differ only in the resource
-name prefix, the accepted SQL tier set, the summary heading and the wording of the drift message
-(ADC's names the conference-day surge, Store's does not). MMCA.Helpdesk and MMCA.Common carry no
-`cost-guard.yml` and no deploy workflow at all: Helpdesk's `.github/workflows/` holds `ci.yml`,
+**Adoption is the two deployed apps, in near-identical form.** The files differ in the resource name
+prefix, the accepted SQL tier set, the header rationale, the summary heading and the wording of the
+drift message (ADC's names the conference-day surge, Store's does not). The header is where the two
+diverge most: Store's carries three passages ADC's has no counterpart for, the SQL-baseline rationale
+(`MMCA.Store/.github/workflows/cost-guard.yml:9-13`), a note that the check reads `maxReplicas` only
+and is therefore blind by design to the 2026-09-02 container right-size (`:15-17`), and a
+`(Mirrors MMCA.ADC.)` marker on the `workflow_call` trigger (`:25`). MMCA.Helpdesk and MMCA.Common
+carry no `cost-guard.yml` and no deploy workflow at all: Helpdesk's `.github/workflows/` holds `ci.yml`,
 `release-templates.yml` and the two Claude workflows, and Common's holds `ci.yml`, `release.yml` and
 the same two, so neither has a rollout for this gate to block.
 
@@ -214,7 +223,7 @@ the same two, so neither has a rollout for this gate to block.
 
 ## Related
 [ADR-064](064-deploy-recency-gates.md) (the sibling deploy-precondition record, which decides the
-three proof-of-recency gates and enumerates this one only in passing; its break-glass input does not
+four proof-of-recency gates and enumerates this one only in passing; its break-glass input does not
 apply here), [ADR-060](060-performance-regression-gate.md) (the other committed-baseline gate, where
 the baseline is a benchmark rather than a footprint),
 [ADR-062](062-slo-alerting-as-code.md) (the alerting-side control this complements: alerts fire on

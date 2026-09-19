@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -244,7 +246,10 @@
           <code>GridPageE2ETests</code> (a class the record had never listed) and the two notification inbox deep-link scans,
           corrects the signed-in set (the notification scans seed the fake auth cookie too, not the sessions scan
           alone), and refreshes the <code>E2ETestBase</code> helper, ADC <code>deploy.yml</code>, and Store <code>deploy.yml</code> deploy-job line
-          anchors; no decision changed.</p>
+          anchors; no decision changed. Revised 2026-09-19: all three suite counts are re-measured from source
+          (ADC now 45 scans, Store now 32, the gallery seventeen assertions across eleven classes), and the two
+          shell-level gallery classes the record had never listed, <code>ShellPagesE2ETests</code> and
+          <code>MobileNavKeyboardE2ETests</code>, are added to the narrative; no decision changed.</p>
           <h2 id="context">Context</h2>
           <p>Accessibility was documented before it was enforced. The narrative guide
           (<a href="../guides/common-ACCESSIBILITY.html">common-ACCESSIBILITY.md</a>, rubric section 21) named WCAG 2.1 AA
@@ -317,7 +322,7 @@
           surface ratio (<code>.../MMCA.Common.UI/Theme/BrandColors.cs:26</code>, rationale at <code>:22-24</code>).</li>
           </ul>
           <p>Adoption differs per repo and is uneven on purpose. <strong>MMCA.Common</strong> scans its own backend-less gallery:
-          fifteen assertions across nine classes over <code>GalleryAxeTestBase</code>
+          seventeen assertions across eleven classes over <code>GalleryAxeTestBase</code>
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/Infrastructure/GalleryAxeTestBase.cs:14</code>),
           covering login (<code>LoginPageE2ETests.cs:34</code>), register (<code>RegisterPageE2ETests.cs:36</code>), the primitives
           showcase (<code>ComponentsPageE2ETests.cs:80</code>), both dark-mode states (<code>DarkModeE2ETests.cs:30,:40</code>), the
@@ -329,12 +334,18 @@
           pages added with <a href="091-cache-backed-password-reset.html">ADR-091</a>: forgot-password in both its form state and
           its confirmation state, which replaces the form and is therefore a distinct rendering
           (<code>ForgotPasswordPageE2ETests.cs:46</code> and <code>:60</code>), plus reset-password (<code>ResetPasswordPageE2ETests.cs:48</code>).
+          Two shell-level classes cover states no page-specific test reaches: <code>Layout/ShellPagesE2ETests.cs:31</code>
+          (class at <code>:16</code>) asserts the strict options over the three framework-owned shell routes in one theory
+          (<code>/</code>, <code>/not-found</code>, <code>/forbidden</code>), so the seventeen assertions scan nineteen page states in total, and
+          <code>Layout/MobileNavKeyboardE2ETests.cs:36</code> (class at <code>:16</code>) scans the home page at a 390x844 phone
+          viewport with the hamburger menu open, the one state the rest of the suite misses because it runs at
+          desktop width.
           The notification and sessions scans are the signed-in ones: both the notification pages and the shared
           devices/sessions page (<code>SessionsPageE2ETests.cs:34</code>, class at <code>:13</code>) carry a real <code>[Authorize]</code>, so those
           tests seed the gallery&#39;s cookie-toggled fake authentication scheme before navigating
-          (<code>NotificationPagesE2ETests.cs:92</code>, <code>SessionsPageE2ETests.cs:39</code>) while the login, register, components
-          and grid scans stay deliberately anonymous. The sessions scan covers the populated table, its
-          current-device marker, and the per-device sign-out buttons under the strict options.
+          (<code>NotificationPagesE2ETests.cs:92</code>, <code>SessionsPageE2ETests.cs:39</code>) while the login, register, components,
+          grid, shell and mobile-nav scans stay deliberately anonymous. The sessions scan covers the populated
+          table, its current-device marker, and the per-device sign-out buttons under the strict options.
           <strong>MMCA.Store</strong> subclasses all four Identity bases
           (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/Identity/UserLoginTests.cs:5</code>,
           <code>UserRegistrationTests.cs:5</code>, <code>ProfileManagementTests.cs:5</code>, <code>PasswordResetTests.cs:5</code>). <strong>MMCA.ADC</strong>
@@ -344,9 +355,9 @@
           <code>E2ETestBase</code> directly
           (<code>ProfileManagementTests.cs:8</code>) because the ADC profile page supports only password change and account
           deletion, so it does not inherit the base&#39;s profile scan. Beyond the Identity bases each app carries a
-          dedicated suite: ADC&#39;s <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:27</code> holds 31 page
-          scans (10 through <code>ScanGridAsync</code>, 21 strict) and Store&#39;s
-          <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 23 (6 grid, 17 strict).
+          dedicated suite: ADC&#39;s <code>Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:27</code> holds 45 page
+          scans (13 through <code>ScanGridAsync</code>, 32 strict) and Store&#39;s
+          <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17</code> holds 32 (9 grid, 23 strict).
           <strong>MMCA.Helpdesk adopts none of it</strong>: it pins the package version
           (<code>MMCA.Helpdesk/Directory.Packages.props:84</code>) but no project references it, and the repo has no E2E
           test project at all (<code>Tests/</code> holds only <code>Architecture</code> and <code>Modules</code>), so the seed has no browser
@@ -396,7 +407,7 @@
           is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
           gate as backstop, but it does mean &quot;deployed&quot; does not always mean &quot;axe ran on this commit&quot;.</li>
           <li><strong>Consumer breadth is hand-maintained.</strong> Nothing forces a new page into <code>AccessibilityTests</code>, so
-          coverage grows by discipline: 31 scans in ADC and 23 in Store today, against far larger page inventories.</li>
+          coverage grows by discipline: 45 scans in ADC and 32 in Store today, against far larger page inventories.</li>
           <li><strong>MMCA.Helpdesk has no accessibility gate.</strong> The reference app demonstrates the framework&#39;s layers but
           not this contract, so a reader following the seed sees no worked example of adopting the scan.</li>
           </ul>

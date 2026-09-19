@@ -1,7 +1,11 @@
 # ADR-108: Cross-Replica Mutual Exclusion via IDistributedLock
 
 ## Status
-Accepted (2026-09-03).
+Accepted (2026-09-03). Revised 2026-09-19 (the second consumer moved: ADC's AI scoring pass now runs
+as the internal command `ScoreEventSessionsInternalCommandHandler` under
+[ADR-114](114-internal-commands-durable-job-queue.md), taking the lock as a constructor dependency
+rather than resolving it from a service scope; and adoption is now three call sites rather than two,
+the third being ADC's question submit path).
 
 ## Context
 Both deployed apps run more than one replica of every service. ADC's Conference container app is
@@ -23,10 +27,12 @@ claim at `:475-483`), and `ScheduledJobRunner` does the same on `ScheduledJobEnt
 Some critical sections have no such row. The API idempotency filter's window between executing an
 action and storing its response is guarded by a cache entry, not a database row (ADR-017, ADR-026):
 two duplicates landing on different replicas both miss the cache, both execute, and the second
-overwrites the first's stored response. ADC's AI scoring pass had the same shape, and its previous
-guard was a cache counter released in a `finally`, which a killed replica left stuck at 1 until an
-operator cleared it by hand
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringProcessor.cs:162-174`).
+overwrites the first's stored response. ADC's AI scoring pass reaches the same place from the other
+side: it runs as a durable internal command (ADR-114), so each trigger does own a claimable row, but
+two rows for the same event can be claimed by different replicas at the same time, and each pass
+issues one paid Anthropic call per session
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:15-21`).
+The exclusion the pass needs is per event, not per row.
 
 ADR-017 records how the idempotency filter uses a distributed lock. Nothing records the primitive
 itself: what it does and deliberately does not promise, what it degrades to, and when to reach for it
@@ -108,13 +114,14 @@ persistence can enforce.**
    counted, so a Redis blip does not become a write outage (`:253-259`). With no lock registered the
    filter falls back to its striped semaphore (`:199`, stripe at `:90`).
 
-10. **Second consumer: ADC's AI scoring pass.** `SessionScoringProcessor` resolves the lock from a
-    service scope (`SessionScoringProcessor.cs:175`) and claims the event with
-    `TryAcquireAsync(ClaimKey(eventId), ClaimTimeToLive, ClaimWait, ...)` (`:178`), where the key is
-    `scoring:inflight:{eventId}` (`:101-102`), the TTL is 15 minutes (`:85`) and the wait is
-    `TimeSpan.Zero` (`:92`), so a duplicate trigger skips the run rather than queueing behind it
-    (`:181-188`). The `await using` on the handle releases on success, on failure, and by TTL when the
-    replica is killed mid-pass.
+10. **Second consumer: ADC's AI scoring pass.** `ScoreEventSessionsInternalCommandHandler` takes the
+    lock as a primary-constructor dependency rather than resolving it from a service scope
+    (`ScoreEventSessionsInternalCommandHandler.cs:41`) and claims the event with
+    `TryAcquireAsync(ClaimKey(eventId), ClaimTimeToLive, ClaimWait, ...)` (`:75-77`), where the key is
+    `scoring:inflight:{eventId}` (`:100-101`), the TTL is 15 minutes (`:53`) and the wait is
+    `TimeSpan.Zero` (`:60`), so a duplicate trigger logs and reports success rather than queueing
+    behind the pass already covering the same work (`:79-83`). The `await using` on the handle releases
+    on success, on failure, and by TTL when the replica is killed mid-pass.
 
 11. **The choose-between rule.** Work that already owns a durable row uses the claim-lease: the
     outbox and the scheduler both stamp `LockedUntil` plus a `LockToken` in a conditional update whose
@@ -124,9 +131,16 @@ persistence can enforce.**
     over rows it does not own. Inventing a row purely to hold a lease is not the answer for those, and
     neither is holding a database transaction open across the work.
 
-12. **Adoption is exactly these two call sites.** No other MMCA.Common component, and nothing in
+12. **Adoption is exactly these three call sites.** The third is ADC's question submit cap:
+    `SubmitQuestionHandler` takes the lock as a constructor dependency
+    (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34`)
+    and serializes the per-(session, user) open-question cap, whose count-then-insert is not one
+    atomic statement, under a claim keyed `session-question:submit:{sessionId}:{userId}` (`:107`,
+    taken at `:148`) with a 30 second TTL (`:49`) and a 2 second wait (`:57`); a submit that cannot
+    get in within the wait is answered with the same cap failure the count itself would have
+    returned, so contention never surfaces as a fault. No other MMCA.Common component, and nothing in
     MMCA.Store or MMCA.Helpdesk, takes a lock today. The primitive is shipped and registered in every
-    host that calls `AddInfrastructure`, and used in two places.
+    host that calls `AddInfrastructure`, and used in three places.
 
 ## Rationale
 - **The degraded mode had to be visible, not silent.** Registering nothing when Redis is absent would
@@ -135,7 +149,8 @@ persistence can enforce.**
   log naming both the condition and the fix (`InProcessDistributedLock.cs:75`).
 - **A handle makes release structural.** Returning `IAsyncDisposable?` rather than a boolean plus a
   `ReleaseAsync(key)` means the release cannot be skipped on a throw path and cannot be aimed at the
-  wrong acquisition. That is exactly what the ADC cache counter it replaced got wrong.
+  wrong acquisition. A counter taken on entry and released in a `finally` gets both of those wrong,
+  and a process killed between the two leaves the guard stuck until an operator clears it.
 - **The owner token is the whole of release correctness.** Deleting without the comparison would let a
   caller whose lock already expired free the next holder's lock, which is the double execution the
   lock exists to prevent (`RedisDistributedLock.cs:32-37`).
@@ -153,7 +168,9 @@ persistence can enforce.**
   caveat.
 - **The fallback is correct only at one replica.** A multi-replica host with no Redis connection gets
   per-replica exclusion from `InProcessDistributedLock`, and after the first warning nothing repeats
-  it. ADC's scoring processor names this as its floor (`SessionScoringProcessor.cs:171-174`).
+  it. ADC's scoring handler names the condition that defeats it: Conference runs two replicas and the
+  framework's processor polls on each of them
+  (`ScoreEventSessionsInternalCommandHandler.cs:15-17`).
 - **No renewal.** Nothing extends a TTL mid-section. A section that outlives its TTL silently loses
   exclusion; Redis notices only after the fact, when the release script returns 0 and logs
   (`RedisDistributedLock.cs:84`), and the in-process fallback cannot notice at all because it ignores
@@ -171,7 +188,7 @@ persistence can enforce.**
   still in flight with a conflict rather than a longer wait (`IdempotencyFilter.cs:263-270`), so the
   client has to retry. That is deliberate, but it is behavior the TTL and wait pairing tunes rather
   than removes.
-- **Two consumers is a thin evidence base.** The contract's edges (TTL loss, wait expiry, idempotent
+- **Three consumers is a thin evidence base.** The contract's edges (TTL loss, wait expiry, idempotent
   disposal) are exercised by unit tests against a mocked `IDatabase`
   (`Infrastructure.Tests/Concurrency/RedisDistributedLockTests.cs:22-40`, six cases) and by the
   in-process tests, not against a live Redis under failover. The behavior most likely to matter in

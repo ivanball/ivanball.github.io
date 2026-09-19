@@ -46,6 +46,10 @@ the exception object while their duration histograms and outcome tags stay exact
 describes them. The eight-meter count in the entry above is superseded, and the metrics configuration
 moved into its own `ConfigureMetrics` method, so the subscription block no longer sits at the lines
 the earlier entries cite. See the "Amended (2026-09-11): the Polly meter" section at the end.
+Revised 2026-09-19 (`MMCA.Common.AI` is now subscribed in the meter chain and added as a trace
+source, so the block carries ten subscribed meters: nine `MMCA.Common.*` plus `Polly`. Both
+2026-09-11 entries above are superseded on those two points, the one that records the AI meter as
+defined but not subscribed and the one that counts nine. See the Revision (2026-09-19) at the end).
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -186,8 +190,8 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 ## Trade-offs
 - **Custom instrumentation carries a maintenance cost.** The Aspire package has no reference to
   Application or Infrastructure by design, so the meter and activity-source names are duplicated as
-  literals (the nine meter subscriptions at `Extensions.cs:582`-`Extensions.cs:589` and
-  `Extensions.cs:596`, the trace sources at `Extensions.cs:169`-`Extensions.cs:171`, and the sync
+  literals (the ten meter subscriptions at `Extensions.cs:598`-`Extensions.cs:606` and
+  `Extensions.cs:613`, the trace sources at `Extensions.cs:182`-`Extensions.cs:185`, and the sync
   notes at `CqrsMetrics.cs:9`,
   `OutboxMetrics.cs:9` and `OutboxPollFilterProcessor.cs:19`-`:25`). A rename on one side silently
   stops export until the literal is updated. That is the price of the decoupled package graph.
@@ -225,7 +229,7 @@ which was already an undercount. The authoritative list is the subscription bloc
 `MMCA.Common.Outbox`, `MMCA.Common.Cqrs`, `MMCA.Common.Idempotency`, `MMCA.Common.Scheduler`,
 `MMCA.Common.Broker`, `MMCA.Common.OutputCache`, `MMCA.Common.BestEffort`. Two of them
 (`Idempotency`, `Scheduler`) were never recorded here at all. Read that block, not this prose, when
-the question is what the framework exports (it carries eight today; see the Revision (2026-09-11)).
+the question is what the framework exports (it carries ten today; see the Revision (2026-09-19)).
 
 **Correlation now starts at the edge.** [ADR-088](088-gateway-edge-responsibilities.md) adds a
 context-free `GatewayCorrelationMiddleware` that ensures `X-Correlation-ID` on the way in and echoes it
@@ -431,7 +435,7 @@ ADR-009 (resilience and recovery objectives, configured alongside telemetry in t
 warm-up and readiness gating, whose health-check endpoints are the operational-signal sibling of these
 telemetry signals in the same Aspire defaults), ADR-114 (the durable internal-command queue whose
 meter, activity source and poll-span filtering this pipeline carries), ADR-120 (the governed chat
-client whose `MMCA.Common.AI` meter these defaults do not subscribe), and COST.md (the FinOps companion that records
+client whose `MMCA.Common.AI` meter these defaults now subscribe), and COST.md (the FinOps companion that records
 span-filtering and sampling as cost levers).
 
 ## Amended (2026-09-11): the Polly meter
@@ -463,9 +467,9 @@ mirror image of `Telemetry:DisableHttpClientMetrics`: it is off by default and m
 anything other than a parseable `true` leaves the histograms dropped.
 
 **Where the block lives now.** The metrics configuration moved out of the `WithMetrics` lambda into a
-dedicated `ConfigureMetrics` method (`Extensions.cs:520`, called at `:166`). The `MMCA.Common.*` meter
-chain is at `Extensions.cs:582`-`:589`, the Polly subscription at `:596`, and the trace sources at
-`:169`-`:171`. The earlier entries in this record cite the pre-move lines; the Trade-offs bullet above
+dedicated `ConfigureMetrics` method (`Extensions.cs:534`, called at `:179`). The `MMCA.Common.*` meter
+chain is at `Extensions.cs:598`-`:606`, the Polly subscription at `:613`, and the trace sources at
+`:182`-`:185`. The earlier entries in this record cite the pre-move lines; the Trade-offs bullet above
 is corrected to the current ones. The authoritative list is still the block itself, and it now carries
 **nine**.
 
@@ -482,3 +486,32 @@ with the full stack belongs to the boundary that handles the exception
 `MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:31`). Both
 lines carry the same correlation id, so they still join; an alert built on the decorator's Error level
 moves to the boundary's ([ADR-014](014-cqrs-decorator-pipeline.md)).
+
+## Revision (2026-09-19): the AI meter is subscribed
+A tenth meter, and a fourth trace source.
+
+**`MMCA.Common.AI` is in the chain now.** The subscription block ends with
+`.AddMeter(AiTelemetryName)`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:606`, the literal at `:62`), and the
+same name is added as a trace source beside the application name, the outbox one and the
+internal-command one (`Extensions.cs:185`). The meter carries the token-usage instruments of the
+governed chat-client boundary ([ADR-120](120-governed-chat-client-boundary.md)): two token counters
+and a call-duration histogram, created by `AiUsageMeter` from an `IMeterFactory`
+(`MMCA.Common/Source/Core/MMCA.Common.AI/Observability/AiUsageMeter.cs:77`, `:81`, `:85`) on the
+meter name it declares at `AiUsageMeter.cs:26`. A host that takes the AI package therefore exports
+token spend and call duration through `AddServiceDefaults` with no per-host subscription, which is
+what the Revision (2026-09-11) said it had to do for itself. That entry and the Related line that
+restated it are superseded.
+
+**The count is ten.** Reading the block itself, which stays the authoritative list: nine
+`MMCA.Common.*` meters (`Outbox`, `Cqrs`, `Idempotency`, `Scheduler`, `Broker`, `OutputCache`,
+`BestEffort`, `InternalCommands`, `AI`, at `Extensions.cs:598`-`:606`) plus `Polly`
+(`Extensions.cs:613`). The **nine** in the Amended (2026-09-11) section counted eight
+`MMCA.Common.*` names plus `Polly` and is superseded by this one.
+
+**Subscribing a package this assembly cannot reference is still deliberate, and still free.** The
+Aspire package has no project reference to `MMCA.Common.AI`, which is what keeps the optional
+language-model dependency out of every host that never adopts it, so the name is a literal here and
+the subscription is inert in a host that never takes the package (`Extensions.cs:55`-`:62`). The
+cost is the one this record's Trade-offs already name, now spread over ten meter literals rather
+than nine: a rename on the publishing side stops export silently until the literal follows.

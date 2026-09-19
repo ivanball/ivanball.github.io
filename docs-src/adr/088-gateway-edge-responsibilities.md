@@ -36,6 +36,11 @@ a trusted-internal-caller exemption beside the synthetic-traffic one, recorded a
 below. Every rate-limiting citation is refreshed against current line numbers, which moved when that
 code landed. Nothing else in the decision changes.
 
+**Revised 2026-09-19:** both consumers now pin `MMCA.Common.Gateway` at 1.205.0, still in lockstep
+with the rest of the framework rather than on a version of its own
+(`MMCA.ADC/Directory.Packages.props:118`, `MMCA.Store/Directory.Packages.props:14`); the 1.185.0
+figure above is the 2026-08-31 snapshot, not the current pin. Nothing in the decision changes.
+
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
 three jobs: the route-to-service map, CORS, and forwarding the caller's `Authorization` header. Nothing

@@ -1,11 +1,16 @@
-# ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange
+# ADR-036: External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange
 
 ## Status
 Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21, provider-email validation ahead of the by-email lookup documented 2026-07-25, one-provider-link-per-user conflict branch documented and the provider-columns migration attribution corrected 2026-09-01).
 Revised 2026-09-07 (an external account's empty credential is explicitly non-authenticating on both
-login and change-password, an OAuth completion must match a flow this client started, and ADC's
+login and change-password, an OAuth completion must match a flow this client started, ADC's
 link-by-email requires both a provider-verified address and a local
-account that has no password).
+account that has no password, and ADC's speaker auto-link takes the same verified-email
+requirement).
+Revised 2026-09-19 (Apple joins Google and GitHub as a third config-gated provider, the by-email
+link runs three guards rather than two, token issuance goes through the shared refresh-session
+workflow, and an external create carries the provider's assertion into the new account's
+confirmation state).
 ## Context
 The framework's Identity story so far is entirely first-party: a user registers with an email and
 password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -17,7 +22,7 @@ provider** vouch for the user. The word "federated" already appears in the ADR s
 but it means service-to-service JWKS trust between our own hosts, not a Google or GitHub account
 signing a person in.
 
-We wanted social sign-in (Google, GitHub) without giving up the invariant that the rest of the system
+We wanted social sign-in (Google and GitHub at the outset, Apple since) without giving up the invariant that the rest of the system
 depends on: **inside the app, a user is always our local `User` carrying our own JWT.** External
 identity should be an *entry path* that terminates in the same local token pair every other flow
 produces, not a parallel identity system that downstream services would have to learn to validate. It
@@ -25,17 +30,25 @@ also had to be optional: most hosts, tests, and local dev runs have no OAuth sec
 JWT-only pipeline untouched, the same inert-until-configured posture as `AddPermissions` (ADR-020).
 
 ## Decision
-Add an opt-in external-login path that federates Google/GitHub sign-in at the edge and immediately
+Add an opt-in external-login path that federates Google, GitHub and Apple sign-in at the edge and immediately
 **exchanges the external identity for the app's own local JWT pair**, linking the external account to
 a local `User`.
 
 - **Scheme registration is config-gated per provider.** `AddExternalAuthProviders` reads the `OAuth`
-  section and enables Google and/or GitHub only when that provider's `OAuth:<Provider>:ClientId` is
-  present; with neither configured it returns without touching the pipeline, so `AddCommonAuthentication`'s
-  JWT-only default is left exactly as it was. `AddAuthentication()` is called with no argument so it
-  appends schemes rather than resetting the JWT bearer default. A configured `ClientId` with a missing
-  `ClientSecret` fails fast at startup. This is the same signal the UI's `ConfigurationOAuthUISettings`
-  uses to light up the Google/GitHub buttons (`GoogleEnabled` / `GitHubEnabled`).
+  section and enables Google, GitHub and/or Apple, each one only when that provider's
+  `OAuth:<Provider>:ClientId` is present
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:60-73`);
+  with none of the three configured it returns without touching the pipeline, so
+  `AddCommonAuthentication`'s JWT-only default is left exactly as it was. `AddAuthentication()` is
+  called with no argument so it appends schemes rather than resetting the JWT bearer default. For
+  Google and GitHub a configured `ClientId` with a missing `ClientSecret` fails fast at startup.
+  Apple carries no static client secret: the handler mints a short-lived ES256 JWT from the
+  developer's private key (`GenerateClientSecret`, `ExternalAuthExtensions.cs:130`), so its
+  fail-fast set is `OAuth:Apple:TeamId` (`:131`), `OAuth:Apple:KeyId` (`:134`) and
+  `OAuth:Apple:PrivateKeyPem` (`:137`) instead, and its callback path is `/auth/callback/apple`
+  (`:143`). The same per-provider signal is what the UI's `ConfigurationOAuthUISettings`
+  uses to light up the Google/GitHub/Apple buttons (`GoogleEnabled` / `GitHubEnabled` /
+  `AppleEnabled`).
 - **A short-lived cookie carries the external principal, nothing more.** The provider callback signs
   into a dedicated `ExternalLogin` cookie scheme (`mmca_external_login`, HttpOnly, SameSite=Lax, a
   10-minute lifetime). It exists only to hand the external claims from the provider callback to the
@@ -69,24 +82,40 @@ a local `User`.
   (`AuthenticationService.cs:192`). This address is the one email in the system no request-level
   validator has already gated (it arrives in an OAuth claim, not in a validated request), and the
   by-email lookup that follows (`AuthenticationService.cs:199`) compares against the validated `Email`
-  value object rather than the raw claim string. When an account already owns that email, two guards
-  run before anything is linked. First, **one provider link per user**: an account that is already
+  value object rather than the raw claim string. When an account already owns that email, three guards
+  run in `TryLinkProviderToExistingAccountAsync` before anything is linked. First, **one provider link per user**: an account that is already
   externally linked to a *different* provider (`IsExternalLogin` plus a `LoginProvider` mismatch,
   `AuthenticationService.cs:210`) is **rejected** with an `Error.Conflict` carrying code
   `Auth.ExternalProviderAlreadyLinked` (`AuthenticationService.cs:212`), because the aggregate holds a
   single `(LoginProvider, ProviderKey)` pair and linking a second provider would overwrite the first
   and strand the original login; the check runs ahead of the verifier, so saying no costs no external
   round trip. Second, the account-takeover guard: it asks
-  `IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync` (`AuthenticationService.cs:224`)
+  `IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync` (`AuthenticationService.cs:338-339`)
   whether the provider asserted the incoming email as verified, and when it did not it **rejects** the
-  sign-in with `Auth.ExternalEmailNotVerified` (defined inline at `AuthenticationService.cs:230`)
-  instead of linking, so an unverified provider assertion cannot claim an existing local account. Only
-  when both guards pass does it **link** the external provider to that account
-  (`User.LinkExternalProvider`, `AuthenticationService.cs:235`). When no account owns the email it
-  **creates** a new `Attendee` via `User.CreateExternal` (`AuthenticationService.cs:241`; an external
-  user has empty password hash/salt and carries `LoginProvider` / `ProviderKey`). In the link and
-  create cases it rotates the refresh token, saves, and mints the access token, so the caller receives
-  the same `AuthenticationResponse` shape as a local login.
+  sign-in with `Auth.ExternalEmailNotVerified` (defined inline at `AuthenticationService.cs:344`)
+  instead of linking, so an unverified provider assertion cannot claim an existing local account.
+  Third, the **pre-registration takeover guard**: an account that still signs in with a password
+  (`User.HasLocalPassword`, checked at `AuthenticationService.cs:356`) is **rejected** with
+  `Auth.ExternalLinkRequiresLocalSignIn` (`:359`), because a provider-verified address proves only
+  the provider's side and nothing proves the local row's address was ever confirmed (the reasoning is
+  in the 2026-09-07 revision, item 3). Only
+  when all three guards pass does it **link** the external provider to that account
+  (`User.LinkExternalProvider`, `AuthenticationService.cs:364`). When no account owns the email it
+  **creates** a new `Attendee` via `User.CreateExternal` (`AuthenticationService.cs:272`; an external
+  user has empty password hash/salt and carries `LoginProvider` / `ProviderKey`). The create path
+  asks the same verifier first (`AuthenticationService.cs:265-266`), so the verifier runs on both
+  branches: the provider's assertion does not gate the create (GitHub asserts nothing, and refusing
+  would close GitHub sign-up), but it is passed to `User.CreateExternal` as a sixth `emailVerified`
+  argument and rides the `UserRegistered` event. It also settles the account's confirmation state
+  (ADR-116): a verified assertion starts the account confirmed
+  (`IsEmailConfirmed = emailVerified`,
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:271`), while a provider
+  that asserts nothing starts it unconfirmed and it receives a confirmation link like a local
+  registration. In the link and create cases the exchange then calls `IssueTokensAsync`
+  (`AuthenticationService.cs:304`), which opens a refresh **session** for the device through the
+  shared workflow (hash at rest, per-user cap, rotation chain) instead of stamping a plaintext
+  refresh token on the aggregate, so the caller receives the same `AuthenticationResponse` shape as a
+  local login.
 - **The linkage is two nullable columns and a filtered unique index.** `User.LoginProvider`
   (`varchar(50)`) and `User.ProviderKey` (`varchar(256)`) are null for local accounts;
   `IsExternalLogin` is derived from `LoginProvider is not null`. In ADC's per-service Identity database
@@ -94,8 +123,9 @@ a local `User`.
   `InitialCreate` migration
   (`MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260606053130_InitialCreate.cs:63`,
   index at `20260606053130_InitialCreate.cs:100`), so two external identities cannot map to the same
-  local account while local (null,null) accounts are unconstrained. (ADC's `Source/Hosting/` carries only
-  the four per-module migration projects, Identity, Conference, Engagement and Notification, so the
+  local account while local (null,null) accounts are unconstrained. (ADC's `Source/Hosting/` carries
+  four per-module migration projects, Identity, Conference, Engagement and Notification, alongside
+  `MMCA.ADC.AppHost`, so the
   Identity database's own `InitialCreate` is the only place these columns are created: there is no
   standalone provider-fields migration and no combined single-DB migration project in the repo.)
   `User.Anonymize` clears both fields on erasure (ADR-005).
@@ -157,7 +187,7 @@ Identity story stays local-credential + RS256 only.
   `email_verified` claim passes the guard; GitHub's OAuth flow asserts nothing, so a GitHub sign-in
   whose email matches an existing account is rejected with `Auth.ExternalEmailNotVerified`, not linked.
   The framework itself still performs no such check: `Auth.ExternalEmailNotVerified` is defined inline
-  in ADC's override (`AuthenticationService.cs:230`), and a non-adopting host (Store, Helpdesk) gets only
+  in ADC's override (`AuthenticationService.cs:344`), and a non-adopting host (Store, Helpdesk) gets only
   the framework's not-supported default (`Auth.ExternalLoginNotSupported`,
   `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:139`), so the guard is
   ADC's own edge, not a framework guarantee.
@@ -173,7 +203,7 @@ Identity story stays local-credential + RS256 only.
   linked, or at Forgot password to set a local one (`AuthenticationService.cs:214`).
 
 ## Revision (2026-09-07)
-Three changes from the 2026-09-07 security review.
+Four changes from the 2026-09-07 security review.
 
 1. **The empty credential an external account carries is explicitly non-authenticating**
    (SEC-Common-01). This record already said an external-login account is created with no password;

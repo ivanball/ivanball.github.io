@@ -5,6 +5,9 @@ Accepted (2026-08-31).
 Revised 2026-09-09: [ADR-115](115-strongly-typed-identifiers-opt-in.md) copies this record's posture verbatim for
 strongly typed identifiers: shipped, tested, wired into JSON, EF Core, MVC binding and OpenAPI, and
 adopted by nothing, with the cheap default left exactly where it is.
+Revised 2026-09-19: Context corrected to state what `ValueObjectsAreImmutableSealedInShared` actually
+asserts (sealed, Shared-layer assembly, no public mutable setters). The rule carries no `record`
+check.
 
 ## Context
 A bounded set of named values shows up everywhere in this workspace: the state that triggered a
@@ -24,9 +27,14 @@ than sketched: reflection-based member discovery, `Result`-returning lookups, ty
 a System.Text.Json converter factory, `DataContract` attribution for the XML formatter, and a pair
 of EF Core value converters in Infrastructure. Thirty-three test methods across three files pin its
 contract. It also sits in the `MMCA.Common.Shared.ValueObjects` namespace but deliberately does not
-derive from `ValueObject`, because the `ValueObjectsAreImmutableSealedInShared` fitness rule requires
-every `ValueObject` derivative to be a sealed record, which forbids the static-member idiom the type
-exists for (`Enumeration.cs:26-29`).
+derive from `ValueObject`. The `ValueObjectsAreImmutableSealedInShared` fitness rule asserts three
+things about every concrete class deriving from `ValueObject`: the type is sealed
+(`ArchitectureRules.Immutability.cs:64`), its assembly sits in the Shared layer (`:67`), and it
+declares no public property with a public mutable setter (`:70`, `:76-79`). Deriving would therefore
+pin every concrete enumeration to the Shared layer and to `sealed`, which is not where a consumer
+declares a per-module set. The remark on the type states the reason as a sealed-record requirement
+(`Enumeration.cs:26-29`); the rule as implemented names no `record`, and nothing in it forbids the
+`public static readonly` field idiom the type exists for.
 
 **Adoption is zero.** A search of all four repos plus the samples finds no production type deriving
 from `Enumeration<T>`: the only derivations anywhere are five private fixtures inside the three test

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -245,7 +247,11 @@
           record used to quote no longer carry a package count of their own (<code>release.yml:90</code>,
           <code>Directory.Build.props:68</code>), so that note is dropped and <code>MMCA.Common/FACTS.md:19-38</code> is the single
           place the published set is enumerated; the <code>release.yml</code> line anchors are re-pinned to the current
-          file.</p>
+          file. Revised (2026-09-19): that re-pin no longer holds. <code>release.yml</code> has since gained a
+          deployment-environment gate, a merged-main ancestry assertion and a locked-mode restore, so every
+          <code>release.yml</code> line number quoted below points at the file as it stood on 2026-09-01 rather than at
+          the current one; the step names and the behavior described are still accurate, and the Trade-offs
+          section now enumerates the added gates.</p>
           <h2 id="context">Context</h2>
           <p>The <code>MMCA.Common.*</code> packages have shipped to GitHub Packages since the first release (the package
           list and its count are generated and CI-gated in <code>MMCA.Common/FACTS.md:19-38</code>, so this record links
@@ -341,9 +347,18 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>A published version can never be withdrawn.</strong> nuget.org allows unlisting, not deletion. A bad
-          release is now permanent public history, which raises the stakes on the release gates (the SBOM
-          hard gate, the package-consumption job, and the Helpdesk source-build canary all already run
-          before a tag ships).</li>
+          release is now permanent public history, which raises the stakes on the release gates. Six stand
+          between a tag and a push. Four run inside <code>release.yml</code>: both publishing jobs declare
+          <code>environment: release</code> (<code>release.yml:16</code>, <code>:127</code>), so each waits on that environment&#39;s protection
+          rules, which are configured in repository settings and are therefore not reviewable from this
+          repository; both jobs refuse to publish unless the tagged commit is an ancestor of <code>origin/main</code>
+          (<code>release.yml:34-42</code>, <code>:145-154</code>), because a <code>v*</code> tag is the one ref pushed outside the
+          branch-protection flow; and the ubuntu job restores <code>--locked-mode</code> (<code>release.yml:62</code>, the MAUI
+          job has no restore step of its own), so an irreversible push cannot carry a transitive version
+          nobody reviewed. The fourth is the SBOM hard gate, which runs in both jobs (<code>release.yml:81-86</code>,
+          <code>:183-189</code>). The remaining two, the package-consumption job (<code>ci.yml:694</code>) and the Helpdesk
+          source-build canary (<code>ci.yml:495</code>), run on the merged pull request rather than on the tag, and the
+          ancestry assertion is what makes them cover the tagged tree.</li>
           <li><strong>Two registries can report different availability.</strong> nuget.org indexing lags a push by minutes,
           so immediately after a release the two feeds disagree briefly. Consumers pinned to exact versions
           are unaffected; anyone restoring the newest version within that window may not see it yet.</li>

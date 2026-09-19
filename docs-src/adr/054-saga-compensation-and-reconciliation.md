@@ -21,7 +21,10 @@ and the bounded-inconsistency trade-off record the scheduled `Sales.ExpireUnpaid
 runs ahead of the sweep, and the sweep's expiry pass is described as the backstop it now is; every
 `PaymentReconciliationService`, `CheckOutHandler` and `OrderPaymentFailedSagaHandler` citation is
 re-anchored, and the two sentences describing that saga handler as an inline notification are
-corrected. See the Revision below.
+corrected. See the Revision below. Revised (2026-09-19): `CancelOrderHandler` no longer performs the
+guarded transition and nothing else, so the compensation bullet records the one compensating action
+that now runs inside the command (retiring the provider's checkout session) and the already-paid case
+that refuses the cancellation outright; the `CancelOrderHandler` citations are re-anchored with it.
 
 ## Context
 Checkout spans a boundary no transaction covers. `CheckOutHandler` commits the order insert, the cart
@@ -47,13 +50,27 @@ Multi-step workflows are **choreographed sagas**: each step raises a domain even
 or compensating action lives in its own handler. A **periodic reconciliation sweep** is the
 saga-timeout backstop for steps that depend on an external system.
 
-- **Compensation is a domain-event handler, never code in the command handler.** `CancelOrderHandler`
-  performs the guarded transition and saves, and nothing else
-  (`.../Orders/UseCases/Cancel/CancelOrderHandler.cs:42-49`); restoring stock is
+- **Compensation is a domain-event handler, and the one exception has to run before the commit.**
+  `CancelOrderHandler` performs the guarded transition and saves
+  (`.../Orders/UseCases/Cancel/CancelOrderHandler.cs:55-67`), and owns exactly one compensating
+  action itself: retiring the payment provider's checkout session
+  (`CancelOrderHandler.cs:60`, `RetirePaymentSessionAsync` at `CancelOrderHandler.cs:90-124`). That
+  call runs only for an order still in `PaymentInitiated` with a session id
+  (`CancelOrderHandler.cs:92-95`); it asks the provider for the session's authoritative status and,
+  when the session is already paid, **refuses the cancellation** with
+  `OrderCancellationErrorCodes.PaymentAlreadyCompleted` instead of transitioning
+  (`CancelOrderHandler.cs:101-109`, the code at `.../Cancel/OrderCancellationErrorCodes.cs:18`), so
+  a paid order is left alone for a refund. Every other outcome (already expired, session gone,
+  provider unreachable) is a Warning and the cancellation proceeds, with the hosted page expired
+  best-effort on the way out (`CancelOrderHandler.cs:111-123`). It sits in the command rather than a
+  saga step because a saga step runs *after* the commit and could only discover the money once the
+  order was already `Cancelled` and a manual refund was the only remedy left. Everything that
+  compensates after the fact is still its own handler: restoring stock is
   `OrderCancelledSagaHandler : IDomainEventHandler<OrderCancelled>`
   (`.../Orders/Saga/OrderCancelledSagaHandler.cs:30-34`) and notifying the customer of a failed
   payment is `OrderPaymentFailedSagaHandler` (`.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:20-22`).
-  A new compensating action is a new handler, not an edit to the command.
+  A new compensating action is a new handler unless it has to decide whether the commit may happen
+  at all.
 - **Each handler runs in its own DI scope.** Domain-event handlers are registered as singletons
   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:184-189`), so every one
   opens its own scope through `IServiceScopeFactory` (`OrderCancelledSagaHandler.cs:40`,

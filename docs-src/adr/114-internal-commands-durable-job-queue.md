@@ -2,7 +2,10 @@
 
 ## Status
 Accepted (2026-09-09). Rides the outbox machinery of
-[ADR-003](003-outbox-dual-dispatch.md) without extending it.
+[ADR-003](003-outbox-dual-dispatch.md) without extending it. Revised 2026-09-19 (three corrections
+to match the code: a schedule outside a transaction signals the processor only when the row is
+already due, context restoration moved to the shared `AmbientOrigin` helper, and the queue's polling
+interval matches the outbox default, with the difference coming from deployed configuration).
 
 ## Context
 The framework has had two ways to move work off the request thread and neither of them is a job
@@ -64,8 +67,11 @@ exposes `ScheduleAsync(command, runAt)` and a `TimeSpan delay` overload, both re
 adds the row to the context handed back by the scope's own `IDbContextFactory`, which is the same
 instance the calling handler's repositories use. With a transaction active it enrolls the row and
 stops, so the caller's commit persists it and a rollback erases it; with no transaction active it
-saves immediately and signals the processor. That is the outbox's atomicity guarantee applied to an
-instruction instead of an event: a transaction that aborts schedules nothing.
+saves immediately, and signals the processor only when the row is already due
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:124`),
+so a future-dated row is persisted without a wake-up and waits for the poll loop. That is the
+outbox's atomicity guarantee applied to an instruction instead of an event: a transaction that
+aborts schedules nothing.
 
 **3. One table per relational source, mapped unconditionally.** `InternalCommandMessage`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:21`)
@@ -88,10 +94,12 @@ databases, and a flag that changed the schema would make enabling the queue a mi
 deployment decision.
 
 **4. Execution restores the caller's context.** The row captures the scheduling user id, roles,
-tenant and correlation id. Before resolving the handler the processor sets the tenant, then rebuilds
-a `ClaimsPrincipal` carrying the `sub` claim and one role claim per stored role
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:568`)
-and hands it to `ScopedUserOverride`
+tenant and correlation id. The processor does not restore that context itself: before the dispatcher
+runs it calls the shared `AmbientOrigin.Restore`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/AmbientOrigin.cs:127`), the same helper
+the other background hops use, so every hop restores the same shape. `Restore` sets the tenant
+first, then rebuilds a `ClaimsPrincipal` carrying the `sub` claim and one role claim per stored role
+(`AmbientOrigin.BuildPrincipal`, same file `:73`) and hands it to `ScopedUserOverride`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ScopedUserOverride.cs:23`), a scoped
 carrier read by `ImpersonatingCurrentUserService`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ImpersonatingCurrentUserService.cs:20`),
@@ -190,8 +198,13 @@ data ([ADR-003](003-outbox-dual-dispatch.md) / [ADR-005](005-soft-delete-vs-eras
 
 **A command scheduled inside a transaction waits up to one polling interval.** The enrolled row
 raises no signal, because a signal before the commit only buys a poll against a transaction that has
-not committed. `InternalCommands:PollingIntervalSeconds` therefore defaults to 2 rather than the 300
-a deployed outbox uses, and a host that raises it to cut idle polling accepts that much latency on
+not committed. `InternalCommands:PollingIntervalSeconds` ships at 2
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:49`),
+which is the same default `OutboxSettings` ships
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:31`),
+so the divergence is a deployment decision rather than a framework one: ADC and Store both run the
+queue at 60 seconds while pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1591` and `:1597`).
+A host that raises the interval to cut idle polling accepts that much latency on
 transaction-scheduled work.
 
 **Two poll loops, not one.** A host now runs the outbox processor and the queue processor side by

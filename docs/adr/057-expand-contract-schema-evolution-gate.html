@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -233,7 +235,12 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-28). Revised 2026-08-01: the diff now fails <strong>closed</strong> in both repos (the <code>|| true</code>
           is gone and MMCA.Store&#39;s <code>build-and-test</code> checkout sets <code>fetch-depth: 0</code>), so the fail-open trade-off
-          recorded on acceptance is now history rather than current behavior.</p>
+          recorded on acceptance is now history rather than current behavior. Revised 2026-09-19: the
+          combined-archive migration projects the pathspec carve-out described have been deleted (both repos
+          are per-module migration projects only), the guard steps are additionally gated on
+          <code>needs.changes.outputs.code</code>, MMCA.Helpdesk&#39;s CI now has four jobs and one of them applies a
+          migration in a generated seed app, and MMCA.Common now commits one real EF Core migration as a test
+          fixture. The decision itself is unchanged.</p>
           <h2 id="context">Context</h2>
           <p>ADR-030 decides <strong>who</strong> applies a migration: every service host runs <code>DatabaseInitStrategy = Migrate</code>
           and self-applies its pending EF Core migrations at startup as the sole migrator, with no deploy-step
@@ -280,8 +287,11 @@
           <code>MMCA.ADC/.github/workflows/deploy.yml:225-226</code>). <code>*.Designer.cs</code> files are skipped explicitly
           (<code>MMCA.Store/.github/workflows/deploy.yml:313-315</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:237-239</code>),
           the model snapshot is a modification rather than an addition so it never enters the list, and the
-          frozen combined-archive projects (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer/</code>,
-          <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer/</code>) fall outside the pathspec.</li>
+          dot before the wildcard means only per-module migration projects match. Today that is every
+          migration project in both repos: <code>MMCA.Store.Migrations.SqlServer.{Catalog,Identity,Sales}</code> and
+          <code>MMCA.ADC.Migrations.SqlServer.{Conference,Engagement,Identity,Notification}</code>
+          (<code>MMCA.Store/Source/Hosting/</code>, <code>MMCA.ADC/Source/Hosting/</code>), so nothing in either tree sits outside
+          the pathspec.</li>
           <li><strong>Only the <code>Up()</code> body is scanned.</strong> The body is extracted with
           <code>awk &#39;/protected override void Up\(/{flag=1} /protected override void Down\(/{flag=0} flag&#39;</code>
           (<code>MMCA.Store/.github/workflows/deploy.yml:316</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:240</code>), because
@@ -291,7 +301,13 @@
           repos run only on <code>pull_request</code> (<code>MMCA.Store/.github/workflows/deploy.yml:178</code>,
           <code>MMCA.ADC/.github/workflows/deploy.yml:194</code>) and document as a required merge check
           (<code>MMCA.Store/CONTRIBUTING.md:37-38</code>, <code>MMCA.ADC/CONTRIBUTING.md:37-38</code>). Nothing re-checks the shape
-          on the push to <code>main</code> that deploys.</li>
+          on the push to <code>main</code> that deploys. The step also carries the repo-wide change filter
+          <code>if: needs.changes.outputs.code == &#39;true&#39;</code>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:304</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:227</code>), so a
+          PR the <code>changes</code> job classifies as docs-only skips the guard entirely. That is not a hole: <code>code</code>
+          goes false only when every changed file is Markdown
+          (<code>MMCA.Store/.github/workflows/deploy.yml:140</code>), and a PR that adds a migration <code>.cs</code> file always
+          sets it true.</li>
           <li><strong>The common legitimate override is an index rebuilt in place.</strong> Adding INCLUDE columns or a filter
           emits a <code>DropIndex</code> immediately followed by a <code>CreateIndex</code> under the same name, which a
           one-release-back revision reads as a superset of what it expects
@@ -304,16 +320,27 @@
           <code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260725044543_AddOrderStatusAndCreatedOnIndexes.cs:13-17</code>.</li>
           </ul>
           <p><strong>Adoption is partial, and deliberately so at the deployed repos only.</strong> MMCA.ADC and MMCA.Store both
-          run the gate, in identical form. <strong>MMCA.Helpdesk does not have it</strong>: neither of its two CI jobs runs a
-          migration step (<code>build-and-test</code> at <code>MMCA.Helpdesk/.github/workflows/ci.yml:14-60</code>, <code>template-smoke</code>
-          at <code>:76-89</code>), and its tree
+          run the gate, in identical form. <strong>MMCA.Helpdesk does not have it</strong>: none of its four CI jobs carries
+          an expand/contract step (<code>changes</code> at <code>MMCA.Helpdesk/.github/workflows/ci.yml:17</code>, <code>build-and-test</code>
+          at <code>:58</code>, <code>template-smoke</code> at <code>:120</code>, <code>postgresql-canary</code> at <code>:146</code>). One of them does run
+          migrations: <code>postgresql-canary</code> installs <code>dotnet-ef</code> (<code>:180-186</code>) and then runs
+          <code>build/templates/canary-postgresql.ps1</code> (<code>:191-193</code>), which scaffolds an <code>InitialCreate</code> and applies
+          it against a real PostgreSQL service container
+          (<code>MMCA.Helpdesk/build/templates/canary-postgresql.ps1:197</code>, <code>:222</code>). That proves a generated seed
+          app migrates on a second engine; it says nothing about the shape of migrations this repo commits.
+          Helpdesk&#39;s own tree
           already carries an unmarked <code>DropIndex</code> in an <code>Up()</code> body
           (<code>MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/Migrations/20260725121253_AddOutboxInboxRetentionIndexes.cs:13-16</code>),
           which is consistent: Helpdesk has no deploy workflow and therefore no revision-rollback model to
-          protect. <strong>MMCA.Common does not have it either, and cannot</strong>: the framework owns no migrations
-          (there is no <code>Migrations</code> directory anywhere in the repo) even though consumer migrations create the
-          shared <code>OutboxMessages</code> / <code>InboxMessages</code> tables it defines, so a framework-driven shape change lands
-          as an added migration in each consumer, which is where the gate sees it.</p>
+          protect. <strong>MMCA.Common does not have it either, and cannot</strong>: the framework ships no consumer-facing
+          migrations, and there is no <code>Migrations</code> directory anywhere in the repo. The one real EF Core
+          migration it commits is a test fixture, <code>CreateMigrationProofTable</code>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests.MigrationsFixture/CreateMigrationProofTable.cs:23-27</code>),
+          a single additive <code>CreateTable</code> against the framework&#39;s SQLite context, kept in its own tiny library
+          outside the test assembly so that only tests naming that assembly as their migrations assembly ever
+          see it. Nothing a consumer deploys applies it. Consumer migrations still create the shared
+          <code>OutboxMessages</code> / <code>InboxMessages</code> tables the framework defines, so a framework-driven shape change
+          lands as an added migration in each consumer, which is where the gate sees it.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Rollback is one-way for schema, so the check belongs where the drop is still cheap.</strong> The only

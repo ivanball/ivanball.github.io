@@ -8,8 +8,13 @@ and sliding-expiry policy this record decided, which ADR-097 keeps and generaliz
 of per-device sessions hashed at rest; read ADR-097 for what ships today. Its storage, revocation,
 claim and single-session details no longer describe the code: refresh tokens are gone from `IAuthUser`
 (`Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:9-14`), `UpdateRefreshToken` and
-`RevokeRefreshToken` no longer exist under any `Source/` tree (the names survive only on a Common test
-double, `MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/UserUseCaseTestDoubles.cs:76,82`),
+`RevokeRefreshToken` are gone from that interface and from both app `User` aggregates, so no production
+type declares them; the source trees still carry the removal record, though, because Common's analyzer
+ledger marks both as `*REMOVED*` (`Source/Core/MMCA.Common.Domain/PublicAPI.Unshipped.txt:4-5`) while the
+shipped baseline still lists them (`PublicAPI.Shipped.txt:16-17`). The only callable copies left are on a
+Common test double
+(`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Users/UserUseCaseTestDoubles.cs:83,89`), which is
+not dead code: `DeleteUserHandlerBaseTests.cs:74` still calls `UpdateRefreshToken` on it. Beyond that,
 the user id rides the standard `sub` claim rather than a `user_id` claim
 (`Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:87-90,93`), the one-token-per-user model
 is replaced by a per-user family of per-device sessions
@@ -22,6 +27,13 @@ Note (2026-09-03): the body bullet on account deactivation and erasure described
 record was written (ADC revoked in `Delete()` and `Anonymize()`, Store in `Deactivate()` and
 `Anonymize()`), and stopped describing it on 2026-08-26, when the refresh-sessions sweep removed the
 refresh-token members from both aggregates. Neither transition touches refresh state today.
+
+Note (2026-09-19): three content corrections re-verified against current source, with the body's other
+line anchors left as they stood. The removed `UpdateRefreshToken` and `RevokeRefreshToken` are recorded
+in Common's analyzer ledgers and are still called from a Common test, not merely surviving on a test
+double; `RefreshTokenAsync` no longer routes through `IssueTokensAsync`, which now has only login and
+registration as callers; and each app's subclass constructor takes an aggregate settings object whose
+`RefreshSessions` it forwards, rather than `IOptions<RefreshSessionSettings>`.
 
 ## Context
 Identity issues two credentials on every successful sign-in: a short-lived, stateless JWT access
@@ -56,14 +68,20 @@ with a token mismatch triggering revocation.
   (`TokenService.cs:118-121`). It carries no claims and is meaningful only by exact match against the
   stored value.
 - **Rotation on every issuance.** Both login (`AuthenticationServiceBase.cs:183`) and refresh
-  (`AuthenticationServiceBase.cs:267`) route through `IssueTokensAsync`
+  (`AuthenticationServiceBase.cs:267`) routed through `IssueTokensAsync`
   (`AuthenticationServiceBase.cs:474`), which mints a new access token, generates a new refresh token,
   and overwrites the stored one via `user.UpdateRefreshToken(...)` before `SaveChangesAsync`.
   Registration seeds the first refresh token the same way (`AuthenticationServiceBase.cs:263`).
   `UpdateRefreshToken` sets the token and its expiry on each app's `User` aggregate. The previous
-  refresh token is therefore invalid the moment a new one is issued. (Today that overwrite is a
-  successor session row claimed atomically through `IRefreshSessionStore.TryRotateAsync`,
-  `AuthenticationServiceBase.cs:686`.)
+  refresh token is therefore invalid the moment a new one is issued. Today that shared entry point is
+  gone from the refresh path: only login (`AuthenticationServiceBase.cs:245`) and registration
+  (`AuthenticationServiceBase.cs:330`) still call `IssueTokensAsync` (body at
+  `AuthenticationServiceBase.cs:554`), while `RefreshTokenAsync` (`AuthenticationServiceBase.cs:334`)
+  does not call it at all, running `ResolveRotatableSessionAsync` (called at
+  `AuthenticationServiceBase.cs:379`, body at `AuthenticationServiceBase.cs:723`) and then `RotateAsync`
+  (called at `AuthenticationServiceBase.cs:387`, body at `AuthenticationServiceBase.cs:801`) instead.
+  (Today that overwrite is a successor session row claimed atomically through
+  `IRefreshSessionStore.TryRotateAsync`, `AuthenticationServiceBase.cs:686`.)
 - **Refresh binds to the same principal via the expired access token.** `RefreshTokenAsync` requires the
   client to present the expired access token alongside the refresh token and calls
   `TokenService.GetPrincipalFromExpiredToken` (`AuthenticationServiceBase.cs:281`). That method
@@ -103,8 +121,12 @@ with a token mismatch triggering revocation.
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:22`,
   forwarded at `AuthenticationService.cs:31`) both pass `ITokenService` into the base constructor and
   supply only app-specific hooks (the claim set, deactivated-account gates, the registration side-effect);
-  both constructors also take `IRefreshSessionStore` and `IOptions<RefreshSessionSettings>` today (ADC
-  `AuthenticationService.cs:54,55`, Store `AuthenticationService.cs:29,30`).
+  both constructors also take `IRefreshSessionStore` today (ADC `AuthenticationService.cs:54`, Store
+  `AuthenticationService.cs:29`), and each takes an aggregate settings object rather than
+  `IOptions<RefreshSessionSettings>` directly: ADC an `AuthenticationServiceSettings`
+  (`AuthenticationService.cs:55`) and Store an `AuthenticationSettings`
+  (`AuthenticationService.cs:30`), from which the constructor forwards `settings.RefreshSessions` to the
+  base (ADC `AuthenticationService.cs:64`, Store `AuthenticationService.cs:39`).
   The rotation, reuse-detection, and lifetime logic is identical across both apps because it lives once in
   the base. ADC's external OAuth path (ADR-036) issues the same refresh credential when it exchanges an
   external identity for the local token pair, by routing into the shared `IssueTokensAsync`

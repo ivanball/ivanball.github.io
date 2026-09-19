@@ -17,6 +17,11 @@ Revised 2026-09-11 (an unhandled exception is logged once, at the boundary: both
 record the exception outcome at Warning and without the exception object, and the single Error row
 with the full stack belongs to the handler that actually handles it; the duration histograms and
 their `outcome=exception` tag are unchanged; see the Revision (2026-09-11) at the end).
+Revised 2026-09-19 (the authorization decorators no longer hold the check themselves: both delegate to
+a shared `AuthorizationGate.Evaluate(...)`, the capability test now grants on a permission **claim** as
+well as on a registry role, and a second `IRequiresMfa` step-up gate runs after it. The description in
+the Revision (2026-08-18) below is the pre-2026-09-19 one: read the Revision (2026-09-19) at the end.
+The chain itself is unchanged, seven decorators on commands and six on queries).
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -331,3 +336,58 @@ through the logging scope, so they still join.
 the boundary's instead. A caller that invokes a handler outside any of those boundaries and swallows
 the exception itself is left with a Warning and no stack, which is the trade this makes deliberately:
 the stack belongs to the code that handles the failure.
+
+## Revision (2026-09-19)
+One decorator pair changed inside, and the pipeline around it did not: the order is still
+FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Transactional ->
+Handler for commands (seven decorators) and the same chain without Transactional for queries (six),
+registered at
+`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:137-143` and `:146-151`.
+
+**The authorization check moved out of the two decorators into one shared helper.**
+`AuthorizationCommandDecorator` now asks
+`AuthorizationGate.Evaluate(command, currentUser, permissionRegistry, typeof(TCommand).Name)` for a
+denial and runs the inner handler when the answer is `null`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/AuthorizationCommandDecorator.cs:62-64`),
+and `AuthorizationQueryDecorator` does the identical thing for a query
+(`.../Decorators/AuthorizationQueryDecorator.cs:57-59`). Neither file contains a
+`permissionRegistry.HasPermission(...)` call any more. The decorators keep only what actually differs
+between them (which handler interface they wrap and which generic parameter names the request) plus the
+lazily built failure factory (`AuthorizationCommandDecorator.cs:50-57`). The stated reason for the
+extraction is drift: a rule enforced on commands but not on queries reads as working until a use case
+moves from one side to the other (`.../Decorators/AuthorizationGate.cs:14-18`).
+
+**The capability test now grants on either source.** `AuthorizationGate.Evaluate`
+(`AuthorizationGate.cs:40`) denies an `IRequiresPermission` request only when the registry does not
+grant the permission to any of the caller's roles **and** the principal carries no matching
+`permission` claim (`:46-48`, `ClaimsPrincipalExtensions.HasPermissionClaim` at
+`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:94-97`, the claim type at
+`.../Auth/AuthClaimTypes.cs:24`). The claim is what carries a stored grant across a service boundary,
+since only the minting host reads the grant table, so a registry-only check would deny in one service
+what the endpoint policy allows in another (`AuthorizationGate.cs:33-39`). The denial itself is
+unchanged: `Error.Forbidden("Authorization.PermissionDenied", ...)` with the request type name as the
+source (`:52-55`), a failure value rather than a throw.
+
+**A second gate joins the same pass: `IRequiresMfa`.** The marker is empty, a pure request-type
+declaration (`.../UseCases/Markers/IRequiresMfa.cs:28`), and it is orthogonal to `IRequiresPermission`:
+a use case may carry either, both, or neither, and both checks must pass (`:16-19`). A marked request
+reached by a principal with no `mfa` claim short-circuits with
+`Error.Forbidden("Authorization.MultiFactorRequired", ...)` (`AuthorizationGate.cs:60-67`, presence
+test at `ClaimsPrincipalExtensions.cs:127-128`). Two properties are deliberate. **Absence denies**:
+there is no "this account has no second factor, so let it through" branch, because a marked use case is
+one where step-up is the point, and the fix is enrolling rather than a fallback
+(`IRequiresMfa.cs:22-25`). And the step-up check runs **second**, so a caller who lacks the capability
+entirely is answered by the capability gate and never learns which use cases additionally demand a
+factor (`AuthorizationGate.cs:58-60`).
+
+**Both denials are counted on the one existing counter.** The gate records
+`CqrsMetrics.RecordAuthorizationDenied(requestTypeName)` on either path (`AuthorizationGate.cs:50` and
+`:62`), which is still `cqrs.authorization.denied.count` with the `request_type` tag on the
+`MMCA.Common.Cqrs` meter (`.../Decorators/CqrsMetrics.cs:53-54,76-77`, ADR-041). A dashboard therefore
+sees step-up denials and permission denials in one series, separable only by `request_type`. Recording
+inside the gate is also what lets each decorator shape a failure and nothing else.
+
+Nothing else in this record moves. The marker-driven opt-in model, the outside-caching and
+inside-FeatureGate placements of Authorization and their arguments, the sealing rule of
+`AddMmcaApplicationPipeline`, and the order pinned by `DecoratorPipelineOrderTestsBase` all stand as
+written: the chain gained no member, so the conformance test's expected sequences are untouched.
