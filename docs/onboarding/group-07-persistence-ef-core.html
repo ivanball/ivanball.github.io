@@ -5780,7 +5780,7 @@
           (<code>PhysicalDbContextFactory.cs:10-14</code>): each instance carries per-source constructor state (its
           <a href="#physicaldatasource"><code>PhysicalDataSource</code></a>), so a pool would hand a context configured for one
           database to a caller asking for another and silently point repositories at the wrong database. The
-          same warning is repeated at the registration site (<code>DependencyInjection.cs:90-96</code>), which is where
+          same warning is repeated at the registration site (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:113-119</code>), which is where
           someone optimizing DI would look first. Under database-per-tenant the rule is load-bearing twice
           over, since a pooled context could then cross a tenant boundary rather than only a module one.</li>
           <li><strong>Walkthrough</strong>:<ul>

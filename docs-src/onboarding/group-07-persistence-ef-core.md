@@ -5404,7 +5404,7 @@ survives a module being pulled out into its own service.
   (`PhysicalDbContextFactory.cs:10-14`): each instance carries per-source constructor state (its
   [`PhysicalDataSource`](#physicaldatasource)), so a pool would hand a context configured for one
   database to a caller asking for another and silently point repositories at the wrong database. The
-  same warning is repeated at the registration site (`DependencyInjection.cs:90-96`), which is where
+  same warning is repeated at the registration site (`MMCA.Common.Infrastructure/DependencyInjection.cs:113-119`), which is where
   someone optimizing DI would look first. Under database-per-tenant the rule is load-bearing twice
   over, since a pooled context could then cross a tenant boundary rather than only a module one.
 - **Walkthrough**:
