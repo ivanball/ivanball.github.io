@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -246,7 +248,12 @@
           three conditional gates (<code>e2e-gate</code>, <code>backend-test-gate</code> and <code>ai-eval-gate</code>) while Store tolerates two,
           and both repos now carry a fourth freshness gate (<code>cross-browser-freshness</code>) beside <code>cost-guard</code> in
           <code>deploy.needs</code>. Citations re-anchored throughout (both Bicep templates, both <code>deploy.yml</code> files); the
-          gate mechanism, the <code>2</code> ceiling and the per-repo SQL tier sets are unchanged.</p>
+          gate mechanism, the <code>2</code> ceiling and the per-repo SQL tier sets are unchanged.
+          Revised 2026-09-19: two content corrections. ADR-064 is now described as deciding <strong>four</strong>
+          proof-of-recency gates rather than three, matching its own 2026-09-11 revision, and the claim that the
+          two <code>cost-guard.yml</code> files differ <em>only</em> in prefix, tier set, heading and drift wording is dropped,
+          because Store&#39;s header carries three passages ADC&#39;s does not. The gate mechanism, the <code>2</code> ceiling and
+          the per-repo SQL tier sets are unchanged.</p>
           <h2 id="context">Context</h2>
           <p>Both deployed apps run a deliberately small production footprint: every Container App is declared with
           <code>maxReplicas: 2</code> and every SQL database with the <code>Basic</code> tier
@@ -268,7 +275,7 @@
           someone would have to look at it.</p>
           <p>This is the FinOps sibling of the deploy gates the framework already records: ADR-038 (supply-chain
           provenance), ADR-060 (the performance-regression gate against a committed baseline) and ADR-062 (SLO
-          alerting as code). ADR-064 decides the three proof-of-recency gates and enumerates <code>cost-guard</code>
+          alerting as code). ADR-064 decides the four proof-of-recency gates and enumerates <code>cost-guard</code>
           in passing among the jobs that &quot;have the change itself as their subject&quot;
           (<code>Website/docs-src/adr/064-deploy-recency-gates.md:21-22,44</code>), but it does not decide it. This record
           does.</p>
@@ -360,10 +367,14 @@
           <code>MMCA.ADC/.github/workflows/cost-guard.yml:83</code>).</p>
           </li>
           </ul>
-          <p><strong>Adoption is the two deployed apps, in near-identical form.</strong> The files differ only in the resource
-          name prefix, the accepted SQL tier set, the summary heading and the wording of the drift message
-          (ADC&#39;s names the conference-day surge, Store&#39;s does not). MMCA.Helpdesk and MMCA.Common carry no
-          <code>cost-guard.yml</code> and no deploy workflow at all: Helpdesk&#39;s <code>.github/workflows/</code> holds <code>ci.yml</code>,
+          <p><strong>Adoption is the two deployed apps, in near-identical form.</strong> The files differ in the resource name
+          prefix, the accepted SQL tier set, the header rationale, the summary heading and the wording of the
+          drift message (ADC&#39;s names the conference-day surge, Store&#39;s does not). The header is where the two
+          diverge most: Store&#39;s carries three passages ADC&#39;s has no counterpart for, the SQL-baseline rationale
+          (<code>MMCA.Store/.github/workflows/cost-guard.yml:9-13</code>), a note that the check reads <code>maxReplicas</code> only
+          and is therefore blind by design to the 2026-09-02 container right-size (<code>:15-17</code>), and a
+          <code>(Mirrors MMCA.ADC.)</code> marker on the <code>workflow_call</code> trigger (<code>:25</code>). MMCA.Helpdesk and MMCA.Common
+          carry no <code>cost-guard.yml</code> and no deploy workflow at all: Helpdesk&#39;s <code>.github/workflows/</code> holds <code>ci.yml</code>,
           <code>release-templates.yml</code> and the two Claude workflows, and Common&#39;s holds <code>ci.yml</code>, <code>release.yml</code> and
           the same two, so neither has a rollout for this gate to block.</p>
           <h2 id="rationale">Rationale</h2>
@@ -441,7 +452,7 @@
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="064-deploy-recency-gates.html">ADR-064</a> (the sibling deploy-precondition record, which decides the
-          three proof-of-recency gates and enumerates this one only in passing; its break-glass input does not
+          four proof-of-recency gates and enumerates this one only in passing; its break-glass input does not
           apply here), <a href="060-performance-regression-gate.html">ADR-060</a> (the other committed-baseline gate, where
           the baseline is a benchmark rather than a footprint),
           <a href="062-slo-alerting-as-code.html">ADR-062</a> (the alerting-side control this complements: alerts fire on

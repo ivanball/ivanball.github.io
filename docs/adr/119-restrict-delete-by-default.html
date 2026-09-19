@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -233,6 +235,10 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-09-11). Inverts EF Core&#39;s cascading default for every relationship in every repo built
           on this framework, and stamps each foreign key with where its delete behavior came from.</p>
+          <p>Revised 2026-09-19: the rule is adopted end to end. All eight migrations were authored and merged on
+          2026-09-11 (four in ADC, three in Store, one in Helpdesk), and all three applications subclass the
+          shipped fitness-function base, so the Decision and Trade-offs record adopted state instead of
+          pending work.</p>
           <h2 id="context">Context</h2>
           <p>EF Core picks a delete behavior for you. A required relationship gets <code>Cascade</code>, an optional one gets
           <code>ClientSetNull</code>, and neither choice appears anywhere a reviewer reads. The consequence is a database
@@ -302,8 +308,14 @@
           <code>Rules/Domain/ArchitectureRules.DeleteBehavior.cs</code>: any <code>Cascade</code> or <code>ClientCascade</code> must carry
           source <code>Explicit</code> (<code>:34</code>), and any foreign key sourced <code>Convention</code> must be <code>Restrict</code> (<code>:65</code>). A
           subclass supplies <code>dbContext.Model</code> from a context built the way the app builds it, so no database
-          server is needed: the model is what is asserted. The base points at relational models only, since
-          a Cosmos model carries no stamps.</p>
+          server is needed: the model is what is asserted. All three applications subclass it
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/DeleteBehaviorConventionTests.cs:29</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/DeleteBehaviorConventionTests.cs:22</code>,
+          <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DeleteBehaviorConventionTests.cs:20</code>),
+          each handing the base one model and covering its remaining service models with an explicit pair of
+          facts (ADC adds Identity, Engagement and Notification; Store adds Sales and Identity; Helpdesk has
+          one database, so it adds none). The base points at relational models only, since a Cosmos model
+          carries no stamps.</p>
           </li>
           <li><p><strong>A cascade keeps its reason next to it.</strong> Opting in means writing
           <code>.OnDelete(DeleteBehavior.Cascade)</code> in the entity configuration with the business reason beside
@@ -331,8 +343,13 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>One migration per service database at the next framework bump.</strong> The FK constraints change, so
-          each database needs a migration: four in ADC, three in Store, one in Helpdesk. MMCA.Common&#39;s own
+          <li><strong>One migration per service database, authored and merged on 2026-09-11.</strong> The FK constraints
+          change, so each database needed a migration: four in ADC (Conference, Identity, Engagement,
+          Notification), three in Store (Catalog, Sales, Identity) and one in Helpdesk
+          (<code>MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/Migrations/20260911154248_RestrictDeleteByDefault.cs</code>),
+          all eight named <code>RestrictDeleteByDefault</code>. Five of them drop and re-add foreign keys with
+          <code>ReferentialAction.Restrict</code>; three (ADC Identity, ADC Notification, Store Identity) are empty,
+          because those models had no convention-sourced foreign key to flip. MMCA.Common&#39;s own
           tables (outbox, inbox, internal commands, scheduler, audit trail, refresh sessions, permission
           grants, notifications) declare no relationships between each other
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/DeleteBehaviorConventionTests.cs:21-26</code>),
@@ -347,9 +364,10 @@
           <li><strong>SQL Server&#39;s multiple-cascade-path limit only bites where a configuration opts in.</strong> Restrict
           cannot create a cycle, so the error class that most often forces a schema redesign now appears
           exactly where a human chose a cascade, which is the one place it is diagnosable.</li>
-          <li><strong>The fitness functions assert the model, not the database.</strong> They prove what the next migration
-          will write, not what an already-deployed schema contains. The two converge once each database has
-          taken its migration, and drift in between is the ordinary migrations-pending state.</li>
+          <li><strong>The fitness functions assert the model, not the database.</strong> They prove what a migration will
+          write, not what an already-deployed schema contains. The migrations that carry the current models
+          into the schemas were merged on 2026-09-11, so the gap this bullet describes reopens only in the
+          ordinary migrations-pending window between a model change and the migration that follows it.</li>
           <li><strong>Cosmos-backed entities get no coverage from this rule</strong>, by construction. The audit says nothing
           about them because the model cannot carry the claim.</li>
           </ul>

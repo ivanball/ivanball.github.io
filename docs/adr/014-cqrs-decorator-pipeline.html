@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -246,7 +248,12 @@
           Revised 2026-09-11 (an unhandled exception is logged once, at the boundary: both logging decorators
           record the exception outcome at Warning and without the exception object, and the single Error row
           with the full stack belongs to the handler that actually handles it; the duration histograms and
-          their <code>outcome=exception</code> tag are unchanged; see the Revision (2026-09-11) at the end).</p>
+          their <code>outcome=exception</code> tag are unchanged; see the Revision (2026-09-11) at the end).
+          Revised 2026-09-19 (the authorization decorators no longer hold the check themselves: both delegate to
+          a shared <code>AuthorizationGate.Evaluate(...)</code>, the capability test now grants on a permission <strong>claim</strong> as
+          well as on a registry role, and a second <code>IRequiresMfa</code> step-up gate runs after it. The description in
+          the Revision (2026-08-18) below is the pre-2026-09-19 one: read the Revision (2026-09-19) at the end.
+          The chain itself is unchanged, seven decorators on commands and six on queries).</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -552,6 +559,55 @@
           the boundary&#39;s instead. A caller that invokes a handler outside any of those boundaries and swallows
           the exception itself is left with a Warning and no stack, which is the trade this makes deliberately:
           the stack belongs to the code that handles the failure.</p>
+          <h2 id="revision-2026-09-19">Revision (2026-09-19)</h2>
+          <p>One decorator pair changed inside, and the pipeline around it did not: the order is still
+          FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt; Transactional -&gt;
+          Handler for commands (seven decorators) and the same chain without Transactional for queries (six),
+          registered at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:137-143</code> and <code>:146-151</code>.</p>
+          <p><strong>The authorization check moved out of the two decorators into one shared helper.</strong>
+          <code>AuthorizationCommandDecorator</code> now asks
+          <code>AuthorizationGate.Evaluate(command, currentUser, permissionRegistry, typeof(TCommand).Name)</code> for a
+          denial and runs the inner handler when the answer is <code>null</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/AuthorizationCommandDecorator.cs:62-64</code>),
+          and <code>AuthorizationQueryDecorator</code> does the identical thing for a query
+          (<code>.../Decorators/AuthorizationQueryDecorator.cs:57-59</code>). Neither file contains a
+          <code>permissionRegistry.HasPermission(...)</code> call any more. The decorators keep only what actually differs
+          between them (which handler interface they wrap and which generic parameter names the request) plus the
+          lazily built failure factory (<code>AuthorizationCommandDecorator.cs:50-57</code>). The stated reason for the
+          extraction is drift: a rule enforced on commands but not on queries reads as working until a use case
+          moves from one side to the other (<code>.../Decorators/AuthorizationGate.cs:14-18</code>).</p>
+          <p><strong>The capability test now grants on either source.</strong> <code>AuthorizationGate.Evaluate</code>
+          (<code>AuthorizationGate.cs:40</code>) denies an <code>IRequiresPermission</code> request only when the registry does not
+          grant the permission to any of the caller&#39;s roles <strong>and</strong> the principal carries no matching
+          <code>permission</code> claim (<code>:46-48</code>, <code>ClaimsPrincipalExtensions.HasPermissionClaim</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:94-97</code>, the claim type at
+          <code>.../Auth/AuthClaimTypes.cs:24</code>). The claim is what carries a stored grant across a service boundary,
+          since only the minting host reads the grant table, so a registry-only check would deny in one service
+          what the endpoint policy allows in another (<code>AuthorizationGate.cs:33-39</code>). The denial itself is
+          unchanged: <code>Error.Forbidden(&quot;Authorization.PermissionDenied&quot;, ...)</code> with the request type name as the
+          source (<code>:52-55</code>), a failure value rather than a throw.</p>
+          <p><strong>A second gate joins the same pass: <code>IRequiresMfa</code>.</strong> The marker is empty, a pure request-type
+          declaration (<code>.../UseCases/Markers/IRequiresMfa.cs:28</code>), and it is orthogonal to <code>IRequiresPermission</code>:
+          a use case may carry either, both, or neither, and both checks must pass (<code>:16-19</code>). A marked request
+          reached by a principal with no <code>mfa</code> claim short-circuits with
+          <code>Error.Forbidden(&quot;Authorization.MultiFactorRequired&quot;, ...)</code> (<code>AuthorizationGate.cs:60-67</code>, presence
+          test at <code>ClaimsPrincipalExtensions.cs:127-128</code>). Two properties are deliberate. <strong>Absence denies</strong>:
+          there is no &quot;this account has no second factor, so let it through&quot; branch, because a marked use case is
+          one where step-up is the point, and the fix is enrolling rather than a fallback
+          (<code>IRequiresMfa.cs:22-25</code>). And the step-up check runs <strong>second</strong>, so a caller who lacks the capability
+          entirely is answered by the capability gate and never learns which use cases additionally demand a
+          factor (<code>AuthorizationGate.cs:58-60</code>).</p>
+          <p><strong>Both denials are counted on the one existing counter.</strong> The gate records
+          <code>CqrsMetrics.RecordAuthorizationDenied(requestTypeName)</code> on either path (<code>AuthorizationGate.cs:50</code> and
+          <code>:62</code>), which is still <code>cqrs.authorization.denied.count</code> with the <code>request_type</code> tag on the
+          <code>MMCA.Common.Cqrs</code> meter (<code>.../Decorators/CqrsMetrics.cs:53-54,76-77</code>, ADR-041). A dashboard therefore
+          sees step-up denials and permission denials in one series, separable only by <code>request_type</code>. Recording
+          inside the gate is also what lets each decorator shape a failure and nothing else.</p>
+          <p>Nothing else in this record moves. The marker-driven opt-in model, the outside-caching and
+          inside-FeatureGate placements of Authorization and their arguments, the sealing rule of
+          <code>AddMmcaApplicationPipeline</code>, and the order pinned by <code>DecoratorPipelineOrderTestsBase</code> all stand as
+          written: the chain gained no member, so the conformance test&#39;s expected sequences are untouched.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -573,6 +629,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
+            <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             </ul>
           </nav>
         </aside>

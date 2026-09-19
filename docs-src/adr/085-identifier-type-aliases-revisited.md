@@ -6,7 +6,9 @@ recounted, the census gained a stated methodology, and the `CheckIn` and generic
 were corrected; see the Revision (2026-08-23) at the end). Revised 2026-09-11 (the alias count and the
 migration-surface census were re-measured, and the Context bullet asserting that no wrapper-struct
 identifier type exists anywhere was rewritten against the framework surface ADR-115 shipped; see the
-Revision (2026-09-11) at the end).
+Revision (2026-09-11) at the end). Revised 2026-09-19 (the alias count and the migration-surface
+census were re-measured again, and the non-`int` alias bullet was rewritten: there are now two `Guid`
+aliases, not one; see the Revision (2026-09-19) at the end).
 **Revisits [ADR-048](048-primitive-identifier-type-aliases.md)**, which stays
 Accepted and unchanged in substance: the aliases remain the identifier model. What changes is the
 shape of the deferral. ADR-048 left the wrapper-struct alternative "considered and left unbuilt" with
@@ -33,21 +35,23 @@ at once (specification-first reads, keyset pagination, projection pushdown; see
 going to ride along with unrelated churn, that was the wave to fold it into. It did not, and this
 record says why.
 
-Three facts frame the decision, all counted in the four repositories' `Source` trees on 2026-09-11:
+Three facts frame the decision, all counted in the four repositories' `Source` trees on 2026-09-19:
 
-- **46 aliases live in 10 files across the four repos.** MMCA.Common declares 3 (`UserIdentifierType`
+- **48 aliases live in 10 files across the four repos.** MMCA.Common declares 3 (`UserIdentifierType`
   in `Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1` plus the two push-notification
   aliases in `Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2`);
-  MMCA.ADC declares 30 across Conference (17, alias file `:5-21`), Engagement (10, `:4-13`),
+  MMCA.ADC declares 32 across Conference (19, alias file `:7-25`), Engagement (10, `:4-13`),
   Identity (1, `:2`) and Notification (2, `:1-2`); MMCA.Store declares 11 across Catalog (6,
   `MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8`), Sales (3, `:5-7`) and Identity (2, `:3-4`);
   MMCA.Helpdesk declares 2 in Tickets
   (`MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:6,8`).
-- **45 of the 46 resolve to `int`.** The single exception is ADC's
-  `SpeakerIdentifierType = System.Guid`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:19`),
-  which Sessionize forces. So for every practical purpose the whole workspace has **one** identifier
-  CLR type, and the compiler sees 45 synonyms for it.
+- **46 of the 48 resolve to `int`.** Both exceptions are `System.Guid` and both sit in ADC's
+  Conference module
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs`):
+  `SpeakerIdentifierType` (`:23`), which Sessionize forces, and `SessionAssetIdentifierType` (`:17`),
+  whose identifier is a path segment of a public blob name and therefore has to be unguessable rather
+  than sequential (`:4-5`). So for every practical purpose the whole workspace has **one** identifier
+  CLR type, and the compiler sees 46 synonyms for it.
 - **The wrapper struct exists as a framework capability and nothing uses it.** The generator packages
   are still absent (a sweep of the four repositories for `Vogen` finds no package reference, no
   project file entry, no using), but the wrapper primitives themselves ship in MMCA.Common:
@@ -102,14 +106,14 @@ switching.
 That radius is measurable, and the measurement only means something with its counting rule stated.
 An **alias token** here is any `*IdentifierType` token other than the framework's own generic
 parameter `TIdentifierType`, counted in the `.cs` and `.razor` files of the four `Source` trees on
-2026-09-11, with tests, `bin` and `obj` excluded, one hit per source line that carries at least one
-such token. On that rule the aliases appear on **3,591 lines across 1,136 files**: 265 in 106 files in
-MMCA.Common, 2,077 in 637 files in MMCA.ADC, 1,185 in 362 files in MMCA.Store, and 64 in 31 files in
-MMCA.Helpdesk. (Counting every token rather than every line raises the total to 3,794 and leaves the
-file count unchanged.) Excluding `TIdentifierType` is what makes the framework figure honest: 723 of
-MMCA.Common's 988 `IdentifierType` lines carry only that generic parameter, which a wrapper migration
-re-satisfies with a new type argument rather than rewrites call
-site by call site. Every one of the 3,591 is a signature, a property, a generic argument, or a DTO
+2026-09-19, with tests, `bin` and `obj` excluded, one hit per source line that carries at least one
+such token. On that rule the aliases appear on **3,767 lines across 1,192 files**: 288 in 117 files in
+MMCA.Common, 2,227 in 682 files in MMCA.ADC, 1,188 in 362 files in MMCA.Store, and 64 in 31 files in
+MMCA.Helpdesk. (Counting every token rather than every line raises the total to 3,978 and leaves the
+file count unchanged.) Excluding `TIdentifierType` is what makes the framework figure honest: 729 of
+MMCA.Common's 1,017 `IdentifierType` lines carry only that generic parameter, which a wrapper
+migration re-satisfies with a new type argument rather than rewrites call
+site by call site. Every one of the 3,767 is a signature, a property, a generic argument, or a DTO
 field that a wrapper migration would have to either change or prove it can leave alone. Because
 MMCA.Common is a published package family released in lockstep
 ([ADR-016](016-lockstep-versioning-masstransit-pin.md)), the framework share of that count
@@ -145,7 +149,7 @@ Absent all three, this stays a recorded, priced deferral rather than an open que
 - **The cost is paid once and the benefit accrues per defect avoided, and the defect count is
   currently zero.** No production incident in any of the four repos has been traced to a swapped
   identifier. That is not proof of safety, and this record does not claim it is; it is the only
-  evidence available, and it does not support a 1,136-file change.
+  evidence available, and it does not support a 1,192-file change.
 - **A partial migration is worse than either endpoint.** Wrapping some identifiers and not others
   produces a codebase where the absence of a compiler error means nothing, because the reader cannot
   tell whether a given call site is protected or merely un-migrated. The change is therefore
@@ -175,7 +179,7 @@ Absent all three, this stays a recorded, priced deferral rather than an open que
   identifier assignment, so with no wrapper declared it matches nothing. Trigger 1 therefore depends on a
   production defect being *traced* to a transposition, and a wrong-user check-in is exactly the kind
   of defect that gets written off as a scanning mistake instead.
-- **The migration price rises with the codebase.** The 3,591 lines counted here are a snapshot
+- **The migration price rises with the codebase.** The 3,767 lines counted here are a snapshot
   and the number only grows. Deferring on cost grounds means the cost argument gets stronger every
   release, which is the classic shape of a decision that is never revisited on its merits.
 - **Trigger 3 is not measured.** No count of cross-module scalar identifier references is maintained,
@@ -273,3 +277,27 @@ the capability: no identifier in the four `Source` trees declares a wrapper type
 (`Vogen` included) is referenced anywhere, and none of the three triggers has fired. The fitness rule
 constrains the shape of a wrapper if one is written and gates no identifier assignment, so the
 "no detection" trade-off stands as written.
+
+## Revision (2026-09-19)
+The decision, the priced alternative, the three triggers and the trade-offs are unchanged. What
+changed is arithmetic and the non-`int` bullet.
+
+**The alias count is 48 across the same 10 files, 46 of them `int`.** ADC's Conference module gained
+two aliases since 2026-09-11, taking Conference to nineteen and ADC to thirty-two; Common (3),
+Store (11) and Helpdesk (2) are unmoved. One of the two, `SessionAssetIdentifierType = System.Guid`
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17`),
+is the first non-`int` alias added since this record was written, so
+`SpeakerIdentifierType = System.Guid` (`:23` in the same file) is no longer the only one. Both are
+`Guid` for the same class of reason (an identifier minted outside the database), and neither weakens
+the point the count is making: 46 of the 48 are still the same CLR type, so the type system still
+distinguishes almost nothing.
+
+**The migration-surface census is re-measured on the same rule** (one hit per source line carrying at
+least one alias token, `.cs` and `.razor` under the four `Source` trees, tests, `bin` and `obj`
+excluded, the generic parameter `TIdentifierType` not counted). That gives **3,767 lines across
+1,192 files** (Common 288/117, ADC 2,227/682, Store 1,188/362, Helpdesk 64/31), against 3,591 across
+1,136 files eight days earlier. Counting individual tokens instead gives 3,978 over the same 1,192
+files. The framework split moves with it: `MMCA.Common/Source` carries 1,017 `IdentifierType` lines,
+729 of them the generic parameter, leaving 288 alias-token lines. The trade-off about the price
+rising with the codebase keeps documenting itself: the surface grew by roughly 5 percent in eight
+days without anyone deciding to grow it.

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -241,7 +243,9 @@
           AppHost, Helpdesk, gallery, cross-ADR and E2E citations to their current lines and folders (Engagement
           <code>CheckIns</code>, Conference <code>Public/Sessions</code> and <code>Public/Speakers</code>, Sales <code>Orders</code> and <code>ShoppingCarts</code>); split
           the prerender-skip guard into the three reasons its pages now state and listed the pages that were
-          missing from it; and quoted ADR-051&#39;s invariant verbatim.</p>
+          missing from it; and quoted ADR-051&#39;s invariant verbatim. Revised 2026-09-19: recounted the list-page
+          inheritors from source and set the count to twenty (thirteen in ADC, seven in Store), nineteen of them
+          routable, matching the inventory ADR-094 records.</p>
           <h2 id="context">Context</h2>
           <p>Both web applications are Blazor Web Apps: a static server-rendered (SSR) prerender pass produces the
           first HTML, then an interactive runtime takes over, either a Blazor Server SignalR circuit or a
@@ -299,8 +303,8 @@
           clears it instead of issuing a redundant API round-trip (<code>DataGridListPageBase.cs:513-522</code>), which the
           base&#39;s own comment records as the fix for the visible cancel-retry cycle caused by the
           SSR to Server to WASM transition (<code>DataGridListPageBase.cs:167-170</code>). The payload is a
-          <code>PersistedGridState</code> record of items plus total (<code>DataGridListPageBase.cs:1034</code>). <strong>Nineteen types
-          inherit this base</strong> (thirteen in ADC, six in Store), eighteen of them routable list pages plus ADC&#39;s
+          <code>PersistedGridState</code> record of items plus total (<code>DataGridListPageBase.cs:1034</code>). <strong>Twenty types
+          inherit this base</strong> (thirteen in ADC, seven in Store), nineteen of them routable list pages plus ADC&#39;s
           non-routable Engagement <code>AttendeeSearchPanel</code>
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/AttendeeSearchPanel.razor.cs:16</code>),
           so the policy is written once and adopted by inheritance.</li>
@@ -394,7 +398,7 @@
           entire reason ADR-022&#39;s SSR cookie scheme exists, and it is what makes public browse pages render
           without waiting on a runtime boot. Disabling it would have removed the duplicate fetch by removing the
           feature; persisting the prerender result keeps both.</li>
-          <li><strong>Encoding the policy in a base class beats documenting it.</strong> Nineteen types inherit the
+          <li><strong>Encoding the policy in a base class beats documenting it.</strong> Twenty types inherit the
           persist/restore path, the explicit render-mode registration, and the bounded prerender fetch by
           inheriting one type; the alternative was the same 30 lines repeated per page, which is what
           <code>CatalogBrowse</code> shows happening the moment a page falls outside the family.</li>

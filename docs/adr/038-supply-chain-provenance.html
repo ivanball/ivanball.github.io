@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html" aria-current="page">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -234,7 +236,9 @@
           <p>Accepted (2026-07-06; revised 2026-07-21).
           Revised 2026-09-07 (MMCA.Common pins every action by commit SHA and every global tool by version,
           restores in locked mode, fails the vulnerability gate closed, and gates the release behind a
-          protected environment plus a merged-main assertion).</p>
+          protected environment plus a merged-main assertion).
+          Revised 2026-09-19 (locked-mode restore described at its actual scope: the two explicit restore steps,
+          CI <code>build-and-test</code> and release <code>publish</code>, not every job in either workflow).</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common is a published framework: it packs its NuGet packages and pushes them to GitHub Packages
           on every <code>v*</code> tag (release.yml:3-5), where the two production apps and the reference seed consume
@@ -347,10 +351,24 @@
           <code>--version 18.11.0</code> in CI (<code>ci.yml:172</code>, <code>:336</code>). The SBOM generator in particular ran unpinned
           inside the job that goes on to publish, which put an unreviewed binary upstream of the artifact
           the SBOM describes.</li>
-          <li><strong>Restores run in locked mode</strong> (SEC-Common-63 / SEC-ADC-34). <code>dotnet restore MMCA.Common.slnx --locked-mode</code>
-          in CI (<code>ci.yml:129</code>, and the same flag on the other restore steps at <code>:103</code>, <code>:217</code>, <code>:296</code>) and
-          in the release (<code>release.yml:62</code>, <code>:163</code>). The lock files were committed but never enforced, so a
-          drifted graph silently re-resolved rather than failing.</li>
+          <li><strong>The two gating restores run in locked mode</strong> (SEC-Common-63 / SEC-ADC-34).
+          <code>dotnet restore MMCA.Common.slnx --locked-mode</code> is an explicit step in exactly two jobs: CI&#39;s
+          <code>build-and-test</code> (<code>ci.yml:120-129</code>, whose Build then runs <code>--no-restore</code> at <code>:133</code>) and the
+          release&#39;s <code>publish</code> (<code>release.yml:57-62</code>, whose Build runs <code>--no-restore</code> at <code>:69</code> and whose Test
+          and Pack then run <code>--no-build</code> at <code>:72</code> and <code>:75</code>). Those are the only two <code>--locked-mode</code>
+          restores in either workflow: the identical sentence at
+          <code>ci.yml:103</code>, <code>:217</code>, <code>:296</code>, <code>:395</code>, <code>:559</code>, <code>:714</code>, <code>:829</code> and at
+          <code>release.yml:163</code> is a comment inside a <code>setup-dotnet</code> cache block explaining the cache key, not a
+          restore command. Every other job that compiles restores implicitly, without the flag, from its
+          build, run, test or pack command: <code>build-maui</code> (<code>ci.yml:263</code>), <code>ui-e2e</code> (<code>:309</code>),
+          <code>performance-smoke</code> (<code>:410</code>), <code>consumer-source-build</code> (<code>:587</code>), <code>package-consumption</code> (<code>:725</code>),
+          <code>redis-integration</code> (<code>:845</code>), <code>postgresql-integration</code> (<code>:880</code>), <code>apphost-testing</code> (<code>:939</code>), and
+          the release&#39;s <code>publish-maui</code>, which has no restore step at all (<code>release.yml:178</code>). The FACTS
+          drift gate inside <code>build-and-test</code> restores implicitly too (<code>ci.yml:118</code>), because <code>build/facts</code>
+          sits outside <code>MMCA.Common.slnx</code> and carries no lock file. So the enforcement is deliberately
+          placed rather than universal: it covers the graph that gets built, audited, SBOM&#39;d, packed and
+          pushed. The lock files were committed but never enforced anywhere, so a drifted graph silently
+          re-resolved on that path rather than failing.</li>
           <li><strong>The vulnerability gate fails closed</strong> (SEC-Common-62). The audit step captures the tool&#39;s exit
           code and fails the job when <code>dotnet list --vulnerable</code> itself errors (<code>ci.yml:146-149</code>) instead of
           reading an empty log as a clean result, and it honors the same accepted-advisory list the build

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -231,7 +233,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-010-integration-event-schema-versioning--upcaster-policy">ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, <code>OutputCacheEvictionRequested</code>, so the framework&#39;s convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see <a href="090-event-upcaster-registration.html">ADR-090</a>. Amended 2026-09-11: <strong>payload purity</strong> is now part of the contract and is build-gated, so an integration event may neither ship from outside a <code>*.Shared</code> assembly nor expose a type declared in a <code>*.Domain</code> assembly on its wire shape (see the amendment section at the end).</p>
+          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention). Updated 2026-08-14 (ADC now gates seven events, and a fourth tree, the local MMCA.ECommerce sample, subclasses the same base). Revised 2026-08-18 (MMCA.Common now ships its own concrete integration event, <code>OutputCacheEvictionRequested</code>, so the framework&#39;s convention test is no longer vacuous: enforcement runs at five points, not four). Updated 2026-08-21: the upcaster registration extension point named below as follow-up work now ships; see <a href="090-event-upcaster-registration.html">ADR-090</a>. Amended 2026-09-11: <strong>payload purity</strong> is now part of the contract and is build-gated, so an integration event may neither ship from outside a <code>*.Shared</code> assembly nor expose a type declared in a <code>*.Domain</code> assembly on its wire shape (see the amendment section at the end). Updated 2026-09-19 (Store now ships four concrete integration events, not one: <code>ProductVariantChanged</code>, <code>ProductInfoChanged</code>, <code>OrderFulfilled</code> and <code>CustomerErased</code>).</p>
           <h2 id="context">Context</h2>
           <p>Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
           are resolved by consumers solely by their type string: the outbox serializes the event to JSON keyed
@@ -300,7 +302,17 @@
           <code>EventConventionTestsBase</code> and run the identical rules against their own event assemblies:
           <code>EventConventionTests</code> in <code>MMCA.ADC.Architecture.Tests</code> (ADC&#39;s seven events, spread across the
           Identity, Conference and Engagement Shared assemblies the map registers) and
-          <code>MMCA.Store.Architecture.Tests</code> (Store&#39;s one), a matching <code>EventConventionTests</code> in
+          <code>MMCA.Store.Architecture.Tests</code>
+          (<code>Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/EventConventionTests.cs:3</code>, Store&#39;s
+          four events across three modules: <code>ProductVariantChanged</code>
+          (<code>Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductVariantChanged.cs:41</code>)
+          and <code>ProductInfoChanged</code>
+          (<code>Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IntegrationEvents/ProductInfoChanged.cs:31</code>)
+          in Catalog Shared, <code>OrderFulfilled</code>
+          (<code>Source/Modules/Sales/MMCA.Store.Sales.Shared/Orders/IntegrationEvents/OrderFulfilled.cs:28</code>) in
+          Sales Shared, and <code>CustomerErased</code>
+          (<code>Source/Modules/Identity/MMCA.Store.Identity.Shared/Customers/IntegrationEvents/CustomerErased.cs:22</code>)
+          in Identity Shared), a matching <code>EventConventionTests</code> in
           <code>MMCA.Helpdesk.Architecture.Tests</code> (<code>ArchitectureTests.cs</code>) that gates the seed&#39;s
           <code>TicketOpenedIntegrationEvent</code>, and one in the two-module <code>MMCA.ECommerce</code> sample
           (<code>Tests/Architecture/MMCA.ECommerce.Architecture.Tests/ArchitectureTests.cs:38</code>, a local-only sample

@@ -12,6 +12,10 @@ first time, through the `Polly` meter the Aspire defaults now subscribe
 ([ADR-041](041-observability-and-telemetry.md)); and `Smtp:TimeoutSeconds` bounds the one framework
 outbound client that is not an `HttpClient`. See the Revision (2026-09-11) at the end.)
 
+Revised 2026-09-19 (the consumer-side companion the 2026-09-11 revision described as intended but
+absent is now in MMCA.Store's `main`: the Stripe leg has one retry owner. See the Revision
+(2026-09-19) at the end.)
+
 ## Context
 The framework already supplies the *mechanisms* for surviving partial failure: a standard Polly
 resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -159,3 +163,31 @@ pipeline that already retries. The intended shape is one retry owner: zero SDK r
 SDK timeout, with Store's pipeline doing the retrying. That configuration is **not** in MMCA.Store's
 `main` as this revision is written; the framework half, the meter and the SMTP bound, is what this
 record can currently claim.
+
+## Revision (2026-09-19)
+That consumer-side companion is now in MMCA.Store's `main`. `StripeClientFactory` builds the SDK
+client over an explicitly bounded HTTP stack instead of Stripe.net's defaults, and both halves the
+2026-09-11 revision asked for are present: the `StripeClient` is given a `SystemNetHttpClient`
+constructed with `maxNetworkRetries: 0`
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeClientFactory.cs:48`-`:50`),
+and the `HttpClient` underneath it carries an explicit
+`Timeout` of `StripeSettings.RequestTimeoutSeconds` (`:43`-`:46`; the setting at
+`.../Payments/Stripe/StripeSettings.cs:44`, `[Range(1, 120)]` at `:43`, default 30 seconds).
+Both are required together: zero SDK retries on their own would still leave each attempt on the
+SDK's own per-attempt budget, which the factory's own note records as 80 seconds (`:11`-`:18`).
+
+`StripePaymentService`'s Polly pipeline, the retry with exponential backoff followed by the circuit
+breaker (`.../Payments/Stripe/StripePaymentService.cs:69`-`:95`), is therefore the single retry
+owner for this dependency, which is what Decision point 1 asks of a framework-registered client and
+what an SDK-owned client has to be configured into by hand. The breaker also now counts what its
+settings say it counts: one network attempt per recorded failure, rather than a call that had
+already spent three attempts inside the SDK.
+
+Unlike the framework-side half, this one has a unit gate rather than review alone:
+`StripeClientFactoryTests.Create_BuildsAClientWhoseHttpClientPerformsNoRetriesOfItsOwn`
+(`MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.Infrastructure.Tests/Services/StripeClientFactoryTests.cs:17`-`:25`)
+asserts `MaxNetworkRetries` is 0 on the client the factory hands out, so a return to the SDK default
+fails a test. The timeout value itself is not asserted, only bounded by configuration validation, so
+the Trade-offs entry about parameters being a review concern still holds for it. This revision
+changes nothing else: the Decision's three points, the reference objectives, and the database
+posture recorded on 2026-08-18 all stand as written.

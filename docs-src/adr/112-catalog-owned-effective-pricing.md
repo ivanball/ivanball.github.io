@@ -7,6 +7,10 @@ Revised 2026-09-07: an order line freezes the list price and the promotion label
 unit price, so an order answers what it saved without asking Catalog again. The two cross-service
 reply contracts grow additive fields for them; the integration events are untouched.
 
+Revised 2026-09-19: the receipt email is rendered by a durable internal command rather than inside the
+`OrderPaid` domain event handler (ADR-114), and it re-reads the order's frozen pricing columns instead
+of consuming the event's carried copies. The columns, the invariants and the contracts are unchanged.
+
 ## Context
 MMCA.Store sells product variants, and a variant's price is one `Money` on the variant row
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:26`).
@@ -72,13 +76,20 @@ is money owed: the line total and the Stripe total still follow from it alone.
 
 **What the order saved is derived, not stored.** `OrderLine.Savings` and `Order.TotalSavings` are
 computed on read from the frozen pair and excluded from the EF mapping (`OrderLine.cs:65`,
-`Order.cs:72`): a stored total could only ever disagree with the two numbers it restates. `OrderPaid`
-carries the order's `TotalSavings` and each line's `ListPrice` and `PromotionLabel`
-(`Orders/DomainEvents/OrderPaid.cs:21,42`), so the receipt email and the order detail page each show
-a struck "Was" amount, the label (HTML-encoded in the email), an accessible "Was X, now Y" sentence
-and a "You saved" total, every one only when there is a saving
-(`Orders/DomainEventHandlers/OrderPaidHandler.cs:89,97,111`,
-`Sales.UI/Pages/Orders/OrderLinesPanel.razor:56,72,95`).
+`Order.cs:72`): a stored total could only ever disagree with the two numbers it restates. Both places
+that show a saving read the frozen columns back off the order rather than off an event payload. The
+receipt email is scheduled by the `OrderPaid` handler, not written by it: `OrderPaidHandler` writes a
+`SendOrderPaidEmailInternalCommand` carrying the order id alone (ADR-114,
+`Orders/DomainEventHandlers/OrderPaidHandler.cs:37-39`), and
+`SendOrderPaidEmailInternalCommandHandler` re-reads the order with its lines
+(`Orders/InternalCommands/SendOrderPaidEmailInternalCommandHandler.cs:44-47`) before rendering the
+struck "Was" amount, the HTML-encoded label and the "You saved" total
+(`SendOrderPaidEmailInternalCommandHandler.cs:96,104,119`). The order detail page renders the same
+three from the order's own read model, plus an accessible "Was X, now Y" sentence
+(`Sales.UI/Pages/Orders/OrderLinesPanel.razor:56,72,95`). Every one appears only when there is a
+saving. `OrderPaid` still carries the order's `TotalSavings` and each line's `ListPrice` and
+`PromotionLabel` (`Orders/DomainEvents/OrderPaid.cs:21,42`), but its one subscriber now reads only
+the order id and the customer id from it.
 
 **The wire contracts grow additive fields; the event contracts do not.** `UnitPriceEntry` gains
 `list_price = 3` and `promotion_label = 4`
@@ -165,3 +176,5 @@ a sale that ends between cart-add and checkout charges the list price, with no r
 - [ADR-057](057-expand-contract-schema-evolution-gate.md): the discount columns are add-only.
 - [ADR-083](083-crud-lifecycle-event-taxonomy.md): discount changes reuse `ProductVariantChanged` with
   the `Updated` state rather than minting a new event type.
+- [ADR-114](114-internal-commands-durable-job-queue.md): the receipt that renders the struck price is
+  a durable internal command, which is why it re-reads the order instead of trusting the event.

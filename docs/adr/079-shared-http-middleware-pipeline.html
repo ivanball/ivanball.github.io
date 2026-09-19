@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -235,7 +237,10 @@
           cross-reference anchor, which moved to <code>:555</code>). Revised 2026-08-21: the order became data (named
           steps seeded by <code>MiddlewarePipelineBuilder.CreateDefault()</code>), gained a scoped configure overload
           with startup-validated invariants, and is frozen by the <code>MiddlewarePipelineOrderTestsBase</code> fitness
-          function; the two costs this record originally carried as open trade-offs are retired below.</p>
+          function; the two costs this record originally carried as open trade-offs are retired below. Revised
+          2026-09-19: the HTTPS-redirect gRPC exemption is now keyed on the negotiated protocol
+          (<code>MiddlewarePipelineBuilder.IsCleartextHttp2</code>) rather than on a forgeable <code>Content-Type</code> header
+          (SEC-Common-44), and the fitness function is recorded as adopted by all three consumer repos.</p>
           <h2 id="context">Context</h2>
           <p>In ASP.NET Core, middleware order is behavior, not style: a rate limiter placed before authentication
           partitions every request as anonymous, an HTTPS redirect placed in front of a gRPC call breaks the
@@ -294,10 +299,18 @@
           addresses that are not in the default allow-lists (comment at <code>:74-76</code>). It sits ahead of the rate
           limiter, which is the ordering ADR-019 depends on, and <code>Build()</code> enforces that it precedes the
           HTTPS redirect (<code>:275-278</code>).</li>
-          <li><strong>HTTPS redirect is exempted for gRPC.</strong> The redirect is wrapped in <code>app.UseWhen</code> and skipped for any
-          request whose <code>Content-Type</code> starts with <code>application/grpc</code>
-          (<code>MiddlewarePipelineBuilder.cs:91-93</code>), because extracted services are reached over HTTP/2
-          cleartext and a 307 on those requests breaks the call (comment at <code>:85-90</code>, ADR-012).</li>
+          <li><strong>HTTPS redirect is exempted for cleartext HTTP/2, which is the gRPC case.</strong> The redirect is wrapped
+          in <code>app.UseWhen</code> and skipped for any request that matches
+          <code>MiddlewarePipelineBuilder.IsCleartextHttp2</code> (<code>MiddlewarePipelineBuilder.cs:97-99</code>), a predicate
+          defined as <code>!Request.IsHttps &amp;&amp; HttpProtocol.IsHttp2(Request.Protocol)</code> (<code>:362-368</code>), because
+          extracted services are reached over HTTP/2 cleartext (h2c) and a 307 on those requests breaks the
+          call (comment at <code>:85-89</code>, ADR-012). The exemption keys on the protocol Kestrel negotiated during
+          connection setup, which no header can fake; it does not read <code>Content-Type</code> and it does not read
+          routed-endpoint gRPC metadata, because the step runs before <code>UseRouting</code> and no endpoint metadata
+          exists yet (comment at <code>:91-96</code>). Matching on a <code>Content-Type</code> of <code>application/grpc</code> was the
+          original shape and was replaced as forgeable: any caller could have set that header and been served
+          plaintext (SEC-Common-44). The predicate is <code>public</code> so a host that rebuilds this step through the
+          configure overload reuses it rather than reinventing the weaker check (<code>:357-362</code>).</li>
           <li><strong>The soft-deleted-user check sits between the limiter and authorization.</strong>
           <code>SoftDeletedUserMiddleware</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:31</code>)
           is the <code>SoftDeletedUserFilter</code> step (<code>MiddlewarePipelineBuilder.cs:129-131</code>), after <code>RateLimiting</code>
@@ -313,8 +326,12 @@
           the subclass&#39;s <code>Configure</code> customization if any (<code>:35</code>), and asserts the step sequence is exactly
           the documented order (<code>:60-67</code>) and that <code>Build()</code>&#39;s invariants hold (<code>:69-77</code>). No
           <code>WebApplication</code> is built, so it runs in the fast unit tier. The framework subclasses it in its own
-          test pass (<code>Tests/Hosting/MMCA.Common.Testing.Tests/MiddlewarePipelineOrderTests.cs</code>); consumer
-          repos subclass it next to their decorator-order tests.</li>
+          test pass (<code>Tests/Hosting/MMCA.Common.Testing.Tests/MiddlewarePipelineOrderTests.cs</code>), and all
+          three consumer repos subclass it next to their decorator-order tests, each with no overrides
+          because every host calls the zero-argument overload:
+          <code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Api/MiddlewarePipelineOrderTests.cs:16</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Api/MiddlewarePipelineOrderTests.cs:16</code>
+          and <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MiddlewarePipelineOrderTests.cs:15</code>.</li>
           <li><strong>Conditional middleware is registered unconditionally and made inert at runtime.</strong> Both
           <code>TenantResolutionMiddleware</code> (the <code>TenantResolution</code> step, <code>MiddlewarePipelineBuilder.cs:113-119</code>) and
           <code>SoftDeletedUserMiddleware</code> (the <code>SoftDeletedUserFilter</code> step, <code>:129-131</code>) are always in the chain:
@@ -381,9 +398,10 @@
           <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:108,127</code>). Both are addressed by the revision
           above: <code>MiddlewarePipelineOrderTestsBase</code> turns a reorder into a red test, <code>Build()</code> turns a
           misordered customization into a startup failure, and the configure overload makes the escape hatch
-          scoped instead of all-or-nothing. What remains true: the fitness function is opt-in per repo, so a
-          consumer that never subclasses it gets only the startup validation, and only for the invariants
-          <code>Build()</code> knows about, not for the full sequence.</li>
+          scoped instead of all-or-nothing. What remains true: the fitness function is opt-in per repo. All
+          three consumer repos have taken it up, so nothing is currently uncovered, but a future repo that
+          never subclasses it would get only the startup validation, and only for the invariants <code>Build()</code>
+          knows about, not for the full sequence.</li>
           <li><strong>The extension API is a new public surface to hold stable.</strong> Step names are now contract:
           renaming a constant on <code>MiddlewarePipelineStepNames</code>, or reordering in a way the invariants do not
           cover, is a behavior change for any host using the configure overload. No host uses it yet, which

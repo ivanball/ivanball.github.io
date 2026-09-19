@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -240,6 +242,9 @@
           first time, through the <code>Polly</code> meter the Aspire defaults now subscribe
           (<a href="041-observability-and-telemetry.html">ADR-041</a>); and <code>Smtp:TimeoutSeconds</code> bounds the one framework
           outbound client that is not an <code>HttpClient</code>. See the Revision (2026-09-11) at the end.)</p>
+          <p>Revised 2026-09-19 (the consumer-side companion the 2026-09-11 revision described as intended but
+          absent is now in MMCA.Store&#39;s <code>main</code>: the Stripe leg has one retry owner. See the Revision
+          (2026-09-19) at the end.)</p>
           <h2 id="context">Context</h2>
           <p>The framework already supplies the <em>mechanisms</em> for surviving partial failure: a standard Polly
           resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
@@ -403,6 +408,31 @@
           SDK timeout, with Store&#39;s pipeline doing the retrying. That configuration is <strong>not</strong> in MMCA.Store&#39;s
           <code>main</code> as this revision is written; the framework half, the meter and the SMTP bound, is what this
           record can currently claim.</p>
+          <h2 id="revision-2026-09-19">Revision (2026-09-19)</h2>
+          <p>That consumer-side companion is now in MMCA.Store&#39;s <code>main</code>. <code>StripeClientFactory</code> builds the SDK
+          client over an explicitly bounded HTTP stack instead of Stripe.net&#39;s defaults, and both halves the
+          2026-09-11 revision asked for are present: the <code>StripeClient</code> is given a <code>SystemNetHttpClient</code>
+          constructed with <code>maxNetworkRetries: 0</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Stripe/StripeClientFactory.cs:48</code>-<code>:50</code>),
+          and the <code>HttpClient</code> underneath it carries an explicit
+          <code>Timeout</code> of <code>StripeSettings.RequestTimeoutSeconds</code> (<code>:43</code>-<code>:46</code>; the setting at
+          <code>.../Payments/Stripe/StripeSettings.cs:44</code>, <code>[Range(1, 120)]</code> at <code>:43</code>, default 30 seconds).
+          Both are required together: zero SDK retries on their own would still leave each attempt on the
+          SDK&#39;s own per-attempt budget, which the factory&#39;s own note records as 80 seconds (<code>:11</code>-<code>:18</code>).</p>
+          <p><code>StripePaymentService</code>&#39;s Polly pipeline, the retry with exponential backoff followed by the circuit
+          breaker (<code>.../Payments/Stripe/StripePaymentService.cs:69</code>-<code>:95</code>), is therefore the single retry
+          owner for this dependency, which is what Decision point 1 asks of a framework-registered client and
+          what an SDK-owned client has to be configured into by hand. The breaker also now counts what its
+          settings say it counts: one network attempt per recorded failure, rather than a call that had
+          already spent three attempts inside the SDK.</p>
+          <p>Unlike the framework-side half, this one has a unit gate rather than review alone:
+          <code>StripeClientFactoryTests.Create_BuildsAClientWhoseHttpClientPerformsNoRetriesOfItsOwn</code>
+          (<code>MMCA.Store/Tests/Modules/Sales/MMCA.Store.Sales.Infrastructure.Tests/Services/StripeClientFactoryTests.cs:17</code>-<code>:25</code>)
+          asserts <code>MaxNetworkRetries</code> is 0 on the client the factory hands out, so a return to the SDK default
+          fails a test. The timeout value itself is not asserted, only bounded by configuration validation, so
+          the Trade-offs entry about parameters being a review concern still holds for it. This revision
+          changes nothing else: the Decision&#39;s three points, the reference objectives, and the database
+          posture recorded on 2026-08-18 all stand as written.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -420,6 +450,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
+            <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             </ul>
           </nav>
         </aside>

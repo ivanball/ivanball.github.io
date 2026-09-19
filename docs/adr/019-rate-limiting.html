@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -242,7 +244,12 @@
           Revised 2026-09-07 (the gRPC exemption keys on endpoint metadata and the negotiated protocol
           instead of a caller-set header; anonymous <code>/hubs</code> traffic is metered per IP; ADC&#39;s tighter gateway
           policy is scoped to the two credential-submission routes; and a trusted-internal-caller exemption
-          generalizes the synthetic-traffic bypass).</p>
+          generalizes the synthetic-traffic bypass).
+          Revised 2026-09-19 (the Decision is brought in line with the two revisions below and with the
+          current <code>auth-ip</code> surface: the gRPC exemption reads endpoint metadata rather than a content type,
+          anonymous hub traffic is metered before the anonymous exemption applies, the second global
+          partition key is the subject claim, and <code>auth-ip</code> now covers password reset and email confirmation
+          alongside login and register).</p>
           <h2 id="context">Context</h2>
           <p>Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
           Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -265,12 +272,15 @@
           (<code>MMCA.Common.API</code>) installs a <code>GlobalLimiter</code> (active on every request through <code>UseRateLimiter</code>)
           that:<ul>
           <li><strong>Exempts infrastructure traffic</strong> outright (<code>NoLimiter</code>): <code>/health</code>, <code>/alive</code>, JWKS / OIDC
-          discovery (<code>/.well-known/*</code>), and gRPC inter-service calls (<code>application/grpc</code> content type).
-          These are legitimately high-frequency.</li>
-          <li><strong>Exempts anonymous traffic</strong> (<code>NoLimiter</code>): unauthenticated requests are not counted, for the
-          three reasons above.</li>
+          discovery (<code>/.well-known/*</code>), and gRPC inter-service calls, recognized from the routed
+          endpoint&#39;s gRPC metadata rather than from the caller-set <code>application/grpc</code> content type (see
+          the Revision (2026-09-07)). These are legitimately high-frequency.</li>
+          <li><strong>Exempts anonymous traffic</strong> (<code>NoLimiter</code>) for the three reasons above, with one metered
+          exception: an anonymous request to a configured hub path prefix is counted per client IP at
+          <code>AnonymousHubPermitLimit</code> first, and only every other anonymous request falls through to the
+          exemption (see the Revision (2026-09-07)).</li>
           <li><strong>Caps each authenticated caller</strong> to <code>globalPermitLimit</code> (default 300) requests per fixed
-          one-minute window, partitioned by identity name, then the <code>user_id</code> claim, then remote IP,
+          one-minute window, partitioned by identity name, then the subject (<code>sub</code>) claim, then remote IP,
           rejecting overage with <code>429 Too Many Requests</code>.</li>
           </ul>
           </li>
@@ -284,9 +294,13 @@
           also registers the named policy <code>RateLimitPolicyAuthIp</code> (<code>&quot;auth-ip&quot;</code>): a fixed one-minute window
           keyed on the client IP, <code>authIpPermitLimit</code> (default 30) requests, overage rejected with <code>429</code>.
           Unlike the other named policies it is not left to each app to attach. <code>AuthControllerBase</code>
-          (<code>MMCA.Common.API</code>) decorates <code>LoginAsync</code> and <code>RegisterAsync</code> with
-          <code>[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]</code>, so any consumer that
-          inherits the base gets it without opting in. <strong>What an override inherits, settled empirically
+          (<code>MMCA.Common.API</code>) decorates <code>LoginAsync</code> and <code>RegisterAsync</code>, and
+          <code>PasswordResetAuthControllerBase</code> decorates the <code>forgot-password</code> and <code>reset-password</code> actions,
+          all four with <code>[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]</code>, so
+          any consumer that inherits either base gets them without opting in. The apps extend the same
+          policy to the two anonymous email-confirmation actions the framework bases do not own
+          (<code>send-email-confirmation</code> and <code>confirm-email</code> on each <code>EmailConfirmationController</code>, in both
+          Store and ADC Identity). <strong>What an override inherits, settled empirically
           (2026-08-13):</strong> <code>EnableRateLimitingAttribute</code> leaves <code>AttributeUsage.Inherited</code> at its default of
           <code>true</code>, and a derived override therefore still sees the base attribute through
           <code>GetCustomAttributes(inherit: true)</code>, so a bare override very likely retains the policy rather
@@ -297,9 +311,9 @@
           both the base decoration and the inherited-on-an-override case, and a Store integration test that
           reads the booted host&#39;s <code>EndpointDataSource</code> and asserts <code>POST /Auth/register</code> carries the
           <code>auth-ip</code> policy in its metadata (the only check independent of the reflection question). It
-          exists because the other two layers leave one hole between them: the global limiter
-          no-ops for anonymous traffic and the lockout is keyed per email, so a password spray (one password,
-          many emails) from a single source was otherwise unthrottled. Three details are deliberate:
+          exists because the other two layers leave one hole between them: the global limiter no-ops for
+          anonymous traffic outside the hub paths and the lockout is keyed per email, so a password spray
+          (one password, many emails) from a single source was otherwise unthrottled. Three details are deliberate:
           <code>RefreshAsync</code> is <strong>not</strong> throttled (renewal is automatic and periodic, and Blazor Server circuits
           issue it server-side from the UI host&#39;s IP); a request with no attributable IP gets <code>NoLimiter</code>
           rather than sharing one bucket with every other such request, mirroring the global limiter&#39;s
@@ -329,14 +343,17 @@
           behind one IP, and public reads served from the output cache, an anonymous IP cap would throttle
           legitimate visitors at scale while barely protecting an already-cached backend.</li>
           <li><strong>Right control per threat.</strong> Brute-force is an auth concern answered by a per-email lockout plus a
-          per-IP cap on the two endpoints that carry it; general overload is a per-user request cap;
+          per-IP cap on the anonymous credential endpoints that carry it (login, register, password reset and
+          email confirmation); general overload is a per-user request cap;
           infrastructure endpoints must never be throttled. A single global IP bucket conflates all three.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The global limiter only protects the authenticated surface.</strong> The anonymous surface is covered
-          endpoint by endpoint instead: login and register carry the <code>auth-ip</code> limiter by default and the
-          login-protection service on top of it, and public reads are served from the output cache. An
+          endpoint by endpoint instead: the anonymous credential endpoints (login, register, password reset
+          and email confirmation) carry the <code>auth-ip</code> limiter, with the login-protection service on top of
+          it for login and register; anonymous hub paths are metered per IP by the global limiter itself;
+          and public reads are served from the output cache. An
           uncached anonymous endpoint added later inherits none of that: it has no global cap and must opt
           into a named policy or its own control.</li>
           <li><strong>The per-IP cap keys on a header a caller can set.</strong> Trusting forwarded headers from any proxy is
@@ -387,9 +404,11 @@
           <code>rl:{partitionKey}:{unixMinute}</code> (<code>:129-130</code>), performs a <code>StringIncrementAsync</code> (<code>:135</code>), and sets
           a 65-second TTL only on the increment that created the key (<code>:137-143</code>, the 5 seconds of slack
           being deliberate clock skew, <code>:139-141</code>), admitting the request when the returned count is within
-          the permit limit (<code>:145</code>). Exactly two partitions opt in: the global limiter
-          (<code>WebApplicationBuilderExtensions.cs:79-104</code>, Redis scope <code>&quot;global&quot;</code> at <code>:99</code>) and <code>UserPolicy</code>
-          (<code>:114-128</code>, scope <code>&quot;user&quot;</code> at <code>:123</code>).</li>
+          the permit limit (<code>:145</code>). Three partitions opt in: the global limiter
+          (<code>WebApplicationBuilderExtensions.cs:79-104</code>, Redis scope <code>&quot;global&quot;</code> at <code>:99</code>), <code>UserPolicy</code>
+          (<code>:114-128</code>, scope <code>&quot;user&quot;</code> at <code>:123</code>), and, since the 2026-09-07 revision below, the anonymous
+          hub partition (<code>AnonymousPartition</code>, scope <code>&quot;hub&quot;</code> at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:96</code>).</li>
           </ol>
           <p><strong><code>auth-ip</code> deliberately stays in-memory</strong> (<code>allowDistributed: false</code>,
           <code>WebApplicationBuilderExtensions.cs:234</code>, rationale at <code>:143-147</code>), as does <code>FixedPolicy</code>
@@ -490,7 +509,8 @@
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
           ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
           safeguard against client retries), ADR-029 (the per-email lockout and registration throttle that sit
-          on the same two endpoints as the <code>auth-ip</code> cap, and the reason <code>auth-ip</code> stays local), ADR-026 (the
+          on the login and register endpoints the <code>auth-ip</code> cap also covers, and the reason <code>auth-ip</code> stays
+          local), ADR-026 (the
           Redis the distributed limiter reuses, and the <code>IncrementAsync</code> storage-format lesson the raw <code>INCR</code>
           here avoids by owning its own <code>rl:</code> keyspace), ADR-070 (the fail-fast configuration contract
           <code>RateLimitingSettings</code> binds into, and the <code>Distributed</code> degradation that sits outside it), ADR-079

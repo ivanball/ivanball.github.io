@@ -4,7 +4,9 @@
 Accepted (2026-08-07). Revised 2026-08-29: records the component-vendor choice (MudBlazor) that the
 Context already scoped to this ADR, and the `IToastService` / `IAppDialogService` facades that keep
 the vendor out of call sites. Revised 2026-08-31: records that the two facade registrations live in
-their own `AddCommonUiFacades()` call, shared by `AddUIShared` and the shipped bUnit base.
+their own `AddCommonUiFacades()` call, shared by `AddUIShared` and the shipped bUnit base. Revised
+2026-09-19: records the third `NavItem` visibility gate, `RequiredPermission`, which the nav menu
+filters on alongside `RequiredRole` and `RequiredClaim`.
 
 ## Context
 ADR-059 decided how a module plugs into the **server**: an `IModule` implementation is discovered by
@@ -32,9 +34,13 @@ Ship the application shell in the framework package and let each module plug int
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IUIModule.cs:13,16,19,22`); the
   last two default to `[]`, so a module that only contributes pages and navigation is two properties.
   A `NavItem` is a record of title, href, icon and a required `TitleResource` that makes the title
-  and group resource keys, followed by optional `RequiredRole` / `RequiredClaim`, a `NavSection` and
-  an optional collapsible `Group` (`MMCA.Common.UI/Common/NavItem.cs:16`, ADR-027). The resource type
+  and group resource keys, followed by three optional visibility gates (`RequiredRole`,
+  `RequiredClaim`, `RequiredPermission`), a `NavSection` and an optional collapsible `Group`
+  (`MMCA.Common.UI/Common/NavItem.cs:20`, ADR-027). The resource type
   is positional rather than optional so a nav entry cannot be declared with a literal title.
+  `RequiredPermission` is matched against the principal's permission claims
+  (`AuthClaimTypes.Permission`, compared ordinally, `MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:94`),
+  so an entry states the capability it needs rather than the role a given host grants it through.
 - **The router discovers module pages at runtime from the registrations.** `Routes.razor` injects
   `IEnumerable<IUIModule>` (`MMCA.Common.UI/Routes.razor:4`) and hands
   `UIModules.Select(m => m.Assembly)` to the `Router`'s `AdditionalAssemblies`, with `AppAssembly`
@@ -51,7 +57,8 @@ Ship the application shell in the framework package and let each module plug int
   dedicated `Forbidden` page rather than a bare alert (`Routes.razor:11-29`).
 - **The nav menu is assembled from the registrations, trimmed per user.** `NavMenu` injects the same
   enumeration (`MMCA.Common.UI/Layout/NavMenu.razor:8`), flattens every module's `NavItems`, drops
-  items whose `RequiredRole` or `RequiredClaim` the current principal does not carry, and splits the
+  items whose `RequiredRole`, `RequiredClaim` or `RequiredPermission` the current principal does not
+  carry (the three filters compose, each skipped when its property is null), and splits the
   remainder into the General, My Account and Administration sections (`:196-204`).
 - **Two component extension points render module-supplied types.** `MainLayout` reads
   `AppBarComponentTypes` and `LayoutComponentTypes` off the registrations
@@ -150,7 +157,8 @@ no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Hel
   than anything declared.
 - **Descriptors are singletons with eagerly built `NavItems`.** Every adopter initializes the list in
   a property initializer, so nav content cannot depend on scoped state; per-user variation is limited
-  to the `RequiredRole` / `RequiredClaim` filtering the shell applies at render time.
+  to the `RequiredRole` / `RequiredClaim` / `RequiredPermission` filtering the shell applies at
+  render time.
 - **Hiding a nav item is not authorization.** The trimming in `NavMenu` is presentation only; route
   protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:11-29`).
 - **Blazor Web heads wire the assemblies twice.** The router's `AdditionalAssemblies` and the

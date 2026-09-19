@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -234,7 +236,10 @@
           <p>Accepted (2026-08-31).
           Revised 2026-09-09: <a href="115-strongly-typed-identifiers-opt-in.html">ADR-115</a> copies this record&#39;s posture verbatim for
           strongly typed identifiers: shipped, tested, wired into JSON, EF Core, MVC binding and OpenAPI, and
-          adopted by nothing, with the cheap default left exactly where it is.</p>
+          adopted by nothing, with the cheap default left exactly where it is.
+          Revised 2026-09-19: Context corrected to state what <code>ValueObjectsAreImmutableSealedInShared</code> actually
+          asserts (sealed, Shared-layer assembly, no public mutable setters). The rule carries no <code>record</code>
+          check.</p>
           <h2 id="context">Context</h2>
           <p>A bounded set of named values shows up everywhere in this workspace: the state that triggered a
           domain event, an error category, a rate-limiting algorithm, a message-bus provider, a JWT signing
@@ -251,9 +256,14 @@
           a System.Text.Json converter factory, <code>DataContract</code> attribution for the XML formatter, and a pair
           of EF Core value converters in Infrastructure. Thirty-three test methods across three files pin its
           contract. It also sits in the <code>MMCA.Common.Shared.ValueObjects</code> namespace but deliberately does not
-          derive from <code>ValueObject</code>, because the <code>ValueObjectsAreImmutableSealedInShared</code> fitness rule requires
-          every <code>ValueObject</code> derivative to be a sealed record, which forbids the static-member idiom the type
-          exists for (<code>Enumeration.cs:26-29</code>).</p>
+          derive from <code>ValueObject</code>. The <code>ValueObjectsAreImmutableSealedInShared</code> fitness rule asserts three
+          things about every concrete class deriving from <code>ValueObject</code>: the type is sealed
+          (<code>ArchitectureRules.Immutability.cs:64</code>), its assembly sits in the Shared layer (<code>:67</code>), and it
+          declares no public property with a public mutable setter (<code>:70</code>, <code>:76-79</code>). Deriving would therefore
+          pin every concrete enumeration to the Shared layer and to <code>sealed</code>, which is not where a consumer
+          declares a per-module set. The remark on the type states the reason as a sealed-record requirement
+          (<code>Enumeration.cs:26-29</code>); the rule as implemented names no <code>record</code>, and nothing in it forbids the
+          <code>public static readonly</code> field idiom the type exists for.</p>
           <p><strong>Adoption is zero.</strong> A search of all four repos plus the samples finds no production type deriving
           from <code>Enumeration&lt;T&gt;</code>: the only derivations anywhere are five private fixtures inside the three test
           files. The bounded sets the framework and its consumers actually declare are plain C# enums. The

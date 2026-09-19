@@ -12,9 +12,15 @@ been added, and the ADC `User` source citations were re-anchored after an expand
 Revised 2026-08-23 (Conference's alias file now declares seventeen aliases, `ActivityIdentifierType`
 having been added, and the workspace alias count was recounted; see the Revision (2026-08-23) at the end).
 Revised 2026-09-11 (recount): Store Catalog's alias file now declares six aliases, the Reviews aggregate
-having added `ProductReviewIdentifierType` and `VerifiedPurchaseIdentifierType`, so the workspace total is
-**46 aliases across 10 files**; three Decision citations were re-anchored after expanded doc comments moved
-them. See the Revision (2026-09-11) at the end.
+having added `ProductReviewIdentifierType` and `VerifiedPurchaseIdentifierType`, which took the workspace
+total to 46 aliases across 10 files; three Decision citations were re-anchored after expanded doc comments
+moved them. See the Revision (2026-09-11) at the end.
+Revised 2026-09-19 (recount): Conference's alias file now declares nineteen aliases,
+`SessionAiScoreIdentifierType` and `SessionAssetIdentifierType` having been added, so the workspace total is
+**48 aliases across 10 files** and there are now **two** `Guid`-backed aliases rather than one. The Context
+and the Decision's last bullet were also corrected: concrete wrapper-struct identifiers now exist in
+Common's test tree, so what is zero is adoption in the four `Source` trees, not existence. See the Revision
+(2026-09-19) at the end.
 **Revisited by [ADR-085](085-identifier-type-aliases-revisited.md) (2026-08-18)**: the wrapper-struct
 alternative this record deferred was re-evaluated, priced, and deferred again, now against named
 revisit triggers instead of open-endedly. The decision below is unchanged; see the Revision
@@ -36,8 +42,12 @@ generic parameter accepts either of the two common identity styles:
    prescribes, to make identifiers non-interchangeable at compile time.
 
 The codebase chose the first, but until now that choice lived only as a CLAUDE.md convention with no
-recorded trade-off. The wrapper-struct alternative was considered and left unbuilt: **no wrapper-struct
-identifier type exists anywhere in the workspace**, in any repo or layer. This ADR records the
+recorded trade-off. The wrapper-struct alternative was considered and left unadopted: **no entity in any
+of the four `Source` trees is identified by a wrapper struct**. The type itself is no longer absent from
+the workspace, since [ADR-115](115-strongly-typed-identifiers-opt-in.md) shipped the opt-in machinery in
+Common (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:60`) and the concrete
+wrapper structs that pin its contract live in Common's test tree
+(`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/TestIdentifiers.cs:10`). This ADR records the
 primitive-alias decision and its cost so the deferral is deliberate and legible.
 
 ## Decision
@@ -58,15 +68,17 @@ not as a wrapper struct.
   app supplying the concrete `User` entity that satisfies it.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
-  ADC Conference with seventeen aliases
+  ADC Conference with nineteen aliases
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21`),
   and Store Catalog with six
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8`).
 - **The alias is the type; there is no wrapping struct.** The right-hand side is a bare primitive.
-  Most resolve to `int`; the one deviation in Conference is
-  `SpeakerIdentifierType = System.Guid` (line 19), because Sessionize assigns speakers GUIDs while its
-  other imported entities carry integer IDs (the file header comment records this,
-  `MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:1-4`).
+  Most resolve to `int`; the two deviations are both in Conference, and the file header comment records a
+  distinct reason for each. `SpeakerIdentifierType = System.Guid` is a `Guid` because Sessionize assigns
+  speakers GUIDs while its other imported entities carry integer IDs
+  (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:1-4`), and `SessionAssetIdentifierType = System.Guid`
+  is a server-minted GUID because the id is a path segment of the public blob name and so has to be
+  unguessable rather than sequential (same file, lines 4-5).
 - **Aliases are linked solution-wide via `Directory.Build.props`.** Each `GlobalUsings.*.cs` file is
   pulled into every project with a `<Compile Include ... Link=... />` block, so the alias is visible
   everywhere without a project reference: Common
@@ -87,9 +99,13 @@ not as a wrapper struct.
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:37`).
   No converter, serializer shim, or OpenAPI schema mapping appears at any hop: `int` and `Guid` are the
   values on the wire and in the store.
-- **The wrapper-struct alternative is deliberately deferred, not planned.** No wrapper-struct
-  identifier type exists in any repo. That is the current reality: a considered option left unbuilt,
-  not scheduled work.
+- **The wrapper-struct alternative is deliberately deferred, not planned.** No entity in any of the
+  four `Source` trees is identified by a wrapper struct. The framework does ship the opt-in machinery
+  ([ADR-115](115-strongly-typed-identifiers-opt-in.md),
+  `MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:60`), and the only concrete
+  wrapper structs in the workspace are the test fixtures that pin its contract
+  (`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/TestIdentifiers.cs:10`). Adoption is zero
+  by design: a considered option left unbuilt, not scheduled work.
 
 ## Rationale
 - **Readable signatures at zero runtime cost.** `GetRepository<User, UserIdentifierType>()` reads as
@@ -149,7 +165,8 @@ is its price and its expiry condition.
 
 ## Revision (2026-08-23)
 No decision and no rationale changed. Two counts did, both because Conference gained an alias. The
-workspace census below is superseded by the Revision (2026-09-11); Conference's seventeen aliases stand.
+workspace census below is superseded by the Revision (2026-09-11), and Conference's seventeen aliases are
+superseded by the Revision (2026-09-19): Conference now declares nineteen.
 
 Conference's alias file declares **seventeen** aliases, `ActivityIdentifierType = int` having been
 added at the head of the list
@@ -179,7 +196,8 @@ Revision (2026-08-18) above is refreshed to those numbers, and ADR-085 carries t
 
 ## Revision (2026-09-11)
 No decision and no rationale changed. The workspace alias count did, because Store Catalog gained the
-Reviews aggregate's two identifiers.
+Reviews aggregate's two identifiers. The census in this revision is itself superseded by the Revision
+(2026-09-19) below, which is the current one; Catalog's six aliases stand.
 
 Catalog's alias file declares **six** aliases, `ProductReviewIdentifierType = int` and
 `VerifiedPurchaseIdentifierType = int` joining the original four
@@ -213,3 +231,49 @@ comment: the `AuthenticationServiceBase<TUser>` constraint is at
 `SpeakerIdentifierType? LinkedSpeakerId` at `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:78`,
 and the `UserIdentifierType UserId` record parameter at
 `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:37`.
+
+## Revision (2026-09-19)
+No decision and no rationale changed. Three facts stated above did, two of them counts and one of them a
+claim about what exists.
+
+Conference's alias file declares **nineteen** aliases, `SessionAiScoreIdentifierType = int` and
+`SessionAssetIdentifierType = System.Guid` having been added
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:7-25`).
+`SessionAssetIdentifierType` is the second `Guid`-backed alias in the workspace, for a reason of its own
+rather than Sessionize's: the id is a path segment of the public blob name, so it has to be unguessable
+rather than sequential (same file, lines 4-5). The Decision section above is re-anchored to both.
+
+Recounting every `GlobalUsings.*IdentifierType.cs` file in the four repositories, one
+`global using X = <primitive>;` line counting as one alias, gives **48 aliases across 10 files**: Common
+Domain 1 (`MMCA.Common/Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1`) and Common
+Shared 2 (`MMCA.Common/Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2`);
+ADC Notification 2
+(`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/MMCA.ADC.Notification.GlobalUsings.IdentifierType.cs:1-2`),
+Identity 1
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
+Engagement 10
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/MMCA.ADC.Engagement.GlobalUsings.IdentifierType.cs:4-13`)
+and Conference 19; Store Catalog 6
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8`),
+Identity 2
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/MMCA.Store.Identity.GlobalUsings.IdentifierType.cs:3-4`)
+and Sales 3
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/MMCA.Store.Sales.GlobalUsings.IdentifierType.cs:5-7`);
+and Helpdesk Tickets 2
+(`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Shared/MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs:6,8`).
+**46 of the 48 resolve to `int`**, and the two `Guid` aliases are both in Conference:
+`SessionAssetIdentifierType` (file line 17) and `SpeakerIdentifierType` (file line 23). The counts in the
+Revisions (2026-08-23) and (2026-09-11) above are superseded by these, and ADR-085 carries the same pair.
+
+The Context and the Decision's last bullet claimed that no wrapper-struct identifier type existed anywhere
+in the workspace. That is no longer true, and both passages now say what is: the framework ships the
+opt-in wrapper-struct machinery
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/IStronglyTypedId.cs:60`) under
+[ADR-115](115-strongly-typed-identifiers-opt-in.md), and concrete wrapper structs exist as the test
+fixtures that pin its contract, five in Common's Shared tests
+(`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/TestIdentifiers.cs:10,17,24,31,38`) plus the
+architecture-rule fixtures
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/StronglyTypedIdFixtures/StronglyTypedIdFixtures.cs:17`).
+What is zero is adoption: no entity in any of the four `Source` trees is identified by a wrapper struct,
+and no `Source` type in ADC, Store or Helpdesk references `IStronglyTypedId` at all. The decision this
+record makes is unchanged by that.

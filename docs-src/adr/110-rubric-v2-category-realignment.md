@@ -2,7 +2,10 @@
 
 ## Status
 Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the category,
-recorded in [ADR-111](111-ai-session-scoring-governance.md)).
+recorded in [ADR-111](111-ai-session-scoring-governance.md); content refreshed 2026-09-19: MMCA.Common
+now scores section 16, the section 10 carried-score caveat is discharged for MMCA.Common and
+MMCA.Store, and the Part A/B/C dispatch split is attributed to the command document rather than the
+workflow).
 
 ## Context
 The 34-category Architecture Evaluation Criteria
@@ -23,9 +26,10 @@ category §34 was promoted out of, and what remained duplicated §32 (coordinate
 criterion, the shotgun-surgery red flag, and the tech-debt register.
 
 Adding categories has a real cost. Every category number is cited by scorecard rows, backlog items
-(`#NN`, `TD-NN` sub-items), ADRs, onboarding chapters, and articles; the workflows carry the literal
-34 in prompts and in the Part A/B/C dispatch split; and any change to the weight sum breaks the
-index trend line across cycles.
+(`#NN`, `TD-NN` sub-items), ADRs, onboarding chapters, and articles; the `/update-scorecard` command
+and its workflow both carry the literal 34 in prompts, and the command document carries a Part A/B/C
+dispatch split (the workflow itself dispatches one subagent per category); and any change to the
+weight sum breaks the index trend line across cycles.
 
 ## Decision
 **The rubric is versioned, and version 2 keeps 34 categories with stable numbering by replacing the
@@ -45,8 +49,12 @@ two overlap-heavy categories in place and adding criteria to eleven others.**
    suite gating CI; guardrails and PII redaction at the boundary; least-privilege tool calling with a
    human in the loop for consequential actions; retrieval stores governed as data (§8, §30); LLM
    observability and cost attribution. Developer-side AI tooling is scored in §33, not here.
-   MMCA.Common and MMCA.Store mark it N/A, which the rubric handles by dropping the weight from both
-   denominators and stating the scope-out in the scorecard's N/A note. MMCA.ADC scores it: its AI
+   MMCA.Store marks it N/A, which the rubric handles by dropping the weight from both denominators
+   and stating the scope-out in the scorecard's N/A note (Sigma-weight 79). MMCA.Common was scoped
+   out the same way at the rebase and is no longer: it scores the category from 2026-09-11, first at
+   M2/I5 when `MMCA.Common.AI` shipped under [ADR-120](120-governed-chat-client-boundary.md), and at
+   M3/I6 from 2026-09-15, so its weight-2 row rejoined both denominators (Sigma-weight 82).
+   MMCA.ADC scores it: its AI
    session-scoring feature calls the Anthropic Messages API in production, so the weight-2 category
    is live in both of its denominators from the 2026-09-04 re-score
    ([ADR-111](111-ai-session-scoring-governance.md)).
@@ -71,21 +79,24 @@ two overlap-heavy categories in place and adding criteria to eleven others.**
    against.** Because the weight sum changes (81 to 80 for MMCA.Common, 80 to 79 for MMCA.ADC and
    MMCA.Store), the indices on either side of the version boundary are comparable only with that
    note. The rebase itself moves no score: §10 is carried at its prior scores under the merged-prior
-   rule, re-weighted to 3, until its first re-score against the new criteria; §16 is N/A for
-   MMCA.Common and MMCA.Store. For MMCA.ADC §16 is scored rather than scoped out, so its weight-2
-   row re-enters both denominators and its sum returns to 81.
+   rule, re-weighted to 3, until each repo's first re-score against the new criteria; §16 is N/A at
+   the rebase for MMCA.Common and MMCA.Store. For MMCA.ADC §16 is scored rather than scoped out, so
+   its weight-2 row re-enters both denominators and its sum returns to 81. Since the rebase,
+   MMCA.Common and MMCA.Store both re-scored §10 on 2026-09-04 and confirmed it (M4/I9 and M4/I8),
+   discharging the carried-score caveat on their rows; MMCA.ADC's §10 still carries it. MMCA.Common's
+   §16 scope-out ended on 2026-09-11, taking its sum to 82.
 
 6. **Landing order.** The rubric, the three scorecards, the three backlogs, and this record land in
    one Website PR, because the workflow reads its category list from the scorecard rows and a rubric
    that changes ahead of them would score the old §10 row against the new §10 text. A full re-score
-   per repo follows, one PR each, since ten categories gained criteria and §10 needs a first-time
+   per repo follows, one PR each, since eleven categories gained criteria and §10 needs a first-time
    score. Onboarding chapters, articles, and the wiki that name the two old titles are refreshed by
    the governance commands on their next cycle, never by hand.
 
 ## Rationale
 Replacing in place preserves every `#NN` citation in the backlogs, every `§NN` in the ADRs and the
-scorecard history, the Part A/B/C dispatch split, and the literal 34 in the command, workflow, and
-agent prompts. The two slots chosen were the two whose criteria were already scored elsewhere, so
+scorecard history, the command document's Part A/B/C dispatch split, and the literal 34 in the
+command, workflow, and agent prompts. The two slots chosen were the two whose criteria were already scored elsewhere, so
 the information loss is limited to relocating a handful of lines. Messaging earns a weight-3 slot
 because a MassTransit plus Service Bus system with an outbox has its operational heart in exactly
 the concerns §6 conflated with in-process dispatch. AI-native earns a slot because an explicit,
@@ -100,9 +111,13 @@ scorecard rows for a decision three lines can record.
 - §10 is scored at carried figures that were earned against different criteria until the first
   re-score, which the row says explicitly. Store's §10 sits at implementation 8, so its
   implementation-band priority rises from 2 to 3 with the weight before any new evidence is read.
+  That carried state has since cleared for two of the three repos: MMCA.Common and MMCA.Store
+  re-scored §10 against the v2 criteria on 2026-09-04 and confirmed it, and only MMCA.ADC's row
+  still reads as carried pending its first re-score.
 - The former §16 evidence (lockstep pin, evolvability gate, tech-debt ledger) lives on as prose in
   the retired row and in §32/§33/§34, but nothing re-scores it as its own line.
-- Prose that names the two old titles persists in onboarding, articles, and the wiki until the
-  governance commands refresh it, and the uncommittable drift prompt was edited in place.
+- The onboarding chapters no longer name either old title. Prose that names them still exists in the
+  articles and in the wiki sources, which the governance commands have not yet refreshed, and the
+  uncommittable drift prompt was edited in place.
 - Every category that gained criteria may move at the next re-score without any code changing,
   which is the intended effect and must not be read as regression.

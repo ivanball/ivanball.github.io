@@ -20,7 +20,11 @@ re-anchored after file moves inside `MMCA.Common`: `MessageBusSettings.cs` now s
 Service Bus emulator host build moved out of `ConfigureBrokerTransport` into the
 `ServiceBusEmulatorSupport` helper, so the bullet describing that branch is restated).
 Revised 2026-09-07 (the single shared client SAS is replaced by a rule per service in both
-consumers, so broker rights and rotations are scoped to one service).
+consumers, so broker rights and rotations are scoped to one service). Revised 2026-09-19 (no
+`app-clients` rule is named anywhere in either template, so the tier-and-rights bullet, the `Manage`
+trade-off and the 2026-09-07 revision are restated around the seven per-service rules that actually
+exist and are named here; the claim that a namespace-level rule survives beside them is dropped,
+because both templates record the opposite in a comment above the rules).
 ## Context
 ADR-003 decides that integration events leave an aggregate through the outbox and are published by
 `OutboxProcessor` via `IMessageBus`, and it settles the *dispatch* question ("in-process for the
@@ -106,16 +110,21 @@ carry a dedicated test tier for the transport that only production uses.
   Both namespaces are `Standard`/`Standard` (`MMCA.ADC/infra/main.bicep:716-719`,
   `MMCA.Store/infra/main.bicep:690-693`) because `UsingAzureServiceBus` configures a topic per
   message type plus a subscription per consumer, and Basic supports queues only
-  (`MMCA.ADC/infra/main.bicep:707-708`, `MMCA.Store/infra/main.bicep:682-684`). The `app-clients`
-  authorization rule carries `Send` + `Listen` + **`Manage`** (`MMCA.ADC/infra/main.bicep:735-739`,
-  rule at `:731-741`; `MMCA.Store/infra/main.bicep:709-713`, rule at `:705-715`) so
-  `ConfigureEndpoints` can provision that topology at startup; without `Manage` the first publish
-  fails with an Unauthorized topology error (`MMCA.ADC/infra/main.bicep:728-729`,
-  `MMCA.Store/infra/main.bicep:702-703`). Both repos source the connection string from that dedicated
-  rule rather than from `RootManageSharedAccessKey`, so a later move to managed identity can revoke it
-  without touching the namespace root (`MMCA.ADC/infra/main.bicep:177-179`,
-  `MMCA.Store/infra/main.bicep:137-139`, the same two-line rationale comment above the same
-  `serviceBusAuthRule.listKeys().primaryConnectionString` expression in each).
+  (`MMCA.ADC/infra/main.bicep:707-708`, `MMCA.Store/infra/main.bicep:682-684`). There is no shared
+  client rule: each container app owns a namespace authorization rule of its own, and every one of
+  them carries `Send` + `Listen` + **`Manage`**. ADC declares four (`identity-service`,
+  `conference-service`, `engagement-service`, `notification-service` at
+  `MMCA.ADC/infra/main.bicep:980`, `:992`, `:1004`, `:1016`, rights at `:984-988` and repeated
+  identically on the other three); Store declares three (`catalog-app`, `sales-app`, `identity-app`
+  at `MMCA.Store/infra/main.bicep:1005`, `:1017`, `:1029`, rights at `:1009-1013`). `Manage` is on
+  all seven so `ConfigureEndpoints` can provision that topology at startup; without it the first
+  publish fails with an Unauthorized topology error, which is why neither template drops it
+  (`MMCA.ADC/infra/main.bicep:953-965`, `MMCA.Store/infra/main.bicep:995-1004`). Neither repo
+  sources a connection string from `RootManageSharedAccessKey`, so a later move to managed identity
+  can revoke these without touching the namespace root: each service reads its own
+  `listKeys().primaryConnectionString` variable, four of them under a four-line rationale comment in
+  ADC (`MMCA.ADC/infra/main.bicep:197-200`, variables at `:201-204`) and three under a five-line one
+  in Store (`MMCA.Store/infra/main.bicep:154-158`, variables at `:159-161`).
 - **Tests use the transport the tier is testing.** A per-service integration host configures no
   provider, so `AddBrokerMessaging` short-circuits and the in-process bus stands
   (`DependencyInjection.cs:755-758`). The cross-service round-trip tier runs the real broker: the
@@ -211,9 +220,13 @@ broker, so extraction later is an AppHost change rather than a code change.
   `MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ServiceBusEmulatorFixtureBase.cs`, plus a throttled
   admin plane and a 10-connection namespace quota), so a green
   smoke proves the binding and the topology provisioning, not production behavior at volume.
-- **`Manage` rights are broad.** The `app-clients` rule can create and delete entities in the
-  namespace, which is the price of letting `ConfigureEndpoints` build the topology instead of
-  declaring every topic in Bicep (`MMCA.ADC/infra/main.bicep:731-741`).
+- **`Manage` rights are broad, and splitting the credential did not narrow them.** Every per-service
+  rule can create and delete entities anywhere in the namespace, which is the price of letting
+  `ConfigureEndpoints` build the topology instead of declaring every topic in Bicep
+  (`MMCA.ADC/infra/main.bicep:980-1026`, `MMCA.Store/infra/main.bicep:1005-1039`). Both templates
+  record the residual next to the rules: a compromised container still holds namespace-wide
+  `Send` + `Listen` + `Manage`, so per-service rules buy credential separation and revocability, not
+  privilege reduction (`MMCA.ADC/infra/main.bicep:967-979`, `MMCA.Store/infra/main.bicep:995-1004`).
 - **Provider selection is per host and silent when missing.** A service that never receives
   `MessageBus__Provider` keeps the in-process bus and publishes nothing to the broker, without an
   error (`DependencyInjection.cs:755-758`); correctness depends on auditing the AppHost and the Bicep
@@ -231,10 +244,15 @@ The transport selection is unchanged. The credential topology under it is (SEC-A
 SEC-Store-38).
 
 Both repos previously sourced their Service Bus connection strings from one shared authorization
-rule on the namespace. Each service now has its own: ADC declares Identity, Conference, Engagement
-and Notification rules (`MMCA.ADC/infra/main.bicep:977`, `:989`, `:1001`, `:1013`) beside the
-namespace-level rule (`:934`), and Store declares Catalog, Sales and Identity rules
-(`MMCA.Store/infra/main.bicep:1005`, `:1017`, `:1029`) beside `:966`.
+rule on the namespace. Each service now has its own, and the shared rule is gone rather than kept
+alongside them: ADC declares `identity-service`, `conference-service`, `engagement-service` and
+`notification-service` (`MMCA.ADC/infra/main.bicep:980`, `:992`, `:1004`, `:1016`) and states the
+absence in the template itself, "One rule per service (SEC-ADC-26): there is no namespace-wide
+shared credential" (`:200`); Store declares `catalog-app`, `sales-app` and `identity-app`
+(`MMCA.Store/infra/main.bicep:1005`, `:1017`, `:1029`) under the matching note, "One namespace
+authorization rule per container app, and no namespace-wide shared credential" (`:981`). Store's
+namespace keeps local auth enabled precisely because those three rules are SAS credentials
+(`MMCA.Store/infra/main.bicep:984-985`).
 
 The consequence for this record is operational rather than architectural: dev/prod parity is
 unaffected (the emulator tier has no SAS at all), but a rotation is now a per-service action instead

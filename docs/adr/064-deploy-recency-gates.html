@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -251,7 +253,12 @@
           also added a third conditional test gate, <code>ai-eval-gate</code>
           (<code>MMCA.ADC/.github/workflows/deploy.yml:470-472</code>), which Store does not have, so the two
           <code>deploy.needs</code> lists are no longer identical: 12 entries in ADC, 11 in Store. Every <code>deploy.yml</code>
-          citation below is re-anchored for the lines the new jobs displaced.</p>
+          citation below is re-anchored for the lines the new jobs displaced.
+          Revised 2026-09-19: the MMCA.Helpdesk inventory is corrected again. Its <code>ci.yml</code> now runs <strong>four</strong>
+          jobs, not the two the 2026-08-07 revision recorded: <code>changes</code>, <code>build-and-test</code>, <code>template-smoke</code>
+          and <code>postgresql-canary</code>, the last an advisory <code>continue-on-error</code> PostgreSQL consumer canary added
+          for ADR-113. The workflow-file count is still four and none of the four <code>ci.yml</code> jobs has an Azure
+          step, so the conclusion that Helpdesk has no rollout for a recency gate to block is unchanged.</p>
           <h2 id="context">Context</h2>
           <p>A production rollout in both deployed apps waits on a list of jobs in <code>deploy.needs</code>
           (<code>MMCA.ADC/.github/workflows/deploy.yml:1305</code>, <code>MMCA.Store/.github/workflows/deploy.yml:1200</code>). Most of
@@ -420,11 +427,16 @@
           deploy pipeline at all</strong>: its <code>.github/workflows/</code> holds four files, <code>ci.yml</code>, the two Claude
           workflows, and <code>release-templates.yml</code>, and the fourth publishes the MMCA.Templates <code>dotnet new</code> pack
           to nuget.org on a <code>templates-v*</code> tag rather than rolling anything out
-          (<code>MMCA.Helpdesk/.github/workflows/release-templates.yml:3,17</code>). <code>ci.yml</code> runs two jobs and neither has
-          an Azure step: <code>build-and-test</code> builds and tests against MMCA.Common source
-          (<code>MMCA.Helpdesk/.github/workflows/ci.yml:14-60</code>) and <code>template-smoke</code> packs the template, generates an
-          app and builds it through <code>build/templates/smoke.ps1</code>
-          (<code>MMCA.Helpdesk/.github/workflows/ci.yml:76-89</code>). There is no rollout for a recency gate to block.
+          (<code>MMCA.Helpdesk/.github/workflows/release-templates.yml:3,17</code>). <code>ci.yml</code> runs four jobs and none has
+          an Azure step: <code>changes</code> classifies the changed paths so the heavy advisory job below can skip a
+          docs-only pull request (<code>MMCA.Helpdesk/.github/workflows/ci.yml:17</code>), <code>build-and-test</code> builds and
+          tests against MMCA.Common source (<code>MMCA.Helpdesk/.github/workflows/ci.yml:58</code>), <code>template-smoke</code>
+          packs the template, generates an app and builds it through <code>build/templates/smoke.ps1</code>
+          (<code>MMCA.Helpdesk/.github/workflows/ci.yml:120</code>), and <code>postgresql-canary</code> generates a
+          PostgreSQL-shaped app against a real <code>postgres:17</code> service container as the ADR-113 consumer canary,
+          advisory by <code>continue-on-error</code> and gated on <code>needs.changes.outputs.code == &#39;true&#39;</code>
+          (<code>MMCA.Helpdesk/.github/workflows/ci.yml:146,152,155</code>). There is no rollout for a recency gate to
+          block.
           <strong>MMCA.Common has no deploy workflow either</strong>: it ships <code>ci.yml</code> and <code>release.yml</code>, publishes packages
           on a tag rather than deploying a service, and neither file contains a freshness gate.</p>
           <h2 id="rationale">Rationale</h2>

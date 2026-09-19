@@ -2,10 +2,11 @@
 
 ## Status
 Accepted (2026-08-18; revised 2026-08-23: ADC's table gained a 27th route, `/Activities`, on
-2026-08-19, and the bicep anchors below are corrected; revised 2026-08-31: section 5 now states the
+2026-08-19; revised 2026-08-31: section 5 now states the
 activity timeout where it actually lives, declared once in the shared `MmcaGateway`
-`ClusterRequestDefaults` profile rather than copied into each cluster, and the host and test anchors
-throughout are re-pinned). **Amends
+`ClusterRequestDefaults` profile rather than copied into each cluster; revised 2026-09-19: the route
+counts below are recounted from the two `appsettings.json` tables, which now hold 33 routes in ADC and
+15 in Store). **Amends
 [ADR-008](008-service-extraction-topology.md)**: that record gave the
 Gateway the route-to-service map and expressed it as code (a list of `MapForwarder` calls). The map
 itself is unchanged; what changed is where it is written. YARP `ReverseProxy` **configuration** is now
@@ -88,10 +89,11 @@ Each gateway calls `AddReverseProxy().LoadFromConfig(builder.Configuration.GetSe
 and `MapReverseProxy()`, and the `MapForwarder` lists are deleted. ADC wires it at
 `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:112-115` and maps it at `:158`; Store at
 `MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:138-141` and `:172`. Routes and clusters live
-in the gateway's own `appsettings.json`: 27 routes over five clusters for ADC (4 identity, 16
+in the gateway's own `appsettings.json`: 33 routes over five clusters for ADC (8 identity, 18
 conference, 5 engagement, 2 notification, at
-`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:58-168`) and 10 routes over three clusters
-for Store (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:42-84`). Destinations stay
+`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:58-168`) and 15 routes over three clusters
+for Store (3 catalog, 8 identity, 4 sales, at
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:42-84`). Destinations stay
 Aspire service-discovery names, so nothing about ADR-008's transport-at-the-edge posture, the AppHost
 wiring or the bicep address book changes: what changed is that the path-prefix-to-cluster mapping is
 data rather than a sequence of calls.
@@ -122,7 +124,7 @@ do, and it is the reason a configuration table is safe to adopt: configuration i
 so the check has to be a test. `/Sponsors`, `/CheckIns` and `/Points` are pinned by it now.
 
 Store gained the equivalent suite it had none of
-(`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:46`): all ten route prefixes are
+(`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:46`): all fifteen route prefixes are
 pinned to their owning cluster (`:87-99`) and to its destination (`:106-123`, driven through the same
 recording forwarder at `:166-183`), with the forwarder budget and the per-cluster version settings
 asserted separately (`:259-277`, `:279-298`, `:300-318`). **Updated
@@ -184,7 +186,12 @@ declarative shape makes the difference a diff instead of an archaeology exercise
 - **The drift already happened, in the repository that has the most gateway tests.** ADC is the careful
   consumer, and it still carried three unpinned routes, an off-by-one comment and a test description
   matching neither. The argument for configuration is not aesthetic: a hand-maintained list of calls
-  produces exactly this, and adding discipline has already been tried.
+  produces exactly this, and adding discipline has already been tried. The gate that replaced the
+  hand-typed list closes the code-versus-test half of that and not the comment half: ADC's current
+  `RouteMapTests` labels its conference block "15 REST controllers + SessionSelection" above 18
+  conference entries (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:146`), so a
+  comment is still an ungated description of the table and the off-by-N is back, just no longer
+  load-bearing.
 - **A route table is data, and data belongs in configuration.** Nothing in a forwarder registration is
   a decision the compiler can check anyway: the path is a string, the destination is a string, the
   cluster name is a string. Writing them as C# buys a build step and no verification.
@@ -231,8 +238,8 @@ declarative shape makes the difference a diff instead of an archaeology exercise
   stronger convergence force than either repo noticing the other's diff. Configuration still makes
   divergence easier to see rather than impossible, and the route table itself remains consumer-owned
   by design.
-- **A JSON table reviews less well than a code diff.** A reviewer reading 27 routes in
-  `appsettings.json` has no types, no navigation and no compiler; the gain in editability is partly a
+- **A JSON table reviews less well than a code diff.** A reviewer reading ADC's 33 routes in
+  `appsettings.json`, or Store's 15, has no types, no navigation and no compiler; the gain in editability is partly a
   loss in review signal, offset only by the test.
 
 ## Related

@@ -9,7 +9,10 @@ Decision and Trade-offs). Revised 2026-08-31: the record now covers `SelfHttpWar
 base class for warming a host's own inbound request path, which both production apps subclass (see
 Decision). Revised 2026-09-02: readiness checks are recorded as PING-class only, never admin-class, and
 the framework owns the Redis registration so that the untagged health check an Aspire client integration
-adds cannot reach `/health/ready` (see Context and Decision).
+adds cannot reach `/health/ready` (see Context and Decision). Revised 2026-09-19: `/health` and
+`/health/ready` are served from a short-TTL single-flight report cache (`MapCachedHealthChecks` over
+`CachedHealthReportProvider`, 5 seconds by default), so an anonymous flood costs one probe round per
+window rather than one per request; `/alive` stays uncached (see Decision).
 
 ## Context
 On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
@@ -40,10 +43,23 @@ gets it.
 
 - **A readiness gate that starts closed.** `WarmupReadinessGate` (singleton) begins not-ready;
   `WarmupReadinessHealthCheck` is registered tagged `ready` and reports `Unhealthy` until the gate opens.
-  `MapDefaultEndpoints()` maps `/health/ready` to every check tagged neither `live` nor `optional`
-  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:433-436`), so while warm-up is running the replica's
-  readiness endpoint reports not-ready and the platform keeps traffic off it. (`/alive` maps only the
-  `live`-tagged self check, `Extensions.cs:417-420`, so liveness is unaffected and the container is not
+  `MapDefaultEndpoints()` maps `/health/ready` through `MapCachedHealthChecks`, under a predicate that
+  admits every check tagged neither `live` nor `optional`
+  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:429-431`), so while warm-up is running the replica's
+  readiness endpoint reports not-ready and the platform keeps traffic off it. The endpoint is served from
+  a cached health report rather than a probe per request: the helper renders exactly what
+  `MapHealthChecks` renders (the status name as `text/plain`, `503` only when unhealthy) but answers from
+  `CachedHealthReportProvider`, keyed by path so two endpoints never share a report, and runs the
+  dependency probes at most once per cache window (`Extensions.cs:445`,
+  `Source/Hosting/MMCA.Common.Aspire/Health/CachedHealthReportProvider.cs:52`). The window is
+  `HealthChecks:CacheSeconds`, 5 seconds by default and `0` to restore probe-per-request behaviour
+  (`Source/Hosting/MMCA.Common.Aspire/Health/HealthReportCacheOptions.cs:38`), and refreshes are
+  single-flight: a caller that cannot take the refresh slot is served the stale report instead of
+  queueing behind a slow dependency (`CachedHealthReportProvider.cs:75`). The cache therefore adds up to
+  one window of lag in both directions: readiness can still report not-ready just after the gate opens,
+  and a dependency that has just failed stays invisible to the probe for the same window. (`/alive` maps
+  only the `live`-tagged self check and is
+  deliberately left uncached, `Extensions.cs:417-420`, so liveness is unaffected and the container is not
   restarted.) The second exclusion, `optional` (`HealthCheckTags.cs:32`), covers a dependency the app
   degrades gracefully without: a distributed cache sitting behind an in-memory fallback, a broker behind
   a retrying outbox. Those checks are still reported on `/health`, so the degradation stays visible, but

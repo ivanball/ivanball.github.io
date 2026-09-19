@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-115: Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-09). Revisits ADR-048 and ADR-085 by adding the capability those records deferred, without migrating anything. ADR-048&#39;s decision…">
+  <meta name="description" content="Accepted (2026-09-09). Revised 2026-09-19 (the alias count and the migration-surface census this record quotes were re-measured, the CheckIn parameter…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/115-strongly-typed-identifiers-opt-in.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-115: Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default">
-  <meta property="og:description" content="Accepted (2026-09-09). Revisits ADR-048 and ADR-085 by adding the capability those records deferred, without migrating anything. ADR-048&#39;s decision…">
+  <meta property="og:description" content="Accepted (2026-09-09). Revised 2026-09-19 (the alias count and the migration-surface census this record quotes were re-measured, the CheckIn parameter…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/115-strongly-typed-identifiers-opt-in.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-115: Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default">
-  <meta name="twitter:description" content="Accepted (2026-09-09). Revisits ADR-048 and ADR-085 by adding the capability those records deferred, without migrating anything. ADR-048&#39;s decision…">
+  <meta name="twitter:description" content="Accepted (2026-09-09). Revised 2026-09-19 (the alias count and the migration-surface census this record quotes were re-measured, the CheckIn parameter…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default","item":"https://ivanball.github.io/docs/adr/115-strongly-typed-identifiers-opt-in.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -231,7 +233,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-115-strongly-typed-identifiers-as-an-opt-in-capability-aliases-still-the-default">ADR-115: Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-09).
+          <p>Accepted (2026-09-09). Revised 2026-09-19 (the alias count and the migration-surface census this
+          record quotes were re-measured, the <code>CheckIn</code> parameter run was corrected from &quot;consecutive&quot;, and the
+          fitness rule&#39;s subclass list was completed; see the Revision (2026-09-19) at the end).
           <strong>Revisits <a href="048-primitive-identifier-type-aliases.html">ADR-048</a> and
           <a href="085-identifier-type-aliases-revisited.html">ADR-085</a></strong> by adding the capability those records deferred,
           without migrating anything. ADR-048&#39;s decision (every entity identity is a primitive named through a
@@ -242,9 +246,15 @@
           <h2 id="context">Context</h2>
           <p>ADR-048 chose primitive identifier aliases over wrapper structs. ADR-085 re-opened that choice on
           2026-08-18, priced the migration in numbers (44 aliases, 43 of them <code>int</code>, 3,192 occurrences across
-          1,001 files), deferred again, and replaced the open-ended &quot;not now&quot; with three named revisit triggers:
-          a production defect traced to an identifier transposition, a greenfield fifth consumer, or a
-          cross-module identifier count that keeps climbing.</p>
+          1,001 files, the August figures), deferred again, and replaced the open-ended &quot;not now&quot; with three
+          named revisit triggers: a production defect traced to an identifier transposition, a greenfield fifth
+          consumer, or a cross-module identifier count that keeps climbing. Those numbers have moved twice
+          since. A recount of the ten <code>GlobalUsings.*IdentifierType.cs</code> files on 2026-09-19 gives <strong>48 aliases,
+          46 of them <code>int</code></strong>; the two exceptions are both <code>System.Guid</code> and both in ADC&#39;s Conference module
+          (<code>SessionAssetIdentifierType</code> and <code>SpeakerIdentifierType</code>,
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17</code>
+          and <code>:23</code>). ADR-085&#39;s 2026-09-19 census puts the migration surface at 3,767 alias-carrying lines
+          across 1,192 files.</p>
           <p><strong>None of the three has fired, and this record is not claiming otherwise.</strong> The trigger here is a
           different one: the 2026-09-09 framework gap analysis of what a .NET application framework is expected
           to ship. The strongly typed identifier is named in four separate &quot;modern .NET building blocks&quot; lists
@@ -399,8 +409,13 @@
           flags a wrapper that is not a struct, is not <code>readonly</code>, is not a record, or declares instance
           state beyond the wrapped value. It is exposed by <code>StronglyTypedIdTestsBase</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/StronglyTypedIdTestsBase.cs:9</code>)
-          and subclassed in MMCA.Common&#39;s own architecture tests, where it is satisfied by having nothing
-          to check. It exists to hold the FIRST wrapper any repo declares to the shape the converters,
+          and subclassed in three repositories&#39; architecture tests: MMCA.Common
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/StronglyTypedIdConventionTests.cs:12</code>),
+          MMCA.ADC
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/StronglyTypedIdTests.cs:9</code>) and
+          MMCA.Store
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/StronglyTypedIdTests.cs:3</code>).
+          All three are satisfied by having nothing to check; MMCA.Helpdesk declares no subclass. It exists to hold the FIRST wrapper any repo declares to the shape the converters,
           comparer and route binding are written against. The rule is deliberately separate from
           <code>ValueObjectsAreImmutableSealedInShared</code>: an identifier is not a <code>ValueObject</code> derivative, it has
           no validation to fail and no <code>Result</code>-returning <code>Create</code> factory, which is the same reasoning
@@ -408,8 +423,9 @@
           </li>
           <li><p><strong>Adoption is zero and this record says so.</strong> No production type in MMCA.Common, MMCA.Store,
           MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample implements <code>IStronglyTypedId&lt;,&gt;</code>. The only
-          implementations anywhere are the fixtures in six of the framework&#39;s own test files. The 44
-          aliases ADR-085 counted are untouched, and no consumer needs a version-bump behaviour change:
+          implementations anywhere are the fixtures in six of the framework&#39;s own test files. The 48
+          aliases in force across the four repositories on 2026-09-19 (46 <code>int</code>, two <code>System.Guid</code>) are
+          untouched, and no consumer needs a version-bump behaviour change:
           without a call to <code>AddStronglyTypedIds</code>, every framework site that reads the registry treats its
           absence as &quot;no wrappers in use&quot;.</p>
           </li>
@@ -441,9 +457,12 @@
           for smart enumerations and <a href="037-field-level-encryption-at-rest.html">ADR-037</a> for the encryption
           converter. The alternative, leaving the code in place with no record, reads as unfinished adoption
           to the next reader.</li>
-          <li><strong>The aliases are still right for the four repos.</strong> ADR-085&#39;s arithmetic did not change: 3,192
-          occurrences across 1,001 files, no incident traced to a transposition, and a partial migration
-          worse than either endpoint. Nothing here proposes moving any of it.</li>
+          <li><strong>The aliases are still right for the four repos.</strong> ADR-085&#39;s conclusion did not change, though its
+          arithmetic did: its 2026-09-19 census reports 3,767 alias-carrying lines across 1,192 files, up
+          from the 3,192 across 1,001 it priced in August. There is still no incident traced to a
+          transposition, and a partial migration is still worse than either endpoint. A surface that grows on
+          its own makes the migration more expensive, not the deferral less sound. Nothing here proposes
+          moving any of it.</li>
           <li><strong>A greenfield consumer now has a first-class path.</strong> ADR-085&#39;s second trigger says a new
           application on the framework pays none of the migration cost and is the right place to build
           wrappers first. That path now exists as one DI call rather than as a research project, which is
@@ -485,10 +504,12 @@
           compiler error whether a call site is protected. ADR-085 named that as the reason the migration is
           all-or-nothing; this record does not fix it, it only makes the wrapped half possible. The rule in
           Decision point 13 (adopt nothing) is prose, not a fitness function.</li>
-          <li><strong>The ADR-085 transposition risk is only closed for adopters.</strong> <code>CheckIn</code>&#39;s five consecutive
-          identifier parameters
+          <li><strong>The ADR-085 transposition risk is only closed for adopters.</strong> <code>CheckIn</code>&#39;s five identifier
+          parameters
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:57-64</code>) are
-          still five <code>int</code>s. Shipping the capability does not retire the risk; it makes retiring it a choice
+          still five <code>int</code>s. They are not five in a row, as this record previously said: a <code>CheckInScope</code>
+          parameter sits between <code>userId</code> and the run of four that follows it, which narrows the transposable
+          window without closing it, since four adjacent <code>int</code>-aliased parameters remain. Shipping the capability does not retire the risk; it makes retiring it a choice
           someone can now make cheaply for one aggregate at a time.</li>
           <li><strong>A capability nobody uses is a capability nobody has stress-tested.</strong> 77 tests against fixtures
           are not a production module with real migrations, a real wire history and a real query surface.
@@ -531,6 +552,28 @@
           column has to keep speaking),
           <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a> (the fourth engine the one base-context
           registration reaches without an engine branch).</p>
+          <h2 id="revision-2026-09-19">Revision (2026-09-19)</h2>
+          <p>The decision is unchanged: the framework still ships the capability, the aliases are still the
+          default, and adoption is still zero. Four facts this record borrowed were re-measured against source.</p>
+          <p><strong>The alias count is 48, not 44, and 46 of them are <code>int</code>, not 43.</strong> Recounted directly from the ten
+          <code>GlobalUsings.*IdentifierType.cs</code> files: Common Domain 1, Common Shared 2, ADC Notification 2, ADC
+          Identity 1, ADC Engagement 10, ADC Conference 19, Store Catalog 6, Store Identity 2, Store Sales 3,
+          Helpdesk Tickets 2. The two non-<code>int</code> aliases are both <code>System.Guid</code> and both in ADC Conference
+          (<code>SessionAssetIdentifierType</code> at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17</code>,
+          <code>SpeakerIdentifierType</code> at <code>:23</code>), so the &quot;one exception&quot; framing earlier records used no longer
+          holds. The Context and Decision point 13 carried the August figure of 44.</p>
+          <p><strong>The migration surface is ADR-085&#39;s to own, and it moved.</strong> That record&#39;s 2026-09-19 census reports
+          3,767 alias-carrying lines across 1,192 files against the 3,192 across 1,001 this record quoted. The
+          Rationale said the arithmetic had not changed; it had, twice, and the deferral survives it on its
+          own merits rather than on the numbers standing still.</p>
+          <p><strong><code>CheckIn</code>&#39;s five identifier parameters are not consecutive.</strong> <code>CheckInScope scope</code> sits between
+          <code>userId</code> and the four identifier parameters that follow it in the private constructor. All five are
+          still <code>int</code>-aliased, so the trade-off holds; the word &quot;consecutive&quot; was wrong.</p>
+          <p><strong>The fitness rule is subclassed in three repositories, not one.</strong> MMCA.Common, MMCA.ADC and
+          MMCA.Store each declare a <code>StronglyTypedIdTestsBase</code> subclass over their own architecture map, and
+          all three pass vacuously. MMCA.Helpdesk declares none. Decision point 12 named only MMCA.Common,
+          which was true when written and had become incomplete.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -547,6 +590,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             </ul>
           </nav>
         </aside>

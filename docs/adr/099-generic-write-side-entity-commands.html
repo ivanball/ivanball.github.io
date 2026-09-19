@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -244,7 +246,10 @@
           2026-08-31: both consumer applications run on the extended surface from their own <code>main</code>, so the
           closing note records adoption in production rather than a branch. Revised 2026-09-03 (framework
           v1.177.0): <code>AddEntityCrud</code> also registers the update command&#39;s validator bridge, so a module&#39;s
-          update-request rules reach the generic command with no hand-registered pairing.</p>
+          update-request rules reach the generic command with no hand-registered pairing. Revised 2026-09-19:
+          the shared mutate workflow now carries one more step, a concurrency-token touch on a conditional
+          write just before the save (SEC-Common-77), and ADC&#39;s Conference module registers a fourth
+          <code>AddEntityCrud</code> aggregate, <code>Partner</code>.</p>
           <h2 id="context">Context</h2>
           <p>ADR-034 records the read side of the generic resource layer and stops one verb short. Its
           <code>AggregateRootEntityControllerBase</code> ships <code>[HttpPost]</code> create and <code>[HttpDelete(&quot;{id}&quot;)]</code>
@@ -257,9 +262,11 @@
           shared load-mutate-save machinery already existed
           (<code>Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:52</code>, whose
           <code>MutateCoreAsync</code> at <code>:271</code> loads the aggregate (<code>:281</code>), stamps the caller&#39;s concurrency token
-          (<code>:291-292</code>), runs the mutation (<code>:294</code>) and saves (<code>:303</code>)), so what was missing was not the
-          workflow but a command and a handler generic enough to close over any aggregate, plus somewhere for
-          the module to say which aggregate method a request maps to.</p>
+          (<code>:291-292</code>), runs the mutation (<code>:294</code>), touches the root&#39;s concurrency token when the request was
+          conditional (<code>MutateEntityHandlerBase.cs:314</code>, added 2026-09-07 for SEC-Common-77 so a write that
+          changed only child rows still emits a root <code>UPDATE</code> carrying the caller&#39;s token) and saves (<code>:303</code>)),
+          so what was missing was not the workflow but a command and a handler generic enough to close over any
+          aggregate, plus somewhere for the module to say which aggregate method a request maps to.</p>
           <p>Two constraints shaped the answer.</p>
           <p><strong>The mutation cannot move into the framework.</strong> An update names fields, and a framework type that
           names fields is a framework type per aggregate. Worse, writing properties directly would route around
@@ -400,9 +407,10 @@
           raise no events. No fitness rule checks it today; the interface makes the right thing easy, not the
           wrong thing impossible.</li>
           <li><strong>Nothing in the framework opts a consumer in: every registration is a line the module writes.</strong>
-          Adoption is per aggregate and partial. ADC&#39;s Conference module registers it for <code>Category</code>,
-          <code>Activity</code> and <code>Sponsor</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:143-145</code>),
+          Adoption is per aggregate and partial. ADC&#39;s Conference module registers it for four aggregates,
+          <code>Category</code>, <code>Activity</code>, <code>Sponsor</code> and <code>Partner</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:143-145</code>,
+          and <code>Partner</code> at <code>:159</code>),
           Store&#39;s Catalog for <code>Product</code> (one call per field-scoped update request) and <code>Category</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:73-76</code>,
           <code>:77</code>, <code>:84</code>),

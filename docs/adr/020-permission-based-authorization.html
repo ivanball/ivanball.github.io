@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -238,7 +240,11 @@
           Revised 2026-09-09: <a href="116-identity-completions-opt-in.html">ADR-116</a> layers OPTIONAL stored grants over the compiled
           registry, through a decorator that unions a <code>(Role, Permission)</code> table into it with no deny row and a
           cached per-role snapshot behind the synchronous read, so the compiled map stays the floor and a data
-          edit can only widen a role.</p>
+          edit can only widen a role.
+          Revised 2026-09-19: capability counts re-enumerated from source. ADC&#39;s Conference module now defines
+          eleven permissions (<code>ActivitiesManage</code> and <code>SessionAssetsManage</code> added) and its <code>ContentManagement</code>
+          curation subset now carries seven members; MMCA.Store now defines eleven across its three modules,
+          Catalog having grown to six with <code>PricingManage</code> and <code>ReviewsModerate</code>.</p>
           <h2 id="context">Context</h2>
           <p>The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
           <code>[Authorize(Policy = &quot;RequireOrganizer&quot;)]</code> against a named policy that calls <code>RequireRole(...)</code>, and a
@@ -293,17 +299,17 @@
           <code>Organizer</code> alone (<code>MMCA.ADC.Notification.API/DependencyInjection.cs:38</code>).</li>
           </ul>
           <p>Adoption is asymmetric and that is intentional: a module declares as many capabilities as its own
-          surface needs. ADC&#39;s Conference module defines nine (<code>ConferencePermissions.cs:12-36</code>, enumerated in
-          <code>All</code> at <code>:39-50</code>), including a curation subset (<code>ContentManagement</code> at <code>:57-64</code>: sessions, speakers,
-          categories, sponsors, activities) granted to the app&#39;s own <code>ContentEditor</code> role constant
+          surface needs. ADC&#39;s Conference module defines eleven (<code>ConferencePermissions.cs:12-47</code>, enumerated in
+          <code>All</code> at <code>:50-63</code>), including a curation subset (<code>ContentManagement</code> at <code>:70-79</code>: sessions, speakers,
+          categories, sponsors, partners, activities, session assets) granted to the app&#39;s own <code>ContentEditor</code> role constant
           (<code>MMCA.ADC.Conference.API/DependencyInjection.cs:50</code>); its Engagement module defines three
           (<code>engagement:live:manage</code> gating the conference-day live-poll management endpoints,
           <code>engagement:checkin:manage</code> gating QR badge check-in and the attendance rollup, and
           <code>engagement:points:view-overview</code> gating the organizer points rollup, at
           <code>EngagementPermissions.cs:16</code>, <code>:23</code>, <code>:30</code>), each granted to <code>Organizer</code>; and its
-          Identity module defines <code>identity:users:read</code>. MMCA.Store defines nine of its own across three
-          modules: four in Catalog (<code>CatalogPermissions.cs:12-21</code>), three in Sales
-          (<code>SalesPermissions.cs:12-18</code>) and two in Identity (<code>IdentityPermissions.cs:12-15</code>), each module
+          Identity module defines <code>identity:users:read</code>. MMCA.Store defines eleven of its own across three
+          modules: six in Catalog (<code>CatalogPermissions.cs:12-36</code>), three in Sales
+          (<code>SalesPermissions.cs:12-18</code>) and two in Identity (<code>IdentityPermissions.cs:14-17</code>), each module
           granting its whole set to its own <code>Admin</code> role constant from its own <code>AddPermissions(...)</code> call
           (<code>MMCA.Store.Catalog.API/DependencyInjection.cs:41</code>, <code>MMCA.Store.Sales.API/DependencyInjection.cs:40</code>,
           <code>MMCA.Store.Identity.API/DependencyInjection.cs:42</code>). The registry, handler and policy provider are

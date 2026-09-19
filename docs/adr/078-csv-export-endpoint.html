@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31). The endpoint ships in the MMCA.Common &quot;enterprise capability wave&quot; release (v1.150.0), its…">
+  <meta name="description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19). The endpoint ships in the MMCA.Common &quot;enterprise capability wave&quot; release…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation">
-  <meta property="og:description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31). The endpoint ships in the MMCA.Common &quot;enterprise capability wave&quot; release (v1.150.0), its…">
+  <meta property="og:description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19). The endpoint ships in the MMCA.Common &quot;enterprise capability wave&quot; release…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation">
-  <meta name="twitter:description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31). The endpoint ships in the MMCA.Common &quot;enterprise capability wave&quot; release (v1.150.0), its…">
+  <meta name="twitter:description" content="Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19). The endpoint ships in the MMCA.Common &quot;enterprise capability wave&quot; release…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation","item":"https://ivanball.github.io/docs/adr/078-csv-export-endpoint.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -231,7 +233,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-078-csv-export-as-a-dedicated-endpoint-not-content-negotiation">ADR-078: CSV Export as a Dedicated Endpoint, Not Content Negotiation</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-13; revised 2026-08-18, 2026-08-31). The endpoint ships in the MMCA.Common
+          <p>Accepted (2026-08-13; revised 2026-08-18, 2026-08-31, 2026-09-19). The endpoint ships in the MMCA.Common
           &quot;enterprise capability wave&quot; release (v1.150.0), its scoping hook in v1.151.0, and the widened
           read hook that supersedes that hook in v1.165.0; all three consumers run on pins that carry them.
           Unlike the wave&#39;s other features this one is NOT opt-in: every controller deriving from
@@ -253,10 +255,17 @@
           <li><strong>The output cache does not vary by <code>Accept</code>.</strong> <code>PublicEndpointOutputCachePolicy</code>
           (<a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a>) sets
           <code>context.CacheVaryByRules.QueryKeys = &quot;*&quot;</code>
-          (<code>Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:81</code>) and varies by
-          nothing else. On any endpoint carrying that policy, a CSV request and a JSON request to the same URL
-          with the same query string are the same cache entry, so a CSV request can be served a stored JSON body
-          with a <code>Content-Type</code> that no longer matches what the formatter would have produced.</li>
+          (<code>Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:81</code>). The key has
+          exactly one other dimension, and it is not a header: when <code>ITenantContext</code> resolves a tenant the policy
+          stamps that tenant into <code>CacheVaryByRules.VaryByValues[TenantVaryByKey]</code>
+          (<code>PublicEndpointOutputCachePolicy.cs:102-105</code>, the <code>&quot;t&quot;</code> key constant at <code>:50</code>), and an unresolved
+          tenant adds nothing. A caller holding one of the policy&#39;s configured bypass roles is out of the cache
+          altogether rather than in a different entry: the policy leaves <code>AllowCacheLookup</code> and
+          <code>AllowCacheStorage</code> false for that request (<code>:86-90</code>, <code>IsBypassedCaller</code> at <code>:141-142</code>). Nothing in
+          the policy varies by <code>Accept</code>. On any endpoint carrying that policy, a CSV request and a JSON request
+          to the same URL with the same query string, from the same tenant and a non-bypass caller, are the same
+          cache entry, so a CSV request can be served a stored JSON body with a <code>Content-Type</code> that no longer
+          matches what the formatter would have produced.</li>
           <li><strong>A negotiation failure is silent.</strong> <code>AddAPI</code> sets <code>options.ReturnHttpNotAcceptable = false</code>
           (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:48</code>), so a request for a media type no
           formatter can produce does not get 406: it falls back to the default formatter. A caller asking for CSV
@@ -466,7 +475,7 @@
           <p><a href="034-generic-entity-query-layer.html">ADR-034</a> (the generic entity surface and query contract this extends,
           and the <code>MaxUnboundedResultLimit</code> ceiling that forced the page loop),
           <a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a> (the output-cache policy whose
-          <code>Accept</code>-blind query-string variance is one of the two forcing findings),
+          <code>Accept</code>-blind cache key is one of the two forcing findings),
           <a href="013-result-pattern.html">ADR-013</a> (the <code>Result</code> contract at the edge and the unhandled-failure filter the
           streamed result passes through untouched),
           <a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a> (the shipped OpenAPI contract snapshots every

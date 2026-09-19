@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 123 ADRs</summary>
+        <summary>All 125 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -135,7 +135,7 @@
         <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
         <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
         <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
-        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
         <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
         <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
         <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
@@ -223,6 +223,8 @@
         <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
         <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
           </ol>
         </nav>
       </details>
@@ -237,6 +239,9 @@
           <p>Revised 2026-09-11: both consumer tiers now subclass the package (MMCA.ADC and MMCA.Store), so the
           consumer passages are recorded as current state rather than as follow-up work; stale line anchors
           refreshed.</p>
+          <p>Revised 2026-09-19: the Aspire pin reads 13.5.4, the version every Aspire entry now carries; the
+          2026-09-09 root-cause fix is recorded as ADC #189 alone, because the Store PR previously cited
+          carried unrelated work.</p>
           <h2 id="context">Context</h2>
           <p>The AppHost is the only file that states how a whole stack fits together: which project resources
           exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -261,8 +266,8 @@
           guarding a single assertion, which every other repo with an AppHost would copy verbatim to get the
           same coverage.</p>
           <p>Two preconditions turned out to be load-bearing, and both were learned the expensive way. The ADC
-          nightly ran red from 2026-09-01 and was root-caused on 2026-09-09 (fixed in ADC #189 and Store
-          #142), each time to something that presents as a timeout on an unrelated resource:</p>
+          nightly ran red from 2026-09-01 and was root-caused on 2026-09-09 (fixed in ADC #189), each time to
+          something that presents as a timeout on an unrelated resource:</p>
           <ol>
           <li><strong>No RS256 key material.</strong> Identity&#39;s <code>appsettings.json</code> ships a user-secrets placeholder and a
           CI runner has no user secrets, so the JwtBearer options factory threw on the first request. Every
@@ -464,7 +469,7 @@
           in each consumer&#39;s <code>Directory.Packages.props</code> moves together at the next release
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>).</li>
           <li><strong>Aspire versions are now coupled in one more place.</strong> <code>Aspire.Hosting.Testing</code> is pinned at the
-          same 13.5.3 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:360</code>, against
+          same 13.5.4 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:360</code>, against
           <code>Aspire.Hosting</code> at <code>:351</code>), because the
           testing host builds the application model the AppHost package produces; a version split between
           them is a model mismatch rather than an upgrade.</li>

@@ -9,6 +9,10 @@ Revised 2026-09-11: both consumer tiers now subclass the package (MMCA.ADC and M
 consumer passages are recorded as current state rather than as follow-up work; stale line anchors
 refreshed.
 
+Revised 2026-09-19: the Aspire pin reads 13.5.4, the version every Aspire entry now carries; the
+2026-09-09 root-cause fix is recorded as ADC #189 alone, because the Store PR previously cited
+carried unrelated work.
+
 ## Context
 The AppHost is the only file that states how a whole stack fits together: which project resources
 exist, which database each one owns, which broker they share, where JWKS discovery points, and the
@@ -36,8 +40,8 @@ guarding a single assertion, which every other repo with an AppHost would copy v
 same coverage.
 
 Two preconditions turned out to be load-bearing, and both were learned the expensive way. The ADC
-nightly ran red from 2026-09-01 and was root-caused on 2026-09-09 (fixed in ADC #189 and Store
-#142), each time to something that presents as a timeout on an unrelated resource:
+nightly ran red from 2026-09-01 and was root-caused on 2026-09-09 (fixed in ADC #189), each time to
+something that presents as a timeout on an unrelated resource:
 
 1. **No RS256 key material.** Identity's `appsettings.json` ships a user-secrets placeholder and a
    CI runner has no user secrets, so the JwtBearer options factory threw on the first request. Every
@@ -239,7 +243,7 @@ Six shapes were weighed, and each rejection is a property the package keeps:
   in each consumer's `Directory.Packages.props` moves together at the next release
   ([ADR-016](016-lockstep-versioning-masstransit-pin.md)).
 - **Aspire versions are now coupled in one more place.** `Aspire.Hosting.Testing` is pinned at the
-  same 13.5.3 as every other Aspire entry (`MMCA.Common/Directory.Packages.props:360`, against
+  same 13.5.4 as every other Aspire entry (`MMCA.Common/Directory.Packages.props:360`, against
   `Aspire.Hosting` at `:351`), because the
   testing host builds the application model the AppHost package produces; a version split between
   them is a model mismatch rather than an upgrade.

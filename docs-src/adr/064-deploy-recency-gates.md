@@ -22,6 +22,11 @@ also added a third conditional test gate, `ai-eval-gate`
 (`MMCA.ADC/.github/workflows/deploy.yml:470-472`), which Store does not have, so the two
 `deploy.needs` lists are no longer identical: 12 entries in ADC, 11 in Store. Every `deploy.yml`
 citation below is re-anchored for the lines the new jobs displaced.
+Revised 2026-09-19: the MMCA.Helpdesk inventory is corrected again. Its `ci.yml` now runs **four**
+jobs, not the two the 2026-08-07 revision recorded: `changes`, `build-and-test`, `template-smoke`
+and `postgresql-canary`, the last an advisory `continue-on-error` PostgreSQL consumer canary added
+for ADR-113. The workflow-file count is still four and none of the four `ci.yml` jobs has an Azure
+step, so the conclusion that Helpdesk has no rollout for a recency gate to block is unchanged.
 
 ## Context
 A production rollout in both deployed apps waits on a list of jobs in `deploy.needs`
@@ -193,11 +198,16 @@ walks 40 completed `e2e.yml` runs per engine in ADC against 50 in Store
 deploy pipeline at all**: its `.github/workflows/` holds four files, `ci.yml`, the two Claude
 workflows, and `release-templates.yml`, and the fourth publishes the MMCA.Templates `dotnet new` pack
 to nuget.org on a `templates-v*` tag rather than rolling anything out
-(`MMCA.Helpdesk/.github/workflows/release-templates.yml:3,17`). `ci.yml` runs two jobs and neither has
-an Azure step: `build-and-test` builds and tests against MMCA.Common source
-(`MMCA.Helpdesk/.github/workflows/ci.yml:14-60`) and `template-smoke` packs the template, generates an
-app and builds it through `build/templates/smoke.ps1`
-(`MMCA.Helpdesk/.github/workflows/ci.yml:76-89`). There is no rollout for a recency gate to block.
+(`MMCA.Helpdesk/.github/workflows/release-templates.yml:3,17`). `ci.yml` runs four jobs and none has
+an Azure step: `changes` classifies the changed paths so the heavy advisory job below can skip a
+docs-only pull request (`MMCA.Helpdesk/.github/workflows/ci.yml:17`), `build-and-test` builds and
+tests against MMCA.Common source (`MMCA.Helpdesk/.github/workflows/ci.yml:58`), `template-smoke`
+packs the template, generates an app and builds it through `build/templates/smoke.ps1`
+(`MMCA.Helpdesk/.github/workflows/ci.yml:120`), and `postgresql-canary` generates a
+PostgreSQL-shaped app against a real `postgres:17` service container as the ADR-113 consumer canary,
+advisory by `continue-on-error` and gated on `needs.changes.outputs.code == 'true'`
+(`MMCA.Helpdesk/.github/workflows/ci.yml:146,152,155`). There is no rollout for a recency gate to
+block.
 **MMCA.Common has no deploy workflow either**: it ships `ci.yml` and `release.yml`, publishes packages
 on a tag rather than deploying a service, and neither file contains a freshness gate.
 
