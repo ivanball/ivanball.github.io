@@ -47,12 +47,45 @@ jobs:
         run: npm run build
         working-directory: tools
 
+      # One exemption, and it is deliberately narrow. sitemap lastmod comes from each file's last
+      # commit date, so a squash merge re-dates every file the PR touched to the merge commit's day.
+      # A PR built on one UTC day and merged on a later one therefore lands with a sitemap that is
+      # a day behind, through no fault of the author: the squash date does not exist until the merge
+      # is pressed, so the branch cannot pre-empt it. That skew has reddened main four times
+      # (2026-08-02, 08-05, 09-17, 09-19), each time costing a follow-up PR that only restamped dates.
+      #
+      # Exempting it is safe because genuine staleness cannot hide in this shape. A content edit that
+      # was not rebuilt changes the rendered HTML under docs/, and an added, removed or moved page
+      # changes a <loc> entry; both fall outside the exemption and still fail. The exemption requires
+      # BOTH that sitemap.xml is the only changed file AND that every changed line within it is
+      # nothing but a <lastmod> element. The whole-line match is the load-bearing part: a rule that
+      # merely ignored lines containing <lastmod> would also wave through a <loc> edit that shared a
+      # line with one, which is exactly how the first draft of this step was wrong.
       - name: Check nothing changed
         run: |
-          if ! git diff --exit-code --stat; then
-            echo "::error::Generated output is stale. Run 'cd tools && npm run build' and commit the result."
-            exit 1
+          if git diff --exit-code --quiet; then
+            echo "Generated output is current."
+            exit 0
           fi
+
+          changed=$(git diff --name-only)
+          lines=$(git diff -U0 -- sitemap.xml | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' || true)
+          if [ -z "$lines" ]; then
+            offending=1
+          else
+            offending=$(printf '%s\n' "$lines" \
+              | grep -cvE '^[+-][[:space:]]*<lastmod>[0-9]{4}-[0-9]{2}-[0-9]{2}</lastmod>[[:space:]]*$' || true)
+          fi
+
+          if [ "$changed" = "sitemap.xml" ] && [ "$offending" = "0" ]; then
+            git diff --stat -- sitemap.xml
+            echo "::notice::sitemap.xml lastmod drift only; treating as a squash-merge date skew, not stale output."
+            exit 0
+          fi
+
+          git diff --stat
+          echo "::error::Generated output is stale. Run 'cd tools && npm run build' and commit the result."
+          exit 1
 
   links:
     name: Internal links resolve
