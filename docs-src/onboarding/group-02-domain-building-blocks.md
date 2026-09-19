@@ -350,14 +350,14 @@ The concrete value objects split into a few patterns worth knowing up front:
 ## Smart enumerations, a closed set that can carry behavior
 
 [`Enumeration<TEnumeration>`](#enumerationtenumeration)
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:71`) is the answer to a
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:76`) is the answer to a
 recurring shape a CLR `enum` handles badly: a closed set of named members that need behavior hanging off
 them (policies, rates, display rules) instead of a `switch` statement somewhere else
 (`Enumeration.cs:13-18`). Members are declared as `public static readonly` fields on the derived type and
 discovered by reflection over that type's own declared fields on first use, then frozen into a
 `ReadOnlyCollection` plus two `FrozenDictionary` lookups keyed by value and by name
-(`Enumeration.cs:74-82`, `Enumeration.cs:165`); `All`, `FromValue`, and `FromName` read from those
-(`Enumeration.cs:105`, `:115`, `:136`). The two resolvers return
+(`Enumeration.cs:79-87`, `Enumeration.cs:170`); `All`, `FromValue`, and `FromName` read from those
+(`Enumeration.cs:110`, `:115`, `:136`). The two resolvers return
 [`Result<TEnumeration>`](group-01-result-error-handling.md#result) with `Enumeration.UnknownValue` /
 `Enumeration.UnknownName` codes rather than throwing, which is the same contract every value-object
 factory in this group honors. Plain CLR enums stay the default, and this base is the documented opt-in
@@ -370,18 +370,18 @@ The interesting part is what it deliberately does *not* do. It does **not** deri
 forces every `ValueObject` derivative to be a sealed record in the Shared layer, which would forbid the
 static-member idiom this type exists for (`Enumeration.cs:26-29`). It also does not implement
 `IEquatable<T>`, for the same S4035 reason [`BaseEntity<TIdentifierType>`](#baseentitytidentifiertype)
-does not; equality is a type-guarded `Equals(object?)` override instead (`Enumeration.cs:37-42`,
-`Enumeration.cs:152`). On the wire, [`EnumerationJsonConverterFactory`](#enumerationjsonconverterfactory)
-(`Enumeration.cs:195`) walks the base chain to confirm a type is the self-referencing closed type and no
-further derivative (`Enumeration.cs:198-199`, `:213-222`), then builds the private nested
-[`EnumerationConverter<TEnumeration>`](#enumerationconvertertenumeration) (`Enumeration.cs:224`), which
+does not; equality is a type-guarded `Equals(object?)` override instead (`Enumeration.cs:42-47`,
+`Enumeration.cs:157`). On the wire, [`EnumerationJsonConverterFactory`](#enumerationjsonconverterfactory)
+(`Enumeration.cs:200`) walks the base chain to confirm a type is the self-referencing closed type and no
+further derivative (`Enumeration.cs:203-204`, `:213-222`), then builds the private nested
+[`EnumerationConverter<TEnumeration>`](#enumerationconvertertenumeration) (`Enumeration.cs:229`), which
 writes the member's `Name` and reads it back through `FromName`, throwing `JsonException` on a non-string
-token or an unknown name (`Enumeration.cs:227-242`) exactly the way `CurrencyJsonConverter` does, so the
+token or an unknown name (`Enumeration.cs:232-247`) exactly the way `CurrencyJsonConverter` does, so the
 non-MVC paths (cache, outbox, integration events, typed `HttpClient` calls) fail the same way MVC model
 binding does. Note the registration gotcha the doc comment calls out: System.Text.Json reads
 `[JsonConverter]` off the type being converted without walking base types, so a concrete enumeration
 either repeats the attribute or the host registers the factory once in `JsonSerializerOptions.Converters`
-(`Enumeration.cs:44-49`). This is a [Rubric §9, API & Contract Design] and [Rubric §15, Best Practices &
+(`Enumeration.cs:49-54`). This is a [Rubric §9, API & Contract Design] and [Rubric §15, Best Practices &
 Code Quality] decision: one serialization shape, chosen once, with the trade-off written down where the
 next reader will find it.
 
@@ -733,7 +733,7 @@ in it.
   (`MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:12,16`).
   The opting-in hosts are the three ADC services
   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:239`,
-  `MMCA.ADC.Conference.Service/Program.cs:325`, `MMCA.ADC.Engagement.Service/Program.cs:198`) and the
+  `MMCA.ADC.Conference.Service/Program.cs:333`, `MMCA.ADC.Engagement.Service/Program.cs:198`) and the
   Helpdesk web host (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78`).
 - **Caveats / not-in-source**: retention is not automatic. `AuditTrailSettings.RetentionDays` defaults
   to 90 (`AuditTrailSettings.cs:38`), but the doc comment states the purge only happens if the host
@@ -1548,7 +1548,7 @@ in it.
   helpers in the Application validation layer.
 
 ### Enumeration<TEnumeration>
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:71` · Level 3 · class (abstract, generic)
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:76` · Level 3 · class (abstract, generic)
 
 - **What it is**: the abstract base for a **smart enumeration**: a closed set of named, integer-valued
   members declared on the derived type as `public static readonly` fields. Unlike a CLR `enum`, each
@@ -1557,50 +1557,50 @@ in it.
 - **Depends on**: [`Error`](group-01-result-error-handling.md#error),
   [`Result`](group-01-result-error-handling.md#result), and
   [`EnumerationJsonConverterFactory`](#enumerationjsonconverterfactory) (mutual: the base carries
-  `[JsonConverter(typeof(EnumerationJsonConverterFactory))]` at `Enumeration.cs:66` while the factory
+  `[JsonConverter(typeof(EnumerationJsonConverterFactory))]` at `Enumeration.cs:71` while the factory
   is constrained on `Enumeration<T>`). Externals: `System.Collections.Frozen`,
   `System.Collections.ObjectModel`, `System.Reflection`, `System.Text.Json`.
 - **Concept introduced, the self-referencing generic (curiously recurring) constraint.** `[Rubric §4,
   DDD]` (a closed domain vocabulary that carries behaviour) and `[Rubric §1, SOLID]` (open for
   extension: adding a member is a field, not a new `case` in every switch). The declaration is
   `abstract class Enumeration<TEnumeration> where TEnumeration : Enumeration<TEnumeration>`
-  (`Enumeration.cs:71-72`). The type parameter is the concrete type itself, which is what lets `All`,
+  (`Enumeration.cs:76-77`). The type parameter is the concrete type itself, which is what lets `All`,
   `FromValue` and `FromName` be **per-enumeration** and strongly typed: `Priority.FromValue(2)`
   returns `Result<Priority>` with no type argument written by hand, and each closed type gets its own
   static lookup tables (static fields on a generic type are per-constructed-type). The
-  `CA1000` suppression (`Enumeration.cs:67-70`) exists for exactly this and states the reasoning: a
+  `CA1000` suppression (`Enumeration.cs:72-75`) exists for exactly this and states the reasoning: a
   non-generic sibling would return the base type and force a cast at every call site.
 - **Concept introduced, lazy reflection frozen into a lookup.** `[Rubric §12, Performance &
-  Scalability]`. Three `Lazy<T>` statics (`Enumeration.cs:74-82`) build the member set once per closed
+  Scalability]`. Three `Lazy<T>` statics (`Enumeration.cs:79-87`) build the member set once per closed
   type on first touch: `MembersLazy` runs `DiscoverMembers`, `ByValueLazy` and `ByNameLazy` project it
   into `FrozenDictionary` instances (the name dictionary using `StringComparer.OrdinalIgnoreCase`).
   `FrozenDictionary` is the right structure for a build-once, read-forever table: construction is more
   expensive, lookups are faster than `Dictionary`. `ToFrozenDictionary` also throws `ArgumentException`
   on a duplicate key, which turns two members sharing a `Value` or a `Name` into a fail-fast at first
-  use rather than a silent shadowing bug (`Enumeration.cs:30-35`).
+  use rather than a silent shadowing bug (`Enumeration.cs:35-40`).
 - **Walkthrough**
-  - `protected Enumeration(int value, string name)` (`Enumeration.cs:87`): the only constructor;
+  - `protected Enumeration(int value, string name)` (`Enumeration.cs:92`): the only constructor;
     derived types keep theirs private and expose members as static fields.
-  - `Name` (`Enumeration.cs:95`) and `Value` (`Enumeration.cs:99`): getter-only, tagged
+  - `Name` (`Enumeration.cs:100`) and `Value` (`Enumeration.cs:104`): getter-only, tagged
     `[DataMember(Order = 1)]` and `[DataMember(Order = 2)]` under the class-level `[DataContract]`
-    (`Enumeration.cs:65`). The split is intentional and documented: `Value` is the **persisted**
+    (`Enumeration.cs:70`). The split is intentional and documented: `Value` is the **persisted**
     representation, `Name` is the **serialized/display** one.
-  - `All` (`Enumeration.cs:105`): `IReadOnlyCollection<TEnumeration>`, ordered by `Value`, cached for
+  - `All` (`Enumeration.cs:110`): `IReadOnlyCollection<TEnumeration>`, ordered by `Value`, cached for
     the lifetime of the closed type.
-  - `FromValue(int value)` (`Enumeration.cs:115`): `TryGetValue` on the frozen by-value map, else
+  - `FromValue(int value)` (`Enumeration.cs:120`): `TryGetValue` on the frozen by-value map, else
     `Error.Invariant(code: "Enumeration.UnknownValue", ...)` naming the concrete type in the message
-    (`Enumeration.cs:120-124`).
-  - `FromName(string name)` (`Enumeration.cs:136`): the case-insensitive twin, null-coalescing the
-    argument to `string.Empty` first (`Enumeration.cs:138`), else
+    (`Enumeration.cs:125-129`).
+  - `FromName(string name)` (`Enumeration.cs:141`): the case-insensitive twin, null-coalescing the
+    argument to `string.Empty` first (`Enumeration.cs:143`), else
     `Error.Invariant(code: "Enumeration.UnknownName", ...)`.
-  - `ToString()` (`Enumeration.cs:149`): returns `Name`.
-  - `Equals(object?)` (`Enumeration.cs:152-155`) and `GetHashCode()` (`Enumeration.cs:158`):
+  - `ToString()` (`Enumeration.cs:154`): returns `Name`.
+  - `Equals(object?)` (`Enumeration.cs:157-160`) and `GetHashCode()` (`Enumeration.cs:163`):
     type-guarded equality, `GetType() == other.GetType() && Value == other.Value`, hashed as
     `HashCode.Combine(GetType(), Value)`. The class deliberately does **not** implement
-    `IEquatable<T>`: the remark at `Enumeration.cs:36-42` cites Sonar S4035 (an unsealed
+    `IEquatable<T>`: the remark at `Enumeration.cs:41-47` cites Sonar S4035 (an unsealed
     `IEquatable<T>` breaks the equality contract for subclasses) and leaves that to a sealed derived
     type. `[Rubric §15, Best Practices & Code Quality]`.
-  - `DiscoverMembers()` (`Enumeration.cs:165-174`): reflects over
+  - `DiscoverMembers()` (`Enumeration.cs:170-179`): reflects over
     `BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly`, keeps fields that are
     `IsInitOnly` (that is, `readonly`) and assignable to `TEnumeration`, reads their values, orders by
     `Value` and freezes to a `ReadOnlyCollection`. `DeclaredOnly` is the load-bearing flag: a derived
@@ -1626,16 +1626,16 @@ in it.
   types in the workspace are the fixtures in `MMCA.Common.Shared.Tests/ValueObjects/EnumerationTests.cs`
   and `EnumerationSerializationTests.cs`, plus
   `MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs`. Treat
-  the `Priority` sample in the doc comment (`Enumeration.cs:50-62`) as the usage template.
+  the `Priority` sample in the doc comment (`Enumeration.cs:55-67`) as the usage template.
 
 ### EnumerationConverter<TEnumeration>
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:224` · Level 3 · class (private nested, sealed)
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:229` · Level 3 · class (private nested, sealed)
 
 - **What it is**: the actual `JsonConverter<TEnumeration>` for one closed enumeration type. It is a
   **private nested class** inside
-  [`EnumerationJsonConverterFactory`](#enumerationjsonconverterfactory) (`Enumeration.cs:224-243`),
+  [`EnumerationJsonConverterFactory`](#enumerationjsonconverterfactory) (`Enumeration.cs:229-248`),
   constrained the same way as the base: `where TEnumeration : Enumeration<TEnumeration>`
-  (`Enumeration.cs:225`).
+  (`Enumeration.cs:230`).
 - **Depends on**: [`Enumeration<TEnumeration>`](#enumerationtenumeration) (it calls
   `Enumeration<TEnumeration>.FromName`) and `System.Text.Json`.
 - **Concept, the generic worker behind a converter factory.** `[Rubric §2, Design Patterns]`
@@ -1644,28 +1644,28 @@ in it.
   to obtain one is through `CreateConverter`, which guarantees the generic argument is a legal closed
   enumeration.
 - **Walkthrough**
-  - `Read` (`Enumeration.cs:227`): rejects a non-string token with
+  - `Read` (`Enumeration.cs:232`): rejects a non-string token with
     `throw new JsonException($"{typeof(TEnumeration).Name} must be a string.")`
-    (`Enumeration.cs:229-230`), reads the string (`Enumeration.cs:232`), resolves it through
-    `Enumeration<TEnumeration>.FromName(name)` (`Enumeration.cs:234`) and throws a naming
-    `JsonException` when that fails (`Enumeration.cs:235-236`). Identical failure behaviour to
+    (`Enumeration.cs:234-235`), reads the string (`Enumeration.cs:237`), resolves it through
+    `Enumeration<TEnumeration>.FromName(name)` (`Enumeration.cs:239`) and throws a naming
+    `JsonException` when that fails (`Enumeration.cs:240-241`). Identical failure behaviour to
     [`CurrencyJsonConverter`](#currencyjsonconverter), which is deliberate.
-  - `Write` (`Enumeration.cs:241-242`): `writer.WriteStringValue(value.Name)`. The wire shape is the
+  - `Write` (`Enumeration.cs:246-247`): `writer.WriteStringValue(value.Name)`. The wire shape is the
     member name, never the integer, so a JSON payload stays readable and a renumbering is not a
     breaking API change (the integer is the *persistence* representation, handled by
     [`EnumerationValueConverter<TEnumeration>`](group-07-persistence-ef-core.md#enumerationvalueconvertertenumeration)).
 - **Where it's used**: instantiated reflectively by
-  `EnumerationJsonConverterFactory.CreateConverter` (`Enumeration.cs:202-204`). It has no other
+  `EnumerationJsonConverterFactory.CreateConverter` (`Enumeration.cs:207-209`). It has no other
   caller and no public surface.
 
 ### EnumerationJsonConverterFactory
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:195` · Level 3 · class (sealed)
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:200` · Level 3 · class (sealed)
 
 - **What it is**: a `JsonConverterFactory` that hands System.Text.Json a
   [`EnumerationConverter<TEnumeration>`](#enumerationconvertertenumeration) for any concrete smart
   enumeration, so every member serializes as its `Name`.
 - **Depends on**: [`Enumeration<TEnumeration>`](#enumerationtenumeration) (mutual: the base type
-  carries `[JsonConverter(typeof(EnumerationJsonConverterFactory))]` at `Enumeration.cs:66`),
+  carries `[JsonConverter(typeof(EnumerationJsonConverterFactory))]` at `Enumeration.cs:71`),
   [`EnumerationConverter<TEnumeration>`](#enumerationconvertertenumeration), and
   `System.Text.Json.Serialization`.
 - **Concept introduced, why an *open generic* needs a factory.** `[Rubric §9, API & Contract
@@ -1673,34 +1673,34 @@ in it.
   serves `Priority`, `Severity` and every future enumeration. `JsonConverterFactory` is the
   System.Text.Json extension point for exactly that: `CanConvert` answers "is this type mine?" and
   `CreateConverter` builds the closed converter on demand. There is a second, subtler reason the
-  factory has to exist at all, documented at `Enumeration.cs:43-49` and again at `Enumeration.cs:184-188`:
+  factory has to exist at all, documented at `Enumeration.cs:48-54` and again at `Enumeration.cs:189-193`:
   System.Text.Json reads `[JsonConverter]` off the type it is converting **without walking base
   types**, so the attribute on `Enumeration<T>` does not reach `Priority`. A host therefore either
   repeats the attribute on each concrete type or registers this factory once. `AddAPI` takes the
   second route (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:59`, with the
   inline comment explaining the `inherit: false` behaviour).
 - **Walkthrough**
-  - `CanConvert(Type typeToConvert)` (`Enumeration.cs:198-199`):
+  - `CanConvert(Type typeToConvert)` (`Enumeration.cs:203-204`):
     `GetEnumerationArgument(typeToConvert) == typeToConvert`. Read that carefully: it is true only
     when the type *is* the type argument of its own `Enumeration<T>` base, that is, only for the
     self-referencing closed type. A class deriving further from a concrete enumeration is left to the
-    default converter rather than being silently serialized as its base (`Enumeration.cs:206-212`).
-  - `CreateConverter(...)` (`Enumeration.cs:202-204`):
+    default converter rather than being silently serialized as its base (`Enumeration.cs:211-217`).
+  - `CreateConverter(...)` (`Enumeration.cs:207-209`):
     `Activator.CreateInstance(typeof(EnumerationConverter<>).MakeGenericType(typeToConvert))` cast to
     `JsonConverter`. Reflection runs once per type; System.Text.Json caches the resulting converter.
-  - `GetEnumerationArgument(Type?)` (`Enumeration.cs:213-222`): walks `type.BaseType` upward looking
+  - `GetEnumerationArgument(Type?)` (`Enumeration.cs:218-227`): walks `type.BaseType` upward looking
     for a generic type whose definition is `typeof(Enumeration<>)`, returning its single generic
     argument, or `null` at the top of the chain.
 - **Why it's built this way**: registering one factory in `JsonSerializerOptions.Converters` gives
   uniform name-based JSON for every enumeration across the whole API surface, including the non-MVC
   paths (cache entries, outbox payloads, integration events, typed `HttpClient` calls) that never see
   MVC model binding. The `HandleNull` default of `false` is left alone on purpose
-  (`Enumeration.cs:189-193`) so nullable members still deserialize to `null`.
+  (`Enumeration.cs:194-198`) so nullable members still deserialize to `null`.
 - **Where it's used**: registered in `AddAPI`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:59`), named in that
   method's doc comment alongside `CurrencyJsonConverter`
   (`.../DependencyInjection.cs:30-31`); also reachable via the `[JsonConverter]` attribute on
-  [`Enumeration<TEnumeration>`](#enumerationtenumeration) (`Enumeration.cs:66`) for a member typed as
+  [`Enumeration<TEnumeration>`](#enumerationtenumeration) (`Enumeration.cs:71`) for a member typed as
   the base itself.
 
 ### PhoneNumberInvariants

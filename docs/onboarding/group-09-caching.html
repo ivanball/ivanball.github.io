@@ -231,7 +231,7 @@
           <code>ICacheService</code>, so calling it is a statement that the two-level cache is the cache
           (<code>DependencyInjection.cs:358-363</code>). All seven deployed service hosts call it, inside the same &quot;is Redis
           configured&quot; branch that registers the distributed cache: ADC Conference at
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:179</code> and Store Catalog at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:186</code> and Store Catalog at
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94</code>, with ADC Engagement, Identity
           and Notification and Store Sales and Identity alongside them. Without Redis the branch does not run and
           the host keeps the auto-selected substrate, which is the point: an L1 in front of an in-process L2 buys
@@ -423,7 +423,7 @@
           <a href="group-04-events-outbox.html#outputcacheevictionrequested"><code>OutputCacheEvictionRequested</code></a> integration
           event and its <a href="group-12-api-hosting-mapping.html#outputcacheevictionhandler"><code>OutputCacheEvictionHandler</code></a>.
           Both adopters back that edge with Redis when Redis is configured
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:169</code>;
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:176</code>;
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:104</code>), so the two tiers ride the same
           Redis instance from opposite ends: Tier 1 through <code>IDistributedCache</code> or <code>HybridCache</code>, Tier 2 through
           the output-cache store. ADR-026 also records an optional <strong>third tier on the client</strong>,
@@ -436,10 +436,10 @@
           Redis is live in the deployed services: every service host registers the Aspire Redis integration
           through <a href="group-16-aspire-orchestration.html#rediscachingextensions"><code>RedisCachingExtensions</code></a>, whose
           <code>AddRedisCaching()</code> brings the <code>IConnectionMultiplexer</code> the SCAN needs along with the distributed cache
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:159</code>;
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:166</code>;
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:86</code>), and the hybrid substrate is
           registered inside the same connection-string conditional
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:177-180</code>). Write-side adoption is
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:184-187</code>). Write-side adoption is
           broad: about forty types across ADC&#39;s Conference, Engagement and Identity modules implement
           <a href="group-05-cqrs-pipeline.html#icacheinvalidating"><code>ICacheInvalidating</code></a>, for example
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/UseCases/UpdateCategoryItem/UpdateCategoryItemCommand.cs:18</code>
@@ -1081,7 +1081,7 @@
           <a href="group-28-testing-infrastructure.html#distributedcacheserviceredistests">DistributedCacheServiceRedisTests</a>.</li>
           <li><strong>Caveats / not-in-source</strong>: all seven deployed service hosts call <code>AddCommonHybridCache()</code> inside a
           Redis-conditional block (for example
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:177-180</code>,
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:184-187</code>,
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94</code>), so this adapter is not the
           one the container hands out in those hosts: it is the default for any host that registers a real
           distributed cache and does <em>not</em> opt in. <code>IncrementAsync</code> here is not atomic (see the walkthrough);
@@ -1197,7 +1197,7 @@
           <li><strong>Where it&#39;s used</strong>: registered only by <code>AddCommonHybridCache</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:370-413</code>), which all
           seven deployed service hosts call inside a <code>GetConnectionString(&quot;redis&quot;)</code> conditional
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:179</code>,
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:186</code>,
           <code>MMCA.ADC.Engagement.Service/Program.cs:113</code>, <code>MMCA.ADC.Identity.Service/Program.cs:135</code>,
           <code>MMCA.ADC.Notification.Service/Program.cs:119</code>,
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94</code>,

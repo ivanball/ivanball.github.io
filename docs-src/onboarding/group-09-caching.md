@@ -89,7 +89,7 @@ after `AddInfrastructure`; the source is equally explicit that this also removes
 `ICacheService`, so calling it is a statement that the two-level cache is the cache
 (`DependencyInjection.cs:358-363`). All seven deployed service hosts call it, inside the same "is Redis
 configured" branch that registers the distributed cache: ADC Conference at
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:179` and Store Catalog at
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:186` and Store Catalog at
 `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94`, with ADC Engagement, Identity
 and Notification and Store Sales and Identity alongside them. Without Redis the branch does not run and
 the host keeps the auto-selected substrate, which is the point: an L1 in front of an in-process L2 buys
@@ -288,7 +288,7 @@ and evict it across replicas through the
 [`OutputCacheEvictionRequested`](group-04-events-outbox.md#outputcacheevictionrequested) integration
 event and its [`OutputCacheEvictionHandler`](group-12-api-hosting-mapping.md#outputcacheevictionhandler).
 Both adopters back that edge with Redis when Redis is configured
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:169`;
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:176`;
 `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:104`), so the two tiers ride the same
 Redis instance from opposite ends: Tier 1 through `IDistributedCache` or `HybridCache`, Tier 2 through
 the output-cache store. ADR-026 also records an optional **third tier on the client**,
@@ -302,10 +302,10 @@ confuse them with Tier 1 when you meet `[OutputCache]` on a controller.
 Redis is live in the deployed services: every service host registers the Aspire Redis integration
 through [`RedisCachingExtensions`](group-16-aspire-orchestration.md#rediscachingextensions), whose
 `AddRedisCaching()` brings the `IConnectionMultiplexer` the SCAN needs along with the distributed cache
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:159`;
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:166`;
 `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:86`), and the hybrid substrate is
 registered inside the same connection-string conditional
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:177-180`). Write-side adoption is
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:184-187`). Write-side adoption is
 broad: about forty types across ADC's Conference, Engagement and Identity modules implement
 [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating), for example
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/UseCases/UpdateCategoryItem/UpdateCategoryItemCommand.cs:18`
@@ -928,7 +928,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   [DistributedCacheServiceRedisTests](group-28-testing-infrastructure.md#distributedcacheserviceredistests).
 - **Caveats / not-in-source**: all seven deployed service hosts call `AddCommonHybridCache()` inside a
   Redis-conditional block (for example
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:177-180`,
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:184-187`,
   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94`), so this adapter is not the
   one the container hands out in those hosts: it is the default for any host that registers a real
   distributed cache and does *not* opt in. `IncrementAsync` here is not atomic (see the walkthrough);
@@ -1042,7 +1042,7 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
 - **Where it's used**: registered only by `AddCommonHybridCache`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:370-413`), which all
   seven deployed service hosts call inside a `GetConnectionString("redis")` conditional
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:179`,
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:186`,
   `MMCA.ADC.Engagement.Service/Program.cs:113`, `MMCA.ADC.Identity.Service/Program.cs:135`,
   `MMCA.ADC.Notification.Service/Program.cs:119`,
   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94`,

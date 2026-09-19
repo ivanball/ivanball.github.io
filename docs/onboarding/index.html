@@ -208,7 +208,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           are resolved by <strong>namespace-aware name matching</strong>; ~96% bind by namespace visibility, the rest by a
           globally-unique-name fallback (586 edges), and 38 references are dropped as ambiguous. The functional grouping is
           then applied mechanically (<code>Tools/invtool/classify.ps1</code> → <code>00-group-taxonomy.md</code>), so every one of the
-          <strong>4,818</strong> distinct type nodes maps to exactly one group with no silent drops. See the
+          <strong>4,905</strong> distinct type nodes maps to exactly one group with no silent drops. See the
           <a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest&#39;s accuracy note</a> for residual caveats.</p>
           <hr>
           <h2 id="chapters">Chapters</h2>
@@ -226,7 +226,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           </tr>
           <tr>
           <td><a href="00-inventory.html"><code>00-inventory.md</code></a></td>
-          <td>Phase 0, every in-scope type (4,818 distinct), mechanically extracted, with <code>file:line</code></td>
+          <td>Phase 0, every in-scope type (4,905 distinct), mechanically extracted, with <code>file:line</code></td>
           </tr>
           <tr>
           <td><a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a></td>
@@ -334,7 +334,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>15</td>
           <td><a href="group-15-common-ui-framework.html">Common UI Framework</a></td>
-          <td>133</td>
+          <td>138</td>
           <td>Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, i18n culture bootstrap + day/dark <code>ThemeService</code>, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>)</td>
           </tr>
           <tr>
@@ -346,32 +346,32 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>17</td>
           <td><a href="group-17-conference-domain.html">ADC Conference, Domain Model &amp; Module Contracts</a></td>
-          <td>107</td>
-          <td>Event/Session/Speaker/Category/Question aggregates + domain events + invariants + Shared contracts (incl. <code>ConferencePermissions</code>, the current/next-event selector + live-validation contracts)</td>
+          <td>112</td>
+          <td>Event/Session/Speaker/Category/Question/Partner aggregates + domain events + invariants + Shared contracts (incl. <code>ConferencePermissions</code>, the current/next-event selector + live-validation contracts)</td>
           </tr>
           <tr>
           <td>18</td>
           <td><a href="group-18-conference-application.html">ADC Conference, Application &amp; Use Cases</a></td>
-          <td>335</td>
+          <td>353</td>
           <td>Conference CQRS handlers, validators (incl. the per-field session validation-rule family), DTOs, specs, Sessionize import, decision-support analytics, batch bookmark-count query, event-filtering-by-role handlers, calendar (.ics) export slice (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>)</td>
           </tr>
           <tr>
           <td>19</td>
           <td><a href="group-19-conference-infrastructure.html">ADC Conference, Infrastructure &amp; Persistence</a></td>
-          <td>27</td>
+          <td>28</td>
           <td>Conference DbContext registration, EF configs, seeding, infra services</td>
           </tr>
           <tr>
           <td>20</td>
           <td><a href="group-20-conference-api-grpc.html">ADC Conference, API, gRPC Contracts &amp; Service Host</a></td>
-          <td>45</td>
+          <td>46</td>
           <td>REST controllers, <code>.Contracts</code> gRPC, the extractable service host (incl. its Kestrel config), the gRPC adapters (incl. cross-service live-validation), localized error resources</td>
           </tr>
           <tr>
           <td>21</td>
           <td><a href="group-21-conference-ui.html">ADC Conference, UI</a></td>
-          <td>153</td>
-          <td>Conference Blazor pages + UI services, the single canonical ADC Home page + its view models, the AI-scoring poll recovery tracker, calendar/QR export UI, OfflineBanner, PresenterLayout on Common theme providers</td>
+          <td>168</td>
+          <td>Conference Blazor pages + UI services (incl. the Partner management pages), the single canonical ADC Home page + its view models, the AI-scoring poll recovery tracker, calendar/QR export UI, OfflineBanner, PresenterLayout on Common theme providers</td>
           </tr>
           <tr>
           <td>22</td>
@@ -406,13 +406,13 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           <tr>
           <td>27</td>
           <td><a href="group-27-common-ai-integration.html">Common AI Integration</a></td>
-          <td>8</td>
-          <td>The optional <code>MMCA.Common.AI</code> package: the provider settings + enum, one composition entry point that builds the delegating-client pipeline, the bounding and usage-metering chat clients over <code>IChatClient</code>, the token-estimator contract, the usage meter, and the hashed, versioned prompt contract (<a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener">ADR-120</a>)</td>
+          <td>12</td>
+          <td>The optional <code>MMCA.Common.AI</code> package: the provider settings + enum, one composition entry point that builds the delegating-client pipeline, the bounding and usage-metering chat clients over <code>IChatClient</code>, the token-estimator contract, the usage meter, the IChatGuardrail verdict contract + its GuardrailChatClient decorator, and the hashed, versioned prompt contract (<a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener">ADR-120</a>)</td>
           </tr>
           <tr>
           <td>28</td>
           <td><a href="group-28-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
-          <td>2,643</td>
+          <td>2,681</td>
           <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases (incl. the handler + decorator-pipeline test bases, the shared production-host/graceful-shutdown bases, the observability-convention fitness base, and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite</td>
           </tr>
           </tbody></table></div>

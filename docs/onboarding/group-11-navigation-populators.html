@@ -241,7 +241,7 @@
           branches on null (<code>[Rubric §2, Design Patterns]</code>). It is registered exactly that way for entities
           with nothing to hand-load, for example
           <code>services.TryAddScoped&lt;INavigationPopulator&lt;Question&gt;, NullNavigationPopulator&lt;Question&gt;&gt;()</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:90</code>) and
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:95</code>) and
           the framework&#39;s own push-notification entity
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:39</code>).</p>
           <p>The actual batch loading is done by <a href="#navigationloader"><code>NavigationLoader</code></a>
@@ -319,8 +319,8 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/SessionNavigationPopulator.cs:13</code>)
           mixes two <code>FKNavigationDescriptor</code>s (<code>Event</code>, <code>Room</code>) with three <code>ChildNavigationDescriptor</code>s. Each is
           registered per entity as a scoped service
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:73</code>,
-          <code>DependencyInjection.cs:77</code>), and those module-level populators are taught in
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:78</code>,
+          <code>DependencyInjection.cs:82</code>), and those module-level populators are taught in
           <a href="group-18-conference-application.html">Group 18</a>.</p>
           <p>Two architectural threads are worth holding onto as you read the per-type sections. First, this
           subsystem is <em>why</em> the database-per-service split is feasible without rewriting query code

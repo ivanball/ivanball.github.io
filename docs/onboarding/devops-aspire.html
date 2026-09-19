@@ -1304,25 +1304,30 @@ object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; 
           cluster, so adding or repointing a route is an appsettings edit plus a matching entry in <code>RouteMapTests</code>
           (which pins the whole table), never a redeploy of hand-written <code>MapForwarder</code> calls.</p>
           <h3 id="the-route-table">The route table</h3>
-          <p><code>Gateway/appsettings.json:80-256</code> declares <strong>32 routes across 5 clusters</strong> (clusters at
-          appsettings.json:257-295), every destination an in-cluster service-discovery name over cleartext, never a
+          <p><code>Gateway/appsettings.json:80-260</code> declares <strong>33 routes across 5 clusters</strong> (clusters at
+          appsettings.json:262-300), every destination an in-cluster service-discovery name over cleartext, never a
           public URL:</p>
           <ul>
-          <li>Eight Identity routes to cluster <code>identity</code> (<code>http://identity</code>, appsettings.json:90-135, 258-266):
+          <li>Eight Identity routes to cluster <code>identity</code> (<code>http://identity</code>, appsettings.json:90-135, 263-271):
           <code>/Auth/login</code> and <code>/Auth/register</code> (90-103), the <code>/Auth/{**catch-all}</code> that carries everything else
           (106-110), <code>/Users</code> (111-115), <code>/UserClaims</code> (116-120), <code>/Admin/Users</code> (121-125), <code>/Admin/Roles</code>
           (126-130) and <code>/.well-known/*</code> (131-135). Only the two credential-submission routes carry
           <code>&quot;RateLimiterPolicy&quot;: &quot;auth-tight&quot;</code>, and they carry <code>&quot;Order&quot;: -1</code> to win over the catch-all explicitly
           rather than by route-precedence inference (lines 94-95, 101-102).</li>
-          <li>Seventeen Conference prefixes (<code>/Events</code>, <code>/Sessions</code>, <code>/Speakers</code>, <code>/Rooms</code>, <code>/ConferenceCategories</code>,
+          <li>Eighteen Conference prefixes (<code>/Events</code>, <code>/Sessions</code>, <code>/Speakers</code>, <code>/Rooms</code>, <code>/ConferenceCategories</code>,
           <code>/CategoryItems</code>, <code>/SessionSpeakers</code>, <code>/EventSpeakers</code>, <code>/SessionCategoryItems</code>,
           <code>/SessionQuestionAnswers</code>, <code>/EventQuestionAnswers</code>, <code>/SpeakerCategoryItems</code>, <code>/SessionSelection</code>,
-          <code>/Questions</code>, <code>/Sponsors</code>, <code>/Activities</code>, <code>/SessionAssets</code>) to cluster <code>conference</code>
-          (appsettings.json:136-220, 267-275).</li>
+          <code>/Questions</code>, <code>/Sponsors</code>, <code>/Partners</code>, <code>/Activities</code>, <code>/SessionAssets</code>) to cluster <code>conference</code>
+          (appsettings.json:136-225, 272-280). <code>/Partners</code> is the newest of them
+          (<code>conference-partners</code>, appsettings.json:211-215), and it is the shape every new aggregate takes at the
+          edge: one prefix route, <code>&quot;AuthorizationPolicy&quot;: &quot;anonymous&quot;</code>, the same <code>conference</code> cluster, no
+          forwarder config of its own, and a matching row in the test that pins the table
+          (<code>Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:162</code>). Nothing in the gateway image or its
+          <code>Program.cs</code> changed to carry it.</li>
           <li>Five Engagement prefixes (<code>/Bookmarks</code>, <code>/CheckIns</code>, <code>/LivePolls</code>, <code>/Points</code>, <code>/SessionQuestions</code>) to
-          cluster <code>engagement</code> (appsettings.json:221-245, 276-284).</li>
+          cluster <code>engagement</code> (appsettings.json:226-250, 281-289).</li>
           <li><code>/Notifications</code> to cluster <code>notification-rest</code> and <code>/hubs/*</code> to cluster <code>notification-hub</code>
-          (appsettings.json:246-255, 285-294). Both point at the same <code>http://notification</code> destination; they are
+          (appsettings.json:251-260, 290-299). Both point at the same <code>http://notification</code> destination; they are
           two clusters because a cluster is what carries the forwarder request config, and these two need
           different ones.</li>
           </ul>
@@ -1351,7 +1356,7 @@ object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; 
           comment enumerates them, Gateway/Program.cs:15-31).</p>
           <p>The <code>identity</code>, <code>conference</code> and <code>engagement</code> clusters each state
           <code>&quot;Version&quot;: &quot;2.0&quot;</code> with <code>&quot;VersionPolicy&quot;: &quot;RequestVersionExact&quot;</code> in their own <code>HttpRequest</code> block
-          (appsettings.json:262-265, 271-274, 280-283). Exact is load-bearing: on cleartext there is no ALPN to
+          (appsettings.json:267-270, 276-279, 285-288). Exact is load-bearing: on cleartext there is no ALPN to
           negotiate, so <code>RequestVersionOrLower</code> silently downgrades to HTTP/1.1 and the <code>Http2</code>-only backend
           rejects it. That pair stays per-cluster rather than moving into the shared defaults, because <strong>which</strong>
           clusters speak h2c is a per-cluster fact, not a default (Program.cs:42-43).</p>

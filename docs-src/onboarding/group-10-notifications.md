@@ -1288,7 +1288,7 @@ without any of the four ever taking the others down, and without a retried reque
   bound is exactly that. `[Rubric §24, Forms/Validation/UX Safety]`: the UI validation and the server
   validation cannot disagree because they read the same constant, and the framework's send page test
   exercises the boundary through it
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Pages/Notifications/NotificationSendTests.cs:113`).
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Pages/Notifications/NotificationSendTests.cs:114`).
 - **Walkthrough**: two positional parameters (line 6); two `public const int` limits (lines 15, 21);
   and `ScopeKey` as a nullable `init` property (line 28) rather than a third positional parameter,
   which the comment (lines 23-27) notes was deliberate so every existing caller keeps compiling. Null,

@@ -142,7 +142,7 @@ The fourth co-located type is [`EventUpcasterRegistry`](#eventupcasterregistry) 
     low-cardinality constant: a tag value per request would multiply the time series.
 - **Why it's built this way**: a host exports the counter by registering the meter name, and the
   Aspire service defaults do that already (`AddMeter("MMCA.Common.BestEffort")` at
-  `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:205`). Note the meter name is
+  `MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:219`). Note the meter name is
   duplicated there as a string literal rather than referenced, because the Aspire package has no
   reference to Application; the class doc (`BestEffort.cs:90-91`) records that duplication as
   deliberate.

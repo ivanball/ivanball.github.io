@@ -101,7 +101,7 @@ Null Object whose `PopulateAsync` is a single `Task.CompletedTask`
 branches on null (`[Rubric §2, Design Patterns]`). It is registered exactly that way for entities
 with nothing to hand-load, for example
 `services.TryAddScoped<INavigationPopulator<Question>, NullNavigationPopulator<Question>>()`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:90`) and
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:95`) and
 the framework's own push-notification entity
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:39`).
 
@@ -184,8 +184,8 @@ imperative loading code at all, and
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/SessionNavigationPopulator.cs:13`)
 mixes two `FKNavigationDescriptor`s (`Event`, `Room`) with three `ChildNavigationDescriptor`s. Each is
 registered per entity as a scoped service
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:73`,
-`DependencyInjection.cs:77`), and those module-level populators are taught in
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:78`,
+`DependencyInjection.cs:82`), and those module-level populators are taught in
 [Group 18](group-18-conference-application.md).
 
 Two architectural threads are worth holding onto as you read the per-type sections. First, this
