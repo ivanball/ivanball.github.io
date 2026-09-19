@@ -934,17 +934,17 @@
           because a judge model is not deterministic even at the same prompt and a tight band would produce a
           flaky gate that gets ignored, which is worse than no gate: what the bands catch is a shift, not a
           wobble (<code>LiveJudgeTests.cs:21-25</code>).</p>
-          <p><a href="#promptcontracttests"><code>PromptContractTests</code></a> (<code>PromptContractTests.cs:29</code>) closes the loop that
+          <p><a href="#promptcontracttests"><code>PromptContractTests</code></a> (<code>MMCA.ADC.Conference.Scoring.Evaluation.Tests/PromptContractTests.cs:12</code>) closes the loop that
           makes a persisted score meaningful. Scores are stored with the prompt version that produced them,
           which is worth something only if the version actually moves when the prompt does, so this suite
           renders the system brief plus the user message for one canonical proposal, hashes it, and compares
           against <code>Golden/prompt-versions.json</code>: a prompt edit without a version bump fails because the
           recorded hash for the current version no longer matches, and a version bump with no recorded hash
-          fails too (<code>PromptContractTests.cs:16-22</code>). The canonical proposal is fixed in the test file rather
-          than read from the corpus on purpose (<code>PromptContractTests.cs:37-45</code>), because editing a golden case
-          must not be able to change what the contract hash covers (<code>PromptContractTests.cs:25-26</code>); it is
+          fails too (<code>MMCA.ADC.Conference.Scoring.Evaluation.Tests/PromptContractTests.cs:14-20</code>). The canonical proposal is fixed in the test file rather
+          than read from the corpus on purpose (<code>MMCA.ADC.Conference.Scoring.Evaluation.Tests/PromptContractTests.cs:35-43</code>), because editing a golden case
+          must not be able to change what the contract hash covers (<code>MMCA.ADC.Conference.Scoring.Evaluation.Tests/PromptContractTests.cs:23-24</code>); it is
           chosen to exercise every branch of the prompt assembly, with a description and two speakers, one of
-          them with no tagline and no bio (<code>PromptContractTests.cs:34-35</code>). Together the three suites are
+          them with no tagline and no bio (<code>MMCA.ADC.Conference.Scoring.Evaluation.Tests/PromptContractTests.cs:32-33</code>). Together the three suites are
           [Rubric §14, Testability] applied to a dependency that cannot be asserted exactly, and [Rubric §29,
           Resilience &amp; Business Continuity] on the operational side: the offline gate is free and always on,
           the paid gate is opt-in, and neither one can pass vacuously.</p>
@@ -5428,7 +5428,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: the class doc (lines 23-28) records why the <code>ResourceAssembly</code> default is load-bearing. The base ships <em>inside</em> the framework package, so resolving resources against its own assembly would look for the consumer&#39;s bicep inside <code>MMCA.Common.Testing.Architecture.dll</code> and always throw. Defaulting to the derived type&#39;s assembly means a subclass needs no wiring beyond two <code>EmbeddedResource</code> entries in its csproj (the snippet is in the doc at lines 18-22).</li>
-          <li><strong>Where it&#39;s used</strong>: subclassed as a one-line body-less class in ADC (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:7</code>) and Store (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/ObservabilityConventionTests.cs:7</code>); see <a href="#observabilityconventiontests">ObservabilityConventionTests</a>. MMCA.Common carries <a href="#observabilityconventiontestsbasetests">ObservabilityConventionTestsBaseTests</a> instead, a deliberate cross-assembly guard that repoints both resource names at local fixtures (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/ObservabilityConventionTestsBaseTests.cs:14</code>, resources at <code>:16-18</code>) and adds one extra <code>[Fact]</code> pinning the <code>ResourceAssembly</code> default to the derived type&#39;s assembly rather than the base&#39;s (<code>:24-29</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: subclassed in ADC (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:7</code>), where the single override raises <code>MinimumAlertSpecs</code> from the base default of three to the four specs ADC declares (<code>:13</code>) so the gate cannot pass vacuously on a drifted parse, and as a one-line body-less class in Store (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/ObservabilityConventionTests.cs:7</code>); see <a href="#observabilityconventiontests">ObservabilityConventionTests</a>. MMCA.Common carries <a href="#observabilityconventiontestsbasetests">ObservabilityConventionTestsBaseTests</a> instead, a deliberate cross-assembly guard that repoints both resource names at local fixtures (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/ObservabilityConventionTestsBaseTests.cs:14</code>, resources at <code>:16-18</code>) and adds one extra <code>[Fact]</code> pinning the <code>ResourceAssembly</code> default to the derived type&#39;s assembly rather than the base&#39;s (<code>:24-29</code>).</li>
           </ul>
           <h3 id="protoscopekind">ProtoScopeKind</h3>
           <blockquote>
@@ -6428,7 +6428,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: keeping the numbers consumer-side while shipping the assert body is what lets ADC and Store hold different calibrated budgets without either repo re-deriving the INP-zero rule or the message format. The 0-INP carve-out is the subtle one, and it is pinned by its own unit test rather than left to a comment (<a href="#webvitalsbudgettests">WebVitalsBudgetTests</a>, <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsBudgetTests.cs:59-63</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: ADC holds one static default instance and takes the framework numbers as-is (<code>MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:39</code>, re-asserted at <code>:93</code>); Store constructs a default one per measurement (<code>MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/WebVitalsTests.cs:42</code>, <code>:89</code>). The framework&#39;s own gallery suite instead constructs one from local constants tuned for the backend-less host (<a href="#webvitalse2etests">WebVitalsE2ETests</a>, <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:17-19</code>, <code>:29-30</code>), and <a href="#webvitalsbudgettests">WebVitalsBudgetTests</a> covers the record&#39;s mechanics without starting a browser (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsBudgetTests.cs:12</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: ADC holds one static default instance and takes the framework numbers as-is (<code>MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:39</code>, re-asserted at <code>:93</code>); Store constructs a default one per measurement (<code>MMCA.Store/Tests/E2E/MMCA.Store.E2E.Tests/Workflows/WebVitalsTests.cs:42</code>, <code>:89</code>). The framework&#39;s own gallery suite instead constructs one from local constants tuned for the backend-less host (<a href="#webvitalse2etests">WebVitalsE2ETests</a>, <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:17-21</code>, <code>:29-30</code>), and <a href="#webvitalsbudgettests">WebVitalsBudgetTests</a> covers the record&#39;s mechanics without starting a browser (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsBudgetTests.cs:12</code>).</li>
           </ul>
           <h3 id="pageextensions">PageExtensions</h3>
           <blockquote>

@@ -11,20 +11,20 @@ explained, and lists what could not be determined from source. All counts are re
 
 | Quantity | Count | Source |
 |----------|------:|--------|
-| `.cs` files scanned | 3,227 | `00-inventory.md` |
-|, in-scope | 3,131 | |
-|, generated/excluded | 96 | logged exception §2.1 |
-| Type declaration rows (incl. partial-class fragments) | 4,358 | `00-inventory.md` |
-| **Distinct type nodes (partials collapsed)** | **4,205** | the master checklist |
-| → mapped to a functional group | 4,205 | `classify.ps1` (0 unmapped) |
-| → individually sectioned (named in a chapter) | 2,273 | `verify.ps1` |
-| → rolled up by project (G25 test classes) | 1,932 | logged exception §2.2 |
-| Distinct `###` sections written across 27 chapters | 2,188 | covering the 2,273 (sibling families share a section, §2.3) |
-| Chapter overviews written | 27 | one per group |
+| `.cs` files scanned | 3,746 | `00-inventory.md` |
+|, in-scope | 3,612 | |
+|, generated/excluded | 134 | logged exception §2.1 |
+| Type declaration rows (incl. partial-class fragments) | 5,055 | `00-inventory.md` |
+| **Distinct type nodes (partials collapsed)** | **4,905** | the master checklist |
+| → mapped to a functional group | 4,905 | `classify.ps1` (0 unmapped) |
+| → individually sectioned (named in a chapter) | 2,624 | `verify.ps1` |
+| → rolled up by project (G25 test classes) | 2,281 | logged exception §2.2 |
+| Distinct `###` sections written across 28 chapters | 2,554 | covering the 2,624 (sibling families share a section, §2.3) |
+| Chapter overviews written | 28 | one per group |
 
-**Cross-check result:** `verify.ps1` confirms **0** of the 2,273 individually-sectioned types are
+**Cross-check result:** `verify.ps1` confirms **0** of the 2,624 individually-sectioned types are
 missing from their group chapter, every one appears as a `###` heading or in a sibling-family
-`File:Line` table. 4,205 = 2,273 individually-sectioned + 1,932 rolled-up. Nothing dropped, nothing
+`File:Line` table. 4,905 = 2,624 individually-sectioned + 2,281 rolled-up. Nothing dropped, nothing
 double-counted (each type maps to exactly one group).
 
 > **Caveat on what `verify.ps1` proves.** Its check is name presence: a type counts as covered when
@@ -1132,7 +1132,7 @@ double-counted (each type maps to exactly one group).
 
 ## 2. Exceptions log (every deliberate omission, with reason)
 
-### 2.1 Generated / scaffolded code, not sectioned (96 files)
+### 2.1 Generated / scaffolded code, not sectioned (134 files)
 EF Core migrations (`/Migrations/`, `.Migrations.SqlServer`), `ModelSnapshot`, `*.Designer.cs`,
 `*.g.cs`, `GlobalUsings.g.cs`, and `AssemblyInfo.cs` are excluded by rule (`Tools/invtool` `IsGenerated`).
 The **mechanisms** that produce them are taught instead: the `DbContext`, the migration workflow, and
@@ -1140,10 +1140,10 @@ the `.proto`/gRPC contracts (see [group-07](group-07-persistence-ef-core.md),
 [group-13](group-13-grpc-contracts.md), and [devops-testing](devops-testing.md)). The full file list is
 in [`00-inventory.md`](00-inventory.md#generated--excluded-artifacts-no-type-sections-written).
 
-### 2.2 Per-`[Fact]` test classes, rolled up by project (1,932 types)
+### 2.2 Per-`[Fact]` test classes, rolled up by project (2,281 types)
 Per the guide's TESTS note, individual test classes are **not** given per-type sections. The
 [Testing chapter (group-28)](group-28-testing-infrastructure.md) instead:
-- sections the **reusable** test infrastructure in full (the **240** types in `MMCA.Common.Testing`,
+- sections the **reusable** test infrastructure in full (the **400** types in `MMCA.Common.Testing`,
   `.Testing.E2E`, `.Testing.UI`, the shared **`.Testing.Architecture`** rule library + bases, now
   including the six convention/fitness bases added since v1.93.0, the web-vitals collector, the
   localization resx-parity base, the slice-cohesion base, the markup-snapshot helper, the new
@@ -1155,10 +1155,10 @@ Per the guide's TESTS note, individual test classes are **not** given per-type s
   `DependencyInjectionAssert`, `TestPolling`, `ModuleConformanceTestsBase<TModule>` and the
   `WebVitalsBudget` added at the v1.142.0 pass, and the per-repo architecture-fitness test classes
   plus the `Gallery` harness), and
-- rolls the remaining **1,667** per-suite test classes (including the `MMCA.Common.Benchmarks`
+- rolls the remaining **2,281** per-suite test classes (including the `MMCA.Common.Benchmarks`
   perf-smoke project) into a **per-project table** (purpose + style:
   unit / integration / fitness / E2E / component / performance-smoke).
-Every one of the 1,460 remains individually listed with `file:line` in
+Every one of the 2,281 remains individually listed with `file:line` in
 [`00-inventory.md`](00-inventory.md). This is the only category of first-party type not given its own
 prose section.
 
@@ -1166,8 +1166,8 @@ prose section.
 Near-identical families (per-entity `Add*/Remove*/Update*` commands, `*DTOMapper`, `*CreateRequest`,
 `*Validator`, per-type filter strategies, etc.) are taught in one `### A, B, C` section that explains
 the shared shape once. **Every** grouped type is still named and cited individually via the section's
-`File:Line` table, so citation coverage is complete (this is what `verify.ps1` checks). The 2,001
-individually-sectioned types are covered by 1,910 `###` sections; the 91-type difference is family grouping.
+`File:Line` table, so citation coverage is complete (this is what `verify.ps1` checks). The 2,624
+individually-sectioned types are covered by 2,554 `###` sections; the 70-type difference is family grouping.
 
 ---
 
@@ -1284,8 +1284,8 @@ chapters. It also reports a 35th distinct `§N` token, `§1798`, which is the le
    [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to) and group-07), not yet as
    live production options.
 3. **Edge-resolution approximation.** The dependency graph is a *syntactic* (namespace-aware) resolve,
-   not a full semantic compiler bind: ~96% of edges bind by namespace visibility (15,334), the rest by a
-   globally-unique-name fallback (586 edges), and 38 references are dropped as ambiguous. This is accurate enough
+   not a full semantic compiler bind: ~96% of edges bind by namespace visibility (17,963), the rest by a
+   globally-unique-name fallback (736 edges), and 101 references are dropped as ambiguous. This is accurate enough
    for the leveling spine but is a documented approximation
    ([manifest accuracy note](00-dependency-manifest.md#edge-resolution--accuracy)).
 4. **64 cross-linked types have no section of their own** (measured at the v1.135.0 pass by the
@@ -1307,6 +1307,12 @@ chapters. It also reports a 35th distinct `§N` token, `§1798`, which is the le
    inverted behaviour (see the v1.135.0 regeneration note). Eight were repaired at this pass; the rest
    of the 199 have corrected declaration citations but unverified bodies, and should be treated as the
    next pass's first task.
+6. **ADR-112 (Catalog owns effective pricing) has no teaching chapter, by design.** Its worked example
+   (VariantDiscount, the effective-price computation, the checkout snapshot) lives in MMCA.Store, which
+   [00-index](00-index.md) places outside this guide's two codebases. The primer row for ADR-112 links only
+   the [ValueObject](group-02-domain-building-blocks.md) base it builds on and says so. Logged here as a
+   deliberate omission rather than a coverage gap (2026-09-19); it becomes a gap only if the guide's scope
+   grows to include Store.
 
 ---
 

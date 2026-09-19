@@ -3676,7 +3676,7 @@ live in later groups; this chapter is the engine those endpoints call into.
      and UI code as well as Domain (`RoleValue.cs:12-17`). The same trade-off is made by
      [`Enumeration<TEnumeration>`](group-02-domain-building-blocks.md#enumerationtenumeration), whose
      own remarks name `RoleValue` as the shipped precedent
-     (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:25-29`).
+     (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:34`).
 
   `[Rubric §11, Security]` applies too, because role strings arrive as JWT claim values whose casing
   is not under this codebase's control. Every comparison here is `OrdinalIgnoreCase`, so an

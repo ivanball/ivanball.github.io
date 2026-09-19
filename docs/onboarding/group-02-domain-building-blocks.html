@@ -495,7 +495,7 @@
           <a href="#valueobject"><code>ValueObject</code></a>, because the <code>ValueObjectsAreImmutableSealedInShared</code> fitness rule
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Immutability.cs:56</code>)
           forces every <code>ValueObject</code> derivative to be a sealed record in the Shared layer, which would forbid the
-          static-member idiom this type exists for (<code>Enumeration.cs:26-29</code>). It also does not implement
+          static-member idiom this type exists for (<code>Enumeration.cs:30-33</code>). It also does not implement
           <code>IEquatable&lt;T&gt;</code>, for the same S4035 reason <a href="#baseentitytidentifiertype"><code>BaseEntity&lt;TIdentifierType&gt;</code></a>
           does not; equality is a type-guarded <code>Equals(object?)</code> override instead (<code>Enumeration.cs:42-47</code>,
           <code>Enumeration.cs:157</code>). On the wire, <a href="#enumerationjsonconverterfactory"><code>EnumerationJsonConverterFactory</code></a>
@@ -1478,7 +1478,7 @@
           <a href="#money"><code>Money</code></a>, <a href="#phonenumber"><code>PhoneNumber</code></a>. Each adds a static factory returning
           <a href="group-01-result-error-handling.html#result"><code>Result&lt;T&gt;</code></a> so an invalid value object cannot be
           constructed. Note the deliberate non-member: <a href="#enumerationtenumeration"><code>Enumeration&lt;TEnumeration&gt;</code></a>
-          does <strong>not</strong> derive from <code>ValueObject</code> (<code>Enumeration.cs:24-29</code> explains why), because the
+          does <strong>not</strong> derive from <code>ValueObject</code> (<code>Enumeration.cs:25-33</code> explains why), because the
           sealed-record rule above would forbid the static-member idiom that type exists for.</li>
           <li><strong>Caveats / not-in-source</strong>: equality is purely structural; if a future value object held a mutable
           collection, record equality would compare references, not contents. None of the current ones do.</li>
@@ -1775,7 +1775,7 @@
           hierarchy never inherits another type&#39;s members.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: the remarks (<code>Enumeration.cs:24-29</code>) explain the placement and the one
+          <li><strong>Why it&#39;s built this way</strong>: the remarks (<code>Enumeration.cs:25-33</code>) explain the placement and the one
           surprising choice. It lives in <code>MMCA.Common.Shared</code> so it stays dependency-free and usable from
           Blazor WASM as well as Domain, and it deliberately does <strong>not</strong> derive from
           <a href="#valueobject"><code>ValueObject</code></a> because the <code>ValueObjectsAreImmutableSealedInShared</code> fitness rule

@@ -368,7 +368,7 @@ The interesting part is what it deliberately does *not* do. It does **not** deri
 [`ValueObject`](#valueobject), because the `ValueObjectsAreImmutableSealedInShared` fitness rule
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Immutability.cs:56`)
 forces every `ValueObject` derivative to be a sealed record in the Shared layer, which would forbid the
-static-member idiom this type exists for (`Enumeration.cs:26-29`). It also does not implement
+static-member idiom this type exists for (`Enumeration.cs:30-33`). It also does not implement
 `IEquatable<T>`, for the same S4035 reason [`BaseEntity<TIdentifierType>`](#baseentitytidentifiertype)
 does not; equality is a type-guarded `Equals(object?)` override instead (`Enumeration.cs:42-47`,
 `Enumeration.cs:157`). On the wire, [`EnumerationJsonConverterFactory`](#enumerationjsonconverterfactory)
@@ -1320,7 +1320,7 @@ in it.
   [`Money`](#money), [`PhoneNumber`](#phonenumber). Each adds a static factory returning
   [`Result<T>`](group-01-result-error-handling.md#result) so an invalid value object cannot be
   constructed. Note the deliberate non-member: [`Enumeration<TEnumeration>`](#enumerationtenumeration)
-  does **not** derive from `ValueObject` (`Enumeration.cs:24-29` explains why), because the
+  does **not** derive from `ValueObject` (`Enumeration.cs:25-33` explains why), because the
   sealed-record rule above would forbid the static-member idiom that type exists for.
 - **Caveats / not-in-source**: equality is purely structural; if a future value object held a mutable
   collection, record equality would compare references, not contents. None of the current ones do.
@@ -1605,7 +1605,7 @@ in it.
     `IsInitOnly` (that is, `readonly`) and assignable to `TEnumeration`, reads their values, orders by
     `Value` and freezes to a `ReadOnlyCollection`. `DeclaredOnly` is the load-bearing flag: a derived
     hierarchy never inherits another type's members.
-- **Why it's built this way**: the remarks (`Enumeration.cs:24-29`) explain the placement and the one
+- **Why it's built this way**: the remarks (`Enumeration.cs:25-33`) explain the placement and the one
   surprising choice. It lives in `MMCA.Common.Shared` so it stays dependency-free and usable from
   Blazor WASM as well as Domain, and it deliberately does **not** derive from
   [`ValueObject`](#valueobject) because the `ValueObjectsAreImmutableSealedInShared` fitness rule
