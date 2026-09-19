@@ -1,5 +1,7 @@
 # Guides & Specifications
 
+_As of: 2026-09-06._
+
 The narrative documentation for the MMCA platform: adoption guides, business specifications, workflow analyses, and per-concern reference notes. Files are prefixed by the repo they describe (common = the framework, store = the e-commerce app, adc = the conference app).
 
 ## Framework (MMCA.Common)

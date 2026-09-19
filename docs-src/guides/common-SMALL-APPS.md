@@ -1,5 +1,7 @@
 # Small Apps: the lowest floor MMCA.Common has
 
+_As of: 2026-08-30._
+
 Two `mmca-app` options decide the shape of the **solution** rather than the shape of the sample
 module, and together they are the smallest thing the framework generates:
 

@@ -1,5 +1,7 @@
 # Integration-Test Tier Rework Plan (RemediationBacklog #14)
 
+_As of: 2026-08-30._
+
 Status: **complete** (Phase 4 broker-transport tier landed 2026-07-06; Phase 5 residual = coverlet only).
 - **Phase 0 ✅**: `Tests/WebAPI` revived as `MMCA.Common.API` middleware unit tests (16 tests), in `MMCA.ADC.CI.slnf`.
 - **Phase 1 (Identity), ✅ verified green in CI.** `Tests/Integration/MMCA.ADC.Identity.IntegrationTests`: reusable `IdentityIntegrationTestFixture` (boots the host via `WebApplicationFactory<Program>`, overrides config via **process env vars** set before `CreateClient`, real SQL DB via `ADC_TEST_SQL_BASE`/LocalDB, Respawn reset, drop-on-dispose) + 11 re-homed tests (`AnonymousAuthTests`, `AttendeeClaimsTests`). **Compiles clean; runtime is verified by the `integration-tests` workflow** (SQL Server service container): it cannot be run in the headless dev environment (no Docker + an instance-wide SQL logon trigger blocks LocalDB/localhost). Run via `MMCA.ADC.Integration.slnf`.

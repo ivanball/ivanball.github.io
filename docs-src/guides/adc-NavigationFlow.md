@@ -1,5 +1,7 @@
 # Navigation Flow
 
+_As of: 2026-09-17._
+
 This document maps the site navigation flow for each actor in the MMCA.ADC application. Each mermaid diagram shows the pages accessible to that actor and the directional navigation links between them.
 
 ## Actors

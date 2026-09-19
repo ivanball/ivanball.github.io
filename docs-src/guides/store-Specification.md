@@ -1,5 +1,7 @@
 # MMCA Business Specification Document
 
+_As of: 2026-09-07._
+
 ## 1. System Overview
 
 MMCA is an **e-commerce platform** built with .NET 10.0 using DDD and Clean Architecture. The business logic is organized as modules (Catalog, Sales, Identity) that have been extracted into per-module service hosts behind a YARP Gateway. It enables customers to browse a product catalog, manage shopping carts, place orders, and process payments. Administrators manage the product catalog, inventory, and order fulfillment.

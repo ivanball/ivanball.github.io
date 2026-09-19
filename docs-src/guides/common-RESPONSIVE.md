@@ -1,5 +1,7 @@
 # Responsive Design & Cross-Browser Support (rubric §22)
 
+_As of: 2026-07-20._
+
 This document is the **supported-device and browser matrix** for the shared `MMCA.Common.UI`
 component library. It makes the responsive contract explicit (the rubric §22 note that it was
 previously implicit) so consumers know which viewports, touch-target sizes, and browser engines

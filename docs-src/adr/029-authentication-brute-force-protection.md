@@ -148,6 +148,20 @@ from the 2026-09-07 security review.
    is a membership oracle that no amount of response-body sameness closes. The generic
    `Auth.InvalidCredentials` answer (`:156`, `:163`) is unchanged.
 
+## Alternatives rejected
+- **Making the failed-attempt and registration counters atomic.** The increment in
+  `DistributedCacheService.IncrementAsync` is a read-modify-write through `IDistributedCache` and is
+  knowingly not atomic (Common v1.125.2, PR #119). It once used Redis `INCR`, which is atomic but
+  writes a Redis **string**, while `StackExchangeRedisCache` stores every entry as a Redis **hash**,
+  so the next read of that key returned `WRONGTYPE` and answered 500 from both registration and
+  login. Two remedies were weighed on 2026-07-25 and both declined: a Lua script written against the
+  hash layout, and moving these counters off `IDistributedCache` so both sides speak Redis strings.
+  The residual weakness is narrow. Concurrent guesses can overwrite each other's increments, so a
+  parallel burst can stay under `MaxFailedAttempts`, but sequential guessing (what credential
+  stuffing against one account actually looks like) still trips the lockout. The comments in
+  `LoginProtectionService.IncrementFailedAttemptsAsync` and the v1.126.0 CHANGELOG entry record the
+  accepted final state, not a TODO: cite this section rather than re-opening the finding.
+
 ## Related
 ADR-019 (the layered limiter: an authenticated-only global cap that exempts this anonymous surface,
 plus the per-IP `auth-ip` window that now sits on the same two endpoints),

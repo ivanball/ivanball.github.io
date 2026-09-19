@@ -1,5 +1,7 @@
 # Build MMCA.ECommerce: a Two-Module Store from the Templates
 
+_As of: 2026-08-06._
+
 [MMCA.ECommerce](https://github.com/ivanball/MMCA.ECommerce) is the simplest e-commerce application
 on the [MMCA.Common](https://www.nuget.org/packages?q=MMCA.Common) framework: a **Products** catalog
 module and an **Orders** module with line items, behind a REST API host and a Blazor Server +

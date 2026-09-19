@@ -1,5 +1,7 @@
 # Resilience & Business Continuity (rubric §29)
 
+_As of: 2026-09-15._
+
 MMCA.Common is a library, so it cannot *operate* a deployment: restores, RTO/RPO, and SLO alerting
 are executed in the consumer apps' IaC (e.g. MMCA.ADC's `infra/DISASTER-RECOVERY.md`,
 `scripts/dr-restore-drill.ps1`, `dr-drill.yml`, and the SLO metric-alerts in `infra/main.bicep`).

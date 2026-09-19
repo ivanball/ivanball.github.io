@@ -1,5 +1,7 @@
 # Manual Screen-Reader Pass: Runbook (§21 Accessibility)
 
+_As of: 2026-07-20._
+
 The automated layer (axe-core WCAG 2.1 AA scans in `Tests/E2E/MMCA.ADC.E2E.Tests/AccessibilityTests.cs`
 plus the shared Login/Register/Profile bases in `MMCA.Common.Testing.E2E`) catches programmatic
 violations: missing labels, contrast, ARIA misuse, landmark gaps. It cannot judge whether the experience

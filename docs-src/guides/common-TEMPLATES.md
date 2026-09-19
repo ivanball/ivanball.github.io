@@ -1,5 +1,7 @@
 # Templates: scaffolding an MMCA app
 
+_As of: 2026-08-30._
+
 `MMCA.Templates` is a `dotnet new` pack that scaffolds solutions, modules, and vertical slices on the
 [MMCA.Common](https://www.nuget.org/packages?q=MMCA.Common) framework. It exists because standing up
 a new app by hand meant 12 projects and roughly 5,300 lines before a line of business logic, several

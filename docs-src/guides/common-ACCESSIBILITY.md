@@ -1,5 +1,7 @@
 # Accessibility (rubric §21)
 
+_As of: 2026-07-20._
+
 The shared `MMCA.Common.UI` surface targets **WCAG 2.1 AA**. Accessibility is enforced two ways: an
 automated axe-core gate in CI (the bulk of coverage) and a documented manual screen-reader pass (this
 file) for the things automation cannot judge (meaningful focus order, sensible reading order, announcement

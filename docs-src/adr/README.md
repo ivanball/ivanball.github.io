@@ -139,5 +139,14 @@ re-derives both from the files and fails if this line, the table, or a link drif
 Copy the structure of an existing record: **Status** (Proposed / Accepted / Superseded, date and
 link when superseding), **Context** (the forces and the problem), **Decision** (what we chose, in
 enough detail to implement), **Rationale** (why this over the alternatives), **Trade-offs** (what it
-costs). Number sequentially (`NNN-kebab-title.md`) and add a row above. Keep ADRs short and
+costs), and **Alternatives rejected** whenever something was genuinely considered and dropped.
+Number sequentially (`NNN-kebab-title.md`) and add a row above. Keep ADRs short and
 decision-focused; deep mechanics belong in the workspace-level `Docs/Architecture/ArchitecturalAnalysis.md` (outside this repo) or the per-project CLAUDE.md.
+
+**Write the rejection down, with its date and its reason.** This is the one part of a decision that
+nothing else in the repository can carry. The code records what was chosen; it never records what
+was considered and dropped, so an unrecorded rejection gets re-proposed forever, by each new reader
+and by every agent reading the source. A rejected option belongs in the record that owns the pattern
+it would have changed (ADR-016, ADR-029, ADR-041 and ADR-083 each carry one), phrased so a reader
+arriving with that exact idea recognises it and stops. "Rejected on cost" is not enough: name the
+alternative, the date it was weighed, and the condition that would make it right to revisit.

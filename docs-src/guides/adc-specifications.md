@@ -1,5 +1,7 @@
 # ADC (Atlanta Developers Conference) - Business Specifications
 
+_As of: 2026-09-17._
+
 ---
 
 ## 1. System Overview
