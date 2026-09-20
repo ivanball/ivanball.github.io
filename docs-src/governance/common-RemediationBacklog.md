@@ -1368,6 +1368,63 @@ MMCA.Common PR #271 (squash `8a6c603`, merged 2026-08-22).
 
 ---
 
+## Progress - improvement wave (gate coverage + internals, 2026-09-20)
+
+> Not a re-score: no category was scored, **no band-table score moves and no category enters or leaves
+> either band**. This records what shipped in the framework wave merged as `82036e7` on `main`
+> (unreleased at time of writing, so the version line stays at v1.205.0 until the next tag), so the
+> next re-score reads it as evidence rather than rediscovering it. Four items, touching §1, §11, §12
+> and §15.
+
+- 🔒 **§1 - the constructor-dependency gate stops scanning only Application services.**
+  `ConstructorDependencyCountTestsBase`
+  (`Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/ConstructorDependencyCountTestsBase.cs:20`)
+  gains two facts and two abstract ratchets:
+  `Controllers_DoNotExceedConstructorDependencyCeiling` (`:90`) over every concrete `ControllerBase`
+  subclass in `Map.Api()` against `MaxControllerConstructorDependencies` (`:41`), and
+  `Handlers_DoNotExceedConstructorDependencyCeiling` (`:114`) over every `ICommandHandler` /
+  `IQueryHandler` implementation in `Map.ModuleApplication()` against
+  `MaxHandlerConstructorDependencies` (`:49`). The old fact scanned only Application types named
+  `*Service`, so a 14-dependency controller sat above a stated ceiling of 9 with a green build: the
+  gate was reporting on the narrowest surface rather than the widest one. Detection stays name-based,
+  so the rule library still takes no ASP.NET Core or Application reference. Both properties are
+  abstract, which is source-breaking for every subclass, and the mechanical fix is in
+  `UPGRADING.md:35-61` beside the changelog entry at `CHANGELOG.md:11-23`. Both first-party consumers
+  adopted it in the same wave and found real offenders (see the ADC and Store ledgers), which is the
+  point: an unenforced ceiling is a comment.
+- 🔒 **§11 / §12 - the UI-host hardening kit is framework code** (`CHANGELOG.md:24-36`, and
+  [ADR-088](../adr/088-gateway-edge-responsibilities.md) revision 2026-09-20, which takes the decision
+  its 2026-09-10 revision declined to take). `MMCA.Common.UI.Web.Hardening` now ships the per-IP fixed
+  window chained with a replica concurrency ceiling
+  (`Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:22`, entry points
+  `:145` and `:187`), the ceiling on concurrently ACTIVE Blazor circuits
+  (`Hardening/BoundedCircuitHandler.cs:39`, registered by `AddBoundedBlazorCircuits()` at
+  `Hardening/BlazorCircuitLimitExtensions.cs:51`) and the disconnected-circuit retention callback
+  (`:28`), bound from the two sections MMCA.ADC and MMCA.Store were already shipping
+  (`Hardening/UiRateLimitingSettings.cs:36`, `Hardening/BlazorCircuitLimitSettings.cs:20`). Defaults
+  ship tight (300 requests per 60 seconds at `UiRateLimitingSettings.cs:58,62`, 60-second retention at
+  `BlazorCircuitLimitSettings.cs:57`), so a Blazor host that configures nothing is still limited. Unit
+  coverage for the kit's own behavior lives beside it in
+  `Tests/Presentation/MMCA.Common.UI.Web.Tests/Hardening/`. Both consumers adopted it and deleted
+  their local copies, which is the two-near-identical-copies condition the ADR named, now removed.
+- 🧹 **§15 - one email-identity normalizer** (`CHANGELOG.md:48-51`). `LoginProtectionService`,
+  `PasswordResetTokenService` and `EmailConfirmationTokenService` each carried a byte-identical
+  private `NormalizeIdentity`; the shared internal `EmailIdentity.Normalize`
+  (`Source/Core/MMCA.Common.Infrastructure/Auth/EmailIdentity.cs:12,22`) replaces all three, so the
+  key the lockout, reset and confirmation paths agree on has exactly one definition. Three copies of
+  a normalization rule is three chances for the lockout key to stop matching the reset key.
+- 🧹 **§15 - the four oversized registration files are partial classes by concern**, no API change
+  (`CHANGELOG.md:55-63`). `MMCA.Common.Infrastructure` `DependencyInjection.cs` (1321 lines),
+  `MMCA.Common.Application` `DependencyInjection.cs` (747), `MMCA.Common.API`
+  `WebApplicationBuilderExtensions.cs` (771) and `MMCA.Common.Aspire` `Extensions.cs` (735) are each
+  split into one file per concern in the same folder; every member keeps its name, signature,
+  accessibility and namespace, and the largest resulting file is 401 lines. Recorded here because it
+  is the kind of change a re-score can otherwise mistake for new surface.
+- 🐞 **CD-2 CLOSED** (see *Recorded - 2026-07-31 consumer-discovered defect* above): the lookup
+  projection over a value-object property no longer throws. That entry carries the full evidence.
+
+---
+
 ## Deferred - 2026-07-19 full review (recorded, not scheduled)
 
 > The 2026-07-19 full framework review shipped its accepted fixes on the review branch (rollback on
@@ -1470,8 +1527,21 @@ MMCA.Common PR #271 (squash `8a6c603`, merged 2026-08-22).
   `orderBy` half is a small contract decision, and removing the parameter is source-breaking for
   any caller that passes it.)*
 
-- [ ] **CD-2 (§9/§15) - the lookup projection cannot translate value-object properties and throws
-  at runtime.** `GetOrBuildLookupSelector` maps the requested property into `BaseLookup.Name` by
+- [x] **CD-2 (§9/§15) - the lookup projection cannot translate value-object properties and throws
+  at runtime.** **CLOSED (fixed 2026-09-20, merged as `82036e7` on MMCA.Common `main`, unreleased at
+  time of writing; `CHANGELOG.md:40-47`).** Both halves of the proposed fix landed, and the chosen
+  shape is the faithful-projection one rather than the reject-at-validation one, so no approved
+  property name starts returning a 400. `GetAllForLookupAsync`
+  (`Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:222`) no
+  longer appends `ToString()` for a non-string name property: the string leg is unchanged
+  (server-side coalesce, order, TOP), while a non-string property is projected in its own CLR type
+  and formatted in memory by `ExecuteRawLookupAsync` (`:280`, the in-memory format at `:295`),
+  reached through the closed-over generic call the selector cache builds
+  (`ExecuteRawLookupMethod` at `:267-268`, `GetOrBuildLookupSelector` at `:320`,
+  `BuildLookupSelector` at `:343` with the reason recorded in-file at `:352` and `:715`). The
+  server-side TOP ceiling still bounds the read, so a value-object, enum, int or date name property
+  returns a lookup instead of an `InvalidOperationException` surfacing as HTTP 500. *Original
+  finding, retained for provenance:* `GetOrBuildLookupSelector` maps the requested property into `BaseLookup.Name` by
   appending a `ToString()` call whenever the property is not a `string`
   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:113-117`).
   For scalar CLR types SQL Server translates that, but for a value-object property (for example a

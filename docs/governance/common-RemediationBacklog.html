@@ -1589,6 +1589,63 @@
           corrected to v1.203.0 / 267 in both files; 136 / 53 / 19 / ADRs 001-123 unchanged; details under #34 below).</li>
           </ul>
           <hr>
+          <h2 id="progress---improvement-wave-gate-coverage--internals-2026-09-20">Progress - improvement wave (gate coverage + internals, 2026-09-20)</h2>
+          <blockquote>
+          <p>Not a re-score: no category was scored, <strong>no band-table score moves and no category enters or leaves
+          either band</strong>. This records what shipped in the framework wave merged as <code>82036e7</code> on <code>main</code>
+          (unreleased at time of writing, so the version line stays at v1.205.0 until the next tag), so the
+          next re-score reads it as evidence rather than rediscovering it. Four items, touching §1, §11, §12
+          and §15.</p>
+          </blockquote>
+          <ul>
+          <li>🔒 <strong>§1 - the constructor-dependency gate stops scanning only Application services.</strong>
+          <code>ConstructorDependencyCountTestsBase</code>
+          (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/ConstructorDependencyCountTestsBase.cs:20</code>)
+          gains two facts and two abstract ratchets:
+          <code>Controllers_DoNotExceedConstructorDependencyCeiling</code> (<code>:90</code>) over every concrete <code>ControllerBase</code>
+          subclass in <code>Map.Api()</code> against <code>MaxControllerConstructorDependencies</code> (<code>:41</code>), and
+          <code>Handlers_DoNotExceedConstructorDependencyCeiling</code> (<code>:114</code>) over every <code>ICommandHandler</code> /
+          <code>IQueryHandler</code> implementation in <code>Map.ModuleApplication()</code> against
+          <code>MaxHandlerConstructorDependencies</code> (<code>:49</code>). The old fact scanned only Application types named
+          <code>*Service</code>, so a 14-dependency controller sat above a stated ceiling of 9 with a green build: the
+          gate was reporting on the narrowest surface rather than the widest one. Detection stays name-based,
+          so the rule library still takes no ASP.NET Core or Application reference. Both properties are
+          abstract, which is source-breaking for every subclass, and the mechanical fix is in
+          <code>UPGRADING.md:35-61</code> beside the changelog entry at <code>CHANGELOG.md:11-23</code>. Both first-party consumers
+          adopted it in the same wave and found real offenders (see the ADC and Store ledgers), which is the
+          point: an unenforced ceiling is a comment.</li>
+          <li>🔒 <strong>§11 / §12 - the UI-host hardening kit is framework code</strong> (<code>CHANGELOG.md:24-36</code>, and
+          <a href="../adr/088-gateway-edge-responsibilities.html">ADR-088</a> revision 2026-09-20, which takes the decision
+          its 2026-09-10 revision declined to take). <code>MMCA.Common.UI.Web.Hardening</code> now ships the per-IP fixed
+          window chained with a replica concurrency ceiling
+          (<code>Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:22</code>, entry points
+          <code>:145</code> and <code>:187</code>), the ceiling on concurrently ACTIVE Blazor circuits
+          (<code>Hardening/BoundedCircuitHandler.cs:39</code>, registered by <code>AddBoundedBlazorCircuits()</code> at
+          <code>Hardening/BlazorCircuitLimitExtensions.cs:51</code>) and the disconnected-circuit retention callback
+          (<code>:28</code>), bound from the two sections MMCA.ADC and MMCA.Store were already shipping
+          (<code>Hardening/UiRateLimitingSettings.cs:36</code>, <code>Hardening/BlazorCircuitLimitSettings.cs:20</code>). Defaults
+          ship tight (300 requests per 60 seconds at <code>UiRateLimitingSettings.cs:58,62</code>, 60-second retention at
+          <code>BlazorCircuitLimitSettings.cs:57</code>), so a Blazor host that configures nothing is still limited. Unit
+          coverage for the kit&#39;s own behavior lives beside it in
+          <code>Tests/Presentation/MMCA.Common.UI.Web.Tests/Hardening/</code>. Both consumers adopted it and deleted
+          their local copies, which is the two-near-identical-copies condition the ADR named, now removed.</li>
+          <li>🧹 <strong>§15 - one email-identity normalizer</strong> (<code>CHANGELOG.md:48-51</code>). <code>LoginProtectionService</code>,
+          <code>PasswordResetTokenService</code> and <code>EmailConfirmationTokenService</code> each carried a byte-identical
+          private <code>NormalizeIdentity</code>; the shared internal <code>EmailIdentity.Normalize</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Auth/EmailIdentity.cs:12,22</code>) replaces all three, so the
+          key the lockout, reset and confirmation paths agree on has exactly one definition. Three copies of
+          a normalization rule is three chances for the lockout key to stop matching the reset key.</li>
+          <li>🧹 <strong>§15 - the four oversized registration files are partial classes by concern</strong>, no API change
+          (<code>CHANGELOG.md:55-63</code>). <code>MMCA.Common.Infrastructure</code> <code>DependencyInjection.cs</code> (1321 lines),
+          <code>MMCA.Common.Application</code> <code>DependencyInjection.cs</code> (747), <code>MMCA.Common.API</code>
+          <code>WebApplicationBuilderExtensions.cs</code> (771) and <code>MMCA.Common.Aspire</code> <code>Extensions.cs</code> (735) are each
+          split into one file per concern in the same folder; every member keeps its name, signature,
+          accessibility and namespace, and the largest resulting file is 401 lines. Recorded here because it
+          is the kind of change a re-score can otherwise mistake for new surface.</li>
+          <li>🐞 <strong>CD-2 CLOSED</strong> (see <em>Recorded - 2026-07-31 consumer-discovered defect</em> above): the lookup
+          projection over a value-object property no longer throws. That entry carries the full evidence.</li>
+          </ul>
+          <hr>
           <h2 id="deferred---2026-07-19-full-review-recorded-not-scheduled">Deferred - 2026-07-19 full review (recorded, not scheduled)</h2>
           <blockquote>
           <p>The 2026-07-19 full framework review shipped its accepted fixes on the review branch (rollback on
@@ -1693,9 +1750,22 @@
           <code>orderBy</code> half is a small contract decision, and removing the parameter is source-breaking for
           any caller that passes it.)</em></p>
           </li>
-          <li><p><input disabled="" type="checkbox"> 
+          <li><p><input checked="" disabled="" type="checkbox"> 
           <strong>CD-2 (§9/§15) - the lookup projection cannot translate value-object properties and throws
-          at runtime.</strong> <code>GetOrBuildLookupSelector</code> maps the requested property into <code>BaseLookup.Name</code> by
+          at runtime.</strong> <strong>CLOSED (fixed 2026-09-20, merged as <code>82036e7</code> on MMCA.Common <code>main</code>, unreleased at
+          time of writing; <code>CHANGELOG.md:40-47</code>).</strong> Both halves of the proposed fix landed, and the chosen
+          shape is the faithful-projection one rather than the reject-at-validation one, so no approved
+          property name starts returning a 400. <code>GetAllForLookupAsync</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:222</code>) no
+          longer appends <code>ToString()</code> for a non-string name property: the string leg is unchanged
+          (server-side coalesce, order, TOP), while a non-string property is projected in its own CLR type
+          and formatted in memory by <code>ExecuteRawLookupAsync</code> (<code>:280</code>, the in-memory format at <code>:295</code>),
+          reached through the closed-over generic call the selector cache builds
+          (<code>ExecuteRawLookupMethod</code> at <code>:267-268</code>, <code>GetOrBuildLookupSelector</code> at <code>:320</code>,
+          <code>BuildLookupSelector</code> at <code>:343</code> with the reason recorded in-file at <code>:352</code> and <code>:715</code>). The
+          server-side TOP ceiling still bounds the read, so a value-object, enum, int or date name property
+          returns a lookup instead of an <code>InvalidOperationException</code> surfacing as HTTP 500. <em>Original
+          finding, retained for provenance:</em> <code>GetOrBuildLookupSelector</code> maps the requested property into <code>BaseLookup.Name</code> by
           appending a <code>ToString()</code> call whenever the property is not a <code>string</code>
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:113-117</code>).
           For scalar CLR types SQL Server translates that, but for a value-object property (for example a
@@ -2013,6 +2083,7 @@
             <li><a href="#progress---thirty-third-wave-evidence-re-score-at-v11930-2026-09-11">Progress - thirty-third wave (evidence re-score at v1.193.0, 2026-09-11)</a></li>
             <li><a href="#progress---thirty-fourth-wave-evidence-re-score-at-v12020-2026-09-14">Progress - thirty-fourth wave (evidence re-score at v1.202.0, 2026-09-14)</a></li>
             <li><a href="#progress---thirty-fifth-wave-evidence-re-score-at-v12030-2026-09-15">Progress - thirty-fifth wave (evidence re-score at v1.203.0, 2026-09-15)</a></li>
+            <li><a href="#progress---improvement-wave-gate-coverage--internals-2026-09-20">Progress - improvement wave (gate coverage + internals, 2026-09-20)</a></li>
             <li><a href="#deferred---2026-07-19-full-review-recorded-not-scheduled">Deferred - 2026-07-19 full review (recorded, not scheduled)</a></li>
             <li><a href="#recorded---2026-07-31-consumer-discovered-defect-not-scheduled">Recorded - 2026-07-31 consumer-discovered defect (not scheduled)</a></li>
             <li><a href="#priority-6-highest-leverage">🔴 Priority 6: highest leverage</a></li>

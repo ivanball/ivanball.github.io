@@ -538,7 +538,100 @@ asserts the ceiling, permit release and the three circuit bounds.
 **Still local, still not framework code.** The Decision above records the deliberate reason Store
 declared this hardening in its own host rather than in MMCA.Common. Two near-identical copies now
 exist, which strengthens the case for extraction without settling it: a shared UI-host hardening kit
-would need its own decision, and this revision does not take one.
+would need its own decision, and this revision does not take one. **That decision is taken in the
+2026-09-20 revision below**, which moves the kit into MMCA.Common and deletes both local copies.
+
+## Revision (2026-09-20)
+
+**The decision the last revision declined to take is taken here: the own-host UI hardening is
+framework code.** Two near-identical copies in two consumers is the shape that says a kit has stopped
+being one app's remediation, and the second copy landed with no new thinking in it. The kit now ships
+in `MMCA.Common.UI.Web` under the `MMCA.Common.UI.Web.Hardening` namespace, released in the framework
+wave merged as `82036e7` on MMCA.Common `main` (`MMCA.Common/CHANGELOG.md:24-36`).
+
+Five files carry it, all under
+`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/`:
+
+| File | What it holds |
+| --- | --- |
+| `UiRateLimitingExtensions.cs:22` | the per-IP fixed window chained with the replica concurrency ceiling, the exempt-prefix list (`:42`) and the exemption rule (`:62`) |
+| `UiRateLimitingSettings.cs:33` | the `UiRateLimiting` section (`:36`) and its three tuned values |
+| `BlazorCircuitLimitExtensions.cs:19` | the two registration halves, which attach to different builders |
+| `BlazorCircuitLimitSettings.cs:17` | the `BlazorCircuitLimits` section (`:20`) and its three bounds |
+| `BoundedCircuitHandler.cs:39` | the ceiling on concurrently ACTIVE circuits, counted on open (`:58`) and released on close (`:79`) |
+
+Three entry points are the whole public surface: `AddUiRateLimiting(configuration)`
+(`UiRateLimitingExtensions.cs:145`), `UseUiRateLimiting()` (`:187`), and the circuit pair
+`AddBoundedBlazorCircuits()` (`BlazorCircuitLimitExtensions.cs:51`) with
+`BlazorCircuitLimitExtensions.RetentionFrom(configuration)` (`:28`), the callback handed to
+`AddInteractiveServerComponents`. The retention and the active-circuit ceiling stay two calls because
+they attach to different builders, and they read the same section so the two numbers cannot drift.
+
+**Both consumers now consume the framework kit and their local copies are deleted.** Neither change is
+merged yet; both sit on the branch `chore/common-wave-2026-09-20` in their repos.
+
+- MMCA.ADC swaps one `using` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:31`) and keeps every
+  call site where it was: the retention callback at `:53`, `AddBoundedBlazorCircuits()` at `:62`,
+  `AddUiRateLimiting(builder.Configuration)` at `:127` and `UseUiRateLimiting()` at `:197`. Its whole
+  `Hardening/` folder (five files) is gone.
+- MMCA.Store swaps the same `using` (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:24`) and
+  additionally loses an inline block: the hand-written `CircuitOptions` callback and the
+  `AddOptions<BlazorCircuitLimitSettings>().BindConfiguration(...).ValidateDataAnnotations()` plus
+  `AddSingleton<CircuitHandler, BoundedCircuitHandler>()` pair become
+  `RetentionFrom(builder.Configuration)` at `:78` and `AddBoundedBlazorCircuits()` at `:86`. The limiter
+  is registered at `:95` and applied at `:227`. Its `Hardening/` folder (four files) is gone.
+
+**No configuration moved.** The framework binds the same two sections (`UiRateLimiting` at
+`UiRateLimitingSettings.cs:36`, `BlazorCircuitLimits` at `BlazorCircuitLimitSettings.cs:20`) and the
+same six keys, which are the names both apps were already shipping, so neither `appsettings.json`
+changed a character. That is what made the adoption one `using` per host.
+
+The tuned values recorded in the 2026-09-10 revision still hold, and they are now set purely in each
+app's configuration against framework defaults rather than in a per-app settings class:
+
+| Setting | Framework default | ADC | Store |
+| --- | --- | --- | --- |
+| `PermitLimit` per window | 300 (`UiRateLimitingSettings.cs:58`) | 1200 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:21`) | 300 (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/appsettings.json:22`) |
+| `WindowSeconds` | 60 (`:62`) | 60 (`appsettings.json:22`) | 60 (`appsettings.json:23`) |
+| `GlobalConcurrencyLimit` | 200 (`:74`) | 200 (`appsettings.json:23`) | 200 (`appsettings.json:24`) |
+| `MaxActiveCircuits` | 200 (`BlazorCircuitLimitSettings.cs:38`) | 200 (`appsettings.json:29`) | 200 (`appsettings.json:36`) |
+| `DisconnectedCircuitMaxRetained` | 25 (`:46`) | 25 (`appsettings.json:30`) | 25 (`appsettings.json:37`) |
+| `DisconnectedCircuitRetentionSeconds` | 60 (`:57`) | 180 (`appsettings.json:31`) | 60 (`appsettings.json:38`) |
+
+The defaults are Store's numbers, which is deliberate: a public origin should ship limited even when a
+host configures nothing, and the tighter pair is the safe one to inherit. ADC's four-times-wider window
+and its 180-second retention keep the reasons the 2026-09-10 revision recorded (a venue full of
+attendees behind a handful of shared NAT addresses, and a walk between rooms that should reconnect),
+and both are now visible in configuration rather than in a settings class.
+
+**One behavior delta, and it is a widening.** The framework exempts `/hubs` alongside `/health`,
+`/alive`, `/_framework` and `/_content` (`UiRateLimitingExtensions.cs:42`), because a SignalR
+connection is long-lived and its negotiate and reconnect traffic must never be throttled; that mirrors
+the Gateway's own `GatewayRateLimiting:BypassPathPrefixes`. ADC's local copy already had the `/hubs`
+prefix; Store's did not (four prefixes at `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/UiRateLimitingExtensions.cs:30`
+on `main`, before the deletion). Store's storefront origin serves no hub, so the exemption covers
+nothing that exists there today and the observable behavior is unchanged; it is covered by declaration
+rather than by accident if one ever appears. `/_blazor` keeps no exemption on either host, because the
+negotiate endpoint is exactly what opens a circuit.
+
+**The unit facts moved with the code; the wiring facts stayed.** The kit's own behavior is now tested
+once, beside it, in `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/Hardening/`:
+`UiRateLimitingTests.cs` covers the exemption rule and the partition keys, and
+`BoundedCircuitHandlerTests.cs` covers the ceiling, the rollback on refusal and the floor at zero.
+What each consumer kept is the half only that repo can answer, which is whether its real host wires the
+kit at all and on which numbers:
+
+- MMCA.ADC: `MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/UiRateLimitingTests.cs:29` proves the real host
+  registers the limiter and the file still drives a burst through the limiter the host actually
+  registered, so the conference-day window is pinned; `BoundedCircuitHandlerTests.cs:25` proves the
+  handler is registered as a SINGLETON (a scoped registration counts to one per circuit and caps
+  nothing) and `:41` pins the tightened retention values.
+- MMCA.Store: `MMCA.Store/Tests/Hosts/MMCA.Store.UI.Web.Tests/UiRateLimitingTests.cs:29` and
+  `BoundedCircuitHandlerTests.cs:30` keep the same two registration assertions and nothing else.
+
+This closes item 2 of the 2026-09-10 revision as a remediation: the hardening is no longer a thing each
+public UI host has to remember to write, and a third Blazor host gets it with one `using` and two
+registrations.
 
 ## Related
 [ADR-008](008-service-extraction-topology.md) (the record that made the Gateway the only entry point
