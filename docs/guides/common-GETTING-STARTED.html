@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Getting Started: Build a New App on MMCA.Common · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-09-07.">
+  <meta name="description" content="As of: 2026-09-20 (MMCA.Templates 1.11.0, framework v1.206.0).">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Getting Started: Build a New App on MMCA.Common">
-  <meta property="og:description" content="As of: 2026-09-07.">
+  <meta property="og:description" content="As of: 2026-09-20 (MMCA.Templates 1.11.0, framework v1.206.0).">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Getting Started: Build a New App on MMCA.Common">
-  <meta name="twitter:description" content="As of: 2026-09-07.">
+  <meta name="twitter:description" content="As of: 2026-09-20 (MMCA.Templates 1.11.0, framework v1.206.0).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Getting Started: Build a New App on MMCA.Common","item":"https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -126,13 +126,13 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="getting-started-build-a-new-app-on-mmcacommon">Getting Started: Build a New App on MMCA.Common</h1>
-          <p><em>As of: 2026-09-07.</em></p>
+          <p><em>As of: 2026-09-20 (MMCA.Templates 1.11.0, framework v1.206.0).</em></p>
           <p>MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set of
           lockstep-versioned NuGet packages (the authoritative list and count live in
           <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a>). Its core promise: <strong>build a
           modular monolith now, and extract a module into its own microservice later, without a rewrite.</strong></p>
-          <p>Standing that up by hand means 12 projects and roughly 6,600 lines before a line of your own
-          business logic, several of them load-bearing in ways nothing tells you about until much later. So
+          <p>Standing that up by hand means 12 projects and roughly 9,000 lines of C# and Razor before a line
+          of your own business logic, several of them load-bearing in ways nothing tells you about until much later. So
           you do not type it. One command writes the whole thing, green:</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
 dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order</code></pre>
@@ -167,8 +167,9 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           same version as everything else, so it is one more entry in the same lockstep sweep
           (<a href="../adr/101-common-metapackage.html">ADR-101</a>, <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>).
           The specialised packages (UI, UI.Web, Grpc, Gateway, Aspire.Hosting, the <code>Testing.*</code> set) stay
-          separate and are added per project. The scaffold below still emits the explicit six, so this is
-          something to reach for when you are wiring a host yourself.</p>
+          separate and are added per project. The scaffold below still emits explicit per-package pins (one
+          <code>PackageVersion</code> per <code>MMCA.Common.*</code> package it uses, all at one version), so this is something to
+          reach for when you are wiring a host yourself.</p>
           </blockquote>
           <hr>
           <h2 id="1-install-the-template-pack">1. Install the template pack</h2>
@@ -204,10 +205,27 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           on every change.</p>
           <p>Getting a green baseline <strong>first</strong> is the point of this step. It is the line you bisect against
           later.</p>
-          <h2 id="4-create-the-first-migration">4. Create the first migration</h2>
-          <p>The scaffold ships the migrations project and its design-time factory; the migration itself
-          describes your entities, so it is yours to generate:</p>
+          <h2 id="4-check-the-first-migration">4. Check the first migration</h2>
+          <p>The scaffold ships the migrations project, its design-time factory, and (in the default shape) the
+          sample&#39;s migrations already renamed for your aggregate. Look inside
+          <code>Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders/Migrations/</code>:</p>
+          <ul>
+          <li><strong>Several <code>*.cs</code> files plus a model snapshot.</strong> You scaffolded the full shape, and the migrations
+          describe exactly the <code>Order</code> model you were handed. There is nothing to generate: running
+          <code>dotnet ef migrations add InitialCreate</code> here fails with
+          <code>The name &#39;InitialCreate&#39; is used by an existing migration</code>. Move on to step 5.</li>
+          <li><strong>Only <code>.editorconfig</code>.</strong> You passed a shape flag (<code>--flat</code>, <code>--no-status</code>, <code>--no-description</code>,
+          <code>--no-owner</code>) or <code>--database sqlite</code>, and the sample migrations were dropped because they would
+          describe a schema you did not ask for. Create your own before the first run:</li>
+          </ul>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
+  <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
+  <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
+  <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
+          <p>The design-time factory opens no connection for <code>migrations add</code>, so neither case needs a database.
+          Either way, every later migration is added the same way, and this is where to confirm the model and
+          the migrations agree before you change the aggregate:</p>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations has<span class="hljs-literal">-pending-model-changes</span> `
   <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
   <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
   <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
@@ -222,8 +240,9 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           <p><strong>Run this from a real, interactive terminal.</strong> Launched from a headless or background shell the
           Aspire AppHost stalls at control-plane init and no dashboard appears.</p>
           </blockquote>
-          <p>The dashboard lists three resources: <code>sql</code>, <code>web</code> (the REST API), and <code>ui</code> (Blazor Server +
-          MudBlazor). Open the <strong><code>ui</code></strong> endpoint to create and browse orders in the browser. To exercise the
+          <p>The dashboard lists <code>sql</code> with its two databases (<code>support</code>, and <code>support-globex</code> for the
+          multi-tenancy demo, where the <code>globex</code> tenant is routed to its own database while every other tenant
+          shares the pooled one), <code>web</code> (the REST API), and <code>ui</code> (Blazor Server + MudBlazor). Open the <strong><code>ui</code></strong> endpoint to create and browse orders in the browser. To exercise the
           API directly, <code>POST /Orders</code> then <code>GET /Orders</code> against the <code>web</code> endpoint; the API root <code>/</code> has no
           page and returns 404 by design. Confirm 201 then 200, that audit fields are stamped, that
           soft-deleted rows are filtered out, and that an outbox row was written for the
@@ -289,7 +308,7 @@ Tests/
           </tr>
           </thead>
           <tbody><tr>
-          <td><code>AddApplicationDecorators()</code> is the <strong>last</strong> DI call</td>
+          <td><code>AddApplicationDecorators()</code> is the <strong>last</strong> handler registration (only <code>AddModuleHealthChecks</code> follows it)</td>
           <td>decorators wrap handlers that already exist, and modules register theirs during <code>ModuleLoader</code></td>
           <td><a href="common-BUILD-BY-HAND.html#phase-5-compose-the-monolith-host-and-run-it">Phase 5</a></td>
           </tr>
@@ -385,9 +404,9 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           RFC 9457 ProblemDetails. Transferring an order to the requester it already has succeeds rather than
           failing, so a retried command is not an error. <code>AddDomainEvent</code> is what makes the change observable
           in-process after <code>SaveChanges</code>. And the mutation goes through the aggregate, never through the
-          handler setting <code>RequesterUserId</code> itself. <code>ChangeStatus</code> in
-          <a href="common-BUILD-BY-HAND.html#3a-domain-aggregate-invariants-events">Phase 3a</a> is the same shape with a
-          different rule.</p>
+          handler setting <code>RequesterUserId</code> itself. <code>AddComment</code>, which runs <code>EnsureStatusAllowsComments</code>
+          before mutating, is the same shape with a different rule; see
+          <a href="common-BUILD-BY-HAND.html#3a-domain-aggregate-invariants-events">Phase 3a</a>.</p>
           <p><strong>Give the command its payload.</strong> <code>--domain-method</code> carries only a name, so the scaffolded record
           holds just the aggregate id and the generated handler calls <code>order.TransferToRequester()</code> with no
           arguments. Two one-line edits finish the slice: add the field to the command record, and pass it at
@@ -406,13 +425,14 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <p><strong>A second module</strong> across all five layers plus its test and migrations projects:</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Billing <span class="hljs-literal">-Aggregate</span> Invoice</code></pre>
           <p>That script ships inside every solution <code>mmca-app</code> generates. It runs <code>dotnet new mmca-module</code> (the
-          same shape options, as PowerShell switches) and then applies all seven wire-ups the template can only
+          same shape options, as PowerShell switches) and then applies every wire-up the template can only
           print, because <code>dotnet new</code> cannot patch files that already exist: the solution entries, the host and
           architecture-test project references, the identifier-alias link, the five architecture-map lines,
-          <code>AddErrorResources</code>, the module&#39;s own Aspire database and data-source routing, and the first EF
-          migration. Until those are done the module is invisible to the host and to the fitness rules. The
-          <a href="common-TEMPLATES.html">templates guide</a> documents the script and lists each wire-up as the manual
-          fallback.</p>
+          the host&#39;s <code>ModuleLoader</code> assembly and <code>AddErrorResources</code> entries, the module&#39;s own Aspire database
+          and <code>DataSources</code> routing in the Web host&#39;s <code>appsettings.json</code>, the new event appended to your frozen
+          wire contract, and the first EF migration. Until those are done the module is invisible to the host
+          and to the fitness rules. The <a href="common-TEMPLATES.html">templates guide</a> documents the script and lists
+          each wire-up as the manual fallback.</p>
           <hr>
           <h2 id="surface-the-slice-at-the-edge">Surface the slice at the edge</h2>
           <p>The scaffold stops at the handler, and the template&#39;s closing instructions tell you to map the
@@ -462,7 +482,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <p>The two halves are what make the signature honest.
           <code>ProblemDetailsResultReader</code> (<code>MMCA.Common.Shared.Http</code>) converts the <strong>response</strong>: a 2xx is a
           success, and anything else is parsed back out of the RFC 9457 body into the errors the server
-          described, with the original <code>ErrorType</code> preserved. <code>HttpResultExecutor</code> (<code>MMCA.Common.UI.Services</code>)
+          described, with the original <code>ErrorType</code> preserved. <code>HttpResultExecutor</code> (<code>MMCA.Common.UI.Services.Api</code>)
           converts the <strong>absence of a response</strong>: a refused connection, a DNS failure, a dropped socket or a
           client timeout becomes a failure coded <code>Http.TransportFailure</code> or <code>Http.Timeout</code> instead of an
           exception. Your own cancellation still propagates, so a disposed component is never reported back
@@ -481,27 +501,27 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
         cancellationToken);</code></pre>
           <p>Neither type needs registering: both are static, so the client just needs
           <code>using MMCA.Common.Shared.Abstractions;</code> (for <code>Result</code>), <code>using MMCA.Common.Shared.Http;</code> and
-          <code>using MMCA.Common.UI.Services;</code>. The host still registers only
+          <code>using MMCA.Common.UI.Services.Api;</code>. The host still registers only
           <code>AddHttpClient&lt;SupportApiClient&gt;(...)</code>.</p>
           <p><strong>The page plus its resource pair.</strong> Add a panel to <code>OrderDetail.razor</code> shaped like the Status one (a
           <code>MudNumericField</code> for the new requester id and a button), with a <code>@code</code> handler shaped like
-          <code>ChangeStatusAsync</code>. Because the client returns a <code>Result</code>, the handler <strong>branches instead of
-          catching</strong>:</p>
+          <code>ChangeStatusAsync</code>. Feedback goes through the <code>IToastService Toast</code> the page already injects.
+          Because the client returns a <code>Result</code>, the handler <strong>branches instead of catching</strong>:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> Api.TransferOrderAsync(Id, _transferRequesterUserId);
 <span class="hljs-keyword">if</span> (result.IsSuccess)
 {
-    Snackbar.Add(L[<span class="hljs-string">&quot;Snackbar.Transferred&quot;</span>], Severity.Success);
+    Toast.Success(L[<span class="hljs-string">&quot;Snackbar.Transferred&quot;</span>]);
     <span class="hljs-keyword">await</span> LoadAsync();
 }
 <span class="hljs-keyword">else</span>
 {
-    Snackbar.Add(L[<span class="hljs-string">&quot;Snackbar.TransferFailed&quot;</span>, result.LocalizedErrorMessage(L) ?? <span class="hljs-built_in">string</span>.Empty], Severity.Error);
+    Toast.Error(L[<span class="hljs-string">&quot;Snackbar.TransferFailed&quot;</span>, result.LocalizedErrorMessage(L) ?? <span class="hljs-built_in">string</span>.Empty]);
 }</code></pre>
           <p><code>LocalizedErrorMessage</code> comes from <code>ResultUiExtensions</code> (<code>@using MMCA.Common.UI.Common</code> in
           <code>_Imports.razor</code>); it composes the failure&#39;s distinct messages, most severe first, resolving each as
           a resource key with pass-through, so a message the API already translated renders as-is. For a
           result that carries a value, <code>result.TryGetValue(out var dto)</code> unwraps it inside the same
-          conditional. A form that wants an inline block rather than a snackbar can drop the shared
+          conditional. A form that wants an inline block rather than a toast can drop the shared
           <code>&lt;ErrorSummary Result=&quot;_result&quot; Localizer=&quot;L&quot; /&gt;</code> component into its markup instead, which renders
           nothing when there is nothing to say.</p>
           <p>Every new <code>L[...]</code> key needs an entry in <strong>both</strong> <code>OrderDetail.resx</code> and <code>OrderDetail.es.resx</code>; a
@@ -510,7 +530,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           page&#39;s reload after a transfer reads fresh data, not a stale cache entry. And transferring a closed
           order exercises the whole error pipeline end to end: the invariant fails, <code>HandleFailure</code> maps it to
           RFC 9457 ProblemDetails, <code>ProblemDetailsResultReader</code> reads it back into a failed <code>Result</code> with its
-          category intact, and the snackbar shows &quot;A closed order cannot be transferred to another requester.&quot;</p>
+          category intact, and the toast shows &quot;A closed order cannot be transferred to another requester.&quot;</p>
           <hr>
           <h2 id="then-what">Then what</h2>
           <ul>
@@ -538,8 +558,8 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           the primary automatable gate.</li>
           <li><code>dotnet test --solution &lt;YourApp&gt;.slnx</code> passes all three projects with no database, including
           your own frozen integration-event contract.</li>
-          <li><code>dotnet ef migrations add InitialCreate ...</code> succeeds and generates your aggregate, its child
-          entity, and the per-database <code>OutboxMessages</code> table.</li>
+          <li>The migrations project holds your aggregate, its child entity, and the per-database
+          <code>OutboxMessages</code> table: shipped in the default shape, generated by <code>dotnet ef migrations add InitialCreate ...</code> after a shape flag; <code>has-pending-model-changes</code> reports none either way.</li>
           <li>Run interactively: the dashboard shows <code>sql</code>, <code>web</code>, and <code>ui</code> healthy; a <code>POST</code> then <code>GET</code> returns
           201 then 200 with audit fields stamped, soft-deleted rows filtered, and an outbox row written.</li>
           </ol>
@@ -577,7 +597,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
             <li><a href="#1-install-the-template-pack">1. Install the template pack</a></li>
             <li><a href="#2-generate-the-solution">2. Generate the solution</a></li>
             <li><a href="#3-build-and-test-before-you-change-anything">3. Build and test before you change anything</a></li>
-            <li><a href="#4-create-the-first-migration">4. Create the first migration</a></li>
+            <li><a href="#4-check-the-first-migration">4. Check the first migration</a></li>
             <li><a href="#5-run-it">5. Run it</a></li>
             <li><a href="#6-the-one-time-fixup">6. The one-time fixup</a></li>
             <li><a href="#what-you-were-handed">What you were handed</a></li>

@@ -976,7 +976,7 @@ resolved by the service-discovery handler that `AddServiceDefaults()` installs. 
 runs the calls **server-side**, there is no browser CORS and no token to forward.
 
 **The client returns `Result` and throws nothing for a server answer.** Every method wraps its call
-in `HttpResultExecutor.ExecuteAsync` (`MMCA.Common.UI.Services`) and hands the response to
+in `HttpResultExecutor.ExecuteAsync` (`MMCA.Common.UI.Services.Api`) and hands the response to
 `ProblemDetailsResultReader.ReadAsync` (`MMCA.Common.Shared.Http`): a 2xx is a success, and anything
 else is parsed back out of the RFC 9457 body into the errors the server described, with the original
 `ErrorType` preserved, so the page can show "Comments cannot be added to a closed order." and can
@@ -986,7 +986,7 @@ failures coded `Http.TransportFailure` and `Http.Timeout` rather than exceptions
 cancellation still propagates. This is the same pattern `MMCA.Common.UI`'s `EntityServiceBase` uses.
 
 Neither type is registered: both are static classes, so the client needs only the `using` directives
-(`MMCA.Common.Shared.Abstractions`, `MMCA.Common.Shared.Http`, `MMCA.Common.UI.Services`) and the
+(`MMCA.Common.Shared.Abstractions`, `MMCA.Common.Shared.Http`, `MMCA.Common.UI.Services.Api`) and the
 pages need `@using MMCA.Common.UI.Common` in `_Imports.razor` for the `TryGetValue` /
 `LocalizedErrorMessage` helpers they branch with. `Program.cs` is the standard Razor-components host
 plus `AddServiceDefaults()` / `MapDefaultEndpoints()`.

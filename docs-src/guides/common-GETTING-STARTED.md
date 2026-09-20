@@ -1,14 +1,14 @@
 # Getting Started: Build a New App on MMCA.Common
 
-_As of: 2026-09-07._
+_As of: 2026-09-20 (MMCA.Templates 1.11.0, framework v1.206.0)._
 
 MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set of
 lockstep-versioned NuGet packages (the authoritative list and count live in
 [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)). Its core promise: **build a
 modular monolith now, and extract a module into its own microservice later, without a rewrite.**
 
-Standing that up by hand means 12 projects and roughly 6,600 lines before a line of your own
-business logic, several of them load-bearing in ways nothing tells you about until much later. So
+Standing that up by hand means 12 projects and roughly 9,000 lines of C# and Razor before a line
+of your own business logic, several of them load-bearing in ways nothing tells you about until much later. So
 you do not type it. One command writes the whole thing, green:
 
 ```powershell
@@ -47,8 +47,9 @@ from nuget.org (see [ADR-053](../adr/053-dual-registry-package-publishing.md)).
 > same version as everything else, so it is one more entry in the same lockstep sweep
 > ([ADR-101](../adr/101-common-metapackage.md), [ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md)).
 > The specialised packages (UI, UI.Web, Grpc, Gateway, Aspire.Hosting, the `Testing.*` set) stay
-> separate and are added per project. The scaffold below still emits the explicit six, so this is
-> something to reach for when you are wiring a host yourself.
+> separate and are added per project. The scaffold below still emits explicit per-package pins (one
+> `PackageVersion` per `MMCA.Common.*` package it uses, all at one version), so this is something to
+> reach for when you are wiring a host yourself.
 
 ---
 
@@ -102,13 +103,33 @@ on every change.
 Getting a green baseline **first** is the point of this step. It is the line you bisect against
 later.
 
-## 4. Create the first migration
+## 4. Check the first migration
 
-The scaffold ships the migrations project and its design-time factory; the migration itself
-describes your entities, so it is yours to generate:
+The scaffold ships the migrations project, its design-time factory, and (in the default shape) the
+sample's migrations already renamed for your aggregate. Look inside
+`Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders/Migrations/`:
+
+- **Several `*.cs` files plus a model snapshot.** You scaffolded the full shape, and the migrations
+  describe exactly the `Order` model you were handed. There is nothing to generate: running
+  `dotnet ef migrations add InitialCreate` here fails with
+  `The name 'InitialCreate' is used by an existing migration`. Move on to step 5.
+- **Only `.editorconfig`.** You passed a shape flag (`--flat`, `--no-status`, `--no-description`,
+  `--no-owner`) or `--database sqlite`, and the sample migrations were dropped because they would
+  describe a schema you did not ask for. Create your own before the first run:
 
 ```powershell
 dotnet ef migrations add InitialCreate `
+  --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
+  --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
+  --context SQLServerDbContext
+```
+
+The design-time factory opens no connection for `migrations add`, so neither case needs a database.
+Either way, every later migration is added the same way, and this is where to confirm the model and
+the migrations agree before you change the aggregate:
+
+```powershell
+dotnet ef migrations has-pending-model-changes `
   --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
   --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
   --context SQLServerDbContext
@@ -129,8 +150,9 @@ dotnet run --project Source/Hosting/Contoso.Support.AppHost
 > **Run this from a real, interactive terminal.** Launched from a headless or background shell the
 > Aspire AppHost stalls at control-plane init and no dashboard appears.
 
-The dashboard lists three resources: `sql`, `web` (the REST API), and `ui` (Blazor Server +
-MudBlazor). Open the **`ui`** endpoint to create and browse orders in the browser. To exercise the
+The dashboard lists `sql` with its two databases (`support`, and `support-globex` for the
+multi-tenancy demo, where the `globex` tenant is routed to its own database while every other tenant
+shares the pooled one), `web` (the REST API), and `ui` (Blazor Server + MudBlazor). Open the **`ui`** endpoint to create and browse orders in the browser. To exercise the
 API directly, `POST /Orders` then `GET /Orders` against the `web` endpoint; the API root `/` has no
 page and returns 404 by design. Confirm 201 then 200, that audit fields are stamped, that
 soft-deleted rows are filtered out, and that an outbox row was written for the
@@ -208,7 +230,7 @@ code around them:
 
 | Know this | Because | Detail |
 |---|---|---|
-| `AddApplicationDecorators()` is the **last** DI call | decorators wrap handlers that already exist, and modules register theirs during `ModuleLoader` | [Phase 5](common-BUILD-BY-HAND.md#phase-5-compose-the-monolith-host-and-run-it) |
+| `AddApplicationDecorators()` is the **last** handler registration (only `AddModuleHealthChecks` follows it) | decorators wrap handlers that already exist, and modules register theirs during `ModuleLoader` | [Phase 5](common-BUILD-BY-HAND.md#phase-5-compose-the-monolith-host-and-run-it) |
 | the AppHost does `WaitFor(sql)`, never `WaitFor(db)` | the host creates the database at startup, so waiting on the database resource deadlocks at "Waiting" forever | [Phase 5](common-BUILD-BY-HAND.md#the-aspire-apphost) |
 | the AppHost needs its `Properties/launchSettings.json` | without it the dashboard endpoints are never configured, and a missing dashboard presents as a hang | [Phase 5](common-BUILD-BY-HAND.md#the-aspire-apphost) |
 | every module must appear in `IArchitectureMap` | a module missing from the map is **silently** not covered by the layering and isolation rules | [Phase 6](common-BUILD-BY-HAND.md#the-architecture-fitness-map-mandatory) |
@@ -289,9 +311,9 @@ throwing, which is what lets the handler short-circuit on `IsFailure` and the ed
 RFC 9457 ProblemDetails. Transferring an order to the requester it already has succeeds rather than
 failing, so a retried command is not an error. `AddDomainEvent` is what makes the change observable
 in-process after `SaveChanges`. And the mutation goes through the aggregate, never through the
-handler setting `RequesterUserId` itself. `ChangeStatus` in
-[Phase 3a](common-BUILD-BY-HAND.md#3a-domain-aggregate-invariants-events) is the same shape with a
-different rule.
+handler setting `RequesterUserId` itself. `AddComment`, which runs `EnsureStatusAllowsComments`
+before mutating, is the same shape with a different rule; see
+[Phase 3a](common-BUILD-BY-HAND.md#3a-domain-aggregate-invariants-events).
 
 **Give the command its payload.** `--domain-method` carries only a name, so the scaffolded record
 holds just the aggregate id and the generated handler calls `order.TransferToRequester()` with no
@@ -324,13 +346,14 @@ pwsh build/add-module.ps1 -Name Billing -Aggregate Invoice
 ```
 
 That script ships inside every solution `mmca-app` generates. It runs `dotnet new mmca-module` (the
-same shape options, as PowerShell switches) and then applies all seven wire-ups the template can only
+same shape options, as PowerShell switches) and then applies every wire-up the template can only
 print, because `dotnet new` cannot patch files that already exist: the solution entries, the host and
 architecture-test project references, the identifier-alias link, the five architecture-map lines,
-`AddErrorResources`, the module's own Aspire database and data-source routing, and the first EF
-migration. Until those are done the module is invisible to the host and to the fitness rules. The
-[templates guide](common-TEMPLATES.md) documents the script and lists each wire-up as the manual
-fallback.
+the host's `ModuleLoader` assembly and `AddErrorResources` entries, the module's own Aspire database
+and `DataSources` routing in the Web host's `appsettings.json`, the new event appended to your frozen
+wire contract, and the first EF migration. Until those are done the module is invisible to the host
+and to the fitness rules. The [templates guide](common-TEMPLATES.md) documents the script and lists
+each wire-up as the manual fallback.
 
 ---
 
@@ -397,7 +420,7 @@ public Task<Result> TransferOrderAsync(int id, int requesterUserId, Cancellation
 The two halves are what make the signature honest.
 `ProblemDetailsResultReader` (`MMCA.Common.Shared.Http`) converts the **response**: a 2xx is a
 success, and anything else is parsed back out of the RFC 9457 body into the errors the server
-described, with the original `ErrorType` preserved. `HttpResultExecutor` (`MMCA.Common.UI.Services`)
+described, with the original `ErrorType` preserved. `HttpResultExecutor` (`MMCA.Common.UI.Services.Api`)
 converts the **absence of a response**: a refused connection, a DNS failure, a dropped socket or a
 client timeout becomes a failure coded `Http.TransportFailure` or `Http.Timeout` instead of an
 exception. Your own cancellation still propagates, so a disposed component is never reported back
@@ -421,24 +444,24 @@ public Task<Result<OrderDTO>> GetOrderAsync(int id, CancellationToken cancellati
 
 Neither type needs registering: both are static, so the client just needs
 `using MMCA.Common.Shared.Abstractions;` (for `Result`), `using MMCA.Common.Shared.Http;` and
-`using MMCA.Common.UI.Services;`. The host still registers only
+`using MMCA.Common.UI.Services.Api;`. The host still registers only
 `AddHttpClient<SupportApiClient>(...)`.
 
 **The page plus its resource pair.** Add a panel to `OrderDetail.razor` shaped like the Status one (a
 `MudNumericField` for the new requester id and a button), with a `@code` handler shaped like
-`ChangeStatusAsync`. Because the client returns a `Result`, the handler **branches instead of
-catching**:
+`ChangeStatusAsync`. Feedback goes through the `IToastService Toast` the page already injects.
+Because the client returns a `Result`, the handler **branches instead of catching**:
 
 ```csharp
 var result = await Api.TransferOrderAsync(Id, _transferRequesterUserId);
 if (result.IsSuccess)
 {
-    Snackbar.Add(L["Snackbar.Transferred"], Severity.Success);
+    Toast.Success(L["Snackbar.Transferred"]);
     await LoadAsync();
 }
 else
 {
-    Snackbar.Add(L["Snackbar.TransferFailed", result.LocalizedErrorMessage(L) ?? string.Empty], Severity.Error);
+    Toast.Error(L["Snackbar.TransferFailed", result.LocalizedErrorMessage(L) ?? string.Empty]);
 }
 ```
 
@@ -446,7 +469,7 @@ else
 `_Imports.razor`); it composes the failure's distinct messages, most severe first, resolving each as
 a resource key with pass-through, so a message the API already translated renders as-is. For a
 result that carries a value, `result.TryGetValue(out var dto)` unwraps it inside the same
-conditional. A form that wants an inline block rather than a snackbar can drop the shared
+conditional. A form that wants an inline block rather than a toast can drop the shared
 `<ErrorSummary Result="_result" Localizer="L" />` component into its markup instead, which renders
 nothing when there is nothing to say.
 
@@ -457,7 +480,7 @@ Two conventions pay off here without extra work. The command's `ICacheInvalidati
 page's reload after a transfer reads fresh data, not a stale cache entry. And transferring a closed
 order exercises the whole error pipeline end to end: the invariant fails, `HandleFailure` maps it to
 RFC 9457 ProblemDetails, `ProblemDetailsResultReader` reads it back into a failed `Result` with its
-category intact, and the snackbar shows "A closed order cannot be transferred to another requester."
+category intact, and the toast shows "A closed order cannot be transferred to another requester."
 
 ---
 
@@ -488,8 +511,9 @@ category intact, and the snackbar shows "A closed order cannot be transferred to
    the primary automatable gate.
 3. `dotnet test --solution <YourApp>.slnx` passes all three projects with no database, including
    your own frozen integration-event contract.
-4. `dotnet ef migrations add InitialCreate ...` succeeds and generates your aggregate, its child
-   entity, and the per-database `OutboxMessages` table.
+4. The migrations project holds your aggregate, its child entity, and the per-database
+   `OutboxMessages` table: shipped in the default shape, generated by `dotnet ef migrations add
+   InitialCreate ...` after a shape flag; `has-pending-model-changes` reports none either way.
 5. Run interactively: the dashboard shows `sql`, `web`, and `ui` healthy; a `POST` then `GET` returns
    201 then 200 with audit fields stamped, soft-deleted rows filtered, and an outbox row written.
 

@@ -975,7 +975,7 @@ app.UseCommonMiddlewarePipeline();
           resolved by the service-discovery handler that <code>AddServiceDefaults()</code> installs. Because Blazor Server
           runs the calls <strong>server-side</strong>, there is no browser CORS and no token to forward.</p>
           <p><strong>The client returns <code>Result</code> and throws nothing for a server answer.</strong> Every method wraps its call
-          in <code>HttpResultExecutor.ExecuteAsync</code> (<code>MMCA.Common.UI.Services</code>) and hands the response to
+          in <code>HttpResultExecutor.ExecuteAsync</code> (<code>MMCA.Common.UI.Services.Api</code>) and hands the response to
           <code>ProblemDetailsResultReader.ReadAsync</code> (<code>MMCA.Common.Shared.Http</code>): a 2xx is a success, and anything
           else is parsed back out of the RFC 9457 body into the errors the server described, with the original
           <code>ErrorType</code> preserved, so the page can show &quot;Comments cannot be added to a closed order.&quot; and can
@@ -984,7 +984,7 @@ app.UseCommonMiddlewarePipeline();
           failures coded <code>Http.TransportFailure</code> and <code>Http.Timeout</code> rather than exceptions; the caller&#39;s own
           cancellation still propagates. This is the same pattern <code>MMCA.Common.UI</code>&#39;s <code>EntityServiceBase</code> uses.</p>
           <p>Neither type is registered: both are static classes, so the client needs only the <code>using</code> directives
-          (<code>MMCA.Common.Shared.Abstractions</code>, <code>MMCA.Common.Shared.Http</code>, <code>MMCA.Common.UI.Services</code>) and the
+          (<code>MMCA.Common.Shared.Abstractions</code>, <code>MMCA.Common.Shared.Http</code>, <code>MMCA.Common.UI.Services.Api</code>) and the
           pages need <code>@using MMCA.Common.UI.Common</code> in <code>_Imports.razor</code> for the <code>TryGetValue</code> /
           <code>LocalizedErrorMessage</code> helpers they branch with. <code>Program.cs</code> is the standard Razor-components host
           plus <code>AddServiceDefaults()</code> / <code>MapDefaultEndpoints()</code>.</p>
