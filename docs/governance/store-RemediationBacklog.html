@@ -416,6 +416,90 @@
           <li>[~] <strong>#12 · Performance &amp; Scalability · maturity 3 → 4 (weight 2). LEVER STILL OPEN</strong> (marker corrected 2026-07-28: the <code>[x]</code> contradicted this entry&#39;s own closing text and #12 sits in both ranked bands; the wave-3 work below did ship, but the maturity candidacy it recorded was declined and has been declined again since). Wave-3 delivery (2026-07-11): Both halves of the lever are now enforced deploy preconditions: (a) a <code>load-freshness</code> job in <code>deploy.yml</code>&#39;s <code>needs</code> fails the deploy when the latest successful monthly <code>load-test.yml</code> run is older than 35 days (the dr-freshness pattern; latest run 2026-07-01, green), and (b) the WebVitals budgets were tightened from catastrophic-only (LCP 8000) to the Core Web Vitals &quot;good&quot; band (LCP 2500 / FCP 1800 / TTFB 800 / CLS 0.1 / INP 500), calibrated against measured CI maxima (LCP 172ms, 10-30x headroom), asserted inside the deploy-gating chromium <code>e2e-gate</code>. <strong>Maturity candidacy DECLINED on the 2026-07-16 re-score</strong>: the k6 load test itself runs monthly/on-demand, so it is capacity-planning evidence rather than a merge gate; the freshness gate bounds staleness but does not gate regressions. §12 stays M3/I8, lever OPEN: either record the monthly cadence as the accepted posture (ADC&#39;s stance) or add a latency-regression check to the merge path. <strong>Re-verified OPEN on the 2026-07-28 re-score, and both proposed moves (M3→4 and I8→9) were adversarially REJECTED:</strong> the k6 run is still monthly cron plus dispatch (re-anchored 2026-09-04: cron <code>load-test.yml:21</code>, <code>workflow_dispatch</code> at <code>:12</code>), <code>deploy.needs</code> (re-anchored 2026-09-04: <code>deploy.yml:999</code>) still contains no perf job, no perf fitness test exists in <code>Tests/Architecture</code>, and the one deploy-chain hook <code>load-freshness</code> (re-anchored 2026-09-04: <code>deploy.yml:714</code>, push-only at <code>:717</code>) gained a break-glass skip (<code>:729-745</code>, skip branch at <code>:732</code>), which loosens rather than tightens it. Re-verified unchanged on the 2026-08-14, 2026-08-23, 2026-09-01 and 2026-09-04 re-scores (the identical M3→4 uplift was adversarially rejected each time: the workflow files backing the axis are byte-unchanged since the cycle that first rejected it, and on 2026-09-01 the verifier additionally CONFIRMED Implementation 8 on the same read, so this is a verified hold rather than a carry-forward). The 2026-07-25 performance wave is real and verified but closed defects the prior I8 already assumed absent, and two efficiency gaps stay open (the monthly k6 cadence and the full-size image blobs). The third gap this entry used to name, the sequential per-item cross-service gRPC loop it cited at <code>BulkSetInventoryHandler.cs:40-49</code>, is <strong>CLOSED (verified 2026-09-01)</strong>: it is now a single batched <code>GetExistingIdsAsync</code> round trip at <code>Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/UseCases/BulkSet/BulkSetInventoryHandler.cs:36-41</code> (rationale comment <code>:30-34</code>), and the path this ledger cited for it, <code>Sales.Application/InventoryItems/Commands/BulkSetInventory/</code>, does not exist. <strong>§23 split out and RESOLVED same day (drift-analysis fold, adversarially verified):</strong> its CWV budget assertions are per-deploy enforcement independent of k6&#39;s cadence, the identical evidence ADC&#39;s twentieth cycle credited, so scorecard §23 is M4/I8 and moves to the protect list.</li>
           <li><input checked="" disabled="" type="checkbox"> <strong>#13 · Observability &amp; Operability · maturity 3 → 4 (weight 2). DONE (2026-07-11, remediation wave 6).</strong> The dashboard half already existed (the saved <code>store-slo-workbook</code> Azure Monitor workbook mirrors the three SLO alerts per service); the missing runbook half landed as <code>infra/OPERATIONS.md</code>: each provisioned alert (<code>failed-requests</code>, <code>server-response-time</code>, <code>dependency-failures</code>) mapped to concrete triage steps (workbook pane, App Insights drill path, container logs, the Stripe/gRPC/outbox failure classes) plus fast-reference recovery moves (revision rollback, PITR restore, the freshness gates) and a pair-with-<code>sloAlertSpecs</code> governance note. <strong>Split verdict on the 2026-07-16 re-score:</strong> Implementation 8 → 9 GRANTED (both prior deductions closed: workbook <code>infra/main.bicep:274</code> + runbook <code>infra/OPERATIONS.md</code>), but the maturity candidacy was DECLINED: dashboards/runbooks are IaC/review-enforced, and nothing in CI fails when an alert loses its runbook pairing. §13 stays M3/I9, lever OPEN: add a CI gate asserting the <code>sloAlertSpecs</code>-to-<code>OPERATIONS.md</code> pairing (mirrors ADC&#39;s reopened #13; one shared gate design can serve both repos). <strong>Gate SHIPPED same day (2026-07-16):</strong> <code>Tests/Architecture/MMCA.Store.Architecture.Tests/ObservabilityConventionTests.cs</code> (mirror of ADC&#39;s) machine-enforces the pairing in the CI.slnf arch gate: every <code>sloAlertSpecs</code> key needs a <code>### ...-alert-&lt;key&gt;</code> runbook section carrying the alert&#39;s current <code>(sev N)</code>, orphans fail, 3-spec non-vacuity floor, both files embedded. Verified red on a seeded severity drift, green on the real files. Maturity 3 → 4 candidacy recorded for the next re-score. <strong>Maturity 4 GRANTED on the 2026-07-17 re-score</strong> (<code>ObservabilityConventionTests.cs:24,34</code> verified live in the CI.slnf arch gate, <code>MMCA.Store.CI.slnf:53</code>): §13 is <strong>M4/I9</strong>; moved to the protect list.</li>
           </ul>
+          <h2 id="progress---improvement-wave-2026-09-20-mmcacommon-adoption">🟢 Progress - improvement wave (2026-09-20, MMCA.Common adoption)</h2>
+          <p>Not a re-score: <strong>no band score moves here.</strong> This records what Store landed against the framework
+          wave merged as <code>82036e7</code> on MMCA.Common <code>main</code>, so the next re-score reads it as evidence rather than
+          rediscovering it. All three commits sit on the branch <code>chore/common-wave-2026-09-20</code> and are <strong>not
+          merged</strong>; paths below are on that branch.</p>
+          <ul>
+          <li><input checked="" disabled="" type="checkbox"> <strong>#1 · The new framework ceilings are adopted at 8 / 8 / 7.</strong>
+          <code>ConstructorDependencyCountTestsBase</code> grew a controller fact and a handler fact
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/ConstructorDependencyCountTestsBase.cs:90</code>
+          and <code>:114</code>), both abstract ratchets, so the gate stopped scanning only Application <code>*Service</code>
+          types. Store&#39;s subclass declares them at
+          <code>Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/ConstructorDependencyCountTests.cs:42</code>
+          (controllers, <strong>8</strong>) and <code>:60</code> (handlers, <strong>7</strong>), beside the unchanged service ceiling of 8 at
+          <code>:24</code>. Store sits one below ADC&#39;s 9 on services because it has no <code>IExternalLoginEmailVerifier</code>:
+          Store is local-credential only.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>#1 · Three oversized controllers split by sub-resource, no dispensation needed.</strong> The first
+          run reported <code>ReviewsController</code> 11, <code>ProductsController</code> 11 and <code>OrdersController</code> 10, each
+          serving several sub-resources from one class. Each was split into sibling controllers carrying the
+          same route prefix, action templates and authorization, cache, idempotency and <code>If-Match</code>
+          attributes, so <strong>no URL, verb or authorization posture moved</strong>:
+          <code>Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewModerationController.cs:48</code> and
+          <code>ReviewEligibilityController.cs:27</code> (11 to 8), <code>ProductAttributesController.cs:42</code> (11 to 7), and
+          <code>Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrderFulfillmentController.cs:39</code> (10 to
+          7). Every reduced controller reached the repo&#39;s existing ceiling of 8 honestly, so the recorded
+          mark is the untouched pair that already sat there rather than a raised ceiling.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>#15 · Checkout decomposed: <code>CheckOutHandler.HandleAsync</code> goes from 144 lines to 45.</strong> The
+          handler was carrying three jobs at once. The two out-of-transaction cross-service reads moved to
+          <code>Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:30</code>
+          and the arming of the order&#39;s payment deadline to <code>CheckOutDeadlineScheduler.cs:26</code>, both beside
+          the handler in the same use-case folder, leaving <code>CheckOutHandler.cs:37</code> with the write phase and
+          its <code>HandleAsync</code> at <code>:47</code>. Constructor dependencies fall 10 to 7, which is what took the handler
+          fact&#39;s first reported mark down to the joint 7 the ceiling is now set at. Recorded against #15,
+          whose band row already names code-quality hygiene as its lever.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>#11 · The own-host UI hardening is taken from MMCA.Common and the local copy is deleted.</strong>
+          <code>Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:24</code> swaps one <code>using</code> to
+          <code>MMCA.Common.UI.Web.Hardening</code>, and the hand-written <code>CircuitOptions</code> callback plus the
+          <code>AddOptions&lt;BlazorCircuitLimitSettings&gt;()</code> / <code>AddSingleton&lt;CircuitHandler, BoundedCircuitHandler&gt;()</code>
+          pair collapse into <code>BlazorCircuitLimitExtensions.RetentionFrom(builder.Configuration)</code> at <code>:78</code> and
+          <code>AddBoundedBlazorCircuits()</code> at <code>:86</code>; the limiter is registered at <code>:95</code> and applied at <code>:227</code>.
+          The four-file <code>Hardening/</code> folder is gone and no configuration key or section name changed, so
+          <code>appsettings.json:20-25</code> and <code>:35-39</code> are untouched and the storefront tuning (300 per 60 s, 60 s
+          retention) is unchanged. <strong>One behavior delta, a widening:</strong> the framework&#39;s exempt-prefix list
+          adds <code>/hubs</code> to the four prefixes Store&#39;s copy carried
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:42</code>).
+          The storefront origin serves no hub, so nothing that exists today changes; the exemption is there
+          by declaration rather than by accident if one ever appears. The kit&#39;s own unit facts moved to
+          <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/Hardening/</code>; what Store kept is the half
+          only this repo can answer, that the real host wires it
+          (<code>Tests/Hosts/MMCA.Store.UI.Web.Tests/UiRateLimitingTests.cs:29</code>,
+          <code>BoundedCircuitHandlerTests.cs:30</code>). Recorded in
+          <a href="../adr/088-gateway-edge-responsibilities.html">ADR-088</a>, revision 2026-09-20.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>#19 · The admin user detail page is guarded against a superseded load.</strong> <code>UserDetail</code> adopts
+          the load-generation guard the three detail pages took on 2026-09-15: a monotonic <code>_loadGeneration</code>
+          stamp (<code>Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Users/UserDetail/UserDetail.razor.cs:45</code>)
+          is incremented before the load&#39;s own await (<code>:97</code>) and re-checked after the response arrives
+          (<code>:105</code>), so a slow response for the account the admin has already left cannot overwrite the one a
+          later navigation owns. The failure branch sits inside the guard too, so a superseded <code>NotFound</code>
+          cannot blank the account on screen or toast over it.</li>
+          </ul>
+          <h3 id="already-closed-by-store-commit-215face7-2026-09-15-awaiting-re-scoring">Already closed by Store commit <code>215face7</code> (2026-09-15), awaiting re-scoring</h3>
+          <p>These three are not this wave&#39;s work; they are recorded here because each is a band-table lever whose
+          row still reads as open, and the next re-score should read the shipped evidence rather than the row.
+          Commit <code>215face7</code> on <code>main</code> (2026-09-15, Store PR #155) closed all three; <strong>no score is claimed here.</strong></p>
+          <ul>
+          <li><input checked="" disabled="" type="checkbox"> <strong>#15 · the global <code>NoWarn</code> rationale gap is CLOSED.</strong> Every code on the global <code>NoWarn</code> line
+          now states why it is there, mirroring MMCA.ADC&#39;s <code>Directory.Build.props</code>, and RMG020 moved off that
+          line into an <code>.Application</code>-only group (it is a Riok.Mapperly generator diagnostic and Mapperly is
+          referenced by exactly the three <code>.Application</code> projects, so suppressing it repo-wide hid a mapper
+          decision behind a global exemption). The six out-of-CI-filter test projects&#39; near-identical
+          per-project <code>NoWarn</code> lines moved into conditioned groups with one rationale block.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>#20 · the inline-style count is CLOSED at zero.</strong> Every <code>Style=</code> and <code>CellStyle=</code> attribute in
+          the razor pages is gone; the values ride named classes in the two Store host stylesheets
+          (<code>store.css</code> and the MAUI <code>app.css</code>, kept in lockstep), on Common&#39;s <code>.detail-card</code>, or on
+          MudBlazor&#39;s own <code>d-flex</code> / <code>flex-column</code> / <code>flex-1</code> utilities. The classes are global because they
+          land on markup MudBlazor renders, which never carries the calling page&#39;s CSS-isolation scope
+          attribute. <code>CategoryListTests</code> pins the sweep by asserting the action column&#39;s cells carry
+          <code>.grid-cell-actions</code>. The #20 band row still records &quot;30 <code>Style=</code>/<code>CellStyle=</code> occurrences&quot;.</li>
+          <li><input checked="" disabled="" type="checkbox"> <strong>#19 · the <code>IsDrawerOpen</code> lever is CLOSED.</strong> <code>ICartStateService.IsDrawerOpen</code> lost its public
+          setter and gained <code>OpenDrawer</code> / <code>CloseDrawer</code> beside <code>ToggleDrawer</code>, so every change to the
+          drawer&#39;s visibility raises <code>OnChange</code>; <code>CartDrawer</code> binds <code>MudDrawer</code> one-way and reports the
+          user&#39;s own dismissal back through <code>OpenChanged</code>, which is what a <code>Temporary</code> drawer raises on a
+          backdrop click. That is exactly the lever the #19 band row names (&quot;route the drawer open/close
+          through the service notify path&quot;).</li>
+          </ul>
           <h2 id="resolved-this-cycle-2026-07-28-drift-wave-d1d2d5d6d7--e2e4e7e8">🟢 Resolved this cycle (2026-07-28, drift wave: D1/D2/D5/D6/D7 + E2/E4/E7/E8)</h2>
           <ul>
           <li><strong>[x] #29 Resilience: the DR drill was restoring a RETIRED database.</strong> The weekly <code>dr-drill.yml</code>
@@ -502,6 +586,7 @@
             <li><a href="#defect-fix-wave-2026-07-05">🐞 Defect-fix wave (2026-07-05)</a></li>
             <li><a href="#deliberate--accepted-record-the-choice-dont-silently-leave-low">Deliberate / accepted (record the choice; don&#39;t silently leave low)</a></li>
             <li><a href="#below-maturity-4-tracking-inclusion-policy-categories-scoring--4-maturity">🟠 Below-maturity-4 tracking (inclusion policy: categories scoring &lt; 4 maturity)</a></li>
+            <li><a href="#progress---improvement-wave-2026-09-20-mmcacommon-adoption">🟢 Progress - improvement wave (2026-09-20, MMCA.Common adoption)</a></li>
             <li><a href="#resolved-this-cycle-2026-07-28-drift-wave-d1d2d5d6d7--e2e4e7e8">🟢 Resolved this cycle (2026-07-28, drift wave: D1/D2/D5/D6/D7 + E2/E4/E7/E8)</a></li>
             <li><a href="#resolved-this-cycle-2026-07-25-performance-program-2">🟢 Resolved this cycle (2026-07-25, performance program 2)</a></li>
             <li><a href="#resolved-this-cycle-2026-07-11-drift-convergence-drift-plan-d1-d13">🟢 Resolved this cycle (2026-07-11 drift-convergence, drift plan D1-D13)</a></li>

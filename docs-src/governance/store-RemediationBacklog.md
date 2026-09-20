@@ -123,6 +123,92 @@ These categories score maturity 3; the ledger records them per its own line-4 in
 - [~] **#12 · Performance & Scalability · maturity 3 → 4 (weight 2). LEVER STILL OPEN** (marker corrected 2026-07-28: the `[x]` contradicted this entry's own closing text and #12 sits in both ranked bands; the wave-3 work below did ship, but the maturity candidacy it recorded was declined and has been declined again since). Wave-3 delivery (2026-07-11): Both halves of the lever are now enforced deploy preconditions: (a) a `load-freshness` job in `deploy.yml`'s `needs` fails the deploy when the latest successful monthly `load-test.yml` run is older than 35 days (the dr-freshness pattern; latest run 2026-07-01, green), and (b) the WebVitals budgets were tightened from catastrophic-only (LCP 8000) to the Core Web Vitals "good" band (LCP 2500 / FCP 1800 / TTFB 800 / CLS 0.1 / INP 500), calibrated against measured CI maxima (LCP 172ms, 10-30x headroom), asserted inside the deploy-gating chromium `e2e-gate`. **Maturity candidacy DECLINED on the 2026-07-16 re-score**: the k6 load test itself runs monthly/on-demand, so it is capacity-planning evidence rather than a merge gate; the freshness gate bounds staleness but does not gate regressions. §12 stays M3/I8, lever OPEN: either record the monthly cadence as the accepted posture (ADC's stance) or add a latency-regression check to the merge path. **Re-verified OPEN on the 2026-07-28 re-score, and both proposed moves (M3→4 and I8→9) were adversarially REJECTED:** the k6 run is still monthly cron plus dispatch (re-anchored 2026-09-04: cron `load-test.yml:21`, `workflow_dispatch` at `:12`), `deploy.needs` (re-anchored 2026-09-04: `deploy.yml:999`) still contains no perf job, no perf fitness test exists in `Tests/Architecture`, and the one deploy-chain hook `load-freshness` (re-anchored 2026-09-04: `deploy.yml:714`, push-only at `:717`) gained a break-glass skip (`:729-745`, skip branch at `:732`), which loosens rather than tightens it. Re-verified unchanged on the 2026-08-14, 2026-08-23, 2026-09-01 and 2026-09-04 re-scores (the identical M3→4 uplift was adversarially rejected each time: the workflow files backing the axis are byte-unchanged since the cycle that first rejected it, and on 2026-09-01 the verifier additionally CONFIRMED Implementation 8 on the same read, so this is a verified hold rather than a carry-forward). The 2026-07-25 performance wave is real and verified but closed defects the prior I8 already assumed absent, and two efficiency gaps stay open (the monthly k6 cadence and the full-size image blobs). The third gap this entry used to name, the sequential per-item cross-service gRPC loop it cited at `BulkSetInventoryHandler.cs:40-49`, is **CLOSED (verified 2026-09-01)**: it is now a single batched `GetExistingIdsAsync` round trip at `Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/UseCases/BulkSet/BulkSetInventoryHandler.cs:36-41` (rationale comment `:30-34`), and the path this ledger cited for it, `Sales.Application/InventoryItems/Commands/BulkSetInventory/`, does not exist. **§23 split out and RESOLVED same day (drift-analysis fold, adversarially verified):** its CWV budget assertions are per-deploy enforcement independent of k6's cadence, the identical evidence ADC's twentieth cycle credited, so scorecard §23 is M4/I8 and moves to the protect list.
 - [x] **#13 · Observability & Operability · maturity 3 → 4 (weight 2). DONE (2026-07-11, remediation wave 6).** The dashboard half already existed (the saved `store-slo-workbook` Azure Monitor workbook mirrors the three SLO alerts per service); the missing runbook half landed as `infra/OPERATIONS.md`: each provisioned alert (`failed-requests`, `server-response-time`, `dependency-failures`) mapped to concrete triage steps (workbook pane, App Insights drill path, container logs, the Stripe/gRPC/outbox failure classes) plus fast-reference recovery moves (revision rollback, PITR restore, the freshness gates) and a pair-with-`sloAlertSpecs` governance note. **Split verdict on the 2026-07-16 re-score:** Implementation 8 → 9 GRANTED (both prior deductions closed: workbook `infra/main.bicep:274` + runbook `infra/OPERATIONS.md`), but the maturity candidacy was DECLINED: dashboards/runbooks are IaC/review-enforced, and nothing in CI fails when an alert loses its runbook pairing. §13 stays M3/I9, lever OPEN: add a CI gate asserting the `sloAlertSpecs`-to-`OPERATIONS.md` pairing (mirrors ADC's reopened #13; one shared gate design can serve both repos). **Gate SHIPPED same day (2026-07-16):** `Tests/Architecture/MMCA.Store.Architecture.Tests/ObservabilityConventionTests.cs` (mirror of ADC's) machine-enforces the pairing in the CI.slnf arch gate: every `sloAlertSpecs` key needs a `### ...-alert-<key>` runbook section carrying the alert's current `(sev N)`, orphans fail, 3-spec non-vacuity floor, both files embedded. Verified red on a seeded severity drift, green on the real files. Maturity 3 → 4 candidacy recorded for the next re-score. **Maturity 4 GRANTED on the 2026-07-17 re-score** (`ObservabilityConventionTests.cs:24,34` verified live in the CI.slnf arch gate, `MMCA.Store.CI.slnf:53`): §13 is **M4/I9**; moved to the protect list.
 
+## 🟢 Progress - improvement wave (2026-09-20, MMCA.Common adoption)
+
+Not a re-score: **no band score moves here.** This records what Store landed against the framework
+wave merged as `82036e7` on MMCA.Common `main`, so the next re-score reads it as evidence rather than
+rediscovering it. All three commits sit on the branch `chore/common-wave-2026-09-20` and are **not
+merged**; paths below are on that branch.
+
+- [x] **#1 · The new framework ceilings are adopted at 8 / 8 / 7.**
+  `ConstructorDependencyCountTestsBase` grew a controller fact and a handler fact
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/ConstructorDependencyCountTestsBase.cs:90`
+  and `:114`), both abstract ratchets, so the gate stopped scanning only Application `*Service`
+  types. Store's subclass declares them at
+  `Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/ConstructorDependencyCountTests.cs:42`
+  (controllers, **8**) and `:60` (handlers, **7**), beside the unchanged service ceiling of 8 at
+  `:24`. Store sits one below ADC's 9 on services because it has no `IExternalLoginEmailVerifier`:
+  Store is local-credential only.
+- [x] **#1 · Three oversized controllers split by sub-resource, no dispensation needed.** The first
+  run reported `ReviewsController` 11, `ProductsController` 11 and `OrdersController` 10, each
+  serving several sub-resources from one class. Each was split into sibling controllers carrying the
+  same route prefix, action templates and authorization, cache, idempotency and `If-Match`
+  attributes, so **no URL, verb or authorization posture moved**:
+  `Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ReviewModerationController.cs:48` and
+  `ReviewEligibilityController.cs:27` (11 to 8), `ProductAttributesController.cs:42` (11 to 7), and
+  `Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrderFulfillmentController.cs:39` (10 to
+  7). Every reduced controller reached the repo's existing ceiling of 8 honestly, so the recorded
+  mark is the untouched pair that already sat there rather than a raised ceiling.
+- [x] **#15 · Checkout decomposed: `CheckOutHandler.HandleAsync` goes from 144 lines to 45.** The
+  handler was carrying three jobs at once. The two out-of-transaction cross-service reads moved to
+  `Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:30`
+  and the arming of the order's payment deadline to `CheckOutDeadlineScheduler.cs:26`, both beside
+  the handler in the same use-case folder, leaving `CheckOutHandler.cs:37` with the write phase and
+  its `HandleAsync` at `:47`. Constructor dependencies fall 10 to 7, which is what took the handler
+  fact's first reported mark down to the joint 7 the ceiling is now set at. Recorded against #15,
+  whose band row already names code-quality hygiene as its lever.
+- [x] **#11 · The own-host UI hardening is taken from MMCA.Common and the local copy is deleted.**
+  `Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:24` swaps one `using` to
+  `MMCA.Common.UI.Web.Hardening`, and the hand-written `CircuitOptions` callback plus the
+  `AddOptions<BlazorCircuitLimitSettings>()` / `AddSingleton<CircuitHandler, BoundedCircuitHandler>()`
+  pair collapse into `BlazorCircuitLimitExtensions.RetentionFrom(builder.Configuration)` at `:78` and
+  `AddBoundedBlazorCircuits()` at `:86`; the limiter is registered at `:95` and applied at `:227`.
+  The four-file `Hardening/` folder is gone and no configuration key or section name changed, so
+  `appsettings.json:20-25` and `:35-39` are untouched and the storefront tuning (300 per 60 s, 60 s
+  retention) is unchanged. **One behavior delta, a widening:** the framework's exempt-prefix list
+  adds `/hubs` to the four prefixes Store's copy carried
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:42`).
+  The storefront origin serves no hub, so nothing that exists today changes; the exemption is there
+  by declaration rather than by accident if one ever appears. The kit's own unit facts moved to
+  `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/Hardening/`; what Store kept is the half
+  only this repo can answer, that the real host wires it
+  (`Tests/Hosts/MMCA.Store.UI.Web.Tests/UiRateLimitingTests.cs:29`,
+  `BoundedCircuitHandlerTests.cs:30`). Recorded in
+  [ADR-088](../adr/088-gateway-edge-responsibilities.md), revision 2026-09-20.
+- [x] **#19 · The admin user detail page is guarded against a superseded load.** `UserDetail` adopts
+  the load-generation guard the three detail pages took on 2026-09-15: a monotonic `_loadGeneration`
+  stamp (`Source/Modules/Identity/MMCA.Store.Identity.UI/Pages/Users/UserDetail/UserDetail.razor.cs:45`)
+  is incremented before the load's own await (`:97`) and re-checked after the response arrives
+  (`:105`), so a slow response for the account the admin has already left cannot overwrite the one a
+  later navigation owns. The failure branch sits inside the guard too, so a superseded `NotFound`
+  cannot blank the account on screen or toast over it.
+
+### Already closed by Store commit `215face7` (2026-09-15), awaiting re-scoring
+
+These three are not this wave's work; they are recorded here because each is a band-table lever whose
+row still reads as open, and the next re-score should read the shipped evidence rather than the row.
+Commit `215face7` on `main` (2026-09-15, Store PR #155) closed all three; **no score is claimed here.**
+
+- [x] **#15 · the global `NoWarn` rationale gap is CLOSED.** Every code on the global `NoWarn` line
+  now states why it is there, mirroring MMCA.ADC's `Directory.Build.props`, and RMG020 moved off that
+  line into an `.Application`-only group (it is a Riok.Mapperly generator diagnostic and Mapperly is
+  referenced by exactly the three `.Application` projects, so suppressing it repo-wide hid a mapper
+  decision behind a global exemption). The six out-of-CI-filter test projects' near-identical
+  per-project `NoWarn` lines moved into conditioned groups with one rationale block.
+- [x] **#20 · the inline-style count is CLOSED at zero.** Every `Style=` and `CellStyle=` attribute in
+  the razor pages is gone; the values ride named classes in the two Store host stylesheets
+  (`store.css` and the MAUI `app.css`, kept in lockstep), on Common's `.detail-card`, or on
+  MudBlazor's own `d-flex` / `flex-column` / `flex-1` utilities. The classes are global because they
+  land on markup MudBlazor renders, which never carries the calling page's CSS-isolation scope
+  attribute. `CategoryListTests` pins the sweep by asserting the action column's cells carry
+  `.grid-cell-actions`. The #20 band row still records "30 `Style=`/`CellStyle=` occurrences".
+- [x] **#19 · the `IsDrawerOpen` lever is CLOSED.** `ICartStateService.IsDrawerOpen` lost its public
+  setter and gained `OpenDrawer` / `CloseDrawer` beside `ToggleDrawer`, so every change to the
+  drawer's visibility raises `OnChange`; `CartDrawer` binds `MudDrawer` one-way and reports the
+  user's own dismissal back through `OpenChanged`, which is what a `Temporary` drawer raises on a
+  backdrop click. That is exactly the lever the #19 band row names ("route the drawer open/close
+  through the service notify path").
+
 ## 🟢 Resolved this cycle (2026-07-28, drift wave: D1/D2/D5/D6/D7 + E2/E4/E7/E8)
 
 - **[x] #29 Resilience: the DR drill was restoring a RETIRED database.** The weekly `dr-drill.yml`
