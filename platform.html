@@ -119,9 +119,9 @@
         </div>
         <div class="stats">
           <!-- BEGIN platform-stats -->
-          <div class="stat"><div class="num">17</div><div class="label">NuGet packages</div></div>
+          <div class="stat"><div class="num">22</div><div class="label">NuGet packages</div></div>
           <div class="stat"><div class="num">125</div><div class="label">Architecture Decision Records</div></div>
-          <div class="stat"><div class="num">124</div><div class="label">Architecture fitness tests</div></div>
+          <div class="stat"><div class="num">138</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
         </div>
@@ -189,11 +189,18 @@
               <span class="layer-note">Aspire service defaults, OpenTelemetry, health checks, broker wiring, YARP gateway composition</span>
             </span>
           </li>
+          <li class="layer layer--edge">
+            <span class="layer-name">AI</span>
+            <span>
+              <span class="pill-list"><span class="pill">MMCA.Common.AI</span><span class="pill">MMCA.Common.AI.Anthropic</span><span class="pill">MMCA.Common.AI.OpenAI</span><span class="pill">MMCA.Common.AI.Testing</span></span>
+              <span class="layer-note">Governed language-model boundary: prompt contracts, bounds, guardrails, tool policy, usage metering; one adapter package per provider and a replay evaluation harness</span>
+            </span>
+          </li>
           <li class="layer">
             <span class="layer-name">Testing</span>
             <span>
-              <span class="pill-list"><span class="pill">MMCA.Common.Testing</span><span class="pill">MMCA.Common.Testing.Architecture</span><span class="pill">MMCA.Common.Testing.E2E</span><span class="pill">MMCA.Common.Testing.UI</span></span>
-              <span class="layer-note">Integration bases, architecture rule library, Playwright and bUnit harnesses</span>
+              <span class="pill-list"><span class="pill">MMCA.Common.Testing</span><span class="pill">MMCA.Common.Testing.Architecture</span><span class="pill">MMCA.Common.Testing.Aspire</span><span class="pill">MMCA.Common.Testing.E2E</span><span class="pill">MMCA.Common.Testing.UI</span></span>
+              <span class="layer-note">Integration bases, architecture rule library, AppHost tier, Playwright and bUnit harnesses</span>
             </span>
           </li>
           <li class="layer">
