@@ -37,14 +37,14 @@ evaluation harness ships as `MMCA.Common.AI.Testing`, which the framework runs o
 contract. The consumer-visible half of that (the `provider` tag casing, the two new defaults, the
 removed `AiProvider` enum) is mapped in `MMCA.Common/UPGRADING.md` under `[1.207.0]`.
 
-Revised 2026-09-21 (MMCA.Common, unreleased after v1.207.0): the framework ships a second content
+Revised 2026-09-21 (MMCA.Common v1.208.0): the framework ships a second content
 policy, `ContentPolicyGuardrail`, bound from `Ai:ContentPolicy`: it redacts, blocks or ignores eight
 built-in prompt-injection markers in user-role content according to `InjectionMode` (`Redact` by
 default) plus any request pattern the host adds, and it refuses an answer matching a configured
 blocked-response pattern, both on the buffered response and on each streamed update.
 `AddContentPolicyGuardrail(configuration)` validates every configured pattern at startup and
 registers one singleton under both `IChatGuardrail` and `IChatRequestRedactor`, so registering it
-satisfies `Ai:RequireGuardrail` on its own (at PR #428).
+satisfies `Ai:RequireGuardrail` on its own (released in v1.208.0).
 
 ## Context
 Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
