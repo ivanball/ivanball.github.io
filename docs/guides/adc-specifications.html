@@ -1162,7 +1162,7 @@
           </tr>
           <tr>
           <td>BR-129</td>
-          <td><strong>Concurrency model:</strong> The system uses <strong>last-write-wins</strong> semantics: no optimistic concurrency control (ETags, row versions) is enforced. Concurrent updates to the same entity overwrite each other without conflict detection. This is acceptable because: (1) Conference data is managed by a small number of organizers with low write frequency, (2) Sessionize refresh is the primary write path and is throttled per-event (BR-63), (3) Engagement writes (bookmarks, feedback) target distinct rows per user. If concurrent organizer editing becomes a problem, optimistic concurrency via EF Core row versions can be added without changing the API contract. <strong>Sessionize refresh concurrency:</strong> A Sessionize refresh writes many entities in a single transaction. If an organizer edits an entity while a refresh is in progress, last-write-wins applies: whichever transaction commits last determines the final state. The per-event throttle (BR-63) reduces but does not eliminate this window. Organizers should avoid manual edits immediately after triggering a refresh.</td>
+          <td><strong>Concurrency model:</strong> Guarded Conference writes use <strong>optimistic concurrency at the API edge</strong>: ten write controllers carry <code>[SupportsIfMatch]</code> (Events, event lifecycle transitions, Sessions, Speakers, Sponsors, Partners, Activities, Questions, ConferenceCategories, SessionAssets), so those requests must state the entity&#39;s current row-version token in the HTTP <code>If-Match</code> header (ADR-035). The header is mandatory on a guarded write: a request that states no precondition (an absent, empty or <code>*</code> header) is refused with <strong>428 Precondition Required</strong> and the action never runs, a tag the server cannot decode is <strong>400</strong>, and a stale token is answered with <strong>412 Precondition Failed</strong> rather than 409. Everything not covered by those endpoints stays <strong>last-write-wins</strong>: concurrent updates overwrite each other without conflict detection, which is acceptable because (1) Conference data is managed by a small number of organizers with low write frequency, (2) Sessionize refresh is the primary write path and is throttled per-event (BR-63), (3) Engagement writes (bookmarks, feedback) target distinct rows per user. <strong>Sessionize refresh concurrency:</strong> A Sessionize refresh writes many entities in a single transaction. If an organizer edits an entity while a refresh is in progress, last-write-wins applies: whichever transaction commits last determines the final state. The per-event throttle (BR-63) reduces but does not eliminate this window. Organizers should avoid manual edits immediately after triggering a refresh.</td>
           </tr>
           <tr>
           <td>BR-130</td>
@@ -2987,7 +2987,7 @@
           </tr>
           <tr>
           <td>Concurrency model</td>
-          <td>Last-write-wins: no optimistic concurrency (ETags, row versions). See BR-129 for rationale.</td>
+          <td>Optimistic concurrency on the ten Conference write controllers that carry <code>[SupportsIfMatch]</code>: <code>If-Match</code> is mandatory there (428 without it, 412 on a stale token). Last-write-wins everywhere else. See BR-129 for rationale.</td>
           </tr>
           </tbody></table></div>
           <hr>

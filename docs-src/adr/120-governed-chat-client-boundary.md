@@ -37,6 +37,15 @@ evaluation harness ships as `MMCA.Common.AI.Testing`, which the framework runs o
 contract. The consumer-visible half of that (the `provider` tag casing, the two new defaults, the
 removed `AiProvider` enum) is mapped in `MMCA.Common/UPGRADING.md` under `[1.207.0]`.
 
+Revised 2026-09-21 (MMCA.Common v1.208.0): the framework ships a second content
+policy, `ContentPolicyGuardrail`, bound from `Ai:ContentPolicy`: it redacts, blocks or ignores eight
+built-in prompt-injection markers in user-role content according to `InjectionMode` (`Redact` by
+default) plus any request pattern the host adds, and it refuses an answer matching a configured
+blocked-response pattern, both on the buffered response and on each streamed update.
+`AddContentPolicyGuardrail(configuration)` validates every configured pattern at startup and
+registers one singleton under both `IChatGuardrail` and `IChatRequestRedactor`, so registering it
+satisfies `Ai:RequireGuardrail` on its own (released in v1.208.0).
+
 ## Context
 Rubric section 16, AI-Native Application Architecture, asks one question of a product feature that
 calls a language model: is that dependency governed like any other external system, meaning
@@ -189,14 +198,41 @@ start, and the evaluation harness ships beside the package.**
    the first block throwing `ChatGuardrailException`. `Ai:RequireGuardrail` defaults to true
    (`AiSettings.cs:110`), and an enabled host that registered neither a guardrail nor a redactor is
    refused at registration with the one-line fix in the message
-   (`DependencyInjection.cs:208-217`, both refusals in `RefuseAnUngovernedHost` at `:202`). That fix
-   is the one content policy the framework does ship: `PiiRedactionGuardrail`
-   (`Guardrails/PiiRedactionGuardrail.cs:39`) removes email addresses and North American phone
-   numbers from every outgoing message (`:70-80`, `:110-111`), leaves the application's own
-   `Instructions` alone (`:34-37`), and is registered as one singleton under both contracts by
-   `AddPiiRedactionGuardrail()` (`Guardrails/GuardrailServiceCollectionExtensions.cs:32`, `:36-40`).
-   Contact details are the exception that proves the rule stated in the trade-offs: they are never
-   evidence for anything a model is asked, so the judgement does not change between applications.
+   (`DependencyInjection.cs:208-217`, both refusals in `RefuseAnUngovernedHost` at `:202`). The
+   framework ships two content policies that answer that refusal on their own. The first,
+   `PiiRedactionGuardrail` (`Guardrails/PiiRedactionGuardrail.cs:39`), removes email addresses and
+   North American phone numbers from every outgoing message (`:70-80`, `:110-111`), leaves the
+   application's own `Instructions` alone (`:34-37`), and is registered as one singleton under both
+   contracts by `AddPiiRedactionGuardrail()`
+   (`Guardrails/GuardrailServiceCollectionExtensions.cs:32`, `:36-40`).
+   Contact details are one of the two judgements the framework is willing to make for every
+   application: they are never evidence for anything a model is asked, so the judgement does not
+   change between applications.
+
+   The second is prompt injection. `ContentPolicyGuardrail` (`Guardrails/ContentPolicyGuardrail.cs:64`)
+   is one type under both contracts: as an `IChatRequestRedactor` it rewrites user-role content, as an
+   `IChatGuardrail` it inspects the request, the buffered response and each streamed update. It binds
+   `Ai:ContentPolicy` (`Guardrails/ContentPolicySettings.cs:26`). `InjectionMode`
+   (`ContentPolicySettings.cs:35`) picks one of three answers to a marker in user-role content:
+   `Redact` (the default, `Guardrails/ContentPolicyInjectionMode.cs:23`) replaces the match with
+   `RedactionPlaceholder` (`[redacted-instruction]` unless configured, `ContentPolicySettings.cs:69`)
+   and lets the call proceed, `Block` (`ContentPolicyInjectionMode.cs:29`) leaves the text alone and
+   refuses the call naming the marker, `Off` (`:35`) does neither. The eight built-in markers are code
+   rather than configuration (`ContentPolicyGuardrail.cs:77-85`): `ignore-previous-instructions`,
+   `disregard-system-prompt`, `role-reassignment`, `new-instructions`, `reveal-system-prompt`,
+   `act-as-unrestricted`, `developer-mode` and `do-anything-now`. `AdditionalRequestPatterns`
+   (`ContentPolicySettings.cs:45`) merges an application's own regular expressions into that list, and
+   `BlockedResponsePatterns` (`:57`) is the other half: inspected on the buffered response
+   (`ContentPolicyGuardrail.cs:164`) and on each streamed update (`:181`), refusing by pattern index
+   and never echoing the text that matched (`:267`, `:283`). Only user-role messages are ever
+   rewritten, never the application's system prompt or a prior assistant turn
+   (`ContentPolicyGuardrail.cs:115-133`). A configured pattern that does not compile fails the host at
+   startup rather than on a user's request (`ContentPolicySettings.cs:82`, `ValidateOnStart` at
+   `Guardrails/GuardrailServiceCollectionExtensions.cs:67-70`), and
+   `AddContentPolicyGuardrail(IConfiguration)` (`GuardrailServiceCollectionExtensions.cs:62`)
+   registers one singleton under both interfaces (`:72-76`), so registering it satisfies
+   `Ai:RequireGuardrail` exactly as the PII policy does. Both policies are at PR #428 in MMCA.Common,
+   unreleased after v1.207.0.
 
 8. **The configuration surface is one section, validated, and the switch is the registration.**
    `AiSettings` (`MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22`) binds `Ai` (`:25`) and
@@ -327,11 +363,19 @@ start, and the evaluation harness ships beside the package.**
   cache, so a hit counts what the call would have cost rather than what was billed
   (`DependencyInjection.cs:36-39`). The provider span is absent on a hit, so the two are
   distinguishable, but a spend graph read without that context over-reports.
-- **The framework ships exactly one content policy, and it is the narrow one.** Contact-detail
-  redaction is shipped because the judgement does not vary; delimiting untrusted input, escaping it,
-  handling injection and constraining the response schema stay where ADR-111 put them, in the feature
-  that knows what its input is (`IChatGuardrail.cs:9-14`). A second feature still makes those
-  decisions for itself.
+- **The framework ships two content policies, and both are narrow.** Contact-detail redaction
+  (`PiiRedactionGuardrail.cs:39`) and the injection and blocked-response policy
+  (`ContentPolicyGuardrail.cs:64`) are shipped because neither judgement varies by application: a
+  phone number is never evidence for anything a model is asked, and an imperative aimed at the model
+  is never the input's own argument. The built-in marker list stays deliberately small (eight
+  phrases, `ContentPolicyGuardrail.cs:77-85`) so ordinary prose about instructions or an initial
+  prompt survives it (`ContentPolicyGuardrailTests.cs:37`); a list broad enough to catch every
+  phrasing would redact the evidence it was protecting. Everything that depends on what the input IS
+  stays where ADR-111 put it, in the feature that knows: delimiting untrusted input, escaping it,
+  constraining the response schema, and any domain-specific check (`IChatGuardrail.cs:9-14`). A
+  second feature still makes those decisions for itself, and an application with a stricter idea of
+  its own content adds `Ai:ContentPolicy:AdditionalRequestPatterns` (`ContentPolicySettings.cs:45`)
+  or registers a guardrail of its own.
 - **The streamed path inspects fragments, not the answer.** Per-update inspection stops a stream at
   the offending update, but the caller has already seen everything yielded before it, and a rule that
   needs the whole text has to accumulate it inside the implementation
