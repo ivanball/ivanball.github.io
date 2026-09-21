@@ -16,8 +16,8 @@
    ============================================================================ */
 window.PLATFORM_FACTS = {
   /* FACTS.md "Published packages" */
-  packages: 17,
-  /* The same 17 packages, grouped by the layer they serve, for the stack on
+  packages: 22,
+  /* The same 22 packages, grouped by the layer they serve, for the stack on
      platform.html. The count above is derived from this list at build time, so a
      package added here cannot leave the headline figure behind (the hand-typed
      pill list this replaced had drifted to 13 while the copy still said fifteen).
@@ -30,11 +30,12 @@ window.PLATFORM_FACTS = {
     { name: "API &amp; transport", note: "Controllers, middleware, idempotency, JWKS, gRPC contracts", items: ["MMCA.Common.API", "MMCA.Common.Grpc"], edge: true },
     { name: "UI", note: "Blazor shared components, MudBlazor theme, web and MAUI clients", items: ["MMCA.Common.UI", "MMCA.Common.UI.Web", "MMCA.Common.UI.Maui"] },
     { name: "Hosting", note: "Aspire service defaults, OpenTelemetry, health checks, broker wiring, YARP gateway composition", items: ["MMCA.Common.Aspire", "MMCA.Common.Aspire.Hosting", "MMCA.Common.Gateway"], edge: true },
-    { name: "Testing", note: "Integration bases, architecture rule library, Playwright and bUnit harnesses", items: ["MMCA.Common.Testing", "MMCA.Common.Testing.Architecture", "MMCA.Common.Testing.E2E", "MMCA.Common.Testing.UI"] },
+    { name: "AI", note: "Governed language-model boundary: prompt contracts, bounds, guardrails, tool policy, usage metering; one adapter package per provider and a replay evaluation harness", items: ["MMCA.Common.AI", "MMCA.Common.AI.Anthropic", "MMCA.Common.AI.OpenAI", "MMCA.Common.AI.Testing"], edge: true },
+    { name: "Testing", note: "Integration bases, architecture rule library, AppHost tier, Playwright and bUnit harnesses", items: ["MMCA.Common.Testing", "MMCA.Common.Testing.Architecture", "MMCA.Common.Testing.Aspire", "MMCA.Common.Testing.E2E", "MMCA.Common.Testing.UI"] },
     { name: "Metapackage", note: "MMCA.Common: one reference that bundles the six core packages (Shared, Domain, Application, Infrastructure, API, Aspire) so a standard app starts from a single PackageReference", items: ["MMCA.Common"] },
   ],
   /* FACTS.md "Architecture fitness functions": test methods, not base classes */
-  fitnessTests: 124,
+  fitnessTests: 138,
   /* Store, ADC, Helpdesk */
   referenceApps: 3,
   /* docs-src/governance/ArchitectureEvaluationCriteria.md */
