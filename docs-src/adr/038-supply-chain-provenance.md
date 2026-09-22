@@ -7,6 +7,7 @@ restores in locked mode, fails the vulnerability gate closed, and gates the rele
 protected environment plus a merged-main assertion).
 Revised 2026-09-19 (locked-mode restore described at its actual scope: the two explicit restore steps,
 CI `build-and-test` and release `publish`, not every job in either workflow).
+Revised 2026-09-22 (build-provenance attestations on every released nupkg; the audit and SBOM gates are shared composite actions consumed by ADC; see the Revision below).
 ## Context
 MMCA.Common is a published framework: it packs its NuGet packages and pushes them to GitHub Packages
 on every `v*` tag (release.yml:3-5), where the two production apps and the reference seed consume
@@ -90,7 +91,7 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
   vetted.
 
 ## Trade-offs
-- **The SBOM is generated and archived, not yet signed or attested.** The gate proves a bill of
+- **The SBOM is generated and archived, not yet signed or attested** (superseded 2026-09-22; see the Revision below). The gate proves a bill of
   materials exists for each release (release.yml:58); it does not add cryptographic attestation or
   signature verification of the pushed packages. That is a possible follow-up, not a claim made here.
 - **Accept-list drift is possible.** A `NuGetAuditSuppress` entry silences the audit for that id until
@@ -148,6 +149,25 @@ The provenance chain gained the controls that make it reproducible under an atta
 6. **Store watches its base images.** A `docker` ecosystem joins the GitHub Actions one in Store's
    Dependabot configuration (`MMCA.Store/.github/dependabot.yml:32`, beside `:15`), which is what
    keeps a digest-pinned base image (ADR-093) from becoming a pin to a stale layer.
+
+## Revision (2026-09-22): attestations, and one implementation of each gate
+
+Two of the trade-offs above have moved. First, every `.nupkg` a release packs now carries a signed
+SLSA build-provenance attestation: `release.yml` calls `actions/attest-build-provenance` (SHA-pinned)
+after `dotnet pack` in both publish jobs, with `attestations: write` added to their permissions, and a
+consumer verifies a package with `gh attestation verify <file>.nupkg --owner ivanball`. MMCA.Common is
+a public repository, so the attestation is also written to the public Sigstore transparency log. The
+private MMCA.ADC container images are not attested by this revision.
+
+Second, the vulnerability audit and the SBOM gate are composite actions in this repository,
+`.github/actions/nuget-vulnerability-audit` and `.github/actions/cyclonedx-sbom`, consumed here by
+local path (`ci.yml`, `release.yml`) and by `MMCA.ADC/.github/workflows/deploy.yml` as
+`ivanball/MMCA.Common/.github/actions/...@main`. That retires the copy in ADC whose own comment said it
+mirrored this repository's block. It is also the one place a first-party action is referenced by branch
+rather than by commit SHA, and that is deliberate: `main` here is PR-protected, and a moving ref is what
+makes a fix to the gate reach every consumer without a per-repository bump. The audit action accepts
+both report headers the SDK has printed and fails closed on any other output, exactly as the inline
+block did; the SBOM action fails on a zero-component bill of materials and normalises a `.slnf` itself.
 
 ## Related
 ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency

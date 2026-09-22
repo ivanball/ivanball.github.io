@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-058: Runtime Conformance Suites Shipped as a Package · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).">
+  <meta name="description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03). Revised 2026-09-22 (the layer rules also ship as compile-time…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-058: Runtime Conformance Suites Shipped as a Package">
-  <meta property="og:description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).">
+  <meta property="og:description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03). Revised 2026-09-22 (the layer rules also ship as compile-time…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-058: Runtime Conformance Suites Shipped as a Package">
-  <meta name="twitter:description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).">
+  <meta name="twitter:description" content="Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03). Revised 2026-09-22 (the layer rules also ship as compile-time…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"058 · Runtime Conformance Suites Shipped as a Package","item":"https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 125 ADRs</summary>
+        <summary>All 127 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -225,6 +225,8 @@
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
         <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
           </ol>
         </nav>
       </details>
@@ -233,7 +235,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-058-runtime-conformance-suites-shipped-as-a-package">ADR-058: Runtime Conformance Suites Shipped as a Package</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).</p>
+          <p>Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).
+          Revised 2026-09-22 (the layer rules also ship as compile-time MSBuild targets inside MMCA.Common.Shared; see the Revision below).</p>
           <h2 id="context">Context</h2>
           <p>ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
           explicitly: the fitness suite asserts &quot;<strong>structure / registration</strong>, not runtime behavior&quot;
@@ -472,6 +475,25 @@
           <code>BoundedCircuitHandlerTests.cs:16</code> (the active-circuit ceiling, permit release, and the retention
           limits). They belong to ADR-088&#39;s own-host hardening rather than to this record, and they are noted
           here only so the inventory above is not read as the whole content of that test project.</p>
+          <h2 id="revision-2026-09-22-the-layer-rules-also-ship-as-compile-time-targets">Revision (2026-09-22): the layer rules also ship as compile-time targets</h2>
+          <p>The runtime suites above judge compiled assemblies, which places the first failure in the architecture
+          test tier. <code>MMCA.Common.Shared</code> now also packs <code>buildTransitive/MMCA.Common.Shared.targets</code>
+          (source <code>MMCA.Common/Source/Build/MMCA.Common.Shared.targets</code>, packed from
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/MMCA.Common.Shared.csproj</code>), which NuGet imports into every
+          project that takes any MMCA.Common package, directly or through a project reference, with no opt-in.
+          It keys on the <code>{App}.{Module}.{Layer}</code> suffix (<code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>,
+          <code>.Infrastructure</code>, <code>.API</code>, <code>.UI</code>) and judges only the references a project declares itself: a
+          forbidden <code>ProjectReference</code> fails with <code>MMCA0001</code> and a forbidden <code>PackageReference</code> with <code>MMCA0002</code>
+          at <code>ResolveProjectReferences</code>, before compilation, on the developer&#39;s machine.</p>
+          <p>The rule set is the reference-level mirror of <code>ArchitectureRules.Purity</code>, <code>.Transport</code> and <code>.Modules</code>
+          and deliberately never exceeds it. The reference inventory of MMCA.ADC, MMCA.Store and MMCA.Helpdesk
+          was checked against it before it shipped, and all three pass. A project opts out with
+          <code>&lt;MmcaLayerEnforcement&gt;false&lt;/MmcaLayerEnforcement&gt;</code> beside a comment saying why; the opt-out is per
+          project on purpose, so a whole repository cannot switch the rule off silently. The <code>package-consumption</code>
+          job in <code>MMCA.Common/.github/workflows/ci.yml</code> builds one valid probe and two violating probes against
+          the packed feed and asserts both error codes fire, so a file silently missing from the package cannot
+          pass. Consumers receive the targets on the next lockstep version bump (ADR-016); nothing in a consumer
+          changes until then.</p>
           <h2 id="related">Related</h2>
           <p>ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, &quot;not
           runtime behavior&quot;, is exactly this ADR&#39;s scope, and the two tiers ship as two separate packages),
@@ -499,6 +521,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
+            <li><a href="#revision-2026-09-22-the-layer-rules-also-ship-as-compile-time-targets">Revision (2026-09-22): the layer rules also ship as compile-time targets</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

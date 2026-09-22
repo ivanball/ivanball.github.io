@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 125 ADRs</summary>
+        <summary>All 127 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -224,6 +224,8 @@
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
         <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
           </ol>
         </nav>
       </details>
@@ -233,10 +235,11 @@
           <h1 id="architecture-decision-records">Architecture Decision Records</h1>
           <p>Accepted ADRs explaining <em>why</em> the core cross-cutting patterns exist. Read these before changing a
           pattern they describe: they capture context and trade-offs that aren&#39;t obvious from the code.</p>
-          <p><strong>125 accepted ADRs</strong>, 001-125, numbered contiguously with one row per ADR in the table below.
+          <p><strong>127 accepted ADRs</strong>, 001-127, numbered contiguously with one row per ADR in the table below.
           This file owns the ADR count and range (<code>MMCA.Common/FACTS.md</code>): read them here rather than
-          recounting, and when you add an ADR, update this line with its row. <code>Tools/Scripts/adr-index.ps1</code>
-          re-derives both from the files and fails if this line, the table, or a link drifts from them.</p>
+          recounting, and when you add an ADR, update this line with its row. <code>tools/adr-index.ps1</code> in this
+          repo re-derives both from the files and fails if this line, the table, or a link drifts from them;
+          CI runs it on every push and pull request.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -869,6 +872,16 @@
           <td><a href="125-parameterized-sql-only.html">125</a></td>
           <td>Parameterized SQL only, enforced by a fitness gate</td>
           <td>Hand-written SQL has exactly one door and its signature makes the unsafe call uncompilable: <code>IRawSqlQueryExecutor</code> (<code>MMCA.Common.Application</code>) exposes <code>QueryAsync&lt;T&gt;</code> and <code>QuerySingleOrDefaultAsync&lt;T&gt;</code> typed <code>FormattableString</code> and nothing else, so a concatenated statement does not bind to either method and every interpolation hole reaches the server as a command parameter (injection becomes a compile error, and the stable statement text keeps the server&#39;s cached plan). The EF implementation is <code>internal</code>, registered scoped one line below the singleton <code>IQueryableExecutor</code>, runs on the host&#39;s default physical source through the scope&#39;s own <code>IDbContextFactory</code> context (so it shares the caller&#39;s connection and any <code>ITransactional</code> transaction), and throws <code>NotSupportedException</code> naming Cosmos DB when that source is not relational (<a href="018-polyglot-persistence.html">ADR-018</a>). The convention is executable rather than documented (<a href="015-architecture-fitness-functions.html">ADR-015</a>): <code>RawSqlConventionTestsBase.ModuleCode_UsesParameterizedSqlOnly</code> scans every mapped module&#39;s project directories and fails on <code>FromSqlRaw</code>, <code>SqlQueryRaw</code>, <code>ExecuteSqlRaw</code> or <code>ExecuteSqlRawAsync</code>, with a failure message that names the four members and their replacements, and a non-empty-directories guard so the scan cannot go vacuous. All three repos subclass it: MMCA.Common redirects the scan onto the framework&#39;s own Application and Infrastructure, MMCA.ADC appends the unmapped Notification module, MMCA.Store takes the base scan. The <code>AllowedFiles</code> ratchet holds ONE entry across the three repos (Common&#39;s <code>DbContextFactory.cs</code>, for <code>SET IDENTITY_INSERT</code>, whose T-SQL identifiers cannot be command parameters and which carries the matching S2077 suppression); ADC and Store are both empty, so the rule blocks every new raw call site rather than ratcheting down. Limits are recorded: <code>FormattableStringFactory.Create</code> can still smuggle a concatenated string, the gate is a textual scan (no IL or Roslyn), <code>AllowedFiles</code> matches on file name rather than path, and the Cosmos refusal is a runtime exception.</td>
+          </tr>
+          <tr>
+          <td><a href="126-event-sourcing-not-adopted.html">126</a></td>
+          <td>Event sourcing is not adopted</td>
+          <td>Weighed 2026-09-22 and rejected: aggregates are current-state EF rows that raise domain events for notification, carry audit fields and soft-delete, and nothing in ADC or Store needs replayable per-aggregate history or &quot;state as of&quot; queries, so a per-aggregate event log would duplicate the outbox and add a second persistence model, a projection layer and a rehydration path across every aggregate. Marten on PostgreSQL was the alternative weighed. Revisit when an aggregate acquires a business requirement for full replayable history or temporal queries, and adopt it for that one module only.</td>
+          </tr>
+          <tr>
+          <td><a href="127-actor-model-not-adopted.html">127</a></td>
+          <td>The actor model is not adopted</td>
+          <td>Weighed 2026-09-22 and rejected: no workload has high-cardinality per-entity in-memory state with single-writer semantics, since live polls, bookmarks and session state are served by EF behind the row-version concurrency token plus Redis output caching plus the SignalR hub, and the load is a single conference&#39;s attendance. Microsoft Orleans hosted under Aspire was the alternative weighed. Revisit when a real-time per-entity state workload appears that optimistic concurrency plus Redis cannot carry, and host Orleans per module behind the existing module contract.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>
