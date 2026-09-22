@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 125 ADRs</summary>
+        <summary>All 127 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -225,6 +225,8 @@
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
         <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
           </ol>
         </nav>
       </details>
@@ -239,7 +241,8 @@
           pre-deploy gate sets have re-converged: both repos&#39; <code>deploy</code> jobs wait on the same ten needs,
           <code>backend-test-gate</code> included, so neither rests on the smoke gate as its only backend backstop. The
           rollout and revision-only rollback model itself is unchanged, and the citation anchors are
-          refreshed).</p>
+          refreshed).
+          Anchors refreshed 2026-09-22.</p>
           <h2 id="context">Context</h2>
           <p>Both production apps deploy to Azure Container Apps from a single <code>deploy.yml</code> job on push to <code>main</code>,
           and every gate runs <strong>before</strong> anything rolls out. The <code>deploy</code> job waits on eleven needs in Store
@@ -271,15 +274,15 @@
           <ul>
           <li><strong>Single-revision rollout.</strong> Every container app runs <code>activeRevisionsMode: &#39;Single&#39;</code>, so a deploy
           replaces the serving revision rather than splitting traffic across two: Store&#39;s identity, catalog,
-          sales, gateway and ui apps (<code>MMCA.Store/infra/main.bicep:980,1133,1247,1384,1493</code>) and ADC&#39;s
+          sales, gateway and ui apps (<code>MMCA.Store/infra/main.bicep:1403,1580,1696,1835,1955</code>) and ADC&#39;s
           identity, conference, engagement, notification, gateway and ui apps
-          (<code>MMCA.ADC/infra/main.bicep:1029,1236,1370,1497,1666,1787</code>). There is no canary or blue/green stage
+          (<code>MMCA.ADC/infra/main.bicep:1545,1770,1919,2050,2227,2371</code>). There is no canary or blue/green stage
           and no traffic-splitting step.</li>
           <li><strong>Readiness gating is the first line of defence.</strong> Every app carries startup, liveness and
           readiness probes, with readiness on <code>/health/ready</code>, so ACA holds user traffic on the old revision
-          until the new one is warm (<code>MMCA.Store/infra/main.bicep:1105-1108</code>, five apps at
-          <code>:1105,1219,1352,1449,1547</code>; <code>MMCA.ADC/infra/main.bicep:1187-1211</code>, six apps at
-          <code>:1187,1321,1448,1603,1722,1844</code>). This is the ADR-025 warm-up gate doing rollout duty.</li>
+          until the new one is warm (<code>MMCA.Store/infra/main.bicep:1552-1555</code>, five apps at
+          <code>:1552,1668,1803,1911,2027</code>; <code>MMCA.ADC/infra/main.bicep:1721-1745</code>, six apps at
+          <code>:1721,1870,2001,2164,2306,2446</code>). This is the ADR-025 warm-up gate doing rollout duty.</li>
           <li><strong>A two-tier post-deploy smoke gate is the last gating step of the deploy job.</strong> <code>Smoke test (rollback on failure)</code> verifies the freshly deployed fleet from outside Azure
           (<code>MMCA.Store/.github/workflows/deploy.yml:1227</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1340</code>):
           tier 1 proves the new revisions activated, tier 2 probes them over HTTP, and only these two can

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 125 ADRs</summary>
+        <summary>All 127 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -225,6 +225,8 @@
         <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
         <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
           </ol>
         </nav>
       </details>
@@ -238,7 +240,8 @@
           restores in locked mode, fails the vulnerability gate closed, and gates the release behind a
           protected environment plus a merged-main assertion).
           Revised 2026-09-19 (locked-mode restore described at its actual scope: the two explicit restore steps,
-          CI <code>build-and-test</code> and release <code>publish</code>, not every job in either workflow).</p>
+          CI <code>build-and-test</code> and release <code>publish</code>, not every job in either workflow).
+          Revised 2026-09-22 (build-provenance attestations on every released nupkg; the audit and SBOM gates are shared composite actions consumed by ADC; see the Revision below).</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common is a published framework: it packs its NuGet packages and pushes them to GitHub Packages
           on every <code>v*</code> tag (release.yml:3-5), where the two production apps and the reference seed consume
@@ -322,7 +325,7 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>The SBOM is generated and archived, not yet signed or attested.</strong> The gate proves a bill of
+          <li><strong>The SBOM is generated and archived, not yet signed or attested</strong> (superseded 2026-09-22; see the Revision below). The gate proves a bill of
           materials exists for each release (release.yml:58); it does not add cryptographic attestation or
           signature verification of the pushed packages. That is a possible follow-up, not a claim made here.</li>
           <li><strong>Accept-list drift is possible.</strong> A <code>NuGetAuditSuppress</code> entry silences the audit for that id until
@@ -381,6 +384,22 @@
           Dependabot configuration (<code>MMCA.Store/.github/dependabot.yml:32</code>, beside <code>:15</code>), which is what
           keeps a digest-pinned base image (ADR-093) from becoming a pin to a stale layer.</li>
           </ol>
+          <h2 id="revision-2026-09-22-attestations-and-one-implementation-of-each-gate">Revision (2026-09-22): attestations, and one implementation of each gate</h2>
+          <p>Two of the trade-offs above have moved. First, every <code>.nupkg</code> a release packs now carries a signed
+          SLSA build-provenance attestation: <code>release.yml</code> calls <code>actions/attest-build-provenance</code> (SHA-pinned)
+          after <code>dotnet pack</code> in both publish jobs, with <code>attestations: write</code> added to their permissions, and a
+          consumer verifies a package with <code>gh attestation verify &lt;file&gt;.nupkg --owner ivanball</code>. MMCA.Common is
+          a public repository, so the attestation is also written to the public Sigstore transparency log. The
+          private MMCA.ADC container images are not attested by this revision.</p>
+          <p>Second, the vulnerability audit and the SBOM gate are composite actions in this repository,
+          <code>.github/actions/nuget-vulnerability-audit</code> and <code>.github/actions/cyclonedx-sbom</code>, consumed here by
+          local path (<code>ci.yml</code>, <code>release.yml</code>) and by <code>MMCA.ADC/.github/workflows/deploy.yml</code> as
+          <code>ivanball/MMCA.Common/.github/actions/...@main</code>. That retires the copy in ADC whose own comment said it
+          mirrored this repository&#39;s block. It is also the one place a first-party action is referenced by branch
+          rather than by commit SHA, and that is deliberate: <code>main</code> here is PR-protected, and a moving ref is what
+          makes a fix to the gate reach every consumer without a per-repository bump. The audit action accepts
+          both report headers the SDK has printed and fails closed on any other output, exactly as the inline
+          block did; the SBOM action fails on a zero-component bill of materials and normalises a <code>.slnf</code> itself.</p>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency
           governance from versioning and licensing into supply-chain provenance and integrity), ADR-015
@@ -405,6 +424,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
+            <li><a href="#revision-2026-09-22-attestations-and-one-implementation-of-each-gate">Revision (2026-09-22): attestations, and one implementation of each gate</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

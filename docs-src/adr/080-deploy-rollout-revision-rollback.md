@@ -8,6 +8,7 @@ pre-deploy gate sets have re-converged: both repos' `deploy` jobs wait on the sa
 `backend-test-gate` included, so neither rests on the smoke gate as its only backend backstop. The
 rollout and revision-only rollback model itself is unchanged, and the citation anchors are
 refreshed).
+Anchors refreshed 2026-09-22.
 
 ## Context
 Both production apps deploy to Azure Container Apps from a single `deploy.yml` job on push to `main`,
@@ -43,15 +44,15 @@ verification fails.
 
 - **Single-revision rollout.** Every container app runs `activeRevisionsMode: 'Single'`, so a deploy
   replaces the serving revision rather than splitting traffic across two: Store's identity, catalog,
-  sales, gateway and ui apps (`MMCA.Store/infra/main.bicep:980,1133,1247,1384,1493`) and ADC's
+  sales, gateway and ui apps (`MMCA.Store/infra/main.bicep:1403,1580,1696,1835,1955`) and ADC's
   identity, conference, engagement, notification, gateway and ui apps
-  (`MMCA.ADC/infra/main.bicep:1029,1236,1370,1497,1666,1787`). There is no canary or blue/green stage
+  (`MMCA.ADC/infra/main.bicep:1545,1770,1919,2050,2227,2371`). There is no canary or blue/green stage
   and no traffic-splitting step.
 - **Readiness gating is the first line of defence.** Every app carries startup, liveness and
   readiness probes, with readiness on `/health/ready`, so ACA holds user traffic on the old revision
-  until the new one is warm (`MMCA.Store/infra/main.bicep:1105-1108`, five apps at
-  `:1105,1219,1352,1449,1547`; `MMCA.ADC/infra/main.bicep:1187-1211`, six apps at
-  `:1187,1321,1448,1603,1722,1844`). This is the ADR-025 warm-up gate doing rollout duty.
+  until the new one is warm (`MMCA.Store/infra/main.bicep:1552-1555`, five apps at
+  `:1552,1668,1803,1911,2027`; `MMCA.ADC/infra/main.bicep:1721-1745`, six apps at
+  `:1721,1870,2001,2164,2306,2446`). This is the ADR-025 warm-up gate doing rollout duty.
 - **A two-tier post-deploy smoke gate is the last gating step of the deploy job.** `Smoke test
   (rollback on failure)` verifies the freshly deployed fleet from outside Azure
   (`MMCA.Store/.github/workflows/deploy.yml:1227`, `MMCA.ADC/.github/workflows/deploy.yml:1340`):

@@ -118,6 +118,20 @@ jobs:
         continue-on-error: true
         run: npx --yes linkinator@6 http://127.0.0.1:8080/ --recurse --format csv
 
+  adr-index:
+    name: ADR index matches the files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # docs-src/adr/README.md is the declared owner of the ADR count and range
+      # (MMCA.Common/FACTS.md), so the claim has to be machine-checked: the script
+      # re-derives both from the files and fails on a stale count, a missing row,
+      # a duplicate number, a gap, or a row pointing at the wrong file.
+      # pwsh is preinstalled on ubuntu-latest.
+      - name: Check the ADR index
+        run: pwsh tools/adr-index.ps1 -Quiet
+
   a11y:
     name: Accessibility (WCAG 2.1 AA)
     runs-on: ubuntu-latest

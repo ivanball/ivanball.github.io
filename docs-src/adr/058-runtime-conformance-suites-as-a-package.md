@@ -2,6 +2,7 @@
 
 ## Status
 Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).
+Revised 2026-09-22 (the layer rules also ship as compile-time MSBuild targets inside MMCA.Common.Shared; see the Revision below).
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
@@ -245,6 +246,28 @@ the configured window, exempt paths, per-IP partitioning, and the shipped values
 `BoundedCircuitHandlerTests.cs:16` (the active-circuit ceiling, permit release, and the retention
 limits). They belong to ADR-088's own-host hardening rather than to this record, and they are noted
 here only so the inventory above is not read as the whole content of that test project.
+
+## Revision (2026-09-22): the layer rules also ship as compile-time targets
+
+The runtime suites above judge compiled assemblies, which places the first failure in the architecture
+test tier. `MMCA.Common.Shared` now also packs `buildTransitive/MMCA.Common.Shared.targets`
+(source `MMCA.Common/Source/Build/MMCA.Common.Shared.targets`, packed from
+`MMCA.Common/Source/Core/MMCA.Common.Shared/MMCA.Common.Shared.csproj`), which NuGet imports into every
+project that takes any MMCA.Common package, directly or through a project reference, with no opt-in.
+It keys on the `{App}.{Module}.{Layer}` suffix (`.Shared`, `.Domain`, `.Application`,
+`.Infrastructure`, `.API`, `.UI`) and judges only the references a project declares itself: a
+forbidden `ProjectReference` fails with `MMCA0001` and a forbidden `PackageReference` with `MMCA0002`
+at `ResolveProjectReferences`, before compilation, on the developer's machine.
+
+The rule set is the reference-level mirror of `ArchitectureRules.Purity`, `.Transport` and `.Modules`
+and deliberately never exceeds it. The reference inventory of MMCA.ADC, MMCA.Store and MMCA.Helpdesk
+was checked against it before it shipped, and all three pass. A project opts out with
+`<MmcaLayerEnforcement>false</MmcaLayerEnforcement>` beside a comment saying why; the opt-out is per
+project on purpose, so a whole repository cannot switch the rule off silently. The `package-consumption`
+job in `MMCA.Common/.github/workflows/ci.yml` builds one valid probe and two violating probes against
+the packed feed and asserts both error codes fire, so a file silently missing from the package cannot
+pass. Consumers receive the targets on the next lockstep version bump (ADR-016); nothing in a consumer
+changes until then.
 
 ## Related
 ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, "not
