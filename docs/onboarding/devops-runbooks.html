@@ -322,7 +322,7 @@
           template, so removing the resource and dropping the database were two separate, deliberate acts.</p>
           <hr>
           <h2 id="infradisaster-recoverymd-dr-runbook">infra/DISASTER-RECOVERY.md, DR runbook</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code> (182 lines; not the Store file of the same name)</p>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code> (234 lines; not the Store file of the same name)</p>
           <p><strong>What it is.</strong> The authoritative disaster-recovery runbook for the ADC production environment.
           Mandated by <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>: every consuming app must declare RTO/RPO per failure scenario, document the
           backup/restore mechanism, accept single-region risk in writing, and record restore drills in a
@@ -337,12 +337,12 @@
           <p>[Rubric §29, Resilience &amp; Business Continuity] assesses whether the system has documented RTO/RPO
           targets and a drilled restore procedure. The DR file addresses both: the objectives table
           (<code>DISASTER-RECOVERY.md:10-14</code>) and a maintained drill ledger of six rows
-          (<code>DISASTER-RECOVERY.md:158-165</code>), whose newest entry is a PITR restore of <code>ADC_Conference</code> on
+          (<code>DISASTER-RECOVERY.md:210-217</code>), whose newest entry is a PITR restore of <code>ADC_Conference</code> on
           2026-08-10 that completed in 2.1 min against the 2 h RTO and came back Online. The status block
-          (<code>DISASTER-RECOVERY.md:167-172</code>) reads that ledger as a rotation rather than as a single success:
+          (<code>DISASTER-RECOVERY.md:219-224</code>) reads that ledger as a rotation rather than as a single success:
           every <code>ADC_*</code> database now carries a recovery proof, and the number it quotes is the <strong>slowest</strong>
           measured restore in the rotation (4.4 min), not the fastest. A second status paragraph is retained
-          for the record (<code>DISASTER-RECOVERY.md:174-182</code>); it closes TD-10 on the strength of the original
+          for the record (<code>DISASTER-RECOVERY.md:226-234</code>); it closes TD-10 on the strength of the original
           2026-06-20 drill plus the Polly fault-injection tests in MMCA.Common and the Azure Monitor SLO
           workbook (<code>main.bicep:542-547</code>, the <code>sloWorkbook</code> resource embedding
           <code>infra/workbooks/adc-slo-workbook.json</code>).</p>
@@ -392,7 +392,7 @@
           (<code>main.bicep:269-286</code>), and <code>deploy.yml:1408-1411</code> fails the deploy before bicep validation when
           <code>vars.ALERT_EMAIL</code> is unset. An alert that notifies nobody is now impossible in a deployed
           environment by construction, which is the stronger version of what the runbook was aiming at.</p>
-          <p><strong>Deploy rollback description (<code>DISASTER-RECOVERY.md:113-115</code>).</strong> The runbook describes the
+          <p><strong>Deploy rollback description (<code>DISASTER-RECOVERY.md:165-167</code>).</strong> The runbook describes the
           post-deploy smoke gate as Gateway <code>/health</code> plus <code>/.well-known/jwks.json</code> plus the UI root. The live
           gate is broader in both dimensions: a revision-activation gate that requires the newest revision of
           every app to report Healthy, Running and 100% traffic weight, followed by six probes that reach
@@ -460,37 +460,37 @@
           durability, and recovering it is an import into a new database name, not a point-in-time restore.</li>
           </ul>
           <h3 id="recovery-procedures">Recovery procedures</h3>
-          <p><strong>Single database PITR restore (<code>DISASTER-RECOVERY.md:94-99</code>).</strong> Restore to a new name, validate,
+          <p><strong>Single database PITR restore (<code>DISASTER-RECOVERY.md:122-127</code>).</strong> Restore to a new name, validate,
           then rename or repoint via a redeploy. The worked example uses <code>ADC_Conference</code>.</p>
-          <p><strong>LTR restore (<code>DISASTER-RECOVERY.md:101-106</code>).</strong> List available backups with
+          <p><strong>LTR restore (<code>DISASTER-RECOVERY.md:129-134</code>).</strong> List available backups with
           <code>az sql db ltr-backup list</code>, then restore with <code>az sql db ltr-backup restore</code>.</p>
-          <p><strong>Full region loss (<code>DISASTER-RECOVERY.md:108-111</code>).</strong> The deploy pipeline is region-parameterized
+          <p><strong>Full region loss (<code>DISASTER-RECOVERY.md:136-139</code>).</strong> The deploy pipeline is region-parameterized
           (<code>sqlLocation</code> plus the RG location), so recovery is: create a new RG in a healthy region,
           geo-restore each <code>ADC_*</code> database there, then re-run <code>deploy.yml</code> pointed at the new RG. The
           <code>AtlDevCon</code> bacpac is the last-resort source of record for pre-cutover data, and the runbook is
           explicit that it must be imported into a <strong>new</strong> database name so a restore can never collide with a
           live <code>ADC_*</code> database.</p>
           <h3 id="restore-drill">Restore drill</h3>
-          <p><code>DISASTER-RECOVERY.md:122-144</code> defines the drill: PITR-restore a throwaway copy, confirm it comes
+          <p><code>DISASTER-RECOVERY.md:174-196</code> defines the drill: PITR-restore a throwaway copy, confirm it comes
           back Online, record the measured restore time, then delete the copy. Only a copy is ever created, so
           the live databases are never touched. The file documents three ways to run it
-          (<code>DISASTER-RECOVERY.md:128-136</code>) and names the scheduled one as the enforcing path:</p>
+          (<code>DISASTER-RECOVERY.md:180-188</code>) and names the scheduled one as the enforcing path:</p>
           <ul>
-          <li><strong>Scheduled</strong> (<code>DISASTER-RECOVERY.md:128-131</code>), the weekly cron, which rotates across the four
+          <li><strong>Scheduled</strong> (<code>DISASTER-RECOVERY.md:180-183</code>), the weekly cron, which rotates across the four
           live per-service databases by ISO week number so each earns a recovery proof roughly monthly. The
           retired <code>AtlDevCon</code> archive was never in the rotation and no longer exists as a database at all.</li>
-          <li><strong>One-click</strong> (<code>DISASTER-RECOVERY.md:132-135</code>), the <code>dr-drill.yml</code> workflow&#39;s manual
+          <li><strong>One-click</strong> (<code>DISASTER-RECOVERY.md:184-187</code>), the <code>dr-drill.yml</code> workflow&#39;s manual
           <code>workflow_dispatch</code>, for a chosen database (the four live <code>ADC_*</code> databases, defaulting to
           <code>ADC_Identity</code>) and a chosen point in time. It prints the drill-result row in the job summary,
           ready to paste into the ledger.</li>
-          <li><strong>Local / CLI</strong> (<code>DISASTER-RECOVERY.md:136</code>), <code>pwsh ./scripts/dr-restore-drill.ps1 -SourceDatabase ADC_Conference</code> after <code>az login</code>.</li>
+          <li><strong>Local / CLI</strong> (<code>DISASTER-RECOVERY.md:188</code>), <code>pwsh ./scripts/dr-restore-drill.ps1 -SourceDatabase ADC_Conference</code> after <code>az login</code>.</li>
           </ul>
           <p>All three wrap the same <code>az sql db restore</code>, verify, <code>az sql db delete</code> sequence
-          (<code>DISASTER-RECOVERY.md:138-144</code>); there is no <code>sqlcmd</code> anywhere in the drill path.</p>
+          (<code>DISASTER-RECOVERY.md:190-196</code>); there is no <code>sqlcmd</code> anywhere in the drill path.</p>
           <p>The stated SLO is at least one successful drill per release train and after any backup or retention
           change, with the restore completing inside the 2 h RTO; a missed or failed drill is called a
-          release-blocking regression for §29 (<code>DISASTER-RECOVERY.md:146-148</code>). The drill-result table
-          (<code>DISASTER-RECOVERY.md:158-165</code>) is where that claim is cashed, and it carries six rows:</p>
+          release-blocking regression for §29 (<code>DISASTER-RECOVERY.md:198-200</code>). The drill-result table
+          (<code>DISASTER-RECOVERY.md:210-217</code>) is where that claim is cashed, and it carries six rows:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -533,17 +533,17 @@
           <p>Read the shape of that table, not just the last row. The first entry is the pre-rotation drill in
           which one database stood in for all four; everything from 2026-07-20 onward is the weekly rotation,
           and those rows are the first recovery proofs <code>ADC_Identity</code>, <code>ADC_Engagement</code> and <code>ADC_Notification</code>
-          ever had (<code>DISASTER-RECOVERY.md:150-156</code>). Each row also carries its <code>dr-drill.yml</code> run id, so every
+          ever had (<code>DISASTER-RECOVERY.md:202-208</code>). Each row also carries its <code>dr-drill.yml</code> run id, so every
           claim in the ledger is traceable to an Actions run instead of resting on the author&#39;s word. The
           spread is the other lesson: the same <code>ADC_Identity</code> database restored in 1.8 min in July and 4.4 min
           in August, which is why the status block quotes the slowest number against the 2 h RTO
-          (<code>DISASTER-RECOVERY.md:167-172</code>). A ledger that keeps growing is what makes a claim like &quot;restores
+          (<code>DISASTER-RECOVERY.md:219-224</code>). A ledger that keeps growing is what makes a claim like &quot;restores
           take about two minutes&quot; falsifiable; a single row cannot show variance at all. The same note
-          (<code>DISASTER-RECOVERY.md:154-156</code>) records that rows naming <code>AtlDevCon</code> are kept as history now that
+          (<code>DISASTER-RECOVERY.md:206-208</code>) records that rows naming <code>AtlDevCon</code> are kept as history now that
           the archive is gone, rather than being edited out.</p>
           <p>The ledger stays honest because it is gated, not remembered: <code>dr-freshness</code> fails a deploy when the
           newest successful <code>dr-drill.yml</code> run is older than 8 days (<code>deploy.yml:823</code>,
-          <code>DISASTER-RECOVERY.md:170-172</code>). The rotation itself is prose here but arithmetic in the workflow,
+          <code>DISASTER-RECOVERY.md:222-224</code>). The rotation itself is prose here but arithmetic in the workflow,
           which is the source of truth. The next section walks it.</p>
           <hr>
           <h2 id="dr-drillyml-and-dr-restore-drillps1-the-adr-009-restore-drill">dr-drill.yml and dr-restore-drill.ps1, the ADR-009 restore drill</h2>
@@ -1207,6 +1207,10 @@
           <td><code>DISASTER-RECOVERY.md</code> (RTO/RPO, PITR, LTR, restore runbook, drill ledger), <code>dr-drill.yml</code> plus <code>dr-restore-drill.ps1</code> (the drill itself, gated for recency by <code>dr-freshness</code>)</td>
           </tr>
           <tr>
+          <td>§30 Compliance/Privacy</td>
+          <td><code>play-store-capture.ps1</code>, <code>play-store-compose.ps1</code></td>
+          </tr>
+          <tr>
           <td>§31 Cost/FinOps</td>
           <td><code>POST-CUTOVER-atldevcon-downgrade.md</code> (S0 to Basic, then archive-and-drop on a measured 0 DTU); the 2026-09-02 alert-cadence changes (<code>main.bicep:345-349</code>, <code>:464-469</code>); the thinned telemetry stream documented in <code>OPERATIONS.md:176-207</code>; the <code>dr-drill.yml</code> <code>always()</code> sweep of leftover <code>-drill</code> copies (<code>dr-drill.yml:89-105</code>), so a drill cancelled at its timeout cannot leave a billed database behind</td>
           </tr>
@@ -1223,7 +1227,7 @@
           <h2 id="not-determinable-from-source">Not determinable from source</h2>
           <ul>
           <li><strong>Whether the newest weekly drill is green</strong>: the drill ledger is maintained through 2026-08-10
-          (<code>DISASTER-RECOVERY.md:158-165</code>), but <code>dr-drill.yml</code> runs every Monday and a run reaches the ledger
+          (<code>DISASTER-RECOVERY.md:210-217</code>), but <code>dr-drill.yml</code> runs every Monday and a run reaches the ledger
           only when an operator pastes the printed row back into <code>DISASTER-RECOVERY.md</code>. Any drill newer than
           the last ledger row exists only in the Actions history, which is exactly what <code>dr-freshness</code> queries
           (<code>deploy.yml:851-853</code>); it cannot be read from the repository.</li>

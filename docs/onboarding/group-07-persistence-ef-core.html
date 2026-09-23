@@ -603,7 +603,7 @@
           <a href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html" target="_blank" rel="noopener">ADR-035</a>). Two set-based escape
           hatches sit beside the tracked path: <code>ExecuteDeleteAsync</code>, which the interface itself documents as
           bypassing domain events, audit stamps, and soft-delete (<code>IRepository.cs:445-455</code>), and
-          <code>ExecuteUpdateAsync</code> (<code>:431-453</code>), the contention-proof conditional update whose guard predicate lets
+          <code>ExecuteUpdateAsync</code> (<code>:457-479</code>), the contention-proof conditional update whose guard predicate lets
           the database arbitrate two racing callers with no rowversion retry loop. The latter is described
           through the persistence-agnostic
           <a href="#iupdatepropertysettertentity"><code>IUpdatePropertySetter&lt;TEntity&gt;</code></a> surface and replayed onto EF&#39;s setters
@@ -617,17 +617,17 @@
           into an <code>IQueryable</code>: criteria always, then the includes, the
           <a href="group-03-querying-specifications.html#orderexpression"><code>OrderExpression</code></a> chain, and the paging a
           <a href="group-03-querying-specifications.html#queryspecificationtentity-tidentifiertype"><code>QuerySpecification&lt;TEntity, TIdentifierType&gt;</code></a>
-          carries (<code>:36-61</code>), with the shape deliberately skipped for aggregate reads because joining includes to
-          count rows costs a join per navigation (<code>:22-26</code>). Tracking and soft-delete scope are <strong>not</strong> its
-          business: those choose the base queryable, which only the repository can do (<code>:14-18</code>). It also owns the
+          carries (<code>:40-68</code>), with the shape deliberately skipped for aggregate reads because joining includes to
+          count rows costs a join per navigation (<code>:30-34</code>). Tracking and soft-delete scope are <strong>not</strong> its
+          business: those choose the base queryable, which only the repository can do (<code>:15-19</code>). It also owns the
           one split-query heuristic in the framework, opting into <code>AsSplitQuery</code> as soon as any include targets a
-          collection navigation (<code>:86-93</code>), and <code>EFReadRepository.ApplyIncludes</code> delegates to it so the
-          string-include path and the specification path cannot drift (<code>:65-70</code>,
+          collection navigation (<code>:93-101</code>), and <code>EFReadRepository.ApplyIncludes</code> delegates to it so the
+          string-include path and the specification path cannot drift (<code>:78-79</code>,
           <code>EFReadRepository.cs:547-550</code>). Cursor paging is the sibling helper:
           <a href="#keysetquerybuilder"><code>KeysetQueryBuilder</code></a> (<code>.../Repositories/KeysetQueryBuilder.cs:22</code>) resolves the
           requested sort property or fails validation (<code>:35</code>), orders by <code>(sortKey, Id)</code> with the identifier
-          tie-break that makes the order total (<code>:59</code>), and builds the composite seek predicate against the
-          last row of the previous page (<code>:102</code>), so <code>GetPageByCursorAsync</code>
+          tie-break that makes the order total (<code>:50-51</code>), and builds the composite seek predicate against the
+          last row of the previous page (<code>:109</code>), so <code>GetPageByCursorAsync</code>
           (<code>IRepository.cs:316</code>, implemented at <code>EFReadRepository.cs:617</code>) seeks straight to the boundary instead
           of counting past every skipped row. Exactly one sort key is supported, by design
           (<code>KeysetQueryBuilder.cs:17-20</code>). That is [Rubric §12, Performance and Scalability] expressed as a

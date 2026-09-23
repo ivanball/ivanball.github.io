@@ -1643,7 +1643,7 @@
           see <code>CountPendingAsync</code>, which derives the depth from the fetch itself unless the batch came back
           saturated (<code>OutboxProcessor.cs:366-387</code>).</li>
           <li><strong>Where it&#39;s used</strong>: <code>DeadLetterCounter</code> on both dead-letter paths (<code>OutboxProcessor.cs:757-760</code> for
-          an unresolvable type, <code>:672-675</code> for exhausted retries); <code>ProcessedCounter</code> and
+          an unresolvable type, <code>:712-715</code> for exhausted retries); <code>ProcessedCounter</code> and
           <code>DispatchLagHistogram</code> on the success path (<code>OutboxProcessor.cs:652,657-659</code>); <code>SetOldestPendingAge</code>
           per source right after its fetch (<code>OutboxProcessor.cs:294-296</code>); and <code>SetPendingDepth</code> once per
           cycle after every target has been drained (<code>OutboxProcessor.cs:256</code>).</li>

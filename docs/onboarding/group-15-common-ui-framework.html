@@ -1254,7 +1254,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: extracting just the observer is what lets a page keep its own cards, empty state and error state and still get infinite scroll (lines 10-13). The alternative, folding the behavior into the list component, would force any page that wants infinite scroll to also adopt that component&#39;s layout.</li>
-          <li><strong>Where it&#39;s used</strong>: ADC&#39;s public speaker list renders it below the card grid while more pages exist, wiring <code>OnVisible</code> to its own loader and passing a localized loading label (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSpeakerList.razor:144-145</code>, inside <a href="group-21-conference-ui.html#publicspeakerlist"><code>PublicSpeakerList</code></a>). Covered by <a href="group-28-testing-infrastructure.html#infinitescrollsentineltests"><code>InfiniteScrollSentinelTests</code></a>.</li>
+          <li><strong>Where it&#39;s used</strong>: ADC&#39;s public speaker list renders it below the card grid while more pages exist, wiring <code>OnVisible</code> to its own loader and passing a localized loading label (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Speakers/PublicSpeakerList.razor:144-145</code>, inside <a href="group-21-conference-ui.html#publicspeakerlist"><code>PublicSpeakerList</code></a>). Covered by <a href="group-28-testing-infrastructure.html#infinitescrollsentineltests"><code>InfiniteScrollSentinelTests</code></a>.</li>
           </ul>
           <h3 id="layoutsettings">LayoutSettings</h3>
           <blockquote>
@@ -1302,7 +1302,7 @@
           <li><strong>Concept introduced, a framework-owned enum instead of a re-exported vendor type.</strong> <code>[Rubric §9, API and Contract Design]</code> (assesses whether a public surface is expressed in types the owner controls) and <code>[Rubric §32, Dependency and Supply-Chain]</code> (assesses whether third-party types leak into contracts consumers must compile against). The doc comment states the decision outright (lines 6-7): declaring this rather than exposing QRCoder&#39;s own <code>ECCLevel</code> keeps the component&#39;s public API from pinning consumers to the encoder package. The mapping to the vendor type is a private detail of the component, a one-line <code>switch</code> in <code>Components/QrCodeImage.razor:77-82</code>, so replacing the encoder would not be a breaking change for any page that names this enum.</li>
           <li><strong>Walkthrough</strong>: four members with explicit values and a stated recovery budget each: <code>Low = 0</code> (line 12, about 7% recovery, densest code, short payloads on clean screens), <code>Medium = 1</code> (line 15, about 15%, the usual screen and print trade-off), <code>Quartile = 2</code> (line 18, about 25%, printed sheets that may get scuffed) and <code>High = 3</code> (line 21, about 30%, codes overlaid with a logo or scanned in poor light). The explicit values matter because the enum is bound as a component parameter and compared for change detection.</li>
           <li><strong>Why it&#39;s built this way</strong>: the recovery percentages are properties of the QR standard, not of the encoder, so documenting them on a framework enum keeps the decision (how much damage must this code survive?) at the call site where the physical context is known.</li>
-          <li><strong>Where it&#39;s used</strong>: <code>QrCodeImage</code> takes it as a parameter defaulting to <code>Medium</code> (<code>Components/QrCodeImage.razor:36</code>) and maps it to <code>QRCodeGenerator.ECCLevel</code> before encoding (<code>:77-82</code>); <code>QrCodeButton</code> defaults to <code>Quartile</code> (<code>Components/QrCodeButton.razor:65</code>). ADC passes <code>Medium</code> explicitly on the attendee badge (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIn/MyBadge.razor:36</code>) and the speaker QR page (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speaker/SpeakerQr.razor:29</code>). Covered by <a href="group-28-testing-infrastructure.html#qrcodeimagetests"><code>QrCodeImageTests</code></a>.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>QrCodeImage</code> takes it as a parameter defaulting to <code>Medium</code> (<code>Components/QrCodeImage.razor:36</code>) and maps it to <code>QRCodeGenerator.ECCLevel</code> before encoding (<code>:77-82</code>); <code>QrCodeButton</code> defaults to <code>Quartile</code> (<code>Components/QrCodeButton.razor:65</code>). ADC passes <code>Medium</code> explicitly on the attendee badge (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/CheckIns/MyBadge.razor:36</code>) and the speaker QR page (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerQr.razor:29</code>). Covered by <a href="group-28-testing-infrastructure.html#qrcodeimagetests"><code>QrCodeImageTests</code></a>.</li>
           </ul>
           <h3 id="uimoduleconfiguration">UIModuleConfiguration</h3>
           <blockquote>
@@ -1393,7 +1393,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: the component encapsulates the part of infinite scroll that is genuinely hard to get right (supersession, cancellation ownership, disposal, the DOM cap) and leaves the part that is app-specific (what a card looks like, where the data comes from) to parameters. The <code>Result</code>-returning delegate rather than a raw <code>Task&lt;List&lt;T&gt;&gt;</code> is what makes a <em>localized</em> failure message reachable without the component knowing any error catalogue.</li>
-          <li><strong>Where it&#39;s used</strong>: the mobile branch of nearly every list page. ADC: <code>SessionList.razor:56</code>, <code>SpeakerList.razor:41</code>, <code>SponsorList.razor:41</code>, <code>RoomList.razor:41</code>, <code>EventList.razor:31</code>, <code>ActivityList.razor:41</code>, <code>QuestionList.razor:27</code>, <code>ConferenceCategoryList.razor:27</code>, the public views <code>PublicSessionListView.razor:6</code> and <code>PublicEventList.razor:23</code>, the check-in <code>AttendeeSearchPanel.razor:27</code>, and <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Pages/User/UserList.razor:27</code>. Store: <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Order/OrderList.razor:26</code> and <code>Pages/ShoppingCart/ShoppingCartList.razor:19</code>. It is also exercised in the component gallery (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Pages/ComponentsGallery.razor:57</code>) and covered by <a href="group-28-testing-infrastructure.html#mobileinfinitescrolllisttests"><code>MobileInfiniteScrollListTests</code></a>.</li>
+          <li><strong>Where it&#39;s used</strong>: the mobile branch of nearly every list page. ADC: <code>SessionList.razor:56</code>, <code>SpeakerList.razor:41</code>, <code>SponsorList.razor:41</code>, <code>RoomList.razor:41</code>, <code>EventList.razor:31</code>, <code>ActivityList.razor:41</code>, <code>QuestionList.razor:27</code>, <code>ConferenceCategoryList.razor:27</code>, the public views <code>PublicSessionListView.razor:6</code> and <code>PublicEventList.razor:23</code>, the check-in <code>AttendeeSearchPanel.razor:27</code>, and <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Pages/Users/UserList.razor:27</code>. Store: <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Order/OrderList.razor:26</code> and <code>Pages/ShoppingCart/ShoppingCartList.razor:19</code>. It is also exercised in the component gallery (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Pages/ComponentsGallery.razor:57</code>) and covered by <a href="group-28-testing-infrastructure.html#mobileinfinitescrolllisttests"><code>MobileInfiniteScrollListTests</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>MaxRenderedItems</code> bounds the DOM but there is no virtualization, so 500 rendered cards remain in the DOM; whether that is acceptable on a given device is not determinable from source. A consumer fetch delegate that ignores its <code>CancellationToken</code> still runs to completion after a reset: the generation guard discards its results, but the request itself is not stopped.</li>
           </ul>
           <h3 id="moneyextensions">MoneyExtensions</h3>
@@ -1854,7 +1854,7 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: two static helpers that every list page shares: reload whichever layout (mobile list or desktop grid) is currently rendered, and run the confirm-delete-toast-reload flow.</li>
-          <li><strong>Depends on</strong>: <a href="#mobileinfinitescrolllisttitem"><code>MobileInfiniteScrollList&lt;TItem&gt;</code></a>, <a href="#itoastservice"><code>IToastService</code></a>, <a href="group-01-result-error-handling.html#result"><code>Result</code></a>, and the <code>DeleteConfirmation</code> dialog component (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/DeleteConfirmation.razor:27</code>). Externals: MudBlazor&#39;s <code>MudDataGrid&lt;T&gt;</code>.</li>
+          <li><strong>Depends on</strong>: <a href="#mobileinfinitescrolllisttitem"><code>MobileInfiniteScrollList&lt;TItem&gt;</code></a>, <a href="#itoastservice"><code>IToastService</code></a>, <a href="group-01-result-error-handling.html#result"><code>Result</code></a>, and the <code>DeleteConfirmation</code> dialog component (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Forms/DeleteConfirmation.razor:27</code>). Externals: MudBlazor&#39;s <code>MudDataGrid&lt;T&gt;</code>.</li>
           <li><strong>Concept introduced, the shared page helper that stays out of the base class.</strong> <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether a repeated flow exists once; <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code> assesses that destructive actions confirm first and that failures surface to the user. The placement argument is in the class comment (lines 8-13) and is the interesting part: these are kept as plain statics rather than members on <a href="#datagridlistpagebasetdto"><code>DataGridListPageBase&lt;TDto&gt;</code></a> so that a page which composes its own layout, or holds several grids, can reuse them <strong>without inheriting anything</strong>. Inheritance would have forced every consumer into the base class&#39;s whole lifecycle just to get two flows.</li>
           <li><strong>Walkthrough</strong>: two static methods.<ul>
           <li><code>ReloadActiveLayoutAsync&lt;TDto&gt;(bool isMobile, MobileInfiniteScrollList&lt;TDto&gt;? mobileList, MudDataGrid&lt;TDto&gt;? dataGrid)</code> (lines 25-38). When the mobile layout is active and its ref is bound it calls <code>mobileList.ResetAsync()</code> (line 32); otherwise it calls <code>dataGrid.ReloadServerData()</code> when that ref is bound (line 36). Both refs are nullable <strong>by design</strong>: only one layout is in the render tree at a time, so the other <code>@ref</code> is genuinely null, which makes the null checks the mechanism rather than defensive noise (<code>[Rubric §22, Responsive &amp; Cross-Browser]</code>).</li>
@@ -2388,7 +2388,7 @@
           <code>TryAddScoped&lt;IAppDialogService, MudAppDialogService&gt;()</code> (<code>DependencyInjection.cs:180</code>, under the
           facade-registration doc at <code>DependencyInjection.cs:163-176</code>). Consumers resolve the interface: the
           shared <code>UnsavedChangesGuard</code> component
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/UnsavedChangesGuard.razor:14</code> and
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Forms/UnsavedChangesGuard.razor:14</code> and
           <code>UnsavedChangesGuard.razor:57</code>) and the Helpdesk seed&#39;s ticket pages
           (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.razor:104</code> and
           <code>Components/Pages/TicketDetail.razor:348</code>). A bUnit test pins the registration to this implementation
@@ -3434,7 +3434,7 @@
           <a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a> establishes
           for the device capability layer.</li>
           <li><strong>Where it&#39;s used</strong>: the shared <code>SharePageButton</code> component
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/SharePageButton.razor:4</code> and
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Sharing/SharePageButton.razor:4</code> and
           <code>SharePageButton.razor:43</code>), the shared <code>QrCodeButton</code> component (<code>QrCodeButton.razor:1</code> and
           <code>QrCodeButton.razor:79</code>), and app pages such as ADC&#39;s speaker QR page
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerQr.razor.cs:21</code> and
@@ -3595,7 +3595,7 @@
           lets one shared component serve both heads.</li>
           <li><strong>Where it&#39;s used</strong>: injected by the shared <code>CultureSwitcher</code> component, which persists the choice
           first and then treats the applier call as the last thing it does
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/CultureSwitcher.razor:6</code> and
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Globalization/CultureSwitcher.razor:6</code> and
           <code>CultureSwitcher.razor:44-48</code>), and by the login page when reconciling a returning user&#39;s stored
           culture (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:15</code> and
           <code>Login.razor:239-244</code>).</li>
@@ -3623,8 +3623,8 @@
           WebView serves the app from an internal virtual host, so an absolute URL built from <code>BaseUri</code> there
           would be unopenable anywhere else (the class comment records exactly this at lines 5-10). Hoisting
           the decision behind an interface is what lets the shared <code>SharePageButton</code> and <code>QrCodeButton</code> stay
-          head-agnostic (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/SharePageButton.razor:4</code>,
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/QrCodeButton.razor:1</code>).
+          head-agnostic (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Sharing/SharePageButton.razor:4</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Sharing/QrCodeButton.razor:1</code>).
           <code>[Rubric §18, UI Architecture &amp; Component Design]</code> reads the same choice from the component side:
           the shared components inject a contract, never a <code>NavigationManager</code>.</li>
           <li><strong>Walkthrough</strong><ul>
@@ -3876,7 +3876,7 @@
           <code>ApiUserPreferenceWriter.cs:11-12</code>) simply not register it: the callers resolve it with
           <code>GetService&lt;T&gt;</code> and skip the persist when it is absent.</li>
           <li><strong>Where it&#39;s used</strong>: the theme toggle resolves it optionally and saves only the theme
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/ThemeToggle.razor:23-27</code>); the culture
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/ThemeToggle.razor:23-27</code>); the culture
           switcher does the same for culture before handing off to the applier
           (<code>CultureSwitcher.razor:38-42</code>).</li>
           </ul>
@@ -4926,7 +4926,7 @@
           interactive render; the class documents that requirement on itself (<code>ThemeService.cs:11-14</code>) rather
           than guarding it internally, and the component that owns the lifecycle calls it from
           <code>OnAfterRenderAsync(firstRender)</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/MmcaThemeProviders.razor:35</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MmcaThemeProviders.razor:35</code>).</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>ModulePath</code> is the <code>_content/MMCA.Common.UI/theme.js</code> static-web-asset path (line 18), wrapped in
           a <a href="#lazyjsmodule">LazyJsModule</a> field (line 19). Two components resolving the same scoped service
@@ -4961,8 +4961,8 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:134</code>) and consumed by
           <code>MmcaThemeProviders</code>, which subscribes in <code>OnInitialized</code>, initializes on first render and
           unsubscribes on dispose
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/MmcaThemeProviders.razor:28,35,119</code>), by
-          <code>ThemeToggle</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/ThemeToggle.razor:2,7</code>), by
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MmcaThemeProviders.razor:28,35,119</code>), by
+          <code>ThemeToggle</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/ThemeToggle.razor:2,7</code>), by
           the MAUI head&#39;s <code>NativeThemeSync</code>, which mirrors the in-app choice onto the native chrome
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Maui/Components/NativeThemeSync.razor:17,41,52</code>),
           and by the login flow, which applies a returning user&#39;s stored theme

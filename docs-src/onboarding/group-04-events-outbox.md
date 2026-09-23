@@ -1506,7 +1506,7 @@ edge) are the primary references.
   see `CountPendingAsync`, which derives the depth from the fetch itself unless the batch came back
   saturated (`OutboxProcessor.cs:366-387`).
 - **Where it's used**: `DeadLetterCounter` on both dead-letter paths (`OutboxProcessor.cs:757-760` for
-  an unresolvable type, `:672-675` for exhausted retries); `ProcessedCounter` and
+  an unresolvable type, `:712-715` for exhausted retries); `ProcessedCounter` and
   `DispatchLagHistogram` on the success path (`OutboxProcessor.cs:652,657-659`); `SetOldestPendingAge`
   per source right after its fetch (`OutboxProcessor.cs:294-296`); and `SetPendingDepth` once per
   cycle after every target has been drained (`OutboxProcessor.cs:256`).

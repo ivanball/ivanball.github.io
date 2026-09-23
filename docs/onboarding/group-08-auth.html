@@ -1298,14 +1298,14 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:52</code>)
           defaults to <code>true</code>; the doc comment states the opt-out is deliberate
           (<code>AddAuthorizationPolicies(options =&gt; options.Enabled = false)</code>) rather than by omission
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:57-62</code>).
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:47-49</code>).
           <code>ExemptPathPrefixes</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:61</code>)
           is a mutable <code>IList&lt;string&gt;</code> seeded with <code>[.. DefaultExemptPathPrefixes]</code>, so a host appends its own
           static roots without losing the framework defaults; the doc comment is explicit that application
           endpoints belong on <code>[AllowAnonymous]</code>, not in this list, because that is what the anonymous-endpoint
           fitness gate reads
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:65-70</code>).</li>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:58-59</code>).</li>
           <li><strong>Why it&#39;s built this way</strong>: matching is segment-based and case-insensitive against these prefixes
           (per the <code>ExemptPathPrefixes</code> doc comment), so a coarse prefix like <code>/_framework</code> covers everything
           beneath it without enumerating individual asset paths.</li>
@@ -3230,7 +3230,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:7-11</code>).</li>
           <li><strong>Depends on</strong>: <a href="#ipasswordhasher"><code>IPasswordHasher</code></a>, the Application-layer port it implements
           (imported at
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:3</code>, declared at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:3</code>, declared at
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/IPasswordHasher.cs:6</code>).
           Externals are BCL only: <code>System.Security.Cryptography</code> (<code>Rfc2898DeriveBytes</code>,
           <code>RandomNumberGenerator</code>, <code>CryptographicOperations</code>) and <code>System.Text.Encoding</code>.</li>
@@ -3551,7 +3551,7 @@
           <li><strong>What it is</strong>: the two permission-string constants the framework&#39;s own administration
           controllers gate on, <code>ManageUsers</code> (value <code>&quot;users:manage&quot;</code>) and <code>ManageRoles</code> (value
           <code>&quot;roles:manage&quot;</code>)
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:15-33</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:15-22</code>).</li>
           <li><strong>Depends on</strong>: nothing first-party; it is a plain <code>const string</code> holder consumed by the
           permission-authorization pipeline.</li>
           <li><strong>Concept introduced, the framework shipping its own permission vocabulary for the
@@ -4015,7 +4015,7 @@
           modules reach it through <code>AddPermissions(...)</code>, which is deliberately safe to call once per module
           (<code>AuthorizationExtensions.cs:96-111</code>), as MMCA.ADC&#39;s Conference, Engagement, and Identity modules
           each do
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41-50</code>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41-46</code>,
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:58-61</code>,
           <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:44-47</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: the lazy build means a <code>Grant</code> call made after the first
@@ -6374,7 +6374,7 @@
           <ul>
           <li><strong>What it is</strong>: the RFC 6238 TOTP implementation of <code>ITwoFactorService</code>: secret generation,
           provisioning-URI construction, code verification, and recovery-code generation/hashing/matching
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TotpTwoFactorService.cs:35-312</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TotpTwoFactorService.cs:35-155</code>).</li>
           <li><strong>Depends on</strong>: <a href="group-08-auth.html#itwofactorservice"><code>ITwoFactorService</code></a> (the contract it implements);
           <code>TwoFactorSettings</code> (<code>MMCA.Common.Shared</code>) injected as <code>IOptions&lt;TwoFactorSettings&gt;</code>; <code>RecoveryCodeSet</code>
           (<code>MMCA.Common.Shared</code>) as its return shape; <code>OtpDotNet</code> (<code>Base32Encoding</code>, <code>KeyGeneration</code>, <code>Totp</code>,
@@ -6384,8 +6384,8 @@
           of.</strong> <code>[Rubric §11, Security]</code> assesses whether the codebase avoids timing side channels around secret
           comparison. <code>TryMatchRecoveryCode</code> never exits its scan early on a match: the loop &quot;runs to the end so
           the answer takes the same time whichever code in the list was presented&quot;
-          (<code>TotpTwoFactorService.cs:293-294</code>), and each comparison itself goes through
-          <code>CryptographicOperations.FixedTimeEquals</code> rather than <code>==</code> or <code>SequenceEqual</code> (<code>:295</code>). A byte-for-byte
+          (<code>TotpTwoFactorService.cs:136-137</code>), and each comparison itself goes through
+          <code>CryptographicOperations.FixedTimeEquals</code> rather than <code>==</code> or <code>SequenceEqual</code> (<code>:138</code>). A byte-for-byte
           comparison that stops at the first differing byte leaks how many leading bytes an attacker guessed
           correctly across repeated attempts; a fixed-time comparison over a full linear scan removes that
           channel entirely.</li>
@@ -6493,7 +6493,7 @@
           <ul>
           <li><strong>What it is</strong>: the <code>ITwoFactorAuthenticator</code> implementation that turns a raw code plus a user&#39;s
           stored two-factor state into one of four challenge outcomes
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TwoFactorAuthenticator.cs:25-448</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TwoFactorAuthenticator.cs:25-73</code>).</li>
           <li><strong>Depends on</strong>: <a href="group-08-auth.html#itwofactorservice"><code>ITwoFactorService</code></a> (code verification and
           recovery-code matching); <a href="group-08-auth.html#itwofactorstore"><code>ITwoFactorStore</code></a> (loading state and
           consuming a recovery code); <a href="group-08-auth.html#twofactorerrors"><code>TwoFactorErrors</code></a>;
@@ -6541,7 +6541,7 @@
           <li><strong>What it is</strong>: the <code>IRoleAdministrationService</code> implementation that lets an operator list roles, read
           or replace a role&#39;s stored permissions, and view the compiled permission catalog, layered over the
           code-compiled permission registry
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs:45-652</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs:45-229</code>).</li>
           <li><strong>Depends on</strong>: <a href="group-08-auth.html#ipermissionregistry"><code>IPermissionRegistry</code></a> (the compiled grants);
           <a href="group-08-auth.html#ipermissioncatalog"><code>IPermissionCatalog</code></a> (the closed list of declared permissions);
           <a href="group-08-auth.html#ipermissiongrantstore"><code>IPermissionGrantStore</code></a> (persisted grants);
@@ -6557,7 +6557,7 @@
           <code>AdministrationPermissions.ManageRoles</code> from a stored row, and the error message states the two-sided
           reason: granting it from a data row would make access to role administration itself a matter of data,
           while deleting the row &quot;would lock every operator out of the screen that could restore it&quot;
-          (<code>StoredPermissionRoleAdministrationService.cs:562-568</code>). That permission is only ever compiled in,
+          (<code>StoredPermissionRoleAdministrationService.cs:139-145</code>). That permission is only ever compiled in,
           through a host&#39;s own permission registry.</li>
           <li><strong>Walkthrough</strong>: constructed with the registry, catalog, store, cache, invalidator, and settings as
           primary constructor parameters (<code>:45-51</code>).<ul>
@@ -6657,7 +6657,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/CurrentUserService.cs:10-16</code>).</li>
           <li><strong>Depends on</strong>: <a href="#icurrentuserservice"><code>ICurrentUserService</code></a> (the Application port) and
           <a href="#claimsprincipalextensions"><code>ClaimsPrincipalExtensions</code></a> for the identity read
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:4-5</code>); externals
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/CurrentUserService.cs:4-5</code>); externals
           are <code>Microsoft.AspNetCore.Http.IHttpContextAccessor</code>, <code>System.Security.Claims</code> and
           <code>System.Globalization</code>. The claims it reads are the ones <a href="#tokenservice"><code>TokenService</code></a> writes.</li>
           <li><strong>Concept introduced: a scoped identity snapshot, computed lazily and parsed invariantly.</strong>

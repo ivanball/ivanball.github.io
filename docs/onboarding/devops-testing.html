@@ -179,7 +179,7 @@
           </thead>
           <tbody><tr>
           <td><code>MMCA.Common.slnx</code></td>
-          <td>Full human solution, 16 source projects + 14 test projects (no <code>.slnf</code>)</td>
+          <td>Full human solution, 16 source projects + 16 test projects (no <code>.slnf</code>)</td>
           </tr>
           <tr>
           <td><code>MMCA.Helpdesk.slnx</code></td>
@@ -258,7 +258,7 @@
           <code>MMCA.ADC.WebAPI.Tests</code>, whose middleware coverage was consolidated upstream into
           <code>MMCA.Common.API.Tests</code>). <code>MMCA.Store.Integration.slnf</code> is the same shape over Catalog, Sales and
           Identity (<code>MMCA.Store/MMCA.Store.Integration.slnf:5-7</code>).</p>
-          <p><code>MMCA.Common.slnx</code> (<code>MMCA.Common/MMCA.Common.slnx:1-54</code>) includes sixteen of the seventeen published
+          <p><code>MMCA.Common.slnx</code> (<code>MMCA.Common/MMCA.Common.slnx:1-61</code>) includes sixteen of the seventeen published
           packages (<code>MMCA.Common/FACTS.md:19-38</code>): the meta package <code>MMCA.Common</code> (line 8), four Core
           (<code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>, lines 11-14), four Presentation (<code>.API</code>,
           <code>.Grpc</code>, <code>.UI</code>, <code>.UI.Web</code>, lines 17-20), and seven Hosting (<code>.Aspire</code>, <code>.Aspire.Hosting</code>, <code>.Gateway</code>,
@@ -378,7 +378,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <tr>
           <td><code>MMCA.Common.Infrastructure.Tests</code></td>
           <td>496</td>
-          <td>Unit/integration tests for EF base contexts, outbox processor, repository, caching, JWT generation, JWKS provider, data-source resolver, plus the <code>Scheduling/</code>, <code>Persistence/Tenancy/</code>, <code>Persistence/AuditTrail/</code> and hybrid-cache subtrees</td>
+          <td>Unit/integration tests for EF base contexts, outbox processor, repository, caching, JWT generation, JWKS provider, data-source resolver, two-factor and email-confirmation token services, plus the <code>Scheduling/</code>, <code>Persistence/Tenancy/</code>, <code>Persistence/AuditTrail/</code>, <code>Persistence/InternalCommands/</code> and hybrid-cache subtrees</td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Infrastructure.Tests.MigrationsFixture</code></td>
@@ -418,7 +418,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <tr>
           <td><code>MMCA.Common.UI.Web.Tests</code></td>
           <td>11</td>
-          <td>The Blazor Web host layer: <code>ServerTokenStorageService</code>, <code>BlazorCspPolicyProvider</code>, <code>WebFormFactor</code></td>
+          <td>The Blazor Web host layer: <code>ServerTokenStorageService</code>, <code>BlazorCspPolicyProvider</code>, <code>WebFormFactor</code>, the trusted-caller header (<code>Security/TrustedCaller*Tests</code>) and the UI-host hardening kit (<code>Hardening/BoundedCircuitHandlerTests</code>, <code>Hardening/UiRateLimitingTests</code>)</td>
           </tr>
           </tbody></table></div>
           <p><strong>Hosting</strong></p>
@@ -574,7 +574,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <tr>
           <td><code>MMCA.ADC.Conference.Application.Tests</code></td>
           <td>193</td>
-          <td>Handler tests for the Conference controllers&#39; use cases (bulk), including the <code>Sponsors/</code> create, update, public-filter and mapper tests</td>
+          <td>Handler tests for the Conference controllers&#39; use cases (bulk), including the <code>Sponsors/</code> create, update, public-filter and mapper tests, the <code>Partners/</code> and <code>SessionAssets/</code> subtrees, and the batch event question-answer handler and validator</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Shared.Tests</code></td>
@@ -584,12 +584,12 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <tr>
           <td><code>MMCA.ADC.Conference.API.Tests</code></td>
           <td>25</td>
-          <td>Controller registration, route tests, <code>SponsorsControllerTests</code> and <code>EntityExportAuthorizationTests</code></td>
+          <td>Controller registration, route tests, <code>SponsorsControllerTests</code>, <code>PartnersControllerTests</code>, <code>SessionAssetsControllerTests</code>, the split event and speaker controllers (<code>EventLifecycleControllerTests</code>, <code>SpeakerLinksControllerTests</code>, <code>SpeakerSessionsControllerTests</code>), <code>ConferencePermissionGrantsTests</code> and <code>EntityExportAuthorizationTests</code></td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Infrastructure.Tests</code></td>
           <td>11</td>
-          <td>EF entity configuration, module seeding, the Sessionize import and the AI session-scoring services</td>
+          <td>EF entity configuration, module seeding, the Sessionize import, the AI session-scoring services, the score-response guardrail and its registration (<code>SessionScoreResponseGuardrailTests</code>, <code>ConferenceAiGuardrailsRegistrationTests</code>) and the session-scores cache evictor</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Scoring.Evaluation.Tests</code></td>
@@ -629,7 +629,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <tr>
           <td><code>MMCA.ADC.Engagement.API.Tests</code></td>
           <td>11</td>
-          <td>Controller surface (bookmarks, live polls, session questions, check-ins, points) and the module&#39;s permission grants</td>
+          <td>Controller surface (bookmarks, live polls and live-poll voting, session questions, check-ins, points) and the module&#39;s permission grants</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Engagement.Infrastructure.Tests</code></td>
@@ -822,7 +822,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <h3 id="mmcacommontesting">MMCA.Common.Testing</h3>
           <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/</code>, 23 types, shipped as <code>MMCA.Common.Testing</code>.</p>
           <h4 id="iintegrationtestfixture"><code>IIntegrationTestFixture</code></h4>
-          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/IIntegrationTestFixture.cs:8</code></p>
+          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/IIntegrationTestFixture.cs:8</code></p>
           <p>The shared contract between a <code>WebApplicationFactory</code> fixture and <code>IntegrationTestBase&lt;TFixture&gt;</code>.
           Two members: <code>CreateClient()</code> (line 11) returns an <code>HttpClient</code> configured for the test server, and
           <code>ResetDatabaseAsync()</code> (line 19) resets the database between tests. The doc comment
@@ -833,7 +833,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           cleanup. Each concrete fixture implements this by opening a per-source <code>SqlConnection</code> and calling
           <code>Respawner.ResetAsync</code>.</p>
           <h4 id="integrationtestbasetfixture"><code>IntegrationTestBase&lt;TFixture&gt;</code></h4>
-          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/IntegrationTestBase.cs:13</code></p>
+          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/IntegrationTestBase.cs:13</code></p>
           <p>The abstract base class all integration test classes inherit from. Generic on <code>TFixture : IIntegrationTestFixture</code>. Implements xUnit v3&#39;s <code>IAsyncLifetime</code>:</p>
           <ul>
           <li><code>InitializeAsync()</code> calls <code>Fixture.ResetDatabaseAsync()</code> before each test, so tests always start
@@ -853,7 +853,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <code>AuthenticateAsSpeaker(userId, speakerId)</code> (line 26), each calls
           <code>SetBearerToken(JwtTokenGenerator.GenerateToken(...))</code>.</p>
           <h4 id="sqlserverintegrationtestfixturebasetentrypoint"><code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code></h4>
-          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/SqlServerIntegrationTestFixtureBase.cs:27</code></p>
+          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/SqlServerIntegrationTestFixtureBase.cs:27</code></p>
           <p>The shared implementation of <code>IIntegrationTestFixture</code> for a service host backed by a throwaway SQL
           Server database. It owns the whole lifecycle, so a consumer&#39;s fixture is only the host-specific
           delta (see section 5 for the walkthrough). Two abstract members name the repo&#39;s conventions:
@@ -861,14 +861,14 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           one abstract <code>CreateFactory()</code> (line 134) supplies the <code>WebApplicationFactory</code>, and one virtual
           <code>ConfigureTestEnvironment</code> (line 142) pushes host-specific settings.</p>
           <h4 id="productionhostapplicationfactorytentrypoint"><code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code></h4>
-          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/ProductionHostApplicationFactory.cs:22</code></p>
+          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ProductionHostApplicationFactory.cs:22</code></p>
           <p>The database-free boot path. Its <code>CreateHost</code> override (line 32) pins <code>UseEnvironment(&quot;Production&quot;)</code>
           (line 36) so the tests exercise the branches a default <code>Development</code> boot skips (restrictive CORS,
           HSTS emission), and it captures the started <code>IHost</code> in <code>StartedHost</code> (line 29, assigned at line 37)
           because <code>IHost.StopAsync</code> is not reachable through the <code>WebApplicationFactory</code> surface. That capture
           is what makes the graceful-shutdown suite possible.</p>
           <h4 id="handlertestbasethandler"><code>HandlerTestBase&lt;THandler&gt;</code></h4>
-          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/HandlerTestBase.cs:38</code></p>
+          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Support/HandlerTestBase.cs:38</code></p>
           <p>A reusable Moq scaffold for command/query handler unit tests, replacing the per-class copy-paste of
           <code>Mock&lt;IUnitOfWork&gt;</code> plus <code>GetRepository</code> wiring plus <code>SaveChangesAsync</code> setup. <code>UnitOfWork</code> (line 45)
           arrives with <code>SaveChangesAsync</code> pre-configured to return 1 (constructor, line 41); <code>Logger</code> (line 48)
@@ -964,12 +964,12 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <code>GracefulShutdownTests.cs:9</code>, <code>GatewayHardeningTests.cs:28</code>, plus the Store trio). No service host
           asserts any of them today.</li>
           <li><strong>Decorator order and middleware order</strong> are subclassed in <strong>all four repos</strong>: ADC and Store from
-          their architecture suites (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:28</code>,
+          their architecture suites (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:28</code>,
           <code>MiddlewarePipelineOrderTests.cs:15</code>), Helpdesk from its own
           (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:35</code>,
           <code>MiddlewarePipelineOrderTests.cs:15</code>), and MMCA.Common dogfooding both against a synthetic
           <code>PingCommand</code>/<code>PingQuery</code> pair and the framework&#39;s own default pipeline
-          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:22</code>,
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:22</code>,
           <code>MiddlewarePipelineOrderTests.cs:10</code>).</li>
           <li><strong>MMCA.Helpdesk now adopts two of the eight.</strong> The seed used to demonstrate only the structural
           tier; the two host-free order gates were the cheapest runtime bases to adopt, and it adopted them.
@@ -977,7 +977,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </ul>
           <p>Each unguarded host is a gap in the record, not a decision that the contract does not apply to it.</p>
           <h4 id="jwttokengenerator"><code>JwtTokenGenerator</code></h4>
-          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/JwtTokenGenerator.cs:30</code></p>
+          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Support/JwtTokenGenerator.cs:30</code></p>
           <p>A static class that mints RS256 JWT tokens for test consumption. Key design decisions visible in
           the source:</p>
           <ul>
@@ -1014,7 +1014,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           patterns are a classic indicator of testability investment; the shared base means every downstream
           module gets fluent builders &quot;for free&quot; by subclassing.</p>
           <h4 id="featuremanagementtestextensions"><code>FeatureManagementTestExtensions</code></h4>
-          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/FeatureManagementTestExtensions.cs:10</code></p>
+          <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Support/FeatureManagementTestExtensions.cs:10</code></p>
           <p>A C# preview <code>extension(IServiceCollection services)</code> block (line 12) exposing
           <code>ConfigureTestFeatureFlags(...)</code> (line 35). Call it in a <code>WebApplicationFactory.ConfigureServices</code>
           override to override feature flags from <code>appsettings.json</code>. The doc comment records the trap it was
@@ -1025,7 +1025,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <h4 id="the-cross-service-gateway-and-polling-helpers">The cross-service, gateway and polling helpers</h4>
           <p>Five more shipped types close out the package, all of them for the tiers above the unit loop:</p>
           <ul>
-          <li><code>CrossServiceFixtureBase</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/CrossServiceFixtureBase.cs:41</code>)
+          <li><code>CrossServiceFixtureBase</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/CrossServiceFixtureBase.cs:41</code>)
           and its <code>CrossServiceDataSource</code> record (line 15) are the scaffolding for the cross-service
           real-broker tier: several service hosts booted in <strong>one</strong> process against a real Testcontainers SQL
           Server and a real Testcontainers RabbitMQ. The class remarks (lines 26-39) record the load-bearing
@@ -1463,7 +1463,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           the framework&#39;s own CI would never catch.</li>
           <li><code>ModuleConformanceTestsBaseTests</code> (<code>ModuleConformanceTestsBaseTests.cs:86</code>) is adversarial coverage
           for <code>ModuleConformanceTestsBase&lt;TModule&gt;</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ModuleConformanceTestsBase.cs:21</code>),
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/ModuleConformanceTestsBase.cs:21</code>),
           the base the consumer repos&#39; near-identical <code>{X}ModuleTests</code> files collapse into. Its four facts
           (lines 39, 45, 58, 64) assert name, dependencies, <code>RequiresDependencies</code> and disabled-stub
           registration; the drift tests assert each check actually <strong>fails</strong> on the drift it claims to catch,
@@ -1871,7 +1871,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <p>The four integration test projects (Identity, Conference, Engagement, Notification) each boot their
           service in-process with <code>WebApplicationFactory&lt;Program&gt;</code>. <strong>The lifecycle is not written per repo:</strong>
           it lives once in <code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/SqlServerIntegrationTestFixtureBase.cs:27</code>), and the
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/SqlServerIntegrationTestFixtureBase.cs:27</code>), and the
           concrete fixture supplies only the host-specific delta. Reading the base is what tells you what a
           test run actually does:</p>
           <ol>
@@ -1973,7 +1973,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <code>continue-on-error</code> only after it earns a track record, or deleted if it proves to be a flake
           generator. That is what an honestly staged new gate looks like.</p>
           <h3 id="mmcacommon-unit-level-infrastructure-tests">MMCA.Common unit-level infrastructure tests</h3>
-          <p><code>MMCA.Common.Infrastructure.Tests</code> (380 types) uses SQLite-backed <code>EnsureCreated</code> contexts for
+          <p><code>MMCA.Common.Infrastructure.Tests</code> (496 types) uses SQLite-backed <code>EnsureCreated</code> contexts for
           tests that need a real EF pipeline, with <code>MMCA.Common.Infrastructure.Tests.MigrationsFixture</code> beside
           it as the real migrations assembly those tests point EF at. SQLite avoids the SQL Server dependency
           entirely, which is why <code>MMCA.Common</code> builds and tests without any SQL Server or Docker in the local
@@ -2046,7 +2046,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <h3 id="example-a-architecture-fitness-function-dependencyversiontests">Example A, Architecture fitness function (<code>DependencyVersionTests</code>)</h3>
           <p>The per-repo class is a bare subclass; the facts, the package lists and the parsing live once in the
           shared base:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/DependencyVersionTests.cs:9</span>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DependencyVersionTests</span> : <span class="hljs-title">DependencyVersionTestsBase</span>;
 
 <span class="hljs-comment">// the lists + parsing live in the shipped package:</span>
@@ -2116,7 +2116,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           [Rubric §14, Testability]: the fixture isolation + shared infrastructure is a direct measure
           of the §14 &quot;integration test isolation&quot; criterion.</p>
           <h3 id="example-c-bunit-component-test-profiletests">Example C, bUnit component test (<code>ProfileTests</code>)</h3>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.UI.Tests/Pages/Profile/ProfileTests.cs:18-70</span>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.UI.Tests/Pages/Users/Profile/ProfileTests.cs:18-70</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ProfileTests</span> : <span class="hljs-title">BunitTestBase</span>
 {
     <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">ProfileTests</span>()</span>

@@ -1303,7 +1303,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: composing the children inline lets a single <code>GET /Events/{id}</code> return the whole event graph without follow-up calls, and defaulting the collections to <code>[]</code> avoids null checks in the UI. The <code>IConcurrencyAware</code> token is the write-path guard that turns a lost update into a conflict instead of a silent overwrite. The constants live on the DTO for the reason its doc comment gives (<code>EventDTO.cs:10-14</code>): it is the lowest layer the domain, EF configuration, and Blazor pages can all reach.</li>
-          <li><strong>Where it&#39;s used</strong>: produced by <a href="group-18-conference-application.html#eventdtomapper"><code>EventDTOMapper</code></a> (group-18); it is the DTO type parameter of <a href="group-20-conference-api-grpc.html#eventscontroller"><code>EventsController</code></a> itself (<code>EventsController.cs:45-54</code>), so every inherited GetAll/GetById/Create action speaks it, and the same type parameter drives the UI&#39;s <code>EntityServiceBase</code> in <a href="group-21-conference-ui.html#eventservice"><code>EventService</code></a> (<code>EventService.cs:15-17</code>). It is the concrete event model that <a href="#currenteventdefaults"><code>CurrentEventDefaults</code></a> binds <a href="#currenteventselector"><code>CurrentEventSelector</code></a> to. Its constants are re-exported by <a href="#eventinvariants"><code>EventInvariants</code></a> (<code>EventInvariants.cs:17-44</code>) and bound by the UI&#39;s <code>EventFormModel</code> <code>[MaxLength]</code> attributes (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Events/EventFormModel.cs:45-88</code>) and the <code>EventFormFields</code> input counters (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Event/EventFormFields.razor:21</code>, <code>:28</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: produced by <a href="group-18-conference-application.html#eventdtomapper"><code>EventDTOMapper</code></a> (group-18); it is the DTO type parameter of <a href="group-20-conference-api-grpc.html#eventscontroller"><code>EventsController</code></a> itself (<code>EventsController.cs:45-54</code>), so every inherited GetAll/GetById/Create action speaks it, and the same type parameter drives the UI&#39;s <code>EntityServiceBase</code> in <a href="group-21-conference-ui.html#eventservice"><code>EventService</code></a> (<code>EventService.cs:15-17</code>). It is the concrete event model that <a href="#currenteventdefaults"><code>CurrentEventDefaults</code></a> binds <a href="#currenteventselector"><code>CurrentEventSelector</code></a> to. Its constants are re-exported by <a href="#eventinvariants"><code>EventInvariants</code></a> (<code>EventInvariants.cs:17-44</code>) and bound by the UI&#39;s <code>EventFormModel</code> <code>[MaxLength]</code> attributes (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Events/EventFormModel.cs:45-88</code>) and the <code>EventFormFields</code> input counters (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Events/EventFormFields.razor:21</code>, <code>:28</code>).</li>
           </ul>
           <hr>
           <h3 id="ieventlivevalidationservice">IEventLiveValidationService</h3>
@@ -2255,7 +2255,7 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Activities/ActivityInvariants.cs:15-22</code>)
           gives the domain check and, through it, the EF <code>HasMaxLength</code> configuration; the Blazor form binds the
           same constant to both the input cap and the character counter
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activity/ActivityFormFields.razor:21</code>)
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activities/ActivityFormFields.razor:21</code>)
           and to its <code>[MaxLength]</code> data annotation
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activities/ActivityFormModel.cs:37</code>).
           A cap can therefore never disagree between the counter a user sees, the invariant that rejects, and the
@@ -2277,7 +2277,7 @@
           empty <code>VenueName</code> means the activity happens at the main conference venue, so the public page renders
           a localized &quot;main venue&quot; label instead of a gap
           (<code>Activity.cs:38-42</code>,
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicActivityList.razor:47</code>),
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Activities/PublicActivityList.razor:47</code>),
           and <code>VenueAddress</code> is what the &quot;directions&quot; affordance hands to a maps URL, labelled with the venue
           name or the activity name when there is none (<code>PublicActivityList.razor.cs:106-114</code>). <code>SortOrder</code>
           (line 60) breaks
@@ -2554,7 +2554,7 @@
           by EF through those invariants
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Sponsors/SponsorConfiguration.cs:20-46</code>),
           and by the sponsor form for both its input cap and its <code>[MaxLength]</code> annotation
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsor/SponsorFormFields.razor:20</code>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsors/SponsorFormFields.razor:20</code>,
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsors/SponsorFormModel.cs:36</code>).</li>
           <li><strong>Walkthrough</strong>: seven constants then thirteen properties (<code>SponsorDTO.cs:17-75</code>). <code>Id</code> + <code>RowVersion</code>
           are the two contracts (lines 39 and 42). The <code>required</code> <code>Name</code> (line 45) is the only mandatory content

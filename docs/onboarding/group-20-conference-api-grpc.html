@@ -3222,7 +3222,7 @@
           <code>ConstructorDependencyCountTests</code>&#39; ceiling without shrinking the resource&#39;s surface.</li>
           <li><strong>Where it&#39;s used</strong>: the Conference service host behind the Gateway route <code>/Speakers/{**catch-all}</code>
           (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:86</code>); consumed by the public speaker directory
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSpeakerList.razor</code>), the
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Speakers/PublicSpeakerList.razor</code>), the
           speaker self-service profile page, and organizer linking tools.</li>
           </ul>
           <hr>
@@ -3348,7 +3348,7 @@
           with identical rules get identical code, so the reader who has learned one has learned both.</li>
           <li><strong>Where it&#39;s used</strong>: the Conference service host behind the Gateway route <code>/Activities/{**catch-all}</code>
           (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:138</code>). Clients are the public activity page
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicActivityList.razor</code>) and
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Activities/PublicActivityList.razor</code>) and
           the organizer list, create and detail pages under
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Activity/</code>.</li>
           </ul>
@@ -3500,7 +3500,7 @@
           <li><strong>Where it&#39;s used</strong>: hosted by <code>MMCA.ADC.Conference.Service</code> and reached through the YARP Gateway, which
           forwards <code>/Sponsors/{**catch-all}</code> to the Conference service
           (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:134</code>). Clients are the public sponsor page
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSponsorList.razor</code>) and
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/Sponsors/PublicSponsorList.razor</code>) and
           the organizer sponsor list, create and detail pages under
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sponsor/</code>.</li>
           </ul>

@@ -1208,14 +1208,14 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:52`)
   defaults to `true`; the doc comment states the opt-out is deliberate
   (`AddAuthorizationPolicies(options => options.Enabled = false)`) rather than by omission
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:57-62`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:47-49`).
   `ExemptPathPrefixes`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:61`)
   is a mutable `IList<string>` seeded with `[.. DefaultExemptPathPrefixes]`, so a host appends its own
   static roots without losing the framework defaults; the doc comment is explicit that application
   endpoints belong on `[AllowAnonymous]`, not in this list, because that is what the anonymous-endpoint
   fitness gate reads
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:65-70`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/Fallback/FallbackAuthorizationOptions.cs:58-59`).
 - **Why it's built this way**: matching is segment-based and case-insensitive against these prefixes
   (per the `ExemptPathPrefixes` doc comment), so a coarse prefix like `/_framework` covers everything
   beneath it without enumerating individual asset paths.
@@ -2907,7 +2907,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:7-11`).
 - **Depends on**: [`IPasswordHasher`](#ipasswordhasher), the Application-layer port it implements
   (imported at
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:3`, declared at
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:3`, declared at
   `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/IPasswordHasher.cs:6`).
   Externals are BCL only: `System.Security.Cryptography` (`Rfc2898DeriveBytes`,
   `RandomNumberGenerator`, `CryptographicOperations`) and `System.Text.Encoding`.
@@ -3203,7 +3203,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **What it is**: the two permission-string constants the framework's own administration
   controllers gate on, `ManageUsers` (value `"users:manage"`) and `ManageRoles` (value
   `"roles:manage"`)
-  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:15-33`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:15-22`).
 - **Depends on**: nothing first-party; it is a plain `const string` holder consumed by the
   permission-authorization pipeline.
 - **Concept introduced, the framework shipping its own permission vocabulary for the
@@ -3644,7 +3644,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   modules reach it through `AddPermissions(...)`, which is deliberately safe to call once per module
   (`AuthorizationExtensions.cs:96-111`), as MMCA.ADC's Conference, Engagement, and Identity modules
   each do
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41-50`,
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41-46`,
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:58-61`,
   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:44-47`).
 - **Caveats / not-in-source**: the lazy build means a `Grant` call made after the first
@@ -5916,7 +5916,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 
 - **What it is**: the RFC 6238 TOTP implementation of `ITwoFactorService`: secret generation,
   provisioning-URI construction, code verification, and recovery-code generation/hashing/matching
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TotpTwoFactorService.cs:35-312`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TotpTwoFactorService.cs:35-155`).
 - **Depends on**: [`ITwoFactorService`](group-08-auth.md#itwofactorservice) (the contract it implements);
   `TwoFactorSettings` (`MMCA.Common.Shared`) injected as `IOptions<TwoFactorSettings>`; `RecoveryCodeSet`
   (`MMCA.Common.Shared`) as its return shape; `OtpDotNet` (`Base32Encoding`, `KeyGeneration`, `Totp`,
@@ -5926,8 +5926,8 @@ live in later groups; this chapter is the engine those endpoints call into.
   of.** `[Rubric §11, Security]` assesses whether the codebase avoids timing side channels around secret
   comparison. `TryMatchRecoveryCode` never exits its scan early on a match: the loop "runs to the end so
   the answer takes the same time whichever code in the list was presented"
-  (`TotpTwoFactorService.cs:293-294`), and each comparison itself goes through
-  `CryptographicOperations.FixedTimeEquals` rather than `==` or `SequenceEqual` (`:295`). A byte-for-byte
+  (`TotpTwoFactorService.cs:136-137`), and each comparison itself goes through
+  `CryptographicOperations.FixedTimeEquals` rather than `==` or `SequenceEqual` (`:138`). A byte-for-byte
   comparison that stops at the first differing byte leaks how many leading bytes an attacker guessed
   correctly across repeated attempts; a fixed-time comparison over a full linear scan removes that
   channel entirely.
@@ -6033,7 +6033,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 
 - **What it is**: the `ITwoFactorAuthenticator` implementation that turns a raw code plus a user's
   stored two-factor state into one of four challenge outcomes
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TwoFactorAuthenticator.cs:25-448`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TwoFactor/TwoFactorAuthenticator.cs:25-73`).
 - **Depends on**: [`ITwoFactorService`](group-08-auth.md#itwofactorservice) (code verification and
   recovery-code matching); [`ITwoFactorStore`](group-08-auth.md#itwofactorstore) (loading state and
   consuming a recovery code); [`TwoFactorErrors`](group-08-auth.md#twofactorerrors);
@@ -6079,7 +6079,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **What it is**: the `IRoleAdministrationService` implementation that lets an operator list roles, read
   or replace a role's stored permissions, and view the compiled permission catalog, layered over the
   code-compiled permission registry
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs:45-652`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs:45-229`).
 - **Depends on**: [`IPermissionRegistry`](group-08-auth.md#ipermissionregistry) (the compiled grants);
   [`IPermissionCatalog`](group-08-auth.md#ipermissioncatalog) (the closed list of declared permissions);
   [`IPermissionGrantStore`](group-08-auth.md#ipermissiongrantstore) (persisted grants);
@@ -6095,7 +6095,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   `AdministrationPermissions.ManageRoles` from a stored row, and the error message states the two-sided
   reason: granting it from a data row would make access to role administration itself a matter of data,
   while deleting the row "would lock every operator out of the screen that could restore it"
-  (`StoredPermissionRoleAdministrationService.cs:562-568`). That permission is only ever compiled in,
+  (`StoredPermissionRoleAdministrationService.cs:139-145`). That permission is only ever compiled in,
   through a host's own permission registry.
 - **Walkthrough**: constructed with the registry, catalog, store, cache, invalidator, and settings as
   primary constructor parameters (`:45-51`).
@@ -6189,7 +6189,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/CurrentUserService.cs:10-16`).
 - **Depends on**: [`ICurrentUserService`](#icurrentuserservice) (the Application port) and
   [`ClaimsPrincipalExtensions`](#claimsprincipalextensions) for the identity read
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:4-5`); externals
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/CurrentUserService.cs:4-5`); externals
   are `Microsoft.AspNetCore.Http.IHttpContextAccessor`, `System.Security.Claims` and
   `System.Globalization`. The claims it reads are the ones [`TokenService`](#tokenservice) writes.
 - **Concept introduced: a scoped identity snapshot, computed lazily and parsed invariantly.**

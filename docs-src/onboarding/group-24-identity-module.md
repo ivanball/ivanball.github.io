@@ -1229,7 +1229,7 @@ blob deletions in ADR-114.
 - **Where it's used**: the per-app role type
   ([UserRole](#userrole); `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:21,24,31`),
   each module's permission grants
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41-50`,
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41-46`,
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:58-61`,
   [`IdentityPermissionGrants`](#identitypermissiongrants)`.Apply`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Authorization/IdentityPermissionGrants.cs:29`)),

@@ -1266,21 +1266,25 @@ are reports, and the comment above the job draws that line explicitly (`deploy.y
   PR-protected and a ref is what keeps the consumer gate from drifting away from the framework's.
 
 **The two non-gating reports** (`continue-on-error: true`) are `supply-chain/deprecated.txt`, packages the
-publisher has flagged as obsolete or replaced (`deploy.yml:542-547`), and `supply-chain/licenses.json`,
-license metadata for every transitive package via `nuget-license` (`deploy.yml:616-626`). All four
-outputs upload as the `supply-chain-reports` artifact with a 14-day retention (`deploy.yml:628-637`).
+publisher has flagged as obsolete or replaced (`deploy.yml:574-579`), and `supply-chain/licenses.json`,
+license metadata for every transitive package via `nuget-license` (`deploy.yml:621-631`). All four
+outputs upload as the `supply-chain-reports` artifact with a 14-day retention (`deploy.yml:633-642`).
 
-Between the audit and the SBOM sits the step that makes both honest on Linux, **Normalize the solution
-filter** (`deploy.yml:589-599`). A `.slnf` records Windows-style project paths, and on the Linux runner a
+Between the audit and the SBOM sits **Normalize the solution filter for Linux**
+(`deploy.yml:594-604`). A `.slnf` records Windows-style project paths, and on the Linux runner a
 backslash is an ordinary filename character, so a tool that opens those paths directly resolves **zero**
 projects. `dotnet list` is unaffected because MSBuild normalizes separators, but CycloneDX silently
 emitted an empty SBOM this way. The step writes a forward-slash copy (`ci-linux.slnf`) next to the
-original so the relative project paths still resolve, and feeds the tools below from it. Two follow-on
-details come straight out of that: `--set-name MMCA.ADC.CI` pins the BOM metadata component, which would
-otherwise take the input filename and become "ci-linux" (`deploy.yml:608-610`); and `nuget-license` cannot
-take a `.slnf` at all, because it hands its `--input` straight to MSBuild, which parses the JSON as XML
-and throws, so the report is fed the extracted project list via `--json-input` instead
-(`deploy.yml:619-625`).
+original and derives `$RUNNER_TEMP/ci-projects.json` from it, but only the **license report** below
+still reads that output: the shared `cyclonedx-sbom` action normalizes the `.slnf` a second time,
+internally, before generating the BOM (`MMCA.Common/.github/actions/cyclonedx-sbom/action.yml:58-61`),
+so the SBOM step passes it the **original** `MMCA.ADC.CI.slnf` (`deploy.yml:616`), not the local
+`ci-linux.slnf` copy. `--set-name MMCA.ADC.CI` also lives inside that action, driven by the `name:
+MMCA.ADC.CI` input (`deploy.yml:617`, applied at `action.yml:65`): it pins the BOM metadata component,
+which would otherwise take the normalized-copy filename and become "sbom-linux-...". `nuget-license`
+cannot take a `.slnf` at all, because it hands its `--input` straight to MSBuild, which parses the JSON
+as XML and throws, so the report is fed the local step's extracted project list via `--json-input`
+instead (`deploy.yml:624-627`).
 
 One scope limit is worth naming here, because a separate workflow exists to cover it: this job audits
 `MMCA.ADC.CI.slnf`, which deliberately excludes the MAUI head, so the largest dependency graph in the
