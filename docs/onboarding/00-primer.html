@@ -982,12 +982,22 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <tr>
           <td>124</td>
           <td>The server-rendered Blazor UI host is its own hardened edge, because it is a separate origin the Gateway limiter never sees: <code>BoundedCircuitHandler</code> (a singleton so one count spans the replica) refuses circuits past <code>MaxActiveCircuits</code>, and <code>UiRateLimitingSettings</code> puts a fixed-window limiter on the page and negotiate endpoints, both bound from host-owned configuration sections</td>
-          <td><a href="group-25-adc-host-composition.html">g25</a></td>
+          <td><a href="group-15-common-ui-framework.html">g15</a>/<a href="group-25-adc-host-composition.html">g25</a></td>
           </tr>
           <tr>
           <td>125</td>
           <td>Parameterized SQL only: hand-written SQL has exactly one door, <code>IRawSqlQueryExecutor</code>, whose two entry points accept <code>FormattableString</code> and nothing else (a concatenated statement does not compile), <code>EFRawSqlQueryExecutor</code> names the relational-only limit, and <code>RawSqlConventionTestsBase</code> bans the four <code>*Raw</code> EF members in module code as a fitness gate</td>
           <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-28-testing-infrastructure.html">g28</a></td>
+          </tr>
+          <tr>
+          <td>126</td>
+          <td>Event sourcing is not adopted: aggregates stay current-state EF rows that raise domain events for notification, carry audit fields and soft-delete, so no repository gains an event store, per-aggregate stream, projection layer or rehydration path</td>
+          <td><a href="group-02-domain-building-blocks.html">g02</a>/<a href="group-04-events-outbox.html">g04</a></td>
+          </tr>
+          <tr>
+          <td>127</td>
+          <td>The actor model is not adopted: per-entity state stays in the owning module&#39;s database behind optimistic concurrency, read pressure stays on the caching tiers, and live fan-out stays on the notification hub, with no actor runtime as a hosting layer</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-09-caching.html">g09</a>/<a href="group-10-notifications.html">g10</a></td>
           </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>

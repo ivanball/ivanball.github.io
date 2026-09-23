@@ -248,10 +248,10 @@
           (<code>OAUTH_GITHUB_CLIENT_ID</code>, <code>OAUTH_GITHUB_CLIENT_SECRET</code>, <code>ANTHROPIC_API_KEY</code>, <code>SMTP_PASSWORD</code>) and
           optional variables (<code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_FROM</code>, <code>SMTP_USERNAME</code>). There is no HS256
           fallback signing key in that list: RS256 is the only signing path, which is why both RSA PEMs are
-          listed as required and <code>deploy.yml:1409-1412</code> fails the run when either is missing.</p>
+          listed as required and <code>deploy.yml:1416-1419</code> fails the run when either is missing.</p>
           <p><strong>One gap to know about before your first deploy.</strong> The checklist never mentions <code>ALERT_EMAIL</code>, but
           <code>main.bicep:115-117</code> declares <code>alertEmailAddress</code> as a required parameter with <code>@minLength(3)</code> and
-          no default (alerts that notify nobody are silent failures), and <code>deploy.yml:1401-1404</code> refuses the
+          no default (alerts that notify nobody are silent failures), and <code>deploy.yml:1408-1411</code> refuses the
           run with an actionable error when <code>vars.ALERT_EMAIL</code> is unset. Follow the printed checklist exactly
           and the first deploy stops there. Set <code>ALERT_EMAIL</code> as well.</p>
           <hr>
@@ -322,7 +322,7 @@
           template, so removing the resource and dropping the database were two separate, deliberate acts.</p>
           <hr>
           <h2 id="infradisaster-recoverymd-dr-runbook">infra/DISASTER-RECOVERY.md, DR runbook</h2>
-          <p><strong>File:</strong> <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code> (182 lines; not the Store file of the same name)</p>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code> (234 lines; not the Store file of the same name)</p>
           <p><strong>What it is.</strong> The authoritative disaster-recovery runbook for the ADC production environment.
           Mandated by <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>: every consuming app must declare RTO/RPO per failure scenario, document the
           backup/restore mechanism, accept single-region risk in writing, and record restore drills in a
@@ -337,12 +337,12 @@
           <p>[Rubric §29, Resilience &amp; Business Continuity] assesses whether the system has documented RTO/RPO
           targets and a drilled restore procedure. The DR file addresses both: the objectives table
           (<code>DISASTER-RECOVERY.md:10-14</code>) and a maintained drill ledger of six rows
-          (<code>DISASTER-RECOVERY.md:158-165</code>), whose newest entry is a PITR restore of <code>ADC_Conference</code> on
+          (<code>DISASTER-RECOVERY.md:210-217</code>), whose newest entry is a PITR restore of <code>ADC_Conference</code> on
           2026-08-10 that completed in 2.1 min against the 2 h RTO and came back Online. The status block
-          (<code>DISASTER-RECOVERY.md:167-172</code>) reads that ledger as a rotation rather than as a single success:
+          (<code>DISASTER-RECOVERY.md:219-224</code>) reads that ledger as a rotation rather than as a single success:
           every <code>ADC_*</code> database now carries a recovery proof, and the number it quotes is the <strong>slowest</strong>
           measured restore in the rotation (4.4 min), not the fastest. A second status paragraph is retained
-          for the record (<code>DISASTER-RECOVERY.md:174-182</code>); it closes TD-10 on the strength of the original
+          for the record (<code>DISASTER-RECOVERY.md:226-234</code>); it closes TD-10 on the strength of the original
           2026-06-20 drill plus the Polly fault-injection tests in MMCA.Common and the Azure Monitor SLO
           workbook (<code>main.bicep:542-547</code>, the <code>sloWorkbook</code> resource embedding
           <code>infra/workbooks/adc-slo-workbook.json</code>).</p>
@@ -389,19 +389,19 @@
           are created and visible in Azure Monitor even without the variable, &quot;they just don&#39;t email&quot;. That
           state is no longer reachable: <code>alertEmailAddress</code> is a required parameter with <code>@minLength(3)</code> and
           no default (<code>main.bicep:115-117</code>), the action group&#39;s email receiver is unconditional
-          (<code>main.bicep:269-286</code>), and <code>deploy.yml:1401-1404</code> fails the deploy before bicep validation when
+          (<code>main.bicep:269-286</code>), and <code>deploy.yml:1408-1411</code> fails the deploy before bicep validation when
           <code>vars.ALERT_EMAIL</code> is unset. An alert that notifies nobody is now impossible in a deployed
           environment by construction, which is the stronger version of what the runbook was aiming at.</p>
-          <p><strong>Deploy rollback description (<code>DISASTER-RECOVERY.md:113-115</code>).</strong> The runbook describes the
+          <p><strong>Deploy rollback description (<code>DISASTER-RECOVERY.md:165-167</code>).</strong> The runbook describes the
           post-deploy smoke gate as Gateway <code>/health</code> plus <code>/.well-known/jwks.json</code> plus the UI root. The live
           gate is broader in both dimensions: a revision-activation gate that requires the newest revision of
           every app to report Healthy, Running and 100% traffic weight, followed by six probes that reach
-          every service through the Gateway (<code>deploy.yml:1600-1621</code> for the reasoning,
-          <code>deploy.yml:1700-1710</code> for the probes). The activation gate exists because the HTTP probes alone
+          every service through the Gateway (<code>deploy.yml:1607-1628</code> for the reasoning,
+          <code>deploy.yml:1707-1717</code> for the probes). The activation gate exists because the HTTP probes alone
           cannot prove the new code is serving: a healthy Gateway keeps answering from the previous backend
           revision when the new one never goes ready, which is exactly how a readiness regression stayed
-          hidden for four days (<code>deploy.yml:1609-1612</code>). The rollback mechanism the runbook names,
-          <code>az containerapp revision copy</code>, is still what runs (<code>deploy.yml:1754</code>).</p>
+          hidden for four days (<code>deploy.yml:1616-1619</code>). The rollback mechanism the runbook names,
+          <code>az containerapp revision copy</code>, is still what runs (<code>deploy.yml:1761</code>).</p>
           <h3 id="recovery-objectives">Recovery objectives</h3>
           <p>The DR file targets three failure scenarios (<code>DISASTER-RECOVERY.md:10-14</code>):</p>
           <div class="table-wrap"><table>
@@ -460,37 +460,37 @@
           durability, and recovering it is an import into a new database name, not a point-in-time restore.</li>
           </ul>
           <h3 id="recovery-procedures">Recovery procedures</h3>
-          <p><strong>Single database PITR restore (<code>DISASTER-RECOVERY.md:94-99</code>).</strong> Restore to a new name, validate,
+          <p><strong>Single database PITR restore (<code>DISASTER-RECOVERY.md:122-127</code>).</strong> Restore to a new name, validate,
           then rename or repoint via a redeploy. The worked example uses <code>ADC_Conference</code>.</p>
-          <p><strong>LTR restore (<code>DISASTER-RECOVERY.md:101-106</code>).</strong> List available backups with
+          <p><strong>LTR restore (<code>DISASTER-RECOVERY.md:129-134</code>).</strong> List available backups with
           <code>az sql db ltr-backup list</code>, then restore with <code>az sql db ltr-backup restore</code>.</p>
-          <p><strong>Full region loss (<code>DISASTER-RECOVERY.md:108-111</code>).</strong> The deploy pipeline is region-parameterized
+          <p><strong>Full region loss (<code>DISASTER-RECOVERY.md:136-139</code>).</strong> The deploy pipeline is region-parameterized
           (<code>sqlLocation</code> plus the RG location), so recovery is: create a new RG in a healthy region,
           geo-restore each <code>ADC_*</code> database there, then re-run <code>deploy.yml</code> pointed at the new RG. The
           <code>AtlDevCon</code> bacpac is the last-resort source of record for pre-cutover data, and the runbook is
           explicit that it must be imported into a <strong>new</strong> database name so a restore can never collide with a
           live <code>ADC_*</code> database.</p>
           <h3 id="restore-drill">Restore drill</h3>
-          <p><code>DISASTER-RECOVERY.md:122-144</code> defines the drill: PITR-restore a throwaway copy, confirm it comes
+          <p><code>DISASTER-RECOVERY.md:174-196</code> defines the drill: PITR-restore a throwaway copy, confirm it comes
           back Online, record the measured restore time, then delete the copy. Only a copy is ever created, so
           the live databases are never touched. The file documents three ways to run it
-          (<code>DISASTER-RECOVERY.md:128-136</code>) and names the scheduled one as the enforcing path:</p>
+          (<code>DISASTER-RECOVERY.md:180-188</code>) and names the scheduled one as the enforcing path:</p>
           <ul>
-          <li><strong>Scheduled</strong> (<code>DISASTER-RECOVERY.md:128-131</code>), the weekly cron, which rotates across the four
+          <li><strong>Scheduled</strong> (<code>DISASTER-RECOVERY.md:180-183</code>), the weekly cron, which rotates across the four
           live per-service databases by ISO week number so each earns a recovery proof roughly monthly. The
           retired <code>AtlDevCon</code> archive was never in the rotation and no longer exists as a database at all.</li>
-          <li><strong>One-click</strong> (<code>DISASTER-RECOVERY.md:132-135</code>), the <code>dr-drill.yml</code> workflow&#39;s manual
+          <li><strong>One-click</strong> (<code>DISASTER-RECOVERY.md:184-187</code>), the <code>dr-drill.yml</code> workflow&#39;s manual
           <code>workflow_dispatch</code>, for a chosen database (the four live <code>ADC_*</code> databases, defaulting to
           <code>ADC_Identity</code>) and a chosen point in time. It prints the drill-result row in the job summary,
           ready to paste into the ledger.</li>
-          <li><strong>Local / CLI</strong> (<code>DISASTER-RECOVERY.md:136</code>), <code>pwsh ./scripts/dr-restore-drill.ps1 -SourceDatabase ADC_Conference</code> after <code>az login</code>.</li>
+          <li><strong>Local / CLI</strong> (<code>DISASTER-RECOVERY.md:188</code>), <code>pwsh ./scripts/dr-restore-drill.ps1 -SourceDatabase ADC_Conference</code> after <code>az login</code>.</li>
           </ul>
           <p>All three wrap the same <code>az sql db restore</code>, verify, <code>az sql db delete</code> sequence
-          (<code>DISASTER-RECOVERY.md:138-144</code>); there is no <code>sqlcmd</code> anywhere in the drill path.</p>
+          (<code>DISASTER-RECOVERY.md:190-196</code>); there is no <code>sqlcmd</code> anywhere in the drill path.</p>
           <p>The stated SLO is at least one successful drill per release train and after any backup or retention
           change, with the restore completing inside the 2 h RTO; a missed or failed drill is called a
-          release-blocking regression for §29 (<code>DISASTER-RECOVERY.md:146-148</code>). The drill-result table
-          (<code>DISASTER-RECOVERY.md:158-165</code>) is where that claim is cashed, and it carries six rows:</p>
+          release-blocking regression for §29 (<code>DISASTER-RECOVERY.md:198-200</code>). The drill-result table
+          (<code>DISASTER-RECOVERY.md:210-217</code>) is where that claim is cashed, and it carries six rows:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -533,21 +533,21 @@
           <p>Read the shape of that table, not just the last row. The first entry is the pre-rotation drill in
           which one database stood in for all four; everything from 2026-07-20 onward is the weekly rotation,
           and those rows are the first recovery proofs <code>ADC_Identity</code>, <code>ADC_Engagement</code> and <code>ADC_Notification</code>
-          ever had (<code>DISASTER-RECOVERY.md:150-156</code>). Each row also carries its <code>dr-drill.yml</code> run id, so every
+          ever had (<code>DISASTER-RECOVERY.md:202-208</code>). Each row also carries its <code>dr-drill.yml</code> run id, so every
           claim in the ledger is traceable to an Actions run instead of resting on the author&#39;s word. The
           spread is the other lesson: the same <code>ADC_Identity</code> database restored in 1.8 min in July and 4.4 min
           in August, which is why the status block quotes the slowest number against the 2 h RTO
-          (<code>DISASTER-RECOVERY.md:167-172</code>). A ledger that keeps growing is what makes a claim like &quot;restores
+          (<code>DISASTER-RECOVERY.md:219-224</code>). A ledger that keeps growing is what makes a claim like &quot;restores
           take about two minutes&quot; falsifiable; a single row cannot show variance at all. The same note
-          (<code>DISASTER-RECOVERY.md:154-156</code>) records that rows naming <code>AtlDevCon</code> are kept as history now that
+          (<code>DISASTER-RECOVERY.md:206-208</code>) records that rows naming <code>AtlDevCon</code> are kept as history now that
           the archive is gone, rather than being edited out.</p>
           <p>The ledger stays honest because it is gated, not remembered: <code>dr-freshness</code> fails a deploy when the
-          newest successful <code>dr-drill.yml</code> run is older than 8 days (<code>deploy.yml:818</code>,
-          <code>DISASTER-RECOVERY.md:170-172</code>). The rotation itself is prose here but arithmetic in the workflow,
+          newest successful <code>dr-drill.yml</code> run is older than 8 days (<code>deploy.yml:823</code>,
+          <code>DISASTER-RECOVERY.md:222-224</code>). The rotation itself is prose here but arithmetic in the workflow,
           which is the source of truth. The next section walks it.</p>
           <hr>
           <h2 id="dr-drillyml-and-dr-restore-drillps1-the-adr-009-restore-drill">dr-drill.yml and dr-restore-drill.ps1, the ADR-009 restore drill</h2>
-          <p><strong>Files:</strong> <code>MMCA.ADC/.github/workflows/dr-drill.yml</code> (88 lines),
+          <p><strong>Files:</strong> <code>MMCA.ADC/.github/workflows/dr-drill.yml</code> (105 lines),
           <code>MMCA.ADC/scripts/dr-restore-drill.ps1</code> (101 lines)</p>
           <p><strong>What it is.</strong> The automation behind the drill requirement above: the workflow picks a target
           database and logs in to Azure via OIDC, the PowerShell script does the restore, the timing, the
@@ -583,7 +583,7 @@
           expanding the <code>${{ }}</code> expression inline, and the whole script runs under <code>set -euo pipefail</code>
           (<code>dr-drill.yml:58</code>) so an unset variable or a failed <code>az</code> call stops the step rather than silently
           rotating to the wrong database.</p>
-          <p><strong>How the inputs reach the PowerShell script.</strong> The final step sets three variables in its own <code>env</code>
+          <p><strong>How the inputs reach the PowerShell script.</strong> The drill step sets three variables in its own <code>env</code>
           block, <code>DRILL_RESOURCE_GROUP</code> from <code>vars.AZURE_RESOURCE_GROUP</code>, <code>DRILL_SOURCE_DATABASE</code> from the
           rotation step&#39;s output, and <code>DRILL_RESTORE_POINT_MINUTES_AGO</code> from the dispatch input with a literal
           <code>&#39;10&#39;</code> fallback for scheduled runs (<code>dr-drill.yml:78-81</code>), then passes those variables to the script
@@ -596,6 +596,24 @@
           hostile input value becomes code; routing every input through <code>env</code> and quoting it turns the same
           value back into data. The <code>type: choice</code> input (<code>dr-drill.yml:20-26</code>) already constrains the database
           name to four options, so this is defence in depth rather than the only control.</p>
+          <p><strong>The sweep that runs even when the drill does not finish.</strong> The job carries a 30-minute
+          <code>timeout-minutes</code> (<code>dr-drill.yml:42</code>), and a job cancelled at that limit is killed mid-step, so the
+          script&#39;s own <code>finally</code> cleanup never runs. The workflow comment records the incident that exposed
+          this (<code>dr-drill.yml:89-93</code>): the 2026-09-14 scheduled run was cancelled mid-restore and left
+          <code>ADC_Engagement-drill</code> behind, and the weekly rotation meant the next run targeted a different
+          database, so the script&#39;s name-specific stale-copy check would not have removed it either; the copy
+          sat at Basic-tier cost for five days. The last step, <code>Remove leftover drill copies</code>, therefore runs
+          under <code>if: always()</code> (<code>dr-drill.yml:94-95</code>), which fires on success, failure and cancellation alike.
+          It resolves the server by the same <code>adc-prod-sql-</code> name prefix the script uses, exits 0 with a
+          workflow warning when no server matches (<code>dr-drill.yml:100-101</code>), and deletes every database whose
+          name ends in <code>-drill</code> (<code>dr-drill.yml:102-105</code>), not just the copy this run created. The suffix
+          filter is what keeps the sweep safe on a production server: the live <code>ADC_*</code> databases never end in
+          <code>-drill</code>, so the only names it can match are throwaway copies. One consequence for a local run: a
+          copy kept with the script&#39;s <code>-KeepCopy</code> switch for a manual row-count check (<code>dr-restore-drill.ps1:83-88</code>
+          honors it) is deleted by the next workflow run, so finish that check before Monday 06:00 UTC. It
+          reads the resource group through
+          <code>env</code> like the drill step (<code>dr-drill.yml:96-97</code>) and runs under <code>set -euo pipefail</code>
+          (<code>dr-drill.yml:99</code>).</p>
           <p><strong><code>AtlDevCon</code> is gone from both ends of this pair.</strong> The dispatch <code>choice</code> input now offers only the
           four live databases (<code>dr-drill.yml:22-26</code>), and the script&#39;s own <code>-SourceDatabase</code> default moved from
           <code>AtlDevCon</code> to <code>ADC_Identity</code> (<code>dr-restore-drill.ps1:26</code>). Both files record why: the archive was
@@ -620,7 +638,9 @@
           <p><strong>Stale-copy cleanup (<code>dr-restore-drill.ps1:52-57</code>).</strong> Deletes any <code>&lt;SourceDatabase&gt;-drill</code> left by a
           previous run, so the restore name is free. Without it, one crashed run would fail every subsequent
           drill on a name collision, and the freshness gate would then start blocking deploys for a reason
-          that has nothing to do with recoverability.</p>
+          that has nothing to do with recoverability. The check only covers the database being drilled this
+          run, which under the weekly rotation is usually a different one, so the workflow&#39;s <code>always()</code> sweep
+          (<code>dr-drill.yml:94-105</code>) is what catches a copy left by an earlier run against another database.</p>
           <p><strong>Restore and timing (<code>dr-restore-drill.ps1:59-66</code>).</strong> A stopwatch brackets <code>az sql db restore</code>, and
           <code>$LASTEXITCODE</code> is checked explicitly (<code>dr-restore-drill.ps1:65</code>) because a failing <code>az</code> call does
           not by itself throw in PowerShell. That elapsed time IS the measured RTO reported in the drill row;
@@ -629,8 +649,10 @@
           <code>Online</code>, otherwise the drill is a FAIL. A deeper row-count check is deliberately out of scope and
           needs <code>-KeepCopy</code> plus a manual pass (<code>dr-restore-drill.ps1:18-21</code>).</p>
           <p><strong>Cleanup (<code>dr-restore-drill.ps1:83-88</code>).</strong> The delete sits in a <code>finally</code> block, so the throwaway
-          copy is removed even when the restore or the verification threw. This is the line that keeps a
-          weekly drill from accreting paid databases.</p>
+          copy is removed even when the restore or the verification threw. A <code>finally</code> block cannot run in
+          a process that GitHub Actions kills at <code>timeout-minutes</code>, though, which is why the workflow backs it
+          with the <code>always()</code> sweep described above (<code>dr-drill.yml:89-105</code>): between them, a weekly drill
+          does not accrete paid databases.</p>
           <p><strong>Result row and exit code (<code>dr-restore-drill.ps1:90-101</code>).</strong> Prints the markdown table row (date,
           source, PASS/FAIL, minutes, note) to both the console and the job summary through the <code>Write-Line</code>
           helper (<code>dr-restore-drill.ps1:35-38</code>), then exits 1 on anything other than PASS
@@ -639,20 +661,20 @@
           <h3 id="what-it-does-not-do-and-the-gate-that-makes-it-matter">What it does not do, and the gate that makes it matter</h3>
           <p>The drill never touches a live database and it does not gate production directly. The link to
           production is the age of its newest successful run: <code>deploy.yml</code>&#39;s <code>dr-freshness</code> job
-          (<code>deploy.yml:810-861</code>) reads the Actions API for the latest successful <code>dr-drill.yml</code> run
-          (<code>deploy.yml:846-848</code>) and fails the deploy when that run is older than the 8-day window
-          (<code>deploy.yml:818</code>, compared at <code>deploy.yml:857-860</code>), or when there is no successful run at all
-          (<code>deploy.yml:849-852</code>). The comment at <code>deploy.yml:844-845</code> records why the gate can trust the run
+          (<code>deploy.yml:815-866</code>) reads the Actions API for the latest successful <code>dr-drill.yml</code> run
+          (<code>deploy.yml:851-853</code>) and fails the deploy when that run is older than the 8-day window
+          (<code>deploy.yml:823</code>, compared at <code>deploy.yml:862-865</code>), or when there is no successful run at all
+          (<code>deploy.yml:854-857</code>). The comment at <code>deploy.yml:849-850</code> records why the gate can trust the run
           list at face value: <code>dr-drill.yml</code> has no skip-if-unchanged guard, so every successful run really
           performed a PITR restore. The job itself asks for only <code>actions: read</code> plus <code>contents: read</code>
-          (<code>deploy.yml:814-816</code>) and runs on a 5-minute timeout (<code>deploy.yml:812</code>), because it is one API read
+          (<code>deploy.yml:819-821</code>) and runs on a 5-minute timeout (<code>deploy.yml:817</code>), because it is one API read
           and no restore cost per deploy.</p>
           <p><code>dr-freshness</code> sits in <code>deploy.needs</code> alongside <code>load-freshness</code>, <code>cross-service-freshness</code> and
-          <code>cross-browser-freshness</code> (<code>deploy.yml:1305</code>), and the deploy&#39;s condition requires all four to have
-          concluded <code>success</code> (<code>deploy.yml:1344-1347</code>). Break-glass exists but is deliberately expensive to
+          <code>cross-browser-freshness</code> (<code>deploy.yml:1310</code>), and the deploy&#39;s condition requires all four to have
+          concluded <code>success</code> (<code>deploy.yml:1349-1352</code>). Break-glass exists but is deliberately expensive to
           use: the <code>skip_freshness_gates</code> input is honored only with a non-empty <code>skip_justification</code>, and the
-          run refuses without one (<code>deploy.yml:829-833</code>), then writes the justification into the step summary
-          and raises a workflow warning (<code>deploy.yml:834-841</code>).</p>
+          run refuses without one (<code>deploy.yml:834-838</code>), then writes the justification into the step summary
+          and raises a workflow warning (<code>deploy.yml:839-846</code>).</p>
           <p>The operational consequence for an on-call reader: <strong>a red or skipped weekly drill blocks the next
           production deploy.</strong> If a deploy fails on <code>dr-freshness</code>, the fix is to re-run <code>dr-drill.yml</code> (and
           fix it first if it genuinely failed), not to bypass it. The gate&#39;s full mechanics, the break-glass
@@ -778,16 +800,16 @@
           two things to lean on: the alert&#39;s own description, which names the first triage step (check
           <code>/health/ready</code> on the named app, an untagged infrastructure health check gating readiness being the
           usual cause, <code>main.bicep:417</code>), and the deploy-side story, the activation gate and rollback at
-          <code>deploy.yml:1600-1621</code>, described in the <a href="devops-cicd.html">CI/CD chapter</a>.</p>
+          <code>deploy.yml:1607-1628</code>, described in the <a href="devops-cicd.html">CI/CD chapter</a>.</p>
           <h3 id="recovery-moves">Recovery moves</h3>
           <p><code>OPERATIONS.md:150-163</code> is the fast reference: roll a bad revision back with <code>az containerapp revision list</code> and <code>revision copy</code>, follow <code>DISASTER-RECOVERY.md</code> for a database restore, re-run the
           referenced workflow when a freshness gate blocks a deploy, and revert a conference-day surge when
           <code>cost-guard.yml</code> fails. Its freshness quick-reference (<code>OPERATIONS.md:158-161</code>) names all three
           windows, and each one matches the workflow that enforces it: <code>dr-freshness</code> 8 days
-          (<code>deploy.yml:818</code>), <code>load-freshness</code> 35 days (<code>deploy.yml:876</code>), <code>cross-service-freshness</code> 5 days
-          (<code>deploy.yml:938</code>). Those numbers live in two places, so treat the workflow as the source of truth
+          (<code>deploy.yml:823</code>), <code>load-freshness</code> 35 days (<code>deploy.yml:881</code>), <code>cross-service-freshness</code> 5 days
+          (<code>deploy.yml:943</code>). Those numbers live in two places, so treat the workflow as the source of truth
           and re-check the runbook line whenever a window moves: <code>deploy.yml</code> now enforces a fourth window the
-          runbook&#39;s quick reference does not name, <code>cross-browser-freshness</code> at 10 days (<code>deploy.yml:1043</code>),
+          runbook&#39;s quick reference does not name, <code>cross-browser-freshness</code> at 10 days (<code>deploy.yml:1048</code>),
           which is the drift this pairing produces whenever a gate is added and the prose is updated
           separately.</p>
           <h3 id="why-there-is-no-aspire-dashboard-in-production">Why there is no Aspire dashboard in production</h3>
@@ -823,8 +845,8 @@
           <p>[Rubric §11, Security] assesses credential hardening. <strong>All three stages have been run in ADC
           production.</strong> The template default is still <code>false</code> (<code>main.bicep:36</code>), because that is what makes a
           fresh environment start on password auth and each stage independently deployable, but the deployed
-          value comes from a repository variable, not the default: <code>deploy.yml:1393</code> reads
-          <code>vars.USE_MANAGED_IDENTITY_SQL</code> and <code>deploy.yml:1562-1565</code> rewrites the parameter to a literal JSON
+          value comes from a repository variable, not the default: <code>deploy.yml:1400</code> reads
+          <code>vars.USE_MANAGED_IDENTITY_SQL</code> and <code>deploy.yml:1569-1574</code> rewrites the parameter to a literal JSON
           <code>true</code> when it is set. All three variables are set in <code>ivanball/ADC</code> (<code>USE_MANAGED_IDENTITY_SQL</code>,
           <code>SQL_AAD_ADMIN_LOGIN</code> and <code>SQL_AAD_ADMIN_OID</code>, all dated 2026-06-28), so the deployed apps use
           passwordless <code>Active Directory Managed Identity</code> connection strings. The ADC scorecard records the
@@ -846,7 +868,7 @@
           is independently deployable and reversible.</p>
           <ol>
           <li><strong>Stage 1, add the Entra admin</strong> (<code>SQL-MANAGED-IDENTITY.md:50-54</code>). Set the <code>SQL_AAD_ADMIN_LOGIN</code>
-          and <code>SQL_AAD_ADMIN_OID</code> repository variables; <code>deploy.yml:1554-1560</code> folds them into the bicep
+          and <code>SQL_AAD_ADMIN_OID</code> repository variables; <code>deploy.yml:1561-1568</code> folds them into the bicep
           parameter file, and <code>main.bicep:624-633</code> provisions the AAD admin only when the object id is
           non-empty. Additive, zero app impact.</li>
           <li><strong>Stage 2, grant the identity in each database</strong> (<code>SQL-MANAGED-IDENTITY.md:56-68</code>). Connect to
@@ -1141,7 +1163,7 @@
           policies, the SLO alerts and workbook, and the Service Bus namespace.</li>
           <li><a href="devops-cicd.html">CI/CD chapter</a>: <code>deploy.yml</code> carries the revision-activation and smoke gates, the
           rollback, and the four recency gates (<code>dr-freshness</code>, <code>load-freshness</code>,
-          <code>cross-service-freshness</code>, <code>cross-browser-freshness</code>, <code>deploy.yml:1305</code>).</li>
+          <code>cross-service-freshness</code>, <code>cross-browser-freshness</code>, <code>deploy.yml:1310</code>).</li>
           <li><a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, the decision to adopt database-per-service, its trade-offs, and the
           <code>CrossDataSourceDegradeConvention</code> that removes cross-database FKs.</li>
           <li><a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>, the resilience and recovery objectives framework, including the requirement
@@ -1190,7 +1212,7 @@
           </tr>
           <tr>
           <td>§31 Cost/FinOps</td>
-          <td><code>POST-CUTOVER-atldevcon-downgrade.md</code> (S0 to Basic, then archive-and-drop on a measured 0 DTU); the 2026-09-02 alert-cadence changes (<code>main.bicep:345-349</code>, <code>:464-469</code>); the thinned telemetry stream documented in <code>OPERATIONS.md:176-207</code></td>
+          <td><code>POST-CUTOVER-atldevcon-downgrade.md</code> (S0 to Basic, then archive-and-drop on a measured 0 DTU); the 2026-09-02 alert-cadence changes (<code>main.bicep:345-349</code>, <code>:464-469</code>); the thinned telemetry stream documented in <code>OPERATIONS.md:176-207</code>; the <code>dr-drill.yml</code> <code>always()</code> sweep of leftover <code>-drill</code> copies (<code>dr-drill.yml:89-105</code>), so a drill cancelled at its timeout cannot leave a billed database behind</td>
           </tr>
           <tr>
           <td>§32 Dependency &amp; Supply-Chain</td>
@@ -1205,12 +1227,12 @@
           <h2 id="not-determinable-from-source">Not determinable from source</h2>
           <ul>
           <li><strong>Whether the newest weekly drill is green</strong>: the drill ledger is maintained through 2026-08-10
-          (<code>DISASTER-RECOVERY.md:158-165</code>), but <code>dr-drill.yml</code> runs every Monday and a run reaches the ledger
+          (<code>DISASTER-RECOVERY.md:210-217</code>), but <code>dr-drill.yml</code> runs every Monday and a run reaches the ledger
           only when an operator pastes the printed row back into <code>DISASTER-RECOVERY.md</code>. Any drill newer than
           the last ledger row exists only in the Actions history, which is exactly what <code>dr-freshness</code> queries
-          (<code>deploy.yml:846-848</code>); it cannot be read from the repository.</li>
+          (<code>deploy.yml:851-853</code>); it cannot be read from the repository.</li>
           <li><strong>The live values of the three SQL managed-identity repository variables</strong>: <code>main.bicep:36</code> shows
-          the safe default (<code>false</code>) and <code>deploy.yml:1393</code> shows that the deployed value comes from
+          the safe default (<code>false</code>) and <code>deploy.yml:1400</code> shows that the deployed value comes from
           <code>vars.USE_MANAGED_IDENTITY_SQL</code>. The variable&#39;s current value is repository configuration, not
           source. Check Settings, then Secrets and variables, then Actions.</li>
           <li><strong>Whether the archive bacpac is still present and readable</strong>: the blob path and storage account are

@@ -1392,6 +1392,46 @@
           <li><strong>Governance events:</strong> none (no new group, no classifier rule; <code>classify.ps1</code> 0 unmapped). Primer ADR table gained rows 124 (UI host as its own hardened edge, g25) and 125 (parameterized SQL only, g07/g28).</li>
           </ul>
           </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, 2026-09-23 full drift sweep).</strong> Regenerated
+          at MMCA.Common <code>0527211</code> + MMCA.ADC <code>0883e184</code> (both clean; prior pass <code>90ffa7a</code> /
+          <code>3f203a03</code>, spanning Common releases v1.206.0 through v1.209.0). Net change: <strong>+76</strong> distinct nodes (4,913 to <strong>4,989</strong>),
+          93 added and 17 removed by name, <strong>13</strong> line-shifted (same type, new <code>file:line</code>),
+          61 body-only, 0 regrouped; <code>classify.ps1</code> reports 0 unmapped and the per-group counts
+          sum to 4,989. Individually-sectioned types 2,624 to <strong>2,671</strong>, roll-ups 2,281 to <strong>2,318</strong>,
+          <code>###</code> sections 2,554 to <strong>2,601</strong>, cycles 44 to <strong>45</strong>,
+          edges 18,261 by namespace / 745 by unique-name fallback / 101 dropped.</p>
+          <ul>
+          <li><strong>Per-group movement</strong> (16 of 28 groups moved; the rest are unchanged):<ul>
+          <li><strong>G04 Events + Outbox</strong> (38): body 1. <code>OutboxProcessor</code> reshaped by the Common v1.206.0 internals pass (#422); walkthrough re-verified.</li>
+          <li><strong>G07 Persistence &amp; EF Core</strong> (162): added 1, body 1. <code>LookupRow&lt;TId, TName&gt;</code> is the new id/name projection row read by <code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code>.</li>
+          <li><strong>G08 Authentication &amp; Authorization</strong> (153): added 1, body 3. <code>EmailIdentity</code> is the shared address normalizer now used by <code>EmailConfirmationTokenService</code>, <code>LoginProtectionService</code> and <code>PasswordResetTokenService</code> for every email-derived cache key.</li>
+          <li><strong>G12 API Hosting</strong> (85): body 1. <code>WebApplicationBuilderExtensions</code> gained the v1.209.0 consumer wiring (#436).</li>
+          <li><strong>G14 Module System &amp; Composition</strong> (86): body 2. The Application and Infrastructure <code>DependencyInjection</code> roots moved with the AI and gate-coverage waves.</li>
+          <li><strong>G15 Common UI Framework</strong> (143): added 5. The Blazor Server UI-host hardening kit (<code>BoundedCircuitHandler</code>, <code>BlazorCircuitLimitSettings</code>/<code>Extensions</code>, <code>UiRateLimitingSettings</code>/<code>Extensions</code>) was extracted from ADC into <code>MMCA.Common.UI.Web.Hardening</code> (v1.206.0, #422); its sections moved here from G24.</li>
+          <li><strong>G16 Aspire Orchestration</strong> (65): body 1. <code>Extensions</code> (service defaults) re-verified.</li>
+          <li><strong>G17 Conference Domain</strong> (112): body 1. <code>ConferenceFeatures</code> now carries a second flag, <code>SessionScoring</code> (the scoring kill switch, ADC #214).</li>
+          <li><strong>G18 Conference Application</strong> (358): added 5, body 3. The batch event-feedback slice (<code>BatchAddEventQuestionAnswers*</code>, <code>EventQuestionAnswerRules</code>, ADC #217) plus scoring-runner changes.</li>
+          <li><strong>G19 Conference Infrastructure</strong> (29): added 2, removed 1, body 2. <code>AnthropicScoringService</code> replaced by the provider-agnostic <code>SessionScoringService</code> plus <code>SessionScoreResponseGuardrail</code> (ADC #215/#217).</li>
+          <li><strong>G20 Conference API</strong> (52): added 6, body 5. The controller split (<code>EventLifecycleController</code>, <code>SessionCalendarController</code>, <code>SpeakerLinksController</code>, <code>SpeakerSessionsController</code>, ADC #214) and the batch-answer request DTOs.</li>
+          <li><strong>G22 Engagement Module</strong> (195): added 1, body 3. <code>LivePollVotingController</code> split out; <code>EventFeedback</code> now posts one batch.</li>
+          <li><strong>G26 Engagement Live Layer</strong> (85): body 1. <code>LivePollsController</code> lost its voting actions to the new controller.</li>
+          <li><strong>G24 ADC Host Composition</strong> (17): removed 5. The hardening kit left for Common (see G15).</li>
+          <li><strong>G28 Common AI Integration</strong> (32): added 21, removed 1, body 7. <code>MMCA.Common.AI</code> became provider-agnostic (v1.207.0, #425): the <code>AiProvider</code> enum gave way to <code>IAiProviderFactory</code> + the Anthropic adapter package, plus <code>ChatToolPolicy</code>, <code>IChatRequestRedactor</code>, the golden-replay evaluation base, and <code>ContentPolicyGuardrail</code> (v1.208.0, #428).</li>
+          <li><strong>G25 Testing &amp; Quality Infrastructure</strong> (2,730): added 51, removed 10, body 30. Tests for all of the above, the constructor-dependency fitness fixtures, and seven rollup counts moved.</li>
+          </ul>
+          </li>
+          <li><strong>Handled mechanically (no re-authoring):</strong> 950 citation remaps, 8 more by baseline-text match, 606 section repacks, 26 cross-link anchor rewrites; 515 citations flagged for an author.</li>
+          <li><strong>Authoring pass:</strong> 131 units: 64 driven by the delta (10 overview, 1 rollup, 47 sections, 5 devops, concept maps) plus 67 parts opened only to repair the flagged citations, each author working from the citation list and current source. Adversarial spot-check: 6 of 6 CONFIRMED. The rollup narrative that the repack had stranded in p25 and a stale copy of the rollup table in p29 were reunited with the rollup unit under a new <code>## Test suites by module</code> heading.</li>
+          <li><strong>Outside the type pipeline:</strong> 5 of 5 <code>devops-*</code> chapters refreshed (devops-aspire, devops-cicd, devops-iac, devops-runbooks, devops-testing) against ADC #213/#215/#216/#217/#219 and Common #436; <code>devops-testing</code> per-project counts reconciled to the inventory.<ul>
+          <li>Coverage gap: unchanged; <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Fixtures/observability-main.bicep</code> remains the logged exception.</li>
+          </ul>
+          </li>
+          <li><strong>CONCEPT-MAPS.md:</strong> 3 mechanical mismatches corrected (section 1 said 19 NuGet packages three times; <code>FACTS.md</code> says 22), and the heading anchor moved with the number.</li>
+          <li><strong>Verification:</strong> <code>verify.ps1</code>: <strong>0 missing</strong>, rollup contract <strong>0 failures</strong>, rubric <strong>34/34</strong>. A path-and-length check over 7,412 full-path cites found 80 that point at a missing file or past end-of-file; 75 predate this pass (abbreviated component paths and older test-base paths) and are an open item, the 5 this pass introduced were fixed.</li>
+          <li><strong>Governance events:</strong> none (no new group, no classifier rule). Primer ADR table gained rows 126 (event sourcing not adopted, g02/g04) and 127 (actor model not adopted, g07/g09/g10); row 124 now links g15 alongside g25.</li>
+          </ul>
+          </blockquote>
           <hr>
           <h2 id="2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</h2>
           <h3 id="21-generated--scaffolded-code-not-sectioned-134-files">2.1 Generated / scaffolded code, not sectioned (134 files)</h3>

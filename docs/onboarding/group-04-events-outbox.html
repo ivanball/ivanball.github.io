@@ -384,16 +384,16 @@
           that the <em>same</em> event may be delivered more than once, so <strong>handlers must be idempotent</strong>. That is not
           a wart; it is the documented contract and a healthy discipline regardless.</p>
           <p>The processor never blindly polls on a fixed clock. After a five second startup delay
-          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:113</code>) it drains every outbox
+          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:118</code>) it drains every outbox
           <strong>target</strong> once per cycle and aggregates the per-target results into an
-          <a href="#outboxcycleresult"><code>OutboxCycleResult</code></a> (<code>OutboxProcessor.cs:216-253</code>), then waits on
+          <a href="#outboxcycleresult"><code>OutboxCycleResult</code></a> (<code>OutboxProcessor.cs:221-258</code>), then waits on
           <a href="#ioutboxsignal"><code>IOutboxSignal</code></a> for whichever comes first: a <strong>signal</strong> (a writer called <code>Signal()</code>
           after persisting a row; <a href="#outboxsignal"><code>OutboxSignal</code></a> is a <code>SemaphoreSlim(0, 1)</code> wrapper whose
           single-permit cap deliberately absorbs a burst of surplus signals, since one batch drains everything
           anyway, <code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxSignal.cs:17-30</code>), the moment the earliest
           pending-but-not-yet-eligible row <em>becomes</em> eligible (the <strong>smart wait</strong>), or the fallback
-          <code>PollingIntervalSeconds</code> (<code>OutboxProcessor.cs:138-153</code>, arithmetic in <code>ComputeWaitTime</code> at
-          <code>OutboxProcessor.cs:163-181</code> with a one second floor so an overdue row cannot hot-loop the service,
+          <code>PollingIntervalSeconds</code> (<code>OutboxProcessor.cs:143-157</code>, arithmetic in <code>ComputeWaitTime</code> at
+          <code>OutboxProcessor.cs:168-186</code> with a one second floor so an overdue row cannot hot-loop the service,
           <code>OutboxProcessor.cs:84</code>). A target is one owned relational source against the shared database, plus one
           extra unit per tenant that keeps its own copy of a source, because a tenant database has its own
           <code>OutboxMessages</code> table that nothing else would ever open
@@ -509,7 +509,7 @@
           <a href="#imessagebus"><code>IMessageBus</code></a>, both defined in <code>Application</code>, so neither ever sees MassTransit).
           Infrastructure supplies two interchangeable implementations of each, selected by registration:</p>
           <ul>
-          <li><strong>Monolith mode</strong> (the defaults, <code>MMCA.Common.Infrastructure/DependencyInjection.cs:725,731</code>).
+          <li><strong>Monolith mode</strong> (the defaults, <code>MMCA.Common.Infrastructure/DependencyInjection.cs:305,311</code>).
           <a href="#inprocesseventbus"><code>InProcessEventBus</code></a> writes the events to the outbox in one save, dispatches them
           in-process, and marks them processed through the same <a href="#outboxfinalizer"><code>OutboxFinalizer</code></a> path as
           the interceptor (<code>MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:76-103</code>), falling back to a
@@ -751,8 +751,8 @@
           (<code>IntegrationEventConsumer.cs:122</code>). Implemented by <a href="#efinboxstore"><code>EfInboxStore</code></a> and
           <a href="#noopinboxstore"><code>NoOpInboxStore</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: both registrations live inside <code>AddBrokerMessaging</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:945</code>), which returns
-          early when the configured provider is in-process (<code>DependencyInjection.cs:954-957</code>), so a monolith
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:41</code>), which returns
+          early when the configured provider is in-process (<code>DependencyInjection.Messaging.cs:50-53</code>), so a monolith
           host that never calls it has no <code>IInboxStore</code> in the container at all. That is consistent (nothing
           consumes the port without a broker consumer) but it does mean the inbox posture is a <em>broker-mode</em>
           decision, not a container-wide one.</li>
@@ -796,12 +796,12 @@
           startup log next to the rest of the boot sequence, where an operator reads it.</li>
           <li><strong>Where it&#39;s used</strong>: added by <code>AddBrokerMessaging</code> inside the <code>else</code> branch of the
           <code>IsInboxEnabled</code> check, immediately after the <a href="#noopinboxstore"><code>NoOpInboxStore</code></a> registration
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:1014-1021</code>, the
-          <code>AddHostedService</code> call at line 795). Covered by <code>InboxDisabledWarningServiceTests</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:112-117</code>, the
+          <code>AddHostedService</code> call at line 117). Covered by <code>InboxDisabledWarningServiceTests</code>
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Inbox/InboxDisabledWarningServiceTests.cs:11</code>),
           which is what makes a log-only class testable at all (<code>[Rubric §14, Testability]</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: because the whole registration sits inside <code>AddBrokerMessaging</code>, which
-          returns early for the in-process provider (<code>DependencyInjection.cs:954-957</code>), a monolith host never
+          returns early for the in-process provider (<code>DependencyInjection.Messaging.cs:50-53</code>), a monolith host never
           sees this warning. That is correct (in-process dispatch does not redeliver) but it does mean the
           absence of the line is not by itself evidence that dedup is on.</li>
           </ul>
@@ -875,7 +875,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:175</code>), and in
           that mode neither <a href="#outboxprocessor"><code>OutboxProcessor</code></a> nor
           <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a> is registered
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:223-231</code>). The delivery
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:207-215</code>). The delivery
           guarantee changes with it: events reach their handlers synchronously inside the raising process, and
           a crash between the commit and the dispatch loses them. The class doc states that this is the right
           trade for a single-process application and the wrong one to discover from an absent hosted service
@@ -893,7 +893,7 @@
           is the <strong>default</strong> posture of an in-process host rather than an opt-out of a safety feature, and a
           warning on every small application&#39;s startup would train operators to ignore the category.</li>
           <li><strong>Where it&#39;s used</strong>: registered by <code>AddInfrastructure</code> in the <code>else</code> branch of the outbox gate
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:228-231</code>), so a host
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:212-215</code>), so a host
           either gets the two outbox background services or gets this notice, never both and never neither.</li>
           </ul>
           <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
@@ -958,12 +958,12 @@
           <li><strong>Why it&#39;s built this way</strong>: making integration events a <em>subtype</em> of domain events means one outbox
           mechanism serves both, and the routing decision is a single <code>is IIntegrationEvent</code> pattern match in
           the processor
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:625</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:630</code>),
           with no parallel capture pipeline to keep in step.</li>
           <li><strong>Where it&#39;s used</strong>: implemented by integration events across modules and by
           <a href="#baseintegrationevent"><code>BaseIntegrationEvent</code></a>, which adds the <code>SchemaVersion</code> convention; routed
           by the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> to <a href="#imessagebus"><code>IMessageBus</code></a>
-          (<code>OutboxProcessor.cs:625</code>); published by <a href="#inprocesseventbus"><code>InProcessEventBus</code></a> and
+          (<code>OutboxProcessor.cs:630</code>); published by <a href="#inprocesseventbus"><code>InProcessEventBus</code></a> and
           <a href="#brokereventbus"><code>BrokerEventBus</code></a>; consumed via
           <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>, whose type parameter is
           constrained to <code>class, IIntegrationEvent</code> (<code>IntegrationEventConsumer.cs:43</code>).</li>
@@ -995,13 +995,13 @@
           (<code>MessageBusSettings.IsInboxEnabled</code>, <code>MessageBusSettings.cs:141</code>), so this store is the deliberate
           opt-out path for a host that cannot query the <code>InboxMessages</code> table yet, not a quiet default. Note
           that it is registered as a <strong>singleton</strong> while <a href="#efinboxstore"><code>EfInboxStore</code></a> is scoped
-          (<code>DependencyInjection.cs:1012,1016</code>): a stateless no-op needs no per-request lifetime, an EF-backed
+          (<code>DependencyInjection.Messaging.cs:108,112</code>): a stateless no-op needs no per-request lifetime, an EF-backed
           store that stages rows in the scope&#39;s unit of work does. The same <code>else</code> branch also registers
-          <a href="#inboxdisabledwarningservice"><code>InboxDisabledWarningService</code></a> (<code>DependencyInjection.cs:1021</code>), so
+          <a href="#inboxdisabledwarningservice"><code>InboxDisabledWarningService</code></a> (<code>DependencyInjection.Messaging.cs:117</code>), so
           choosing the Null Object is never silent (<strong><a href="https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html" target="_blank" rel="noopener">ADR-021</a></strong>).</li>
           <li><strong>Where it&#39;s used</strong>: registered as <code>IInboxStore</code> inside <code>AddBrokerMessaging</code> on the
           <code>else</code> branch of <code>settings.IsInboxEnabled</code>, that is when <code>MessageBus:EnableInbox=false</code> is set
-          explicitly (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:1010-1021</code>);
+          explicitly (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:106-118</code>);
           consumed by <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>.</li>
           </ul>
           <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
@@ -1024,7 +1024,7 @@
           <li><p><strong>Concept introduced, options binding with a static <code>SectionName</code>.</strong> Note the convention that runs
           through every settings class in the framework: <code>public static readonly string SectionName = &quot;Outbox&quot;;</code>
           (<code>OutboxSettings.cs:13</code>) is the single source of truth for the section name, referenced at the bind
-          call instead of duplicating the literal (<code>DependencyInjection.cs:160</code>). The properties are
+          call instead of duplicating the literal (<code>DependencyInjection.cs:144</code>). The properties are
           <code>init</code>-only, so once materialized from configuration they are immutable for the process lifetime.</p>
           <p><code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses how reliably state changes turn into dispatched events.
           This is the knob set for the at-least-once outbox
@@ -1036,10 +1036,10 @@
           <p><code>[Rubric §29, Resilience &amp; Business Continuity]</code> assesses behavior under replication and repeated
           failure. Three properties carry the weight. <code>LeaseSeconds</code> (<code>:82</code>) claims a batch for a replica so
           concurrent replicas never double-dispatch, and expires so a dead replica&#39;s rows become claimable
-          again (<code>:75-81</code>, applied at <code>OutboxProcessor.cs:471</code>). <code>RetryBackoffBaseSeconds</code> (<code>:99</code>) makes the
+          again (<code>:75-81</code>, applied at <code>OutboxProcessor.cs:476</code>). <code>RetryBackoffBaseSeconds</code> (<code>:99</code>) makes the
           retry cadence explicit: attempt <code>n</code> waits <code>base * 2^(n-1)</code>, multiplied by a jitter factor in
           [0.8, 1.2] so rows that failed together do not retry in lockstep, then capped at <code>LeaseSeconds</code>
-          (<code>:84-89</code>, implemented at <code>OutboxProcessor.cs:773-780</code>). The remark is worth reading as a design
+          (<code>:84-89</code>, implemented at <code>OutboxProcessor.cs:778-785</code>). The remark is worth reading as a design
           lesson: before this setting existed the claim was simply never cleared on failure, so the real retry
           cadence was an accident of the lease (300s) rather than a decision (<code>:90-97</code>).</p>
           <p><code>[Rubric §31, Cost &amp; FinOps]</code> assesses cost-relevant defaults. <code>PollingIntervalSeconds</code> (<code>:31</code>) is a
@@ -1052,21 +1052,21 @@
           <a href="#ieventbus"><code>IEventBus</code></a> are written, defaulting to the top-level connection strings so
           single-database behavior is preserved. It is a per-write target, not a global switch: the doc is
           explicit that the PROCESSOR still drains the outbox table of every relational physical source in use
-          (<code>:53-56</code>, and see <code>OutboxProcessor.cs:193-195</code>).</p>
+          (<code>:53-56</code>, and see <code>OutboxProcessor.cs:198-200</code>).</p>
           </li>
           <li><p><strong>Walkthrough</strong>: one static field then eleven <code>init</code> properties, nine of them <code>[Range]</code>-validated.</p>
           <ul>
           <li><code>SectionName</code> (<code>OutboxSettings.cs:13</code>): static readonly <code>&quot;Outbox&quot;</code>, the bind key.</li>
           <li><code>BatchSize</code> (<code>:16-17</code>): <code>[Range(1, 1000)]</code>, default <code>50</code>; messages per cycle, used both to size the
-          fetch (<code>OutboxProcessor.cs:435</code>) and to decide whether more eligible work remains
-          (<code>OutboxProcessor.cs:348</code>, <code>:361</code>).</li>
+          fetch (<code>OutboxProcessor.cs:440</code>) and to decide whether more eligible work remains
+          (<code>OutboxProcessor.cs:353</code>, <code>:361</code>).</li>
           <li><code>MaxRetries</code> (<code>:20-21</code>): <code>[Range(1, 20)]</code>, default <code>5</code>; attempts before a message is treated as
-          dead-lettered and excluded from the poll (<code>OutboxProcessor.cs:378</code>, <code>:424</code>, <code>:669</code>). The first
+          dead-lettered and excluded from the poll (<code>OutboxProcessor.cs:383</code>, <code>:424</code>, <code>:669</code>). The first
           failure is only re-scheduled when <code>MaxRetries &gt; 1</code>, so <code>1</code> is honored as &quot;the host asked for no
-          retries at all&quot; (<code>OutboxProcessor.cs:742</code>).</li>
+          retries at all&quot; (<code>OutboxProcessor.cs:747</code>).</li>
           <li><code>PollingIntervalSeconds</code> (<code>:30-31</code>): <code>[Range(1, 3600)]</code>, default <code>2</code>; the fallback interval.</li>
           <li><code>ProcessingDelaySeconds</code> (<code>:39-40</code>): <code>[Range(0, 600)]</code>, default <code>5</code>; the eligibility delay, applied
-          as a cutoff on the message timestamp (<code>OutboxProcessor.cs:150</code>, <code>:275</code>).</li>
+          as a cutoff on the message timestamp (<code>OutboxProcessor.cs:155</code>, <code>:275</code>).</li>
           <li><code>DataSource</code> (<code>:48</code>): default <code>DataSource.SQLServer</code>; must be a relational provider (SQL Server or
           SQLite), since the outbox is a table.</li>
           <li><code>DatabaseName</code> (<code>:57</code>): default <code>DataSourceKey.DefaultName</code>; the logical source name paired with
@@ -1094,7 +1094,7 @@
           (<strong><a href="https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html" target="_blank" rel="noopener">ADR-070</a></strong>).</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: bound with <code>.ValidateDataAnnotations().ValidateOnStart()</code> in <code>AddInfrastructure</code>
-          (<code>DependencyInjection.cs:159-162</code>). Consumed by <a href="#outboxprocessor"><code>OutboxProcessor</code></a>
+          (<code>DependencyInjection.cs:143-146</code>). Consumed by <a href="#outboxprocessor"><code>OutboxProcessor</code></a>
           (<code>OutboxProcessor.cs:59</code>, <code>:66</code>) and <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a>
           (<code>OutboxCleanupService.cs:50</code>, <code>:57</code>) for batching, retry pacing and retention; by both event buses
           to pick the write target when publishing an integration event
@@ -1312,7 +1312,7 @@
           of work.</li>
           <li><strong>Where it&#39;s used</strong>: registered as the scoped <code>IInboxStore</code> whenever
           <code>MessageBusSettings.IsInboxEnabled</code> resolves true, which for a broker transport is the default
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:1010-1012</code>); driven by
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:106-108</code>); driven by
           <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a> around handler invocation
           (<code>IntegrationEventConsumer.cs:81,101,122</code>); its rows are purged by
           <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a> (<code>OutboxCleanupService.cs:179-194</code>). Exercised
@@ -1409,7 +1409,7 @@
           <li><strong>Where it&#39;s used</strong>: registered scoped as
           <a href="group-07-persistence-ef-core.html#ioutboxadministration"><code>IOutboxAdministration</code></a> by
           <code>AddInfrastructure</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:219-222</code>), with the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:203-206</code>), with the
           comment explaining the lifetime: scoped, because it creates one child scope per data source it visits
           and holds no state of its own. The framework ships no endpoint for it; a host exposes it from an admin
           endpoint, a support command or a scheduled job (<code>IOutboxAdministration.cs:10-14</code>).</li>
@@ -1492,7 +1492,7 @@
           this same sweep, gated on the inbox flag, rather than adding a second housekeeping service.</li>
           <li><strong>Where it&#39;s used</strong>: registered as a hosted service alongside the
           <a href="#outboxprocessor"><code>OutboxProcessor</code></a>, inside the same <code>IsOutboxEnabled</code> gate
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:223-227</code>), so a host with
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:207-211</code>), so a host with
           the outbox disabled runs neither and gets
           <a href="#outboxdisablednoticeservice"><code>OutboxDisabledNoticeService</code></a> instead.</li>
           <li><strong>Caveats / not-in-source</strong>: the inbox purge uses the <em>outbox</em> <code>RetentionDays</code> cutoff
@@ -1530,7 +1530,7 @@
           injection point, and it keeps the <code>SemaphoreSlim</code> detail (including its one-permit cap) out of every
           call site.</li>
           <li><strong>Where it&#39;s used</strong>: registered as a singleton by <code>AddInfrastructure</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:211</code>). <code>Signal()</code> is
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:195</code>). <code>Signal()</code> is
           called by
           <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
           on all three of its paths
@@ -1540,7 +1540,7 @@
           <a href="#outboxadministration"><code>OutboxAdministration</code></a> after a replay
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxAdministration.cs:168</code>).
           <code>WaitAsync</code> is awaited by the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> loop
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:152</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:157</code>),
           with the duration computed from <a href="#outboxcycleresult"><code>OutboxCycleResult</code></a>.</li>
           </ul>
           <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
@@ -1572,10 +1572,10 @@
           the Infrastructure layer where the only two participants live.</li>
           <li><strong>Where it&#39;s used</strong>: returned by <code>OutboxProcessor.ProcessPendingMessagesAsync</code> after aggregating the
           per-target results
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:253</code>),
-          produced per source by <code>ProcessSourceAsync</code> (<code>OutboxProcessor.cs:305,314,346-350</code>), and consumed by
-          <code>ExecuteAsync</code> to either continue immediately (<code>OutboxProcessor.cs:138-142</code>) or wait for the
-          duration <code>ComputeWaitTime</code> derives from it (<code>OutboxProcessor.cs:147-152</code>).</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:258</code>),
+          produced per source by <code>ProcessSourceAsync</code> (<code>OutboxProcessor.cs:310,319,351-355</code>), and consumed by
+          <code>ExecuteAsync</code> to either continue immediately (<code>OutboxProcessor.cs:143-147</code>) or wait for the
+          duration <code>ComputeWaitTime</code> derives from it (<code>OutboxProcessor.cs:152-157</code>).</li>
           </ul>
           <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="outboxmetrics">OutboxMetrics</h3>
@@ -1641,16 +1641,16 @@
           lock-free while the processor writes them from its own loop. Making the depth a <em>gauge fed by the
           cycle</em> rather than an independent query means the steady state pays no extra database round-trip:
           see <code>CountPendingAsync</code>, which derives the depth from the fetch itself unless the batch came back
-          saturated (<code>OutboxProcessor.cs:361-382</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: <code>DeadLetterCounter</code> on both dead-letter paths (<code>OutboxProcessor.cs:752-755</code> for
-          an unresolvable type, <code>:672-675</code> for exhausted retries); <code>ProcessedCounter</code> and
-          <code>DispatchLagHistogram</code> on the success path (<code>OutboxProcessor.cs:647,652-654</code>); <code>SetOldestPendingAge</code>
-          per source right after its fetch (<code>OutboxProcessor.cs:289-291</code>); and <code>SetPendingDepth</code> once per
-          cycle after every target has been drained (<code>OutboxProcessor.cs:251</code>).</li>
+          saturated (<code>OutboxProcessor.cs:366-387</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: <code>DeadLetterCounter</code> on both dead-letter paths (<code>OutboxProcessor.cs:757-760</code> for
+          an unresolvable type, <code>:712-715</code> for exhausted retries); <code>ProcessedCounter</code> and
+          <code>DispatchLagHistogram</code> on the success path (<code>OutboxProcessor.cs:652,657-659</code>); <code>SetOldestPendingAge</code>
+          per source right after its fetch (<code>OutboxProcessor.cs:294-296</code>); and <code>SetPendingDepth</code> once per
+          cycle after every target has been drained (<code>OutboxProcessor.cs:256</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: the circuit-open signal the processor emits alongside these lives on a
           <em>different</em> meter,
           <a href="group-14-module-system-composition.html#brokermetrics"><code>BrokerMetrics.CircuitOpenCounter</code></a>, not on
-          <code>OutboxMetrics</code> (<code>OutboxProcessor.cs:691-693</code>).</li>
+          <code>OutboxMetrics</code> (<code>OutboxProcessor.cs:696-698</code>).</li>
           </ul>
           <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="eventnameresolver">EventNameResolver</h3>
@@ -1751,7 +1751,7 @@
           calls <code>DispatchAsync</code> for the immediate in-process reactions
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:337</code>);
           the background <a href="#outboxprocessor"><code>OutboxProcessor</code></a> routes non-integration events through it
-          (<code>OutboxProcessor.cs:639</code>), as do <a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a>
+          (<code>OutboxProcessor.cs:644</code>), as do <a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessMessageBus.cs:25,32</code>) and
           <a href="#inprocesseventbus"><code>InProcessEventBus</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:83,100</code>).</li>
@@ -1809,7 +1809,7 @@
           overflow makes signalling idempotent against bursts, which is the same &quot;at-least-once is fine,
           duplicates are absorbed&quot; instinct that runs through this whole group.</li>
           <li><strong>Where it&#39;s used</strong>: registered as the singleton <code>IOutboxSignal</code> by <code>AddInfrastructure</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:211</code>). Its callers are
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:195</code>). Its callers are
           listed under <a href="#ioutboxsignal"><code>IOutboxSignal</code></a>. Note the registration is unconditional, above the
           outbox gate, so the producers can signal without checking whether a processor exists.</li>
           </ul>
@@ -2035,8 +2035,8 @@
           attempts (default 5,
           <a href="group-04-events-outbox.html#outboxsettings"><code>OutboxSettings</code></a>,
           <code>MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:21</code>; the retry-count check that stops
-          fetching an exhausted row is <code>OutboxProcessor.cs:376</code> and the dead-letter branch is
-          <code>OutboxProcessor.cs:700</code>). <code>[Rubric §13, Observability &amp; Operability]</code>: the one job the base class
+          fetching an exhausted row is <code>OutboxProcessor.cs:381</code> and the dead-letter branch is
+          <code>OutboxProcessor.cs:705</code>). <code>[Rubric §13, Observability &amp; Operability]</code>: the one job the base class
           keeps is the error line naming the concrete handler and the event type, so an operator can tell
           which handler failed for which event without every subclass hand-rolling that context.</li>
           <li><strong>Concept introduced, batch redelivery.</strong> The consequence subclasses have to design for is in the
@@ -2240,7 +2240,7 @@
           <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>&#39;s in-process dispatch
           stays cheap; the durability net is the background <a href="#outboxprocessor"><code>OutboxProcessor</code></a>, which
           deliberately does <strong>not</strong> use this helper (it stamps <code>ProcessedOn</code> on tracked rows and issues one
-          ordinary <code>SaveChangesAsync</code> per source, <code>OutboxProcessor.cs:342</code>, because it must persist
+          ordinary <code>SaveChangesAsync</code> per source, <code>OutboxProcessor.cs:347</code>, because it must persist
           <code>RetryCount</code>, <code>LastError</code> and lease changes in the same save).</li>
           <li><strong>Where it&#39;s used</strong>: called by
           <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
@@ -2268,7 +2268,7 @@
           (<code>OutboxProcessor.cs:56-64</code>); per scope
           <a href="group-07-persistence-ef-core.html#idbcontextfactory"><code>IDbContextFactory</code></a>,
           <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>, <a href="#imessagebus"><code>IMessageBus</code></a> and, for a tenant
-          target, <a href="group-05-cqrs-pipeline.html#itenantcontext"><code>ITenantContext</code></a> (lines 262-270); the
+          target, <a href="group-05-cqrs-pipeline.html#itenantcontext"><code>ITenantContext</code></a> (lines 275-283); the
           <a href="#outboxmessage"><code>OutboxMessage</code></a> entity, <a href="#outboxmetrics"><code>OutboxMetrics</code></a>,
           <a href="#outboxcycleresult"><code>OutboxCycleResult</code></a>,
           <a href="group-07-persistence-ef-core.html#tenantdatasourcetargets"><code>TenantDataSourceTargets</code></a>,
@@ -2285,56 +2285,57 @@
           claim lease expires, not immediately on restart, because the claim is persisted before dispatch and
           the poll skips leased rows. Take the rest a layer at a time.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><strong>The loop.</strong> <code>ExecuteAsync</code> (<code>OutboxProcessor.cs:110-154</code>) waits 5 seconds so the application
-          finishes initializing (line 105), then bails out entirely if the host owns no relational targets
-          (lines 107-111, logged once, <code>LogOutboxDisabled</code> at 797-798). Each iteration calls
-          <code>ProcessPendingMessagesAsync</code> (line 118), treats a cancellation as a clean stop (lines 120-124) and
-          any other exception as a logged error that does not kill the service (lines 125-128). If the cycle
-          reported <code>HasMoreEligibleWork</code> it re-polls immediately (lines 130-134); otherwise it awaits
+          <li><strong>The loop.</strong> <code>ExecuteAsync</code> (<code>OutboxProcessor.cs:116-159</code>) waits <code>StartupDelay</code>, a named 5-second
+          constant matching the internal command processor&#39;s delay (<code>OutboxProcessor.cs:90</code>), so the
+          application finishes initializing (line 118), then bails out entirely if the host owns no relational
+          targets (lines 120-124, logged once, <code>LogOutboxDisabled</code> at 838). Each iteration calls
+          <code>ProcessPendingMessagesAsync</code> (line 131), treats a cancellation as a clean stop (lines 133-137) and
+          any other exception as a logged error that does not kill the service (lines 138-141). If the cycle
+          reported <code>HasMoreEligibleWork</code> it re-polls immediately (lines 143-147); otherwise it awaits
           <a href="#ioutboxsignal"><code>IOutboxSignal.WaitAsync</code></a> for whichever comes first of a signal, the <strong>smart
-          wait</strong>, or the fallback interval (lines 139-144).</li>
-          <li><strong>The smart wait.</strong> <code>ComputeWaitTime</code> (<code>OutboxProcessor.cs:163-181</code>) returns the full polling
-          interval when nothing is pending (lines 161-164); otherwise it waits until the earliest pending row
-          becomes eligible, its <code>OccurredOn</code> plus <code>ProcessingDelaySeconds</code> (line 166, delay default 5,
+          wait</strong>, or the fallback interval (lines 152-157).</li>
+          <li><strong>The smart wait.</strong> <code>ComputeWaitTime</code> (<code>OutboxProcessor.cs:168-186</code>) returns the full polling
+          interval when nothing is pending (lines 174-177); otherwise it waits until the earliest pending row
+          becomes eligible, its <code>OccurredOn</code> plus <code>ProcessingDelaySeconds</code> (line 179, delay default 5,
           <code>OutboxSettings.cs:40</code>), floored at <code>MinimumWait</code> of 1 second so an overdue row cannot hot-loop the
-          processor (lines 76, 167-170) and capped at the polling interval (line 172). Its doc adds a subtle
-          rule (lines 148-154): failed-but-already-eligible messages never shorten the wait, which throttles a
+          processor (lines 84, 180-183) and capped at the polling interval (line 185). Its doc adds a subtle
+          rule (lines 161-167): failed-but-already-eligible messages never shorten the wait, which throttles a
           permanently failing message instead of letting it drive the loop. This is why a deployed host can
           set a long poll interval without adding latency: real messages wake it by signal or smart wait, and
           the slow fallback only cuts idle database chatter and telemetry cost.</li>
-          <li><strong>Which databases.</strong> <code>GetOutboxSources</code> (<code>OutboxProcessor.cs:188-199</code>) enumerates every relational
-          physical source backing a registered entity (Cosmos is filtered out, line 183) plus the configured
-          publish target (lines 185-188), deduplicated (line 190). It is recomputed per cycle, which the doc
-          calls cheap and tolerant of module assemblies loading after startup (lines 175-179). A host
+          <li><strong>Which databases.</strong> <code>GetOutboxSources</code> (<code>OutboxProcessor.cs:193-204</code>) enumerates every relational
+          physical source backing a registered entity (Cosmos is filtered out, line 196) plus the configured
+          publish target (lines 198-201), deduplicated (line 203). It is recomputed per cycle, which the doc
+          calls cheap and tolerant of module assemblies loading after startup (lines 188-192). A host
           therefore only touches <em>its own</em> databases, never racing another service for its rows
           (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>). <code>GetOutboxTargets</code>
-          (lines 199-200) is the layer above it: it expands those sources through
+          (lines 212-213) is the layer above it: it expands those sources through
           <a href="group-07-persistence-ef-core.html#tenantdatasourcetargets"><code>TenantDataSourceTargets.Expand</code></a> into one
           target per source against the shared database plus one per tenant that keeps its own copy, because a
           tenant database has its own <code>OutboxMessages</code> table that nothing else would drain (doc, lines
-          193-198; <a href="https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html" target="_blank" rel="noopener">ADR-073</a>).</li>
-          <li><strong>Aggregating a cycle.</strong> <code>ProcessPendingMessagesAsync</code> (<code>OutboxProcessor.cs:216-254</code>) drains each
+          206-211; <a href="https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html" target="_blank" rel="noopener">ADR-073</a>).</li>
+          <li><strong>Aggregating a cycle.</strong> <code>ProcessPendingMessagesAsync</code> (<code>OutboxProcessor.cs:221-259</code>) drains each
           target in turn, ORs the <code>HasMoreEligibleWork</code> flags, keeps the earliest pending timestamp across all
-          targets, and sums the observed backlog (lines 214-226). One unreachable database must not starve the
-          others, so a per-target failure is logged and skipped (lines 232-238) while a real cancellation
-          propagates (lines 228-231). It then publishes the summed depth through
-          <a href="#outboxmetrics"><code>OutboxMetrics.SetPendingDepth</code></a> (line 243), so a target that threw contributes
-          zero and an outage reads as a drop rather than a stale plateau (comment, lines 241-242).</li>
-          <li><strong>Draining one target.</strong> <code>ProcessSourceAsync</code> (<code>OutboxProcessor.cs:260-351</code>) opens a scope (line
-          258), sets the tenant when the target has one (lines 262-265), gets the context for that source
-          (lines 267-268) and resolves the dispatcher and message bus (lines 269-270). It fetches a candidate
-          batch (line 275), derives the backlog depth (lines 276-277) and publishes the oldest-pending age
-          from the batch&#39;s own first row (lines 279-283). Then it splits the ordered batch: the eligible
-          prefix is everything with <code>OccurredOn</code> before the <code>ProcessingDelaySeconds</code> cutoff (lines 273,
-          287-291), and the first row past it becomes <code>earliestPending</code> (line 293). Nothing eligible means an
-          early return carrying only the wait information (lines 295-298). Otherwise it <strong>claims</strong> the prefix
-          (lines 300-301), returns early if another replica claimed all of it between fetch and claim (lines
-          303-307), dispatches (lines 314-315), and saves with a plain <code>DbContext.SaveChangesAsync</code> (line
-          333). The comment above that save is worth noting (lines 329-332): no user id is passed, so the
+          targets, and sums the observed backlog (lines 227-239). One unreachable database must not starve the
+          others, so a per-target failure is logged and skipped (lines 245-250) while a real cancellation
+          propagates (lines 241-244). It then publishes the summed depth through
+          <a href="#outboxmetrics"><code>OutboxMetrics.SetPendingDepth</code></a> (line 256), so a target that threw contributes
+          zero and an outage reads as a drop rather than a stale plateau (comment, lines 254-255).</li>
+          <li><strong>Draining one target.</strong> <code>ProcessSourceAsync</code> (<code>OutboxProcessor.cs:265-356</code>) opens a scope (line
+          271), sets the tenant when the target has one (lines 275-278), gets the context for that source
+          (lines 280-281) and resolves the dispatcher and message bus (lines 282-283). It fetches a candidate
+          batch (line 288), derives the backlog depth (line 289) and publishes the oldest-pending age
+          from the batch&#39;s own first row (lines 294-296). Then it splits the ordered batch: the eligible
+          prefix is everything with <code>OccurredOn</code> before the <code>ProcessingDelaySeconds</code> cutoff (lines 286,
+          300-304), and the first row past it becomes <code>earliestPending</code> (line 306). Nothing eligible means an
+          early return carrying only the wait information (lines 308-310). Otherwise it <strong>claims</strong> the prefix
+          (line 313), returns early if another replica claimed all of it between fetch and claim (lines
+          316-319), dispatches (lines 327-329), and saves with a plain <code>DbContext.SaveChangesAsync</code> (line
+          347). The comment above that save is worth noting (lines 343-346): no user id is passed, so the
           audit interceptor stamps its system sentinel, and although the EF interceptors still run there is
           nothing for them to capture because <code>OutboxMessage</code> is not an aggregate root. It returns a
-          <code>(OutboxCycleResult, long PendingDepth)</code> tuple (lines 337-341) so the caller can sum the depth.</li>
-          <li><strong>Fetching.</strong> <code>FetchCandidatesAsync</code> (<code>OutboxProcessor.cs:420-438</code>) selects rows that are
+          <code>(OutboxCycleResult, long PendingDepth)</code> tuple (lines 351-355) so the caller can sum the depth.</li>
+          <li><strong>Fetching.</strong> <code>FetchCandidatesAsync</code> (<code>OutboxProcessor.cs:425-443</code>) selects rows that are
           unprocessed, under <code>MaxRetries</code>, and not under another replica&#39;s unexpired lease (lines 421-423),
           ordered by <code>OccurredOn</code> then <code>Id</code> and capped at <code>BatchSize</code> (lines 424-426, default 50,
           <code>OutboxSettings.cs:17</code>). There is deliberately <strong>no</strong> <code>OccurredOn</code> cutoff in SQL (doc, lines
@@ -2345,13 +2346,13 @@
           <a href="group-16-aspire-orchestration.html#outboxpollfilterprocessor"><code>OutboxPollFilterProcessor</code></a> suppresses
           from telemetry export along with its SqlClient child span; the string is deliberately duplicated
           there because Aspire has no project reference back to Infrastructure (comment, lines 67-72).</li>
-          <li><strong>Backlog depth almost for free.</strong> <code>CountPendingAsync</code> (<code>OutboxProcessor.cs:361-382</code>) returns the
+          <li><strong>Backlog depth almost for free.</strong> <code>CountPendingAsync</code> (<code>OutboxProcessor.cs:366-387</code>) returns the
           fetched count directly whenever the batch came back short, because a short batch <em>is</em> the whole
           backlog (lines 359-362). Only a saturated batch, exactly the state an operator alerts on, pays for a
           <code>LongCountAsync</code>, and that query runs inside its own <code>OutboxPoll</code> activity so it is suppressed like
           the poll itself (lines 364-372). The predicate mirrors the fetch (lines 368-370), so the gauge counts
           the rows this processor considers workable.</li>
-          <li><strong>Claiming: how scale-out is made safe.</strong> <code>ClaimEligibleAsync</code> (<code>OutboxProcessor.cs:463-507</code>) mints
+          <li><strong>Claiming: how scale-out is made safe.</strong> <code>ClaimEligibleAsync</code> (<code>OutboxProcessor.cs:468-512</code>) mints
           a <code>lockToken</code> and a <code>leaseUntil</code> of now plus <code>LeaseSeconds</code> (lines 461-462, default 300,
           <code>OutboxSettings.cs:82</code>), narrows the prefix (line 463), then issues one conditional
           <code>ExecuteUpdateAsync</code> setting <code>LockedUntil</code> and <code>LockToken</code> (lines 477-481). A claim of zero rows
@@ -2364,10 +2365,10 @@
           <li><strong>Ordered delivery, enforced inside the claim.</strong> This is the piece that is easy to get wrong, and
           the doc explains why it lives here rather than after the fetch (lines 438-446): enforcing it in the
           claim is what makes it survive batching <em>and</em> scale-out. Three pieces cooperate.
-          <code>SelectOrderedCandidates</code> (<code>OutboxProcessor.cs:516-532</code>) narrows the eligible prefix to every
+          <code>SelectOrderedCandidates</code> (<code>OutboxProcessor.cs:521-537</code>) narrows the eligible prefix to every
           unkeyed row plus the <strong>first</strong> row of each ordering key, which is what stops one cycle from
-          dispatching two events of a key in parallel. <code>FilterClaimable</code> (lines 529-535) is the shared
-          predicate (these ids, still unprocessed, not leased). <code>FilterUnblocked</code> (lines 544-554) adds the
+          dispatching two events of a key in parallel. <code>FilterClaimable</code> (lines 543-549) is the shared
+          predicate (these ids, still unprocessed, not leased). <code>FilterUnblocked</code> (lines 558-568) adds the
           ordering guard as a correlated <code>NOT EXISTS</code>: a keyed row is refused while any earlier unprocessed,
           non-dead-lettered row shares its key, evaluated by the database at the instant of the update, so a
           second replica racing the same key loses on the row rather than on a check it made before the race
@@ -2381,7 +2382,7 @@
           timestamp are ordered by <code>Id</code> within a cycle but neither blocks the other in SQL, because <code>Guid</code> has
           no order that .NET and every provider agree on (remarks, lines 448-453).</li>
           <li><strong>Restoring the request&#39;s identity, per row.</strong> <code>DispatchMessagesAsync</code> now also takes the cycle&#39;s
-          <code>IServiceProvider scopeServices</code> (<code>OutboxProcessor.cs:588</code>), passed as <code>scope.ServiceProvider</code> from
+          <code>IServiceProvider scopeServices</code> (<code>OutboxProcessor.cs:593</code>), passed as <code>scope.ServiceProvider</code> from
           the <code>ProcessSourceAsync</code> call site (lines 322-324). Before anything else runs for a row, <code>Context.AmbientOrigin.Restore</code> writes that
           row&#39;s captured <code>UserId</code>, <code>UserRoles</code>, <code>TenantId</code> and <code>CorrelationId</code> onto the scope, tagged with the
           authentication type <code>OutboxPrincipalAuthenticationType</code> (<code>&quot;Outbox&quot;</code>, line 81) so the rebuilt identity
@@ -2391,85 +2392,85 @@
           publish headers, and the in-process path (<code>InProcessMessageBus</code> to
           <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>) gets the right ambient context for free without
           either transport reaching back into the row itself (remarks, lines 570-578).</li>
-          <li><strong>Dispatching.</strong> <code>DispatchMessagesAsync</code> (<code>OutboxProcessor.cs:585-722</code>) walks the claimed batch
-          inside a per-message activity (line 602). A row whose payload will not deserialize goes to
-          <code>HandleUnresolvableType</code> (lines 615-620). Otherwise an <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> is
+          <li><strong>Dispatching.</strong> <code>DispatchMessagesAsync</code> (<code>OutboxProcessor.cs:590-727</code>) walks the claimed batch
+          inside a per-message activity (line 607). A row whose payload will not deserialize goes to
+          <code>HandleUnresolvableType</code> (lines 621-625). Otherwise an <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> is
           published through <a href="#imessagebus"><code>IMessageBus</code></a> and a pure domain event goes to
-          <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a> (lines 625-640). On success the row is stamped
-          (lines 642-644), <code>ProcessedCounter</code> is incremented (line 647) and <code>DispatchLagHistogram</code> records the
+          <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a> (lines 630-645). On success the row is stamped
+          (lines 647-649), <code>ProcessedCounter</code> is incremented (line 652) and <code>DispatchLagHistogram</code> records the
           seconds between <code>OccurredOn</code> and <code>ProcessedOn</code>, clamped at zero because the two timestamps come from
-          different hosts and clock skew must not publish a negative duration (lines 649-654). The per-message
+          different hosts and clock skew must not publish a negative duration (lines 657-659). The per-message
           success log is deliberately Debug, not Information, and the comment prices the difference: it would
           otherwise be the single noisiest line in steady state, a real telemetry-ingestion cost, while
-          failures stay loud (lines 847-849).</li>
+          failures stay loud (lines 852-854).</li>
           <li><strong>Dead-lettering an unresolvable type, with one grace attempt.</strong> <code>HandleUnresolvableType</code>
-          (<code>OutboxProcessor.cs:736-758</code>) treats the <strong>first</strong> failure to resolve as transient and retries it
+          (<code>OutboxProcessor.cs:741-763</code>) treats the <strong>first</strong> failure to resolve as transient and retries it
           through the normal backoff path, because the assembly declaring the type may simply not be loaded
           yet, a module assembly resolved lazily or a host still coming up, and a name that resolves one cycle
-          later was never a dead letter (doc, lines 689-695). Only the second attempt is terminal, which is
-          also the point at which an operator has already had a Warning naming the row (lines 707-714,
-          <code>LogTypeUnresolvableRetry</code> at 824-825, whose message names the fix: give the event an
+          later was never a dead letter (doc, lines 730-734). Only the second attempt is terminal, which is
+          also the point at which an operator has already had a Warning naming the row (lines 747-754,
+          <code>LogTypeUnresolvableRetry</code> at 864-865, whose message names the fix: give the event an
           <a href="group-02-domain-building-blocks.html#eventnameattribute"><code>EventName</code></a>). A host that set <code>MaxRetries</code>
           to 1 asked for no retries at all, so that case skips the grace attempt rather than scheduling one
-          the poll&#39;s filter would never pick up (lines 705-707). The terminal path stamps <code>ProcessedOn</code>,
-          increments the dead-letter counter with <code>reason=type_unresolvable</code> and logs at Error (lines 716-722).</li>
+          the poll&#39;s filter would never pick up (lines 745-746). The terminal path stamps <code>ProcessedOn</code>,
+          increments the dead-letter counter with <code>reason=type_unresolvable</code> and logs at Error (lines 756-762).</li>
           <li><strong>The broker circuit breaker.</strong> Only the broker hop is wrapped. <code>_brokerPublishPipeline</code>
-          (<code>OutboxProcessor.cs:107</code>) is a Polly <code>ResiliencePipeline</code> built by <code>BuildBrokerPublishPipeline</code>
-          (lines 755-766) from
+          (<code>OutboxProcessor.cs:113</code>) is a Polly <code>ResiliencePipeline</code> built by <code>BuildBrokerPublishPipeline</code>
+          (lines 795-806) from
           <a href="group-16-aspire-orchestration.html#brokerresiliencedefaults"><code>BrokerResilienceDefaults</code></a> (failure
-          ratio, minimum throughput, sampling and break durations, lines 759-762), and the integration-event
-          branch executes the publish through it (lines 596-600). Three deliberate choices sit in the doc
+          ratio, minimum throughput, sampling and break durations, lines 799-802), and the integration-event
+          branch executes the publish through it (lines 636-640). Three deliberate choices sit in the doc
           comments. It guards the publish call <strong>only</strong>, never the database calls, because a breaker on those
-          would open exactly when the processor most needs to persist retry state (lines 87-91). It carries
+          would open exactly when the processor most needs to persist retry state (lines 101-103). It carries
           <strong>no</strong> retry strategy, because the outbox already owns retry through <code>RetryCount</code> and
-          <code>ComputeRetryBackoffSeconds</code> (lines 90-91). And it is an <strong>instance</strong> field rather than a static
+          <code>ComputeRetryBackoffSeconds</code> (lines 104-105). And it is an <strong>instance</strong> field rather than a static
           one, so breaker state cannot leak across the many processors a test assembly constructs in parallel
-          (lines 92-97). <code>OperationCanceledException</code> is excluded from the handled set (lines 763-764), because
-          a host shutdown cancelling a batch is not evidence that the broker is unhealthy (doc, lines 748-754).
+          (lines 106-111). <code>OperationCanceledException</code> is excluded from the handled set (line 804), because
+          a host shutdown cancelling a batch is not evidence that the broker is unhealthy (doc, lines 789-794).
           The in-process dispatcher branch is left unwrapped on purpose: it is a direct method call into the
           same process, so a breaker there would only add a way to reject work that would have succeeded
-          (comment, lines 592-595).</li>
+          (comment, lines 632-635).</li>
           <li><strong>Failure handling.</strong> A cancellation during dispatch is rethrown rather than treated as a delivery
-          failure, and the comment explains the bug that guard prevents (lines 625-628): falling into the
+          failure, and the comment explains the bug that guard prevents (lines 665-668): falling into the
           generic handler would increment <code>RetryCount</code> and stamp <code>LastError</code> on this message and, since every
           later <code>await</code> fails the same way, on the whole remainder of the batch, so a graceful restart could
-          dead-letter messages that were never attempted. A genuine exception bumps <code>RetryCount</code> (line 633),
-          records <code>LastError</code> (line 634) and <strong>re-leases</strong> the row for an explicit backoff (lines 642-643);
+          dead-letter messages that were never attempted. A genuine exception bumps <code>RetryCount</code> (line 673),
+          records <code>LastError</code> (line 674) and <strong>re-leases</strong> the row for an explicit backoff (lines 682-683);
           the comment notes that simply keeping the original claim made every retry wait the full
           <code>LeaseSeconds</code> no matter what the polling interval or a signal said, turning the retry cadence into
-          an accident of the lease (lines 636-641). A <code>BrokenCircuitException</code> follows that same failure path
+          an accident of the lease (lines 676-681). A <code>BrokenCircuitException</code> follows that same failure path
           but is counted separately on
           <a href="group-14-module-system-composition.html#brokermetrics"><code>BrokerMetrics.CircuitOpenCounter</code></a> (lines
-          653-659) and logged <strong>once per batch</strong> through a local latch (lines 573, 661-665), because an open
+          693-699) and logged <strong>once per batch</strong> through a local latch (lines 603, 701-705), because an open
           circuit rejects every remaining row in the same instant, and &quot;the broker refused 50 messages&quot; and
-          &quot;we did not try, the broker is known-dead&quot; are different operational facts (comment, lines 647-652).
+          &quot;we did not try, the broker is known-dead&quot; are different operational facts (comment, lines 687-692).
           When <code>RetryCount</code> reaches <code>MaxRetries</code> (5 by default, <code>OutboxSettings.cs:21</code>) the dead-letter counter
-          is incremented with <code>reason=retries_exhausted</code> and it logs at Error (lines 667-677); the row then
+          is incremented with <code>reason=retries_exhausted</code> and it logs at Error (lines 707-716); the row then
           leaves the poll through the <code>RetryCount</code> filter and is eventually purged by
           <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a>, unless an operator replays it first through
           <a href="#outboxadministration"><code>OutboxAdministration</code></a>.</li>
-          <li><strong>Backoff.</strong> <code>ComputeRetryBackoffSeconds</code> (<code>OutboxProcessor.cs:767-781</code>) is
+          <li><strong>Backoff.</strong> <code>ComputeRetryBackoffSeconds</code> (<code>OutboxProcessor.cs:772-786</code>) is
           <code>RetryBackoffBaseSeconds * 2^(retryCount - 1)</code> (default base 10, <code>OutboxSettings.cs:99</code>) with the
-          exponent clamped to at most 16 before it reaches <code>Math.Pow</code> (line 737), multiplied by a random
-          jitter factor in <code>[0.8, 1.2]</code> (line 742) and capped at <code>LeaseSeconds</code> (line 745). Jitter is applied
-          <em>before</em> the cap so a capped backoff sits exactly at the lease bound (comment, line 740). The doc
-          names the reason for the jitter (lines 725-731): a batch that failed together, one dependency outage
+          exponent clamped to at most 16 before it reaches <code>Math.Pow</code> (line 777), multiplied by a random
+          jitter factor in <code>[0.8, 1.2]</code> (line 782) and capped at <code>LeaseSeconds</code> (line 785). Jitter is applied
+          <em>before</em> the cap so a capped backoff sits exactly at the lease bound (comment, line 780). The doc
+          names the reason for the jitter (lines 765-771): a batch that failed together, one dependency outage
           failing all 50 rows in the same instant, would otherwise retry in lockstep and re-hammer that
-          dependency on a single shared schedule. The <code>S2245</code>/<code>CA5394</code> suppression (lines 741, 743) is
+          dependency on a single shared schedule. The <code>S2245</code>/<code>CA5394</code> suppression (lines 781, 783) is
           justified inline: the randomness feeds no security, token, key or cryptographic decision.</li>
           <li><strong>Graceful shutdown.</strong> If cancellation lands mid-batch, <code>ProcessSourceAsync</code> calls
-          <code>TryPersistStampsOnCancellationAsync</code> (lines 317-327, implemented at 388-400) before rethrowing, so
+          <code>TryPersistStampsOnCancellationAsync</code> (lines 331-340, implemented at 402-414) before rethrowing, so
           messages already delivered keep their <code>ProcessedOn</code> instead of being redelivered when their lease
-          expires. Two constraints are deliberate (doc, lines 375-387): its own try/catch, because a failure
+          expires. Two constraints are deliberate (doc, lines 389-401): its own try/catch, because a failure
           here must never replace the propagating <code>OperationCanceledException</code> the loop uses to recognize
-          shutdown; and its own 5-second token (<code>ShutdownSaveTimeout</code>, line 83) rather than
+          shutdown; and its own 5-second token (<code>ShutdownSaveTimeout</code>, line 97) rather than
           <code>CancellationToken.None</code>, so an uncancellable save against a dead connection cannot hold host
           shutdown open until the command timeout. A failure there logs at Warning and says plainly that the
-          delivered messages will be redelivered when the lease expires (lines 806-807).</li>
-          <li><strong>Trace continuity.</strong> <code>StartOutboxActivity</code> (<code>OutboxProcessor.cs:808-830</code>) rebuilds the original
-          request&#39;s <code>ActivityContext</code> from the row&#39;s <code>TraceId</code>/<code>SpanId</code> (lines 780-783) and starts a
+          delivered messages will be redelivered when the lease expires (lines 846-847).</li>
+          <li><strong>Trace continuity.</strong> <code>StartOutboxActivity</code> (<code>OutboxProcessor.cs:813-835</code>) rebuilds the original
+          request&#39;s <code>ActivityContext</code> from the row&#39;s <code>TraceId</code>/<code>SpanId</code> (lines 820-823) and starts a
           <code>Consumer</code>-kind <code>OutboxProcess</code> activity tagged with the message id, event type and data source
-          (lines 785-792), returning null when no trace context was captured (lines 775-778), so traces span
+          (lines 825-832), returning null when no trace context was captured (lines 815-818), so traces span
           the asynchronous hop.</li>
           </ul>
           </li>
@@ -2487,7 +2488,7 @@
           guard inside the claim is what makes ordered delivery survive both batching and scale-out.</li>
           <li><strong>Where it&#39;s used</strong>: registered as a hosted service by <code>AddInfrastructure</code> whenever the transport
           enables the outbox
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:223-227</code>), so every
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:207-211</code>), so every
           broker-backed service host runs exactly one. The producer side is the two <code>IEventBus</code> implementations
           (<a href="#inprocesseventbus"><code>InProcessEventBus</code></a> and <a href="#brokereventbus"><code>BrokerEventBus</code></a>) plus the
           <code>SaveChanges</code> capture in
@@ -2537,12 +2538,12 @@
           The <strong>MassTransit v8 pin</strong> is a separate constraint enforced by the dependency-version fitness test
           (v9 requires a commercial licence); see the primer&#39;s external-stack section.</li>
           <li><strong>Where it&#39;s used</strong>: implemented by <a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a>, the default
-          scoped registration (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:731</code>, with the rationale
+          scoped registration (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:311</code>, with the rationale
           comment at <code>DependencyInjection.cs:551-555</code>), and by <a href="#brokermessagebus"><code>BrokerMessageBus</code></a>, which
           <code>Replace</code>s that registration inside <code>AddBrokerMessaging</code>
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:997</code>). At runtime it is resolved per cycle by
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:93</code>). At runtime it is resolved per cycle by
           the background <a href="#outboxprocessor"><code>OutboxProcessor</code></a>
-          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:278</code>) and invoked for every
+          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:283</code>) and invoked for every
           integration-event row it drains (<code>OutboxProcessor.cs:590-600</code>).</li>
           </ul>
           <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
@@ -2626,12 +2627,12 @@
           identity headers, and a publish with nothing to stamp pays no extra allocation for the pipe
           (comment, <code>BrokerMessageBus.cs:59-61</code>).</li>
           <li><strong>Where it&#39;s used</strong>: swapped in for the default in-process registration by <code>AddBrokerMessaging</code>
-          through <code>services.Replace</code> (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:997</code>), which returns
+          through <code>services.Replace</code> (<code>MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:93</code>), which returns
           early without touching the container when <code>MessageBus:Provider</code> is <code>InProcess</code>
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:954-957</code>; see
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:50-53</code>; see
           <a href="group-14-module-system-composition.html#messagebussettings"><code>MessageBusSettings</code></a>). It is driven at
           runtime by the <a href="#outboxprocessor"><code>OutboxProcessor</code></a>, which resolves <code>IMessageBus</code> per cycle
-          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:278</code>) and calls it inside a
+          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:283</code>) and calls it inside a
           resilience pipeline that wraps only the broker hop
           (<code>OutboxProcessor.cs:590-600</code>).</li>
           </ul>
@@ -2718,14 +2719,14 @@
           uniform, which is precisely what lets <a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a> be a two-line
           adapter.</li>
           <li><strong>Where it&#39;s used</strong>: registered as the singleton <code>IDomainEventDispatcher</code>
-          (<code>MMCA.Common.Application/DependencyInjection.cs:37</code>, beside the
+          (<code>MMCA.Common.Application/DependencyInjection.cs:34</code>, beside the
           <a href="group-05-cqrs-pipeline.html#ieventupcasterregistry"><code>IEventUpcasterRegistry</code></a> registration at
           <code>DependencyInjection.cs:41</code>); called by
           <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
           after the outbox rows are written
           (<code>MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:337</code>), by
           the background <a href="#outboxprocessor"><code>OutboxProcessor</code></a> when re-dispatching persisted domain events
-          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:639</code>), and by both in-process
+          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:644</code>), and by both in-process
           buses (<a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a>,
           <a href="#inprocesseventbus"><code>InProcessEventBus</code></a>).</li>
           </ul>
@@ -2761,12 +2762,12 @@
           latency. When the outbox is enabled, the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> still supplies the
           at-least-once safety net around this bus, because the processor is what invokes it.</li>
           <li><strong>Where it&#39;s used</strong>: registered as the default scoped <code>IMessageBus</code> in <code>AddServices</code>
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:731</code>, with the rationale comment at
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:311</code>, with the rationale comment at
           <code>DependencyInjection.cs:551-555</code>), and therefore the bus resolved by
           <a href="#outboxprocessor"><code>OutboxProcessor</code></a> in monolith mode
-          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:278</code>). It is replaced by
+          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:283</code>). It is replaced by
           <a href="#brokermessagebus"><code>BrokerMessageBus</code></a> in broker-mode service hosts
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:997</code>).</li>
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:93</code>).</li>
           </ul>
           <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <h3 id="integrationeventconsumertevent">IntegrationEventConsumer&lt;TEvent&gt;</h3>
@@ -2879,7 +2880,7 @@
           <a href="#iinboxstore"><code>IInboxStore</code></a> is registered. <code>AddBrokerMessaging</code> registers
           <a href="#efinboxstore"><code>EfInboxStore</code></a> when <code>MessageBusSettings.IsInboxEnabled</code> resolves true, which it
           does by default for a broker transport
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:1010-1016</code>,
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:106-117</code>,
           <code>MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:141</code>); an explicit
           <code>MessageBus:EnableInbox=false</code> opts down to <a href="#noopinboxstore"><code>NoOpInboxStore</code></a>, where the inbox
           calls do nothing and every redelivery re-runs the handlers, a posture announced once at startup by
@@ -3032,7 +3033,7 @@
           fault consumer to <em>on</em> means the safe posture is the one you get by not thinking about it,
           <code>[Rubric §15, Best Practices &amp; Code Quality]</code>.</li>
           <li><strong>Where it&#39;s used</strong>: inside the <code>configureConsumers</code> callback passed to <code>AddBrokerMessaging</code>
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:991</code>) in each broker-mode service&#39;s
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:87</code>) in each broker-mode service&#39;s
           <code>Program.cs</code>, for example <code>x.RegisterIntegrationEventConsumer&lt;SpeakerLinkedToUser&gt;()</code>.</li>
           </ul>
           <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
@@ -3097,11 +3098,11 @@
           at the first publish rather than lose events quietly, and the same constraint is checked once at
           startup as well: <code>EnsureOutboxAvailableForProvider</code> rejects <code>MessageBus:EnableOutbox=false</code> under a
           broker transport with a message that names this class as the reason
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:962</code>,
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:58</code>,
           <code>DependencyInjection.cs:857-862</code>).</li>
           <li><strong>Where it&#39;s used</strong>: registered as the scoped <code>IEventBus</code> when <code>AddBrokerMessaging</code> runs, replacing
           <a href="#inprocesseventbus"><code>InProcessEventBus</code></a>
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:1003</code>, with the explanatory comment at
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:99</code>, with the explanatory comment at
           <code>DependencyInjection.cs:773-776</code>). Every <code>IEventBus</code> injection in application code resolves this
           implementation in broker mode.</li>
           </ul>
@@ -3178,9 +3179,9 @@
           <a href="#brokereventbus"><code>BrokerEventBus</code></a> makes: with no local consumers, a silent dispatch-only fallback
           in broker mode would drop the event entirely, so that class throws instead.</li>
           <li><strong>Where it&#39;s used</strong>: the default scoped <code>IEventBus</code> registration
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:725</code>), superseded by
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:305</code>), superseded by
           <a href="#brokereventbus"><code>BrokerEventBus</code></a> once <code>AddBrokerMessaging</code> is called
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:1003</code>).</li>
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:99</code>).</li>
           </ul>
           <p><code>[Rubric §10, Messaging &amp; Integration Architecture]</code> applies: this type sits on the path a message takes once it leaves the process (outbox, bus, consumer, or broker plumbing), which is what section 10 scores.</p>
           <hr>

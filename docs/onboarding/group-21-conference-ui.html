@@ -199,7 +199,7 @@
           <p>All paths are centralized in <a href="#conferenceroutepaths"><code>ConferenceRoutePaths</code></a>, a static catalogue of literal routes and id-parameterized builder methods (<code>EventDetails(id)</code>, <code>PublicSessionDetails(id)</code>, <code>SponsorDetails(id)</code>, <code>PartnerDetails(id)</code>, <code>ActivityDetails(id)</code>, <code>EventFeedbackOrganizer(id)</code>, and so on) typed against the module&#39;s identifier aliases and formatted culture-invariantly, so a route change happens in one file (<code>ConferenceRoutePaths.cs:8</code> to <code>:73</code>; the partner triple at <code>:38</code> to <code>:40</code> is what a new area adds here). Two entries in that file are deliberate duplicates of routes <strong>owned by Engagement.UI</strong>, <code>SponsorVisitLink</code> and <code>RoomCheckInLink</code> (<code>ConferenceRoutePaths.cs:64</code>, <code>:65</code>), because Conference.UI must not reference Engagement.UI yet the organizer print surfaces need those links to encode into a QR; the reason is recorded inline at <code>ConferenceRoutePaths.cs:60</code> to <code>:63</code>. <code>[Rubric §25, Navigation, Routing &amp; Information Architecture]</code>. User-facing strings are <strong>not</strong> inline English: every page injects an <code>IStringLocalizer&lt;TPage&gt;</code> in its markup (<code>Pages/Events/EventList.razor:5</code>) and resolves labels and snackbar messages through <code>L[&quot;...&quot;]</code> over co-located <code>.resx</code> resource pairs, including enum labels composed as keys (<code>Pages/Partners/PartnerList.razor.cs:37</code>). Where a string is deliberately left untranslated (the conference brand name, a postal address, a ticketing URL, the English-only editorial content) the code carries an explicit <code>// i18n: allow</code> marker with a reason (<code>Pages/Home/ADCHome.razor.cs:31</code>, <code>:82</code>, <code>:86</code>, <code>Pages/Home/ADCHomeContent.cs:10</code> to <code>:13</code>). <code>[Rubric §27, Internationalization &amp; Localization]</code> assesses externalized strings and culture-aware formatting; this area embodies it under <a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>, which superseded the single-locale <a href="https://ivanball.github.io/docs/adr/011-single-locale-i18n.html" target="_blank" rel="noopener">ADR-011</a> (<a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer §6</a>).</p>
           <h2 id="how-it-all-plugs-into-the-shell">How it all plugs into the shell</h2>
           <p>Two registration types wire the area in. <a href="#conferenceuimodule"><code>ConferenceUIModule</code></a> implements Common&#39;s <a href="group-15-common-ui-framework.html#iuimodule"><code>IUIModule</code></a> (the front-end counterpart of the <a href="group-14-module-system-composition.html#imodule"><code>IModule</code></a> back-end contract): it declares the module&#39;s seventeen <a href="group-15-common-ui-framework.html#navitem"><code>NavItem</code></a> entries, whose labels are resource <em>keys</em> (<code>Nav.Events</code>, <code>Nav.Dashboard</code>, and so on) resolved by the shared NavMenu at render time against the co-located <code>ConferenceUIModule.resx</code> pair (<code>ConferenceUIModule.cs:14</code>, <code>:16</code> to <code>:18</code>). Those seventeen split three ways: five public entries for everyone, Events, Sessions, Speakers, Sponsors, and Activities (<code>ConferenceUIModule.cs:21</code> to <code>:25</code>), two <code>speaker_id</code>-claim-gated entries in the user section, the dashboard and the speaker&#39;s own QR (<code>ConferenceUIModule.cs:28</code>, <code>:29</code>), and an <code>Organizer</code>-role-gated admin group of ten, Events, Sessions, Speakers, Categories, Questions, Rooms, Sponsors, Partners, Activities, and Session Selection (<code>ConferenceUIModule.cs:32</code> to <code>:41</code>); it then exposes its assembly so the host can discover the Razor routes (<code>ConferenceUIModule.cs:44</code>).</p>
-          <p>The companion <a href="#dependencyinjection"><code>DependencyInjection</code></a> extension <code>AddConferenceUI()</code> (a C# <code>extension(IServiceCollection)</code> member, <a href="00-primer.html#c-extensiont-types-read-this-once">primer §4</a>) is the one call a host makes (<code>DependencyInjection.cs:18</code>, extension block at <code>:20</code>, method at <code>:26</code>). It delegates the prologue to Common&#39;s <code>AddUIModule&lt;ConferenceUIModule&gt;()</code>, which scans the module assembly for every <code>IEntityService&lt;,&gt;</code> implementation as scoped and registers the descriptor as a singleton <code>IUIModule</code> (<code>DependencyInjection.cs:30</code>), then explicitly registers what a scan cannot infer: the four child-entity services (<code>:33</code> to <code>:36</code>), the speaker dashboard (<code>:39</code>), the two organizer feedback services (<code>:42</code>, <code>:43</code>), session selection (<code>:46</code>), the session-materials service, which is outside the scan for exactly the reason its interface records (<code>:51</code>, note at <code>:48</code> to <code>:50</code>), the offline-first schedule service (<code>:54</code>), the three lookup services (<code>:57</code> to <code>:59</code>), and the composite speaker-detail lookup (<code>:63</code>). Public share links are <em>not</em> registered here: <code>IPublicLinkBuilder</code> comes from the framework&#39;s own <code>AddUIShared</code>, and the MAUI head overrides that registration afterwards so shared links always point at the web app, a note left in place where the registration used to be (<code>DependencyInjection.cs:65</code> to <code>:68</code>). Because the scan covers the entity services, the partner area arrived with no edit to this file at all, and because the module contributes its own nav and assembly, the shell folds it in with no edit to the shell either. <code>[Rubric §1, SOLID]</code> (Open/Closed) and <code>[Rubric §18, UI Architecture]</code>. Read the per-type sections that follow for the mechanics of each page, model, and service; the bUnit and Playwright tests that exercise this library live in the testing chapter (<a href="group-28-testing-infrastructure.html">G28</a>).</p>
+          <p>The companion <a href="#dependencyinjection"><code>DependencyInjection</code></a> extension <code>AddConferenceUI()</code> (a C# <code>extension(IServiceCollection)</code> member, <a href="00-primer.html#c-extensiont-types-read-this-once">primer §4</a>) is the one call a host makes (<code>MMCA.ADC.Conference.UI/DependencyInjection.cs:18</code>, extension block at <code>:20</code>, method at <code>:26</code>). It delegates the prologue to Common&#39;s <code>AddUIModule&lt;ConferenceUIModule&gt;()</code>, which scans the module assembly for every <code>IEntityService&lt;,&gt;</code> implementation as scoped and registers the descriptor as a singleton <code>IUIModule</code> (<code>MMCA.ADC.Conference.UI/DependencyInjection.cs:30</code>), then explicitly registers what a scan cannot infer: the four child-entity services (<code>:33</code> to <code>:36</code>), the speaker dashboard (<code>:39</code>), the two organizer feedback services (<code>:42</code>, <code>:43</code>), session selection (<code>:46</code>), the session-materials service, which is outside the scan for exactly the reason its interface records (<code>:51</code>, note at <code>:48</code> to <code>:50</code>), the offline-first schedule service (<code>:54</code>), the three lookup services (<code>:57</code> to <code>:59</code>), and the composite speaker-detail lookup (<code>:63</code>). Public share links are <em>not</em> registered here: <code>IPublicLinkBuilder</code> comes from the framework&#39;s own <code>AddUIShared</code>, and the MAUI head overrides that registration afterwards so shared links always point at the web app, a note left in place where the registration used to be (<code>MMCA.ADC.Conference.UI/DependencyInjection.cs:65</code> to <code>:68</code>). Because the scan covers the entity services, the partner area arrived with no edit to this file at all, and because the module contributes its own nav and assembly, the shell folds it in with no edit to the shell either. <code>[Rubric §1, SOLID]</code> (Open/Closed) and <code>[Rubric §18, UI Architecture]</code>. Read the per-type sections that follow for the mechanics of each page, model, and service; the bUnit and Playwright tests that exercise this library live in the testing chapter (<a href="group-28-testing-infrastructure.html">G28</a>).</p>
           <h3 id="conferenceroutepaths">ConferenceRoutePaths</h3>
           <blockquote>
           <p>MMCA.ADC.Conference.UI · <code>MMCA.ADC.Conference.UI</code> · <code>MMCA.ADC.Conference.UI/ConferenceRoutePaths.cs:8</code> · Level 0 · class (static)</p>
@@ -346,7 +346,7 @@
           <li><strong>Where it&#39;s used</strong>: <a href="#eventcreatemodel"><code>EventCreateModel</code></a> and <a href="#eventeditmodel"><code>EventEditModel</code></a>
           derive from it; <a href="#eventcreate"><code>EventCreate</code></a> and <a href="#eventdetail"><code>EventDetail</code></a> bind an instance to the
           shared <code>EventFormFields</code> component
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Event/EventFormFields.razor</code>).</li>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Events/EventFormFields.razor</code>).</li>
           </ul>
           <h3 id="eventcreatemodel">EventCreateModel</h3>
           <blockquote>
@@ -1210,7 +1210,7 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the read-only public view of one event: venue information, rooms, support contacts, and the conference-day conveniences (copy the Wi-Fi details, open directions, a distance-to-venue hint, a collapsible venue map, a QR code for the page itself). For a public visitor it is also the landing page of the whole conference, because <a href="#publiceventlist"><code>PublicEventList</code></a> redirects them here.</li>
-          <li><strong>Depends on</strong>: <a href="#ieventuiservice"><code>IEventUIService</code></a> (<code>:20</code>), <a href="group-17-conference-domain.html#eventdto"><code>EventDTO</code></a>, <a href="group-15-common-ui-framework.html#itoastservice"><code>IToastService</code></a> (<code>:22</code>), <a href="group-17-conference-domain.html#conferencereadaudience"><code>ConferenceReadAudience</code></a> (<code>:64</code>), <a href="#conferenceroutepaths"><code>ConferenceRoutePaths</code></a> (<code>:80</code>, <code>:170</code>, <code>:172</code>, <code>:174</code>), <a href="group-02-domain-building-blocks.html#domainhelper"><code>DomainHelper</code></a>&#39;s <code>Id.Parse&lt;T&gt;</code> extension for the route string (<code>:118</code>, defined at <code>MMCA.Common/Source/Core/MMCA.Common.Shared/DomainHelper.cs:30</code>), <a href="#venuemaplinks"><code>VenueMapLinks</code></a> (called from the markup, not the code-behind, at <code>PublicEventDetail.razor:73,86</code>) to decide the venue-map rendering, and four device-capability abstractions: <a href="group-26-device-capability-layer.html#iclipboardservice"><code>IClipboardService</code></a>, <a href="group-26-device-capability-layer.html#imapnavigationservice"><code>IMapNavigationService</code></a>, <a href="group-26-device-capability-layer.html#igeolocationservice"><code>IGeolocationService</code></a>, <a href="group-26-device-capability-layer.html#igeocodingservice"><code>IGeocodingService</code></a> (<code>:23-26</code>), whose <a href="group-26-device-capability-layer.html#geopoint"><code>GeoPoint</code></a> results supply the <code>DistanceKmTo</code> used at <code>:231</code>. It also reads <code>IConfiguration</code> for the host-wide support contacts (<code>:27</code>, <code>:56-57</code>).</li>
+          <li><strong>Depends on</strong>: <a href="#ieventuiservice"><code>IEventUIService</code></a> (<code>:20</code>), <a href="group-17-conference-domain.html#eventdto"><code>EventDTO</code></a>, <a href="group-15-common-ui-framework.html#itoastservice"><code>IToastService</code></a> (<code>:22</code>), <a href="group-17-conference-domain.html#conferencereadaudience"><code>ConferenceReadAudience</code></a> (<code>:64</code>), <a href="#conferenceroutepaths"><code>ConferenceRoutePaths</code></a> (<code>:80</code>, <code>:170</code>, <code>:172</code>, <code>:174</code>), <a href="group-02-domain-building-blocks.html#domainhelper"><code>DomainHelper</code></a>&#39;s <code>Id.Parse&lt;T&gt;</code> extension for the route string (<code>:118</code>, defined at <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Extensions/DomainHelper.cs:30</code>), <a href="#venuemaplinks"><code>VenueMapLinks</code></a> (called from the markup, not the code-behind, at <code>PublicEventDetail.razor:73,86</code>) to decide the venue-map rendering, and four device-capability abstractions: <a href="group-26-device-capability-layer.html#iclipboardservice"><code>IClipboardService</code></a>, <a href="group-26-device-capability-layer.html#imapnavigationservice"><code>IMapNavigationService</code></a>, <a href="group-26-device-capability-layer.html#igeolocationservice"><code>IGeolocationService</code></a>, <a href="group-26-device-capability-layer.html#igeocodingservice"><code>IGeocodingService</code></a> (<code>:23-26</code>), whose <a href="group-26-device-capability-layer.html#geopoint"><code>GeoPoint</code></a> results supply the <code>DistanceKmTo</code> used at <code>:231</code>. It also reads <code>IConfiguration</code> for the host-wide support contacts (<code>:27</code>, <code>:56-57</code>).</li>
           <li><strong>Concept introduced, the generation counter, the audience-shaped breadcrumb trail, and best-effort progressive enhancement.</strong> Three mechanisms are worth extracting.<ol>
           <li><strong>Load once per id, and let the newest load win.</strong> The route value arrives as <code>[Parameter] string Id</code> (<code>:29</code>), and <code>OnParametersSetAsync</code> compares it against <code>_loadedId</code> (<code>:99-108</code>) so a re-render does not refetch. On top of that, <code>_loadGeneration</code> (<code>:94</code>) is bumped at the top of every <code>LoadEventAsync</code> (<code>:113</code>) and re-checked after each await (<code>:120</code>, <code>:161</code>), so a superseded fetch drops its results. The field doc explains why the generation and not the route id is authoritative (<code>:88-93</code>): <code>_loadedId</code> is stamped synchronously before the await, so two rapid route changes would otherwise let the later-completing fetch paint the wrong event. The <code>finally</code> is guarded by the same test (<code>:159-164</code>), because an unconditional clear would let a superseded response switch off the spinner the newer load just turned on. <code>[Rubric #19, State Management &amp; Data Flow]</code>.</li>
           <li><strong>The breadcrumb trail depends on the audience, and the audience is awaited first.</strong> <code>OnInitializedAsync</code> resolves privileged status from role membership before building the trail (<code>:59-70</code>), then adds the &quot;Events&quot; crumb only for a privileged reader (<code>:78-81</code>). The doc comment states both halves of the reasoning (<code>:46-53</code>): a public visitor was redirected <em>to</em> this page by the event list, so an Events crumb would bounce them straight back here, and the access token hydrates asynchronously from the HttpOnly cookie, so reading roles synchronously would render the wrong trail and correct it on the next render. A failed auth read is treated as non-privileged (<code>:66-69</code>). <code>[Rubric #25, Navigation &amp; Information Architecture]</code> (assesses that navigation affordances lead somewhere the reader can actually use) and <code>[Rubric #26, Front-End Security]</code> (fail closed to the narrower audience).</li>
@@ -2878,7 +2878,8 @@
           (<code>ISpeakerLookupService.cs:9-12</code>), so a change to the transport DTO that does not touch those three
           fields never reaches the consuming pages.</li>
           <li><strong>Where it&#39;s used</strong>: implemented by <a href="#speakerlookupservice">SpeakerLookupService</a> and registered
-          scoped (<code>DependencyInjection.cs:57</code>). Injected into <a href="#sessiondetail">SessionDetail</a>
+          scoped
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:57</code>). Injected into <a href="#sessiondetail">SessionDetail</a>
           (<code>Pages/Session/SessionDetail.razor.cs:25</code>), <a href="#sessionlist">SessionList</a>
           (<code>Pages/Session/SessionList.razor.cs:26</code>), <a href="#publicsessionlist">PublicSessionList</a>
           (<code>Pages/Public/PublicSessionList.razor.cs:33</code>), <a href="#publicsessiondetail">PublicSessionDetail</a>
@@ -2938,7 +2939,8 @@
           authorization story simple: every method takes the speaker id explicitly, so the server has the
           subject it needs to check ownership on every call <code>[Rubric §11, Security]</code>.</li>
           <li><strong>Where it&#39;s used</strong>: implemented by <a href="#speakerdashboardservice">SpeakerDashboardService</a>
-          (<code>SpeakerDashboardService.cs:14-16</code>) and registered explicitly at <code>DependencyInjection.cs:39</code> (an
+          (<code>SpeakerDashboardService.cs:14-16</code>) and registered explicitly at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:39</code> (an
           explicit <code>AddScoped</code> because it is not an <code>IEntityService&lt;,&gt;</code> and the assembly scan would not find
           it); injected into <a href="#speakerdashboard">SpeakerDashboard</a>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDashboard.razor.cs:25</code>),
@@ -3019,7 +3021,7 @@
           <a href="group-20-conference-api-grpc.html#sessionscontroller"><code>SessionsController</code></a> removes the key from the
           filter dictionary, parses it with <code>TryParse</code> under the invariant culture, and resolves it through the
           SessionSpeaker join before ANDing the result with the public-session specification
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:113-122</code>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionsController.cs:111-120</code>,
           documented at <code>:90-94</code>). The request also asks for <code>includeFKs=false&amp;includeChildren=false</code> and caps
           the page at <code>MaxSpeakerSessions = 100</code> (<code>SpeakerDashboardService.cs:19,38</code>). The comment records what
           this replaced: fetching the whole catalog with every child collection and filtering client-side.
@@ -3283,8 +3285,8 @@
           speaks the server&#39;s contract exactly rather than an assumed one): link is a <code>PUT</code> to <code>{id}/link</code>
           carrying a <a href="group-17-conference-domain.html#linkuserrequest"><code>LinkUserRequest</code></a> body and unlink is a
           <code>DELETE</code> to the same path, which is precisely what the controller declares
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakersController.cs:375</code>,
-          <code>:393</code>). <code>[Rubric §2, Design Patterns]</code> (assesses use of template-method style bases): the subclass
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakerLinksController.cs:40</code>,
+          <code>:59</code>). <code>[Rubric §2, Design Patterns]</code> (assesses use of template-method style bases): the subclass
           supplies only what varies, the resource name and the two extra verbs.</li>
           <li><strong>Walkthrough</strong><ul>
           <li>The primary constructor takes <code>IHttpClientFactory</code> and
@@ -3309,7 +3311,7 @@
           <code>DeleteAsync</code> against the identical path and no body (<code>:32-34</code>). Both methods return the
           <a href="group-01-result-error-handling.html#result"><code>Result</code></a> the base produced, success for any 2xx and
           otherwise the errors the ProblemDetails response described (<code>EntityServiceBase.cs:354-370</code>); the
-          server answers <code>NoContent</code> on both success paths (<code>SpeakersController.cs:390</code>, <code>:407</code>).</li>
+          server answers <code>NoContent</code> on both success paths (<code>SpeakerLinksController.cs:55</code>, <code>:73</code>).</li>
           <li>Neither call passes an <code>idempotencyKey</code> or an <code>ifMatch</code>, both optional parameters of that overload
           (<code>EntityServiceBase.cs:354-358</code>). That matches the contract the base documents: a key is for
           non-idempotent writes (creates), and link and unlink are a <code>PUT</code> and a <code>DELETE</code> whose repetition
@@ -3340,10 +3342,10 @@
           private <code>InvalidateOnSuccess</code> (<code>EntityServiceBase.cs:165</code>, <code>:187</code>, <code>:213</code>, <code>:281-288</code>), so the two
           link verbs here evict nothing. That is inert as written, because this service is constructed without
           an <a href="group-15-common-ui-framework.html#iuireadcache"><code>IUiReadCache</code></a>; the server-side output cache is
-          evicted by the controller itself on both paths (<code>SpeakersController.cs:389</code>, <code>:406</code>,
+          evicted by the controller itself on both paths (<code>SpeakerLinksController.cs:54</code>, <code>:72</code>,
           <a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a>).
           Authorization for both endpoints is enforced server side with
-          <code>[HasPermission(ConferencePermissions.SpeakersManage)]</code> (<code>SpeakersController.cs:376</code>, <code>:394</code>,
+          <code>[HasPermission(ConferencePermissions.SpeakersManage)]</code> (<code>SpeakerLinksController.cs:41</code>, <code>:60</code>,
           <a href="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html" target="_blank" rel="noopener">ADR-020</a>): the client
           sends the bearer token and reports whatever the server decides.</li>
           </ul>
@@ -3694,7 +3696,7 @@
           <li><strong>What it is</strong>: the organizer browse page for speakers: server-side paging with a full-name search and avatars, an event filter, a mobile card layout, and delete-with-confirmation.</li>
           <li><strong>Depends on</strong>: extends <a href="#eventfilteredlistpagebasetdto"><code>EventFilteredListPageBase&lt;TDto&gt;</code></a> closed over <a href="group-17-conference-domain.html#speakerdto"><code>SpeakerDTO</code></a> (<code>:18</code>), and injects <a href="#ispeakeruiservice"><code>ISpeakerUIService</code></a> (<code>:23</code>). It uses <a href="group-15-common-ui-framework.html#listpageactions"><code>ListPageActions</code></a> (<code>:42,86</code>), <a href="group-15-common-ui-framework.html#errormessages"><code>ErrorMessages</code></a> (<code>:92</code>), <a href="#conferenceroutepaths"><code>ConferenceRoutePaths</code></a> (<code>:95-96</code>), the <a href="group-15-common-ui-framework.html#mobileinfinitescrolllisttitem"><code>MobileInfiniteScrollList&lt;TItem&gt;</code></a> and <code>DeleteConfirmation</code> components (<code>:31-32</code>), and <a href="group-01-result-error-handling.html#result"><code>Result&lt;T&gt;</code></a> (<code>:73</code>).</li>
           <li><strong>Concept introduced, the virtual filter key.</strong> Structurally this is <a href="#activitylist"><code>ActivityList</code></a>: the same five overrides over the same base, the same <code>WaitForEventsAsync</code> guard before both fetches (<code>:56</code>, <code>:75</code>), the same delegation of delete to <a href="group-15-common-ui-framework.html#listpageactions"><code>ListPageActions</code></a>. One thing genuinely differs, and it is the interesting part.
-          <code>ApplyEventFilter</code> (<code>:69</code>) adds <code>filters[&quot;EventId&quot;]</code> exactly as it does for activities, but a <code>Speaker</code> has <strong>no</strong> <code>EventId</code> column: a speaker relates to an event through the EventSpeaker and SessionSpeaker joins. So <code>EventId</code> here is a <em>virtual</em> filter key. The paged speakers endpoint intercepts it, removes it from the filter dictionary before the generic filter pipeline ever sees it, and resolves the scope through those joins instead (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakersController.cs:120-122,152-159</code>). The client-side contract is therefore identical for both entities while the server-side resolution is not. <code>[Rubric §9, API &amp; Contract Design]</code> (assesses whether a query contract can express a client&#39;s intent without leaking the storage shape) and <code>[Rubric §8, Data Architecture]</code>: the join stays server-side, where the indexes are, instead of becoming a two-step client fetch.
+          <code>ApplyEventFilter</code> (<code>:69</code>) adds <code>filters[&quot;EventId&quot;]</code> exactly as it does for activities, but a <code>Speaker</code> has <strong>no</strong> <code>EventId</code> column: a speaker relates to an event through the EventSpeaker and SessionSpeaker joins. So <code>EventId</code> here is a <em>virtual</em> filter key. The paged speakers endpoint intercepts it, removes it from the filter dictionary before the generic filter pipeline ever sees it, and resolves the scope through those joins instead (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakersController.cs:110-112,142-149</code>). The client-side contract is therefore identical for both entities while the server-side resolution is not. <code>[Rubric §9, API &amp; Contract Design]</code> (assesses whether a query contract can express a client&#39;s intent without leaking the storage shape) and <code>[Rubric §8, Data Architecture]</code>: the join stays server-side, where the indexes are, instead of becoming a two-step client fetch.
           The class doc records this in one sentence at the top of the page (<code>:13-16</code>), which matters: a reader who assumes <code>EventId</code> is a column would look for it on the DTO and find nothing.</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>SavePageFilters</code> / <code>RestorePageFilters</code> (<code>:35-39</code>): persist and restore the search term only.</li>
@@ -4485,7 +4487,7 @@
           a <code>RequiredError</code> string per control. This codebase does the opposite: the fields live on one model,
           the rules live on that model as attributes, and the MudBlazor controls carry only <code>For</code> plus a
           single shared <code>Validation</code> delegate (see
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Room/RoomFormFields.razor:14-16</code>).
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Rooms/RoomFormFields.razor:14-16</code>).
           The delegate is built once per page by
           <a href="group-15-common-ui-framework.html#modelvalidation"><code>ModelValidation.For</code></a> over a
           <a href="group-15-common-ui-framework.html#dataannotationsmodelvalidator"><code>DataAnnotationsModelValidator</code></a>
@@ -5697,8 +5699,9 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Feedback/OrganizerFeedbackService.cs:15-64</code>)
           for the paged request it actually issues and the ceiling that comes with it.</li>
           <li><strong>Where it&#39;s used</strong>: implemented by <a href="#organizereventfeedbackservice">OrganizerEventFeedbackService</a>,
-          registered scoped at <code>DependencyInjection.cs:43</code> (whose comment names BR-53 moderation), and injected
-          into <a href="#organizereventfeedback">OrganizerEventFeedback</a>
+          registered scoped at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:41-42</code> (whose comment
+          names BR-53 moderation), and injected into <a href="#organizereventfeedback">OrganizerEventFeedback</a>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Feedback/OrganizerEventFeedback.razor.cs:20</code>).</li>
           </ul>
           <h3 id="iorganizersessionfeedbackuiservice">IOrganizerSessionFeedbackUIService</h3>
@@ -5739,7 +5742,8 @@
           </li>
           <li><p><strong>Where it&#39;s used</strong>: implemented by
           <a href="#organizersessionfeedbackservice">OrganizerSessionFeedbackService</a>
-          (<code>OrganizerFeedbackService.cs:66-110</code>), registered scoped at <code>DependencyInjection.cs:43</code>, and
+          (<code>OrganizerFeedbackService.cs:66-110</code>), registered scoped at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:43</code>, and
           injected into <a href="#organizersessionfeedback">OrganizerSessionFeedback</a>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Feedback/OrganizerSessionFeedback.razor.cs:20</code>).</p>
           </li>
@@ -5929,7 +5933,9 @@
           client-side paging) at the cost of a hard ceiling, see the caveat.</li>
           <li><strong>Where it&#39;s used</strong>: registered explicitly as
           <a href="#iorganizereventfeedbackuiservice">IOrganizerEventFeedbackUIService</a> under a comment naming BR-53
-          moderation (<code>DependencyInjection.cs:41-42</code>) and injected into
+          moderation
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:41-42</code>) and injected
+          into
           <a href="#organizereventfeedback">OrganizerEventFeedback</a>
           (<code>Pages/Feedback/OrganizerEventFeedback.razor.cs:18</code>). Its structural twin
           <a href="#organizersessionfeedbackservice">OrganizerSessionFeedbackService</a> shares the same file
@@ -6038,7 +6044,9 @@
           assembly scan does not see it) as
           <a href="#iorganizersessionfeedbackuiservice"><code>IOrganizerSessionFeedbackUIService</code></a> at
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:43</code>, under the
-          comment naming BR-53 moderation (<code>DependencyInjection.cs:43</code>), and injected into
+          comment naming BR-53 moderation
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:41</code>), and injected
+          into
           <a href="#organizersessionfeedback"><code>OrganizerSessionFeedback</code></a>
           (<code>Pages/Feedback/OrganizerSessionFeedback.razor.cs:18</code>).</p>
           </li>
@@ -6203,7 +6211,8 @@
           closes the leaf.</li>
           <li><strong>Where it&#39;s used</strong>: never named in DI by hand. Because it is an <code>IEntityService&lt;,&gt;</code> implementation in
           the Conference UI assembly, the same Scrutor scan inside <code>AddUIModule&lt;ConferenceUIModule&gt;()</code>
-          (<code>DependencyInjection.cs:28-30</code>) registers it <code>AsImplementedInterfaces()</code> with a scoped lifetime, which
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/DependencyInjection.cs:28-30</code>) registers it
+          <code>AsImplementedInterfaces()</code> with a scoped lifetime, which
           is what makes <a href="#ipartneruiservice">IPartnerUIService</a> resolvable in <a href="#partnercreate">PartnerCreate</a>
           (<code>Pages/Partners/PartnerCreate.razor.cs:20</code>), <a href="#partnerdetail">PartnerDetail</a>
           (<code>Pages/Partners/PartnerDetail.razor.cs:23</code>), and <a href="#partnerlist">PartnerList</a>
@@ -6613,8 +6622,8 @@
           The two map one to one onto two of the endpoints on
           <a href="group-20-conference-api-grpc.html#sessionselectioncontroller">SessionSelectionController</a>: the
           <code>GET dashboard/{eventId}</code> read
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:41</code>)
-          and the <code>POST score/{eventId}</code> command (<code>SessionSelectionController.cs:108</code>). The controller exposes
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:43</code>)
+          and the <code>POST score/{eventId}</code> command (<code>SessionSelectionController.cs:121</code>). The controller exposes
           three further analytical GETs (category distribution, speaker overlap, content similarity, <code>:54,68,82</code>)
           that this UI contract deliberately does not surface.</li>
           </ul>

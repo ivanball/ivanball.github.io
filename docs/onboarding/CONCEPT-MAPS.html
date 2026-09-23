@@ -154,8 +154,8 @@
           <a href="00-primer.html"><code>00-primer.md</code></a> · <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a> ·
           <a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a> · the <code>group-NN-*.md</code> chapters.</p>
           <hr>
-          <h2 id="1-system-context-two-codebases--the-19-packages">1. System context, two codebases + the 19 packages</h2>
-          <p><code>MMCA.Common</code> is a framework published as nineteen NuGet packages in lockstep, to nuget.org <strong>and</strong>
+          <h2 id="1-system-context-two-codebases--the-22-packages">1. System context, two codebases + the 22 packages</h2>
+          <p><code>MMCA.Common</code> is a framework published as twenty-two NuGet packages in lockstep, to nuget.org <strong>and</strong>
           GitHub Packages from one tag (<a href="https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html" target="_blank" rel="noopener">ADR-053</a>);
           <code>MMCA.ADC</code> and <code>MMCA.Store</code> consume them. <code>MMCA.Common/FACTS.md</code> owns the count and the list (link
           there, do not recount). The framework depends on neither consumer (that one-way arrow is why the
@@ -169,12 +169,15 @@
           is the one MAUI-TFM package: it lives outside <code>MMCA.Common.slnx</code> and is built and packed by
           dedicated windows CI jobs
           (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>). Two more
-          stand apart from the layer chain: <code>MMCA.Common.AI</code> is the governed language-model boundary
-          (<a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener">ADR-120</a>, taught as its
-          own chapter group), and <code>MMCA.Common.Testing.Aspire</code> ships the AppHost integration-test base
+          families stand apart from the layer chain. The four AI packages form the governed language-model
+          boundary (<a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener">ADR-120</a>, taught
+          as its own chapter group): <code>MMCA.Common.AI</code> is the governed client, <code>MMCA.Common.AI.Anthropic</code> and
+          <code>MMCA.Common.AI.OpenAI</code> are provider adapters (one <code>IAiProviderFactory</code> each), and
+          <code>MMCA.Common.AI.Testing</code> is the prompt-contract and golden-replay harness; none of them takes an
+          MMCA.Common project reference. <code>MMCA.Common.Testing.Aspire</code> ships the AppHost integration-test base
           (<a href="https://ivanball.github.io/docs/adr/117-apphost-integration-test-base.html" target="_blank" rel="noopener">ADR-117</a>).</p>
           <pre class="mermaid">flowchart TD
-    subgraph COMMON[&quot;MMCA.Common: framework, 19 NuGet packages (lockstep versioned)&quot;]
+    subgraph COMMON[&quot;MMCA.Common: framework, 22 NuGet packages (lockstep versioned)&quot;]
         direction TB
         subgraph CORE[&quot;Core (4)&quot;]
             SH[&quot;Shared&quot;]
@@ -201,7 +204,12 @@
             T4[&quot;Testing.Architecture&quot;]
             T5[&quot;Testing.Aspire&lt;br/&gt;(AppHost test base, ADR-117)&quot;]
         end
-        AIPK[&quot;AI&lt;br/&gt;(governed chat boundary, ADR-120)&quot;]
+        subgraph AIFAM[&quot;AI boundary (4), ADR-120&quot;]
+            AIPK[&quot;AI&lt;br/&gt;(governed chat client)&quot;]
+            AIA[&quot;AI.Anthropic&lt;br/&gt;(provider adapter)&quot;]
+            AIO[&quot;AI.OpenAI&lt;br/&gt;(provider adapter)&quot;]
+            AIT[&quot;AI.Testing&lt;br/&gt;(replay + contract pins)&quot;]
+        end
         META[&quot;MMCA.Common&lt;br/&gt;(metapackage, no assembly:&lt;br/&gt;the Core 6, ADR-101)&quot;]
     end
 
@@ -213,7 +221,7 @@
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef con fill:#e6f4ea,stroke:#34a853,color:#111
-    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,T5,AIPK,META fw
+    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,T5,AIPK,AIA,AIO,AIT,META fw
     class ADC,STORE con</pre>
           <hr>
           <h2 id="2-clean-architecture-the-layered-dependency-rule">2. Clean Architecture, the layered dependency rule</h2>
@@ -1000,7 +1008,7 @@
           <nav class="doc-toc" aria-label="On this page">
             <p class="doc-toc-title">On this page</p>
             <ul>
-            <li><a href="#1-system-context-two-codebases--the-19-packages">1. System context, two codebases + the 19 packages</a></li>
+            <li><a href="#1-system-context-two-codebases--the-22-packages">1. System context, two codebases + the 22 packages</a></li>
             <li><a href="#2-clean-architecture-the-layered-dependency-rule">2. Clean Architecture, the layered dependency rule</a></li>
             <li><a href="#3-the-28-functional-groups-dependency--build-order">3. The 28 functional groups, dependency / build order</a></li>
             <li><a href="#4-core-framework-patterns-how-the-building-blocks-compose">4. Core framework patterns, how the building blocks compose</a></li>
