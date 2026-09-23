@@ -499,7 +499,7 @@ sends that token straight back in the `If-Match`
 header rather than in a body field: the publish and unpublish endpoints are marked
 [`SupportsIfMatchAttribute`](group-12-api-hosting-mapping.md#supportsifmatchattribute) and read the
 required token from the header before building their command
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:265,273,298,306`),
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventLifecycleController.cs:53,61,86,94`),
 so a transition decided against a stale view surfaces as a conflict instead of applying silently, and a
 request with no `If-Match` at all is refused outright
 ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)). Alongside those sit
@@ -549,9 +549,10 @@ rather than from a field on `Speaker`: the dashboard handler resolves each speak
 rows (near-duplicate talks, scored 0.0 to 1.0 with the shared category items and keywords that drove the
 score, `ContentSimilarityDTO.cs:34-41`) are *not* members of the composite record: they are served by
 their own endpoint on the same controller
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:83`).
-The AI scores are produced by an Anthropic-backed scoring service in `Conference.Infrastructure`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:30`,
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:85`).
+The AI scores are produced by a scoring service in `Conference.Infrastructure` that calls the model
+through the framework's governed `IChatClient` rather than a hand-built `HttpClient`
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:13-17,46`,
 outside this chapter) and persisted as the [`SessionAiScore`](#sessionaiscore) aggregate;
 [`ScoreEventSessionsResultDTO`](#scoreeventsessionsresultdto) reports a batch run's scored and failed
 counts
@@ -560,8 +561,10 @@ counts
 The whole organizer workflow is guarded by the `conference:session-selection:manage` capability
 permission catalogued in [`ConferencePermissions`](#conferencepermissions)
 (`ConferencePermissions.cs:30`), applied once at the controller level
-(`SessionSelectionController.cs:30`), not by a feature flag. The one flag the module does carry,
-[`ConferenceFeatures`](#conferencefeatures)`.SessionizeIntegration`
+(`SessionSelectionController.cs:32`); access is a permission question, not a feature-flag one. The
+module carries two flags, both on
+[`ConferenceFeatures`](#conferencefeatures). The first,
+`SessionizeIntegration`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/ConferenceFeatures.cs:23`), gates only
 the Sessionize external sync that seeds the raw session data this dashboard then analyzes: the
 `RefreshFromSessionizeCommand` implements [`IFeatureGated`](group-05-cqrs-pipeline.md#ifeaturegated)
@@ -572,7 +575,15 @@ Concerns]`, [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-manag
 is declared `Permanent` with an owning team (`ConferenceFeatures.cs:22`), and its own doc comment says
 why that matters: it is a shipped kill switch over a live external dependency, kept so an organizer can
 shed the Sessionize call during a provider incident, not a rollout toggle with a removal date
-(`ConferenceFeatures.cs:16-20`). The scoring and dashboard handlers are not flag-gated.
+(`ConferenceFeatures.cs:16-20`). The second, `SessionScoring`, is declared the same way
+(`ConferenceFeatures.cs:37-38`) and gates only the paid AI scoring pass, one model call per session
+(`ConferenceFeatures.cs:31-34`): the `ScoreEventSessionsInternalCommand` is `IFeatureGated` on it
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:28,37`),
+and because the organizer trigger only schedules that command, the endpoint also carries
+`[FeatureGate]` so a switched-off pass answers 404 up front instead of 202 for work about to be
+refused (`SessionSelectionController.cs:112-122`). The dashboard handler is not flag-gated, so the
+dashboard and any scores already stored stay readable with the scoring flag off
+(`ConferenceFeatures.cs:28-29`).
 
 The Sessionize *code* that sync runs against has its own single definition,
 [`SessionizeCodeFormat`](#sessionizecodeformat)
@@ -792,7 +803,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 - **Concept introduced, the assembly-marker pattern.** `[Rubric §2, Design Patterns]` (assesses whether the patterns in use are idiomatic and solve a real problem): instead of hard-coding an assembly-name string, a scanner takes a `typeof(...)` from a type it knows lives in the target assembly, so renaming the assembly cannot silently break discovery. Every layer of every ADC module ships this same pair (see the sibling pairs in [group-18 Conference.Application](group-18-conference-application.md#assemblyreference), [group-19 Conference.Infrastructure](group-19-conference-infrastructure.md#assemblyreference), and [group-20 Conference.API](group-20-conference-api-grpc.md#assemblyreference)), so registration and discovery code reads the same way in every project. MMCA.Common ships the same pair in its own layers (for example `MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:8,18`), and its doc comment there records the split explicitly: `ClassReference` is the anchor for the case where a *static* type cannot be used.
 - **Walkthrough**: `AssemblyReference.Assembly` (`AssemblyReference.cs:7`) is a `public static readonly Assembly`; `AssemblyName` (`AssemblyReference.cs:8`) is its short name, falling back to `string.Empty` when reflection returns null. `ClassReference` (`AssemblyReference.cs:11`) has no members at all.
 - **Why it's built this way**: a `typeof()` handle is refactor-safe where a magic string is not, and a non-static `ClassReference` can be passed where a static class cannot. A C# static type is not a legal generic type argument, so a generic scanning API such as `services.ScanModuleApplicationServices<ClassReference>()` (used by the Application-layer sibling at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:146`) needs the non-static form.
-- **Where it's used**: the *Domain* pair has no call site in `MMCA.ADC/Source` today. The layer pairs that are actually consumed are the Application one (`Conference.Application/DependencyInjection.cs:130`) and the framework's own (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:145`, `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:51`). The Domain pair exists so the layer-parallel convention holds across all five layers of the module.
+- **Where it's used**: the *Domain* pair has no call site in `MMCA.ADC/Source` today. The layer pairs that are actually consumed are the Application one (`Conference.Application/DependencyInjection.cs:130`) and the framework's own (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:129`, `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:48`). The Domain pair exists so the layer-parallel convention holds across all five layers of the module.
 - **Caveats / not-in-source**: whether the convention is *enforced* (an architecture fitness rule requiring one pair per project) is not visible from these files; no test in `MMCA.ADC/Tests` references either type.
 
 ---
@@ -855,7 +866,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 - **Walkthrough**: one member. `PrivilegedRoles` (`ConferenceReadAudience.cs:34-38`) is a `static IReadOnlyList<string>` initialized with a collection expression of the two role-name constants. There are no methods and no state; callers do the matching themselves with `Any(...IsInRole)`.
 - **Why it's built this way**: the remarks (`ConferenceReadAudience.cs:10-21`) name the exact failure a single declaration prevents. The output-cache bypass list and the API-layer visibility checks must name the *same* roles; if the two lists drifted apart, a privileged caller's everything-inclusive response would land in a shared public cache entry and then be served to anonymous visitors. Declaring the audience once makes that drift impossible instead of merely unlikely. The second paragraph records what keeps the list at exactly two entries: a third, partially privileged audience would need its own cache key, so extending this list means revisiting the cache policies in the Conference service first.
 - **Where it's used**: three layers, one definition.
-  - The Conference service host spreads it into `adminBypassRoles` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:250`) and hands that array to ten named output-cache policies (`Program.cs:251-280`: `ConferencePublicCache`, `EventsCache`, `SessionsCache`, `SpeakersCache`, `RoomsCache`, `CategoriesCache`, `QuestionsCache`, `SponsorsCache`, `ActivitiesCache`, `BookmarkCountsCache`). The comment directly above states the single-source-of-truth rule and its consequence: if the two lists ever named different roles, a privileged payload would be cached and served to the public (`Program.cs:247-249`). One policy deliberately takes no bypass list, `NowNextCache` (`Program.cs:268`), because its payload is identical for every role.
+  - The Conference service host spreads it into `adminBypassRoles` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:267`) and hands that array to ten named output-cache policies (`Program.cs:268-297`: `ConferencePublicCache`, `EventsCache`, `SessionsCache`, `SpeakersCache`, `RoomsCache`, `CategoriesCache`, `QuestionsCache`, `SponsorsCache`, `ActivitiesCache`, `BookmarkCountsCache`). The comment directly above states the single-source-of-truth rule and its consequence: if the two lists ever named different roles, a privileged payload would be cached and served to the public (`Program.cs:264-266`). One policy deliberately takes no bypass list, `NowNextCache` (`Program.cs:285`), because its payload is identical for every role.
   - The API layer wraps it as the [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) extension `IsPrivilegedConferenceReader()` (`CurrentUserServiceExtensions.cs:24-25`), which the controllers use to decide whether to apply a public filter specification at all: `EventsController` picks `null` or a [`PublishedEventSpecification`](group-18-conference-application.md#publishedeventspecification) from it (`.../Controllers/EventsController.cs:75`, with a second guard at `:141`), and `SessionsController` (`:60`), `SpeakersController` (`:65`), `SponsorsController` (`:52`), `ActivitiesController` (`:52`), `RoomsController` (`:104`), `SessionSpeakersController` (`:59`), `SessionCategoryItemsController` (`:59`), `SpeakerCategoryItemsController` (`:59`), and `EventSpeakersController` (`:58`) each expose it as a private `IsPrivileged` property.
   - The Blazor UI reads it directly when sizing its filters and detail views: `.../MMCA.ADC.Conference.UI/Pages/Public/PublicSessionList.razor.cs:121`, `.../PublicSpeakerList.razor.cs:101`, `.../PublicEventList.razor.cs:77`, `.../PublicEventDetail.razor.cs:64`, and `.../PublicSpeakerDetail.razor.cs:205`.
 
@@ -1018,7 +1029,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 - **Concept introduced, the informative mutation response.** `[Rubric §9, API & Contract Design]` (assesses stable, useful response contracts): rather than returning `204 No Content` for a bulk sync, the endpoint returns counts so the caller can verify that the expected number of sessions, speakers, and categories landed. This is the read-back shape of a bulk write. `[Rubric §13, Observability & Operability]` also applies in the small: the `Warnings` list turns silent partial-import oddities into something an operator can read off the response.
 - **Walkthrough**: eight `required init` properties (`RefreshFromSessionizeResultDTO.cs:10-31`). Six are `int` counts, `CategoriesSynced` (line 10), `CategoryItemsSynced` (line 13), `RoomsSynced` (line 16), `QuestionsSynced` (line 19), `SpeakersSynced` (line 22), and `SessionsSynced` (line 25). `SkippedSoftDeleted` (line 28) counts entities that a sync re-encountered but did not restore because the app had soft-deleted them (BR-136). `Warnings` (line 31) is an `IReadOnlyList<string>` of non-fatal issues such as a duration violation or a date-range mismatch. Every property is `required`, so a partial or forgotten field cannot be constructed.
 - **Why it's built this way**: `SkippedSoftDeleted` is surfaced explicitly because an organizer who soft-deleted a session and then re-ran a sync would otherwise be puzzled why the count does not match Sessionize. The handler even folds that count into the warning list when it is non-zero (`RefreshFromSessionizeHandler.cs:158-161`).
-- **Where it's used**: built by the [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand) handler, which reads the per-strategy [`SessionizeSyncResult`](group-18-conference-application.md#sessionizesyncresult) values and the shared sync context into it (`RefreshFromSessionizeHandler.cs:173-183`), with an all-zero instance returned when Sessionize sends an empty response (`RefreshFromSessionizeHandler.cs:130-140`). Returned by [`EventsController.RefreshAsync`](group-20-conference-api-grpc.md#eventscontroller) (`EventsController.cs:329`, whose `[Idempotent]` attribute replays the first response for a retried `Idempotency-Key` rather than starting a second import, `EventsController.cs:328`) and surfaced to the organizer UI through [`EventService.RefreshFromSessionizeAsync`](group-21-conference-ui.md#eventservice) (`EventService.cs:43-51`), which the [`EventDetail`](group-21-conference-ui.md#eventdetail) page holds as `_refreshResult` (`EventDetail.razor.cs:63`, assigned at `:254`).
+- **Where it's used**: built by the [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand) handler, which reads the per-strategy [`SessionizeSyncResult`](group-18-conference-application.md#sessionizesyncresult) values and the shared sync context into it (`RefreshFromSessionizeHandler.cs:173-183`), with an all-zero instance returned when Sessionize sends an empty response (`RefreshFromSessionizeHandler.cs:130-140`). Returned by [`EventLifecycleController.RefreshAsync`](group-20-conference-api-grpc.md#eventlifecyclecontroller) (`EventLifecycleController.cs:117`, whose `[Idempotent]` attribute replays the first response for a retried `Idempotency-Key` rather than starting a second import, `EventLifecycleController.cs:116`) and surfaced to the organizer UI through [`EventService.RefreshFromSessionizeAsync`](group-21-conference-ui.md#eventservice) (`EventService.cs:43-51`), which the [`EventDetail`](group-21-conference-ui.md#eventdetail) page holds as `_refreshResult` (`EventDetail.razor.cs:63`, assigned at `:254`).
 
 ---
 
@@ -1102,7 +1113,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 
 - **What it is**: the aggregate DTO for a conference event, the full wire shape a client reads or writes for the [`Event`](#event) aggregate. It composes the three child collections (rooms, speaker associations, question answers) alongside the event's own scalar fields, its concurrency token, and the ten field-length constants the rest of the stack reads.
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) and [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) (both implemented, `EventDTO.cs:3,16`); composes [`RoomDTO`](#roomdto), [`EventSpeakerDTO`](#eventspeakerdto), and [`EventQuestionAnswerDTO`](#eventquestionanswerdto); carries [`QuestionModerationDefault`](#questionmoderationdefault).
-- **Concept introduced, the aggregate DTO and the optimistic-concurrency round-trip on the wire.** `[Rubric §9, API & Contract Design]` (aggregate DTOs compose child DTOs so a UI gets everything it needs in one call; mapping is manual or Mapperly-generated per [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)): `EventDTO` is the Level-2 composite that bundles the Level-1 children. `[Rubric §8, Data Architecture]` (optimistic concurrency): implementing [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) means the DTO round-trips the EF `RowVersion` token (`EventDTO.cs:52`), so an update form can detect a concurrent edit instead of silently overwriting one. The body-less publish and unpublish transitions carry the same token in an `If-Match` header rather than a body, which is why there is no transition request record here: [`EventsController.PublishAsync`](group-20-conference-api-grpc.md#eventscontroller) reads it via `SupportsIfMatchAttribute.RequiredToken` and answers a missing header with `428` and a stale token with `412` (`EventsController.cs:265-277`, `:295-309`).
+- **Concept introduced, the aggregate DTO and the optimistic-concurrency round-trip on the wire.** `[Rubric §9, API & Contract Design]` (aggregate DTOs compose child DTOs so a UI gets everything it needs in one call; mapping is manual or Mapperly-generated per [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)): `EventDTO` is the Level-2 composite that bundles the Level-1 children. `[Rubric §8, Data Architecture]` (optimistic concurrency): implementing [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) means the DTO round-trips the EF `RowVersion` token (`EventDTO.cs:52`), so an update form can detect a concurrent edit instead of silently overwriting one. The body-less publish and unpublish transitions carry the same token in an `If-Match` header rather than a body, which is why there is no transition request record here: [`EventLifecycleController.PublishAsync`](group-20-conference-api-grpc.md#eventlifecyclecontroller) reads it via `SupportsIfMatchAttribute.RequiredToken` and answers a missing header with `428` and a stale token with `412` (`EventLifecycleController.cs:57-72`, `:90-105`).
 - **Walkthrough**
   - Length constants (`EventDTO.cs:19-46`): `NameMaxLength = 500` (line 17), `DescriptionMaxLength = 4000` (line 20), `TimeZoneMaxLength = 100` (line 23), `SessionizeCodeMaxLength = 100` (line 26), `VenueAddressMaxLength = 500` (line 29), `VenueMapUrlMaxLength = 2000` (line 32), `WiFiInfoMaxLength = 500` (line 35), `OrganizerContactEmailMaxLength = 255` (line 38), `SponsorshipPacketUrlMaxLength = 2000` (line 41), and `TicketingUrlMaxLength = 2000` (line 44).
   - Identity and concurrency: `Id` (`required`, `EventDTO.cs:49`) and `RowVersion`, a non-nullable `byte[]` defaulting to `[]` (`EventDTO.cs:52`), so a freshly constructed DTO carries an empty token rather than a null one.
@@ -1111,7 +1122,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   - Sessionize refresh audit: `LastSessionizeRefreshOn` (`DateTime?`, line 95) and `LastSessionizeRefreshBy` (`string?`, line 98), so the UI can show when the last import ran and who ran it.
   - Child collections (`EventDTO.cs:103-109`): `Rooms`, `EventSpeakers`, and `EventQuestionAnswers`, each an `IReadOnlyCollection<>` of the matching child DTO, each defaulting to an empty collection (`= []`) so an event with no children is safe to render.
 - **Why it's built this way**: composing the children inline lets a single `GET /Events/{id}` return the whole event graph without follow-up calls, and defaulting the collections to `[]` avoids null checks in the UI. The `IConcurrencyAware` token is the write-path guard that turns a lost update into a conflict instead of a silent overwrite. The constants live on the DTO for the reason its doc comment gives (`EventDTO.cs:10-14`): it is the lowest layer the domain, EF configuration, and Blazor pages can all reach.
-- **Where it's used**: produced by [`EventDTOMapper`](group-18-conference-application.md#eventdtomapper) (group-18); it is the DTO type parameter of [`EventsController`](group-20-conference-api-grpc.md#eventscontroller) itself (`EventsController.cs:48-60`), so every inherited GetAll/GetById/Create action speaks it, and the same type parameter drives the UI's `EntityServiceBase` in [`EventService`](group-21-conference-ui.md#eventservice) (`EventService.cs:15-17`). It is the concrete event model that [`CurrentEventDefaults`](#currenteventdefaults) binds [`CurrentEventSelector`](#currenteventselector) to. Its constants are re-exported by [`EventInvariants`](#eventinvariants) (`EventInvariants.cs:17-44`) and bound by the UI's `EventFormModel` `[MaxLength]` attributes (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Events/EventFormModel.cs:45-88`) and the `EventFormFields` input counters (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Event/EventFormFields.razor:21`, `:28`).
+- **Where it's used**: produced by [`EventDTOMapper`](group-18-conference-application.md#eventdtomapper) (group-18); it is the DTO type parameter of [`EventsController`](group-20-conference-api-grpc.md#eventscontroller) itself (`EventsController.cs:45-54`), so every inherited GetAll/GetById/Create action speaks it, and the same type parameter drives the UI's `EntityServiceBase` in [`EventService`](group-21-conference-ui.md#eventservice) (`EventService.cs:15-17`). It is the concrete event model that [`CurrentEventDefaults`](#currenteventdefaults) binds [`CurrentEventSelector`](#currenteventselector) to. Its constants are re-exported by [`EventInvariants`](#eventinvariants) (`EventInvariants.cs:17-44`) and bound by the UI's `EventFormModel` `[MaxLength]` attributes (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Events/EventFormModel.cs:45-88`) and the `EventFormFields` input counters (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Event/EventFormFields.razor:21`, `:28`).
 
 ---
 
@@ -1206,7 +1217,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 - **Where it's used**: nested as the `Now` and `Next` lists on [NowNextDTO](#nownextdto); each row is
   built by the handler's private `ToRow` projection over a `Session` aggregate
   (`GetNowNextHandler.cs:73`), then served on the anonymous now-next endpoints of
-  [EventsController](group-20-conference-api-grpc.md#eventscontroller) (`EventsController.cs:171-180,187-194`).
+  [EventsController](group-20-conference-api-grpc.md#eventscontroller) (`EventsController.cs:165-174,181-188`).
 
 ### SessionAssetKind
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.SessionAssets` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/SessionAssets/SessionAssetKind.cs:13` · Level 0 · enum
@@ -1312,14 +1323,14 @@ are the primary references; the business rules themselves are catalogued in ADC'
 - **Why it's built this way**: batching `Next` as a list rather than a single session is the modelling
   decision that makes the widget correct on a multi-track schedule. Local-plus-UTC times live on the row
   type, keeping this envelope thin. The endpoint is `[AllowAnonymous]` and output-cached under the
-  `NowNextCache` policy (`EventsController.cs:171-173`) because the payload is public and changes with
+  `NowNextCache` policy (`EventsController.cs:165-167`) because the payload is public and changes with
   the clock, which is the `[Rubric §12, Performance & Scalability]` lever for a widget that polls.
 - **Where it's used**: returned as `Result<NowNextDTO>` by
   [GetNowNextHandler](group-18-conference-application.md#getnownexthandler) (`GetNowNextHandler.cs:25`)
   for [GetNowNextQuery](group-18-conference-application.md#getnownextquery); exposed by
   [EventsController](group-20-conference-api-grpc.md#eventscontroller) both per event
-  (`GET {id}/now-next`, `EventsController.cs:174`) and in the id-less "current event" form the
-  home-screen widget calls (`GET now-next`, `EventsController.cs:189`). Both
+  (`GET {id}/now-next`, `EventsController.cs:168`) and in the id-less "current event" form the
+  home-screen widget calls (`GET now-next`, `EventsController.cs:183`). Both
   [NowNextWidgetProvider](group-25-adc-host-composition.md#nownextwidgetprovider) and Engagement's
   [INowNextService](group-22-engagement-module.md#inownextservice) deliberately mirror this wire shape
   locally instead of referencing the type, so neither takes a project reference on Conference.
@@ -1704,7 +1715,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
 - **What it is**: the richest leaf in this family: the AI-generated score for one session, bundled with enough display context (title, status, speaker localities, categories, level) that a dashboard row is self-contained. It is what the organizer sees when the AI has ranked an event's submissions.
 - **Depends on**: `SessionIdentifierType` alias (no first-party link). All other members are primitives, `string`, `DateTime`, or `IReadOnlyList<string>`.
 - **Concept introduced, the self-contained scored row.** `[Rubric §12, Performance & Scalability]` (assesses shaping the payload so the client does no secondary lookups) and `[Rubric §9, API & Contract Design]`. The interesting move is that the score does not travel alone: alongside the numbers it carries `SpeakerLocalities`, `SessionCategories`, and `SessionLevel` (lines 56-62), so the organizer dashboard can print a complete, sortable row for each session without an N+1 fetch back to the [`Session`](#session), [`Speaker`](#speaker), or [`Category`](#category) aggregates. `[Rubric §13, Observability & Operability]`: the record also records *how* the number was produced, `ModelUsed` (line 39), `PromptVersion` (line 47), and `ScoredOn` (line 50), so a score is auditable, comparable against another score, and its staleness visible.
-- **Walkthrough**: `SessionId` + `SessionTitle` (lines 9-12, required) identify the row. Then the scores, all `required decimal` on a 1.0 to 10.0 scale: an `OverallScore` (line 15) plus six dimension sub-scores, `TopicRelevanceScore`, `DescriptionQualityScore`, `NoveltyScore`, `ActionableTakeawaysScore`, `DepthOrInsightQualityScore`, `CredibilityExperienceScore` (lines 18-33). `Reasoning` (line 36, required) holds the model's free-text justification. `ModelUsed` (line 39), `PromptVersion` (line 47), and `ScoredOn` (line 50) capture provenance, all three `required`. `PromptVersion` is the reviewer-brief contract version behind the numbers, shaped `yyyy-MM-dd.N` or the sentinel `legacy` for rows written before the column existed (documented at `SessionAiScoreDTO.cs:41-46`); the value comes from the scoring service's own constant, today `"2026-09-04.1"` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:37`). The tail members are optional display context: `Status` (line 53, nullable), `SpeakerLocalities` and `SessionCategories` (lines 56-59, defaulted to `[]` so never null), and `SessionLevel` (line 62, nullable). `SpeakerLocalities` is the speaker-locality convention surfacing here: those tier names come from a [`CategoryItem`](#categoryitem) under the "Where are you traveling from" category (Sessionize id 121854), not from any geographic field on [`Speaker`](#speaker) (resolved by `SpeakerLocalityHelper` in Conference.Application, `SpeakerLocalityHelper.cs:19-33`).
+- **Walkthrough**: `SessionId` + `SessionTitle` (lines 9-12, required) identify the row. Then the scores, all `required decimal` on a 1.0 to 10.0 scale: an `OverallScore` (line 15) plus six dimension sub-scores, `TopicRelevanceScore`, `DescriptionQualityScore`, `NoveltyScore`, `ActionableTakeawaysScore`, `DepthOrInsightQualityScore`, `CredibilityExperienceScore` (lines 18-33). `Reasoning` (line 36, required) holds the model's free-text justification. `ModelUsed` (line 39), `PromptVersion` (line 47), and `ScoredOn` (line 50) capture provenance, all three `required`. `PromptVersion` is the reviewer-brief contract version behind the numbers, shaped `yyyy-MM-dd.N` or the sentinel `legacy` for rows written before the column existed (documented at `SessionAiScoreDTO.cs:41-46`); the value comes from the scoring service's own constant, today `"2026-09-04.1"` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:53`). The tail members are optional display context: `Status` (line 53, nullable), `SpeakerLocalities` and `SessionCategories` (lines 56-59, defaulted to `[]` so never null), and `SessionLevel` (line 62, nullable). `SpeakerLocalities` is the speaker-locality convention surfacing here: those tier names come from a [`CategoryItem`](#categoryitem) under the "Where are you traveling from" category (Sessionize id 121854), not from any geographic field on [`Speaker`](#speaker) (resolved by `SpeakerLocalityHelper` in Conference.Application, `SpeakerLocalityHelper.cs:19-33`).
 - **Why it's built this way**: embedding display context in the score DTO avoids per-row lookups on a dashboard that shows every session in an event at once, and recording the model id, the prompt contract version, and the timestamp keeps an AI-produced number honest and re-scorable. Two scores are only comparable when both the model and the prompt behind them match, so surfacing `PromptVersion` next to `ModelUsed` is what lets a reader tell a genuine ranking change from a change of reviewer brief.
 - **Where it's used**: nested as the `AiScores` collection on [`SessionSelectionDashboardDTO`](#sessionselectiondashboarddto); projected from the [`SessionAiScore`](#sessionaiscore) entity by `GetSessionSelectionDashboardHandler` (`GetSessionSelectionDashboardHandler.cs:386` carries `PromptVersion` across), written by `ScoreEventSessionsHandler` (which stamps `aiScoringService.ModelId` and `aiScoringService.PromptVersion`, `ScoreEventSessionsHandler.cs:83`, and returns a [`ScoreEventSessionsResultDTO`](#scoreeventsessionsresultdto) summary), and read back through [`SessionSelectionController`](group-20-conference-api-grpc.md#sessionselectioncontroller).
 - **Caveats / not-in-source**: the 1.0 to 10.0 range and the status vocabulary are documented in the property comments and enforced by the scoring handler and the external model prompt, not by this record. The `legacy` sentinel is likewise a convention, not a constant on this type: rows predating the column were backfilled with it by the `AddSessionAiScorePromptVersion` migration (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/Sessions/SessionAiScoreConfiguration.cs:59-61`).
@@ -1827,13 +1838,16 @@ are the primary references; the business rules themselves are catalogued in ADC'
 - **Why it's built this way**: strongly typing the body over the `UserIdentifierType` alias keeps "who"
   named end to end, and placing it in `Shared` lets the UI and any future extracted client bind the same
   contract without a Domain reference.
-- **Where it's used**: bound by `SpeakersController.LinkUserAsync`, a `PUT /Speakers/{id}/link` gated by
-  `[HasPermission(ConferencePermissions.SpeakersManage)]`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakersController.cs:374-391`),
+- **Where it's used**: bound by `SpeakerLinksController.LinkUserAsync`, a `PUT /Speakers/{id}/link` gated
+  by `[HasPermission(ConferencePermissions.SpeakersManage)]`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakerLinksController.cs:40-56`),
   which forwards `request.UserId` into the
   [`LinkUserToSpeakerCommand`](group-18-conference-application.md#linkusertospeakercommand)
-  (`SpeakersController.cs:383`), then evicts the `conference:speakers` output-cache tags and answers
-  `204 No Content` (`SpeakersController.cs:389-390`). The command's handler enforces BR-208 first (no
+  (`SpeakerLinksController.cs:48`), then evicts the `conference:speakers` output-cache tags and answers
+  `204 No Content` (`SpeakerLinksController.cs:54-55`). This endpoint moved off the speaker CRUD
+  controller onto its own sub-resource controller so `SpeakersController` stays within the repo's
+  constructor-dependency ceiling; the route, verb and authorization posture are unchanged by the split
+  (`SpeakerLinksController.cs:17-22`). The command's handler enforces BR-208 first (no
   other speaker may already hold that `LinkedUserId`, otherwise a `Speaker.UserAlreadyLinked` invariant
   failure comes back) and only then links and raises
   [`SpeakerLinkedToUser`](#speakerlinkedtouser) on the aggregate *before* the save
@@ -2155,16 +2169,20 @@ are the primary references; the business rules themselves are catalogued in ADC'
   loading only the questions referenced by an answer (`GetSessionFeedbackHandler.cs:56-63`) keeps the
   second query proportional to the feedback actually received.
 - **Where it's used**: returned by `GET /Speakers/{speakerId}/sessions/{sessionId}/feedback`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakersController.cs:411-436`)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Speakers/SpeakerSessionsController.cs:43-62`)
   via [`GetSessionFeedbackHandler`](group-18-conference-application.md#getsessionfeedbackhandler); fetched
   by [`SpeakerDashboardService`](group-21-conference-ui.md#speakerdashboardservice)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Speakers/SpeakerDashboardService.cs:73-79`)
-  and rendered on the speaker dashboard. `[Rubric §11, Security]` is worth reading off that endpoint
+  and rendered on the speaker dashboard. Rubric section 11, Security, is worth reading off that endpoint
   directly: it is `[Authorize]` and applies a self-or-organizer gate in the action body, requiring either
   the `Organizer` role or a `speaker_id` claim matching the route speaker before it calls the handler
-  (`SpeakersController.cs:418,424-427`). Its own doc comment records why it carries no output cache: free
+  (`SpeakerSessionsController.cs:50-53`). Its own doc comment records why it carries no output cache: free
   text comments are the speaker's own read, and every response is authorization-dependent, so a shared
-  public cache entry would be a leak (`SpeakersController.cs:411-416`).
+  public cache entry would be a leak; the endpoint was briefly anonymous with a public output cache
+  before that (`SpeakerSessionsController.cs:36-42`). This read also moved off the speaker CRUD
+  controller onto its own sub-resource controller so `SpeakersController` stays within the repo's
+  constructor-dependency ceiling; the route, verb, authorization attributes and output-cache policy are
+  unchanged by the split (`SpeakerSessionsController.cs:17-24`).
 - **Caveats / not-in-source**: the answers this report aggregates are the Conference module's
   `SessionQuestionAnswers`, not the Engagement module's
   [`SessionFeedback`](group-22-engagement-module.md#sessionfeedback) aggregate; nothing in this DTO or its
@@ -2280,23 +2298,33 @@ are the primary references; the business rules themselves are catalogued in ADC'
 ### ConferenceFeatures
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/ConferenceFeatures.cs:10` · Level 0 · class (static)
 
-- **What it is**: the feature-flag name catalog for the Conference module. It holds exactly one constant today: `SessionizeIntegration = "Conference.SessionizeIntegration"` (`ConferenceFeatures.cs:23`), which gates the Sessionize external-data sync capability.
+- **What it is**: the feature-flag name catalog for the Conference module. It holds two constants:
+  `SessionizeIntegration = "Conference.SessionizeIntegration"` (`ConferenceFeatures.cs:23`), which gates
+  the Sessionize external-data sync capability, and `SessionScoring = "Conference.SessionScoring"`
+  (`ConferenceFeatures.cs:96`), which gates the AI session-scoring pass.
 - **Depends on**: nothing first-party, beyond the `[FeatureFlag]` attribute
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/FeatureFlags/FeatureFlagAttribute.cs:32`) and
   [`FeatureFlagLifetime`](group-08-auth.md#featureflaglifetime) it is decorated with.
-- **Concept introduced, feature flags as named constants.** `[Rubric §6, CQRS & Event-Driven Design]` (assesses whether cross-cutting behavior such as flags and configuration is centralized rather than scattered). The constant's value matches a key under the `"FeatureManagement"` configuration section, and per the class doc comment (`ConferenceFeatures.cs:5-9`) it is consumed with `[FeatureGate]` attributes and the [`IFeatureGated`](group-05-cqrs-pipeline.md#ifeaturegated) marker interface. Centralizing the *string* here means the flag name is written once: a typo cannot silently split one flag into two, one of which is never configured and therefore always off. The `"{Module}.{Feature}"` naming convention keeps flags from different modules unambiguous inside one configuration file. The mechanism itself is [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html).
-- **Walkthrough**: a single `public const string` (`ConferenceFeatures.cs:23`), decorated
-  `[FeatureFlag(FeatureFlagLifetime.Permanent, Owner = "ADC Conference")]` (`ConferenceFeatures.cs:22`).
-  The member doc comment (`ConferenceFeatures.cs:12-15`) records the runtime contract: when the flag is
-  disabled, `RefreshFromSessionizeCommand` short-circuits with a failure result and organizers manage
-  event data manually instead of syncing. A second `<para>` (`ConferenceFeatures.cs:16-20`) records why
-  the lifetime is `Permanent` rather than `Temporary`: it is a shipped kill switch over a live external
-  dependency, kept so an organizer can shed the Sessionize call during a provider incident, so it is not
-  a rollout toggle and carries no removal date (ADR-031). [`FeatureFlagRegistry`](group-08-auth.md#featureflagregistry)
-  is what enforces that a `Permanent` flag never carries a `RemoveBy` date and a `Temporary` one always
-  does.
-- **Why it's built this way**: putting the Sessionize sync behind a flag lets organizers turn the integration off (for example during a Sessionize API maintenance window) through configuration, with no redeploy; declaring it `Permanent` with an owner records, in the attribute itself, that this is a durable operational switch rather than debt to clean up later.
-- **Where it's used**: [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand) implements `IFeatureGated` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeCommand.cs:13`) and returns this constant from its `FeatureName` property (`RefreshFromSessionizeCommand.cs:19`), so the pipeline decorator (G05), not the handler body, does the gating.
+- **Concept introduced, feature flags as named constants.** Rubric section 6, CQRS and Event-Driven Design (assesses whether cross-cutting behavior such as flags and configuration is centralized rather than scattered). Each constant's value matches a key under the `"FeatureManagement"` configuration section, and per the class doc comment (`ConferenceFeatures.cs:5-9`) it is consumed with `[FeatureGate]` attributes and the [`IFeatureGated`](group-05-cqrs-pipeline.md#ifeaturegated) marker interface. Centralizing the *string* here means the flag name is written once: a typo cannot silently split one flag into two, one of which is never configured and therefore always off. The `"{Module}.{Feature}"` naming convention keeps flags from different modules unambiguous inside one configuration file. The mechanism itself is [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html).
+- **Walkthrough**: two `public const string` members, each decorated
+  `[FeatureFlag(FeatureFlagLifetime.Permanent, Owner = "ADC Conference")]`
+  (`ConferenceFeatures.cs:22,95`). `SessionizeIntegration`'s doc comment (`ConferenceFeatures.cs:12-15`)
+  records the runtime contract: when the flag is disabled, `RefreshFromSessionizeCommand`
+  short-circuits with a failure result and organizers manage event data manually instead of syncing. Its
+  second `<para>` (`ConferenceFeatures.cs:16-20`) records why the lifetime is `Permanent` rather than
+  `Temporary`: it is a shipped kill switch over a live external dependency, kept so an organizer can shed
+  the Sessionize call during a provider incident, so it is not a rollout toggle and carries no removal
+  date (ADR-031). `SessionScoring`'s doc comment (`ConferenceFeatures.cs:84-87`) records the parallel
+  contract: when disabled, the organizer trigger endpoint answers 404 and
+  `ScoreEventSessionsInternalCommand` short-circuits with a failure result, so organizers select sessions
+  from the counts and overlap views alone, and scores already stored stay readable, only the pass that
+  produces new ones is switched off. Its `<para>` (`ConferenceFeatures.cs:88-93`) gives the reason it is
+  `Permanent`: a scoring pass is one paid Anthropic call per session, and the organizer needs a way to
+  stop it during a provider incident, a pricing surprise, or a runaway loop.
+  [`FeatureFlagRegistry`](group-08-auth.md#featureflagregistry) is what enforces that a `Permanent` flag
+  never carries a `RemoveBy` date and a `Temporary` one always does.
+- **Why it's built this way**: putting the Sessionize sync and the AI scoring pass each behind a flag lets organizers turn the capability off (for example during a Sessionize API maintenance window, or a scoring provider incident or cost spike) through configuration, with no redeploy; declaring both `Permanent` with an owner records, in the attribute itself, that these are durable operational switches rather than debt to clean up later.
+- **Where it's used**: [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand) implements `IFeatureGated` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeCommand.cs:13`) and returns `SessionizeIntegration` from its `FeatureName` property (`RefreshFromSessionizeCommand.cs:19`); `ScoreEventSessionsInternalCommand` and `SessionSelectionController` read `SessionScoring` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs`, `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs`), so the pipeline decorator (G05), not the handler body, does the gating.
 
 ---
 
@@ -2461,10 +2489,10 @@ are the primary references; the business rules themselves are catalogued in ADC'
 - **Where it's used**: projected by the
   [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)
   injected into [`SpeakersController`](group-20-conference-api-grpc.md#speakerscontroller)
-  (`SpeakersController.cs:48`), and returned by its create and update commands; the update path is the
+  (`SpeakersController.cs:43`), and returned by its create and update commands; the update path is the
   concurrency story end to end, an `[Authorize]` self-or-organizer action marked `[SupportsIfMatch]` that
   pulls the required token out of the request header and hands it to the command
-  (`SpeakersController.cs:327-352`, ADR-035). Rendered by the public speaker pages and by
+  (`SpeakersController.cs:317-342`, ADR-035). Rendered by the public speaker pages and by
   [`SpeakerDashboardService`](group-21-conference-ui.md#speakerdashboardservice).
 
 ---
@@ -3127,7 +3155,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
      and the [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) publishes it through
      [`IMessageBus`](group-04-events-outbox.md#imessagebus) instead, wrapped in a broker-publish resilience
      pipeline
-     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:622-635`).
+     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:627-640`).
      The registered transport then decides delivery: in-process for the monolith, MassTransit broker for the
      extracted services.
   2. **It carries an explicit wire name.** `[EventName("Conference.EventFeedbackSubmitted.v1")]`
@@ -3144,11 +3172,11 @@ are the primary references; the business rules themselves are catalogued in ADC'
   `UserId` (the attendee, line 21), `EventId` (the subject, line 22), and `SubmittedOnUtc` (when the answer was
   recorded, in UTC, line 23). The producer supplies that instant from an injected `TimeProvider`, never an
   ambient clock
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/AddEventQuestionAnswer/AddEventQuestionAnswerHandler.cs:113`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/AddEventQuestionAnswer/AddEventQuestionAnswerHandler.cs:104`).
 - **Why it's built this way**: the delivery semantics are the interesting part, and the XML doc states them
   (`EventFeedbackSubmitted.cs:9-14`). Event feedback is an upsert writing one row per form question (BR-107),
   so one submitted form raises this event once per *newly created* answer, and only on the create path: the
-  update branch of the same handler raises nothing (`AddEventQuestionAnswerHandler.cs:82-95` for the update
+  update branch of the same handler raises nothing (`AddEventQuestionAnswerHandler.cs:73-86` for the update
   path versus `:96-117` for the create path). Because at-least-once outbox delivery and a multi-question form
   both mean the consumer can see the message more than once, the consumer is idempotent on its own side: it
   collapses everything onto one subject key and lets the awarder's uniqueness rule reject the duplicates
@@ -3480,6 +3508,8 @@ are the primary references; the business rules themselves are catalogued in ADC'
   read by [`EventConfiguration`](group-19-conference-infrastructure.md#eventconfiguration) and
   [`RoomConfiguration`](group-19-conference-infrastructure.md#roomconfiguration) and by the
   application-layer event and room validation rules. `EnsureEventIsPublished` is called from
+  `EventQuestionAnswerRules.EnsureEventAcceptsFeedback` (`EventQuestionAnswerRules.cs:28-29`), itself
+  invoked by
   [`AddEventQuestionAnswerHandler`](group-18-conference-application.md#addeventquestionanswerhandler)
   (`AddEventQuestionAnswerHandler.cs:41`) and
   [`SessionQuestionAnswerRules`](group-18-conference-application.md#sessionquestionanswerrules)
@@ -3679,8 +3709,9 @@ are the primary references; the business rules themselves are catalogued in ADC'
   not-empty plus 4000 characters. The BR-124 shape rule
   (`QuestionInvariants.EnsureAnswerValueMatchesQuestionType`, `QuestionInvariants.cs:118`) is applied one
   layer up by
-  [`AddEventQuestionAnswerHandler`](group-18-conference-application.md#addeventquestionanswerhandler)
-  (`AddEventQuestionAnswerHandler.cs:78`), where the handler has the question in hand; the reason the
+  [`AddEventQuestionAnswerHandler`](group-18-conference-application.md#addeventquestionanswerhandler)'s
+  `ValidateQuestionAsync` (`AddEventQuestionAnswerHandler.cs:67-70`), where the handler has the question
+  in hand; the reason the
   check cannot live in a validator is recorded at
   `UpdateEventQuestionAnswerCommandValidator.cs:14`.
 
@@ -4173,8 +4204,8 @@ are the primary references; the business rules themselves are catalogued in ADC'
   as arrays keeps adding a new question type a one-line data change rather than a code restructure.
 - **Where it's used**: called from [`Question`](#question)'s `Create` and `Update`;
   `EnsureAnswerValueMatchesQuestionType` is applied by the answer-recording paths in the Application tier,
-  [`AddEventQuestionAnswerHandler`](group-18-conference-application.md#addeventquestionanswerhandler)
-  (`AddEventQuestionAnswerHandler.cs:78`) and
+  [`EventQuestionAnswerRules`](group-18-conference-application.md#eventquestionanswerrules)
+  (`EventQuestionAnswerRules.cs:52`) and
   [`SessionQuestionAnswerRules`](group-18-conference-application.md#sessionquestionanswerrules)
   (`SessionQuestionAnswerRules.cs:69`); the length constants feed
   [`QuestionConfiguration`](group-19-conference-infrastructure.md#questionconfiguration)

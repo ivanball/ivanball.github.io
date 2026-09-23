@@ -465,7 +465,7 @@
           (<code>MMCA.ADC.Engagement.UI/Services/SessionLive/SessionLiveUIService.cs:10-14</code>).</p>
           <h2 id="authorization-feature-gating-and-the-cross-service-dependency-on-conference">Authorization, feature gating, and the cross-service dependency on Conference</h2>
           <p>Both controllers, <a href="#livepollscontroller"><code>LivePollsController</code></a>
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:45</code>) and
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:42</code>) and
           <a href="#sessionquestionscontroller"><code>SessionQuestionsController</code></a>
           (<code>.../Controllers/SessionQuestionsController.cs:37</code>), sit behind
           <a href="group-12-api-hosting-mapping.html#apicontrollerbase"><code>ApiControllerBase</code></a> and are gated two ways: a
@@ -557,7 +557,7 @@
           API edge, never from the request body. That is literally what the controller does: the vote action
           reads the authenticated subject and passes it positionally, while the request body contributes only
           the chosen option
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:283</code>). The same shape recurs across
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollVotingController.cs:112,119</code>). The same shape recurs across
           every live-layer message in this group, so a client cannot vote as (or moderate on behalf of)
           someone else by forging a field. <code>[Rubric §6, CQRS &amp; Event-Driven]</code>: this is a command (it mutates
           state and answers with a <a href="group-01-result-error-handling.html#result">Result</a>); the read-side
@@ -572,7 +572,7 @@
           the message a flat DTO is the vertical-slice convention (command, validator, and handler co-located
           under one <code>UseCases/CastVote/</code> folder, <code>[Rubric §5, Vertical Slice]</code>).</li>
           <li><strong>Where it&#39;s used</strong>: constructed at the Engagement REST edge
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:283</code>, on the <code>POST /api/livepolls/{id}/votes</code> action at <code>:259</code>, which is <code>[Idempotent]</code> at <code>:260</code> so a retried vote
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollVotingController.cs:119</code>, on the <code>POST /api/livepolls/{id}/votes</code> action at <code>:102</code>, which is <code>[Idempotent]</code> at <code>:103</code> so a retried vote
           replays rather than re-runs) and handled by <a href="#castvotehandler">CastVoteHandler</a>; shape-validated
           first by <a href="#castvotecommandvalidator">CastVoteCommandValidator</a>.</li>
           </ul>
@@ -606,7 +606,7 @@
           without any handler-specific plumbing (see
           <a href="group-05-cqrs-pipeline.html#mutateentityhandlercoretcommand-tentity-tidentifiertype">MutateEntityHandlerCore&lt;TCommand, TEntity, TIdentifierType&gt;</a>).</li>
           <li><strong>Where it&#39;s used</strong>: built by the close action at
-          <code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:140</code> from
+          <code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:134</code> from
           <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code> (<code>:138</code>), on an endpoint marked <code>[Idempotent]</code>
           and <code>[SupportsIfMatch]</code> (<code>:124-126</code>) so a missing header answers 428 and a stale token answers 412;
           handled by <a href="#closelivepollhandler">CloseLivePollHandler</a>.</li>
@@ -629,9 +629,9 @@
           <li><strong>Why it&#39;s built this way</strong>: the manage tab wants every poll (Draft, Open, Closed), so the query is
           deliberately unfiltered by status (doc comment, <code>:3-5</code>), and its authorization is applied at the
           controller edge with <code>[HasPermission(EngagementPermissions.LiveManage)]</code>
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:169</code>) rather than inside the handler.</li>
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:163</code>) rather than inside the handler.</li>
           <li><strong>Where it&#39;s used</strong>: constructed on the <code>GET /api/livepolls?eventId=</code> action
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:168,175</code>) and handled by
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:162,169</code>) and handled by
           <a href="#geteventpollshandler">GetEventPollsHandler</a>, which maps to <a href="#livepolldto">LivePollDTO</a>.</li>
           </ul>
           <h3 id="getopenpollsquery">GetOpenPollsQuery</h3>
@@ -656,7 +656,7 @@
           surface calling a single handler; the handler, not the record, rejects the &quot;neither scope&quot; case, so
           the message stays a plain data carrier.</li>
           <li><strong>Where it&#39;s used</strong>: constructed on the <code>GET /api/livepolls/open</code> action
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:209,224</code>) and handled by
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollVotingController.cs:45,60</code>) and handled by
           <a href="#getopenpollshandler">GetOpenPollsHandler</a>, which returns
           <a href="#livepollresultsdto">LivePollResultsDTO</a> tallies.</li>
           </ul>
@@ -691,7 +691,7 @@
           the controller edge) is what lets <a href="#getpollresultshandler">GetPollResultsHandler</a> apply the same
           BR-236 rule the write paths already apply, in one place.</li>
           <li><strong>Where it&#39;s used</strong>: constructed on the <code>GET /api/livepolls/{id}/results</code> action
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:233,247</code>) and handled by
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollVotingController.cs:75,89</code>) and handled by
           <a href="#getpollresultshandler">GetPollResultsHandler</a>.</li>
           </ul>
           <h3 id="getsessionmanagepollsquery">GetSessionManagePollsQuery</h3>
@@ -717,13 +717,13 @@
           <li><strong>Walkthrough</strong>: three positional members, <code>SessionId</code> first (<code>:13</code>), then the caller-rights pair
           (<code>:14-15</code>). No methods.</li>
           <li><strong>Why it&#39;s built this way</strong>: the controller&#39;s own doc comment is the rationale
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:182-188</code>): the <code>manage</code> endpoint is
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:176-182</code>): the <code>manage</code> endpoint is
           deliberately <em>not</em> behind the organizer-only <code>LiveManage</code> permission, because a role-based gate would
           answer a session&#39;s assigned speaker with a 403 they then have to work around. Moving the decision
           into the handler (where the Conference module&#39;s assigned-speaker list is reachable) makes the rule
           expressible.</li>
           <li><strong>Where it&#39;s used</strong>: constructed on the <code>GET /api/livepolls/manage?sessionId=</code> action
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:189,197</code>) and handled by
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:183,191</code>) and handled by
           <a href="#getsessionmanagepollshandler">GetSessionManagePollsHandler</a>.</li>
           </ul>
           <h3 id="openlivepollcommand">OpenLivePollCommand</h3>
@@ -747,7 +747,7 @@
           single &quot;SetStatus&quot; command) makes each transition&#39;s rights and side effects explicit and
           independently testable, which is the vertical-slice convention (<code>[Rubric §5, Vertical Slice]</code>).</li>
           <li><strong>Where it&#39;s used</strong>: built by the open action at
-          <code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:106</code> from the required <code>If-Match</code> token
+          <code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:100</code> from the required <code>If-Match</code> token
           (<code>:104</code>), on an endpoint marked <code>[Idempotent]</code> and <code>[SupportsIfMatch]</code> (<code>:90-92</code>); handled by
           <a href="#openlivepollhandler">OpenLivePollHandler</a>.</li>
           </ul>
@@ -870,7 +870,7 @@
           (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>).</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: dispatched by the attendee vote endpoint
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:266,283</code>); shape-checked first by
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollVotingController.cs:102,119</code>); shape-checked first by
           <a href="#castvotecommandvalidator">CastVoteCommandValidator</a>.</p>
           </li>
           </ul>
@@ -964,7 +964,7 @@
           real save&quot; ordering are decided once for the whole codebase, not re-typed per handler.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: dispatched by the <code>POST /api/livepolls/{id}/close</code> action
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:125,140</code>); a member of the
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:119,134</code>); a member of the
           poll-lifecycle family with <a href="#openlivepollhandler">OpenLivePollHandler</a>.</p>
           </li>
           </ul>
@@ -996,7 +996,7 @@
           than an oversight.</li>
           <li><strong>Where it&#39;s used</strong>: dispatched by the <code>GET /api/livepolls?eventId=</code> action, which is gated by
           <code>[HasPermission(EngagementPermissions.LiveManage)]</code>
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:168-169,175</code>). Its per-session
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:162-163,169</code>). Its per-session
           counterpart is <a href="#getsessionmanagepollshandler">GetSessionManagePollsHandler</a>.</li>
           </ul>
           <h3 id="getopenpollshandler">GetOpenPollsHandler</h3>
@@ -1039,7 +1039,7 @@
           event-wide board, the session live page, and the post-vote response all compute tallies identically,
           so a pushed change and a pulled refresh can never disagree (<code>[Rubric §1, SOLID]</code>).</li>
           <li><strong>Where it&#39;s used</strong>: dispatched by the <code>GET /api/livepolls/open</code> action
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:209,224</code>), which is the attendee-facing
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollVotingController.cs:45,60</code>), which is the attendee-facing
           poll list on both live surfaces.</li>
           </ul>
           <h3 id="getpollresultshandler">GetPollResultsHandler</h3>
@@ -1091,7 +1091,7 @@
           fallback rather than a second copy of BR-236 is what keeps the read and write paths from drifting
           apart.</li>
           <li><strong>Where it&#39;s used</strong>: dispatched by the <code>GET /api/livepolls/{id}/results</code> action
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:233,247</code>).</li>
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollVotingController.cs:75,89</code>).</li>
           </ul>
           <h3 id="getsessionmanagepollshandler">GetSessionManagePollsHandler</h3>
           <blockquote>
@@ -1135,7 +1135,7 @@
           the rule, and the handler is the only layer that can reach both the caller&#39;s claims (on the query)
           and the Conference-owned speaker assignment.</li>
           <li><strong>Where it&#39;s used</strong>: dispatched by the <code>GET /api/livepolls/manage?sessionId=</code> action
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:189,197</code>), which deliberately carries no
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:183,191</code>), which deliberately carries no
           <code>[HasPermission]</code> attribute (<code>:181-190</code>).</li>
           </ul>
           <h3 id="openlivepollhandler">OpenLivePollHandler</h3>
@@ -1189,7 +1189,7 @@
           and a session open also costs one; whether those two live-window sources can ever disagree for the
           same session is a Conference-side question and is not determinable from this file.</li>
           <li><strong>Where it&#39;s used</strong>: dispatched by the <code>POST /api/livepolls/{id}/open</code> action
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:91,106</code>); paired with
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:85,100</code>); paired with
           <a href="#closelivepollhandler">CloseLivePollHandler</a>.</li>
           </ul>
           <h3 id="getmoderationqueuequery">GetModerationQueueQuery</h3>
@@ -2431,7 +2431,7 @@
           <code>ICommandHandler&lt;DeleteEntityCommand&lt;LivePoll, LivePollIdentifierType&gt;, Result&gt;</code> implementation at
           <code>MMCA.ADC.Engagement.Application/DependencyInjection.cs:68</code>, and dispatched by
           <a href="#livepollscontroller"><code>LivePollsController.DeleteAsync</code></a>
-          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:158-160</code>), which is the one endpoint
+          (<code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:152-154</code>), which is the one endpoint
           behind <code>[HasPermission(EngagementPermissions.LiveManage)]</code>.</li>
           </ul>
           <h3 id="livepolldtomapper">LivePollDTOMapper</h3>
@@ -2476,12 +2476,14 @@
           </ul>
           <h3 id="livepollscontroller">LivePollsController</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.API · <code>MMCA.ADC.Engagement.API.Controllers</code> · <code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:45</code> · Level 9 · class (sealed)</p>
+          <p>MMCA.ADC.Engagement.API · <code>MMCA.ADC.Engagement.API.Controllers</code> · <code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:42</code> · Level 9 · class (sealed)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the REST controller for the live poll layer: create, open, close, and delete a poll,
-          list polls for the organizer and for the session moderation panel, read tallies, and cast a vote.</li>
-          <li><strong>Depends on</strong>: nine handlers injected through
+          <li><strong>What it is</strong>: the REST controller for the live poll lifecycle: create, open, close, and delete a
+          poll, plus the organizer and session-moderation manage lists. Casting a vote and reading tallies live
+          on the sibling <a href="../../../MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollVotingController.cs"><code>LivePollVotingController</code></a>
+          instead.</li>
+          <li><strong>Depends on</strong>: six handlers injected through
           <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a>
           and <a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler&lt;in TQuery, TResult&gt;</code></a>
           (including the generic
@@ -2499,69 +2501,54 @@
           <li><strong>Concept introduced, three stacked authorization tiers on one controller.</strong> <code>[Rubric §11, Security]</code>
           assesses where the trust boundary sits and whether identity is derived from a trusted source.
           <code>[Rubric §9, API and Contract Design]</code> assesses whether controllers stay thin transport adapters over
-          the handler pipeline. The class attributes (<code>:39-43</code>) set two of the tiers:
+          the handler pipeline. The class attributes (<code>:37-41</code>) set two of the tiers:
           <code>[FeatureGate(EngagementFeatures.LivePolls)]</code> makes the entire surface dark when the flag is off, and
-          a bare <code>[Authorize]</code> requires a token at all. The third tier is per-endpoint: only the organizer-facing
-          delete (<code>:149</code>) and the event-wide manage list (<code>:168</code>) carry
-          <code>[HasPermission(EngagementPermissions.LiveManage)]</code>, while the finer &quot;this speaker owns this session&quot;
-          rule (BR-236) is evaluated <em>inside</em> the handlers via
+          a bare <code>[Authorize]</code> requires a token at all. The third tier is per-endpoint: only the delete (<code>:144</code>)
+          and the event-wide manage list (<code>:163</code>) carry <code>[HasPermission(EngagementPermissions.LiveManage)]</code>,
+          while the finer &quot;this speaker owns this session&quot; rule (BR-236) is evaluated <em>inside</em> the handlers via
           <a href="#livepollauthorization"><code>LivePollAuthorization</code></a>, because it needs data the transport layer does not
-          have. The session moderation list at <code>:192</code> is the instructive case: its doc comment (<code>:181-187</code>)
+          have. The session moderation list at <code>:187</code> is the instructive case: its doc comment (<code>:176-182</code>)
           states that it is <strong>deliberately not</strong> behind <code>LiveManage</code>, so a session&#39;s assigned speakers get the
           real list from the handler&#39;s BR-236 check instead of an organizer-only 403 they would have to work
           around. Complementing all three, caller identity is bound from the token and never from the request
-          (<code>:291-299</code>).</li>
+          (<code>:200-207</code>).</li>
           <li><strong>Concept introduced, conditional writes over the <code>If-Match</code> header
           (<a href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html" target="_blank" rel="noopener">ADR-035</a>).</strong> The lifecycle verbs
-          carry no body at all. <code>[SupportsIfMatch]</code> (<code>:92</code>, <code>:126</code>) makes the precondition <strong>mandatory</strong>: the
+          carry no body at all. <code>[SupportsIfMatch]</code> (<code>:87</code>, <code>:121</code>) makes the precondition <strong>mandatory</strong>: the
           action filter reads the caller&#39;s entity tag from <code>If-Match</code>, answers a request that states none with
           <code>428 Precondition Required</code> before the action ever runs, answers an undecodable tag with <code>400</code>, and
           rewrites a concurrency conflict from the handler into <code>412 Precondition Failed</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Concurrency/SupportsIfMatchAttribute.cs:49</code>,
           <code>:126-153</code>, <code>:161-190</code>). The action itself just calls
-          <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code> (<code>:104</code>, <code>:138</code>) to pull the already-validated
+          <code>SupportsIfMatchAttribute.RequiredToken(HttpContext)</code> (<code>:99</code>, <code>:133</code>) to pull the already-validated
           token out and pass it into the command. Alongside it, <code>[Idempotent]</code>
-          (<a href="https://ivanball.github.io/docs/adr/017-request-idempotency.html" target="_blank" rel="noopener">ADR-017</a>) marks the four writes
-          where replaying a retried request is what the caller meant (<code>:63</code>, <code>:91</code>, <code>:125</code>, <code>:260</code>), which on a
+          (<a href="https://ivanball.github.io/docs/adr/017-request-idempotency.html" target="_blank" rel="noopener">ADR-017</a>) marks the three writes
+          where replaying a retried request is what the caller meant (<code>:58</code>, <code>:86</code>, <code>:120</code>), which on a
           conference-day mobile network is not a theoretical concern. The <code>ProducesResponseType</code> lists on those
-          actions (<code>:93-99</code>, <code>:127-133</code>) are the documented contract for all of it.</li>
+          actions (<code>:59-61</code>, <code>:88-94</code>, <code>:122-128</code>) are the documented contract for all of it.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li>The primary constructor (<code>:44-54</code>) injects five command handlers, four query handlers, and
+          <li>The primary constructor (<code>:42-49</code>) injects four command handlers, two query handlers, and
           <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a>. Every action follows the same three
           steps: build a message, await the handler, map the
           <a href="group-01-result-error-handling.html#result"><code>Result</code></a> to HTTP.</li>
-          <li><code>CreateAsync</code> (<code>:67</code>): builds <a href="#createlivepollcommand"><code>CreateLivePollCommand</code></a> from the body plus
-          <code>GetCallerSpeakerId()</code> / <code>IsCallerOrganizer()</code> (<code>:71</code>) and returns <code>201 Created</code> with a relative
-          location built under <code>CultureInfo.InvariantCulture</code> (<code>:76</code>).</li>
-          <li><code>OpenAsync</code> (<code>:100</code>) and <code>CloseAsync</code> (<code>:134</code>): the lifecycle verbs, returning <code>204 No Content</code>.
-          Both take the row version from <code>RequiredToken</code> (<code>:104</code>, <code>:138</code>) and forward it into
-          <code>OpenLivePollCommand</code> / <code>CloseLivePollCommand</code> (<code>:105</code>, <code>:139</code>).</li>
-          <li><code>DeleteAsync</code> (<code>:153</code>): <code>[HasPermission(LiveManage)]</code>-gated (<code>:149</code>), dispatching the generic
+          <li><code>CreateAsync</code> (<code>:62</code>): builds <a href="#createlivepollcommand"><code>CreateLivePollCommand</code></a> from the body plus
+          <code>GetCallerSpeakerId()</code> / <code>IsCallerOrganizer()</code> (<code>:66</code>) and returns <code>201 Created</code> with a relative
+          location built under <code>CultureInfo.InvariantCulture</code> (<code>:71</code>).</li>
+          <li><code>OpenAsync</code> (<code>:95</code>) and <code>CloseAsync</code> (<code>:129</code>): the lifecycle verbs, returning <code>204 No Content</code>.
+          Both take the row version from <code>RequiredToken</code> (<code>:99</code>, <code>:133</code>) and forward it into
+          <code>OpenLivePollCommand</code> / <code>CloseLivePollCommand</code> (<code>:100</code>, <code>:134</code>).</li>
+          <li><code>DeleteAsync</code> (<code>:148</code>): <code>[HasPermission(LiveManage)]</code>-gated (<code>:144</code>), dispatching the generic
           <a href="group-05-cqrs-pipeline.html#deleteentitycommandtentity-tidentifiertype"><code>DeleteEntityCommand&lt;LivePoll, LivePollIdentifierType&gt;</code></a>
-          (<code>:157-159</code>); the BR-228 &quot;close an open poll before deleting it&quot; rule lives deeper, in
+          (<code>:152-154</code>); the BR-228 &quot;close an open poll before deleting it&quot; rule lives deeper, in
           <a href="#livepoll"><code>LivePoll.Delete</code></a>.</li>
-          <li><code>GetEventPollsAsync</code> (<code>:170</code>): the organizer manage list, also <code>[HasPermission(LiveManage)]</code>, with
-          <code>[FromQuery, Required] EventIdentifierType eventId</code> (<code>:171</code>).</li>
-          <li><code>GetSessionManagePollsAsync</code> (<code>:192</code>): the session moderation panel, ungated at the transport layer,
+          <li><code>GetEventPollsAsync</code> (<code>:165</code>): the organizer manage list, also <code>[HasPermission(LiveManage)]</code>, with
+          <code>[FromQuery, Required] EventIdentifierType eventId</code> (<code>:166</code>).</li>
+          <li><code>GetSessionManagePollsAsync</code> (<code>:187</code>): the session moderation panel, ungated at the transport layer,
           passing <code>sessionId</code> plus the two claim-derived flags into
-          <a href="#getsessionmanagepollsquery"><code>GetSessionManagePollsQuery</code></a> (<code>:196</code>).</li>
-          <li><code>GetOpenPollsAsync</code> (<code>:211</code>): the attendee and presenter view, taking optional <code>eventId</code> <strong>or</strong>
-          <code>sessionId</code> (<code>:212-213</code>). Like <code>GetResultsAsync</code> (<code>:242</code>) and <code>CastVoteAsync</code> (<code>:271</code>), it first
-          reads <code>currentUserService.UserId</code> and returns an <code>Error.Forbidden</code> when the token carries no
-          subject (<code>:216-220</code>), then stamps the id onto the query or command.</li>
-          <li><code>GetResultsAsync</code> (<code>:242</code>): its doc comment (<code>:232-238</code>) spells out the scope BR-236 enforces
-          inside the handler: an attendee reads a poll that reached Open or Closed on a published event or
-          session, while a Draft (or a poll of an unpublished event) is visible only to the rights holders
-          and answers <code>404</code> to everyone else, so walking sequential ids reveals neither the draft content
-          nor its existence. It passes <code>GetCallerSpeakerId()</code> and <code>IsCallerOrganizer()</code> alongside the id and
-          token subject into <a href="#getpollresultsquery"><code>GetPollResultsQuery</code></a> (<code>:253</code>) so the handler can make
-          that call.</li>
-          <li><code>CastVoteAsync</code> (<code>:271</code>): builds <a href="#castvotecommand"><code>CastVoteCommand</code></a> from the route id, the body&#39;s
-          <code>OptionId</code>, and the token subject, and returns the fresh
-          <a href="#livepollresultsdto"><code>LivePollResultsDTO</code></a> as <code>200 OK</code>.</li>
-          <li>The two claim helpers are the load-bearing security detail: <code>GetCallerSpeakerId()</code> (<code>:291</code>) reads
-          the <code>speaker_id</code> claim and maps a default value to <code>null</code> (<code>:294-295</code>), and <code>IsCallerOrganizer()</code>
-          (<code>:298</code>) is <code>IsInRole(Organizer)</code> only (<code>:299</code>), not <code>Organizer || Admin</code>.</li>
+          <a href="#getsessionmanagepollsquery"><code>GetSessionManagePollsQuery</code></a> (<code>:191</code>).</li>
+          <li>The two claim helpers are the load-bearing security detail: <code>GetCallerSpeakerId()</code> (<code>:200</code>) reads
+          the <code>speaker_id</code> claim and maps a default value to <code>null</code> (<code>:202-203</code>), and <code>IsCallerOrganizer()</code>
+          (<code>:207</code>) is <code>IsInRole(Organizer)</code> only, not <code>Organizer || Admin</code>.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: a declarative capability gate keeps the two organizer-only endpoints
@@ -2570,7 +2557,8 @@
           transport. Pushing the concurrency token into a header rather than a request body means the lifecycle
           verbs need no body type at all and the missing-precondition case is answered by the filter instead of
           by every handler. The <code>[FeatureGate]</code> lets the whole live-poll surface ship dark and be enabled per
-          environment.</li>
+          environment. Splitting the vote-and-tally reads onto <code>LivePollVotingController</code> keeps this controller
+          to the lifecycle and manage-list shape, one concern per class.</li>
           <li><strong>Where it&#39;s used</strong>: mounted by the Engagement service host and reached by the Blazor and MAUI clients
           through the YARP Gateway
           (<a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a>).</li>

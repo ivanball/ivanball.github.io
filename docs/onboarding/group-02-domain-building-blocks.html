@@ -301,7 +301,7 @@
           64-character <code>string</code> on purpose, because it arrives from a claim, a header, or configuration, all of
           which are strings (<code>ITenantEntity.cs:22-25</code>). Adopting tenancy is three things together: marking
           entities, calling <code>AddMultiTenancy(configuration)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:686</code>), and setting
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:266</code>), and setting
           <code>Tenancy:Enabled</code> (<code>ITenantEntity.cs:26-31</code>); a host that never resolves a tenant behaves exactly as it
           did before (<a href="https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html" target="_blank" rel="noopener">ADR-073</a>).</p>
           <p><a href="#iauditedentity"><code>IAuditedEntity</code></a>
@@ -317,7 +317,7 @@
           <code>IAuditedEntity</code> records the SEQUENCE that produced it, and when both are present the trail rows see the
           freshly stamped values because the trail is captured after the stamping interceptor has run
           (<code>IAuditedEntity.cs:16-21</code>). Like tenancy, recording is host-gated behind <code>AddAuditTrail(configuration)</code>
-          (<code>DependencyInjection.cs:637</code>) plus <code>AuditTrail:Enabled</code>, so marking an entity in a host that never
+          (<code>DependencyInjection.Jobs.cs:108</code>) plus <code>AuditTrail:Enabled</code>, so marking an entity in a host that never
           opted in is inert (<code>IAuditedEntity.cs:23-26</code>).</p>
           <p><a href="#ireactivatable"><code>IReactivatable</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IReactivatable.cs:19</code>) is the third marker and
@@ -384,7 +384,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:152</code>) and the
           processor refuses to claim a row while an earlier unprocessed, non-dead-lettered row carries the same
           key in the same data source
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:559-560</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:564-565</code>,
           with an in-batch guard at <code>:516</code>), so ordering holds across batches and across scaled-out replicas
           rather than only within one batch. Read the doc comment before adopting it, because the trade-off is
           explicit: this is head-of-line blocking by design, so keys must be as NARROW as the requirement really
@@ -852,7 +852,7 @@
           <a href="group-07-persistence-ef-core.html#audittrailentry"><code>AuditTrailEntry</code></a> rows and is registered last,
           after the audit and domain-event interceptors, so it diffs final values
           (<code>AuditTrailSaveChangesInterceptor.cs:26-29</code>). The host gate is <code>AddAuditTrail</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:637</code>) plus
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:108</code>) plus
           <a href="group-07-persistence-ef-core.html#audittrailsettings"><code>AuditTrailSettings</code></a><code>.Enabled</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26</code>, an
           uninitialized <code>bool</code> and therefore <code>false</code> unless configured). Marked aggregates today: ADC&#39;s
@@ -868,7 +868,7 @@
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketComment.cs:12,16</code>).
           The opting-in hosts are the three ADC services
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:239</code>,
-          <code>MMCA.ADC.Conference.Service/Program.cs:333</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:198</code>) and the
+          <code>MMCA.ADC.Conference.Service/Program.cs:350</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:198</code>) and the
           Helpdesk web host (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: retention is not automatic. <code>AuditTrailSettings.RetentionDays</code> defaults
           to 90 (<code>AuditTrailSettings.cs:38</code>), but the doc comment states the purge only happens if the host
@@ -970,16 +970,16 @@
           </li>
           <li><strong>Why it&#39;s built this way</strong>: ordering is enforced at <strong>claim</strong> time rather than at fetch time, which
           is what makes it survive batching and scale-out
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:448-455</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:453-460</code>).
           Making it opt-in per event keeps the unordered fast path free: a batch containing no keyed row runs
           exactly the query it always ran, with no subquery for the optimizer to prove away
-          (<code>OutboxProcessor.cs:479-484</code>). The decision is recorded in
+          (<code>OutboxProcessor.cs:484-489</code>). The decision is recorded in
           <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a> (<code>003-outbox-dual-dispatch.md:142-157</code>).</li>
           <li><strong>Where it&#39;s used</strong>: <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> copies the key onto
           the row it writes (<code>OutboxMessage.cs:86</code> for the column, <code>:115</code> inside <code>FromDomainEvent</code> at <code>:98</code>).
           <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> enforces it in two places:
-          <code>SelectOrderedCandidates</code> (<code>OutboxProcessor.cs:516-533</code>) keeps at most one row per key in this
-          cycle&#39;s candidate set (<code>:516</code>), and <code>FilterUnblocked</code> (<code>OutboxProcessor.cs:553-563</code>) adds the
+          <code>SelectOrderedCandidates</code> (<code>OutboxProcessor.cs:521-538</code>) keeps at most one row per key in this
+          cycle&#39;s candidate set (<code>:516</code>), and <code>FilterUnblocked</code> (<code>OutboxProcessor.cs:558-568</code>) adds the
           <code>NOT EXISTS</code> predicate to the claim update itself, so a second replica racing the same key loses on
           the row rather than on a check made before the race (<code>:550-554</code>; the retry-count conjunct at <code>:552</code>
           is what lets a dead-lettered predecessor stop blocking). The storage side is configured on
@@ -996,7 +996,7 @@
           tested, not exercised by an application event. Ordering is also <strong>not</strong> total under a timestamp tie:
           the predecessor test is on <code>OccurredOn</code> alone, so two rows sharing a key and an exact timestamp are
           ordered within a cycle by <code>Id</code> but neither blocks the other in SQL, which the code states as a
-          deliberate non-guarantee (<code>OutboxProcessor.cs:457-462</code>).</li>
+          deliberate non-guarantee (<code>OutboxProcessor.cs:462-467</code>).</li>
           </ul>
           <h3 id="irowversioned">IRowVersioned</h3>
           <blockquote>
@@ -1107,7 +1107,7 @@
           <a href="group-07-persistence-ef-core.html#crosstenantwriteexception"><code>CrossTenantWriteException</code></a> rather than
           writing a row nobody can read (<code>:101-110</code>), and a declared-versus-current mismatch is rejected the
           same way (<code>:123</code>). The host gate is <code>AddMultiTenancy</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:686</code>) plus
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:266</code>) plus
           <a href="group-07-persistence-ef-core.html#tenancysettings"><code>TenancySettings</code></a> (<code>Tenancy:Enabled</code> at
           <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettings.cs:67</code>, claim-then-header
           resolution order at <code>TenancySettings.cs:57</code>). The only entities marked in the workspace apps today
@@ -1118,7 +1118,7 @@
           today.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>Tenancy:Enabled</code> gates <strong>resolution</strong>, not isolation. The filter and the
           interceptor are always registered and are inert whenever no tenant is resolved
-          (<code>TenancySettings.cs:37-39</code>, and the registration note at <code>DependencyInjection.cs:710</code>), so an
+          (<code>TenancySettings.cs:37-39</code>, and the registration note at <code>DependencyInjection.cs:290</code>), so an
           untenanted code path (a job, a seeder) reads every tenant&#39;s rows by design. That is the documented
           behavior, not an oversight, but it means &quot;tenant safety&quot; is a property of the request pipeline
           resolving a tenant, not of the entity marker alone.</li>

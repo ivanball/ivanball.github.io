@@ -159,10 +159,10 @@
           is still linked (only one possible target). Names that are neither visible nor unique are
           dropped as unresolvable without full semantic binding.</p>
           <ul>
-          <li>Edges resolved by namespace visibility: <strong>17963</strong> (~96%)</li>
-          <li>Edges resolved by globally-unique name (fallback): <strong>736</strong></li>
+          <li>Edges resolved by namespace visibility: <strong>18261</strong> (~96%)</li>
+          <li>Edges resolved by globally-unique name (fallback): <strong>745</strong></li>
           <li>References dropped as ambiguous (matched &gt;1 type, none visible): <strong>101</strong></li>
-          <li>Sensitivity: <strong>998 / 4905</strong> type levels would change if the globally-unique fallback
+          <li>Sensitivity: <strong>1006 / 4989</strong> type levels would change if the globally-unique fallback
           were excluded; the fallback is retained because a globally-unique first-party name is
           unambiguous, so excluding it would under-count real dependencies.</li>
           </ul>
@@ -180,47 +180,47 @@
           </thead>
           <tbody><tr>
           <td>0</td>
-          <td>927</td>
+          <td>942</td>
           </tr>
           <tr>
           <td>1</td>
-          <td>601</td>
+          <td>611</td>
           </tr>
           <tr>
           <td>2</td>
-          <td>383</td>
+          <td>398</td>
           </tr>
           <tr>
           <td>3</td>
-          <td>350</td>
+          <td>363</td>
           </tr>
           <tr>
           <td>4</td>
-          <td>438</td>
+          <td>442</td>
           </tr>
           <tr>
           <td>5</td>
-          <td>370</td>
+          <td>374</td>
           </tr>
           <tr>
           <td>6</td>
-          <td>191</td>
+          <td>193</td>
           </tr>
           <tr>
           <td>7</td>
-          <td>152</td>
+          <td>156</td>
           </tr>
           <tr>
           <td>8</td>
-          <td>236</td>
+          <td>241</td>
           </tr>
           <tr>
           <td>9</td>
-          <td>282</td>
+          <td>287</td>
           </tr>
           <tr>
           <td>10</td>
-          <td>263</td>
+          <td>268</td>
           </tr>
           <tr>
           <td>11</td>
@@ -232,7 +232,7 @@
           </tr>
           <tr>
           <td>13</td>
-          <td>152</td>
+          <td>153</td>
           </tr>
           <tr>
           <td>14</td>
@@ -240,7 +240,7 @@
           </tr>
           <tr>
           <td>15</td>
-          <td>168</td>
+          <td>169</td>
           </tr>
           <tr>
           <td>16</td>
@@ -259,7 +259,7 @@
           <td>1</td>
           </tr>
           </tbody></table></div>
-          <h2 id="cycles-scc-size--1-44">Cycles (SCC size &gt; 1): 44</h2>
+          <h2 id="cycles-scc-size--1-45">Cycles (SCC size &gt; 1): 45</h2>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -287,6 +287,11 @@
           <td>2</td>
           <td>2</td>
           <td>API:SessionCookieEndpoints, API:SessionCookieJar</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>2</td>
+          <td>AI:ContentPolicyGuardrail, AI:ContentPolicySettings</td>
           </tr>
           <tr>
           <td>2</td>
@@ -572,6 +577,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>BatchEventQuestionAnswerItemRequest</code></td>
+          <td>MMCA.ADC.Conference.API</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>BatchSessionQuestionAnswerItemRequest</code></td>
           <td>MMCA.ADC.Conference.API</td>
           <td>0</td>
@@ -629,6 +641,13 @@
           <tr>
           <td>0</td>
           <td><code>AssemblyReference</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>BatchEventQuestionAnswerItem</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>0</td>
           <td>(none)</td>
@@ -2448,21 +2467,28 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>BlazorCircuitLimitSettings</code></td>
-          <td>MMCA.ADC.UI.Web</td>
+          <td><code>AiSettings</code></td>
+          <td>MMCA.Common.AI</td>
           <td>0</td>
           <td>(none)</td>
           </tr>
           <tr>
           <td>0</td>
-          <td><code>UiRateLimitingSettings</code></td>
-          <td>MMCA.ADC.UI.Web</td>
+          <td><code>AiUsageMeter</code></td>
+          <td>MMCA.Common.AI</td>
           <td>0</td>
           <td>(none)</td>
           </tr>
           <tr>
           <td>0</td>
-          <td><code>AiProvider</code></td>
+          <td><code>ChatToolPolicy</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ContentPolicyInjectionMode</code></td>
           <td>MMCA.Common.AI</td>
           <td>0</td>
           <td>(none)</td>
@@ -2483,8 +2509,43 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>IChatRequestRedactor</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>PromptContract</code></td>
           <td>MMCA.Common.AI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ToolAuthorization</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>GoldenReplayCase</code></td>
+          <td>MMCA.Common.AI.Testing</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>RecordedResponses</code></td>
+          <td>MMCA.Common.AI.Testing</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ReplayChatClient</code></td>
+          <td>MMCA.Common.AI.Testing</td>
           <td>0</td>
           <td>(none)</td>
           </tr>
@@ -3988,7 +4049,21 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>FatFixtureController</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>GetFixturePreferencesQuery</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>GetFixtureProjectionQuery</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>0</td>
           <td>(none)</td>
@@ -4079,6 +4154,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>RebuildFixtureProjectionCommand</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>RebuildTicketIndexCommand</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>0</td>
@@ -4094,6 +4176,13 @@
           <tr>
           <td>0</td>
           <td><code>RethrowingFixture</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ThinFixtureController</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>0</td>
           <td>(none)</td>
@@ -4962,6 +5051,13 @@
           <tr>
           <td>0</td>
           <td><code>LoginProtectionSettings</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>LookupRow&lt;TId, TName&gt;</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>0</td>
           <td>(none)</td>
@@ -6970,6 +7066,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>BlazorCircuitLimitSettings</code></td>
+          <td>MMCA.Common.UI.Web</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>BlazorCspSettings</code></td>
           <td>MMCA.Common.UI.Web</td>
           <td>0</td>
@@ -6978,6 +7081,13 @@
           <tr>
           <td>0</td>
           <td><code>TrustedCallerHandler</code></td>
+          <td>MMCA.Common.UI.Web</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>UiRateLimitingSettings</code></td>
           <td>MMCA.Common.UI.Web</td>
           <td>0</td>
           <td>(none)</td>
@@ -7002,6 +7112,13 @@
           <td>MMCA.ADC.Architecture.Tests</td>
           <td>1</td>
           <td>ObservabilityConventionTestsBase</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>BatchAddEventQuestionAnswersRequest</code></td>
+          <td>MMCA.ADC.Conference.API</td>
+          <td>1</td>
+          <td>BatchEventQuestionAnswerItemRequest</td>
           </tr>
           <tr>
           <td>1</td>
@@ -7908,38 +8025,10 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>BoundedCircuitHandler</code></td>
-          <td>MMCA.ADC.UI.Web</td>
-          <td>1</td>
-          <td>BlazorCircuitLimitSettings</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>UiRateLimitingExtensions</code></td>
-          <td>MMCA.ADC.UI.Web</td>
-          <td>1</td>
-          <td>UiRateLimitingSettings</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>ADCHomePageContent</code></td>
           <td>MMCA.ADC.UI.Web.Client</td>
           <td>1</td>
           <td>IHomePageContent</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>AiSettings</code></td>
-          <td>MMCA.Common.AI</td>
-          <td>1</td>
-          <td>AiProvider</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>AiUsageMeter</code></td>
-          <td>MMCA.Common.AI</td>
-          <td>1</td>
-          <td>AiProvider</td>
           </tr>
           <tr>
           <td>1</td>
@@ -7950,10 +8039,52 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>IAiProviderFactory</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>1</td>
+          <td>AiSettings</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>IChatGuardrail</code></td>
           <td>MMCA.Common.AI</td>
           <td>1</td>
           <td>GuardrailVerdict</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>IChatToolPolicy</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>1</td>
+          <td>ToolAuthorization</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>UsageRecordingChatClient</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>2</td>
+          <td>AiUsageMeter, PromptContract</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>GoldenReplayTestsBase</code></td>
+          <td>MMCA.Common.AI.Testing</td>
+          <td>3</td>
+          <td>GoldenReplayCase, RecordedResponses, ReplayChatClient</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>PromptContractPinTestsBase</code></td>
+          <td>MMCA.Common.AI.Testing</td>
+          <td>1</td>
+          <td>PromptContract</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>AiSettingsTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>1</td>
+          <td>AiSettings</td>
           </tr>
           <tr>
           <td>1</td>
@@ -7968,6 +8099,41 @@
           <td>MMCA.Common.AI.Tests</td>
           <td>1</td>
           <td>PromptContract</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>ReferencePrompts</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>1</td>
+          <td>PromptContract</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>StubTool</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>1</td>
+          <td>ChatToolPolicy</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SuffixRedactor</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>1</td>
+          <td>IChatRequestRedactor</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>UppercaseRedactor</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>1</td>
+          <td>IChatRequestRedactor</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>UsageRecorder</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>3</td>
+          <td>AiUsageMeter, DurationMeasurement, Measurement</td>
           </tr>
           <tr>
           <td>1</td>
@@ -11177,6 +11343,20 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>BoundedCircuitHandler</code></td>
+          <td>MMCA.Common.UI.Web</td>
+          <td>1</td>
+          <td>BlazorCircuitLimitSettings</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>UiRateLimitingExtensions</code></td>
+          <td>MMCA.Common.UI.Web</td>
+          <td>1</td>
+          <td>UiRateLimitingSettings</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>WebFormFactor</code></td>
           <td>MMCA.Common.UI.Web</td>
           <td>1</td>
@@ -12010,38 +12190,122 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>BlazorCircuitLimitExtensions</code></td>
-          <td>MMCA.ADC.UI.Web</td>
+          <td><code>AiProviderValidator</code></td>
+          <td>MMCA.Common.AI</td>
           <td>2</td>
-          <td>BlazorCircuitLimitSettings, BoundedCircuitHandler</td>
+          <td>AiSettings, IAiProviderFactory</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>BoundedChatClient</code></td>
           <td>MMCA.Common.AI</td>
+          <td>5</td>
+          <td>AiSettings, ChatToolPolicy, IAiTokenEstimator, IChatToolPolicy, ToolAuthorization</td>
+          </tr>
+          <tr>
           <td>2</td>
-          <td>AiSettings, IAiTokenEstimator</td>
+          <td><code>ContentPolicyGuardrail</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>5</td>
+          <td>ContentPolicyInjectionMode, ContentPolicySettings, GuardrailVerdict, IChatGuardrail, IChatRequestRedactor</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>ContentPolicySettings</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>2</td>
+          <td>ContentPolicyGuardrail, ContentPolicyInjectionMode</td>
           </tr>
           <tr>
           <td>2</td>
           <td><code>GuardrailChatClient</code></td>
           <td>MMCA.Common.AI</td>
-          <td>3</td>
-          <td>ChatGuardrailException, GuardrailVerdict, IChatGuardrail</td>
+          <td>4</td>
+          <td>ChatGuardrailException, GuardrailVerdict, IChatGuardrail, IChatRequestRedactor</td>
           </tr>
           <tr>
           <td>2</td>
-          <td><code>UsageRecordingChatClient</code></td>
+          <td><code>PiiRedactionGuardrail</code></td>
           <td>MMCA.Common.AI</td>
           <td>3</td>
-          <td>AiProvider, AiUsageMeter, PromptContract</td>
+          <td>GuardrailVerdict, IChatGuardrail, IChatRequestRedactor</td>
           </tr>
           <tr>
           <td>2</td>
-          <td><code>AiSettingsTests</code></td>
+          <td><code>AnthropicAiProviderFactory</code></td>
+          <td>MMCA.Common.AI.Anthropic</td>
+          <td>2</td>
+          <td>AiSettings, IAiProviderFactory</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>OpenAiProviderFactory</code></td>
+          <td>MMCA.Common.AI.OpenAI</td>
+          <td>2</td>
+          <td>AiSettings, IAiProviderFactory</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>EmptyCorpusHarness</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>3</td>
+          <td>GoldenReplayCase, GoldenReplayTestsBase, ReplayChatClient</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>FakeProviderFactory</code></td>
           <td>MMCA.Common.AI.Tests</td>
           <td>2</td>
-          <td>AiProvider, AiSettings</td>
+          <td>AiSettings, IAiProviderFactory</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>MissingRecordingHarness</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>3</td>
+          <td>GoldenReplayCase, GoldenReplayTestsBase, ReplayChatClient</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>PinHarness</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>2</td>
+          <td>PromptContract, PromptContractPinTestsBase</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>PreStreamingGuardrail</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>2</td>
+          <td>GuardrailVerdict, IChatGuardrail</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>ProviderTagTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>2</td>
+          <td>StubChatClient, UsageRecordingChatClient</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>RecordingGuardrail</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>2</td>
+          <td>GuardrailVerdict, IChatGuardrail</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>ReferenceGoldenReplayTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>6</td>
+          <td>GoldenReplayCase, GoldenReplayTestsBase, PromptContract, RecordedResponses, ReferencePrompts, ReplayChatClient</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>ReferencePromptContractTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>3</td>
+          <td>PromptContract, PromptContractPinTestsBase, ReferencePrompts</td>
           </tr>
           <tr>
           <td>2</td>
@@ -12052,10 +12316,17 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>UsageRecorder</code></td>
+          <td><code>StubToolPolicy</code></td>
           <td>MMCA.Common.AI.Tests</td>
-          <td>3</td>
-          <td>AiUsageMeter, DurationMeasurement, Measurement</td>
+          <td>2</td>
+          <td>IChatToolPolicy, ToolAuthorization</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>UsageRecordingChatClientTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>5</td>
+          <td>AiUsageMeter, PromptContract, StubChatClient, UsageRecorder, UsageRecordingChatClient</td>
           </tr>
           <tr>
           <td>2</td>
@@ -13844,6 +14115,13 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>BlazorCircuitLimitExtensions</code></td>
+          <td>MMCA.Common.UI.Web</td>
+          <td>2</td>
+          <td>BlazorCircuitLimitSettings, BoundedCircuitHandler</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>BlazorCspPolicyProvider</code></td>
           <td>MMCA.Common.UI.Web</td>
           <td>5</td>
@@ -13876,6 +14154,13 @@
           <td>MMCA.Common.UI.Web.Tests</td>
           <td>2</td>
           <td>CapturingHandler, SentRequest</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>UiRateLimitingTests</code></td>
+          <td>MMCA.Common.UI.Web.Tests</td>
+          <td>2</td>
+          <td>UiRateLimitingExtensions, UiRateLimitingSettings</td>
           </tr>
           <tr>
           <td>3</td>
@@ -13998,10 +14283,10 @@
           </tr>
           <tr>
           <td>3</td>
-          <td><code>AnthropicScoringService</code></td>
+          <td><code>SessionScoringService</code></td>
           <td>MMCA.ADC.Conference.Infrastructure</td>
-          <td>6</td>
-          <td>AiScoreResponse, IAiScoringService, PromptContract, SessionScoringInput, SessionScoringResult, SpeakerInfo</td>
+          <td>7</td>
+          <td>AiScoreResponse, ChatGuardrailException, IAiScoringService, PromptContract, SessionScoringInput, SessionScoringResult, SpeakerInfo</td>
           </tr>
           <tr>
           <td>3</td>
@@ -14572,10 +14857,31 @@
           </tr>
           <tr>
           <td>3</td>
-          <td><code>AiServiceCollectionExtensions</code></td>
+          <td><code>GuardrailServiceCollectionExtensions</code></td>
           <td>MMCA.Common.AI</td>
-          <td>7</td>
-          <td>AiProvider, AiSettings, AiUsageMeter, BoundedChatClient, GuardrailChatClient, IChatGuardrail, UsageRecordingChatClient</td>
+          <td>5</td>
+          <td>ContentPolicyGuardrail, ContentPolicySettings, IChatGuardrail, IChatRequestRedactor, PiiRedactionGuardrail</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>AnthropicAiServiceCollectionExtensions</code></td>
+          <td>MMCA.Common.AI.Anthropic</td>
+          <td>2</td>
+          <td>AnthropicAiProviderFactory, IAiProviderFactory</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>OpenAiServiceCollectionExtensions</code></td>
+          <td>MMCA.Common.AI.OpenAI</td>
+          <td>2</td>
+          <td>IAiProviderFactory, OpenAiProviderFactory</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>AdapterFactoryTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>6</td>
+          <td>AiSettings, AnthropicAiProviderFactory, BoundedChatClient, IAiProviderFactory, OpenAiProviderFactory, UsageRecordingChatClient</td>
           </tr>
           <tr>
           <td>3</td>
@@ -14588,8 +14894,22 @@
           <td>3</td>
           <td><code>BoundedChatClientTests</code></td>
           <td>MMCA.Common.AI.Tests</td>
-          <td>4</td>
-          <td>AiSettings, BoundedChatClient, FixedTokenEstimator, StubChatClient</td>
+          <td>6</td>
+          <td>AiSettings, BoundedChatClient, FixedTokenEstimator, PromptContract, StubChatClient, StubToolPolicy</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>ContentPolicyGuardrailTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>3</td>
+          <td>ContentPolicyGuardrail, ContentPolicyInjectionMode, ContentPolicySettings</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>ContentPolicyRegistrationTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>7</td>
+          <td>ContentPolicyGuardrail, ContentPolicyInjectionMode, ContentPolicySettings, GuardrailChatClient, IChatGuardrail, IChatRequestRedactor, StubChatClient</td>
           </tr>
           <tr>
           <td>3</td>
@@ -14600,10 +14920,45 @@
           </tr>
           <tr>
           <td>3</td>
-          <td><code>UsageRecordingChatClientTests</code></td>
+          <td><code>GuardrailRegistrationTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>7</td>
+          <td>AiSettings, BoundedChatClient, GuardrailChatClient, IChatGuardrail, IChatRequestRedactor, PiiRedactionGuardrail, StubChatClient</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>RecordedResponsesTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>3</td>
+          <td>PinHarness, PromptContract, RecordedResponses</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>ReplayChatClientTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>3</td>
+          <td>EmptyCorpusHarness, MissingRecordingHarness, ReplayChatClient</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>RequestRedactionTests</code></td>
           <td>MMCA.Common.AI.Tests</td>
           <td>6</td>
-          <td>AiProvider, AiUsageMeter, PromptContract, StubChatClient, UsageRecorder, UsageRecordingChatClient</td>
+          <td>GuardrailChatClient, PiiRedactionGuardrail, RecordingGuardrail, StubChatClient, SuffixRedactor, UppercaseRedactor</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>StreamedGuardrailTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>6</td>
+          <td>ChatGuardrailException, GuardrailChatClient, GuardrailVerdict, PreStreamingGuardrail, StubChatClient, StubGuardrail</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>ToolPolicyTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>8</td>
+          <td>AiSettings, BoundedChatClient, ChatToolPolicy, IChatToolPolicy, StubChatClient, StubTool, StubToolPolicy, ToolAuthorization</td>
           </tr>
           <tr>
           <td>3</td>
@@ -15258,6 +15613,13 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>GetFixtureProjectionHandler</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>3</td>
+          <td>GetFixtureProjectionQuery, IQueryHandler&lt;in TQuery, TResult&gt;, Result</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>MutableFixtureId</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>1</td>
@@ -15283,6 +15645,13 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>3</td>
           <td>ICommandHandler&lt;in TCommand, TResult&gt;, PurgeTicketsCommand, Result</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>RebuildFixtureProjectionHandler</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>3</td>
+          <td>ICommandHandler&lt;in TCommand, TResult&gt;, RebuildFixtureProjectionCommand, Result</td>
           </tr>
           <tr>
           <td>3</td>
@@ -16328,6 +16697,13 @@
           <td>ISessionCookieSync, ITokenRefresher, Mocks, WasmTokenStorageService</td>
           </tr>
           <tr>
+          <td>3</td>
+          <td><code>BoundedCircuitHandlerTests</code></td>
+          <td>MMCA.Common.UI.Web.Tests</td>
+          <td>3</td>
+          <td>BlazorCircuitLimitExtensions, BlazorCircuitLimitSettings, BoundedCircuitHandler</td>
+          </tr>
+          <tr>
           <td>4</td>
           <td><code>AdcAppHostCollection</code></td>
           <td>MMCA.ADC.AppHost.SmokeTests</td>
@@ -16352,8 +16728,8 @@
           <td>4</td>
           <td><code>ScoreEventSessionsInternalCommand</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>4</td>
-          <td>ConferencePermissions, IHasTimeout, IInternalCommand, IRequiresPermission</td>
+          <td>6</td>
+          <td>ConferenceFeatures, ConferencePermissions, IFeatureGated, IHasTimeout, IInternalCommand, IRequiresPermission</td>
           </tr>
           <tr>
           <td>4</td>
@@ -16371,31 +16747,38 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>AnthropicScoringServiceTests</code></td>
-          <td>MMCA.ADC.Conference.Infrastructure.Tests</td>
-          <td>6</td>
-          <td>AnthropicScoringService, PromptContract, SessionScoringInput, SessionScoringResult, SpeakerInfo, StubChatClient</td>
+          <td><code>SessionScoreResponseGuardrail</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure</td>
+          <td>5</td>
+          <td>AiScoreResponse, GuardrailVerdict, IChatGuardrail, PromptContract, SessionScoringService</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>GoldenReplayTests</code></td>
+          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td>8</td>
+          <td>GoldenCorpus, GoldenReplayCase, GoldenReplayTestsBase, GuardrailChatClient, RecordedResponses, RecordedScores, ReplayChatClient, SessionScoringService</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>LiveJudgeTests</code></td>
           <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
           <td>2</td>
-          <td>AnthropicScoringService, GoldenCorpus</td>
+          <td>GoldenCorpus, SessionScoringService</td>
           </tr>
           <tr>
           <td>4</td>
           <td><code>PromptContractTests</code></td>
           <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
           <td>4</td>
-          <td>AnthropicScoringService, GoldenCorpus, SessionScoringInput, SpeakerInfo</td>
+          <td>GoldenCorpus, SessionScoringInput, SessionScoringService, SpeakerInfo</td>
           </tr>
           <tr>
           <td>4</td>
-          <td><code>ReplayChatClient</code></td>
+          <td><code>SessionScoringPromptContractPinTests</code></td>
           <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
-          <td>2</td>
-          <td>AnthropicScoringService, GoldenCase</td>
+          <td>3</td>
+          <td>PromptContract, PromptContractPinTestsBase, SessionScoringService</td>
           </tr>
           <tr>
           <td>4</td>
@@ -16917,10 +17300,17 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>EventFeedback</code></td>
+          <td>MMCA.ADC.Engagement.UI</td>
+          <td>9</td>
+          <td>DataAnnotationsModelValidator, EventQuestionAnswerDTO, FeedbackAnswerModel, IEventFeedbackUIService, IEventLookupService, IQuestionLookupService, IToastService, ModelValidation, QuestionDTO</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>EventFeedbackService</code></td>
           <td>MMCA.ADC.Engagement.UI</td>
-          <td>8</td>
-          <td>AuthenticatedServiceBase, EventQuestionAnswerDTO, HttpResultExecutor, IEventFeedbackUIService, ITokenStorageService, PagedCollectionResult&lt;T&gt;, ProblemDetailsResultReader, Result</td>
+          <td>9</td>
+          <td>AuthenticatedServiceBase, EventQuestionAnswerDTO, HttpResultExecutor, IdempotencyHeaders, IEventFeedbackUIService, ITokenStorageService, PagedCollectionResult&lt;T&gt;, ProblemDetailsResultReader, Result</td>
           </tr>
           <tr>
           <td>4</td>
@@ -17932,6 +18322,13 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>BareMap</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>4</td>
+          <td>ArchitectureMapBase, Layer, LayerRef, Result</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>CascadeChildFixture</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>1</td>
@@ -18020,6 +18417,13 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>1</td>
           <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>FixtureMap</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>4</td>
+          <td>ArchitectureMapBase, FatFixtureController, Layer, LayerRef</td>
           </tr>
           <tr>
           <td>4</td>
@@ -19409,10 +19813,17 @@
           </tr>
           <tr>
           <td>5</td>
+          <td><code>SessionCalendarController</code></td>
+          <td>MMCA.ADC.Conference.API</td>
+          <td>6</td>
+          <td>ApiControllerBase, ConferencePermissions, ExportSessionCalendarQuery, IQueryHandler&lt;in TQuery, TResult&gt;, Result, Route</td>
+          </tr>
+          <tr>
+          <td>5</td>
           <td><code>SessionSelectionController</code></td>
           <td>MMCA.ADC.Conference.API</td>
-          <td>15</td>
-          <td>ApiControllerBase, CategoryDistributionDTO, ConferencePermissions, ContentSimilarityDTO, GetCategoryDistributionQuery, GetContentSimilarityQuery, GetSessionSelectionDashboardQuery, GetSpeakerSessionOverlapQuery, IInternalCommandScheduler, IQueryHandler&lt;in TQuery, TResult&gt;, Result, Route, ScoreEventSessionsInternalCommand, SessionSelectionDashboardDTO, SpeakerSessionOverlapDTO</td>
+          <td>16</td>
+          <td>ApiControllerBase, CategoryDistributionDTO, ConferenceFeatures, ConferencePermissions, ContentSimilarityDTO, GetCategoryDistributionQuery, GetContentSimilarityQuery, GetSessionSelectionDashboardQuery, GetSpeakerSessionOverlapQuery, IInternalCommandScheduler, IQueryHandler&lt;in TQuery, TResult&gt;, Result, Route, ScoreEventSessionsInternalCommand, SessionSelectionDashboardDTO, SpeakerSessionOverlapDTO</td>
           </tr>
           <tr>
           <td>5</td>
@@ -19446,8 +19857,8 @@
           <td>5</td>
           <td><code>ScoreEventSessionsInternalCommandMarkerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>2</td>
-          <td>ConferencePermissions, ScoreEventSessionsInternalCommand</td>
+          <td>4</td>
+          <td>ConferenceFeatures, ConferencePermissions, IFeatureGated, ScoreEventSessionsInternalCommand</td>
           </tr>
           <tr>
           <td>5</td>
@@ -19460,15 +19871,29 @@
           <td>5</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.ADC.Conference.Infrastructure</td>
-          <td>6</td>
-          <td>AnthropicScoringService, IAiScoringService, ISessionizeService, ISessionScoresCacheEvictor, OutputCacheSessionScoresCacheEvictor, SessionizeService</td>
+          <td>8</td>
+          <td>IAiScoringService, IChatGuardrail, ISessionizeService, ISessionScoresCacheEvictor, OutputCacheSessionScoresCacheEvictor, SessionizeService, SessionScoreResponseGuardrail, SessionScoringService</td>
           </tr>
           <tr>
           <td>5</td>
-          <td><code>GoldenReplayTests</code></td>
-          <td>MMCA.ADC.Conference.Scoring.Evaluation.Tests</td>
+          <td><code>ConferenceAiGuardrailsRegistrationTests</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure.Tests</td>
+          <td>7</td>
+          <td>ContentPolicyGuardrail, GuardrailChatClient, IChatGuardrail, IChatRequestRedactor, PiiRedactionGuardrail, SessionScoreResponseGuardrail, StubChatClient</td>
+          </tr>
+          <tr>
           <td>5</td>
-          <td>AnthropicScoringService, GoldenCase, GoldenCorpus, RecordedScores, ReplayChatClient</td>
+          <td><code>SessionScoreResponseGuardrailTests</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure.Tests</td>
+          <td>8</td>
+          <td>GuardrailChatClient, GuardrailVerdict, PromptContract, SessionScoreResponseGuardrail, SessionScoringInput, SessionScoringService, SpeakerInfo, StubChatClient</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>SessionScoringServiceTests</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure.Tests</td>
+          <td>9</td>
+          <td>GuardrailChatClient, PiiRedactionGuardrail, PromptContract, SessionScoreResponseGuardrail, SessionScoringInput, SessionScoringResult, SessionScoringService, SpeakerInfo, StubChatClient</td>
           </tr>
           <tr>
           <td>5</td>
@@ -19859,8 +20284,8 @@
           <td>5</td>
           <td><code>EventFeedbackServiceTests</code></td>
           <td>MMCA.ADC.Engagement.UI.Tests</td>
-          <td>7</td>
-          <td>CapturingHttpMessageHandler, ErrorType, EventFeedbackService, EventQuestionAnswerDTO, HttpTestDoubles, PagedCollectionResult&lt;T&gt;, PaginationMetadata</td>
+          <td>8</td>
+          <td>CapturingHttpMessageHandler, ErrorType, EventFeedbackService, EventQuestionAnswerDTO, HttpTestDoubles, IdempotencyHeaders, PagedCollectionResult&lt;T&gt;, PaginationMetadata</td>
           </tr>
           <tr>
           <td>5</td>
@@ -20655,6 +21080,13 @@
           </tr>
           <tr>
           <td>5</td>
+          <td><code>ConformantTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>3</td>
+          <td>ConstructorDependencyCountTestsBase, FixtureMap, IArchitectureMap</td>
+          </tr>
+          <tr>
+          <td>5</td>
           <td><code>CycleTestMap</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>4</td>
@@ -20673,6 +21105,13 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>1</td>
           <td>FixtureEntity</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>EmptyScanTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>3</td>
+          <td>BareMap, ConstructorDependencyCountTestsBase, IArchitectureMap</td>
           </tr>
           <tr>
           <td>5</td>
@@ -20816,6 +21255,13 @@
           </tr>
           <tr>
           <td>5</td>
+          <td><code>TightCeilingTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>3</td>
+          <td>ConstructorDependencyCountTestsBase, FixtureMap, IArchitectureMap</td>
+          </tr>
+          <tr>
+          <td>5</td>
           <td><code>QueryPipelineBenchmarks</code></td>
           <td>MMCA.Common.Benchmarks</td>
           <td>3</td>
@@ -20949,10 +21395,10 @@
           </tr>
           <tr>
           <td>5</td>
-          <td><code>EmailConfirmationTokenService</code></td>
+          <td><code>EmailIdentity</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>8</td>
-          <td>Email, EmailConfirmationEntry, EmailConfirmationErrors, EmailConfirmationSettings, Error, ICacheService, IEmailConfirmationTokenService, Result</td>
+          <td>1</td>
+          <td>Email</td>
           </tr>
           <tr>
           <td>5</td>
@@ -21019,13 +21465,6 @@
           </tr>
           <tr>
           <td>5</td>
-          <td><code>LoginProtectionService</code></td>
-          <td>MMCA.Common.Infrastructure</td>
-          <td>6</td>
-          <td>Email, Error, ICacheService, ILoginProtectionService, LoginProtectionSettings, Result</td>
-          </tr>
-          <tr>
-          <td>5</td>
           <td><code>NullableEmailValueConverter</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>1</td>
@@ -21037,13 +21476,6 @@
           <td>MMCA.Common.Infrastructure</td>
           <td>1</td>
           <td>PhoneNumber</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>PasswordResetTokenService</code></td>
-          <td>MMCA.Common.Infrastructure</td>
-          <td>7</td>
-          <td>Email, Error, ICacheService, IPasswordResetTokenService, PasswordResetEntry, PasswordResetSettings, Result</td>
           </tr>
           <tr>
           <td>5</td>
@@ -21385,8 +21817,8 @@
           <td>5</td>
           <td><code>SpecTestEntity</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>2</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, SpecTestChild</td>
+          <td>3</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, Email, SpecTestChild</td>
           </tr>
           <tr>
           <td>5</td>
@@ -22748,6 +23180,13 @@
           </tr>
           <tr>
           <td>6</td>
+          <td><code>ConstructorDependencyCountTestsBaseTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>6</td>
+          <td>ConformantTests, EmptyScanTests, FatFixtureController, GetFixtureProjectionHandler, RebuildFixtureProjectionHandler, TightCeilingTests</td>
+          </tr>
+          <tr>
+          <td>6</td>
           <td><code>DependencyVersionTests</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>1</td>
@@ -22918,8 +23357,8 @@
           <td>6</td>
           <td><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>16</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, BaseLookup&lt;TIdentifierType&gt;, EntityQueryPipeline, Error, GroupedCount&lt;TKey&gt;, GroupedSum&lt;TKey&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;, KeysetCollectionResult&lt;T&gt;, KeysetCursor, KeysetPageRequest, KeysetQueryBuilder, QuerySpecification&lt;TEntity, TIdentifierType&gt;, QueryTags, Result, SpecificationEvaluator</td>
+          <td>17</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, BaseLookup&lt;TIdentifierType&gt;, EntityQueryPipeline, Error, GroupedCount&lt;TKey&gt;, GroupedSum&lt;TKey&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;, KeysetCollectionResult&lt;T&gt;, KeysetCursor, KeysetPageRequest, KeysetQueryBuilder, LookupRow&lt;TId, TName&gt;, QuerySpecification&lt;TEntity, TIdentifierType&gt;, QueryTags, Result, SpecificationEvaluator</td>
           </tr>
           <tr>
           <td>6</td>
@@ -22930,10 +23369,31 @@
           </tr>
           <tr>
           <td>6</td>
+          <td><code>EmailConfirmationTokenService</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>8</td>
+          <td>EmailConfirmationEntry, EmailConfirmationErrors, EmailConfirmationSettings, EmailIdentity, Error, ICacheService, IEmailConfirmationTokenService, Result</td>
+          </tr>
+          <tr>
+          <td>6</td>
           <td><code>EntityTypeConfiguration&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>10</td>
           <td>AuditableBaseEntity&lt;TIdentifierType&gt;, CosmosIntIdValueGenerator, DataSource, EntityTypeConfigurationBase&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationCosmos&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationPostgreSQL&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationSqlite&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, NamespaceConventions, UseDataSourceAttribute</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>LoginProtectionService</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>6</td>
+          <td>EmailIdentity, Error, ICacheService, ILoginProtectionService, LoginProtectionSettings, Result</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>PasswordResetTokenService</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>7</td>
+          <td>EmailIdentity, Error, ICacheService, IPasswordResetTokenService, PasswordResetEntry, PasswordResetSettings, Result</td>
           </tr>
           <tr>
           <td>6</td>
@@ -22993,10 +23453,10 @@
           </tr>
           <tr>
           <td>6</td>
-          <td><code>EmailConfirmationTokenServiceTests</code></td>
+          <td><code>EmailIdentityTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>7</td>
-          <td>EmailConfirmationEntry, EmailConfirmationErrors, EmailConfirmationSettings, EmailConfirmationTokenService, ErrorType, FakeConfirmationCacheService, Result</td>
+          <td>1</td>
+          <td>EmailIdentity</td>
           </tr>
           <tr>
           <td>6</td>
@@ -23049,13 +23509,6 @@
           </tr>
           <tr>
           <td>6</td>
-          <td><code>LoginProtectionServiceTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>5</td>
-          <td>ErrorType, FakeCacheService, LoginProtectionService, LoginProtectionSettings, Result</td>
-          </tr>
-          <tr>
-          <td>6</td>
           <td><code>LowestRankedBetaSpecification</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
@@ -23102,13 +23555,6 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
           <td>QuerySpecification&lt;TEntity, TIdentifierType&gt;, SpecTestEntity</td>
-          </tr>
-          <tr>
-          <td>6</td>
-          <td><code>PasswordResetTokenServiceTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>6</td>
-          <td>ErrorType, FakeCacheService, PasswordResetEntry, PasswordResetSettings, PasswordResetTokenService, Result</td>
           </tr>
           <tr>
           <td>6</td>
@@ -24001,6 +24447,13 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>PointsSettings</code></td>
+          <td>MMCA.ADC.Engagement.Shared</td>
+          <td>4</td>
+          <td>EventFeedback, PointsActivityType, SessionFeedback, SponsorVisit</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>AttendeeLookupService</code></td>
           <td>MMCA.ADC.Engagement.UI</td>
           <td>9</td>
@@ -24302,6 +24755,20 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>EmailConfirmationTokenServiceTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>7</td>
+          <td>EmailConfirmationEntry, EmailConfirmationErrors, EmailConfirmationSettings, EmailConfirmationTokenService, ErrorType, FakeConfirmationCacheService, Result</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>LoginProtectionServiceTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>5</td>
+          <td>ErrorType, FakeCacheService, LoginProtectionService, LoginProtectionSettings, Result</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>OwnsAddressTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>6</td>
@@ -24313,6 +24780,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>6</td>
           <td>Currency, HandRolledOwner, HelperOwner, Money, MoneyTestDbContext, PropertyFacets</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>PasswordResetTokenServiceTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>6</td>
+          <td>ErrorType, FakeCacheService, PasswordResetEntry, PasswordResetSettings, PasswordResetTokenService, Result</td>
           </tr>
           <tr>
           <td>7</td>
@@ -24442,6 +24916,13 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>BatchAddEventQuestionAnswersCommand</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>4</td>
+          <td>BatchEventQuestionAnswerItem, Event, ICacheInvalidating, ITransactional</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>ConferenceCategoryCreateRequestMapper</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>4</td>
@@ -24495,6 +24976,13 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>3</td>
           <td>EventQuestionAnswer, EventQuestionAnswerDTO, IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>EventQuestionAnswerRules</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>7</td>
+          <td>Error, Event, EventInvariants, EventQuestionAnswer, Question, QuestionInvariants, Result</td>
           </tr>
           <tr>
           <td>8</td>
@@ -25086,6 +25574,13 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>GetLeaderboardHandler</code></td>
+          <td>MMCA.ADC.Engagement.Application</td>
+          <td>9</td>
+          <td>GetLeaderboardQuery, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, LeaderboardEntryDTO, LeaderboardOptIn, OptInRow, PointsEntry, PointsSettings, Result</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>GetPointsOverviewHandler</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td>9</td>
@@ -25153,6 +25648,13 @@
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td>5</td>
           <td>IQueryableExecutor, IRepository&lt;TEntity, TIdentifierType&gt;, ISessionBookmarkValidationService, IUnitOfWork, UserSessionBookmark</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>MutableOptions</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>1</td>
+          <td>PointsSettings</td>
           </tr>
           <tr>
           <td>8</td>
@@ -25275,10 +25777,10 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>EventFeedback</code></td>
-          <td>MMCA.ADC.Engagement.UI</td>
-          <td>10</td>
-          <td>DataAnnotationsModelValidator, EventQuestionAnswerDTO, FeedbackAnswerModel, IEventFeedbackUIService, IEventLookupService, IQuestionLookupService, IToastService, ModelValidation, Question, QuestionDTO</td>
+          <td><code>PointsSettingsTests</code></td>
+          <td>MMCA.ADC.Engagement.Shared.Tests</td>
+          <td>5</td>
+          <td>EventFeedback, PointsActivityType, PointsSettings, SessionFeedback, SponsorVisit</td>
           </tr>
           <tr>
           <td>8</td>
@@ -25300,6 +25802,13 @@
           <td>MMCA.ADC.Engagement.UI.Tests</td>
           <td>8</td>
           <td>AdvanceableTimeProvider, AttendeeLookupService, AttendeeSummary, CapturingHttpMessageHandler, GatedHttpMessageHandler, HttpTestDoubles, PagedCollectionResult&lt;T&gt;, PaginationMetadata</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>EventFeedbackTests</code></td>
+          <td>MMCA.ADC.Engagement.UI.Tests</td>
+          <td>11</td>
+          <td>BunitComponentTestBase, EventFeedback, EventInfo, EventQuestionAnswerDTO, FeedbackAnswerModel, IEventFeedbackUIService, IEventLookupService, IQuestionLookupService, Question, QuestionDTO, Result</td>
           </tr>
           <tr>
           <td>8</td>
@@ -26052,6 +26561,13 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>EventLifecycleController</code></td>
+          <td>MMCA.ADC.Conference.API</td>
+          <td>10</td>
+          <td>ApiControllerBase, ConferencePermissions, ICommandHandler&lt;in TCommand, TResult&gt;, PublishEventCommand, RefreshFromSessionizeCommand, RefreshFromSessionizeResultDTO, Result, Route, SupportsIfMatchAttribute, UnpublishEventCommand</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>EventSpeakersController</code></td>
           <td>MMCA.ADC.Conference.API</td>
           <td>19</td>
@@ -26087,10 +26603,24 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>SpeakerLinksController</code></td>
+          <td>MMCA.ADC.Conference.API</td>
+          <td>8</td>
+          <td>ApiControllerBase, ConferencePermissions, ICommandHandler&lt;in TCommand, TResult&gt;, LinkUserRequest, LinkUserToSpeakerCommand, Result, Route, UnlinkUserFromSpeakerCommand</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>SpeakersController</code></td>
           <td>MMCA.ADC.Conference.API</td>
-          <td>31</td>
-          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetPublicSpeakerFilterQuery, GetSessionBookmarkCountQuery, GetSessionBookmarkCountsQuery, GetSessionFeedbackQuery, GetSpeakersByEventFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, LinkUserRequest, LinkUserToSpeakerCommand, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, Result …(+11)</td>
+          <td>24</td>
+          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetPublicSpeakerFilterQuery, GetSpeakersByEventFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, Result, RoleNames, Route, Speaker, SpeakerCreateRequest, SpeakerDTO …(+4)</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>SpeakerSessionsController</code></td>
+          <td>MMCA.ADC.Conference.API</td>
+          <td>10</td>
+          <td>ApiControllerBase, GetSessionBookmarkCountQuery, GetSessionBookmarkCountsQuery, GetSessionFeedbackQuery, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, Result, RoleNames, Route, SessionFeedbackDTO</td>
           </tr>
           <tr>
           <td>9</td>
@@ -26152,8 +26682,8 @@
           <td>9</td>
           <td><code>AddEventQuestionAnswerHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>14</td>
-          <td>AddEventQuestionAnswerCommand, Error, Event, EventFeedbackSubmitted, EventInvariants, EventQuestionAnswer, EventQuestionAnswerDTO, EventQuestionAnswerDTOMapper, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IUnitOfWork, Question, QuestionInvariants, Result</td>
+          <td>13</td>
+          <td>AddEventQuestionAnswerCommand, Error, Event, EventFeedbackSubmitted, EventQuestionAnswer, EventQuestionAnswerDTO, EventQuestionAnswerDTOMapper, EventQuestionAnswerRules, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IUnitOfWork, Question, Result</td>
           </tr>
           <tr>
           <td>9</td>
@@ -26217,6 +26747,20 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>8</td>
           <td>AddChildEntityHandlerBase&lt;TCommand, TParent, TIdentifierType, TChild, TChildDTO&gt;, AddSpeakerCategoryItemCommand, IUnitOfWork, Result, Speaker, SpeakerCategoryItem, SpeakerCategoryItemDTO, SpeakerCategoryItemDTOMapper</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>BatchAddEventQuestionAnswersCommandValidator</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>1</td>
+          <td>BatchAddEventQuestionAnswersCommand</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>BatchAddEventQuestionAnswersHandler</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>13</td>
+          <td>BatchAddEventQuestionAnswersCommand, Error, Event, EventFeedbackSubmitted, EventQuestionAnswer, EventQuestionAnswerDTO, EventQuestionAnswerDTOMapper, EventQuestionAnswerRules, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IUnitOfWork, Question, Result</td>
           </tr>
           <tr>
           <td>9</td>
@@ -27090,8 +27634,15 @@
           <td>9</td>
           <td><code>LivePollsController</code></td>
           <td>MMCA.ADC.Engagement.API</td>
-          <td>25</td>
-          <td>ApiControllerBase, CastVoteCommand, CastVoteRequest, CloseLivePollCommand, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, EngagementFeatures, EngagementPermissions, Error, GetEventPollsQuery, GetOpenPollsQuery, GetPollResultsQuery, GetSessionManagePollsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, LivePoll, LivePollDTO, LivePollResultsDTO …(+5)</td>
+          <td>19</td>
+          <td>ApiControllerBase, CloseLivePollCommand, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, EngagementFeatures, EngagementPermissions, GetEventPollsQuery, GetSessionManagePollsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, LivePoll, LivePollDTO, OpenLivePollCommand, Result, RoleNames, Route, SupportsIfMatchAttribute</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>LivePollVotingController</code></td>
+          <td>MMCA.ADC.Engagement.API</td>
+          <td>14</td>
+          <td>ApiControllerBase, CastVoteCommand, CastVoteRequest, EngagementFeatures, Error, GetOpenPollsQuery, GetPollResultsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, LivePollResultsDTO, Result, RoleNames, Route</td>
           </tr>
           <tr>
           <td>9</td>
@@ -27263,13 +27814,6 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>PointsSettings</code></td>
-          <td>MMCA.ADC.Engagement.Shared</td>
-          <td>4</td>
-          <td>EventFeedback, PointsActivityType, SessionFeedback, SponsorVisit</td>
-          </tr>
-          <tr>
-          <td>9</td>
           <td><code>LiveEventService</code></td>
           <td>MMCA.ADC.Engagement.UI</td>
           <td>5</td>
@@ -27281,13 +27825,6 @@
           <td>MMCA.ADC.Engagement.UI.Tests</td>
           <td>21</td>
           <td>AttendeeSearchPanel, AttendeeSummary, BunitComponentTestBase, IAttendeeLookupService, ILivePollUIService, ISessionQuestionUIService, LivePollDTO, LivePollOptionDTO, LivePollOptionResultDTO, LivePollResultsDTO, LivePollStatus, MarkupSnapshot, PollManagementPanel, Question, QuestionStatus, Result, SessionLiveModerationPanel, SessionLivePollPanel, SessionLiveQuestionPanel, SessionQuestionDTO …(+1)</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>EventFeedbackTests</code></td>
-          <td>MMCA.ADC.Engagement.UI.Tests</td>
-          <td>11</td>
-          <td>BunitComponentTestBase, EventFeedback, EventInfo, EventQuestionAnswerDTO, FeedbackAnswerModel, IEventFeedbackUIService, IEventLookupService, IQuestionLookupService, Question, QuestionDTO, Result</td>
           </tr>
           <tr>
           <td>9</td>
@@ -27456,6 +27993,13 @@
           <td>MMCA.ADC.UI</td>
           <td>1</td>
           <td>Activity</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>PromptTaggingChatClient</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>3</td>
+          <td>Activity, AiUsageMeter, PromptContract</td>
           </tr>
           <tr>
           <td>9</td>
@@ -28028,15 +28572,15 @@
           <td>10</td>
           <td><code>EventQuestionAnswersController</code></td>
           <td>MMCA.ADC.Conference.API</td>
-          <td>22</td>
-          <td>AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;, Error, EventQuestionAnswer, EventQuestionAnswerDTO, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, OwnedByUserSpecification&lt;TEntity, TIdentifierType&gt;, OwnershipHelper, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, RemoveEventQuestionAnswerCommand, Result, RoleNames, Route, Specification&lt;TEntity, TIdentifierType&gt; …(+2)</td>
+          <td>25</td>
+          <td>AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, BaseLookup&lt;TIdentifierType&gt;, BatchAddEventQuestionAnswersCommand, BatchAddEventQuestionAnswersRequest, BatchEventQuestionAnswerItem, CollectionResult&lt;T&gt;, EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;, Error, EventQuestionAnswer, EventQuestionAnswerDTO, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, OwnedByUserSpecification&lt;TEntity, TIdentifierType&gt;, OwnershipHelper, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, RemoveEventQuestionAnswerCommand, Result …(+5)</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>EventsController</code></td>
           <td>MMCA.ADC.Conference.API</td>
-          <td>29</td>
-          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Event, EventCreateRequest, EventDTO, EventUpdateRequest, ExportEventCalendarQuery, GetNowNextQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, NowNextDTO, PagedCollectionResult&lt;T&gt;, PublishedEventSpecification, PublishEventCommand, QueryFilterModelBinder …(+9)</td>
+          <td>25</td>
+          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Event, EventCreateRequest, EventDTO, EventUpdateRequest, ExportEventCalendarQuery, GetNowNextQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, NowNextDTO, PagedCollectionResult&lt;T&gt;, PublishedEventSpecification, QueryFilterModelBinder, Result …(+5)</td>
           </tr>
           <tr>
           <td>10</td>
@@ -28063,8 +28607,8 @@
           <td>10</td>
           <td><code>SessionsController</code></td>
           <td>MMCA.ADC.Conference.API</td>
-          <td>26</td>
-          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Event, EventDTO, ExportSessionCalendarQuery, GetPublicSessionFilterQuery, GetSessionsBySpeakerFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, Result, Route, Session, SessionCreateRequest …(+6)</td>
+          <td>25</td>
+          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Event, EventDTO, GetPublicSessionFilterQuery, GetSessionsBySpeakerFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, Result, Route, Session, SessionCreateRequest, SessionDTO …(+5)</td>
           </tr>
           <tr>
           <td>10</td>
@@ -28079,6 +28623,13 @@
           <td>MMCA.ADC.Conference.API</td>
           <td>21</td>
           <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, GetPublicSponsorFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, Result, Route, Specification&lt;TEntity, TIdentifierType&gt;, Sponsor, SponsorCreateRequest, SponsorDTO, SponsorUpdateRequest, SupportsIfMatchAttribute …(+1)</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>EventLifecycleControllerTests</code></td>
+          <td>MMCA.ADC.Conference.API.Tests</td>
+          <td>10</td>
+          <td>Error, ErrorType, EventLifecycleController, ICommandHandler&lt;in TCommand, TResult&gt;, PublishEventCommand, RefreshFromSessionizeCommand, RefreshFromSessionizeResultDTO, Result, SupportsIfMatchAttribute, UnpublishEventCommand</td>
           </tr>
           <tr>
           <td>10</td>
@@ -28117,10 +28668,24 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>SpeakerLinksControllerTests</code></td>
+          <td>MMCA.ADC.Conference.API.Tests</td>
+          <td>7</td>
+          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, LinkUserRequest, LinkUserToSpeakerCommand, Result, SpeakerLinksController, UnlinkUserFromSpeakerCommand</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>SpeakersControllerTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
-          <td>30</td>
-          <td>AndSpecification&lt;TEntity, TIdentifierType&gt;, BaseLookup&lt;TIdentifierType&gt;, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetPublicSpeakerFilterQuery, GetSessionBookmarkCountQuery, GetSessionBookmarkCountsQuery, GetSessionFeedbackQuery, GetSpeakersByEventFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;, LinkUserRequest, LinkUserToSpeakerCommand, PagedCollectionResult&lt;T&gt;, Result, RoleNames …(+10)</td>
+          <td>23</td>
+          <td>AndSpecification&lt;TEntity, TIdentifierType&gt;, BaseLookup&lt;TIdentifierType&gt;, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetPublicSpeakerFilterQuery, GetSpeakersByEventFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;, PagedCollectionResult&lt;T&gt;, Result, RoleNames, Speaker, SpeakerCreateRequest, SpeakerDTO, SpeakersController, SpeakerUpdateRequest …(+3)</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>SpeakerSessionsControllerTests</code></td>
+          <td>MMCA.ADC.Conference.API.Tests</td>
+          <td>10</td>
+          <td>Error, GetSessionBookmarkCountQuery, GetSessionBookmarkCountsQuery, GetSessionFeedbackQuery, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, Result, RoleNames, SessionFeedbackDTO, SpeakerSessionsController</td>
           </tr>
           <tr>
           <td>10</td>
@@ -28604,6 +29169,13 @@
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>2</td>
           <td>AddSpeakerCategoryItemCommand, AddSpeakerCategoryItemCommandValidator</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>BatchAddEventQuestionAnswersCommandValidatorTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>3</td>
+          <td>BatchAddEventQuestionAnswersCommand, BatchAddEventQuestionAnswersCommandValidator, BatchEventQuestionAnswerItem</td>
           </tr>
           <tr>
           <td>10</td>
@@ -29106,8 +29678,15 @@
           <td>10</td>
           <td><code>LivePollsControllerTests</code></td>
           <td>MMCA.ADC.Engagement.API.Tests</td>
-          <td>25</td>
-          <td>CastVoteCommand, CastVoteRequest, CloseLivePollCommand, ControllerMocks, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetEventPollsQuery, GetOpenPollsQuery, GetPollResultsQuery, GetSessionManagePollsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IdempotentAttribute, IQueryHandler&lt;in TQuery, TResult&gt;, LivePoll, LivePollDTO, LivePollResultsDTO, LivePollsController …(+5)</td>
+          <td>20</td>
+          <td>CloseLivePollCommand, ControllerMocks, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetEventPollsQuery, GetSessionManagePollsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IdempotentAttribute, IQueryHandler&lt;in TQuery, TResult&gt;, LivePoll, LivePollDTO, LivePollsController, LivePollStatus, OpenLivePollCommand, Question, Result, SupportsIfMatchAttribute</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>LivePollVotingControllerTests</code></td>
+          <td>MMCA.ADC.Engagement.API.Tests</td>
+          <td>14</td>
+          <td>CastVoteCommand, CastVoteRequest, ControllerMocks, GetOpenPollsQuery, GetPollResultsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IdempotentAttribute, IQueryHandler&lt;in TQuery, TResult&gt;, LivePollResultsDTO, LivePollStatus, LivePollVotingController, Question, Result</td>
           </tr>
           <tr>
           <td>10</td>
@@ -29157,13 +29736,6 @@
           <td>MMCA.ADC.Engagement.Application</td>
           <td>7</td>
           <td>GetEventPollsQuery, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, LivePoll, LivePollDTO, LivePollDTOMapper, Result</td>
-          </tr>
-          <tr>
-          <td>10</td>
-          <td><code>GetLeaderboardHandler</code></td>
-          <td>MMCA.ADC.Engagement.Application</td>
-          <td>9</td>
-          <td>GetLeaderboardQuery, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, LeaderboardEntryDTO, LeaderboardOptIn, OptInRow, PointsEntry, PointsSettings, Result</td>
           </tr>
           <tr>
           <td>10</td>
@@ -29237,13 +29809,6 @@
           </tr>
           <tr>
           <td>10</td>
-          <td><code>MutableOptions</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>1</td>
-          <td>PointsSettings</td>
-          </tr>
-          <tr>
-          <td>10</td>
           <td><code>CheckIn</code></td>
           <td>MMCA.ADC.Engagement.Domain</td>
           <td>7</td>
@@ -29269,13 +29834,6 @@
           <td>MMCA.ADC.Engagement.Shared.Tests</td>
           <td>2</td>
           <td>CheckInScope, CheckInScopeNames</td>
-          </tr>
-          <tr>
-          <td>10</td>
-          <td><code>PointsSettingsTests</code></td>
-          <td>MMCA.ADC.Engagement.Shared.Tests</td>
-          <td>5</td>
-          <td>EventFeedback, PointsActivityType, PointsSettings, SessionFeedback, SponsorVisit</td>
           </tr>
           <tr>
           <td>10</td>
@@ -29381,6 +29939,27 @@
           <td>MMCA.ADC.UI</td>
           <td>3</td>
           <td>MainActivity, NowNextSession, NowNextSnapshot</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>AiServiceCollectionExtensions</code></td>
+          <td>MMCA.Common.AI</td>
+          <td>11</td>
+          <td>AiProviderValidator, AiSettings, AiUsageMeter, BoundedChatClient, GuardrailChatClient, IAiProviderFactory, IChatGuardrail, IChatRequestRedactor, IChatToolPolicy, PromptTaggingChatClient, UsageRecordingChatClient</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>AiProviderSelectionTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>6</td>
+          <td>AiSettings, BoundedChatClient, FakeProviderFactory, IAiProviderFactory, PromptTaggingChatClient, StubChatClient</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>PromptTaggingChatClientTests</code></td>
+          <td>MMCA.Common.AI.Tests</td>
+          <td>4</td>
+          <td>AiUsageMeter, PromptContract, PromptTaggingChatClient, StubChatClient</td>
           </tr>
           <tr>
           <td>10</td>
@@ -29862,8 +30441,8 @@
           <td>11</td>
           <td><code>ConditionalWriteConventionTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
-          <td>10</td>
-          <td>ActivitiesController, ConferenceCategoriesController, EventsController, PartnersController, QuestionsController, SessionAssetsController, SessionsController, SpeakersController, SponsorsController, SupportsIfMatchAttribute</td>
+          <td>11</td>
+          <td>ActivitiesController, ConferenceCategoriesController, EventLifecycleController, EventsController, PartnersController, QuestionsController, SessionAssetsController, SessionsController, SpeakersController, SponsorsController, SupportsIfMatchAttribute</td>
           </tr>
           <tr>
           <td>11</td>
@@ -29876,15 +30455,15 @@
           <td>11</td>
           <td><code>EventQuestionAnswersControllerTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
-          <td>19</td>
-          <td>AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, CollectionResult&lt;T&gt;, Error, EventQuestionAnswer, EventQuestionAnswerDTO, EventQuestionAnswersController, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, OwnedByUserSpecification&lt;TEntity, TIdentifierType&gt;, PagedCollectionResult&lt;T&gt;, PaginationMetadata, RemoveEventQuestionAnswerCommand, Result, RoleNames, Specification&lt;TEntity, TIdentifierType&gt;, UpdateEventQuestionAnswerCommand, UpdateEventQuestionAnswerRequest</td>
+          <td>21</td>
+          <td>AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, BatchAddEventQuestionAnswersCommand, BatchAddEventQuestionAnswersRequest, CollectionResult&lt;T&gt;, Error, EventQuestionAnswer, EventQuestionAnswerDTO, EventQuestionAnswersController, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, OwnedByUserSpecification&lt;TEntity, TIdentifierType&gt;, PagedCollectionResult&lt;T&gt;, PaginationMetadata, RemoveEventQuestionAnswerCommand, Result, RoleNames, Specification&lt;TEntity, TIdentifierType&gt;, UpdateEventQuestionAnswerCommand …(+1)</td>
           </tr>
           <tr>
           <td>11</td>
           <td><code>EventsControllerTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
-          <td>31</td>
-          <td>BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, ErrorType, Event, EventCreateRequest, EventDTO, EventsController, EventUpdateRequest, ExportEventCalendarQuery, GetNowNextQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;, NowNextDTO, PagedCollectionResult&lt;T&gt;, PaginationMetadata …(+11)</td>
+          <td>26</td>
+          <td>BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, Event, EventCreateRequest, EventDTO, EventsController, EventUpdateRequest, ExportEventCalendarQuery, GetNowNextQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;, NowNextDTO, PagedCollectionResult&lt;T&gt;, PaginationMetadata, PublishedEventSpecification …(+6)</td>
           </tr>
           <tr>
           <td>11</td>
@@ -29911,8 +30490,8 @@
           <td>11</td>
           <td><code>SessionsControllerTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
-          <td>28</td>
-          <td>BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, Event, EventDTO, ExportSessionCalendarQuery, GetPublicSessionFilterQuery, GetSessionsBySpeakerFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;, PagedCollectionResult&lt;T&gt;, PaginationMetadata, Result, RoleNames, Session …(+8)</td>
+          <td>27</td>
+          <td>BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, Event, EventDTO, GetPublicSessionFilterQuery, GetSessionsBySpeakerFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, ISpecification&lt;TEntity, TIdentifierType&gt;, PagedCollectionResult&lt;T&gt;, PaginationMetadata, Result, RoleNames, Session, SessionCreateRequest …(+7)</td>
           </tr>
           <tr>
           <td>11</td>
@@ -31101,8 +31680,8 @@
           <td>12</td>
           <td><code>SpecificationTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>3</td>
-          <td>ApplicationDbContext, SpecTestChild, SpecTestEntity</td>
+          <td>4</td>
+          <td>ApplicationDbContext, NullableEmailValueConverter, SpecTestChild, SpecTestEntity</td>
           </tr>
           <tr>
           <td>12</td>
@@ -31978,6 +32557,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>7</td>
           <td>BbbSpecification, EFReadRepository&lt;TEntity, TIdentifierType&gt;, ErrorType, KeysetCursor, KeysetPageRequest, SpecificationTestDbContext, SpecTestEntity</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td><code>EFReadRepositoryLookupProjectionTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>4</td>
+          <td>EFReadRepository&lt;TEntity, TIdentifierType&gt;, Email, SpecificationTestDbContext, SpecTestEntity</td>
           </tr>
           <tr>
           <td>13</td>
@@ -32954,6 +33540,13 @@
           </tr>
           <tr>
           <td>15</td>
+          <td><code>BatchAddEventQuestionAnswersHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>13</td>
+          <td>BatchAddEventQuestionAnswersCommand, BatchAddEventQuestionAnswersHandler, BatchEventQuestionAnswerItem, ErrorType, Event, EventFeedbackSubmitted, EventQuestionAnswerDTOMapper, FakeTimeProvider, HandlerTestBase&lt;THandler&gt;, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, Question, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>15</td>
           <td><code>BatchAddSessionQuestionAnswersHandlerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>14</td>
@@ -33908,8 +34501,8 @@
           <td>15</td>
           <td><code>UiRateLimitingTests</code></td>
           <td>MMCA.ADC.UI.Web.Tests</td>
-          <td>3</td>
-          <td>ConferenceUiHostApplicationFactory, UiRateLimitingExtensions, UiRateLimitingSettings</td>
+          <td>2</td>
+          <td>ConferenceUiHostApplicationFactory, UiRateLimitingSettings</td>
           </tr>
           <tr>
           <td>15</td>

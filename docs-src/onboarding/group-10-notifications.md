@@ -15,9 +15,9 @@ the same one that runs through the whole codebase: application and domain code t
 forwarder) is chosen at the composition root, and a default is always registered so nothing has to
 be configured for DI to resolve. [`NullPushNotificationSender`](#nullpushnotificationsender) and
 [`NullLiveChannelPublisher`](#nulllivechannelpublisher) are no-ops
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:735-736`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:315-316`),
 `IEmailSender` defaults to the real [`SmtpEmailSender`](#smtpemailsender)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:734`), and
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:314`), and
 `INotificationRecipientProvider` gets its default in the Application layer
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/DependencyInjection.cs:75`).
 
@@ -353,13 +353,14 @@ to avoid overwhelming the connection manager
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Live/SignalRLiveChannelPublisher.cs:14-18`).
 Both are wired by `AddPushNotifications(configuration)`, which also attaches a Redis backplane when
 a `redis` connection string is present, so the fan-out crosses replicas
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:820-849`).
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:41-70`).
 
 The live channel is where the extracted-service topology shows through
 ([Rubric §7, Microservices Readiness]). In a monolith the default
 [`NullLiveChannelPublisher`](#nulllivechannelpublisher) is registered, and a host that maps the hub
 swaps in the real [`SignalRLiveChannelPublisher`](#signalrlivechannelpublisher)
-(`DependencyInjection.cs:844-845`). In extracted ADC, Engagement is a *different* process from the
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:316`,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:66`). In extracted ADC, Engagement is a *different* process from the
 one that owns the WebSocket, so Engagement's live layer depends on
 [`ILiveChannelPublisher`](#ilivechannelpublisher) as usual but the composition root `Replace`s the
 registration with [`LiveChannelPublisherGrpcAdapter`](#livechannelpublishergrpcadapter)
@@ -382,18 +383,18 @@ named `grpc` (8081 in the container, 5996 locally) is declared in the `Kestrel:E
 section and resolved by peers as `_grpc.notification` through the
 `services__notification__grpc__0` entry
 (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:59-74`). The host maps the hub
-itself at `/hubs/notifications` via `MapNotificationHub()` (`Program.cs:277-281`, the path coming
+itself at `/hubs/notifications` via `MapNotificationHub()` (`Program.cs:285-289`, the path coming
 from `PushNotificationSettings.HubPath`,
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:17`) and both
-gRPC services on that dedicated endpoint (`Program.cs:290,298`). The two gRPC surfaces are **not**
+gRPC services on that dedicated endpoint (`Program.cs:298,306`). The two gRPC surfaces are **not**
 protected alike, and the difference is deliberate: the live-channel ingress is mapped
-`.AllowAnonymous()` (`Program.cs:290`) because it is reachable only on the internal service network
+`.AllowAnonymous()` (`Program.cs:298`) because it is reachable only on the internal service network
 and its caller (Engagement's
 [`LiveChannelPublishProcessor`](group-22-engagement-module.md#livechannelpublishprocessor) background
 drain) has no HttpContext and forwards no bearer
 (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:13-20`),
 while the export rpc is mapped with `.RequireAuthorization()` because its response carries personal
-data keyed by a raw user id (`Program.cs:294-298`).
+data keyed by a raw user id (`Program.cs:302-306`).
 
 ## The module host, native-device registration, and the privacy export
 
@@ -584,7 +585,7 @@ without any of the four ever taking the others down, and without a retried reque
 - **Why it's built this way**: keeping the interface in Application (and the SMTP dependency in
   Infrastructure) is what lets a test host register a no-op sender and production register
   [SmtpEmailSender](#smtpemailsender). Registration is `TryAddTransient<IEmailSender, SmtpEmailSender>()`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:734`), so the `TryAdd` lets
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:314`), so the `TryAdd` lets
   a host pre-register its own sender and win.
 - **Where it's used**: the framework's own consumer is the password-reset flow:
   [ForgotPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand)
@@ -638,7 +639,7 @@ without any of the four ever taking the others down, and without a retried reque
   of the business of knowing each live event's schema; the presentation and UI layers agree on the
   contract. Non-delivery to absent clients is the intended semantics, not a gap. The default registration
   is the inert [NullLiveChannelPublisher](#nulllivechannelpublisher)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:736`), replaced by
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:316`), replaced by
   [SignalRLiveChannelPublisher](#signalrlivechannelpublisher) when a host opts into the SignalR wiring
   (same file, line 632).
 - **Where it's used**: ADC's conference-day live layer does **not** inject it into command handlers.
@@ -721,7 +722,7 @@ without any of the four ever taking the others down, and without a retried reque
 - **Why it's built this way**: three targeting methods rather than one "audience" parameter keeps each
   call site's intent explicit and lets the SignalR implementation map user-targeting to hub groups
   directly. The default registration is the no-op
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:735`) so a host with no
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:315`) so a host with no
   real-time transport still resolves the port; the SignalR wiring replaces it with `AddTransient` (same
   file, line 631), a deliberate override rather than a `TryAdd`.
 - **Where it's used**: [SendPushNotificationHandler](#sendpushnotificationhandler) fans a message out
@@ -1582,7 +1583,7 @@ without any of the four ever taking the others down, and without a retried reque
   transport relays the event rather than modeling it.
 - **Why it's built this way (security posture)**: there is deliberately **no `[Authorize]`**, and the
   endpoint is mapped without `RequireAuthorization`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:267`). `[Rubric §11, Security]`:
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:275`). `[Rubric §11, Security]`:
   the doc comment (`LiveChannelGrpcService.cs:13-20`) gives two reasons. First, this surface is reachable
   only on the internal service network (a dedicated internal port in Azure Container Apps, never routed
   by the Gateway), the same posture as the other internal gRPC services (it names
@@ -1594,7 +1595,7 @@ without any of the four ever taking the others down, and without a retried reque
   (`Program.cs:75`) and serves this h2c gRPC ingress on a dedicated `Http2`-only endpoint named `grpc`
   (port 8081 in the container, 5996 locally), declared in the `Kestrel:Endpoints` config section rather
   than in code; the full reasoning is spelled out at `Program.cs:59-74`.
-- **Where it's used**: mapped by the Notification service's `Program.cs` (`Program.cs:267`); invoked by
+- **Where it's used**: mapped by the Notification service's `Program.cs` (`Program.cs:275`); invoked by
   [LiveChannelPublisherGrpcAdapter](#livechannelpublishergrpcadapter) running inside Engagement.
 
 ---
@@ -1683,9 +1684,9 @@ without any of the four ever taking the others down, and without a retried reque
   best-effort by design).
 - **Where it's used**: registered as the framework default with
   `services.TryAddTransient<ILiveChannelPublisher, NullLiveChannelPublisher>()`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:736`) so the port is always
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:316`) so the port is always
   resolvable; `AddPushNotifications` adds the SignalR implementation over it
-  (`DependencyInjection.cs:845`), and in ADC Engagement's composition root `services.Replace(...)`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:66`), and in ADC Engagement's composition root `services.Replace(...)`
   overwrites it with the [LiveChannelPublisherGrpcAdapter](#livechannelpublishergrpcadapter)
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:48`).
 
@@ -1714,8 +1715,9 @@ without any of the four ever taking the others down, and without a retried reque
   `AddPushNotifications()`. The send handler always calls the port; whether anything reaches a browser is
   a composition-root decision.
 - **Where it's used**: registered as the default `IPushNotificationSender` by `AddInfrastructure`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:735`); superseded by the
-  SignalR sender in any host that calls `AddPushNotifications` (`DependencyInjection.cs:844`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:315`); superseded by the
+  SignalR sender in any host that calls `AddPushNotifications`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:65`).
 
 ---
 
@@ -1792,7 +1794,7 @@ without any of the four ever taking the others down, and without a retried reque
   `[Rubric §17, DevOps & Deployment]`: host, port, credentials, and the default from/to addresses come
   from configuration bound at startup by `AddInfrastructure`
   (`services.AddOptions<SmtpSettings>().Bind(configuration.GetSection(SmtpSettings.SectionName))`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:108-109`), never hard-coded,
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:92-93`), never hard-coded,
   so the same code targets a real relay in production and a local SMTP container in development.
   - `[Rubric §11, Security]` (SEC-Common-54): TLS is no longer read verbatim from
     `SmtpSettings.EnableSsl`. The container-preferred constructor resolves it through
@@ -1833,7 +1835,7 @@ without any of the four ever taking the others down, and without a retried reque
   would be a breaking public-API change. Unlike push, email has **no** null-object default:
   `SmtpEmailSender` itself is what `AddInfrastructure` registers as `IEmailSender`
   (`services.TryAddTransient<IEmailSender, SmtpEmailSender>()`,
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:734`), so a host that never
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:314`), so a host that never
   configures SMTP settings still resolves a real sender that will fail at send time rather than silently
   no-op.
 - **Where it's used**: injected as `IEmailSender` by callers (the port, not this class); the transient
@@ -1951,13 +1953,13 @@ without any of the four ever taking the others down, and without a retried reque
   path is `/hubs/notifications`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/PushNotificationSettings.cs:17`), and in
   ADC the Notification service calls it at
-  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:281`. It is driven by
+  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:289`. It is driven by
   [SignalRPushNotificationSender](#signalrpushnotificationsender) (per-user notification delivery) and
   [SignalRLiveChannelPublisher](#signalrlivechannelpublisher) (ephemeral channel events), both via
   `IHubContext<NotificationHub>`. `AddPushNotifications` registers the `IUserIdProvider`
   ([ClaimBasedUserIdProvider](group-08-auth.md#claimbaseduseridprovider)) that maps a connection's claims
   to the user id the sender addresses
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:846`). ADC's
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:67`). ADC's
   `LiveChannelJoinAuthorizer` (`MMCA.ADC.Notification.Service.Live`) is the concrete
   `IChannelJoinAuthorizer` a host registers to gate channel membership beyond the shape check.
 
@@ -2026,7 +2028,7 @@ without any of the four ever taking the others down, and without a retried reque
   is not subscribed at publish time simply never receives the event.
 - **Where it's used**: registered over [NullLiveChannelPublisher](#nulllivechannelpublisher) by
   `AddPushNotifications` in any host that maps the hub
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:845`); in ADC it is the
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:66`); in ADC it is the
   *local* implementation the Notification service's gRPC ingress
   ([LiveChannelGrpcService](#livechannelgrpcservice)) delegates to. The browser side lives in
   [group 15](group-15-common-ui-framework.md).
@@ -2070,7 +2072,7 @@ without any of the four ever taking the others down, and without a retried reque
   the connection manager.
 - **Where it's used**: registered over [NullPushNotificationSender](#nullpushnotificationsender) by
   `AddPushNotifications`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:844`); called by
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:65`); called by
   [SendPushNotificationHandler](#sendpushnotificationhandler) after the inbox rows are persisted, inside
   a swallow-everything `try/catch` so a transport hiccup is recorded as a status rather than thrown.
 
@@ -2281,7 +2283,7 @@ without any of the four ever taking the others down, and without a retried reque
 - **Why it's built this way (security posture)**: unlike
   [LiveChannelGrpcService](#livechannelgrpcservice), this endpoint **requires authorization**: it is
   mapped with `.RequireAuthorization()`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:298`) and the class doc says why
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:306`) and the class doc says why
   (`UserNotificationExportGrpcService.cs:14-19`). `[Rubric §11, Security]`, `[Rubric §30, Compliance,
   Privacy & Data Governance]`: internal-only ingress is **not sufficient** here because the response
   carries personal data keyed by a raw `UserId`, so the calling service forwards the end user's JWT via
@@ -2290,7 +2292,7 @@ without any of the four ever taking the others down, and without a retried reque
   endpoint as the live-channel ingress
   ([ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) mixed-endpoint profile,
   `UserNotificationExportGrpcService.cs:11-13`).
-- **Where it's used**: mapped by the Notification service's `Program.cs` (`Program.cs:298`); the wire is
+- **Where it's used**: mapped by the Notification service's `Program.cs` (`Program.cs:306`); the wire is
   dialed by its client half
   [UserNotificationExportServiceGrpcAdapter](#usernotificationexportservicegrpcadapter), which runs
   inside the Identity service's export aggregator and stitches this Notification slice into the full

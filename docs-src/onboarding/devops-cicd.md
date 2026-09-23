@@ -33,13 +33,13 @@ are consumed by every downstream application, a regression here propagates to bo
 `MMCA.Store`. The workflow runs **twelve jobs**: a `changes` classifier that every other job keys off
 (`ci.yml:45`), a fast `build-and-test` covering unit and architecture tests with coverage collection
 (`ci.yml:87`), a windows `build-maui` for the one package that cannot compile on Ubuntu
-(`ci.yml:199`), a `ui-e2e` cross-browser matrix for real-browser accessibility and render-smoke testing
-(`ci.yml:270`), a `performance-smoke` benchmark gate (`ci.yml:377`), a `coverage` job that merges the
-coverage tiers and enforces a floor (`ci.yml:424`), three canaries that catch failure modes the
-solution build cannot see: `consumer-source-build` (`ci.yml:494`), `package-consumption`
-(`ci.yml:694`) and `sample-deployment-validate` (`ci.yml:788`), and three engine-or-orchestrator tiers
-for the components whose behavior only a real server can falsify: `redis-integration` (`ci.yml:806`),
-`postgresql-integration` (`ci.yml:847`) and the advisory `apphost-testing` (`ci.yml:882`).
+(`ci.yml:174`), a `ui-e2e` cross-browser matrix for real-browser accessibility and render-smoke testing
+(`ci.yml:245`), a `performance-smoke` benchmark gate (`ci.yml:352`), a `coverage` job that merges the
+coverage tiers and enforces a floor (`ci.yml:399`), three canaries that catch failure modes the
+solution build cannot see: `consumer-source-build` (`ci.yml:469`), `package-consumption`
+(`ci.yml:669`) and `sample-deployment-validate` (`ci.yml:795`), and three engine-or-orchestrator tiers
+for the components whose behavior only a real server can falsify: `redis-integration` (`ci.yml:813`),
+`postgresql-integration` (`ci.yml:854`) and the advisory `apphost-testing` (`ci.yml:889`).
 
 
 That job count is the interesting fact about this workflow. A framework cannot verify itself by compiling
@@ -146,8 +146,10 @@ dotnet run --project build/facts -- . --check
 ```
 
 A fast, dependency-free drift gate. `build/facts` recomputes the framework-wide facts from source (version
-from the git tag, package count, ADR range, fitness-method and base-class counts) and fails if the
-committed `FACTS.md` disagrees. Regenerate with `dotnet run --project build/facts -- .`.
+from the git tag, package count, fitness-method and base-class counts) and fails if the committed
+`FACTS.md` disagrees. Regenerate with `dotnet run --project build/facts -- .`. The ADR count and range are
+deliberately not in that list: the comment (`ci.yml:112-113`) records that the Website ADR index owns
+them, so the one number the framework repo cannot see is not checked against a stale copy.
 
 This is the one step **not** guarded on the `code` flag, and the comment (`ci.yml:116-117`) explains why:
 `FACTS.md` is itself markdown, so a docs-only PR is exactly the kind of change that can make it drift.
@@ -194,30 +196,42 @@ from Step 4.
 [Rubric §15, Best Practices & Code Quality] (quality enforcement via analyzers at error severity) is
 realized here: the build *is* the static-analysis gate.
 
-**Step 6, Vulnerability audit** (`ci.yml:135-168`):
+**Step 6, Vulnerability audit** (`ci.yml:135-143`):
 
-```bash
-dotnet list MMCA.Common.slnx package --vulnerable --include-transitive > audit.log 2>&1 || true
-cat audit.log
-suppressed=$(grep -E '<NuGetAuditSuppress\b' Directory.Build.props | grep -oE 'GHSA-[a-z0-9-]+' | sort -u | paste -sd'|' -)
-vulns=$(grep -E '^[[:space:]]*>[[:space:]]' audit.log || true)
-# drop any vulnerable-package row whose advisory is in the suppressed list, then fail on the rest
-if printf '%s' "$vulns" | grep -q .; then
-  echo "::error::Non-suppressed vulnerable NuGet packages detected, see log above"; exit 1
-fi
+```yaml
+- name: Audit dependencies (fail on known vulnerabilities)
+  if: needs.changes.outputs.code == 'true'
+  uses: ./.github/actions/nuget-vulnerability-audit
+  with:
+    solution: MMCA.Common.slnx
 ```
 
-`dotnet list package --vulnerable` queries NuGet's vulnerability database for every direct and transitive
-dependency and writes any hits to `audit.log`. The `|| true` prevents an API-call failure from masking the
-parse. The gate is not a simple sentinel grep: because `dotnet list --vulnerable` ignores
-`NuGetAuditSuppress`, the step honors the same accepted-advisory list itself, it extracts every suppressed
-`GHSA-...` id from `Directory.Build.props` (the single source of truth), filters those advisories out of
-the vulnerable-package rows (the `>`-prefixed lines), and fails only if a *non-suppressed* vulnerable row
-remains (e.g. the unpatched SQLite advisory is an accepted exception).
+The step is a call into a composite action in the same repository,
+`.github/actions/nuget-vulnerability-audit/action.yml`, and the comment (`ci.yml:136-139`) says why the
+logic moved there: ADC and Store `deploy.yml` run the very same action by ref
+(`ivanball/MMCA.Common/.github/actions/...@main`), so the framework and its consumers share ONE
+implementation instead of a per-repository copy that drifts
+([ADR-038](https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html)). The action takes a
+`solution`, an optional `props-file` (default `Directory.Build.props`) and an optional `report-path`
+(default `audit.log`) (`nuget-vulnerability-audit/action.yml:13-24`).
 
-Note how narrowly the extraction is scoped (`ci.yml:157-159`): it greps `<NuGetAuditSuppress` lines
-specifically, not the whole file, so a GHSA id merely *mentioned in a comment* about a non-accepted
-advisory cannot silently suppress it here. A looser grep would have turned prose into policy.
+Inside it (`nuget-vulnerability-audit/action.yml:35-65`), `dotnet list package --vulnerable
+--include-transitive` queries NuGet's vulnerability database for every direct and transitive dependency
+and writes the report. The gate then **fails closed** (SEC-Common-62) on two assertions before it will
+trust an empty result: the command's exit code must be 0 (`:41-43`), and the report must carry a
+recognised header, either the sources header or a per-project verdict line (`:46-48`). Without those two
+checks, every way the tool itself can fail (an advisory-feed timeout, an auth or proxy error, a renamed
+output) produced an empty grep and a green "no vulnerabilities".
+
+Only then does it apply the accept-list. Because `dotnet list --vulnerable` ignores `NuGetAuditSuppress`,
+the action honors the same accepted-advisory list itself: it extracts the suppressed `GHSA-...` ids from
+`Directory.Build.props` (the single source of truth), filters those advisories out of the vulnerable-package
+rows (the `>`-prefixed lines), and fails only if a *non-suppressed* vulnerable row remains (`:58-64`).
+
+Note how narrowly the extraction is scoped (`nuget-vulnerability-audit/action.yml:49-55`): it matches
+only real `<NuGetAuditSuppress ... Include="GHSA-..."` elements, not every `GHSA-` string in the file,
+so a GHSA id merely *mentioned in a comment* about a non-accepted advisory cannot silently suppress it
+here. A looser grep would have turned prose into policy.
 
 Why this gate exists and why it comes *before* tests: a vulnerable dependency that reaches the published
 packages is a supply-chain liability for every downstream consumer. Catching it before the release
@@ -227,7 +241,7 @@ workflow runs (and before the package is published) is cheaper than retracting a
 (assesses whether secrets, auth, and dependency security are properly managed) is also touched: the
 vulnerability audit ensures the framework's own dependencies do not carry known CVEs.
 
-**Steps 7 and 8, Test with coverage and the discovery-regression floor** (`ci.yml:170-183`):
+**Steps 7 and 8, Test with coverage and the discovery-regression floor** (`ci.yml:145-158`):
 
 ```bash
 dotnet tool install --global dotnet-coverage
@@ -241,7 +255,7 @@ coverage itself is report-only (the `coverage` job below consumes it).
 
 `--minimum-expected-tests 2000` is the load-bearing number. It is a Microsoft Testing Platform (MTP) flag
 that fails the run when fewer than N tests are discovered, and the floor sits just under the real suite
-size of roughly 2,254 (`ci.yml:180-181`). A floor of 1 would only catch a project that discovered nothing
+size of roughly 2,254 (`ci.yml:155-156`). A floor of 1 would only catch a project that discovered nothing
 at all; a floor near the true count catches the far more common and far more dangerous failure, a
 discovery or filter regression that silently drops thousands of tests and reports green with a handful
 run. The solution test suite covers the per-layer projects (`Shared.Tests`, `Domain.Tests`,
@@ -255,7 +269,7 @@ run. The solution test suite covers the per-layer projects (`Shared.Tests`, `Dom
 `--minimum-expected-tests` floor is a mechanical enforcement of §14: you cannot merge a change that
 quietly stops running the suite.
 
-The unit-tier cobertura report is uploaded as the `coverage-unit` artifact (`ci.yml:185-191`) for the
+The unit-tier cobertura report is uploaded as the `coverage-unit` artifact (`ci.yml:160-166`) for the
 `coverage` job to merge and gate on, under `if: always()` so a failing run still yields its partial
 coverage data.
 
@@ -263,36 +277,36 @@ coverage data.
 
 `MMCA.Common.UI.Maui` multi-targets net10.0-android/ios/maccatalyst/windows, which needs the MAUI
 workloads, which Ubuntu runners do not have. So it stays **out of `MMCA.Common.slnx`** and builds in its
-own `windows-latest` job (`ci.yml:199-263`), the same mechanism that keeps the gallery and UI E2E projects
+own `windows-latest` job (`ci.yml:174-238`), the same mechanism that keeps the gallery and UI E2E projects
 out of the fast unit run ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
 It is a required merge gate alongside `build-and-test`.
 
-There are no tests here, and the comment says why (`ci.yml:197-198`): the capability contracts and their
+There are no tests here, and the comment says why (`ci.yml:172-173`): the capability contracts and their
 browser fallbacks are covered in `MMCA.Common.UI.Tests` on ubuntu, while the MAUI implementations are thin
 Essentials wrappers exercised on-device. A test that only proves a wrapper forwards a call is not worth a
 windows runner.
 
 The job is the **critical path of the whole CI run** (measured at 7.1 to 8.2 minutes, and the only windows
 runner), which is why two steps exist purely to make it cheaper. `Resolve SDK version and root`
-(`ci.yml:230-240`) computes a cache key from the resolved SDK version, deriving the SDK root from `dotnet`
+(`ci.yml:205-215`) computes a cache key from the resolved SDK version, deriving the SDK root from `dotnet`
 itself rather than trusting `$DOTNET_ROOT` to be exported, since an empty value there would silently turn
-the cache paths into garbage and miss forever. `Cache MAUI workload packs` (`ci.yml:242-253`) then carries
+the cache paths into garbage and miss forever. `Cache MAUI workload packs` (`ci.yml:217-228`) then carries
 the `sdk-manifests`, `packs`, `metadata`, `library-packs`, and `template-packs` directories between runs,
 keyed so that an SDK feature-band bump busts it.
 
-`dotnet workload install maui` still runs on a cache hit (`ci.yml:255-259`), deliberately: it is a no-op
+`dotnet workload install maui` still runs on a cache hit (`ci.yml:230-234`), deliberately: it is a no-op
 that reconciles the manifest, and it is the only thing that lets a partially-restored cache self-heal
 instead of failing the build underneath it.
 
 ### Job: `ui-e2e`, accessibility and render-smoke gate
 
-This job (`ci.yml:270-367`) runs in parallel with `build-and-test`, on its own `ubuntu-latest` runner,
-with a 20-minute timeout (`ci.yml:274`). It is a **cross-browser matrix** over `chromium`, `firefox`, and
-`webkit` (`ci.yml:275-279`) with `fail-fast: false`, so one engine's failure does not cancel the others.
+This job (`ci.yml:245-342`) runs in parallel with `build-and-test`, on its own `ubuntu-latest` runner,
+with a 20-minute timeout (`ci.yml:249`). It is a **cross-browser matrix** over `chromium`, `firefox`, and
+`webkit` (`ci.yml:250-254`) with `fail-fast: false`, so one engine's failure does not cancel the others.
 
 **All three engines are required merge gates.** The matrix was introduced with the non-chromium legs
 non-blocking, then promoted as each proved itself: firefox on 2026-07-12 after a clean observed streak,
-webkit on 2026-07-16 after 11 consecutive green runs since its last flake (`ci.yml:280-282`). There is no
+webkit on 2026-07-16 after 11 consecutive green runs since its last flake (`ci.yml:255-257`). There is no
 `continue-on-error` in this job today. A webkit red blocks the merge like any other check.
 
 Its purpose is to catch two failure classes the unit-test job cannot: WCAG 2.1 AA accessibility violations
@@ -301,17 +315,17 @@ render).
 
 **Why a separate job?** The gallery host (`Tests/Presentation/MMCA.Common.UI.Gallery`) and the E2E test
 project (`Tests/Presentation/MMCA.Common.UI.E2E.Tests`) are **intentionally excluded from
-`MMCA.Common.slnx`** (`ci.yml:265-269` comment). Playwright requires a full browser install (several
+`MMCA.Common.slnx`** (`ci.yml:240-244` comment). Playwright requires a full browser install (several
 hundred megabytes) and a browser-capable runner config. Including these in `dotnet test --solution` would
 slow every CI run for every code change, most of which do not touch the UI. Keeping the E2E gate separate
 means the unit/arch job stays fast while accessibility remains enforced.
 
 **Step-by-step:**
 
-1. **Checkout** (`ci.yml:284-287`): `fetch-depth: 0` (the comment notes "MinVer needs full history"), same
+1. **Checkout** (`ci.yml:259-262`): `fetch-depth: 0` (the comment notes "MinVer needs full history"), same
    as `build-and-test`.
 
-2. **Build the E2E project directly** (`ci.yml:305-309`):
+2. **Build the E2E project directly** (`ci.yml:280-284`):
    ```bash
    dotnet build Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release
    ```
@@ -319,7 +333,7 @@ means the unit/arch job stays fast while accessibility remains enforced.
    included). The E2E project references MMCA.Common source projects directly (via project references, not
    NuGet packages), so no `GITHUB_TOKEN` is needed.
 
-3. **Cache and install Playwright for the matrix browser** (`ci.yml:314-332`):
+3. **Cache and install Playwright for the matrix browser** (`ci.yml:289-307`):
    ```bash
    script=$(find Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release -name playwright.ps1 | head -1)
    if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
@@ -329,7 +343,7 @@ means the unit/arch job stays fast while accessibility remains enforced.
    fi
    ```
    Browser binaries run 100 to 300 MB per engine and were re-downloaded on all three legs of every run,
-   which is what the workflow-level `PLAYWRIGHT_BROWSERS_PATH` and this cache step (`ci.yml:314-320`)
+   which is what the workflow-level `PLAYWRIGHT_BROWSERS_PATH` and this cache step (`ci.yml:289-295`)
    exist to stop. The cache key includes the engine, since each leg installs only its own.
 
    The install branches on the cache hit, and the distinction is the useful part: OS-level shared
@@ -338,8 +352,8 @@ means the unit/arch job stays fast while accessibility remains enforced.
    launch. The `playwright.ps1` script is emitted into the build output by the Playwright MSBuild
    integration; `find` locates it dynamically so the step does not hard-code a .NET version suffix.
 
-4. **Run the E2E suite** (`ci.yml:334-351`): the chromium leg installs `dotnet-coverage`
-   (`ci.yml:334-336`) and wraps the run in `dotnet-coverage collect`; the firefox and webkit legs run the
+4. **Run the E2E suite** (`ci.yml:309-326`): the chromium leg installs `dotnet-coverage`
+   (`ci.yml:309-311`) and wraps the run in `dotnet-coverage collect`; the firefox and webkit legs run the
    same command plain (`eval "$CMD"`). The inner command is:
    ```yaml
    env:
@@ -362,8 +376,8 @@ means the unit/arch job stays fast while accessibility remains enforced.
    smoke confirms that the real component tree renders without exceptions in a real browser context.
 
 5. **Upload coverage and Playwright traces**, the chromium leg uploads its E2E cobertura report as the
-   `coverage-e2e` artifact (`ci.yml:353-359`), and on failure each leg uploads its traces
-   (`ci.yml:361-367`):
+   `coverage-e2e` artifact (`ci.yml:328-334`), and on failure each leg uploads its traces
+   (`ci.yml:336-342`):
    ```yaml
    if: failure()
    uses: actions/upload-artifact@v7
@@ -384,12 +398,12 @@ means the unit/arch job stays fast while accessibility remains enforced.
 
 ### Job: `performance-smoke`, benchmarks plus a committed baseline
 
-This job (`ci.yml:377-419`) runs the BenchmarkDotNet harness and then compares the results against a
+This job (`ci.yml:352-394`) runs the BenchmarkDotNet harness and then compares the results against a
 committed baseline, which makes it two gates in one. Its context, `Performance gate (BenchmarkDotNet
 Short + baseline verify)`, is one of the eight required merge gates on `main`
 (`MMCA.Common/CONTRIBUTING.md:60-71`).
 
-The run itself (`ci.yml:404-410`) uses `--filter "*"` and `--job Short`:
+The run itself (`ci.yml:379-385`) uses `--filter "*"` and `--job Short`:
 
 ```bash
 dotnet run -c Release --project Tests/Performance/MMCA.Common.Benchmarks --no-launch-profile -- --filter "*" --job Short --exporters json
@@ -400,7 +414,7 @@ selection and hangs in CI. `--job Short` (3 warmup + 3 iterations) produces real
 minute instead of a full multi-iteration timing run. `--no-launch-profile` keeps it deterministic on
 hosted runners.
 
-Then `build/perfgate` (`ci.yml:412-419`) compares the exported results against
+Then `build/perfgate` (`ci.yml:387-394`) compares the exported results against
 `Tests/Performance/perf-baseline.json` and fails on any violation. The baseline holds two kinds of
 assertion, and the difference matters: deterministic **allocation ceilings** (byte counts, which are
 stable across machines) and machine-independent **ratio floors**, such as the compiled-expression
@@ -413,12 +427,12 @@ fast" but "did the property that makes it fast stop holding".
 
 ### Job: `coverage`, merge report and coverage floor
 
-This job (`ci.yml:424-481`) runs after both test jobs (`needs: [changes, build-and-test, ui-e2e]`, `if:
+This job (`ci.yml:399-456`) runs after both test jobs (`needs: [changes, build-and-test, ui-e2e]`, `if:
 always()`). It downloads the `coverage-*` artifacts, merges the unit/architecture/bUnit and E2E cobertura
 tiers with ReportGenerator (`+MMCA.*;-*.Tests`, generated `*.generated.cs`/`*.g.cs` filtered out), and
-publishes the summary to the run's Step Summary (`ci.yml:441-454`).
+publishes the summary to the run's Step Summary (`ci.yml:416-429`).
 
-It then **enforces a coverage floor** (`ci.yml:470-481`) as a regression backstop: the *unit tier alone*
+It then **enforces a coverage floor** (`ci.yml:445-456`) as a regression backstop: the *unit tier alone*
 (not the gallery-diluted merged report) must stay at **68.3% line coverage or better** with generated code
 excluded, and only when `build-and-test` succeeded, so that an upstream failure does not add a confusing
 secondary coverage failure.
@@ -438,54 +452,54 @@ backstop on top of the `--minimum-expected-tests` guard.
 The remaining jobs all exist for the same reason: **a green solution build does not prove the framework
 works for anyone who is not the framework.**
 
-**`consumer-source-build`** (`ci.yml:494-682`) is a cross-repo pre-merge canary, and it now proves two
-different things. It checks out MMCA.Helpdesk as a sibling directory (`ci.yml:511-550`) and builds and
+**`consumer-source-build`** (`ci.yml:469-657`) is a cross-repo pre-merge canary, and it now proves two
+different things. It checks out MMCA.Helpdesk as a sibling directory (`ci.yml:486-525`) and builds and
 tests it against *this PR's* framework source, so a breaking public-API change fails here rather than
 surfacing after a release and a lockstep sweep. Helpdesk is the ideal canary precisely because it is
 minimal: a single-module app that needs no database and no GitHub Packages token to compile, shipping a
 committed `local.props` that swaps the `MMCA.Common.*` `PackageReference`s for `ProjectReference`s into
 `../MMCA.Common/Source`. The sibling checkout layout is what makes that relative path resolve to the PR's
-own checkout. Its test step (`ci.yml:589-594`) carries the same discovery floor idea as `build-and-test`,
-set to 40 against a suite of about 91 (`ci.yml:592-593`). Promoted to a required gate on 2026-07-16 after
-9 consecutive green runs (`ci.yml:489-490`).
+own checkout. Its test step (`ci.yml:564-569`) carries the same discovery floor idea as `build-and-test`,
+set to 40 against a suite of about 91 (`ci.yml:567-568`). Promoted to a required gate on 2026-07-16 after
+9 consecutive green runs (`ci.yml:464-465`).
 
 Two additions are worth reading closely. First, the job resolves which Helpdesk ref to build
-(`ci.yml:523-538`): if a branch with the **same name** as this PR's head branch exists on
+(`ci.yml:498-513`): if a branch with the **same name** as this PR's head branch exists on
 `ivanball/MMCA.Helpdesk`, the canary builds that pair together; otherwise it builds Helpdesk `main`. That
 convention is what makes a deliberate breaking framework change landable at all. Helpdesk's own CI builds
 against MMCA.Common `main`, so neither repo can adapt first while the canary pins the other's `main`: a
-mutual deadlock, resolved by letting one PR name its counterpart branch (`ci.yml:518-522`).
+mutual deadlock, resolved by letting one PR name its counterpart branch (`ci.yml:493-497`).
 
 Second, the job runs the consumer's **real EF migrations against a real SQL Server**. An ephemeral
 `mcr.microsoft.com/mssql/server:2022-latest` container starts *before* the build so it warms up while the
-solution compiles (`ci.yml:572-580`), `go-sqlcmd` is installed as a single static binary rather than the
-mssql-tools deb (`ci.yml:598-602`), a 30 x 5s poll waits on a real `SELECT 1` rather than on Docker's
-notion of "running" (`ci.yml:606-619`), and `dotnet ef database update` applies the Tickets migrations
-with the same `dotnet-ef 10.0.8` the consumers deploy with (`ci.yml:623-648`). The reason is stated in
-the comment (`ci.yml:627-635`): `migrations add` and the model-drift gate never open a connection, so
+solution compiles (`ci.yml:547-555`), `go-sqlcmd` is installed as a single static binary rather than the
+mssql-tools deb (`ci.yml:573-577`), a 30 x 5s poll waits on a real `SELECT 1` rather than on Docker's
+notion of "running" (`ci.yml:581-594`), and `dotnet ef database update` applies the Tickets migrations
+with the same `dotnet-ef 10.0.8` the consumers deploy with (`ci.yml:598-623`). The reason is stated in
+the comment (`ci.yml:602-610`): `migrations add` and the model-drift gate never open a connection, so
 neither notices a framework change that breaks the generated DDL, the history table, or the design-time
 context wiring. `database update` does.
 
-The step after it is the one that makes the apply falsifiable (`ci.yml:655-682`). `dotnet ef database
+The step after it is the one that makes the apply falsifiable (`ci.yml:630-657`). `dotnet ef database
 update` exits 0 on a no-op, so a wiring mistake that applied nothing would pass silently. The assertion
 step therefore reads `__EFMigrationsHistory` for at least one row and checks that both a module table
 (`Tickets.Ticket`) and a **framework** table (`dbo.OutboxMessages`) exist. The framework table is the
 half that belongs to MMCA.Common, so a change that stops the framework's own tables reaching a consumer's
 schema fails right here rather than at a consumer's deploy. The job's timeout was raised to 30 minutes to
-pay for the container, the poll and the apply (`ci.yml:498-500`), and the throwaway SA password is inline
-rather than a secret so the gate still runs from a fork (`ci.yml:501-505`).
+pay for the container, the poll and the apply (`ci.yml:473-475`), and the throwaway SA password is inline
+rather than a secret so the gate still runs from a fork (`ci.yml:476-480`).
 
 [Rubric §8, Data Architecture] is served in a way no build-only canary can reach: the framework's
 migration path is exercised end to end, on a real engine, by a real consumer.
 
-**`package-consumption`** (`ci.yml:694-780`) closes the gap that the previous job cannot: source-mode
+**`package-consumption`** (`ci.yml:669-755`) closes the gap that the previous job cannot: source-mode
 builds bind `ProjectReference`s, so pack breaks (NU5xxx) and package-mode-only restore, analyzer, and
 reference failures stay invisible to them. The comment records that this failure mode shipped **twice**
-before the job existed (`ci.yml:684-693`). So this job packs every slnx package into a local folder feed
-under a CI-only version (`PACK_VERSION` at `ci.yml:699-700`, packed at `ci.yml:723-725`, with
+before the job existed (`ci.yml:659-668`). So this job packs every slnx package into a local folder feed
+under a CI-only version (`PACK_VERSION` at `ci.yml:674-675`, packed at `ci.yml:698-700`, with
 `MinVerSkip=true` so the consumer can pin the packed version exactly), then scaffolds a throwaway
-consumer (`ci.yml:727-775`) whose `nuget.config` maps `MMCA.Common.*` to that feed and everything else to
-nuget.org, and builds it (`ci.yml:777-780`).
+consumer (`ci.yml:702-750`) whose `nuget.config` maps `MMCA.Common.*` to that feed and everything else to
+nuget.org, and builds it (`ci.yml:752-755`).
 
 The throwaway consumer lives in `RUNNER_TEMP`, **outside the repo checkout**, and that placement is the
 whole point: inside the checkout it would inherit `Directory.Build.props` and `Directory.Packages.props`
@@ -493,7 +507,28 @@ and stop resembling a real downstream app. It references the meta set (`API` + `
 `Testing.Architecture`) to pull the full package graph transitively, and compiles one smoke type against
 `Result` to prove the references actually bind rather than merely resolve.
 
-**`sample-deployment-validate`** (`ci.yml:788-804`) type-checks the `samples/deployment` Bicep templates
+The job's last step, **Layer rules ship with the packages** (`ci.yml:757-787`), proves something a
+successful consumer build cannot. `MMCA.Common.Shared` carries a `buildTransitive` targets file
+(`Source/Build/MMCA.Common.Shared.targets`) that gives any consumer project named
+`{App}.{Module}.{Layer}` compile-time layer rules with no opt-in: `MMCA0001` for a forbidden project
+reference, `MMCA0002` for a forbidden package reference (the comment at `ci.yml:759-763` ties it to
+[ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html) and
+[ADR-058](https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html)). The step
+writes three kinds of probe project next to the throwaway consumer: one positive probe
+(`Probe.Sample.Application` referencing `Probe.Sample.Domain`, which must build, `ci.yml:779-781`) and two
+negative ones (`Probe.BadPackage.Domain` pulling `MMCA.Common.Infrastructure`, which must fail with
+`MMCA0002`, and `Probe.BadProject.Domain` referencing an Application project, which must fail with
+`MMCA0001`, `ci.yml:782-786`). The helper `expect_error` (`ci.yml:773-778`) fails the step both when a
+negative probe builds and when it fails for a reason other than the expected code.
+
+Why the negatives are the point: a passing positive probe on its own would also pass if the targets file
+were silently missing from the package, so only the two probes that must break prove the import reaches
+a package-mode consumer and that both error codes fire. [Rubric section 34, Governance] assesses whether
+architectural rules are enforced mechanically rather than by review; here the rules travel with the
+package and CI proves they arrive, which is the consumer-side twin of the
+[doubled fitness functions](00-primer.md#architecture-enforcement-is-doubled-fitness-functions-rubric-34-3).
+
+**`sample-deployment-validate`** (`ci.yml:795-811`) type-checks the `samples/deployment` Bicep templates
 with `az bicep build`, no cloud credentials required. A library cannot deploy itself, so this IaC/OIDC
 reference is documentation that would otherwise rot unobserved; compiling it on every PR keeps it honest.
 A real what-if or deploy stays a consumer-side concern, since ADC's and Store's `deploy.yml` are the
@@ -501,45 +536,45 @@ production-proven versions.
 
 ### Job: `redis-integration`
 
-The last job (`ci.yml:806-845`) runs `MMCA.Common.Infrastructure.Redis.Tests` against a real Redis via
+The last job (`ci.yml:813-852`) runs `MMCA.Common.Infrastructure.Redis.Tests` against a real Redis via
 Testcontainers, which Ubuntu runners support with no extra setup since they ship a Docker daemon. Like the
 E2E and benchmark projects it lives outside `MMCA.Common.slnx` so the fast solution-wide unit loop never
 requires Docker, and is therefore built and run by path.
 
-The comment (`ci.yml:811-815`) states the falsifiability argument better than a summary can:
+The comment (`ci.yml:818-822`) states the falsifiability argument better than a summary can:
 `DistributedCacheService` is the one place where the **storage format** matters, and a
 `Mock<IDistributedCache>` cannot express it. Redis keys are typed, so a counter written as a string and
 read back as a hash round-trips perfectly against a mock and answers `WRONGTYPE` against a server. A test
 that cannot fail against a mock is not a test of the thing you care about.
 
-Its heavy step is code-guarded like every other job (`ci.yml:838-845`) so a docs-only PR does not pull a
+Its heavy step is code-guarded like every other job (`ci.yml:845-852`) so a docs-only PR does not pull a
 Redis image, while the job itself still runs and posts its context green, keeping it safe to add to branch
 protection.
 
 ### Jobs: `postgresql-integration` and `apphost-testing`
 
-`postgresql-integration` (`ci.yml:847-880`) is the Redis argument applied to the second database engine.
+`postgresql-integration` (`ci.yml:854-887`) is the Redis argument applied to the second database engine.
 The PostgreSQL provider is the one place where the SQL the framework *emits* matters, and a model
-assertion cannot express it: the comment is specific about the failure class (`ci.yml:852-857`), a
+assertion cannot express it: the comment is specific about the failure class (`ci.yml:859-864`), a
 partial-index predicate written the SQL Server way (`[ProcessedOn] IS NULL`), a soft-delete predicate
 comparing a boolean to `0`, and a `DateTime` whose `Kind` is not UTC all build a perfectly valid EF model
 and are rejected by the server. The job runs `MMCA.Common.Infrastructure.PostgreSQL.Tests` against a real
-PostgreSQL over Testcontainers (`ci.yml:873-880`), built and run by path for the same reason the Redis
+PostgreSQL over Testcontainers (`ci.yml:880-887`), built and run by path for the same reason the Redis
 tier is: the project sits outside `MMCA.Common.slnx` so the fast unit loop never requires Docker.
 
-`apphost-testing` (`ci.yml:882-939`) is the only tier that starts a real orchestrator. It boots the sample
+`apphost-testing` (`ci.yml:889-946`) is the only tier that starts a real orchestrator. It boots the sample
 AppHost through `Aspire.Hosting.Testing` and closes the one layer nothing else executes, the AppHost
-wiring itself (`ci.yml:892-895`): the solution build never runs an AppHost, and every in-process test tier
+wiring itself (`ci.yml:899-902`): the solution build never runs an AppHost, and every in-process test tier
 boots hosts directly through `WebApplicationFactory`, bypassing the orchestration, so a renamed resource,
 an unresolvable reference or a `WaitFor` cycle is invisible everywhere else. Three properties are worth
-carrying away. It is **advisory**, `continue-on-error: true` (`ci.yml:900`), because it is the slowest
+carrying away. It is **advisory**, `continue-on-error: true` (`ci.yml:907`), because it is the slowest
 thing in the repository per assertion and its failure modes on a shared runner are not proven yet; the
-comment states the exit condition rather than leaving it open (`ci.yml:887-890`), promote it once it has a
+comment states the exit condition rather than leaving it open (`ci.yml:894-897`), promote it once it has a
 green streak, delete it if it proves to be a flake generator. It trusts the ASP.NET Core development
-certificate as an explicit job step (`ci.yml:916-925`), because a resource launched with the `https`
+certificate as an explicit job step (`ci.yml:923-932`), because a resource launched with the `https`
 profile answers its health probe over TLS terminated by that certificate: untrusted on a fresh runner,
 every probe fails with `UntrustedRoot`, the resource never turns healthy, and every `WaitFor` edge into it
-waits out the budget. And the test step opts in through `MMCA_APPHOST_TESTS` (`ci.yml:926-939`), the
+waits out the budget. And the test step opts in through `MMCA_APPHOST_TESTS` (`ci.yml:933-946`), the
 environment gate the fixture reads, so a developer machine and every other CI job skip the collection with
 a named reason instead of paying for an orchestrator.
 
@@ -563,13 +598,13 @@ from source and gates on (see the FACTS drift step in `ci.yml` above): read the 
 from any prose.
 
 They are packed by **two jobs, not one**, and the split follows the solution boundary exactly. The ubuntu
-`publish` job runs `dotnet pack MMCA.Common.slnx` (`release.yml:74-75`), which packs every packable
+`publish` job runs `dotnet pack MMCA.Common.slnx` (`release.yml:75-76`), which packs every packable
 project the solution contains (`MMCA.Common.slnx:8-29`). The windows `publish-maui` job packs the one
-remaining package, `MMCA.Common.UI.Maui`, by csproj path (`release.yml:180-181`), because its four MAUI
+remaining package, `MMCA.Common.UI.Maui`, by csproj path (`release.yml:189-190`), because its four MAUI
 target frameworks need workloads that Ubuntu runners do not carry
 (**[ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)**), which is
 also why that project stays out of the solution. Both jobs derive their version from the same
-`GITHUB_REF_NAME` (`release.yml:64-66`, `release.yml:172-175`), so the lockstep release stays whole
+`GITHUB_REF_NAME` (`release.yml:65-67`, `release.yml:181-184`), so the lockstep release stays whole
 across the runner split.
 
 ### Why lockstep matters
@@ -630,27 +665,27 @@ registry is reached with no stored API key at all.
 version can never be withdrawn (ADR-053), so the job declares `environment: release` (`release.yml:11-15`)
 and waits on that environment's protection rules (a required reviewer, and a deployment policy limited to
 `v*` tags) before it runs at all. The first step after checkout then refuses to publish a tag that is not
-reachable from `origin/main` (`release.yml:34-45`): it fetches the branch tip and fails unless
+reachable from `origin/main` (`release.yml:35-46`): it fetches the branch tip and fails unless
 `git merge-base --is-ancestor` places the tagged commit on merged `main`. A `v*` tag is the one ref pushed
 directly, outside the branch-protection pull-request flow, and this workflow re-runs only restore, build,
 test and SBOM, so the ancestry check is what makes the checks that ran on the merged pull request (the
 FACTS drift gate, the vulnerability audit, the Helpdesk consumer canary, the package-consumption canary,
 `ui-e2e`, the perf gate) the checks that actually covered the tree being published. `publish-maui` carries
-the same assertion (`release.yml:145-155`), because it publishes from the same tag.
+the same assertion (`release.yml:154-164`), because it publishes from the same tag.
 
 
-**Step 1, Checkout with full history** (`release.yml:22-25`): `fetch-depth: 0` for MinVer, same as CI,
+**Step 1, Checkout with full history** (`release.yml:23-26`): `fetch-depth: 0` for MinVer, same as CI,
 with `persist-credentials: false` so the checkout token is not left behind in the workspace.
 
-**Step 2, .NET 10 setup** (`release.yml:47-56`): same as CI, including the NuGet cache keyed on the
+**Step 2, .NET 10 setup** (`release.yml:48-57`): same as CI, including the NuGet cache keyed on the
 committed lock files plus `Directory.Packages.props`.
 
-**Step 3, Restore** (`release.yml:57-63`): `dotnet restore MMCA.Common.slnx --locked-mode`, so the
+**Step 3, Restore** (`release.yml:58-64`): `dotnet restore MMCA.Common.slnx --locked-mode`, so the
 packages that are about to be packed, SBOM'd and pushed irreversibly come from the committed lock graph
 rather than from whatever the feed resolves at tag time; no `GITHUB_TOKEN` is needed.
 
 
-**Step 4, Determine version from tag** (`release.yml:64-66`):
+**Step 4, Determine version from tag** (`release.yml:65-67`):
 ```bash
 echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 ```
@@ -658,7 +693,7 @@ echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 `v`, yielding `1.52.0`. This string is then passed to the build and pack steps as an explicit version
 override.
 
-**Step 5, Build with explicit version** (`release.yml:68-69`):
+**Step 5, Build with explicit version** (`release.yml:69-70`):
 ```bash
 dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=true -p:Version=${{ steps.version.outputs.VERSION }}
 ```
@@ -667,7 +702,7 @@ tag-derived version directly. This pattern avoids a subtle race: if MinVer ran h
 version from the tag, which should be the same value, but in edge cases (e.g. detached HEAD, retagged
 commit) the two sources could diverge. Making the version explicit from the start removes the ambiguity.
 
-**Step 6, Test** (`release.yml:71-72`):
+**Step 6, Test** (`release.yml:72-73`):
 ```bash
 dotnet test --solution MMCA.Common.slnx -c Release --no-build
 ```
@@ -675,7 +710,7 @@ Tests run again (no `--minimum-expected-tests` floor here, the release workflow 
 gate; CI already covered this). This is a belt-and-suspenders pass to ensure the tagged commit is green
 before packaging.
 
-**Step 7, Pack** (`release.yml:74-75`):
+**Step 7, Pack** (`release.yml:75-76`):
 ```bash
 dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=true -p:PackageVersion=${{ steps.version.outputs.VERSION }}
 ```
@@ -685,14 +720,17 @@ one command. `-p:PackageVersion` sets the NuGet package version metadata. `-o ./
 version string. `MMCA.Common.UI.Maui` is not in the solution and is packed by the `publish-maui` windows
 job into its own `./nupkgs-maui` directory from the same tag (ADR-042).
 
-**Steps 8 and 9, SBOM generation and upload** (`release.yml:81-93`):
+**Steps 8 and 9, SBOM generation and upload** (`release.yml:90-101`):
 ```yaml
+- name: Attest build provenance (nupkgs)
+  uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+  with:
+    subject-path: ./nupkgs/*.nupkg
 - name: Generate SBOM (CycloneDX)
-  run: |
-    dotnet tool install --global CycloneDX
-    dotnet CycloneDX MMCA.Common.slnx --output ./sbom --json
-    ls -la ./sbom
-    test -n "$(ls -A ./sbom 2>/dev/null)" || { echo "::error::SBOM generation produced no output"; exit 1; }
+  uses: ./.github/actions/cyclonedx-sbom
+  with:
+    solution: MMCA.Common.slnx
+    output-dir: ./sbom
 - name: Upload SBOM
   uses: actions/upload-artifact@v7
   with:
@@ -700,18 +738,27 @@ job into its own `./nupkgs-maui` directory from the same tag (ADR-042).
     path: ./sbom
     if-no-files-found: error
 ```
+Two supply-chain artifacts follow the pack. **Build provenance** (`release.yml:78-84`):
+`actions/attest-build-provenance` writes a signed SLSA attestation binding each `.nupkg` to this workflow,
+this commit and this repository. GitHub stores it, and anyone holding a downloaded package can check it with
+`gh attestation verify <file>.nupkg --owner ivanball`. It needs the `attestations: write` permission the job
+declares (`release.yml:21`; `publish-maui` declares its own at `release.yml:140` and attests its package at
+`release.yml:195-198`). It answers the question an SBOM cannot: not what is inside the package, but whether
+this exact file was built by this pipeline from this commit ([ADR-038](https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html)).
+
 CycloneDX generates a Software Bill of Materials, a machine-readable inventory of every dependency's
-identity, version, and license. The SBOM is now a **hard gate** (the comment on `release.yml:77-80` records
-that it "was continue-on-error while the tooling was being validated in CI, now promoted to a blocking
-step"): a failed generation, an *empty* `./sbom` directory, or a missing artifact (`if-no-files-found:
-error`) fails the release. Every published version must ship a verifiable SBOM.
+identity, version, and license. The SBOM is a **hard gate** (`release.yml:86-94`): the step calls the shared
+composite action `.github/actions/cyclonedx-sbom`, the same one ADC and Store `deploy.yml` run by ref, which
+fails the release when generation fails OR the BOM lists zero components
+(`MMCA.Common/.github/actions/cyclonedx-sbom/action.yml:68-71`); a missing artifact then fails the upload
+(`if-no-files-found: error`). Every published version must ship a verifiable SBOM.
 
 [Rubric §30, Compliance, Privacy & Data Governance] (assesses whether supply-chain and licensing
 obligations are tracked) is served: the SBOM is the machine-readable artifact that fulfills the
 "know your dependencies" requirement for regulated or commercially-distributed software, and gating on it
 guarantees no version ships without one.
 
-**Step 10, Push to GitHub Packages** (`release.yml:95-96`):
+**Step 10, Push to GitHub Packages** (`release.yml:103-104`):
 ```bash
 dotnet nuget push ./nupkgs/*.nupkg \
   --source "https://nuget.pkg.github.com/ivanball/index.json" \
@@ -726,7 +773,7 @@ packages that already uploaded.
 `GITHUB_TOKEN` is automatically provided by GitHub Actions when `packages: write` is in the job
 permissions. No external secret is needed.
 
-**Steps 11 and 12, Push to nuget.org via trusted publishing** (`release.yml:107-116`):
+**Steps 11 and 12, Push to nuget.org via trusted publishing** (`release.yml:115-124`):
 ```yaml
 - name: NuGet login (OIDC to short-lived key)
   if: github.repository_owner == 'ivanball'
@@ -757,19 +804,19 @@ property, since there is no secret to steal even momentarily.
 
 ### Job: `publish-maui`
 
-A second job on `windows-latest` (`release.yml:122-218`) packs the one out-of-solution package,
+A second job on `windows-latest` (`release.yml:130-236`) packs the one out-of-solution package,
 `MMCA.Common.UI.Maui`, which multi-targets net10.0-android/ios/maccatalyst/windows and therefore cannot
-build on the ubuntu runner at all (ADR-042). It installs the MAUI workload (`release.yml:169-170`),
-derives the version from the same tag (`release.yml:172-175`), builds and packs by csproj path into
-`./nupkgs-maui` (`release.yml:177-181`), applies the same SBOM hard gate scoped to that one project
-(`release.yml:183-196`), and pushes to both registries (`release.yml:198-218`). Because both jobs key off
+build on the ubuntu runner at all (ADR-042). It installs the MAUI workload (`release.yml:178-179`),
+derives the version from the same tag (`release.yml:181-184`), builds and packs by csproj path into
+`./nupkgs-maui` (`release.yml:186-190`), applies the same SBOM hard gate scoped to that one project
+(`release.yml:200-214`), and pushes to both registries (`release.yml:216-236`). Because both jobs key off
 `GITHUB_REF_NAME`, the two runners produce the same version string and lockstep survives the split.
 
-Two details are load-bearing, and the comment states them (`release.yml:204-207`). The nuget.org
+Two details are load-bearing, and the comment states them (`release.yml:222-225`). The nuget.org
 trusted-publishing policy is keyed on the workflow **file**, so one policy covers both jobs, but each job
-needs its own `id-token: write` (`release.yml:128-131`) and its own exchange: a short-lived key is
+needs its own `id-token: write` (`release.yml:136-140`) and its own exchange: a short-lived key is
 single-use and cannot cross a job boundary. And every `dotnet nuget push` step here sets `shell: bash`
-(`release.yml:201`, `release.yml:217`), because the windows-default PowerShell passes `*.nupkg` through
+(`release.yml:219`, `release.yml:235`), because the windows-default PowerShell passes `*.nupkg` through
 unexpanded and the push then fails with "File does not exist" on the un-globbed pattern.
 
 The cost of the split is release surface: two runners must both succeed for a release to be whole.
@@ -1093,6 +1140,19 @@ just "a migration exists" but "the schema stays compatible with the release you 
 [Rubric §29, Resilience, Reliability & Business Continuity] is served because it is what keeps the
 automatic rollback in Phase 5 an actual recovery path rather than a hopeful one.
 
+**OpenAPI documents are current** (`deploy.yml:297-312`) is a contract-first gate that runs right after
+the Release build. Each `*.Service` host writes `openapi/<host>.json` during that build (the
+`MmcaGenerateOpenApiDocument` target in `Directory.Build.props`, per the comment at `deploy.yml:299-302`), and
+the four documents are committed. The step asserts that exactly four documents are tracked
+(`deploy.yml:305-308`) and that `git diff --exit-code` over `Source/Services/*/openapi/*.json` is empty
+(`deploy.yml:309-311`). A PR that changes a route, parameter, status code or response shape without
+committing the regenerated document therefore fails, so the contract change is a reviewable diff instead of
+a runtime surprise. When it fails, **Upload the regenerated OpenAPI documents** (`deploy.yml:314-324`, under
+`if: failure()`) publishes the runner's regenerated files as the `openapi-regenerated` artifact with a
+seven-day retention: those files ARE the expected contract, so the fix is a download and a commit rather than
+guessing from a `--stat` line, and a green run leaves no artifact behind. Both steps are guarded on the `code`
+flag like the rest of the job.
+
 ### Job: `backend-test-gate`, closing the "deploy with zero tests" hole
 
 This job (`deploy.yml:419-447`) is the newest piece of the pipeline, and it exists because three
@@ -1154,17 +1214,17 @@ two gates cannot see. It restores and builds one project by path,
    math. It carries `--filter-not-trait "Category=AiEval.Live" --minimum-expected-tests 1`, the same
    discovery floor every other gate step uses, because a filter breakage that runs zero tests must red the
    gate rather than report a vacuous pass (`deploy.yml:496-497`).
-2. **Live judge**, only when `needs.changes.outputs.scoring == 'true'` (`deploy.yml:504-515`, gated at
-   `:505`). Real paid calls to the Anthropic API for each golden proposal, asserting the overall score
+2. **Live judge**, only when `needs.changes.outputs.scoring == 'true'` (`deploy.yml:534-547`, gated at
+   `:535`). Real paid calls to the configured AI provider's API for each golden proposal, asserting the overall score
    lands in the case's band. It is scoped to a diff that touches the scoring code precisely because it
    costs money, and the bands are deliberately wide: a judge model is not deterministic, and a flaky gate
    gets ignored.
 
 Two details in the second tier are worth reading. It sets **no** `--minimum-expected-tests` floor, and
-the comment says why (`deploy.yml:506-508`): without `ANTHROPIC_API_KEY` every case skips itself
+the comment says why (`deploy.yml:536-538`): without `AI_API_KEY` every case skips itself
 dynamically, reported as skipped and never as passed, so a zero-run must not red the deploy on a
 repository whose secret is absent. And the key arrives as a job-scoped `env` from
-`secrets.ANTHROPIC_API_KEY` (`deploy.yml:514-515`), never as a build argument or a workflow input.
+`secrets.ANTHROPIC_API_KEY` mapped to the provider-neutral variable `AI_API_KEY` (`deploy.yml:544-547`; the secret keeps its name because it holds an Anthropic credential, and only the variable the test reads is neutral), never as a build argument or a workflow input.
 
 This is also why `scoring` is the one classifier output that does **not** fail safe to `true`
 (`deploy.yml:154-158`): a false positive here spends money on every unrelated deploy, while the two
@@ -1185,24 +1245,25 @@ are reports, and the comment above the job draws that line explicitly (`deploy.y
 
 **The two gates:**
 
-- **Vulnerability audit** (`deploy.yml:549-587`) fails on any vulnerable-package row except advisories
-  accepted via `NuGetAuditSuppress` in `Directory.Build.props`. This mirrors Common's `ci.yml` step and
-  exists for the same reason: `dotnet list --vulnerable` ignores `NuGetAuditSuppress`, so the accepted
-  advisory list has to be re-applied by hand (`deploy.yml:566-583`). NuGetAudit at restore already gates
-  the build; this makes the check deploy-gating as well, belt and suspenders. Two properties added on
-  2026-09-07 are what make the gate falsifiable. It **fails closed**: the step keeps `dotnet list`'s exit
-  code instead of swallowing it with `|| true`, and it requires a recognized result header before it
-  trusts the report (`deploy.yml:558-573`). Previously an advisory-feed timeout or an MSBuild evaluation
-  error wrote non-matching text, the row grep matched nothing, and the gate reported no non-suppressed
-  vulnerable packages and exited 0 with the audit never having run. And the accept-list scrape now reads
-  **only** real `<NuGetAuditSuppress ... Include="GHSA-..."` elements (`deploy.yml:574-578`), the same
-  narrow reading Common uses (`MMCA.Common/.github/workflows/ci.yml:157-159`): scraping every `GHSA-`
-  string in the file let a rationale comment silence an advisory that was never actually suppressed.
+- **Vulnerability audit** (`deploy.yml:581-592`) fails on any vulnerable-package row except advisories
+  accepted via `NuGetAuditSuppress` in `Directory.Build.props`. It is no longer a copy of Common's gate: it
+  calls the shared composite action `ivanball/MMCA.Common/.github/actions/nuget-vulnerability-audit@main`
+  (`deploy.yml:589-592`), the implementation Common's `ci.yml` runs by path, so the fail-closed exit-code and
+  report-header checks and the narrow `<NuGetAuditSuppress ... Include="GHSA-..."` accept-list reading
+  described in the Common section above apply here unchanged. The comment (`deploy.yml:583-588`) gives the
+  reason: one implementation for the framework and its consumers instead of a copy per repository that
+  drifts ([ADR-038](https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html)). ADC passes `report-path: supply-chain/vulnerable.txt`, so the raw report still
+  lands in the uploaded artifact. NuGetAudit at restore already gates the build; this makes the job a
+  deploy-gating belt-and-suspenders check.
 
-- **CycloneDX SBOM** (`deploy.yml:601-614`) must exist **and contain components**. The comment records
-  the near-miss (`deploy.yml:603-605`): the previous `test -s` check only proved the file was non-empty,
-  which a zero-component skeleton passes, which is exactly how an empty SBOM went unnoticed. The step now
-  asserts `jq '.components | length' > 0` (`deploy.yml:612-614`).
+- **CycloneDX SBOM** (`deploy.yml:606-619`) must exist **and contain components**. It runs the shared
+  `cyclonedx-sbom@main` action (`deploy.yml:614-619`) with `name: MMCA.ADC.CI` and `filename: adc-sbom.json`;
+  the action fails unless the file exists and `jq '.components | length'` is greater than zero
+  (`MMCA.Common/.github/actions/cyclonedx-sbom/action.yml:68-71`), because a zero-component skeleton passes a
+  plain file-size check, which is exactly how an empty SBOM once went unnoticed. The comment
+  (`deploy.yml:608-613`) records two further choices: the action normalises the `.slnf` itself, and the
+  first-party action is referenced by branch rather than by SHA on purpose, since MMCA.Common `main` is
+  PR-protected and a ref is what keeps the consumer gate from drifting away from the framework's.
 
 **The two non-gating reports** (`continue-on-error: true`) are `supply-chain/deprecated.txt`, packages the
 publisher has flagged as obsolete or replaced (`deploy.yml:542-547`), and `supply-chain/licenses.json`,
@@ -1271,7 +1332,7 @@ placement is the design detail: a job-level `services:` block starts before the 
 conditioned, so a docs-only PR would pay to pull and boot SQL Server for nothing. As a guarded step it is
 skipped with everything else while the job still runs and posts its required status green
 (`deploy.yml:641-645`). MMCA.Common's Helpdesk canary now uses the identical pattern for its migration
-apply (`MMCA.Common/.github/workflows/ci.yml:568-571`).
+apply (`MMCA.Common/.github/workflows/ci.yml:543-546`).
 
 The password lives in the job's `env:` (`deploy.yml:649-650`) because it is a throwaway SA credential for
 an ephemeral container, not a production secret, and not stored in GitHub Secrets. The comment states it
@@ -1690,7 +1751,7 @@ from scratch using `jq` (there is no committed parameters template, see the IaC 
 `infra/main.parameters.json` does not exist). The `jq --arg` flag properly JSON-escapes multiline values (critical for the RSA PEM keys,
 which contain newlines). The base parameter set is always present (`deploy.yml:1424-1452`), including the
 six SHA-tagged image references read from `needs.foundation.outputs.acrLoginServer`. Optional parameters
-(OAuth credentials, Anthropic API key, SMTP config, the synthetic-traffic key, managed-identity SQL
+(OAuth credentials, the AI provider key (`AI_API_KEY`, fed to the Bicep `aiApiKey` parameter), SMTP config, the synthetic-traffic key, managed-identity SQL
 settings) are conditionally appended only if their env vars are non-empty:
 
 ```bash
@@ -2554,6 +2615,16 @@ all, which is the ADR-016 lockstep invariant expressed as a test. It deliberatel
 `--locked-mode`: an Aspire AppHost lock carries a RID-specific `Aspire.Dashboard.Sdk.<rid>` entry, so
 locked mode fails with NU1004 on a Linux runner whether or not anything drifted. Neither workflow is
 given its own section above, but both are part of the workflow set.)
+
+The drill also cleans up when it does not finish. The script deletes its restored copy in a `finally` block,
+but a job cancelled at `timeout-minutes` never reaches it, and the weekly rotation means the next run targets
+a different database, so its stale-name check would not remove the leftover either; the comment
+(`dr-drill.yml:89-93`) records the 2026-09-14 scheduled run that left `ADC_Engagement-drill` at Basic-tier
+cost for five days. The **Remove leftover drill copies** step (`dr-drill.yml:94-105`) runs under
+`if: always()`, so on cancel and on failure too, finds the `adc-prod-sql-*` server (warning and exiting
+cleanly when there is none) and deletes every database on it whose name ends in `-drill`, not just this run's.
+[Rubric section 31, Cost/FinOps] assesses whether spend is bounded by design rather than by vigilance; this
+step makes an interrupted drill self-correcting instead of a silent standing charge.
 
 `deploy.yml` on push or dispatch is the only Azure-mutating workflow in the set today, and it holds the
 `prod-azure` concurrency group with `cancel-in-progress: false` so a deploy is never interrupted

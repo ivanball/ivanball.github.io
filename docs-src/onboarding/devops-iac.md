@@ -350,12 +350,16 @@ How it works:
   region. The two RSA keys are appended immediately after, unconditionally
   (`deploy.yml:1384-1387`), because they are required.
 - Optional parameters (GitHub OAuth, Google OAuth, the four Sign in with Apple pieces, the
-  Anthropic key, the five SMTP settings, the synthetic-traffic bypass key, the alert email, and the
+  AI provider key, the five SMTP settings, the synthetic-traffic bypass key, the alert email, and the
   three staged managed-identity SQL inputs) are conditionally appended with further `jq --arg`
-  calls (`deploy.yml:1390-1487`) **only when their env var is non-empty**. `jq --arg` JSON-escapes
+  calls (`deploy.yml:1390-1487`) **only when their env var is non-empty**. The AI key is the one
+  whose names differ at each hop: the GitHub secret is still `ANTHROPIC_API_KEY` because the
+  credential is an Anthropic one, the step maps it to the provider-neutral `AI_API_KEY` variable
+  (`deploy.yml:1386-1388`), and that variable feeds the `aiApiKey` Bicep parameter
+  (`deploy.yml:1506-1509`). `jq --arg` JSON-escapes
   multi-line values correctly, critical for the Apple `.p8` PEM, which contains newlines. Anything
   not appended falls back to the `@secure()` parameter's empty-string default in `main.bicep`,
-  which the template's feature flags (`hasAnthropic`, `hasAppleOAuth`, …) read to disable the
+  which the template's feature flags (`hasAiApiKey`, `hasAppleOAuth` and the rest) read to disable the
   corresponding feature.
 - `useManagedIdentitySql` is the one boolean: it is appended as a literal JSON `true` only when the
   `USE_MANAGED_IDENTITY_SQL` repository variable is exactly `"true"` (`deploy.yml:1484-1487`), keeping
@@ -372,9 +376,9 @@ that exists only for the duration of the workflow run.
 
 **File:** `MMCA.ADC/infra/main.bicep`
 
-`main.bicep` declares every application-layer Azure resource: Application Insights, three SLO
-scheduled query rules and their action group, three operational scheduled query rules, one
-conditional AI-scoring token-ceiling rule (`main.bicep:460-522`), a Gateway
+`main.bicep` declares every application-layer Azure resource: Application Insights, five SLO
+scheduled query rules (one of them the AI-scoring token ceiling, `main.bicep:417-429`) and their
+action group, three operational scheduled query rules, a log-ingestion-cap rule, a Gateway
 availability web test and its severity-1 alert, a saved SLO workbook (`main.bicep:600-620`), the
 monthly cost budget, SQL Server with the four per-service databases, Service Bus, references to the
 manually provisioned Notification Hub, the blob storage account with its two declared containers
@@ -401,8 +405,12 @@ them in deployment history):
   only signing algorithm the deployment supports, so there is no HS256 fallback key parameter at
   all any more.
 - `githubOAuthClientSecret` (`main.bicep:51`), `googleOAuthClientSecret` (`main.bicep:58`),
-  `appleOAuthPrivateKeyPem` (`main.bicep:71`), `anthropicApiKey` (`main.bicep:75`),
-  `smtpPassword` (`main.bicep:91`), optional integration secrets.
+  `appleOAuthPrivateKeyPem` (`main.bicep:71`), `aiApiKey` (`main.bicep:75`),
+  `smtpPassword` (`main.bicep:91`), optional integration secrets. `aiApiKey` is provider-neutral:
+  it holds the key for whichever provider `Ai:Provider` names (Anthropic today), and its
+  description records why the Key Vault secret it lands in keeps the `anthropic-api-key` name
+  (`main.bicep:74`): the credential itself is an Anthropic one, and renaming a live secret buys
+  nothing.
 - `syntheticTrafficSecret` (`main.bicep:98`), the shared key that lets the monthly k6 capacity
   proof bypass the gateway edge rate limiter
   ([ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html)
@@ -431,7 +439,7 @@ them in deployment history):
 - `enableBudget` (`main.bicep:132`), `monthlyBudgetAmount` (`main.bicep:135`),
   `budgetStartDate` (`main.bicep:138`), govern the cost budget resource (see below).
 - `aiScoringTokenCeiling` (`main.bicep:78`), an `int` defaulting to `2000000`, is the only
-  parameter that bounds a **third-party** meter rather than an Azure one: it is the Anthropic
+  parameter that bounds a **third-party** meter rather than an Azure one: it is the AI provider's
   input-plus-output token envelope of one full AI scoring pass over a conference's submissions,
   times a safety factor, and it is the threshold of the conditional alert described below. Its
   description states the non-obvious part (`main.bicep:77`): the number is a **per-window** ceiling
@@ -444,7 +452,8 @@ them in deployment history):
 ### Computed variables (`main.bicep:156-204`)
 
 Six boolean flags gate optional blocks throughout the template:
-- `hasAnthropic` (`main.bicep:143`), gates the Anthropic API key secret and env var on Conference.
+- `hasAiApiKey` (`main.bicep:159`), gates the AI provider key's secret reference and its
+  `Ai__ApiKey` env var on Conference, and is the `enabled` value of the AI token-ceiling alert.
 - `hasSmtpPassword` (`main.bicep:144`), gates the SMTP password `secretRef` on Identity and
   Notification.
 - `hasSyntheticTrafficSecret` (`main.bicep:145`), gates the Gateway's only secret and the
@@ -533,11 +542,20 @@ are cost controls on a pay-per-GB workspace:
   This is the standard OpenTelemetry SDK env var, read by the periodic exporting metric reader
   rather than by any MMCA.Common code.
 
-Every one of the six apps gets all five: Identity (`main.bicep:1128-1133`), Conference
-(`:1337-1342`), Engagement (`:1460-1465`), Notification (`:1602-1607`), Gateway (`:1762-1767`),
-UI (`:1875-1880`). They are declared once as Bicep variables and spliced into each `env` array by
+Every one of the six apps gets all five: Identity (`main.bicep:1578-1583`), Conference
+(`:1805-1810`), Engagement (`:1943-1948`), Notification (`:2089-2094`), Gateway (`:2265-2271`),
+UI (`:2398-2403`). They are declared once as Bicep variables and spliced into each `env` array by
 name, which is what keeps a cost decision from being applied to five apps and forgotten on the
 sixth.
+
+The Gateway carries one more, and it is the only per-host entry in the set:
+`Logging__LogLevel__Yarp: 'Warning'` (`yarpLogLevelEnv`, `main.bicep:264-273`, spliced at `:2268`).
+YARP writes two Information lines per proxied request (`HttpForwarder` events 9 and 56) to stdout,
+which Container Apps ships to Log Analytics as `ContainerAppConsoleLogs_CL`. The comment records the
+measurement behind it: about 177k lines and 77 MB per week between 2026-09-13 and 2026-09-19, the
+largest console-log stream in the workspace, and a duplicate of what `AppRequests` and
+`AppDependencies` already record. It is Gateway-only because no other host references YARP, and the
+floor is `Warning` rather than anything higher so the forwarder's error lines still ship.
 
 [Rubric §13, Observability & Operability] assesses whether the system ships distributed traces,
 structured logs, and metrics to a queryable backend. The workspace-based App Insights with
@@ -547,17 +565,19 @@ across all six services, and Kusto-queryable logs, covering this category end-to
 ### SLO alerts as code (`main.bicep:297-441`), [ADR-062](https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html)
 
 The SLOs are declared as **data**: an array of records named `sloAlertSpecs`
-(`main.bicep:330-370`) carrying `key`, `description`, `query`, `timeAggregation`,
-`metricMeasureColumn`, `threshold` and `severity`. A Bicep `for` loop materializes one Log Analytics
-`Microsoft.Insights/scheduledQueryRules` per spec (`main.bicep:372-418`). There are **four** specs
-today:
+(`main.bicep:340-430`) carrying `key`, `description`, `query`, `timeAggregation`,
+`metricMeasureColumn`, `threshold` and `severity`, plus four optional fields that only one entry sets
+(`enabled`, `windowSize`, `evaluationFrequency`, `autoMitigate`). A Bicep `for` loop materializes one
+Log Analytics `Microsoft.Insights/scheduledQueryRules` per spec (`main.bicep:432-492`). There are
+**five** specs today:
 
 | Alert key | KQL source | Threshold | Window | Severity |
 |---|---|---|---|---|
-| `failed-requests` (`:331-339`) | `AppRequests` where `Success == false`, excluding 401/499 and crawler 404s on `/robots.txt` and `/sitemap.xml` | > 10 rows | 15 min | 2 (Error) |
-| `server-response-time` (`:340-348`) | `AppRequests` excluding `/hubs/`, `avg(DurationMs)` | > 3000ms | 15 min | 3 (Warning) |
-| `dependency-failures` (`:349-357`) | `AppDependencies` where `Success == false`, excluding 401/499 | > 10 rows | 15 min | 2 (Error) |
-| `resilience-circuit-open` (`:361-369`) | `AppMetrics` where `Name == "resilience.polly.strategy.events"` and `Properties["event.name"] == "OnCircuitOpened"` | > 0 rows | 15 min | 2 (Error) |
+| `failed-requests` (`:341-349`) | `AppRequests` where `Success == false`, excluding 401/499 and crawler 404s on `/robots.txt` and `/sitemap.xml` | > 10 rows | 15 min | 2 (Error) |
+| `server-response-time` (`:350-358`) | HTTP rows of `AppRequests` only: excludes `/hubs/`, `ResultCode` 101 and rows with no `Url`; `avg(DurationMs)` over windows holding at least 5 requests | > 3000ms | 15 min | 3 (Warning) |
+| `dependency-failures` (`:359-367`) | `AppDependencies` where `Success == false`, excluding 401/499 | > 10 rows | 15 min | 2 (Error) |
+| `resilience-circuit-open` (`:371-379`) | `AppMetrics` where `Name == "resilience.polly.strategy.events"` and `Properties["event.name"] == "OnCircuitOpened"` | > 0 rows | 15 min | 2 (Error) |
+| `ai-scoring-token-ceiling` (`:417-429`) | `AppMetrics` sum of `mmca.ai.input_tokens` and `mmca.ai.output_tokens` | > `aiScoringTokenCeiling` (2,000,000) | 2 days, evaluated every 12h | 3 (Warning) |
 
 **The KQL predicate is the whole point of the migration.** The first three rules replaced metric
 alerts on `requests/failed`, `requests/duration` and `dependencies/failed`, which paged on routine
@@ -573,6 +593,16 @@ but a sitemap probe is still a 404, which is why that one pair of paths is exclu
 unchanged, so this is a precision fix, not a sensitivity cut: a genuine 400, 404 or 500 burst still
 pages at the same numbers.
 
+`server-response-time` has since been narrowed a second time, to HTTP requests only
+(`main.bicep:352-353`), because the `/hubs/` name filter was not the whole connection problem. Two
+more kinds of `AppRequests` row carry a duration that is not request latency: SignalR hub and
+Blazor circuit connections, which surface as `ResultCode` 101 (the WebSocket upgrade) and report
+connection lifetime, and the background `InternalCommandExecute` / `OutboxProcess` spans, which are
+Consumer-kind and carry no `Url`, so `isnotempty(Url)` drops them. The query also counts rows
+alongside the average and keeps a window only when it holds at least 5 requests, so one cold request
+on a quiet window cannot page. The threshold is still 3000ms: as with the first fix, what changed is
+the population the average is taken over, not the bar it is held to.
+
 **`resilience-circuit-open` is the newest spec and the only one that reads a metric rather than a
 request or dependency row.** `MMCA.Common`'s resilience pipelines emit the standard Polly
 `resilience.polly.strategy.events` instrument, and the rule filters it to the `OnCircuitOpened`
@@ -582,13 +612,13 @@ circuit is already the failure mode the retry budget existed to absorb, and ever
 is failing fast until the break window elapses, so there is nothing to average. That puts it in the
 same "any hit is the incident" class as the outbox dead-letter rule below.
 
-The `union(...)` in the criteria (`main.bicep:398-410`) supplies `metricMeasureColumn` only for the
+The `union(...)` in the criteria (`main.bicep:473-485`) supplies `metricMeasureColumn` only for the
 aggregate rule. Omitting it (the empty-string case) makes a rule count returned **rows**, which is
 what the three row-count SLOs want.
 
 **Evaluation frequency matches the window: `PT15M` over `PT15M` with `autoMitigate: true`**
-(`main.bicep:390-392`). These rules used to re-evaluate every five minutes over the same 15-minute
-window, and the template records why that changed (`main.bicep:385-389`): a scheduled-query rule is
+(`main.bicep:462-467`), as the loop's defaults. These rules used to re-evaluate every five minutes
+over the same 15-minute window, and the template records why that changed (`main.bicep:452-456`): a scheduled-query rule is
 billed per evaluation, and the 5-minute tier costs $1.47/month per rule against about $0.50 at 15
 minutes, across four rules. Because `windowSize` was already `PT15M`, each evaluation still looks at
 exactly the same 15 minutes of data, no threshold moves, and no rule is renamed; what disappears is
@@ -596,47 +626,63 @@ the overlapping evaluations the 5-minute frequency produced. The cost is detecti
 is now noticed within 15 minutes rather than 5, which is why the fast path is covered by the deploy
 smoke gate rather than by these rules.
 
+**Those three cadence fields, and `enabled`, are read with a safe dereference and a default**
+(`spec.?evaluationFrequency ?? 'PT15M'` and its siblings, `main.bicep:450`, `:463-467`), because
+exactly one entry needs something else: the AI token ceiling evaluates a two-day window twice a day
+and switches itself off when no provider key is deployed (`main.bicep:458-461`). Each of the four
+reads carries a `#disable-next-line BCP187`, and the reason is a failed pipeline rather than
+tidiness (`main.bicep:443-448`): Bicep infers the array's element type from the entries that omit
+the optional fields and reports an **Info** diagnostic on each read, and the deploy action runs with
+`failOnStdErr`, so an Info line on stderr failed the step after the deployment itself had already
+succeeded (2026-09-21, run 35567591059). It is the ARM-limit lesson of the AI alert below seen from
+the other side: a template can be valid and applied while the pipeline that carried it still goes
+red.
+
 **The superseded metric alerts are gone from the template, and their `-v2` names are the residue.**
 An earlier revision kept the three replaced `metricAlerts` declared under their original names with
 `enabled: false`, because Incremental ARM never deletes a resource that simply leaves the template.
 They have since been retired in Azure and dropped from the source; what remains is a comment
 recording that the scheduled-query rules are now the SLO alerts and that the severity-1
 availability metric alert stays because availability has no status-code confound
-(`main.bicep:383-384`). The `-v2` suffix on the replacement names is still load-bearing, and the
-template says why (`main.bicep:337-338`): the suffix is part of a rule's identity in Azure, so
+(`main.bicep:495-496`). The `-v2` suffix on the replacement names is still load-bearing, and the
+template says why (`main.bicep:434-435`): the suffix is part of a rule's identity in Azure, so
 renaming it would create a second rule alongside the live one rather than update it.
 
-The action group (`main.bicep:275-289`) has an **unconditional** email receiver, which is the direct
+The action group (`main.bicep:307`) has an **unconditional** email receiver, which is the direct
 consequence of `alertEmailAddress` being a required parameter. Every scheduled query rule routes to
-it (`main.bicep:377`, `:454`) and so does the cost budget (`main.bicep:645`, `:653`). One group, one
+it (`main.bicep:489`, `:566`, `:618`, and `:694` for the availability metric alert) and so does the
+cost budget (`main.bicep:745`, `:753`). One group, one
 receiver, no severity routing: severity is triage metadata, not a delivery decision.
 
 Each SLO alert is paired with a same-severity triage section in `MMCA.ADC/infra/OPERATIONS.md`
-(`OPERATIONS.md:15`, `:29`, `:42`), and that pairing is enforced by a framework fitness test rather
+(`OPERATIONS.md:17`, `:31`, `:50`, `:63`, `:111`), and that pairing is enforced by a framework fitness test rather
 than by discipline: `ObservabilityConventionTestsBase` parses this template between the literal
 anchors `var sloAlertSpecs` and `resource sloAlerts`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ObservabilityConventionTestsBase.cs:109-110`)
-and fails the build in both directions. That gate is covered in
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/ObservabilityConventionTestsBase.cs:109-110`)
+and fails the build in both directions. ADC raises the base class's floor of three discovered specs
+(`ObservabilityConventionTestsBase.cs:39`) to five
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14`),
+so a parse-anchor drift that found fewer specs fails rather than passing vacuously. That gate is covered in
 [group 27](group-28-testing-infrastructure.md#observabilityconventiontestsbase); it is not
 duplicated here. Note the coverage boundary, which the runbook itself spells out
-(`OPERATIONS.md:57-63`): only alerts inside that parse window are gated, so the operational rules
+(`OPERATIONS.md:151-160`): only alerts inside that parse window are gated, so the operational rules
 and the availability alert below are provisioned but ungated, and their triage deliberately sits
 under `####` headings so the parser does not read them as SLO runbook sections.
 
 ### Operational and availability alerts (`main.bicep:442-700`)
 
-Beyond the four SLOs, `main.bicep` provisions **three** more scheduled query rules from
-`scheduledQueryAlertSpecs` (`main.bicep:442-461`, materialized at `:463-495`), all severity 2 on a
+Beyond the five SLOs, `main.bicep` provisions **three** more scheduled query rules from
+`scheduledQueryAlertSpecs` (`main.bicep:517`, materialized at `:538`), all severity 2 on a
 15-minute evaluation over a 15-minute window:
 
-- `outbox-dead-letter` (`main.bicep:443-448`) fires on **any** hit (`threshold: 0`) of an `AppTraces`
+- `outbox-dead-letter` (`main.bicep:518-523`) fires on **any** hit (`threshold: 0`) of an `AppTraces`
   row at Error or above whose message contains `dead-lettered`. An outbox message that exhausted its
   retries means an integration event was permanently lost. The row-age signal is DB-side and not
   queryable from Log Analytics, so this Error line _is_ the backlog alarm.
-- `sql-dependency-failures` (`main.bicep:449-454`) fires above 10 failed SQL dependency calls. Every
+- `sql-dependency-failures` (`main.bicep:524-529`) fires above 10 failed SQL dependency calls. Every
   service owns exactly one database, so a burst here means a service cannot reach its own DB, which
   also stalls its outbox drain.
-- `revision-activation-failed` (`main.bicep:455-460`) is the newest of the three and the most
+- `revision-activation-failed` (`main.bicep:530-535`) is the newest of the three and the most
   instructive, because it exists to catch a failure the rest of the alerting stack is blind to. It
   queries `ContainerAppSystemLogs_CL` for `Reason_s startswith "Deployment Progress Deadline
   Exceeded"` and fires on any hit. When a revision's readiness probe never goes green, Container
@@ -647,13 +693,13 @@ Beyond the four SLOs, `main.bicep` provisions **three** more scheduled query rul
   older revision kept 100% of the traffic for days. The rule works at all only because the
   environment's `appLogsConfiguration` sends platform system logs to the same workspace.
 
-The two older rules each have a `####` triage section in the runbook (`OPERATIONS.md:65`, `:100`);
+The two older rules each have a `####` triage section in the runbook (`OPERATIONS.md:163`, `:206`);
 `revision-activation-failed` does not have one, which the ungated coverage boundary above allows,
-and the runbook still describes this block as carrying two scheduled query rules
-(`OPERATIONS.md:57-58`). Its `description` field (`main.bicep:457`) carries the first-response
-instructions instead.
+and the runbook names it, with the ingestion-cap rule below, as the gap the honour system leaves
+open (`OPERATIONS.md:157-159`). Its `description` field (`main.bicep:532`) carries the
+first-response instructions instead.
 
-**A fourth standalone rule watches the detector itself** (`main.bicep:515-546`, added 2026-09-07 as
+**A fourth standalone rule watches the detector itself** (`main.bicep:590`, added 2026-09-07 as
 SEC-ADC-47). `logIngestionCapAlert` is named `${prefix}-alert-log-ingestion-cap-reached`, fires at
 severity 2 on any hit, and queries `_LogOperation` for an `Ingestion` / `Data collection Status`
 record whose `Detail` contains `OverQuota` (`main.bicep:531`). Three decisions in it are worth
@@ -693,10 +739,10 @@ counts, so the 2-of-3 threshold keeps its meaning without being renumbered. The 
 other non-obvious part (`OPERATIONS.md:140-146`): `/health` is the Gateway's readiness endpoint and
 aggregates one `downstream-{name}` check per service, so a perfectly healthy Gateway can still fail
 this probe because a backend is unhealthy. (The runbook's parenthetical still describes the probe as
-5-minute, `OPERATIONS.md:130`; the template is the ground truth.)
+5-minute, `OPERATIONS.md:236`; the template is the ground truth.)
 
 [Rubric §29, Resilience, Reliability & Business Continuity] assesses whether the system can detect
-degradation automatically and notify operators. The three SLO rules, the three operational rules,
+degradation automatically and notify operators. The request, latency, dependency and circuit SLO rules, the three operational rules,
 and the sev-1 availability alert all route to the same action group as the cost budget, giving the
 on-call operator an automated signal for error rate, latency, dependency failures, permanent event
 loss, database reachability, a silently failed rollout, and total entry-point outage. The 2026-09-02
@@ -705,64 +751,75 @@ latency for a materially smaller monitoring bill, and the deploy-time gates carr
 
 ### AI-scoring token-ceiling alert (`main.bicep:567-628`)
 
-One rule in the template watches a **third-party** meter, and it is the only alert here that is
-conditional. `aiScoringSpendAlert` (`main.bicep:567`) is declared
-`if (hasAnthropic)`, fires at severity **3**, and compares a two-day token total against the
-`aiScoringTokenCeiling` parameter (`main.bicep:602`):
+One rule in the template watches a **third-party** meter, and it is the only alert here that
+configuration can switch off. It is the fifth entry in `sloAlertSpecs` (`main.bicep:417-429`), so the
+loop provisions it as `${prefix}-alert-ai-scoring-token-ceiling-v2` like every other SLO rule. It
+fires at severity **3** and compares a two-day token total against the `aiScoringTokenCeiling`
+parameter:
 
 ```bicep
+key: 'ai-scoring-token-ceiling'
 query: 'AppMetrics | where Name in ("mmca.ai.input_tokens", "mmca.ai.output_tokens") | summarize AggregatedValue = sum(Sum)'
 timeAggregation: 'Total'
 metricMeasureColumn: 'AggregatedValue'
-operator: 'GreaterThan'
 threshold: aiScoringTokenCeiling
+severity: 3
+windowSize: 'P2D'
+evaluationFrequency: 'PT12H'
+autoMitigate: true
+enabled: hasAiApiKey
 ```
 
-Four decisions in it are worth reading, because each one is a constraint rather than a preference:
+Five decisions in it are worth reading, because each one is a constraint rather than a preference:
 
-- **Why the rule exists at all** (`main.bicep:558-561`). Every scored submission is a paid Anthropic
-  call, and an organizer can trigger a full pass over an entire event's submissions. Nothing in the
-  Azure budget resource sees that spend: it lands on an Anthropic invoice, not on the subscription.
-  The cost risk is therefore a repeated or runaway pass, and this rule is the only signal that
-  notices one.
-- **Why it queries `AppMetrics`, and why the instrument names moved** (`main.bicep:549-557`). The
-  counters are now `mmca.ai.input_tokens` and `mmca.ai.output_tokens` on the **framework** meter
-  `MMCA.Common.AI`: since MMCA.Common v1.192.0 the governed `IChatClient` meters every model call,
-  so they are no longer per-service, and they replace the former `scoring.tokens.input` /
-  `scoring.tokens.output` on the `MMCA.ADC.Conference.Scoring` meter. The template states the
-  consequence of that rename in place: the rule reads zero for the two-day window that straddles the
-  deploy and then resumes on the new names. In a workspace-based component the classic
-  `customMetrics` table surfaces under its workspace-schema name `AppMetrics`, the same schema family
-  the SLO rules above query, with `Name` / `Sum` / `ItemCount` as its measure columns. The comment
-  also closes the obvious worry (`main.bicep:564-566`): the two metric-group disables described in
-  the App Insights section drop only the http-client and runtime instrument **groups**, so an
-  application meter like this one keeps exporting.
-- **Why `windowSize: 'P2D'` and `evaluationFrequency: 'PT12H'`** (`main.bicep:579-593`). Both values
-  are pinned by ARM-side limits that `az bicep build` cannot see, and each was learned from a
-  rejected production deployment on 2026-09-05 (`InvalidRequestContent` both times). Two days is the
-  longest data range a scheduled query rule will evaluate: the first cut asked for a 30-day lookback
-  through `overrideQueryTimeRange` and ARM rejected the **whole deployment** ("OverrideQueryTimeRange
-  of 43200 minutes is not supported ... 2880", run 33972401924). Twelve hours is then the least
-  frequent cadence a **stateful** rule accepts: the second cut used `P1D` and was rejected with
-  "Stateful rules can not run in a frequency greater than 12 hours. Either reduce frequency, or set
-  'AutoMitigate' property to false" (run 33975403549). That is the failure mode worth remembering:
-  an unsupported alert property does not degrade the alert, it fails the infrastructure deploy that
-  carried it. `autoMitigate: true` (`main.bicep:594`) stays on deliberately, so the alert resolves
-  itself once the two-day window rolls past the spike, and the second daily evaluation is the price
-  of keeping it. A two-day rolling total against a single-pass envelope is the honest runaway signal
-  anyway, since one legitimate pass fits inside it and a repeated one does not.
-- **Why severity 3 and why `hasAnthropic`** (`main.bicep:574-575`, `:562-563`). Nothing is down when
-  a budget ceiling is crossed, so it must not page the way the sev-1 availability and sev-2 failure
-  rules do. And with no API key deployed the feature is inert and emits nothing, so an unconditional
-  rule could only ever evaluate zero while still billing per evaluation.
+- **Why it lives inside the SLO array** (`main.bicep:380-384`). The alert-to-runbook pairing gate
+  regex-parses only the text between its two literal anchors, so an entry assembled with a `concat`
+  or declared as a standalone resource would be invisible to it. Inside the array it is gated like
+  the other four, and its triage is the gated `###` section for
+  `adc-prod-alert-ai-scoring-token-ceiling-v2` in the runbook (`OPERATIONS.md:111`). The same
+  comment warns that because the anchors are literal strings, neither may appear in a comment inside
+  the block either.
+- **Why the rule exists at all** (`main.bicep:391-394`). Every scored submission is a paid call to
+  the configured provider, and an organizer can trigger a full pass over an entire event's
+  submissions. Nothing in the Azure budget resource sees that spend: it lands on the provider's
+  invoice, not on the subscription. The cost risk is therefore a repeated or runaway pass, and this
+  rule is the only signal that notices one.
+- **Why it queries `AppMetrics`** (`main.bicep:386-390`). The counters `mmca.ai.input_tokens` and
+  `mmca.ai.output_tokens` come from the **framework** meter `MMCA.Common.AI`: the governed
+  `IChatClient` meters every model call, so they are not per-service. In a workspace-based component
+  the classic `customMetrics` table surfaces under its workspace-schema name `AppMetrics`, the same
+  schema family the other SLO rules query, with `Name` / `Sum` / `ItemCount` as its measure columns.
+  The comment also closes the obvious worry (`main.bicep:397-399`): the two metric-group disables
+  described in the App Insights section drop only the http-client and runtime instrument **groups**,
+  so an application meter like this one keeps exporting.
+- **Why `windowSize: 'P2D'` and `evaluationFrequency: 'PT12H'`** (`main.bicep:404-416`). These are the
+  entry's overrides of the loop's 15-minute defaults, and both values are pinned by ARM-side limits
+  that `az bicep build` cannot see, each learned from a rejected production deployment on 2026-09-05
+  (`InvalidRequestContent` both times). Two days is the longest data range a scheduled query rule
+  will evaluate: the first cut asked for a 30-day lookback through `overrideQueryTimeRange` and ARM
+  rejected the **whole deployment** ("OverrideQueryTimeRange of 43200 minutes is not supported ...
+  2880", run 33972401924). Twelve hours is then the least frequent cadence a **stateful** rule
+  accepts: the second cut used `P1D` and was rejected with "Stateful rules can not run in a frequency
+  greater than 12 hours. Either reduce frequency, or set 'AutoMitigate' property to false" (run
+  33975403549). That is the failure mode worth remembering: an unsupported alert property does not
+  degrade the alert, it fails the infrastructure deploy that carried it. `autoMitigate: true`
+  (`main.bicep:427`) stays on deliberately, so the alert resolves itself once the two-day window
+  rolls past the spike, and the second daily evaluation is the price of keeping it. A two-day rolling
+  total against a single-pass envelope is the honest runaway signal anyway, since one legitimate pass
+  fits inside it and a repeated one does not.
+- **Why severity 3 and why `enabled: hasAiApiKey`** (`main.bicep:401-402`, `:395-396`). Nothing is
+  down when a budget ceiling is crossed, so it must not page the way the sev-1 availability and sev-2
+  failure rules do. And with no API key deployed the feature is inert and emits nothing, so an
+  enabled rule could only ever evaluate zero while still billing per evaluation. The rule is
+  therefore always provisioned and disabled rather than omitted, which keeps its name and its
+  runbook pairing the same whichever way the key is set.
 
-It routes to the same action group as everything else (`main.bicep:610-612`). Like the three
-operational rules and the ingestion-cap rule, it sits **outside** the `var sloAlertSpecs` /
-`resource sloAlerts` parse window, so `ObservabilityConventionTestsBase` does not require a runbook
-section for it and `OPERATIONS.md` has none; its `description` field (`main.bicep:573`) carries the
-first response instead, which is to look for a repeated or runaway full-event scoring pass before
-raising the ceiling.
-
+It routes to the same action group as every other SLO rule (`main.bicep:489`). Its runbook
+(`OPERATIONS.md:111-147`) walks the triage in four steps: confirm the shape of the spend in
+`AppMetrics`, attribute it to passes through the `Conference.ScoreEventSessions.v1` internal-command
+rows, decide whether it is one legitimate large pass, a repeat or a runaway, and raise the ceiling
+only after the last two are ruled out, since a ceiling raised to silence a loop buys the loop a
+bigger budget.
 [Rubric §31, Cost Efficiency / FinOps] assesses whether cost is actively monitored, bounded and
 governed. This rule extends that discipline past the Azure bill: the budget resource below bounds
 subscription spend, `cost-guard.yml` bounds a surge left un-reverted, and this bounds the one meter
@@ -1095,18 +1152,24 @@ published. What keeps a file from being enumerable is the blob **name**,
 asset's URL reveals nothing about any other. Nothing personal is stored there; a speaker uploading
 material is publishing it.
 
-That container is also the reason for `sessionAssetMalwareScanning` (`main.bicep:1234-1250`), a
+That container is also the reason for `sessionAssetMalwareScanning` (`main.bicep:1242-1258`), a
 Microsoft Defender for Storage setting declared `if (enableSessionAssetMalwareScanning)` with the
-parameter defaulting to **false** (`main.bicep:135-136`). It scans every upload on arrival, with
-`capGBPerMonth: 50` and `sensitiveDataDiscovery` off. Both the guard and the cap are deliberate
-(`main.bicep:1225-1233`): the deploy identity is not assumed to hold
-`Microsoft.Security/defenderForStorageSettings/write`, and a refused write fails the **whole**
-deployment rather than just this resource, which is the same posture as `grantAvatarStorageRole`;
-the feature is billed per GB scanned, so the monthly cap bounds a runaway or malicious upload burst
-and scanning simply stops for the rest of the month once it is reached. Sensitive-data discovery is
-off because the account holds published conference material and avatars, not records to classify,
-and it is priced separately. Scanning is defence in depth here rather than the only control: the
-ADR-045 upload path already gates format by magic bytes and stores under an unguessable asset id.
+parameter defaulting to **true** (`main.bicep:135-136`). It scans every upload on arrival, with
+`capGBPerMonth: 50` and `sensitiveDataDiscovery` off. The guard started life as an opt-in knob, off
+by default, for the reason `grantAvatarStorageRole` still is one: a write the deploy identity may not
+be allowed to make fails the **whole** deployment rather than just this resource. The template
+records why that reason no longer applies (`main.bicep:135`, `:1233-1236`): the deploy identity
+holds Contributor on the resource group, which covers
+`Microsoft.Security/defenderForStorageSettings/write` (verified 2026-09-21). The cap is the part that
+did not change. This is still the one resource in the template billed per GB scanned, so the monthly
+cap bounds a runaway or malicious upload burst and scanning simply stops for the rest of the month
+once it is reached, which the comment calls the correct failure mode for defence in depth. The
+parameter description sizes the risk (`main.bicep:135`): session assets are slide decks and speaker
+headshots for one annual conference, so the cap is a bound on a burst rather than a budget anyone
+expects to reach. Sensitive-data discovery is off because the account holds published conference
+material and avatars, not records to classify, and it is priced separately. Scanning is defence in
+depth here rather than the only control: the ADR-045 upload path already gates format by magic bytes
+and stores under an unguessable asset id. Setting the parameter to `false` turns scanning off.
 
 The third container is `dataProtectionKeysContainer` (`main.bicep:1195-1201`), named `dataprotection-keys` and
 explicitly `publicAccess: 'None'`. It holds the shared ASP.NET Core DataProtection key ring for the
@@ -1290,11 +1353,12 @@ Secrets stored in Key Vault (`main.bicep:1415-1523`), eighteen unconditional plu
 - `kvRedisConn` (`:1463`)
 - the notification-hub connection string, the one conditional secret, written only when
   `deployNotificationHub` is true (`main.bicep:1458-1462`)
-- `kvRsaPrivate`, `kvRsaPublic` (`:1468`, `:1473`), both always real values because the
+- `kvRsaPrivate`, `kvRsaPublic` (`:1476`, `:1481`), both always real values because the
   parameters are required
-- `kvSmtpPassword` (`:1478`), `kvSyntheticTrafficSecret` (`:1485`), `kvTrustedCallerSecret`
-  (`:1495`), `kvGitHubOAuthSecret` (`:1500`), `kvGoogleOAuthSecret` (`:1505`),
-  `kvAppleOAuthPrivateKey` (`:1510`), `kvAnthropicKey` (`:1515`)
+- `kvSmtpPassword` (`:1486`), `kvSyntheticTrafficSecret` (`:1493`), `kvTrustedCallerSecret`
+  (`:1503`), `kvGitHubOAuthSecret` (`:1508`), `kvGoogleOAuthSecret` (`:1513`),
+  `kvAppleOAuthPrivateKey` (`:1518`), `kvAnthropicKey` (`:1523`; still named `anthropic-api-key`,
+  `:1525`, and now fed from `aiApiKey`)
 
 Two more vault-scoped resources sit with them. `keyVaultDiagnostics` (`main.bicep:1378`) forwards the
 vault's `AuditEvent` category to the workspace, so a secret read is attributable in the same place
@@ -1680,13 +1744,17 @@ as one line and one deploy. The second-order effect is called out too: a smaller
 the startup spike, so cold start roughly doubles, which traffic never sees because ACA keeps the
 previous revision serving until readiness goes green.
 
-The Anthropic API key is injected only when `hasAnthropic = true` (`main.bicep:1312-1319`, `:1381`):
+The AI provider key is injected only when `hasAiApiKey = true` (`main.bicep:1786`, `:1864`). The
+secret reference keeps the Key Vault secret's `anthropic-api-key` name, while the env var it feeds is
+the provider-neutral `Ai__ApiKey`:
 
 ```bicep
 secrets: union(
   [ ... sql, redis and service bus ... ],
-  hasAnthropic ? [{ name: 'anthropic-api-key', keyVaultUrl: ..., identity: appsIdentity.id }] : []
+  hasAiApiKey ? [{ name: 'anthropic-api-key', keyVaultUrl: ..., identity: appsIdentity.id }] : []
 )
+// and in the env union:
+hasAiApiKey ? [{ name: 'Ai__ApiKey', secretRef: 'anthropic-api-key' }] : []
 ```
 
 This is the `union()` + conditional array pattern used throughout `main.bicep` to keep optional
@@ -1878,10 +1946,10 @@ secret and redeploying.
 | §7 Microservices Readiness | Per-service databases ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)); service-discovery env vars (including the two named `grpc` endpoints); gRPC transport selection |
 | §8 Data Architecture | Four per-service databases as the whole estate; LTR policies; the AtlDevCon bacpac archive as the rollback source of record; EF model-drift gate in deploy.yml (migrations applied by services at startup) |
 | §11 Security | UAMI/OIDC model; Key Vault-backed secrets ([ADR-061](https://ivanball.github.io/docs/adr/061-runtime-secret-management.html)) plus the `KeyVault__Uri` configuration source on five of six apps; `secrets: []` on the UI and a single conditional secret on the Gateway; `adminUserEnabled: false`; `@secure()` parameters; required RSA keys with no HS256 fallback; staged `useManagedIdentitySql`; private `dataprotection-keys` container for the shared key ring (at-rest key-vault encryption of that ring is an explicit not-yet-implemented follow-up); the scoped `RequireHttpsMetadata: false` on the three internal JWKS consumers; the secret-gated rate-limiter bypass ([ADR-088](https://ivanball.github.io/docs/adr/088-gateway-edge-responsibilities.html)); no static credentials |
-| §13 Observability | Workspace-based App Insights; per-service `OTEL_SERVICE_NAME`; Application Map coverage; three SLO scheduled query rules + workbook ([ADR-062](https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html)); outbox dead-letter, SQL dependency and revision-activation alerts over the same workspace; the `hasAnthropic`-gated AI-scoring token-ceiling rule over `AppMetrics`; the 15-minute evaluation cadence and its stated detection-latency trade |
+| §13 Observability | Workspace-based App Insights; per-service `OTEL_SERVICE_NAME`; Application Map coverage; five SLO scheduled query rules (the AI-scoring token ceiling among them, enabled by `hasAiApiKey`) + workbook ([ADR-062](https://ivanball.github.io/docs/adr/062-slo-alerting-as-code.html)); outbox dead-letter, SQL dependency and revision-activation alerts over the same workspace; the 15-minute evaluation cadence and its stated detection-latency trade |
 | §17 DevOps & Deployment | Two-phase Bicep split; Incremental mode (and the operator step a template deletion still needs); image sha-tagging + registry build cache; service-startup migration (sole migrator, minReplicas:1); the revision-activation gate followed by the smoke gate, then the post-deploy cache purge |
 | §29 Resilience & Business Continuity | LTR on per-service databases; SLO alerts; sev-1 Gateway availability web test with a window that tracks its probe cadence; the `revision-activation-failed` alert for a rollout that silently never took traffic; guarded rollback in the smoke gate; `minReplicas: 1`; readiness probes with a self-only liveness split |
-| §31 Cost Efficiency / FinOps | `commonTags` on every resource; monthly budget with 80%/100% thresholds; `cost-guard.yml` surge-drift gate against a uniform `maxReplicas` 2 baseline; workspace `dailyQuotaGb: 1`; 25% trace sampling; Warning OTel log floor; Basic-tier DB sizing plus the archived-and-dropped AtlDevCon database; 300s outbox and scheduler polls; the two disabled metric groups plus the 300s metric export interval; 30-second readiness probes; 15-minute SLO-rule and web-test cadences; the `aiScoringTokenCeiling` two-day Anthropic token alert; uniform 0.25 vCPU / 0.5 Gi container sizing; the daily two-step ACR purge task plus its post-deploy re-run |
+| §31 Cost Efficiency / FinOps | `commonTags` on every resource; monthly budget with 80%/100% thresholds; `cost-guard.yml` surge-drift gate against a uniform `maxReplicas` 2 baseline; workspace `dailyQuotaGb: 1`; 25% trace sampling; Warning OTel log floor; the Gateway-only Warning floor on YARP's per-request logs; Basic-tier DB sizing plus the archived-and-dropped AtlDevCon database; 300s outbox and scheduler polls; the two disabled metric groups plus the 300s metric export interval; 30-second readiness probes; 15-minute SLO-rule and web-test cadences; the `aiScoringTokenCeiling` two-day AI provider token alert; the 50 GB monthly cap on on-upload malware scanning; uniform 0.25 vCPU / 0.5 Gi container sizing; the daily two-step ACR purge task plus its post-deploy re-run |
 
 ---
 
@@ -1913,11 +1981,16 @@ secret and redeploying.
   decides whether the SMTP env block on Identity and Notification carries a real relay or empty
   strings. `SYNTHETIC_TRAFFIC_SECRET` (`deploy.yml:1319`) is the same case for the Gateway's one
   secret.
-- Whether the AI-scoring token-ceiling alert exists in a given environment is not determinable from
-  the template either: it is declared `if (hasAnthropic)` (`main.bicep:475`), and `hasAnthropic`
-  (`main.bicep:143`) is derived from the `ANTHROPIC_API_KEY` GitHub secret appended to the parameters
-  file only when it is non-empty (`deploy.yml:1428-1430`). An environment without that secret
-  deploys the scoring feature inert and the rule not at all.
+- Whether the AI-scoring token-ceiling alert is **enabled** in a given environment is not
+  determinable from the template: the rule is always provisioned, with `enabled: hasAiApiKey`
+  (`main.bicep:428`), and `hasAiApiKey` (`main.bicep:159`) is derived from the `ANTHROPIC_API_KEY`
+  GitHub secret, which reaches the parameters file as `aiApiKey` only when it is non-empty
+  (`deploy.yml:1388`, `:1506-1509`). An environment without that secret deploys the scoring feature
+  inert and the rule disabled.
+- Whether on-upload malware scanning is actually in effect on the storage account is not
+  determinable from source either: the template declares it on by default (`main.bicep:136`,
+  `:1242-1258`), but only the account's live `defenderForStorageSettings` resource shows whether the
+  setting took effect.
 - The `azure/arm-deploy@v2` action's `deploymentMode` is not set explicitly in `deploy.yml`
   (`deploy.yml:1115-1121` for foundation, `deploy.yml:1489-1495` for main), the action defaults to
   Incremental, but this is not stated in the workflow file; it is inferred from the Incremental intent

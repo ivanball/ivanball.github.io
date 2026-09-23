@@ -194,13 +194,13 @@ for the best-effort live-channel push (`Program.cs:283`, replacing the framework
 [`NullLiveChannelPublisher`](group-10-notifications.md#nulllivechannelpublisher) behind
 [`ILiveChannelPublisher`](group-10-notifications.md#ilivechannelpublisher)), Conference to Engagement
 for `IBookmarkCountService` on the speaker dashboard
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:392`), Notification to Identity for
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:409`), Notification to Identity for
 attendee user ids (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:225`), and
 Identity to Engagement plus Identity to Notification for the cross-service data-subject export
 aggregation (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:316-317`). Server sides are
 mapped in each host with `AddGrpcServiceDefaults()` plus `app.MapGrpcService<...>()`, mostly behind
 `.RequireAuthorization()`
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:404`, `:396-397`).
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:421`, `:396-397`).
 
 **The startup-ordering edge worth knowing.** Conference and Engagement call *each other*, so the
 AppHost gives Engagement a `WithReference(conference).WaitFor(conference)` but the reverse Conference

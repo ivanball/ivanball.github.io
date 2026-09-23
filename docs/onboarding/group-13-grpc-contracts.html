@@ -329,13 +329,13 @@
           <a href="group-10-notifications.html#nulllivechannelpublisher"><code>NullLiveChannelPublisher</code></a> behind
           <a href="group-10-notifications.html#ilivechannelpublisher"><code>ILiveChannelPublisher</code></a>), Conference to Engagement
           for <code>IBookmarkCountService</code> on the speaker dashboard
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:392</code>), Notification to Identity for
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:409</code>), Notification to Identity for
           attendee user ids (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:225</code>), and
           Identity to Engagement plus Identity to Notification for the cross-service data-subject export
           aggregation (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:316-317</code>). Server sides are
           mapped in each host with <code>AddGrpcServiceDefaults()</code> plus <code>app.MapGrpcService&lt;...&gt;()</code>, mostly behind
           <code>.RequireAuthorization()</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:404</code>, <code>:396-397</code>).</p>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:421</code>, <code>:396-397</code>).</p>
           <p><strong>The startup-ordering edge worth knowing.</strong> Conference and Engagement call <em>each other</em>, so the
           AppHost gives Engagement a <code>WithReference(conference).WaitFor(conference)</code> but the reverse Conference
           to Engagement edge only a <code>WithReference</code> with <strong>no <code>WaitFor</code></strong>

@@ -6,16 +6,17 @@ mapping**, the 19 EF Core entity configurations that turn plain domain classes i
 the abstract `DbContext` that declares the module's `DbSet`s, and the seeder that puts the real
 conference events and feedback questions into a fresh database; (2) **outbound integration**, the typed
 `HttpClient` that talks to **Sessionize** (the conference's session-submission platform) and the AI
-session scorer that runs one proposal through the framework's governed chat client; and (3) the **DI
-wiring** that registers those services, plus the one small output-cache adapter the durable scoring pass
-calls back into. It is the per-module realization of Clean Architecture's ports and adapters idea: the
-[Application](group-18-conference-application.md) layer declares the ports
+session scorer that runs one proposal through the framework's governed chat client, together with the
+response guardrail that pipeline runs on every scoring answer; and (3) the **DI wiring** that registers
+those services and composes the Conference AI guardrails, plus the one small output-cache adapter the
+durable scoring pass calls back into. It is the per-module realization of Clean Architecture's ports
+and adapters idea: the [Application](group-18-conference-application.md) layer declares the ports
 ([`ISessionizeService`](group-18-conference-application.md#isessionizeservice),
 [`IAiScoringService`](group-18-conference-application.md#iaiscoringservice),
 [`ISessionScoresCacheEvictor`](group-18-conference-application.md#isessionscorescacheevictor)), and this
 Infrastructure layer supplies the adapters. `[Rubric §3, Clean Architecture]` assesses
 whether dependencies point inward and the domain stays framework-free; here every EF, HTTP, and
-Anthropic concern is quarantined in Infrastructure, so the domain entities in
+AI concern is quarantined in Infrastructure, so the domain entities in
 [Group 17](group-17-conference-domain.md) carry no persistence or transport attribute at all.
 
 ## Engine-agnostic entities, engine chosen by the config base class
@@ -255,95 +256,124 @@ sessions and rooms. The request validators already enforce the charset at the bo
 second layer that also covers a code written to the database before that rule existed: `[Rubric §11,
 Security]` defence in depth on an outbound call. It is registered as a typed `HttpClient` in
 [`DependencyInjection`](#dependencyinjection) with the base address `https://sessionize.com/api/v2/`
-baked in (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:29-31`), so it inherits the standard Aspire
+baked in (`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:32-34`), so it inherits the standard Aspire
 resilience handler (Polly retry, timeout, circuit breaker) unchanged: `[Rubric §29, Resilience &
 Business Continuity]`, the [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html)
 policy that every outbound client gets resilience by default. The thinness is intentional: parsing,
 mapping, and the import workflow live in Application use-cases, and this adapter owns only the wire call.
 
-## The Anthropic AI scoring adapter
+## The AI scoring adapter and its response guardrail
 
-[`AnthropicScoringService`](#anthropicscoringservice)
-(`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:30`) is the richer of the
-two adapters: it scores one session proposal against a Program Committee rubric. Despite the name it owns
-no transport at all. It takes an `IChatClient` (`AnthropicScoringService.cs:31`), a
-[`PromptContract`](group-27-common-ai-integration.md#promptcontract) (`:32`) and a logger (`:33`), and the
-model, the credential, the per-call timeout and the tool gate are configuration under the `Ai` section
-handled by the framework's governed chat client in MMCA.Common.AI
-(`AnthropicScoringService.cs:13-21`,
+[`SessionScoringService`](#sessionscoringservice)
+(`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:46`) is the richer of the
+two adapters: it scores one session proposal against a Program Committee rubric. It owns no transport at
+all and names no vendor. It takes an `IChatClient` (`SessionScoringService.cs:47`), a
+[`PromptContract`](group-27-common-ai-integration.md#promptcontract) (`:48`) and a logger (`:49`), and the
+model, the output ceiling, the per-call timeout and the tool gate are configuration under the `Ai` section
+handled by the framework's governed chat client in MMCA.Common.AI (`SessionScoringService.cs:12-17`,
 [ADR-111](https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html)). What stays here is
-the part only this module can know: the prompt, the redaction rules, the output schema and the scoring
-arithmetic. It implements [`IAiScoringService`](group-18-conference-application.md#iaiscoringservice), and
-one scoring call is `ToChatOptions()` off the contract plus two request-specific settings, a 256-token
-output ceiling (`:54`, `:99`) and `ChatResponseFormat.ForJsonSchema(ScoreSchema)` (`:100`), then a single
-`GetResponseAsync` with the user message (`:102-105`).
+the part only this module can know: the prompt, the delimited envelope, the output schema and the scoring
+arithmetic. Two duties that used to live in this class have left it for the governed pipeline, and the
+remarks record both: contact-detail redaction is the framework's
+[`PiiRedactionGuardrail`](group-27-common-ai-integration.md#piiredactionguardrail), so it is a policy the
+feature cannot bypass rather than a step this service has to remember (`:29-35`), and validating the
+answer is [`SessionScoreResponseGuardrail`](#sessionscoreresponseguardrail)'s (`:36-44`). It implements
+[`IAiScoringService`](group-18-conference-application.md#iaiscoringservice) (`:49`), and one scoring call
+is `ToChatOptions()` off the contract plus two request-specific settings, a 256-token output ceiling
+(`:70`, `:115`) that `Ai:MaxOutputTokens` clamps again at the framework boundary (`:66-68`), and
+`ChatResponseFormat.ForJsonSchema(ScoreSchema)` (`:116`), then a single `GetResponseAsync` with the user
+message (`:118-121`).
 
 The chat client is nullable **on purpose**, and that is the whole disabled path: it is resolved with
 `GetService` rather than `GetRequiredService`, because the framework registers no client when `Ai:Enabled`
 is false, so a host with no AI configured still starts and still serves every other Conference endpoint
-while scoring answers a failed result and calls nothing (`AnthropicScoringService.cs:22-27`, `:86-90`, and
-the registration comment at `DependencyInjection.cs:38-42`). The rest of the contract is equally precise
-about failure: it **never throws for a scoring failure**, but **cancellation propagates**. Every failure
-path (no client, a refusal, an empty answer, unparseable JSON, a partial score object, any other
-exception) funnels into `FailedResult`, which returns zero scores with `Success = false` (`:368-381`),
-while the catch filter `when (ex is not OperationCanceledException)` (`:109`) lets host shutdown unwind.
-That split matters because scoring runs a whole event: one bad proposal must not abort the pass, but a
-deploy must still be able to stop it.
+while scoring answers a failed result and calls nothing (`SessionScoringService.cs:21-26`, `:102-106`, and
+the registration comment at `DependencyInjection.cs:42-46`). The rest of the contract is equally precise
+about failure: it **never throws for a scoring failure**, but **cancellation propagates** (`:18-19`). A
+[`ChatGuardrailException`](group-27-common-ai-integration.md#chatguardrailexception) raised by a registered
+guardrail is caught on its own so the log line carries the reason the guardrail reported (`:125-133`),
+every other failure (no client, unparseable JSON, a partial score object, any other exception) funnels into
+`FailedResult`, which returns zero scores with `Success = false` (`:344-357`), and the catch filter
+`when (ex is not OperationCanceledException)` (`:134`) lets host shutdown unwind. That split matters because
+scoring runs a whole event: one bad proposal must not abort the pass, but a deploy must still be able to
+stop it.
 
 The prompt is a **versioned contract**, not a string constant, and that is what makes a score reproducible.
-`SessionScoringContract` is a static `PromptContract` built from the prompt name `session-scoring` (`:40`),
-the dated version `2026-09-04.1` (`:216`), the pinned model `claude-haiku-4-5` (`:47`) and the system brief
-(`:76-77`), and the service reports `ModelId` and `PromptVersion` by reading them back off that contract so
-the two can never disagree (`:57`, `:68`, `:213-215`). The framework hashes the contract and stamps the
-hash on every request, which is what the golden evaluation gate keys on; the remarks state the rule that
-any edit to the system prompt, the user-prompt builder, the speaker formatting, the redaction rules or the
-schema must bump the version, so an unversioned edit fails a test instead of quietly re-basing scores
-already on the dashboard (`:60-67`). `RenderPrompt` exposes the exact prompt pair without calling a model
-(`:313-328`) so that suite can hash it offline.
+`SessionScoringContract` is a static `PromptContract` built from the prompt name `session-scoring` (`:56`),
+the dated version `2026-09-04.1` (`:219`), the pinned model `claude-haiku-4-5` (`:63`) and the system brief
+(`:223-249`), assembled at `:92-93`, and the service reports `ModelId` and `PromptVersion` by reading them
+back off that contract so the two can never disagree (`:73`, `:84`, `:216-218`). The framework hashes the
+contract and stamps the hash on every request, which is what the golden evaluation gate keys on; the
+remarks state the rule that any edit to the system prompt, the user-prompt builder, the speaker formatting
+or the schema must bump the version, so an unversioned edit fails a test instead of quietly re-basing scores
+already on the dashboard (`:76-83`). `RenderPrompt` exposes the exact prompt pair without calling a model
+(`:325-332`) so that suite can hash it offline.
 
 The output is **schema-constrained rather than parsed out of prose**. `BuildScoreSchema()` emits a JSON
 Schema naming the six criteria as numbers, a `penalty` restricted to `0`, `0.5` or `1`, and a `reasoning`
 string, with `additionalProperties = false` and every field required
-(`AnthropicScoringService.cs:388-419`); it is built once into the static `ScoreSchema` (`:386`) and rides
-the request's response format (`:100`). Because the model can only answer in that shape, the whole text is
-the JSON object and deserialization is a single `JsonSerializer.Deserialize<AiScoreResponse>` call, with
-anything else (prose, fences, truncation) treated as a failed call (`:155-168`).
-[`AiScoreResponse`](#aiscoreresponse) (`:429`) is the only wire shape left in this file, and its six
-sub-scores and penalty are **nullable** so a partial object is rejected by a property pattern rather than
-silently defaulting to zero (`:170-186`). Two more guards sit in front of the parse: a refusal is detected
-from both the normalized `ChatFinishReason.ContentFilter` and the provider's raw `refusal` value, so a
-mapping change on either side cannot turn a refusal into an unparseable answer (`:126-130`, `:142-153`),
-and an empty answer is failed outright (`:132-137`). The overall score is the documented weighted sum
-(topic 30%, description 10%, novelty 20%, takeaways 20%, depth 10%, credibility 10%) minus the penalty
-(`:188-196`), and every value is clamped to `[1.0, 10.0]` and rounded to one decimal with banker's rounding
-(`:366`). The Application layer sees only
+(`SessionScoringService.cs:362-393`); it is built once into the static `ScoreSchema` (`:360`) and rides the
+request's response format (`:116`). The wire shape now has a file of its own:
+[`AiScoreResponse`](#aiscoreresponse)
+(`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AiScoreResponse.cs:22`) is an `internal sealed record`
+whose six sub-scores and penalty are **nullable** so a partial object is detectable rather than silently
+defaulting to zero (`AiScoreResponse.cs:28-57`), and it carries the one `JsonOptions` instance (`:25`) and
+an `IsComplete` check (`:63-70`). It lives beside the scorer rather than inside it because two readers need
+it, and one declaration means the guardrail cannot drift from what the scorer would accept
+(`AiScoreResponse.cs:14-20`). The scorer's own share is a single `JsonSerializer.Deserialize<AiScoreResponse>`
+call (`SessionScoringService.cs:164`), a property pattern that fails a partial object (`:177-189`), and the
+documented weighted sum (topic 30%, description 10%, novelty 20%, takeaways 20%, depth 10%, credibility
+10%) minus the penalty (`:191-204`), with every value clamped to `[1.0, 10.0]` and rounded to one decimal
+with banker's rounding (`:342`). Its `JsonException` catch is kept as the fail-closed path for a caller that
+composes the scorer **without** the governed pipeline, as the golden replay suite does (`:159-170`). The
+Application layer sees only
 [`SessionScoringResult`](group-18-conference-application.md#sessionscoringresult).
+
+[`SessionScoreResponseGuardrail`](#sessionscoreresponseguardrail)
+(`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoreResponseGuardrail.cs:34`) is the response
+half of that boundary, an [`IChatGuardrail`](group-27-common-ai-integration.md#ichatguardrail) the governed
+pipeline runs on every call. It moved out of the scorer for the reason the redaction did: a rule a feature
+applies to itself is a rule a second call site can forget, while a registered guardrail cannot be bypassed
+by a caller (`SessionScoreResponseGuardrail.cs:15-21`). `InspectResponseAsync` (`:74-82`) answers a
+[`GuardrailVerdict`](group-27-common-ai-integration.md#guardrailverdict) that blocks three shapes, each
+with a public reason constant: a refusal, detected from both the normalized `ChatFinishReason.ContentFilter`
+and the provider's raw `refusal` value so a mapping change on either side cannot turn a refusal into an
+unparseable answer (`:94-100`, `:125-134`, reason `:40-41`), an empty answer (`:102-106`, `:44-45`), and
+text that does not deserialize to an `AiScoreResponse` or deserializes without `IsComplete`
+(`:108-122`, `:51-52`). It is **scoped** to the session-scoring prompt by reading the name off the
+request's prompt contract and comparing it to `SessionScoringService.PromptName` (`:62-63`), because "the
+answer must be a score object" is false of every other AI call a host might add later, and an unscoped rule
+would block the first one (`:23-26`). The request side and streamed updates always allow (`:66-71`,
+`:84-90`): it has nothing to say about what goes out, and a per-fragment JSON rule would refuse every
+well-formed answer before it finished arriving (`:28-31`).
 
 The prompt itself is treated as an attack surface, which is the `[Rubric §11, Security]` story here
 alongside the obvious one (the credential is configuration the framework reads, never a literal in this
-file). Everything a speaker typed arrives through a public call-for-papers form, so the user message is a
-delimited envelope (`<session_proposal>` with `<session_title>`, `<session_description>` and a
-`<speakers>` block, `AnthropicScoringService.cs:275-311`) rather than labelled lines, because labelled
-lines gave a submission no boundary to be contained by (`:270-274`). Angle brackets in every submitted
-value are escaped so a submission cannot forge a delimiter, a typed `</session_title>` arriving as
-`&lt;/session_title&gt;` (`:336-342`), and emails and North-American phone shapes are redacted by
-source-generated regexes before the text leaves the process (`:347-364`), with the phone pattern kept
-deliberately narrow so the years and team sizes a bio legitimately carries are not redacted away
-(`:356-359`). Speaker names are deliberately left intact because they are the published conference record
-and the only evidence the credibility criterion has (`:297-299`, `:344-346`). The system brief carries a
-matching `UntrustedInputBrief` constant (`:261-268`) that declares the tagged content data rather than
-instructions and routes an injection attempt to the existing 1.0 penalty, which gives the model a rule to
-apply instead of a judgement call to make (`:255-258`).
+file), and it is also where `[Rubric §16, AI-Native]` is most concrete. Everything a speaker typed arrives
+through a public call-for-papers form, so the user message is a delimited envelope (`<session_proposal>`
+with `<session_title>`, `<session_description>` and a `<speakers>` block,
+`SessionScoringService.cs:278-315`) rather than labelled lines, because labelled lines gave a submission no
+boundary to be contained by (`:273-277`). Angle brackets in every submitted value are escaped so a
+submission cannot forge a delimiter, a typed `</session_title>` arriving as `&lt;/session_title&gt;`
+(`:334-340`). Speaker names are deliberately left intact because they are the published conference record
+and the only evidence the credibility criterion has (`:300-303`); emails and phone numbers are stripped by
+the framework guardrail on the assembled message, and a proposal's instruction-override phrase is
+neutralized before the call by the framework's
+[`ContentPolicyGuardrail`](group-27-common-ai-integration.md#contentpolicyguardrail) under
+`Ai:ContentPolicy` (`DependencyInjection.cs:90-96`). The system brief carries a matching
+`UntrustedInputBrief` constant (`SessionScoringService.cs:264-271`) that declares the tagged content data
+rather than instructions and routes an injection attempt to the existing 1.0 penalty, which gives the model
+a rule to apply instead of a judgement call to make (`:256-261`).
 
 `[Rubric §13, Observability & Operability]` and `[Rubric §31, Cost/FinOps]` meet in the usage path, and
 the split of duties there is worth reading. The **aggregate** is the framework's: the governed pipeline's
 usage-recording chat client reports `mmca.ai.input_tokens` and `mmca.ai.output_tokens` on the
 `MMCA.Common.AI` meter, tagged by model, prompt name, prompt version and provider, which is why the prompt
 contract's identity is a first-class value here rather than a log string
-(`AnthropicScoringService.cs:118-120`, `:35-39`). What this adapter keeps is per-session forensics: when
-the response carries a usage block it logs the input and output token counts against the session id
-(`:121-124`). Two `[LoggerMessage]` source-generated methods carry the log half, a warning naming the
-session id and the failure reason, and that information line (`:421-425`).
+(`SessionScoringService.cs:143-145`, `:51-56`). What this adapter keeps is per-session forensics: when the
+response carries a usage block it logs the input and output token counts against the session id
+(`:146-149`). Two `[LoggerMessage]` source-generated methods carry the log half, a warning naming the
+session id and the failure reason, and that information line (`:395-399`).
 
 ## The scoring run is durable now, and this layer keeps one adapter inside it
 
@@ -351,11 +381,11 @@ A multi-minute paid AI pass triggered from an HTTP POST used to be this chapter'
 machinery: a hosted `BackgroundService` draining an in-memory queue, plus a five-minute cron sweep that
 re-queued whatever a crash had cut in half. Both are gone from this assembly, and the registration comment
 says why in one line: the framework's internal-command processor owns the durability, the claim lease and
-the retry backoff now (`DependencyInjection.cs:48-53`,
+the retry backoff now (`DependencyInjection.cs:52-56`,
 [ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html)). The organizer's
 POST schedules a `ScoreEventSessionsInternalCommand` through `IInternalCommandScheduler` and returns
 `202 Accepted`
-(`MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:36,116,125`), the row is
+(`MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:38,130,139`), the row is
 persisted, and
 [`ScoreEventSessionsInternalCommandHandler`](group-18-conference-application.md#scoreeventsessionsinternalcommandhandler)
 in the Application layer runs the pass. Cross-replica exclusion did not disappear with the drain, it moved:
@@ -372,7 +402,7 @@ What this layer keeps is the one step the Application layer cannot take.
 implements the Application-owned port
 [`ISessionScoresCacheEvictor`](group-18-conference-application.md#isessionscorescacheevictor) over the
 host's `IOutputCacheStore`, because an internal command handled in Application cannot see ASP.NET's output
-cache (`DependencyInjection.cs:48-51`). Its whole body is one call, and the value is in *which tag* it
+cache (`DependencyInjection.cs:52-54`). Its whole body is one call, and the value is in *which tag* it
 evicts: the narrow `conference:sessions` rather than the root `conference` tag every Conference policy
 carries (`OutputCacheSessionScoresCacheEvictor.cs:20,23-24`). The remarks record the production reason
 (`:9-15`): scoring writes session scores and nothing else, and evicting the root flushed events, speakers,
@@ -385,26 +415,45 @@ Performance & Scalability]` and `[Rubric §31, Cost/FinOps]` both live in that o
 ## DI wiring, and what it deliberately no longer registers
 
 [`DependencyInjection`](#dependencyinjection)
-(`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:15`) is a single
+(`MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:18`) is a single
 `extension(IServiceCollection)` block (the codebase's standard DI-registration idiom, taught in the
-primer) exposing `AddModuleConferenceInfrastructure()` (`DependencyInjection.cs:23-56`). It is now short
-enough to read in one screen and registers exactly three things: the Sessionize typed `HttpClient` with
-its base address baked in (`:29-31`), which takes Aspire's standard resilience handler unchanged
+primer, `DependencyInjection.cs:20-133`) exposing three methods. The module method,
+`AddModuleConferenceInfrastructure()` (`DependencyInjection.cs:26-60`), registers exactly three things:
+the Sessionize typed `HttpClient` with its base address baked in (`:32-34`), which takes Aspire's standard
+resilience handler unchanged
 ([ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html)); the scoring
 adapter, constructed by hand as a scoped `IAiScoringService` so it can be handed
-`GetService<IChatClient>()` and the static `SessionScoringContract` (`:43-46`); and the output-cache
-evictor as a scoped `ISessionScoresCacheEvictor` (`:53`). Both use `TryAdd`, so a host or a test can
-substitute either adapter before this call runs.
+`GetService<IChatClient>()` and the static `SessionScoringContract` (`:47-50`); and the output-cache
+evictor as a scoped `ISessionScoresCacheEvictor` (`:57`). Both adapters use `TryAdd`, so a host or a test
+can substitute either before this call runs.
 
-The three registrations that are **absent** teach as much as the three that are present, and each left a
+The other two methods exist because of an ordering rule the module method cannot honor.
+`AddConferenceAiGuardrails(IConfiguration)` (`DependencyInjection.cs:85-102`) is the **single composition
+point** for every guardrail the Conference AI pipeline runs: the framework's `PiiRedactionGuardrail` and
+`ContentPolicyGuardrail` on the request side (`:95-96`) and this module's response guardrail (`:99`).
+The remarks give the reason it exists: when each caller assembled its own list, the golden replay suite
+drove the scorer bare and the live judge registered one of the three, so the evaluation tiers were judging
+a different pipeline from the deployed one; one method shared by the host and every tier means a new
+guardrail reaches the gates automatically (`:70-76`). Registering either request-side guardrail also
+satisfies `Ai:RequireGuardrail`, which defaults to true (`:93-94`). It must run **before**
+`AddMmcaChatClient`, which reads the `IChatGuardrail` descriptors to decide whether to compose the
+guardrail layer at all, so a later registration would be silently absent (`:78-82`), and the Conference
+service host calls the two in exactly that order
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:150,152`).
+`AddSessionScoreResponseGuardrail()` (`DependencyInjection.cs:124-132`) registers the one policy with
+`TryAddEnumerable` as a singleton `IChatGuardrail` (`:128-129`), so it stacks with the framework's
+guardrails instead of replacing them and a second call composes nothing twice (`:111-115`); it stays public
+for a caller that wants only the response gate (`:117-122`).
+
+The three registrations that are **absent** teach as much as the ones that are present, and each left a
 comment behind. The provider error classifiers this module used to own (a unique-constraint detector and a
 concurrency-conflict detector) are framework surface now, registered by MMCA.Common's `AddInfrastructure`
-(`DependencyInjection.cs:25-28`). No `HttpClient` is constructed for Anthropic and there is no custom
-resilience override on it: the transport, the credential, the model, the output ceiling, the per-call
-timeout and the tool gate belong to the governed `IChatClient` configured under the `Ai` section and
-registered by the host's `AddMmcaChatClient` call (`:33-36`). And the hosted drain plus the five-minute
-crash-recovery sweep are gone entirely (`:48-52`). That is the shape of a healthy module wiring file:
-every line in it is something only this module can know.
+(`DependencyInjection.cs:28-31`). No `HttpClient` is constructed for the AI provider and no vendor is
+named: the transport, the credential, the model, the output ceiling, the per-call timeout and the tool gate
+belong to the governed `IChatClient` configured under the `Ai` section and registered by the host's
+`AddMmcaChatClient` call over whichever provider adapter `Ai:Provider` names (`:36-40`). And the hosted
+drain plus the five-minute crash-recovery sweep are gone entirely (`:52-56`). That is the shape of a
+healthy module wiring file: every line in it is something only this module can know.
 
 ## How it fits together at runtime
 
@@ -418,12 +467,14 @@ organizer triggers a Sessionize refresh; the Application use-case calls
 adapter makes the outbound call inside the default Polly pipeline, and the parsed `SessionizeResponse`
 flows back for mapping. **Scoring flow:** the organizer POSTs to the scoring endpoint, the controller only
 schedules a `ScoreEventSessionsInternalCommand` and returns `202 Accepted`
-(`MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:116,125`), the framework's
+(`MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:130,139`), the framework's
 internal-command processor picks the persisted row up on one of the replicas, and the Application handler
 evicts the sessions cache tag through
 [`OutputCacheSessionScoresCacheEvictor`](#outputcachesessionscorescacheevictor), claims the event's
-distributed lock, calls [`AnthropicScoringService`](#anthropicscoringservice) once per session through the
-governed chat client, persists one `SessionAiScore` row per session behind the unique filtered index, and
+distributed lock, calls [`SessionScoringService`](#sessionscoringservice) once per session through the
+governed chat client (whose request-side guardrails strip contact details and neutralize an
+instruction-override phrase, and whose [`SessionScoreResponseGuardrail`](#sessionscoreresponseguardrail)
+refuses any answer that is not a complete score object), persists one `SessionAiScore` row per session behind the unique filtered index, and
 evicts the tag again; if that run dies mid-pass, the command row is still there and the processor replays
 it under its own backoff and attempt ceiling. The two marker types in this assembly,
 [`AssemblyReference`](#assemblyreference) and [`ClassReference`](#classreference)
@@ -460,14 +511,14 @@ type list, the same extension point every module assembly provides.
 
 ### AiScoreResponse
 
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:429` · Level 0 · record (private sealed)
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AiScoreResponse.cs:22` · Level 0 · record (internal sealed)
 
-- **What it is**: the score object the language model is constrained to emit, deserialized from the response text block. Six weighted sub-scores, a penalty, and a free-text `reasoning` line.
-- **Depends on**: no first-party types. External: `System.Text.Json.Serialization.JsonPropertyName`.
-- **Concept introduced, anti-corruption serialization records at the edge.** This is a `private sealed record` nested inside [AnthropicScoringService](#anthropicscoringservice) (`AnthropicScoringService.cs:429`), so the vendor's snake_case vocabulary (`topic_relevance`, `actionable_takeaways`, `depth_or_insight_quality`) is named here and nowhere else. `[Rubric §3, Clean Architecture]` assesses whether external contracts stay out of inner layers: the Application layer only ever sees [SessionScoringResult](group-18-conference-application.md#sessionscoringresult), never an Anthropic shape. `[Rubric §32, Dependency & Supply-Chain]` assesses how a third-party API dependency is isolated: if Anthropic reshapes its envelope, only this one file changes.
-- **Walkthrough**: eight `init` properties (`:508-533`), each carrying an explicit `[JsonPropertyName]`. `Penalty` (`:511`) and the six criterion scores (`TopicRelevance` `:514`, `DescriptionQuality` `:517`, `Novelty` `:520`, `ActionableTakeaways` `:523`, `DepthOrInsightQuality` `:526`, `CredibilityExperience` `:529`) are **`decimal?`**, not `decimal`: nullability is what makes a *partial* model response detectable. `BuildResult` (`:131`) pattern-matches all seven numeric fields against `{ } value` patterns (`:134-146`) and returns a failed result if any one is missing, instead of silently defaulting a missing score to `0m` and then clamping it up to `1.0`. There is **no overall score on the wire**: the weighted total is computed in-process from the six criteria and the penalty subtracted from it (`:150-162`), so the model is never asked to do arithmetic the code can do exactly. `Reasoning` (`:532`) stays `string?` and is the only genuinely optional field, defaulted to `string.Empty` at `:169`.
-- **Why it's built this way**: nesting it as a private record of the one class that speaks HTTP keeps it an implementation detail; making the score fields nullable turns "the model returned four of six scores" into a detectable parse failure rather than a plausible-looking but wrong row in [SessionAiScore](group-17-conference-domain.md#sessionaiscore).
-- **Where it's used**: [AnthropicScoringService](#anthropicscoringservice)`.ParseSingleScore` (`:116`) deserializes into it, and `BuildResult` (`:131`) converts it into a [SessionScoringResult](group-18-conference-application.md#sessionscoringresult).
+- **What it is**: the structured-output object a session-scoring call asks the model for, in the shape [SessionScoringService](#sessionscoringservice)'s score schema declares. Six weighted sub-scores, a penalty, and a free-text `reasoning` line.
+- **Depends on**: no first-party types (its two readers depend on it, not the other way around). External: `System.Text.Json.Serialization.JsonPropertyName`, `System.Text.Json.JsonSerializerOptions`.
+- **Concept introduced, one declaration shared by two readers.** The type used to be a private record nested inside the now-removed `AnthropicScoringService`; it is now its own top-level `internal sealed record` in its own file, and its XML remarks (`:50-56`) say why: two readers need it, [SessionScoringService](#sessionscoringservice), which maps a complete object onto a [SessionScoringResult](group-18-conference-application.md#sessionscoringresult), and [SessionScoreResponseGuardrail](#sessionscoreresponseguardrail), which refuses an incomplete one at the pipeline boundary. One declaration of the shape means the guardrail cannot drift from what the scorer would accept, and the JSON schema is still declared exactly once, on the scorer. `[Rubric §3, Clean Architecture]` assesses whether external contracts stay out of inner layers: the Application layer only ever sees `SessionScoringResult`, never the model's wire shape. `[Rubric §32, Dependency & Supply-Chain]` assesses how a third-party API dependency is isolated: if the model's envelope changes shape, only this one file and its readers change.
+- **Walkthrough**: a `static` `JsonOptions` property (`:61`, `PropertyNameCaseInsensitive = true`) both readers deserialize with. Eight `init` properties (`:64-93`), each carrying an explicit `[JsonPropertyName]`. `Penalty` (`:65`) and the six criterion scores (`TopicRelevance` `:69`, `DescriptionQuality` `:73`, `Novelty` `:77`, `ActionableTakeaways` `:81`, `DepthOrInsightQuality` `:85`, `CredibilityExperience` `:89`) are **`decimal?`**, not `decimal`: nullability is what makes a *partial* model response detectable. `Reasoning` (`:93`) stays `string?`, the only genuinely optional field. `IsComplete` (`:99-106`) is a computed `internal bool`: `true` only when the penalty and all six sub-scores are non-null; reasoning is deliberately not required, matching the scorer's own acceptance rule.
+- **Why it's built this way**: making the score fields nullable turns "the model returned four of six scores" into a detectable parse failure rather than a plausible-looking but wrong row in [SessionAiScore](group-17-conference-domain.md#sessionaiscore); computing `IsComplete` once on the record itself, rather than re-deriving the same null-check twice, is what lets the scorer and the guardrail agree on "complete" without sharing any other code.
+- **Where it's used**: [SessionScoringService](#sessionscoringservice)`.ParseSingleScore` (`:304`) deserializes into it and builds a `SessionScoringResult` from it; [SessionScoreResponseGuardrail](#sessionscoreresponseguardrail)`.Inspect` (`:585`) deserializes into it and reads `IsComplete` to decide whether to allow or block the response.
 
 ---
 
@@ -479,37 +530,47 @@ type list, the same extension point every module assembly provides.
 
 - **What it is**: the Infrastructure adapter for [ISessionScoresCacheEvictor](group-18-conference-application.md#isessionscorescacheevictor), evicting the output-cache tag that fronts session score reads after a scoring pass writes fresh scores.
 - **Depends on**: first-party: [ISessionScoresCacheEvictor](group-18-conference-application.md#isessionscorescacheevictor) (implements). External: `Microsoft.AspNetCore.OutputCaching.IOutputCacheStore`.
-- **Concept**: the same dependency-inversion shape taught under [AnthropicScoringService](#anthropicscoringservice) and [SessionizeService](#sessionizeservice): Application declares the port, Infrastructure supplies the concrete ASP.NET Core dependency. The DI registration comment (`DependencyInjection.cs:48-52`) is explicit about why the port exists at all: the internal-command handler that runs a scoring pass lives in the Application layer, which cannot see `IOutputCacheStore` directly.
+- **Concept**: the same dependency-inversion shape taught under [SessionScoringService](#sessionscoringservice) and [SessionizeService](#sessionizeservice): Application declares the port, Infrastructure supplies the concrete ASP.NET Core dependency. The DI registration comment (`DependencyInjection.cs:52-56`) is explicit about why the port exists at all: the internal-command handler that runs a scoring pass lives in the Application layer, which cannot see `IOutputCacheStore` directly.
 - **Walkthrough**: a primary constructor injects `IOutputCacheStore` (`:17`). `SessionsCacheTag` (`:20`) is the private constant `"conference:sessions"`, the tag Conference's session-read output-cache policies are registered under. `EvictAsync` (`:23-24`) is a one-line expression body that calls `outputCacheStore.EvictByTagAsync(SessionsCacheTag, cancellationToken)` and returns the `ValueTask` directly, no `await` needed.
 - **Why it's built this way**: a single-method adapter keeps the output-cache API entirely out of Application, matching the boundary every other Infrastructure adapter in this chapter draws.
 - **Where it's used**: registered by [DependencyInjection](#dependencyinjection) (`services.TryAddScoped<ISessionScoresCacheEvictor, OutputCacheSessionScoresCacheEvictor>()`); called by the scoring pass's internal-command handler once a batch has written new `SessionAiScore` rows, so a cached session-score read never outlives the scores it summarizes. Exercised directly by `OutputCacheSessionScoresCacheEvictorTests`.
 
 ---
 
-### AnthropicScoringService
+### SessionScoringService
 
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/AnthropicScoringService.cs:30` · Level 3 · class (sealed partial)
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:46` · Level 3 · class (sealed partial)
 
-- **What it is**: the adapter that implements [IAiScoringService](group-18-conference-application.md#iaiscoringservice) by scoring one session proposal against a Program Committee rubric through the framework's governed `IChatClient` (`MMCA.Common.AI`, `:14`), rather than by calling the Anthropic HTTP API directly. Its XML doc states the contract plainly (`:19-20`): it never throws for scoring failures, but `OperationCanceledException` propagates. The governance around it (prompt versioning, the golden evaluation suite, the injection posture) is recorded in [ADR-111](https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html); the boundary that put the chat client itself behind a framework port is [ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
-- **Depends on**: first-party: [IAiScoringService](group-18-conference-application.md#iaiscoringservice) (implements), [SessionScoringInput](group-18-conference-application.md#sessionscoringinput), [SessionScoringResult](group-18-conference-application.md#sessionscoringresult), [SpeakerInfo](group-18-conference-application.md#speakerinfo), [PromptContract](group-27-common-ai-integration.md#promptcontract) (constructor parameter and the source of `ModelId`/`PromptVersion`), and its own private nested [AiScoreResponse](#aiscoreresponse). External: `Microsoft.Extensions.AI` (`IChatClient`, `ChatMessage`, `ChatResponse`, `ChatFinishReason`, `ChatResponseFormat`), `ILogger<T>`, `System.Text.Json`, `System.Text.RegularExpressions`, `System.Globalization`.
-- **Concept introduced, the adapter that keeps an HTTP/LLM vendor at the edge, now one level further removed.** `[Rubric §3, Clean Architecture]` and `[Rubric §1, SOLID]` (dependency inversion) assess whether inner layers depend on abstractions rather than vendors: this class no longer constructs an `HttpClient` or reads an `Anthropic:ApiKey` setting at all, it depends on `IChatClient`, the framework's own port over the vendor. `[Rubric §11, Security]` assesses secret handling and untrusted input: the credential, transport and vendor identity are the framework's concern behind `IChatClient`; this class's own security surface is the constructor's nullable `chatClient` (`:31`, `null` when `Ai:Enabled` is false or no key reached configuration, XML doc `:22-27`) and the untrusted-text handling below (escaping, delimiting, redaction). `[Rubric §16, AI-Native Application Architecture]` assesses whether model interaction is versioned, constrained and evaluable: `PromptVersion` (`:68`), the structured-output schema (`:388-419`) and the prompt-injection brief (`:261-268`) are the three pieces, and the [PromptContract](group-27-common-ai-integration.md#promptcontract) itself now carries the hash the evaluation gate pins. `[Rubric §13, Observability & Operability]` assesses structured, allocation-cheap logging: both log paths are source-generated `[LoggerMessage]` methods (`:421-425`), which is also why the class is `partial`; per-call token usage is still logged here (`:121-124`) but the spend **aggregate** now lands on the framework's `MMCA.Common.AI` meter through its `UsageRecordingChatClient`, tagged model/prompt_name/prompt_version/provider (comment `:118-120`). `[Rubric §29, Resilience & Business Continuity]` assesses graceful degradation: five distinct failure paths (disabled client `:86-90`, model refusal `:126-130`, empty response text `:132-137`, unparseable or partial JSON `:164-166` and `:174-186`, any other exception `:109-113`) all converge on `FailedResult`, so one bad proposal cannot abort a batch. `[Rubric §27, i18n]` assesses culture-correctness: `CultureInfo.InvariantCulture` is used for every interpolated string that reaches the prompt (`:279`, `:301`, `:303`, `:305`), so output never varies with server locale.
+- **What it is**: the replacement for the removed `AnthropicScoringService`. It implements [IAiScoringService](group-18-conference-application.md#iaiscoringservice) by scoring one session proposal against a Program Committee rubric through the framework's governed `IChatClient` (`MMCA.Common.AI`), rather than by calling a named vendor's HTTP API directly. The governance around it (prompt versioning, the golden evaluation suite, the injection posture) is recorded in [ADR-111](https://ivanball.github.io/docs/adr/111-ai-session-scoring-governance.html); the boundary that put the chat client itself behind a framework port is [ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html).
+- **Depends on**: first-party: [IAiScoringService](group-18-conference-application.md#iaiscoringservice) (implements), [SessionScoringInput](group-18-conference-application.md#sessionscoringinput), [SessionScoringResult](group-18-conference-application.md#sessionscoringresult), [SpeakerInfo](group-18-conference-application.md#speakerinfo), [PromptContract](group-27-common-ai-integration.md#promptcontract) (constructor parameter and the source of `PromptVersion`), and [AiScoreResponse](#aiscoreresponse) (own file now, not a nested record). External: `Microsoft.Extensions.AI` (`IChatClient`, `ChatMessage`, `ChatResponse`, `ChatOptions`, `ChatGuardrailException`), `ILogger<T>`, `System.Text.Json`, `System.Globalization`.
+- **Concept introduced, the module supplies only the prompt, the framework supplies the vendor.** `[Rubric §3, Clean Architecture]` and `[Rubric §1, SOLID]` (dependency inversion) assess whether inner layers depend on abstractions rather than vendors: this class constructs no `HttpClient` and names no vendor anywhere in its own code, it depends on `IChatClient`, the framework's own port. `[Rubric §16, AI-Native Application Architecture]` assesses whether model interaction is versioned, constrained and evaluable: `PromptVersion` (`:224`), the `SessionScoringContract` static (`:232-233`) and `PromptVersionValue` (`:359`, format `yyyy-MM-dd.N`) are the versioning story; the golden evaluation suite pins the rendered prompt by hash per version. `[Rubric §29, Resilience & Business Continuity]` assesses graceful degradation: an unconfigured client (`:242-246`), a guardrail block (`:265-273`), and any other non-cancellation exception (`:274-278`) all converge on `FailedResult`, so one bad proposal cannot abort a batch.
 - **Walkthrough**
-  - A **primary constructor** injects `IChatClient? chatClient`, `PromptContract promptContract` and `ILogger<AnthropicScoringService>` (`:30-33`). `IChatClient` is resolved with `GetService`, not `GetRequiredService`, by [DependencyInjection](#dependencyinjection) (`DependencyInjection.cs:43-46`), so a host with AI disabled or no key still starts.
-  - `PromptName` (`:40`), `ModelIdValue` (`:47`) and `MaxOutputTokens` (`:54`) are `public const` fields, each with an XML doc explaining its role: the name tags every usage measurement, the model is pinned into the prompt contract's hash, and the token ceiling is the class's own default that `Ai:MaxOutputTokens` clamps again at the framework boundary. `ModelId` (`:57`) and `PromptVersion` (`:68`) are no longer literals, they read `promptContract.Model` and `promptContract.Version`. `PromptVersion`'s remark (`:60-67`) keeps the same maintenance contract as before: bump it on any change to `SystemPrompt`, `BuildUserPrompt`, `FormatSpeakers`, `Redact` or `BuildScoreSchema`, because the golden evaluation suite pins the rendered prompt by hash per version. `SessionScoringContract` (`:76-77`) is the one static [PromptContract](group-27-common-ai-integration.md#promptcontract) the module scores with, built from the four constants above plus `SystemPrompt`; composition passes it to the constructor so a test can score against a different contract without touching the registration.
-  - `ScoreSessionAsync` (`:80`) null-checks `session` (`:84`), then guards on a disabled client (`:86-90`, the same log-and-`FailedResult` shape the missing-API-key branch used before), builds the user message with `BuildUserPrompt` (`:94`), then asks the contract for its `ChatOptions` (`:98`) and layers on the two things specific to a scoring request: `MaxOutputTokens` (`:99`) and a JSON-schema `ResponseFormat` built from `ScoreSchema` (`:100`). `chatClient.GetResponseAsync` (`:102-105`) sends one user `ChatMessage`; a caught, non-cancellation exception logs and returns `FailedResult` (`:109-113`).
-  - `InterpretResponse` (`:116`) takes a `ChatResponse` (no longer a nullable Anthropic-shaped DTO) and logs usage from `response.Usage` when present (`:121-124`), then checks `IsRefusal(response.FinishReason)` (`:126-130`), then reads `response.Text` and fails on a null-or-empty one (`:132-137`).
-  - `IsRefusal` (`:150-153`) is new: because Microsoft.Extensions.AI normalizes provider-specific finish reasons, it treats both the normalized `ChatFinishReason.ContentFilter` and the raw string `"refusal"` (case-insensitive) as a refusal, so a mapping change on either side cannot silently turn a refusal into an unparseable answer (XML doc `:142-149`).
-  - `ParseSingleScore` (`:155`) deserializes the whole response text directly into [AiScoreResponse](#aiscoreresponse), with the inline comment stating why that is safe (`:157-158`): structured outputs constrain the reply to the schema, so prose, fences or truncation are a failed call rather than something to salvage. A `JsonException` returns `FailedResult` (`:164-166`).
-  - `BuildResult` (`:170`) is unchanged in shape from before: its single `is not { ... }` pattern (`:174-186`) requires the penalty and all six sub-scores present; the overall score is computed in-process, the six criteria weighted 30/10/20/20/10/10 (`:190-196`) and the penalty subtracted (`:201`), with every value passed through `Clamp` (`:366`), `Math.Clamp(value, 1.0m, 10.0m)` rounded to one decimal with `MidpointRounding.ToEven`.
-  - `SystemPrompt` (`:220`) is unchanged content: the ADC track list, the six weighted criteria, calibration rules ("most talks should fall between 5.5 and 7.5"), and the 0.0/0.5/1.0 penalty ladder, ending with `UntrustedInputBrief` (`:246`), an `internal const` kept separate only so the evaluation suite can assert on it by name (its own XML doc, `:248-260`, is the injection-defense rationale).
-  - `BuildUserPrompt` (`:275`) is the containment half, unchanged: a delimited, escaped envelope (`<session_proposal>`, `<session_title>`, `<session_description>`) rather than labelled `Title:`/`Description:` lines, with the reasoning recorded at `:270-274`. `Escape` (`:339`) replaces `<` and `>` with entities (`:336-338`).
-  - `Redact` (`:347`) runs submitted text through two `[GeneratedRegex]` patterns, `EmailPattern` (`:350-354`) and `PhonePattern` (`:360-364`), both with a 1000 ms match timeout; the phone pattern stays deliberately narrow (`:356-359`). `FormatSpeakers` (`:286`) applies it to taglines and bios but **not** to names (`:297-299`); with no speakers it returns the literal `<speakers>(no speaker information available)</speakers>` (`:288-289`).
-  - `RenderPrompt` (`:321`) is unchanged: the one public affordance for testing, returning the exact system-plus-user pair this service would send without calling the model, so the evaluation suite can hash it per `PromptVersion`.
-  - `BuildScoreSchema` (`:388-419`) builds the structured-output JSON schema from the six criterion names plus `penalty` and `reasoning`, with `additionalProperties = false` and everything listed as `required`, cached once into the static `ScoreSchema` field (`:386`).
-  - `FailedResult` (`:368`) is the single shape of failure: all seven scores `0m`, `Reasoning = "Scoring failed"`, `Success = false`, a value that sits outside the 1.0 to 10.0 band by construction.
-- **Why it's built this way**: concentrating vendor specifics behind `IChatClient` (itself a framework-owned port over the vendor) makes swapping providers or faking the service in tests a one-class change, and the never-throw plus clamp plus all-or-nothing-parse discipline makes raw model output safe to persist into [SessionAiScore](group-17-conference-domain.md#sessionaiscore). The prompt is prescriptive because the scoring semantics depend on it, and it is versioned through a `PromptContract` because the evaluation suite depends on being able to tell one prompt from another and to bind that identity to spend telemetry.
-- **Where it's used**: registered as the `IAiScoringService` implementation by [DependencyInjection](#dependencyinjection) (`DependencyInjection.cs:43-46`); driven per session by [ScoreEventSessionsHandler](group-18-conference-application.md#scoreeventsessionshandler). It is exercised directly by `AnthropicScoringServiceTests` and, through `RenderPrompt` and `UntrustedInputBrief`, by the `MMCA.ADC.Conference.Scoring.Evaluation.Tests` project (`PromptContractTests`, `GoldenReplayTests`, `LiveJudgeTests`).
-- **Caveats / not-in-source**: there is **no retry inside this class**. Whatever resilience the chat call carries (retry, timeout, circuit breaking) is now the framework's `IChatClient` pipeline's concern, configured where `AddMmcaChatClient` is called, not in this Infrastructure project; the in-class contract stays "never throw, let the batch continue". The hosted-drain and scheduled-sweep background work this class used to be driven by is gone (see [DependencyInjection](#dependencyinjection)): what now drives scoring per event, and on what schedule or durability guarantee, is not in this file.
+  - A **primary constructor** injects `IChatClient? chatClient`, `PromptContract promptContract` and `ILogger<SessionScoringService>` (`:186-189`). `IChatClient` is resolved with `GetService`, not `GetRequiredService`, by [DependencyInjection](#dependencyinjection), so a host with AI disabled or no key still starts.
+  - `PromptName` (`:196`, `"session-scoring"`) tags every usage measurement on the `MMCA.Common.AI` meter. `ModelIdValue` (`:203`, `"claude-haiku-4-5"`) is pinned into the prompt contract's hash. `MaxOutputTokens` (`:210`, `256`) is the class's own default that `Ai:MaxOutputTokens` clamps again at the framework boundary. `SessionScoringContract` (`:232-233`) is the one static [PromptContract](group-27-common-ai-integration.md#promptcontract) the module scores with, built from those constants plus `SystemPrompt`; composition passes it to the constructor so a test can score against a different contract without touching the registration.
+  - `ScoreSessionAsync` (`:236`) null-checks `session` (`:240`), then guards on a disabled client (`:242-246`, log-and-`FailedResult`), builds the user message with `BuildUserPrompt` (`:250`), then asks the contract for its `ChatOptions` (`:254`) and layers on `MaxOutputTokens` (`:255`) and a JSON-schema `ResponseFormat` built from `ScoreSchema` (`:256`). `chatClient.GetResponseAsync` sends one user `ChatMessage` (`:258-261`). A caught `ChatGuardrailException` (`:265-273`) logs the guardrail's own reported reason and returns `FailedResult`; any other non-cancellation exception does the same (`:274-278`).
+  - `InterpretResponse` (`:281`) logs usage from `response.Usage` when present (`:286-289`), then hands `response.Text` straight to `ParseSingleScore` (`:294`): refusals, empty answers and malformed text are already refused upstream by [SessionScoreResponseGuardrail](#sessionscoreresponseguardrail), so this method's own job is parse and map.
+  - `ParseSingleScore` (`:297-311`) deserializes `responseText` into [AiScoreResponse](#aiscoreresponse) with `AiScoreResponse.JsonOptions` (`:304`) and passes it to `BuildResult`; a `JsonException` is the fail-closed path for a caller that composed the scorer without the governed pipeline, such as the golden replay suite (`:307-310`).
+  - `BuildResult` (`:313`) requires the penalty and all six sub-scores present via a single `is not { ... }` pattern (`:317-329`); the overall score is weighted 30/10/20/20/10/10 (`:333-339`) and the penalty subtracted (`:344`), with every value passed through `Clamp` (`:482`), `Math.Clamp(value, 1.0m, 10.0m)` rounded to one decimal with `MidpointRounding.ToEven`.
+  - `SystemPrompt` (`:363`) carries the ADC track list, the six weighted criteria, calibration rules ("most talks should fall between 5.5 and 7.5"), and the 0.0/0.5/1.0 penalty ladder, ending with `UntrustedInputBrief` (`:389`, `:404-411`), an `internal const` kept separate only so the evaluation suite can assert on it by name.
+  - `BuildUserPrompt` (`:418`) is the containment half: a delimited, escaped envelope (`<session_proposal>`, `<session_title>`, `<session_description>`) rather than labelled `Title:`/`Description:` lines, with the reasoning recorded at `:413-417`. `FormatSpeakers` (`:429`) renders each speaker's name, tagline and bio inside `<speaker>` tags, or the literal `<speakers>(no speaker information available)</speakers>` when there are none (`:431-432`). `Escape` (`:477-480`) replaces `<` and `>` with entities.
+  - `RenderPrompt` (`:465`) is the one public affordance for testing: the exact system-plus-user pair this service would send without calling the model, so the evaluation suite can hash it per `PromptVersion`.
+  - `FailedResult` (`:484`, tail not shown) is the single shape of failure, matching the prior adapter's contract.
+- **Why it's built this way**: concentrating vendor specifics behind `IChatClient` makes swapping providers or faking the service in tests a one-class change; the never-throw-for-scoring, clamp, and all-or-nothing-parse discipline makes raw model output safe to persist into [SessionAiScore](group-17-conference-domain.md#sessionaiscore). Moving [AiScoreResponse](#aiscoreresponse) to its own file, rather than nesting it as before, is what lets [SessionScoreResponseGuardrail](#sessionscoreresponseguardrail) share the exact same shape and completeness check.
+- **Where it's used**: registered as the `IAiScoringService` implementation by [DependencyInjection](#dependencyinjection); driven per session by [ScoreEventSessionsHandler](group-18-conference-application.md#scoreeventsessionshandler). Exercised directly by `SessionScoringServiceTests`, `SessionScoreResponseGuardrailTests`, and through `RenderPrompt` by the `MMCA.ADC.Conference.Scoring.Evaluation.Tests` project (`PromptContractTests`, `GoldenReplayTests`, `LiveJudgeTests`).
+- **Caveats / not-in-source**: there is **no retry inside this class**. Whatever resilience the chat call carries is the framework's `IChatClient` pipeline's concern, configured where `AddMmcaChatClient` is called; the in-class contract stays "never throw for a scoring failure, let the batch continue".
+
+---
+
+### SessionScoreResponseGuardrail
+
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure.Sessions.Scoring` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoreResponseGuardrail.cs:34` · Level 4 · class (sealed)
+
+- **What it is**: an `IChatGuardrail` that refuses a session-scoring response before it reaches [SessionScoringService](#sessionscoringservice), for three cases: a provider refusal, an empty answer, or text that is not a complete [AiScoreResponse](#aiscoreresponse).
+- **Depends on**: first-party: `IChatGuardrail` (implements), [AiScoreResponse](#aiscoreresponse), `PromptContract` (`ReadName`), [SessionScoringService](#sessionscoringservice)`.PromptName`. External: `Microsoft.Extensions.AI` (`ChatOptions`, `ChatResponse`, `ChatFinishReason`, `GuardrailVerdict`), `System.Text.Json`, `System.Globalization`, `System.Text.CompositeFormat`.
+- **Concept introduced, a response-side guardrail scoped to one prompt.** `AppliesTo` (`:534-535`) reads the prompt contract's name off `ChatOptions` and compares it to `SessionScoringService.PromptName`, so this guardrail only ever inspects session-scoring calls and allows everything else through unexamined. `[Rubric §16, AI-Native Application Architecture]` assesses whether an evaluation gate sits at the pipeline boundary rather than inside the caller: the same completeness check the scorer would apply is applied here first, so a malformed answer never reaches [SessionScoringService](#sessionscoringservice) at all. `[Rubric §29, Resilience & Business Continuity]` assesses graceful degradation: three named block reasons (`RefusalReasonFormat` `:512-513`, `EmptyResponseReason` `:516-517`, `MalformedResponseReason` `:523-524`) give the caller a specific, logged reason for every refusal instead of one generic failure.
+- **Walkthrough**: `InspectRequestAsync` (`:539-543`) and `InspectStreamedUpdateAsync` (`:558-562`) both always allow, the first because the guardrail has nothing to say about what goes out, the second because the scorer does not stream. `InspectResponseAsync` (`:546-554`) delegates to `Inspect` only `AppliesTo` returns true. `Inspect` (`:564-595`) checks `IsRefusal(response.FinishReason)` first (`:566-572`), then blocks on a null-or-empty `response.Text` (`:575-578`), then deserializes the text into [AiScoreResponse](#aiscoreresponse) with `AiScoreResponse.JsonOptions`, blocking on a `JsonException` (`:583-590`) and on `IsComplete` being false (`:592-594`). `IsRefusal` (`:603-606`) treats both the normalized `ChatFinishReason.ContentFilter` and the raw string `"refusal"` (case-insensitive) as a refusal, because Microsoft.Extensions.AI does not normalize every provider's own refusal signal.
+- **Why it's built this way**: pulling the completeness check out to a guardrail, rather than leaving it solely inside the scorer, means the check runs identically for the deployed pipeline and for every evaluation tier that composes guardrails through [DependencyInjection](#dependencyinjection)`.AddConferenceAiGuardrails`, so a guardrail change cannot silently start scoring on incomplete data in one tier and not another.
+- **Where it's used**: registered as a singleton `IChatGuardrail` by [DependencyInjection](#dependencyinjection)`.AddSessionScoreResponseGuardrail`, called from `AddConferenceAiGuardrails`. Exercised directly by `SessionScoreResponseGuardrailTests` and by `ConferenceAiGuardrailsRegistrationTests`.
 
 ---
 
@@ -522,25 +583,24 @@ type list, the same extension point every module assembly provides.
 - **Concept introduced, a second-layer format check ahead of a redirect-capable URI segment.** `[Rubric §11, Security]` assesses defense against SSRF-shaped input: `sessionizeCode` becomes the leading segment of a relative URI resolved against the configured Sessionize base address, and the inline `SECURITY` comment (`:14-19`) spells out the exact attack, RFC 3986 resolution reads a code that starts `//host/path` as a network-path reference, so an unchecked code redirects the request to a foreign host whose JSON gets imported as speakers, sessions and rooms. Request validators already enforce the charset at the boundary; this check is deliberately a **second** layer, because it is the one that still covers a code written to the database before that validator rule existed. `[Rubric §2, Design Patterns]` and `[Rubric §1, SOLID]` (dependency inversion) assess whether the application depends on an abstraction it owns: the Application layer declares the port, Infrastructure supplies the adapter, and no Application file references `HttpClient`.
 - **Walkthrough**: a primary constructor takes `HttpClient` (`:12`). `GetAllAsync` now returns `Task<Result<SessionizeResponse?>>` rather than a bare nullable task (`:14`). It first checks `SessionizeCodeFormat.IsValid(sessionizeCode)` (`:21`) and, on a bad format, returns `Result.Failure<SessionizeResponse?>` with the invariant error `Event.SessionizeCode.InvalidFormat` (`:22-27`), naming `SessionizeService` as the source and `sessionizeCode` as the target. Past that gate the wire call is unchanged: it builds the relative URI `{sessionizeCode}/view/All` (`:31`), GETs it (`:32-34`), calls `EnsureSuccessStatusCode()` (`:36`), and now wraps the deserialized `SessionizeResponse?` in `Result.Success` (`:38-40`). Both awaits use `.ConfigureAwait(false)`, the repo-wide library rule from [ADR-049](https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html).
 - **Why it's built this way**: keeping parsing, mapping and the import workflow in Application use-cases leaves this adapter owning only the wire call and the one input check that only Infrastructure can make (the value that becomes part of a URI), which is what keeps it trivially fakeable in tests.
-- **Caveat, error handling still differs from the AI adapter.** `EnsureSuccessStatusCode()` throws `HttpRequestException` on any non-2xx, and that exception **propagates** out of the class, the opposite of [AnthropicScoringService](#anthropicscoringservice)'s never-throw contract; only the new format check returns a `Result` failure instead of throwing. The difference still follows the shape of the work: a Sessionize sync is one explicit organizer action where a failure should surface as an error, while AI scoring is a per-item batch where one item's failure must not stop the rest. The success payload is also nullable, so a 2xx with an empty body yields a successful `Result` wrapping `null` rather than an exception.
+- **Caveat, error handling still differs from the AI adapter.** `EnsureSuccessStatusCode()` throws `HttpRequestException` on any non-2xx, and that exception **propagates** out of the class, the opposite of [SessionScoringService](#sessionscoringservice)'s never-throw contract; only the new format check returns a `Result` failure instead of throwing. The difference still follows the shape of the work: a Sessionize sync is one explicit organizer action where a failure should surface as an error, while AI scoring is a per-item batch where one item's failure must not stop the rest. The success payload is also nullable, so a 2xx with an empty body yields a successful `Result` wrapping `null` rather than an exception.
 - **Where it's used**: the Sessionize import handlers in [Conference Application](group-18-conference-application.md), triggered when an organizer refreshes an event's data.
 
 ---
 
 ### DependencyInjection
 
-> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:15` · Level 5 · class (static)
+> MMCA.ADC.Conference.Infrastructure · `MMCA.ADC.Conference.Infrastructure` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:18` · Level 5 · class (static)
 
-- **What it is**: the DI wiring for Conference Infrastructure. It registers the one remaining outbound HTTP integration (Sessionize) as a typed client, wires the AI scoring adapter against the framework's governed chat client, and registers the output-cache eviction adapter the internal-command scoring pass depends on.
-- **Depends on**: first-party: [ISessionizeService](group-18-conference-application.md#isessionizeservice) with [SessionizeService](#sessionizeservice), [IAiScoringService](group-18-conference-application.md#iaiscoringservice) with [AnthropicScoringService](#anthropicscoringservice), [ISessionScoresCacheEvictor](group-18-conference-application.md#isessionscorescacheevictor) with [OutputCacheSessionScoresCacheEvictor](#outputcachesessionscorescacheevictor). External: `Microsoft.Extensions.DependencyInjection`, `Microsoft.Extensions.AI` (`IChatClient`).
-- **Concept introduced, what moved to the framework and what stayed.** The comment above the Sessionize registration (`:25-28`) is itself a piece of documentation: provider error classification (`IUniqueConstraintViolationDetector`, `IConcurrencyConflictDetector`) used to be registered by this module and is now framework surface added by MMCA.Common's `AddInfrastructure`. The AI scoring registration carries the larger version of the same story (`:33-42`): the transport, the credential, the model, the output ceiling, the per-call timeout and the tool gate all now belong to the framework's governed `IChatClient` (registered by the host's `AddMmcaChatClient` call, [ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html)), so nothing in this file constructs an `HttpClient` for Anthropic or tunes a resilience pipeline for it. `[Rubric §3, Clean Architecture]` and `[Rubric §7, Microservices Readiness]` assess how cleanly a module's registration surface shrinks as its responsibilities move to shared framework surface without the module losing the ability to run as its own service.
-- **Walkthrough**: a single `extension(IServiceCollection services)` block (`:17`, the codebase's standard DI idiom, see the primer's [extension(T) note](00-primer.md#c-extensiont-types-read-this-once)) exposes `AddModuleConferenceInfrastructure()` (`:23`).
-  - **Sessionize** (`:29-31`): typed client with base address `https://sessionize.com/api/v2/`, unchanged from before.
-  - **AI session scoring** (`:43-46`): `services.TryAddScoped<IAiScoringService>(serviceProvider => new AnthropicScoringService(...))`, a factory registration rather than a constructor-injected `AddHttpClient` pair because [AnthropicScoringService](#anthropicscoringservice) needs `IChatClient` resolved with `GetService` (nullable, the disabled path) alongside `AnthropicScoringService.SessionScoringContract` (the static [PromptContract](group-27-common-ai-integration.md#promptcontract)) and a required `ILogger<AnthropicScoringService>`. The comment (`:38-42`) restates the null contract plainly: a host without an AI key still starts and still serves every other Conference endpoint, because the scoring service just answers a failed result.
-  - **Output-cache eviction** (`:53`): `services.TryAddScoped<ISessionScoresCacheEvictor, OutputCacheSessionScoresCacheEvictor>()`. The comment above it (`:48-52`) is explicit about what is gone: the hosted drain and the five-minute crash-recovery sweep that used to live in this file are removed entirely, because the framework's internal-command processor now owns the durability, the claim lease and the retry backoff for a scoring pass.
-  - Returns `services` for chaining (`:55`).
-- **Why it's built this way**: registering `AnthropicScoringService` from a factory lambda rather than a typed `AddHttpClient` call is the direct consequence of depending on a shared, already-configured `IChatClient` instead of owning a client's lifecycle; the module supplies only what is specific to scoring (the contract, the logger) and takes the transport as a dependency. Registering `OutputCacheSessionScoresCacheEvictor` here, rather than in the internal-command handler's own project, keeps the ASP.NET Core output-cache dependency out of Application, `[Rubric §3, Clean Architecture]`.
-- **Where it's used**: called from the Conference module's registration chain (see [ConferenceModule](group-20-conference-api-grpc.md#conferencemodule)), which the module loader invokes in topological order.
+- **What it is**: the DI wiring for Conference Infrastructure. It registers the one remaining outbound HTTP integration (Sessionize) as a typed client, wires the AI scoring adapter against the framework's governed chat client, registers the output-cache eviction adapter the internal-command scoring pass depends on, and composes the three AI guardrails the Conference module runs.
+- **Depends on**: first-party: [ISessionizeService](group-18-conference-application.md#isessionizeservice) with [SessionizeService](#sessionizeservice), [IAiScoringService](group-18-conference-application.md#iaiscoringservice) with [SessionScoringService](#sessionscoringservice), [ISessionScoresCacheEvictor](group-18-conference-application.md#isessionscorescacheevictor) with [OutputCacheSessionScoresCacheEvictor](#outputcachesessionscorescacheevictor), `IChatGuardrail` with [SessionScoreResponseGuardrail](#sessionscoreresponseguardrail). External: `Microsoft.Extensions.DependencyInjection`, `Microsoft.Extensions.AI` (`IChatClient`, `IChatGuardrail`).
+- **Concept introduced, what moved to the framework and what stayed.** The comment above the Sessionize registration is itself a piece of documentation: provider error classification (`IUniqueConstraintViolationDetector`, `IConcurrencyConflictDetector`) used to be registered by this module and is now framework surface added by MMCA.Common's `AddInfrastructure`. The AI scoring registration comment (`:763-767`) carries the larger version of the same story: the transport, the credential, the model, the output ceiling, the per-call timeout and the tool gate all belong to the framework's governed `IChatClient` now, over whichever provider adapter `Ai:Provider` names, so nothing in this file constructs an `HttpClient` or names a vendor ([ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html)). `[Rubric §3, Clean Architecture]` and `[Rubric §7, Microservices Readiness]` assess how cleanly a module's registration surface shrinks as its responsibilities move to shared framework surface without the module losing the ability to run as its own service.
+- **Walkthrough**: a single `extension(IServiceCollection services)` block (`:746`, the codebase's standard DI idiom, see the primer's [extension(T) note](00-primer.md#c-extensiont-types-read-this-once)).
+  - **`AddModuleConferenceInfrastructure()`** (`:753`): typed client for Sessionize, base address `https://sessionize.com/api/v2/` (`:759-761`); `services.TryAddScoped<IAiScoringService>(serviceProvider => new SessionScoringService(...))` (`:774-777`), a factory registration rather than a constructor-injected `AddHttpClient` pair because [SessionScoringService](#sessionscoringservice) needs `IChatClient` resolved with `GetService` (nullable, the disabled path) alongside `SessionScoringService.SessionScoringContract` and a required `ILogger<SessionScoringService>`; `services.TryAddScoped<ISessionScoresCacheEvictor, OutputCacheSessionScoresCacheEvictor>()` (`:784`), with a comment (`:779-783`) noting the hosted drain and crash-recovery sweep this method used to own are gone, the framework's internal-command processor now owns the durability, claim lease and retry backoff. Returns `services` for chaining (`:786`).
+  - **`AddConferenceAiGuardrails(IConfiguration configuration)`** (`:812`): the single composition point for the Conference AI pipeline's three guardrails, shared by the service host and by every evaluation tier. Its remarks (`:797-803`) state the reason it exists at all: when each caller assembled its own guardrail list, the golden replay suite drove the scorer bare and the live judge registered only one of the three, so the tiers that exist to judge the deployed pipeline were judging a different pipeline. It calls `services.AddPiiRedactionGuardrail()` and `services.AddContentPolicyGuardrail(configuration)` (`:822-823`, both framework guardrails, request side) then `services.AddSessionScoreResponseGuardrail()` (`:826`, this module's, response side). Its remarks (`:805-809`) warn it must run BEFORE `AddMmcaChatClient`, which reads the `IChatGuardrail` descriptors to decide whether to compose the guardrail layer at all; every registration is `TryAddEnumerable`, so calling it twice composes the same three.
+  - **`AddSessionScoreResponseGuardrail()`** (`:851`): registers [SessionScoreResponseGuardrail](#sessionscoreresponseguardrail) with `services.TryAddEnumerable(ServiceDescriptor.Singleton<IChatGuardrail, SessionScoreResponseGuardrail>())` (`:855-856`). Kept public and separate from `AddConferenceAiGuardrails`, which composes it (remarks `:843-849`), so a caller that wants only the response gate has it, and stacks with the framework's guardrails instead of replacing them.
+- **Why it's built this way**: registering `SessionScoringService` from a factory lambda rather than a typed `AddHttpClient` call is the direct consequence of depending on a shared, already-configured `IChatClient` instead of owning a client's lifecycle. Splitting guardrail composition into its own method, called before the host wires `AddMmcaChatClient`, is what lets one registration point reach both the deployed pipeline and every evaluation tier, so a guardrail cannot change production scores without an evaluation case seeing the same guardrail.
+- **Where it's used**: `AddModuleConferenceInfrastructure` is called from the Conference module's registration chain (see [ConferenceModule](group-20-conference-api-grpc.md#conferencemodule)), which the module loader invokes in topological order; `AddConferenceAiGuardrails` is called by the service host and by the evaluation tiers ahead of `AddMmcaChatClient`.
 
 ---
 

@@ -183,17 +183,17 @@ the whole `IEnumerable<IValidator<TRequest>>` from the container, de-duplicates 
 an assembly scanned twice does not report each failure twice, and attaches each one with
 `RuleFor(c => c.Request).SetValidator(validator)` (`CommandRequestValidator.cs:33-41`). The wiring is
 reflective and lives in the module scan: `ScanModuleApplicationServices`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:187`) first calls
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.ModuleScanning.cs:46`) first calls
 FluentValidation's `AddValidatorsFromAssembly` to pick up every hand-written validator by convention
-(`DependencyInjection.cs:258`), then walks the assembly for types implementing
+(`DependencyInjection.ModuleScanning.cs:116`), then walks the assembly for types implementing
 `ICommandWithRequest<>`, constructs the closed `CommandRequestValidator<TCommand, TRequest>`, and
 registers it as `IValidator<TCommand>` with **`TryAddTransient`**, so an explicitly authored command
-validator always wins (`DependencyInjection.cs:260-276`). Common's own validators are registered
+validator always wins (`DependencyInjection.ModuleScanning.cs:118-133`). Common's own validators are registered
 separately in `AddApplication` via `AddValidatorsFromAssemblyContaining<ClassReference>()`, because
-the per-module scan only sees the module's own assembly (`DependencyInjection.cs:48-51`); that call
+the per-module scan only sees the module's own assembly (`DependencyInjection.cs:45-48`); that call
 is what puts [`AddressValidator`](#addressvalidator) in the container. For a command the reflective
 scan cannot see, for example a closed generic constructed at registration time,
-`AddCommandRequestValidator<TCommand, TRequest>()` (`DependencyInjection.cs:483-486`) is the explicit
+`AddCommandRequestValidator<TCommand, TRequest>()` (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.Crud.cs:220-226`) is the explicit
 form of the same registration, with the same `TryAdd` precedence. `[Rubric §2, Design Patterns]`
 (convention over configuration, plus the Decorator pattern the gate itself rides on) and
 `[Rubric §15, Best Practices & Code Quality]` (a new command inherits validation without a registration line) both
@@ -449,18 +449,18 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
     twice (a module assembly scanned twice, say) reports each failure once rather than in duplicate.
   - An **empty** collection is not an error: the loop simply adds no rule, and the bridge is a no-op for
     a request with no rules (the same point is made at
-    `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:483-484`).
+    `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.Crud.cs:217-218`).
 
 - **Why it's built this way**: it removes the most common piece of validation boilerplate (restating
   request rules at the command level) while staying overridable. Registration is by `TryAdd`, so the
   convention never blocks a bespoke case. Two registration paths exist, both using `TryAddTransient`:
   the reflection scan in `ScanModuleApplicationServices` walks the module assembly for commands
   implementing `ICommandWithRequest<>`, builds the closed generic and registers it
-  (`DependencyInjection.cs:260-276`, `TryAddTransient` at `:267`) after
+  (`DependencyInjection.ModuleScanning.cs:121-135`, `TryAddTransient` at `:134`) after
   `services.AddValidatorsFromAssembly(moduleAssembly)` has already picked up every hand-written
-  validator (`:250`); and the explicit helper `AddCommandRequestValidator<TCommand, TRequest>()`
-  (`DependencyInjection.cs:483-487`) does the same thing for one pair, which is how the generic
-  create/update/delete registration helpers wire their commands (`:349`, `:405`, `:454`). Because the
+  validator (`:117`); and the explicit helper `AddCommandRequestValidator<TCommand, TRequest>()`
+  (`DependencyInjection.Crud.cs:220-224`) does the same thing for one pair, which is how the generic
+  update registration helpers wire their commands (`:94`, `:150`, `:199`). Because the
   explicit `IValidator<TCommand>` is registered first, it always wins.
 
 - **Where it's used**: the closed generic is registered per command during module scanning. At runtime

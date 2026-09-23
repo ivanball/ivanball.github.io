@@ -11,9 +11,9 @@ Diagrams are grounded in:
 
 ---
 
-## 1. System context, two codebases + the 19 packages
+## 1. System context, two codebases + the 22 packages
 
-`MMCA.Common` is a framework published as nineteen NuGet packages in lockstep, to nuget.org **and**
+`MMCA.Common` is a framework published as twenty-two NuGet packages in lockstep, to nuget.org **and**
 GitHub Packages from one tag ([ADR-053](https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html));
 `MMCA.ADC` and `MMCA.Store` consume them. `MMCA.Common/FACTS.md` owns the count and the list (link
 there, do not recount). The framework depends on neither consumer (that one-way arrow is why the
@@ -27,14 +27,17 @@ first-party project reference at all
 is the one MAUI-TFM package: it lives outside `MMCA.Common.slnx` and is built and packed by
 dedicated windows CI jobs
 ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Two more
-stand apart from the layer chain: `MMCA.Common.AI` is the governed language-model boundary
-([ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html), taught as its
-own chapter group), and `MMCA.Common.Testing.Aspire` ships the AppHost integration-test base
+families stand apart from the layer chain. The four AI packages form the governed language-model
+boundary ([ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html), taught
+as its own chapter group): `MMCA.Common.AI` is the governed client, `MMCA.Common.AI.Anthropic` and
+`MMCA.Common.AI.OpenAI` are provider adapters (one `IAiProviderFactory` each), and
+`MMCA.Common.AI.Testing` is the prompt-contract and golden-replay harness; none of them takes an
+MMCA.Common project reference. `MMCA.Common.Testing.Aspire` ships the AppHost integration-test base
 ([ADR-117](https://ivanball.github.io/docs/adr/117-apphost-integration-test-base.html)).
 
 ```mermaid
 flowchart TD
-    subgraph COMMON["MMCA.Common: framework, 19 NuGet packages (lockstep versioned)"]
+    subgraph COMMON["MMCA.Common: framework, 22 NuGet packages (lockstep versioned)"]
         direction TB
         subgraph CORE["Core (4)"]
             SH["Shared"]
@@ -61,7 +64,12 @@ flowchart TD
             T4["Testing.Architecture"]
             T5["Testing.Aspire<br/>(AppHost test base, ADR-117)"]
         end
-        AIPK["AI<br/>(governed chat boundary, ADR-120)"]
+        subgraph AIFAM["AI boundary (4), ADR-120"]
+            AIPK["AI<br/>(governed chat client)"]
+            AIA["AI.Anthropic<br/>(provider adapter)"]
+            AIO["AI.OpenAI<br/>(provider adapter)"]
+            AIT["AI.Testing<br/>(replay + contract pins)"]
+        end
         META["MMCA.Common<br/>(metapackage, no assembly:<br/>the Core 6, ADR-101)"]
     end
 
@@ -73,7 +81,7 @@ flowchart TD
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef con fill:#e6f4ea,stroke:#34a853,color:#111
-    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,T5,AIPK,META fw
+    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,GWPK,T1,T2,T3,T4,T5,AIPK,AIA,AIO,AIT,META fw
     class ADC,STORE con
 ```
 

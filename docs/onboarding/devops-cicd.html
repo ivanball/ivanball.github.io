@@ -173,13 +173,13 @@
           <code>MMCA.Store</code>. The workflow runs <strong>twelve jobs</strong>: a <code>changes</code> classifier that every other job keys off
           (<code>ci.yml:45</code>), a fast <code>build-and-test</code> covering unit and architecture tests with coverage collection
           (<code>ci.yml:87</code>), a windows <code>build-maui</code> for the one package that cannot compile on Ubuntu
-          (<code>ci.yml:199</code>), a <code>ui-e2e</code> cross-browser matrix for real-browser accessibility and render-smoke testing
-          (<code>ci.yml:270</code>), a <code>performance-smoke</code> benchmark gate (<code>ci.yml:377</code>), a <code>coverage</code> job that merges the
-          coverage tiers and enforces a floor (<code>ci.yml:424</code>), three canaries that catch failure modes the
-          solution build cannot see: <code>consumer-source-build</code> (<code>ci.yml:494</code>), <code>package-consumption</code>
-          (<code>ci.yml:694</code>) and <code>sample-deployment-validate</code> (<code>ci.yml:788</code>), and three engine-or-orchestrator tiers
-          for the components whose behavior only a real server can falsify: <code>redis-integration</code> (<code>ci.yml:806</code>),
-          <code>postgresql-integration</code> (<code>ci.yml:847</code>) and the advisory <code>apphost-testing</code> (<code>ci.yml:882</code>).</p>
+          (<code>ci.yml:174</code>), a <code>ui-e2e</code> cross-browser matrix for real-browser accessibility and render-smoke testing
+          (<code>ci.yml:245</code>), a <code>performance-smoke</code> benchmark gate (<code>ci.yml:352</code>), a <code>coverage</code> job that merges the
+          coverage tiers and enforces a floor (<code>ci.yml:399</code>), three canaries that catch failure modes the
+          solution build cannot see: <code>consumer-source-build</code> (<code>ci.yml:469</code>), <code>package-consumption</code>
+          (<code>ci.yml:669</code>) and <code>sample-deployment-validate</code> (<code>ci.yml:795</code>), and three engine-or-orchestrator tiers
+          for the components whose behavior only a real server can falsify: <code>redis-integration</code> (<code>ci.yml:813</code>),
+          <code>postgresql-integration</code> (<code>ci.yml:854</code>) and the advisory <code>apphost-testing</code> (<code>ci.yml:889</code>).</p>
           <p>That job count is the interesting fact about this workflow. A framework cannot verify itself by compiling
           itself: most of these jobs exist because a green <code>dotnet build</code> on the framework&#39;s own solution has, at
           some point, coexisted with a broken consumer, a broken package, or a broken deployment sample.</p>
@@ -251,8 +251,10 @@
           <p><strong>Step 3, Verify FACTS.md is current</strong> (<code>ci.yml:115-118</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet run --project build/facts -- . --check</code></pre>
           <p>A fast, dependency-free drift gate. <code>build/facts</code> recomputes the framework-wide facts from source (version
-          from the git tag, package count, ADR range, fitness-method and base-class counts) and fails if the
-          committed <code>FACTS.md</code> disagrees. Regenerate with <code>dotnet run --project build/facts -- .</code>.</p>
+          from the git tag, package count, fitness-method and base-class counts) and fails if the committed
+          <code>FACTS.md</code> disagrees. Regenerate with <code>dotnet run --project build/facts -- .</code>. The ADR count and range are
+          deliberately not in that list: the comment (<code>ci.yml:112-113</code>) records that the Website ADR index owns
+          them, so the one number the framework repo cannot see is not checked against a stale copy.</p>
           <p>This is the one step <strong>not</strong> guarded on the <code>code</code> flag, and the comment (<code>ci.yml:116-117</code>) explains why:
           <code>FACTS.md</code> is itself markdown, so a docs-only PR is exactly the kind of change that can make it drift.
           The gate has to run precisely when everything else is skipped.</p>
@@ -283,32 +285,41 @@
           from Step 4.</p>
           <p>[Rubric §15, Best Practices &amp; Code Quality] (quality enforcement via analyzers at error severity) is
           realized here: the build <em>is</em> the static-analysis gate.</p>
-          <p><strong>Step 6, Vulnerability audit</strong> (<code>ci.yml:135-168</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet list MMCA.Common.slnx package --vulnerable --include-transitive &gt; audit.log 2&gt;&amp;1 || <span class="hljs-literal">true</span>
-<span class="hljs-built_in">cat</span> audit.log
-suppressed=$(grep -E <span class="hljs-string">&#x27;&lt;NuGetAuditSuppress\b&#x27;</span> Directory.Build.props | grep -oE <span class="hljs-string">&#x27;GHSA-[a-z0-9-]+&#x27;</span> | <span class="hljs-built_in">sort</span> -u | <span class="hljs-built_in">paste</span> -sd<span class="hljs-string">&#x27;|&#x27;</span> -)
-vulns=$(grep -E <span class="hljs-string">&#x27;^[[:space:]]*&gt;[[:space:]]&#x27;</span> audit.log || <span class="hljs-literal">true</span>)
-<span class="hljs-comment"># drop any vulnerable-package row whose advisory is in the suppressed list, then fail on the rest</span>
-<span class="hljs-keyword">if</span> <span class="hljs-built_in">printf</span> <span class="hljs-string">&#x27;%s&#x27;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$vulns</span>&quot;</span> | grep -q .; <span class="hljs-keyword">then</span>
-  <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;::error::Non-suppressed vulnerable NuGet packages detected, see log above&quot;</span>; <span class="hljs-built_in">exit</span> 1
-<span class="hljs-keyword">fi</span></code></pre>
-          <p><code>dotnet list package --vulnerable</code> queries NuGet&#39;s vulnerability database for every direct and transitive
-          dependency and writes any hits to <code>audit.log</code>. The <code>|| true</code> prevents an API-call failure from masking the
-          parse. The gate is not a simple sentinel grep: because <code>dotnet list --vulnerable</code> ignores
-          <code>NuGetAuditSuppress</code>, the step honors the same accepted-advisory list itself, it extracts every suppressed
-          <code>GHSA-...</code> id from <code>Directory.Build.props</code> (the single source of truth), filters those advisories out of
-          the vulnerable-package rows (the <code>&gt;</code>-prefixed lines), and fails only if a <em>non-suppressed</em> vulnerable row
-          remains (e.g. the unpatched SQLite advisory is an accepted exception).</p>
-          <p>Note how narrowly the extraction is scoped (<code>ci.yml:157-159</code>): it greps <code>&lt;NuGetAuditSuppress</code> lines
-          specifically, not the whole file, so a GHSA id merely <em>mentioned in a comment</em> about a non-accepted
-          advisory cannot silently suppress it here. A looser grep would have turned prose into policy.</p>
+          <p><strong>Step 6, Vulnerability audit</strong> (<code>ci.yml:135-143</code>):</p>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Audit</span> <span class="hljs-string">dependencies</span> <span class="hljs-string">(fail</span> <span class="hljs-string">on</span> <span class="hljs-string">known</span> <span class="hljs-string">vulnerabilities)</span>
+  <span class="hljs-attr">if:</span> <span class="hljs-string">needs.changes.outputs.code</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span>
+  <span class="hljs-attr">uses:</span> <span class="hljs-string">./.github/actions/nuget-vulnerability-audit</span>
+  <span class="hljs-attr">with:</span>
+    <span class="hljs-attr">solution:</span> <span class="hljs-string">MMCA.Common.slnx</span></code></pre>
+          <p>The step is a call into a composite action in the same repository,
+          <code>.github/actions/nuget-vulnerability-audit/action.yml</code>, and the comment (<code>ci.yml:136-139</code>) says why the
+          logic moved there: ADC and Store <code>deploy.yml</code> run the very same action by ref
+          (<code>ivanball/MMCA.Common/.github/actions/...@main</code>), so the framework and its consumers share ONE
+          implementation instead of a per-repository copy that drifts
+          (<a href="https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html" target="_blank" rel="noopener">ADR-038</a>). The action takes a
+          <code>solution</code>, an optional <code>props-file</code> (default <code>Directory.Build.props</code>) and an optional <code>report-path</code>
+          (default <code>audit.log</code>) (<code>nuget-vulnerability-audit/action.yml:13-24</code>).</p>
+          <p>Inside it (<code>nuget-vulnerability-audit/action.yml:35-65</code>), <code>dotnet list package --vulnerable --include-transitive</code> queries NuGet&#39;s vulnerability database for every direct and transitive dependency
+          and writes the report. The gate then <strong>fails closed</strong> (SEC-Common-62) on two assertions before it will
+          trust an empty result: the command&#39;s exit code must be 0 (<code>:41-43</code>), and the report must carry a
+          recognised header, either the sources header or a per-project verdict line (<code>:46-48</code>). Without those two
+          checks, every way the tool itself can fail (an advisory-feed timeout, an auth or proxy error, a renamed
+          output) produced an empty grep and a green &quot;no vulnerabilities&quot;.</p>
+          <p>Only then does it apply the accept-list. Because <code>dotnet list --vulnerable</code> ignores <code>NuGetAuditSuppress</code>,
+          the action honors the same accepted-advisory list itself: it extracts the suppressed <code>GHSA-...</code> ids from
+          <code>Directory.Build.props</code> (the single source of truth), filters those advisories out of the vulnerable-package
+          rows (the <code>&gt;</code>-prefixed lines), and fails only if a <em>non-suppressed</em> vulnerable row remains (<code>:58-64</code>).</p>
+          <p>Note how narrowly the extraction is scoped (<code>nuget-vulnerability-audit/action.yml:49-55</code>): it matches
+          only real <code>&lt;NuGetAuditSuppress ... Include=&quot;GHSA-...&quot;</code> elements, not every <code>GHSA-</code> string in the file,
+          so a GHSA id merely <em>mentioned in a comment</em> about a non-accepted advisory cannot silently suppress it
+          here. A looser grep would have turned prose into policy.</p>
           <p>Why this gate exists and why it comes <em>before</em> tests: a vulnerable dependency that reaches the published
           packages is a supply-chain liability for every downstream consumer. Catching it before the release
           workflow runs (and before the package is published) is cheaper than retracting a published version.</p>
           <p>[Rubric §32, Dependency &amp; Supply-Chain] is directly served by this step. [Rubric §11, Security]
           (assesses whether secrets, auth, and dependency security are properly managed) is also touched: the
           vulnerability audit ensures the framework&#39;s own dependencies do not carry known CVEs.</p>
-          <p><strong>Steps 7 and 8, Test with coverage and the discovery-regression floor</strong> (<code>ci.yml:170-183</code>):</p>
+          <p><strong>Steps 7 and 8, Test with coverage and the discovery-regression floor</strong> (<code>ci.yml:145-158</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet tool install --global dotnet-coverage
 dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
   <span class="hljs-string">&quot;dotnet test --solution MMCA.Common.slnx -c Release --no-build --minimum-expected-tests 2000&quot;</span></code></pre>
@@ -317,7 +328,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           coverage itself is report-only (the <code>coverage</code> job below consumes it).</p>
           <p><code>--minimum-expected-tests 2000</code> is the load-bearing number. It is a Microsoft Testing Platform (MTP) flag
           that fails the run when fewer than N tests are discovered, and the floor sits just under the real suite
-          size of roughly 2,254 (<code>ci.yml:180-181</code>). A floor of 1 would only catch a project that discovered nothing
+          size of roughly 2,254 (<code>ci.yml:155-156</code>). A floor of 1 would only catch a project that discovered nothing
           at all; a floor near the true count catches the far more common and far more dangerous failure, a
           discovery or filter regression that silently drops thousands of tests and reports green with a handful
           run. The solution test suite covers the per-layer projects (<code>Shared.Tests</code>, <code>Domain.Tests</code>,
@@ -329,58 +340,58 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p>[Rubric §14, Testability &amp; Test Strategy] assesses whether tests actually run and cover the system. The
           <code>--minimum-expected-tests</code> floor is a mechanical enforcement of §14: you cannot merge a change that
           quietly stops running the suite.</p>
-          <p>The unit-tier cobertura report is uploaded as the <code>coverage-unit</code> artifact (<code>ci.yml:185-191</code>) for the
+          <p>The unit-tier cobertura report is uploaded as the <code>coverage-unit</code> artifact (<code>ci.yml:160-166</code>) for the
           <code>coverage</code> job to merge and gate on, under <code>if: always()</code> so a failing run still yields its partial
           coverage data.</p>
           <h3 id="job-build-maui-the-one-package-ubuntu-cannot-compile">Job: <code>build-maui</code>, the one package Ubuntu cannot compile</h3>
           <p><code>MMCA.Common.UI.Maui</code> multi-targets net10.0-android/ios/maccatalyst/windows, which needs the MAUI
           workloads, which Ubuntu runners do not have. So it stays <strong>out of <code>MMCA.Common.slnx</code></strong> and builds in its
-          own <code>windows-latest</code> job (<code>ci.yml:199-263</code>), the same mechanism that keeps the gallery and UI E2E projects
+          own <code>windows-latest</code> job (<code>ci.yml:174-238</code>), the same mechanism that keeps the gallery and UI E2E projects
           out of the fast unit run (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>).
           It is a required merge gate alongside <code>build-and-test</code>.</p>
-          <p>There are no tests here, and the comment says why (<code>ci.yml:197-198</code>): the capability contracts and their
+          <p>There are no tests here, and the comment says why (<code>ci.yml:172-173</code>): the capability contracts and their
           browser fallbacks are covered in <code>MMCA.Common.UI.Tests</code> on ubuntu, while the MAUI implementations are thin
           Essentials wrappers exercised on-device. A test that only proves a wrapper forwards a call is not worth a
           windows runner.</p>
           <p>The job is the <strong>critical path of the whole CI run</strong> (measured at 7.1 to 8.2 minutes, and the only windows
           runner), which is why two steps exist purely to make it cheaper. <code>Resolve SDK version and root</code>
-          (<code>ci.yml:230-240</code>) computes a cache key from the resolved SDK version, deriving the SDK root from <code>dotnet</code>
+          (<code>ci.yml:205-215</code>) computes a cache key from the resolved SDK version, deriving the SDK root from <code>dotnet</code>
           itself rather than trusting <code>$DOTNET_ROOT</code> to be exported, since an empty value there would silently turn
-          the cache paths into garbage and miss forever. <code>Cache MAUI workload packs</code> (<code>ci.yml:242-253</code>) then carries
+          the cache paths into garbage and miss forever. <code>Cache MAUI workload packs</code> (<code>ci.yml:217-228</code>) then carries
           the <code>sdk-manifests</code>, <code>packs</code>, <code>metadata</code>, <code>library-packs</code>, and <code>template-packs</code> directories between runs,
           keyed so that an SDK feature-band bump busts it.</p>
-          <p><code>dotnet workload install maui</code> still runs on a cache hit (<code>ci.yml:255-259</code>), deliberately: it is a no-op
+          <p><code>dotnet workload install maui</code> still runs on a cache hit (<code>ci.yml:230-234</code>), deliberately: it is a no-op
           that reconciles the manifest, and it is the only thing that lets a partially-restored cache self-heal
           instead of failing the build underneath it.</p>
           <h3 id="job-ui-e2e-accessibility-and-render-smoke-gate">Job: <code>ui-e2e</code>, accessibility and render-smoke gate</h3>
-          <p>This job (<code>ci.yml:270-367</code>) runs in parallel with <code>build-and-test</code>, on its own <code>ubuntu-latest</code> runner,
-          with a 20-minute timeout (<code>ci.yml:274</code>). It is a <strong>cross-browser matrix</strong> over <code>chromium</code>, <code>firefox</code>, and
-          <code>webkit</code> (<code>ci.yml:275-279</code>) with <code>fail-fast: false</code>, so one engine&#39;s failure does not cancel the others.</p>
+          <p>This job (<code>ci.yml:245-342</code>) runs in parallel with <code>build-and-test</code>, on its own <code>ubuntu-latest</code> runner,
+          with a 20-minute timeout (<code>ci.yml:249</code>). It is a <strong>cross-browser matrix</strong> over <code>chromium</code>, <code>firefox</code>, and
+          <code>webkit</code> (<code>ci.yml:250-254</code>) with <code>fail-fast: false</code>, so one engine&#39;s failure does not cancel the others.</p>
           <p><strong>All three engines are required merge gates.</strong> The matrix was introduced with the non-chromium legs
           non-blocking, then promoted as each proved itself: firefox on 2026-07-12 after a clean observed streak,
-          webkit on 2026-07-16 after 11 consecutive green runs since its last flake (<code>ci.yml:280-282</code>). There is no
+          webkit on 2026-07-16 after 11 consecutive green runs since its last flake (<code>ci.yml:255-257</code>). There is no
           <code>continue-on-error</code> in this job today. A webkit red blocks the merge like any other check.</p>
           <p>Its purpose is to catch two failure classes the unit-test job cannot: WCAG 2.1 AA accessibility violations
           in the shared Blazor UI components, and rendering regressions (a component that compiles but throws during
           render).</p>
           <p><strong>Why a separate job?</strong> The gallery host (<code>Tests/Presentation/MMCA.Common.UI.Gallery</code>) and the E2E test
           project (<code>Tests/Presentation/MMCA.Common.UI.E2E.Tests</code>) are <strong>intentionally excluded from
-          <code>MMCA.Common.slnx</code></strong> (<code>ci.yml:265-269</code> comment). Playwright requires a full browser install (several
+          <code>MMCA.Common.slnx</code></strong> (<code>ci.yml:240-244</code> comment). Playwright requires a full browser install (several
           hundred megabytes) and a browser-capable runner config. Including these in <code>dotnet test --solution</code> would
           slow every CI run for every code change, most of which do not touch the UI. Keeping the E2E gate separate
           means the unit/arch job stays fast while accessibility remains enforced.</p>
           <p><strong>Step-by-step:</strong></p>
           <ol>
-          <li><p><strong>Checkout</strong> (<code>ci.yml:284-287</code>): <code>fetch-depth: 0</code> (the comment notes &quot;MinVer needs full history&quot;), same
+          <li><p><strong>Checkout</strong> (<code>ci.yml:259-262</code>): <code>fetch-depth: 0</code> (the comment notes &quot;MinVer needs full history&quot;), same
           as <code>build-and-test</code>.</p>
           </li>
-          <li><p><strong>Build the E2E project directly</strong> (<code>ci.yml:305-309</code>):</p>
+          <li><p><strong>Build the E2E project directly</strong> (<code>ci.yml:280-284</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release</code></pre>
           <p>Building by csproj path, not solution, ensures only the gallery and E2E graphs are compiled (restore
           included). The E2E project references MMCA.Common source projects directly (via project references, not
           NuGet packages), so no <code>GITHUB_TOKEN</code> is needed.</p>
           </li>
-          <li><p><strong>Cache and install Playwright for the matrix browser</strong> (<code>ci.yml:314-332</code>):</p>
+          <li><p><strong>Cache and install Playwright for the matrix browser</strong> (<code>ci.yml:289-307</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">script=$(find Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release -name playwright.ps1 | <span class="hljs-built_in">head</span> -1)
 <span class="hljs-keyword">if</span> [ <span class="hljs-string">&quot;<span class="hljs-variable">${{ steps.playwright-cache.outputs.cache-hit }</span>}&quot;</span> = <span class="hljs-string">&quot;true&quot;</span> ]; <span class="hljs-keyword">then</span>
   pwsh <span class="hljs-string">&quot;<span class="hljs-variable">$script</span>&quot;</span> install-deps <span class="hljs-variable">${{ matrix.browser }</span>}
@@ -388,7 +399,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
   pwsh <span class="hljs-string">&quot;<span class="hljs-variable">$script</span>&quot;</span> install --with-deps <span class="hljs-variable">${{ matrix.browser }</span>}
 <span class="hljs-keyword">fi</span></code></pre>
           <p>Browser binaries run 100 to 300 MB per engine and were re-downloaded on all three legs of every run,
-          which is what the workflow-level <code>PLAYWRIGHT_BROWSERS_PATH</code> and this cache step (<code>ci.yml:314-320</code>)
+          which is what the workflow-level <code>PLAYWRIGHT_BROWSERS_PATH</code> and this cache step (<code>ci.yml:289-295</code>)
           exist to stop. The cache key includes the engine, since each leg installs only its own.</p>
           <p>The install branches on the cache hit, and the distinction is the useful part: OS-level shared
           libraries and fonts live outside the cached directory, so a restored cache still needs <code>install-deps</code>,
@@ -396,8 +407,8 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           launch. The <code>playwright.ps1</code> script is emitted into the build output by the Playwright MSBuild
           integration; <code>find</code> locates it dynamically so the step does not hard-code a .NET version suffix.</p>
           </li>
-          <li><p><strong>Run the E2E suite</strong> (<code>ci.yml:334-351</code>): the chromium leg installs <code>dotnet-coverage</code>
-          (<code>ci.yml:334-336</code>) and wraps the run in <code>dotnet-coverage collect</code>; the firefox and webkit legs run the
+          <li><p><strong>Run the E2E suite</strong> (<code>ci.yml:309-326</code>): the chromium leg installs <code>dotnet-coverage</code>
+          (<code>ci.yml:309-311</code>) and wraps the run in <code>dotnet-coverage collect</code>; the firefox and webkit legs run the
           same command plain (<code>eval &quot;$CMD&quot;</code>). The inner command is:</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">env:</span>
   <span class="hljs-attr">E2E_HEADLESS:</span> <span class="hljs-string">&quot;true&quot;</span>
@@ -416,8 +427,8 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           smoke confirms that the real component tree renders without exceptions in a real browser context.</p>
           </li>
           <li><p><strong>Upload coverage and Playwright traces</strong>, the chromium leg uploads its E2E cobertura report as the
-          <code>coverage-e2e</code> artifact (<code>ci.yml:353-359</code>), and on failure each leg uploads its traces
-          (<code>ci.yml:361-367</code>):</p>
+          <code>coverage-e2e</code> artifact (<code>ci.yml:328-334</code>), and on failure each leg uploads its traces
+          (<code>ci.yml:336-342</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">if:</span> <span class="hljs-string">failure()</span>
 <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/upload-artifact@v7</span>
 <span class="hljs-attr">with:</span>
@@ -435,16 +446,16 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           </li>
           </ol>
           <h3 id="job-performance-smoke-benchmarks-plus-a-committed-baseline">Job: <code>performance-smoke</code>, benchmarks plus a committed baseline</h3>
-          <p>This job (<code>ci.yml:377-419</code>) runs the BenchmarkDotNet harness and then compares the results against a
+          <p>This job (<code>ci.yml:352-394</code>) runs the BenchmarkDotNet harness and then compares the results against a
           committed baseline, which makes it two gates in one. Its context, <code>Performance gate (BenchmarkDotNet Short + baseline verify)</code>, is one of the eight required merge gates on <code>main</code>
           (<code>MMCA.Common/CONTRIBUTING.md:60-71</code>).</p>
-          <p>The run itself (<code>ci.yml:404-410</code>) uses <code>--filter &quot;*&quot;</code> and <code>--job Short</code>:</p>
+          <p>The run itself (<code>ci.yml:379-385</code>) uses <code>--filter &quot;*&quot;</code> and <code>--job Short</code>:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet run -c Release --project Tests/Performance/MMCA.Common.Benchmarks --no-launch-profile -- --filter <span class="hljs-string">&quot;*&quot;</span> --job Short --exporters json</code></pre>
           <p><code>--filter &quot;*&quot;</code> selects every benchmark non-interactively, and without it BenchmarkDotNet prompts for a
           selection and hangs in CI. <code>--job Short</code> (3 warmup + 3 iterations) produces real measurements in under a
           minute instead of a full multi-iteration timing run. <code>--no-launch-profile</code> keeps it deterministic on
           hosted runners.</p>
-          <p>Then <code>build/perfgate</code> (<code>ci.yml:412-419</code>) compares the exported results against
+          <p>Then <code>build/perfgate</code> (<code>ci.yml:387-394</code>) compares the exported results against
           <code>Tests/Performance/perf-baseline.json</code> and fails on any violation. The baseline holds two kinds of
           assertion, and the difference matters: deterministic <strong>allocation ceilings</strong> (byte counts, which are
           stable across machines) and machine-independent <strong>ratio floors</strong>, such as the compiled-expression
@@ -454,10 +465,10 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p>[Rubric §12, Performance &amp; Scalability] is served in the only form CI can honestly provide: not &quot;is it
           fast&quot; but &quot;did the property that makes it fast stop holding&quot;.</p>
           <h3 id="job-coverage-merge-report-and-coverage-floor">Job: <code>coverage</code>, merge report and coverage floor</h3>
-          <p>This job (<code>ci.yml:424-481</code>) runs after both test jobs (<code>needs: [changes, build-and-test, ui-e2e]</code>, <code>if: always()</code>). It downloads the <code>coverage-*</code> artifacts, merges the unit/architecture/bUnit and E2E cobertura
+          <p>This job (<code>ci.yml:399-456</code>) runs after both test jobs (<code>needs: [changes, build-and-test, ui-e2e]</code>, <code>if: always()</code>). It downloads the <code>coverage-*</code> artifacts, merges the unit/architecture/bUnit and E2E cobertura
           tiers with ReportGenerator (<code>+MMCA.*;-*.Tests</code>, generated <code>*.generated.cs</code>/<code>*.g.cs</code> filtered out), and
-          publishes the summary to the run&#39;s Step Summary (<code>ci.yml:441-454</code>).</p>
-          <p>It then <strong>enforces a coverage floor</strong> (<code>ci.yml:470-481</code>) as a regression backstop: the <em>unit tier alone</em>
+          publishes the summary to the run&#39;s Step Summary (<code>ci.yml:416-429</code>).</p>
+          <p>It then <strong>enforces a coverage floor</strong> (<code>ci.yml:445-456</code>) as a regression backstop: the <em>unit tier alone</em>
           (not the gallery-diluted merged report) must stay at <strong>68.3% line coverage or better</strong> with generated code
           excluded, and only when <code>build-and-test</code> succeeded, so that an upstream failure does not add a confusing
           secondary coverage failure.</p>
@@ -472,93 +483,112 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <h3 id="the-three-canaries-and-why-a-framework-needs-them">The three canaries, and why a framework needs them</h3>
           <p>The remaining jobs all exist for the same reason: <strong>a green solution build does not prove the framework
           works for anyone who is not the framework.</strong></p>
-          <p><strong><code>consumer-source-build</code></strong> (<code>ci.yml:494-682</code>) is a cross-repo pre-merge canary, and it now proves two
-          different things. It checks out MMCA.Helpdesk as a sibling directory (<code>ci.yml:511-550</code>) and builds and
+          <p><strong><code>consumer-source-build</code></strong> (<code>ci.yml:469-657</code>) is a cross-repo pre-merge canary, and it now proves two
+          different things. It checks out MMCA.Helpdesk as a sibling directory (<code>ci.yml:486-525</code>) and builds and
           tests it against <em>this PR&#39;s</em> framework source, so a breaking public-API change fails here rather than
           surfacing after a release and a lockstep sweep. Helpdesk is the ideal canary precisely because it is
           minimal: a single-module app that needs no database and no GitHub Packages token to compile, shipping a
           committed <code>local.props</code> that swaps the <code>MMCA.Common.*</code> <code>PackageReference</code>s for <code>ProjectReference</code>s into
           <code>../MMCA.Common/Source</code>. The sibling checkout layout is what makes that relative path resolve to the PR&#39;s
-          own checkout. Its test step (<code>ci.yml:589-594</code>) carries the same discovery floor idea as <code>build-and-test</code>,
-          set to 40 against a suite of about 91 (<code>ci.yml:592-593</code>). Promoted to a required gate on 2026-07-16 after
-          9 consecutive green runs (<code>ci.yml:489-490</code>).</p>
+          own checkout. Its test step (<code>ci.yml:564-569</code>) carries the same discovery floor idea as <code>build-and-test</code>,
+          set to 40 against a suite of about 91 (<code>ci.yml:567-568</code>). Promoted to a required gate on 2026-07-16 after
+          9 consecutive green runs (<code>ci.yml:464-465</code>).</p>
           <p>Two additions are worth reading closely. First, the job resolves which Helpdesk ref to build
-          (<code>ci.yml:523-538</code>): if a branch with the <strong>same name</strong> as this PR&#39;s head branch exists on
+          (<code>ci.yml:498-513</code>): if a branch with the <strong>same name</strong> as this PR&#39;s head branch exists on
           <code>ivanball/MMCA.Helpdesk</code>, the canary builds that pair together; otherwise it builds Helpdesk <code>main</code>. That
           convention is what makes a deliberate breaking framework change landable at all. Helpdesk&#39;s own CI builds
           against MMCA.Common <code>main</code>, so neither repo can adapt first while the canary pins the other&#39;s <code>main</code>: a
-          mutual deadlock, resolved by letting one PR name its counterpart branch (<code>ci.yml:518-522</code>).</p>
+          mutual deadlock, resolved by letting one PR name its counterpart branch (<code>ci.yml:493-497</code>).</p>
           <p>Second, the job runs the consumer&#39;s <strong>real EF migrations against a real SQL Server</strong>. An ephemeral
           <code>mcr.microsoft.com/mssql/server:2022-latest</code> container starts <em>before</em> the build so it warms up while the
-          solution compiles (<code>ci.yml:572-580</code>), <code>go-sqlcmd</code> is installed as a single static binary rather than the
-          mssql-tools deb (<code>ci.yml:598-602</code>), a 30 x 5s poll waits on a real <code>SELECT 1</code> rather than on Docker&#39;s
-          notion of &quot;running&quot; (<code>ci.yml:606-619</code>), and <code>dotnet ef database update</code> applies the Tickets migrations
-          with the same <code>dotnet-ef 10.0.8</code> the consumers deploy with (<code>ci.yml:623-648</code>). The reason is stated in
-          the comment (<code>ci.yml:627-635</code>): <code>migrations add</code> and the model-drift gate never open a connection, so
+          solution compiles (<code>ci.yml:547-555</code>), <code>go-sqlcmd</code> is installed as a single static binary rather than the
+          mssql-tools deb (<code>ci.yml:573-577</code>), a 30 x 5s poll waits on a real <code>SELECT 1</code> rather than on Docker&#39;s
+          notion of &quot;running&quot; (<code>ci.yml:581-594</code>), and <code>dotnet ef database update</code> applies the Tickets migrations
+          with the same <code>dotnet-ef 10.0.8</code> the consumers deploy with (<code>ci.yml:598-623</code>). The reason is stated in
+          the comment (<code>ci.yml:602-610</code>): <code>migrations add</code> and the model-drift gate never open a connection, so
           neither notices a framework change that breaks the generated DDL, the history table, or the design-time
           context wiring. <code>database update</code> does.</p>
-          <p>The step after it is the one that makes the apply falsifiable (<code>ci.yml:655-682</code>). <code>dotnet ef database update</code> exits 0 on a no-op, so a wiring mistake that applied nothing would pass silently. The assertion
+          <p>The step after it is the one that makes the apply falsifiable (<code>ci.yml:630-657</code>). <code>dotnet ef database update</code> exits 0 on a no-op, so a wiring mistake that applied nothing would pass silently. The assertion
           step therefore reads <code>__EFMigrationsHistory</code> for at least one row and checks that both a module table
           (<code>Tickets.Ticket</code>) and a <strong>framework</strong> table (<code>dbo.OutboxMessages</code>) exist. The framework table is the
           half that belongs to MMCA.Common, so a change that stops the framework&#39;s own tables reaching a consumer&#39;s
           schema fails right here rather than at a consumer&#39;s deploy. The job&#39;s timeout was raised to 30 minutes to
-          pay for the container, the poll and the apply (<code>ci.yml:498-500</code>), and the throwaway SA password is inline
-          rather than a secret so the gate still runs from a fork (<code>ci.yml:501-505</code>).</p>
+          pay for the container, the poll and the apply (<code>ci.yml:473-475</code>), and the throwaway SA password is inline
+          rather than a secret so the gate still runs from a fork (<code>ci.yml:476-480</code>).</p>
           <p>[Rubric §8, Data Architecture] is served in a way no build-only canary can reach: the framework&#39;s
           migration path is exercised end to end, on a real engine, by a real consumer.</p>
-          <p><strong><code>package-consumption</code></strong> (<code>ci.yml:694-780</code>) closes the gap that the previous job cannot: source-mode
+          <p><strong><code>package-consumption</code></strong> (<code>ci.yml:669-755</code>) closes the gap that the previous job cannot: source-mode
           builds bind <code>ProjectReference</code>s, so pack breaks (NU5xxx) and package-mode-only restore, analyzer, and
           reference failures stay invisible to them. The comment records that this failure mode shipped <strong>twice</strong>
-          before the job existed (<code>ci.yml:684-693</code>). So this job packs every slnx package into a local folder feed
-          under a CI-only version (<code>PACK_VERSION</code> at <code>ci.yml:699-700</code>, packed at <code>ci.yml:723-725</code>, with
+          before the job existed (<code>ci.yml:659-668</code>). So this job packs every slnx package into a local folder feed
+          under a CI-only version (<code>PACK_VERSION</code> at <code>ci.yml:674-675</code>, packed at <code>ci.yml:698-700</code>, with
           <code>MinVerSkip=true</code> so the consumer can pin the packed version exactly), then scaffolds a throwaway
-          consumer (<code>ci.yml:727-775</code>) whose <code>nuget.config</code> maps <code>MMCA.Common.*</code> to that feed and everything else to
-          nuget.org, and builds it (<code>ci.yml:777-780</code>).</p>
+          consumer (<code>ci.yml:702-750</code>) whose <code>nuget.config</code> maps <code>MMCA.Common.*</code> to that feed and everything else to
+          nuget.org, and builds it (<code>ci.yml:752-755</code>).</p>
           <p>The throwaway consumer lives in <code>RUNNER_TEMP</code>, <strong>outside the repo checkout</strong>, and that placement is the
           whole point: inside the checkout it would inherit <code>Directory.Build.props</code> and <code>Directory.Packages.props</code>
           and stop resembling a real downstream app. It references the meta set (<code>API</code> + <code>Infrastructure</code> +
           <code>Testing.Architecture</code>) to pull the full package graph transitively, and compiles one smoke type against
           <code>Result</code> to prove the references actually bind rather than merely resolve.</p>
-          <p><strong><code>sample-deployment-validate</code></strong> (<code>ci.yml:788-804</code>) type-checks the <code>samples/deployment</code> Bicep templates
+          <p>The job&#39;s last step, <strong>Layer rules ship with the packages</strong> (<code>ci.yml:757-787</code>), proves something a
+          successful consumer build cannot. <code>MMCA.Common.Shared</code> carries a <code>buildTransitive</code> targets file
+          (<code>Source/Build/MMCA.Common.Shared.targets</code>) that gives any consumer project named
+          <code>{App}.{Module}.{Layer}</code> compile-time layer rules with no opt-in: <code>MMCA0001</code> for a forbidden project
+          reference, <code>MMCA0002</code> for a forbidden package reference (the comment at <code>ci.yml:759-763</code> ties it to
+          <a href="https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html" target="_blank" rel="noopener">ADR-015</a> and
+          <a href="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html" target="_blank" rel="noopener">ADR-058</a>). The step
+          writes three kinds of probe project next to the throwaway consumer: one positive probe
+          (<code>Probe.Sample.Application</code> referencing <code>Probe.Sample.Domain</code>, which must build, <code>ci.yml:779-781</code>) and two
+          negative ones (<code>Probe.BadPackage.Domain</code> pulling <code>MMCA.Common.Infrastructure</code>, which must fail with
+          <code>MMCA0002</code>, and <code>Probe.BadProject.Domain</code> referencing an Application project, which must fail with
+          <code>MMCA0001</code>, <code>ci.yml:782-786</code>). The helper <code>expect_error</code> (<code>ci.yml:773-778</code>) fails the step both when a
+          negative probe builds and when it fails for a reason other than the expected code.</p>
+          <p>Why the negatives are the point: a passing positive probe on its own would also pass if the targets file
+          were silently missing from the package, so only the two probes that must break prove the import reaches
+          a package-mode consumer and that both error codes fire. [Rubric section 34, Governance] assesses whether
+          architectural rules are enforced mechanically rather than by review; here the rules travel with the
+          package and CI proves they arrive, which is the consumer-side twin of the
+          <a href="00-primer.html#architecture-enforcement-is-doubled-fitness-functions-rubric-34-3">doubled fitness functions</a>.</p>
+          <p><strong><code>sample-deployment-validate</code></strong> (<code>ci.yml:795-811</code>) type-checks the <code>samples/deployment</code> Bicep templates
           with <code>az bicep build</code>, no cloud credentials required. A library cannot deploy itself, so this IaC/OIDC
           reference is documentation that would otherwise rot unobserved; compiling it on every PR keeps it honest.
           A real what-if or deploy stays a consumer-side concern, since ADC&#39;s and Store&#39;s <code>deploy.yml</code> are the
           production-proven versions.</p>
           <h3 id="job-redis-integration">Job: <code>redis-integration</code></h3>
-          <p>The last job (<code>ci.yml:806-845</code>) runs <code>MMCA.Common.Infrastructure.Redis.Tests</code> against a real Redis via
+          <p>The last job (<code>ci.yml:813-852</code>) runs <code>MMCA.Common.Infrastructure.Redis.Tests</code> against a real Redis via
           Testcontainers, which Ubuntu runners support with no extra setup since they ship a Docker daemon. Like the
           E2E and benchmark projects it lives outside <code>MMCA.Common.slnx</code> so the fast solution-wide unit loop never
           requires Docker, and is therefore built and run by path.</p>
-          <p>The comment (<code>ci.yml:811-815</code>) states the falsifiability argument better than a summary can:
+          <p>The comment (<code>ci.yml:818-822</code>) states the falsifiability argument better than a summary can:
           <code>DistributedCacheService</code> is the one place where the <strong>storage format</strong> matters, and a
           <code>Mock&lt;IDistributedCache&gt;</code> cannot express it. Redis keys are typed, so a counter written as a string and
           read back as a hash round-trips perfectly against a mock and answers <code>WRONGTYPE</code> against a server. A test
           that cannot fail against a mock is not a test of the thing you care about.</p>
-          <p>Its heavy step is code-guarded like every other job (<code>ci.yml:838-845</code>) so a docs-only PR does not pull a
+          <p>Its heavy step is code-guarded like every other job (<code>ci.yml:845-852</code>) so a docs-only PR does not pull a
           Redis image, while the job itself still runs and posts its context green, keeping it safe to add to branch
           protection.</p>
           <h3 id="jobs-postgresql-integration-and-apphost-testing">Jobs: <code>postgresql-integration</code> and <code>apphost-testing</code></h3>
-          <p><code>postgresql-integration</code> (<code>ci.yml:847-880</code>) is the Redis argument applied to the second database engine.
+          <p><code>postgresql-integration</code> (<code>ci.yml:854-887</code>) is the Redis argument applied to the second database engine.
           The PostgreSQL provider is the one place where the SQL the framework <em>emits</em> matters, and a model
-          assertion cannot express it: the comment is specific about the failure class (<code>ci.yml:852-857</code>), a
+          assertion cannot express it: the comment is specific about the failure class (<code>ci.yml:859-864</code>), a
           partial-index predicate written the SQL Server way (<code>[ProcessedOn] IS NULL</code>), a soft-delete predicate
           comparing a boolean to <code>0</code>, and a <code>DateTime</code> whose <code>Kind</code> is not UTC all build a perfectly valid EF model
           and are rejected by the server. The job runs <code>MMCA.Common.Infrastructure.PostgreSQL.Tests</code> against a real
-          PostgreSQL over Testcontainers (<code>ci.yml:873-880</code>), built and run by path for the same reason the Redis
+          PostgreSQL over Testcontainers (<code>ci.yml:880-887</code>), built and run by path for the same reason the Redis
           tier is: the project sits outside <code>MMCA.Common.slnx</code> so the fast unit loop never requires Docker.</p>
-          <p><code>apphost-testing</code> (<code>ci.yml:882-939</code>) is the only tier that starts a real orchestrator. It boots the sample
+          <p><code>apphost-testing</code> (<code>ci.yml:889-946</code>) is the only tier that starts a real orchestrator. It boots the sample
           AppHost through <code>Aspire.Hosting.Testing</code> and closes the one layer nothing else executes, the AppHost
-          wiring itself (<code>ci.yml:892-895</code>): the solution build never runs an AppHost, and every in-process test tier
+          wiring itself (<code>ci.yml:899-902</code>): the solution build never runs an AppHost, and every in-process test tier
           boots hosts directly through <code>WebApplicationFactory</code>, bypassing the orchestration, so a renamed resource,
           an unresolvable reference or a <code>WaitFor</code> cycle is invisible everywhere else. Three properties are worth
-          carrying away. It is <strong>advisory</strong>, <code>continue-on-error: true</code> (<code>ci.yml:900</code>), because it is the slowest
+          carrying away. It is <strong>advisory</strong>, <code>continue-on-error: true</code> (<code>ci.yml:907</code>), because it is the slowest
           thing in the repository per assertion and its failure modes on a shared runner are not proven yet; the
-          comment states the exit condition rather than leaving it open (<code>ci.yml:887-890</code>), promote it once it has a
+          comment states the exit condition rather than leaving it open (<code>ci.yml:894-897</code>), promote it once it has a
           green streak, delete it if it proves to be a flake generator. It trusts the ASP.NET Core development
-          certificate as an explicit job step (<code>ci.yml:916-925</code>), because a resource launched with the <code>https</code>
+          certificate as an explicit job step (<code>ci.yml:923-932</code>), because a resource launched with the <code>https</code>
           profile answers its health probe over TLS terminated by that certificate: untrusted on a fresh runner,
           every probe fails with <code>UntrustedRoot</code>, the resource never turns healthy, and every <code>WaitFor</code> edge into it
-          waits out the budget. And the test step opts in through <code>MMCA_APPHOST_TESTS</code> (<code>ci.yml:926-939</code>), the
+          waits out the budget. And the test step opts in through <code>MMCA_APPHOST_TESTS</code> (<code>ci.yml:933-946</code>), the
           environment gate the fixture reads, so a developer machine and every other CI job skip the collection with
           a named reason instead of paying for an orchestrator.</p>
           <p>[Rubric §14, Testability &amp; Test Strategy] is served by both jobs the way the Redis tier serves it: each
@@ -575,13 +605,13 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           from source and gates on (see the FACTS drift step in <code>ci.yml</code> above): read the count there rather than
           from any prose.</p>
           <p>They are packed by <strong>two jobs, not one</strong>, and the split follows the solution boundary exactly. The ubuntu
-          <code>publish</code> job runs <code>dotnet pack MMCA.Common.slnx</code> (<code>release.yml:74-75</code>), which packs every packable
+          <code>publish</code> job runs <code>dotnet pack MMCA.Common.slnx</code> (<code>release.yml:75-76</code>), which packs every packable
           project the solution contains (<code>MMCA.Common.slnx:8-29</code>). The windows <code>publish-maui</code> job packs the one
-          remaining package, <code>MMCA.Common.UI.Maui</code>, by csproj path (<code>release.yml:180-181</code>), because its four MAUI
+          remaining package, <code>MMCA.Common.UI.Maui</code>, by csproj path (<code>release.yml:189-190</code>), because its four MAUI
           target frameworks need workloads that Ubuntu runners do not carry
           (<strong><a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a></strong>), which is
           also why that project stays out of the solution. Both jobs derive their version from the same
-          <code>GITHUB_REF_NAME</code> (<code>release.yml:64-66</code>, <code>release.yml:172-175</code>), so the lockstep release stays whole
+          <code>GITHUB_REF_NAME</code> (<code>release.yml:65-67</code>, <code>release.yml:181-184</code>), so the lockstep release stays whole
           across the runner split.</p>
           <h3 id="why-lockstep-matters">Why lockstep matters</h3>
           <p>MMCA.Common&#39;s packages form a coherent framework layer. A consumer&#39;s <code>Directory.Packages.props</code>
@@ -626,65 +656,77 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           version can never be withdrawn (ADR-053), so the job declares <code>environment: release</code> (<code>release.yml:11-15</code>)
           and waits on that environment&#39;s protection rules (a required reviewer, and a deployment policy limited to
           <code>v*</code> tags) before it runs at all. The first step after checkout then refuses to publish a tag that is not
-          reachable from <code>origin/main</code> (<code>release.yml:34-45</code>): it fetches the branch tip and fails unless
+          reachable from <code>origin/main</code> (<code>release.yml:35-46</code>): it fetches the branch tip and fails unless
           <code>git merge-base --is-ancestor</code> places the tagged commit on merged <code>main</code>. A <code>v*</code> tag is the one ref pushed
           directly, outside the branch-protection pull-request flow, and this workflow re-runs only restore, build,
           test and SBOM, so the ancestry check is what makes the checks that ran on the merged pull request (the
           FACTS drift gate, the vulnerability audit, the Helpdesk consumer canary, the package-consumption canary,
           <code>ui-e2e</code>, the perf gate) the checks that actually covered the tree being published. <code>publish-maui</code> carries
-          the same assertion (<code>release.yml:145-155</code>), because it publishes from the same tag.</p>
-          <p><strong>Step 1, Checkout with full history</strong> (<code>release.yml:22-25</code>): <code>fetch-depth: 0</code> for MinVer, same as CI,
+          the same assertion (<code>release.yml:154-164</code>), because it publishes from the same tag.</p>
+          <p><strong>Step 1, Checkout with full history</strong> (<code>release.yml:23-26</code>): <code>fetch-depth: 0</code> for MinVer, same as CI,
           with <code>persist-credentials: false</code> so the checkout token is not left behind in the workspace.</p>
-          <p><strong>Step 2, .NET 10 setup</strong> (<code>release.yml:47-56</code>): same as CI, including the NuGet cache keyed on the
+          <p><strong>Step 2, .NET 10 setup</strong> (<code>release.yml:48-57</code>): same as CI, including the NuGet cache keyed on the
           committed lock files plus <code>Directory.Packages.props</code>.</p>
-          <p><strong>Step 3, Restore</strong> (<code>release.yml:57-63</code>): <code>dotnet restore MMCA.Common.slnx --locked-mode</code>, so the
+          <p><strong>Step 3, Restore</strong> (<code>release.yml:58-64</code>): <code>dotnet restore MMCA.Common.slnx --locked-mode</code>, so the
           packages that are about to be packed, SBOM&#39;d and pushed irreversibly come from the committed lock graph
           rather than from whatever the feed resolves at tag time; no <code>GITHUB_TOKEN</code> is needed.</p>
-          <p><strong>Step 4, Determine version from tag</strong> (<code>release.yml:64-66</code>):</p>
+          <p><strong>Step 4, Determine version from tag</strong> (<code>release.yml:65-67</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;VERSION=<span class="hljs-variable">${GITHUB_REF_NAME#v}</span>&quot;</span> &gt;&gt; <span class="hljs-variable">$GITHUB_OUTPUT</span></code></pre>
           <p><code>GITHUB_REF_NAME</code> is the full tag name (e.g. <code>v1.52.0</code>). The <code>#v</code> parameter expansion strips the leading
           <code>v</code>, yielding <code>1.52.0</code>. This string is then passed to the build and pack steps as an explicit version
           override.</p>
-          <p><strong>Step 5, Build with explicit version</strong> (<code>release.yml:68-69</code>):</p>
+          <p><strong>Step 5, Build with explicit version</strong> (<code>release.yml:69-70</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=<span class="hljs-literal">true</span> -p:Version=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
           <p><code>-p:MinVerSkip=true</code> disables MinVer&#39;s git-tag-based version derivation and <code>-p:Version=...</code> injects the
           tag-derived version directly. This pattern avoids a subtle race: if MinVer ran here, it would derive the
           version from the tag, which should be the same value, but in edge cases (e.g. detached HEAD, retagged
           commit) the two sources could diverge. Making the version explicit from the start removes the ambiguity.</p>
-          <p><strong>Step 6, Test</strong> (<code>release.yml:71-72</code>):</p>
+          <p><strong>Step 6, Test</strong> (<code>release.yml:72-73</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --solution MMCA.Common.slnx -c Release --no-build</code></pre>
           <p>Tests run again (no <code>--minimum-expected-tests</code> floor here, the release workflow is not the primary test
           gate; CI already covered this). This is a belt-and-suspenders pass to ensure the tagged commit is green
           before packaging.</p>
-          <p><strong>Step 7, Pack</strong> (<code>release.yml:74-75</code>):</p>
+          <p><strong>Step 7, Pack</strong> (<code>release.yml:75-76</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=<span class="hljs-literal">true</span> -p:PackageVersion=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
           <p><code>dotnet pack</code> over the entire solution packs every packable project it contains (<code>Source/**</code>) in
           one command. <code>-p:PackageVersion</code> sets the NuGet package version metadata. <code>-o ./nupkgs</code> collects all
           <code>.nupkg</code> files in one directory for the push step. The packages produced here all share the same
           version string. <code>MMCA.Common.UI.Maui</code> is not in the solution and is packed by the <code>publish-maui</code> windows
           job into its own <code>./nupkgs-maui</code> directory from the same tag (ADR-042).</p>
-          <p><strong>Steps 8 and 9, SBOM generation and upload</strong> (<code>release.yml:81-93</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Generate</span> <span class="hljs-string">SBOM</span> <span class="hljs-string">(CycloneDX)</span>
-  <span class="hljs-attr">run:</span> <span class="hljs-string">|
-    dotnet tool install --global CycloneDX
-    dotnet CycloneDX MMCA.Common.slnx --output ./sbom --json
-    ls -la ./sbom
-    test -n &quot;$(ls -A ./sbom 2&gt;/dev/null)&quot; || { echo &quot;::error::SBOM generation produced no output&quot;; exit 1; }
-</span><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Upload</span> <span class="hljs-string">SBOM</span>
+          <p><strong>Steps 8 and 9, SBOM generation and upload</strong> (<code>release.yml:90-101</code>):</p>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Attest</span> <span class="hljs-string">build</span> <span class="hljs-string">provenance</span> <span class="hljs-string">(nupkgs)</span>
+  <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8</span> <span class="hljs-comment"># v4.2.2</span>
+  <span class="hljs-attr">with:</span>
+    <span class="hljs-attr">subject-path:</span> <span class="hljs-string">./nupkgs/*.nupkg</span>
+<span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Generate</span> <span class="hljs-string">SBOM</span> <span class="hljs-string">(CycloneDX)</span>
+  <span class="hljs-attr">uses:</span> <span class="hljs-string">./.github/actions/cyclonedx-sbom</span>
+  <span class="hljs-attr">with:</span>
+    <span class="hljs-attr">solution:</span> <span class="hljs-string">MMCA.Common.slnx</span>
+    <span class="hljs-attr">output-dir:</span> <span class="hljs-string">./sbom</span>
+<span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Upload</span> <span class="hljs-string">SBOM</span>
   <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/upload-artifact@v7</span>
   <span class="hljs-attr">with:</span>
     <span class="hljs-attr">name:</span> <span class="hljs-string">sbom</span>
     <span class="hljs-attr">path:</span> <span class="hljs-string">./sbom</span>
     <span class="hljs-attr">if-no-files-found:</span> <span class="hljs-string">error</span></code></pre>
+          <p>Two supply-chain artifacts follow the pack. <strong>Build provenance</strong> (<code>release.yml:78-84</code>):
+          <code>actions/attest-build-provenance</code> writes a signed SLSA attestation binding each <code>.nupkg</code> to this workflow,
+          this commit and this repository. GitHub stores it, and anyone holding a downloaded package can check it with
+          <code>gh attestation verify &lt;file&gt;.nupkg --owner ivanball</code>. It needs the <code>attestations: write</code> permission the job
+          declares (<code>release.yml:21</code>; <code>publish-maui</code> declares its own at <code>release.yml:140</code> and attests its package at
+          <code>release.yml:195-198</code>). It answers the question an SBOM cannot: not what is inside the package, but whether
+          this exact file was built by this pipeline from this commit (<a href="https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html" target="_blank" rel="noopener">ADR-038</a>).</p>
           <p>CycloneDX generates a Software Bill of Materials, a machine-readable inventory of every dependency&#39;s
-          identity, version, and license. The SBOM is now a <strong>hard gate</strong> (the comment on <code>release.yml:77-80</code> records
-          that it &quot;was continue-on-error while the tooling was being validated in CI, now promoted to a blocking
-          step&quot;): a failed generation, an <em>empty</em> <code>./sbom</code> directory, or a missing artifact (<code>if-no-files-found: error</code>) fails the release. Every published version must ship a verifiable SBOM.</p>
+          identity, version, and license. The SBOM is a <strong>hard gate</strong> (<code>release.yml:86-94</code>): the step calls the shared
+          composite action <code>.github/actions/cyclonedx-sbom</code>, the same one ADC and Store <code>deploy.yml</code> run by ref, which
+          fails the release when generation fails OR the BOM lists zero components
+          (<code>MMCA.Common/.github/actions/cyclonedx-sbom/action.yml:68-71</code>); a missing artifact then fails the upload
+          (<code>if-no-files-found: error</code>). Every published version must ship a verifiable SBOM.</p>
           <p>[Rubric §30, Compliance, Privacy &amp; Data Governance] (assesses whether supply-chain and licensing
           obligations are tracked) is served: the SBOM is the machine-readable artifact that fulfills the
           &quot;know your dependencies&quot; requirement for regulated or commercially-distributed software, and gating on it
           guarantees no version ships without one.</p>
-          <p><strong>Step 10, Push to GitHub Packages</strong> (<code>release.yml:95-96</code>):</p>
+          <p><strong>Step 10, Push to GitHub Packages</strong> (<code>release.yml:103-104</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet nuget push ./nupkgs/*.nupkg \
   --<span class="hljs-built_in">source</span> <span class="hljs-string">&quot;https://nuget.pkg.github.com/ivanball/index.json&quot;</span> \
   --api-key <span class="hljs-variable">${{ secrets.GITHUB_TOKEN }</span>} \
@@ -695,7 +737,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           packages that already uploaded.</p>
           <p><code>GITHUB_TOKEN</code> is automatically provided by GitHub Actions when <code>packages: write</code> is in the job
           permissions. No external secret is needed.</p>
-          <p><strong>Steps 11 and 12, Push to nuget.org via trusted publishing</strong> (<code>release.yml:107-116</code>):</p>
+          <p><strong>Steps 11 and 12, Push to nuget.org via trusted publishing</strong> (<code>release.yml:115-124</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">NuGet</span> <span class="hljs-string">login</span> <span class="hljs-string">(OIDC</span> <span class="hljs-string">to</span> <span class="hljs-string">short-lived</span> <span class="hljs-string">key)</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">github.repository_owner</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;ivanball&#x27;</span>
   <span class="hljs-attr">uses:</span> <span class="hljs-string">NuGet/login@v1</span>
@@ -720,18 +762,18 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p>[Rubric §11, Security] again: this is the strongest form of the &quot;no long-lived credentials in CI&quot;
           property, since there is no secret to steal even momentarily.</p>
           <h3 id="job-publish-maui">Job: <code>publish-maui</code></h3>
-          <p>A second job on <code>windows-latest</code> (<code>release.yml:122-218</code>) packs the one out-of-solution package,
+          <p>A second job on <code>windows-latest</code> (<code>release.yml:130-236</code>) packs the one out-of-solution package,
           <code>MMCA.Common.UI.Maui</code>, which multi-targets net10.0-android/ios/maccatalyst/windows and therefore cannot
-          build on the ubuntu runner at all (ADR-042). It installs the MAUI workload (<code>release.yml:169-170</code>),
-          derives the version from the same tag (<code>release.yml:172-175</code>), builds and packs by csproj path into
-          <code>./nupkgs-maui</code> (<code>release.yml:177-181</code>), applies the same SBOM hard gate scoped to that one project
-          (<code>release.yml:183-196</code>), and pushes to both registries (<code>release.yml:198-218</code>). Because both jobs key off
+          build on the ubuntu runner at all (ADR-042). It installs the MAUI workload (<code>release.yml:178-179</code>),
+          derives the version from the same tag (<code>release.yml:181-184</code>), builds and packs by csproj path into
+          <code>./nupkgs-maui</code> (<code>release.yml:186-190</code>), applies the same SBOM hard gate scoped to that one project
+          (<code>release.yml:200-214</code>), and pushes to both registries (<code>release.yml:216-236</code>). Because both jobs key off
           <code>GITHUB_REF_NAME</code>, the two runners produce the same version string and lockstep survives the split.</p>
-          <p>Two details are load-bearing, and the comment states them (<code>release.yml:204-207</code>). The nuget.org
+          <p>Two details are load-bearing, and the comment states them (<code>release.yml:222-225</code>). The nuget.org
           trusted-publishing policy is keyed on the workflow <strong>file</strong>, so one policy covers both jobs, but each job
-          needs its own <code>id-token: write</code> (<code>release.yml:128-131</code>) and its own exchange: a short-lived key is
+          needs its own <code>id-token: write</code> (<code>release.yml:136-140</code>) and its own exchange: a short-lived key is
           single-use and cannot cross a job boundary. And every <code>dotnet nuget push</code> step here sets <code>shell: bash</code>
-          (<code>release.yml:201</code>, <code>release.yml:217</code>), because the windows-default PowerShell passes <code>*.nupkg</code> through
+          (<code>release.yml:219</code>, <code>release.yml:235</code>), because the windows-default PowerShell passes <code>*.nupkg</code> through
           unexpanded and the push then fails with &quot;File does not exist&quot; on the un-globbed pattern.</p>
           <p>The cost of the split is release surface: two runners must both succeed for a release to be whole.</p>
           <hr>
@@ -993,6 +1035,18 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           just &quot;a migration exists&quot; but &quot;the schema stays compatible with the release you can still roll back to&quot;.
           [Rubric §29, Resilience, Reliability &amp; Business Continuity] is served because it is what keeps the
           automatic rollback in Phase 5 an actual recovery path rather than a hopeful one.</p>
+          <p><strong>OpenAPI documents are current</strong> (<code>deploy.yml:297-312</code>) is a contract-first gate that runs right after
+          the Release build. Each <code>*.Service</code> host writes <code>openapi/&lt;host&gt;.json</code> during that build (the
+          <code>MmcaGenerateOpenApiDocument</code> target in <code>Directory.Build.props</code>, per the comment at <code>deploy.yml:299-302</code>), and
+          the four documents are committed. The step asserts that exactly four documents are tracked
+          (<code>deploy.yml:305-308</code>) and that <code>git diff --exit-code</code> over <code>Source/Services/*/openapi/*.json</code> is empty
+          (<code>deploy.yml:309-311</code>). A PR that changes a route, parameter, status code or response shape without
+          committing the regenerated document therefore fails, so the contract change is a reviewable diff instead of
+          a runtime surprise. When it fails, <strong>Upload the regenerated OpenAPI documents</strong> (<code>deploy.yml:314-324</code>, under
+          <code>if: failure()</code>) publishes the runner&#39;s regenerated files as the <code>openapi-regenerated</code> artifact with a
+          seven-day retention: those files ARE the expected contract, so the fix is a download and a commit rather than
+          guessing from a <code>--stat</code> line, and a green run leaves no artifact behind. Both steps are guarded on the <code>code</code>
+          flag like the rest of the job.</p>
           <h3 id="job-backend-test-gate-closing-the-deploy-with-zero-tests-hole">Job: <code>backend-test-gate</code>, closing the &quot;deploy with zero tests&quot; hole</h3>
           <p>This job (<code>deploy.yml:419-447</code>) is the newest piece of the pipeline, and it exists because three
           individually-sound decisions composed into a hole. <code>build-and-test</code> and <code>integration-tests</code> are both
@@ -1041,17 +1095,17 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           math. It carries <code>--filter-not-trait &quot;Category=AiEval.Live&quot; --minimum-expected-tests 1</code>, the same
           discovery floor every other gate step uses, because a filter breakage that runs zero tests must red the
           gate rather than report a vacuous pass (<code>deploy.yml:496-497</code>).</li>
-          <li><strong>Live judge</strong>, only when <code>needs.changes.outputs.scoring == &#39;true&#39;</code> (<code>deploy.yml:504-515</code>, gated at
-          <code>:505</code>). Real paid calls to the Anthropic API for each golden proposal, asserting the overall score
+          <li><strong>Live judge</strong>, only when <code>needs.changes.outputs.scoring == &#39;true&#39;</code> (<code>deploy.yml:534-547</code>, gated at
+          <code>:535</code>). Real paid calls to the configured AI provider&#39;s API for each golden proposal, asserting the overall score
           lands in the case&#39;s band. It is scoped to a diff that touches the scoring code precisely because it
           costs money, and the bands are deliberately wide: a judge model is not deterministic, and a flaky gate
           gets ignored.</li>
           </ol>
           <p>Two details in the second tier are worth reading. It sets <strong>no</strong> <code>--minimum-expected-tests</code> floor, and
-          the comment says why (<code>deploy.yml:506-508</code>): without <code>ANTHROPIC_API_KEY</code> every case skips itself
+          the comment says why (<code>deploy.yml:536-538</code>): without <code>AI_API_KEY</code> every case skips itself
           dynamically, reported as skipped and never as passed, so a zero-run must not red the deploy on a
           repository whose secret is absent. And the key arrives as a job-scoped <code>env</code> from
-          <code>secrets.ANTHROPIC_API_KEY</code> (<code>deploy.yml:514-515</code>), never as a build argument or a workflow input.</p>
+          <code>secrets.ANTHROPIC_API_KEY</code> mapped to the provider-neutral variable <code>AI_API_KEY</code> (<code>deploy.yml:544-547</code>; the secret keeps its name because it holds an Anthropic credential, and only the variable the test reads is neutral), never as a build argument or a workflow input.</p>
           <p>This is also why <code>scoring</code> is the one classifier output that does <strong>not</strong> fail safe to <code>true</code>
           (<code>deploy.yml:154-158</code>): a false positive here spends money on every unrelated deploy, while the two
           key-free tiers already run unconditionally, so the narrow set costs nothing in coverage.</p>
@@ -1067,24 +1121,25 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           are reports, and the comment above the job draws that line explicitly (<code>deploy.yml:517-520</code>).</p>
           <p><strong>The two gates:</strong></p>
           <ul>
-          <li><p><strong>Vulnerability audit</strong> (<code>deploy.yml:549-587</code>) fails on any vulnerable-package row except advisories
-          accepted via <code>NuGetAuditSuppress</code> in <code>Directory.Build.props</code>. This mirrors Common&#39;s <code>ci.yml</code> step and
-          exists for the same reason: <code>dotnet list --vulnerable</code> ignores <code>NuGetAuditSuppress</code>, so the accepted
-          advisory list has to be re-applied by hand (<code>deploy.yml:566-583</code>). NuGetAudit at restore already gates
-          the build; this makes the check deploy-gating as well, belt and suspenders. Two properties added on
-          2026-09-07 are what make the gate falsifiable. It <strong>fails closed</strong>: the step keeps <code>dotnet list</code>&#39;s exit
-          code instead of swallowing it with <code>|| true</code>, and it requires a recognized result header before it
-          trusts the report (<code>deploy.yml:558-573</code>). Previously an advisory-feed timeout or an MSBuild evaluation
-          error wrote non-matching text, the row grep matched nothing, and the gate reported no non-suppressed
-          vulnerable packages and exited 0 with the audit never having run. And the accept-list scrape now reads
-          <strong>only</strong> real <code>&lt;NuGetAuditSuppress ... Include=&quot;GHSA-...&quot;</code> elements (<code>deploy.yml:574-578</code>), the same
-          narrow reading Common uses (<code>MMCA.Common/.github/workflows/ci.yml:157-159</code>): scraping every <code>GHSA-</code>
-          string in the file let a rationale comment silence an advisory that was never actually suppressed.</p>
+          <li><p><strong>Vulnerability audit</strong> (<code>deploy.yml:581-592</code>) fails on any vulnerable-package row except advisories
+          accepted via <code>NuGetAuditSuppress</code> in <code>Directory.Build.props</code>. It is no longer a copy of Common&#39;s gate: it
+          calls the shared composite action <code>ivanball/MMCA.Common/.github/actions/nuget-vulnerability-audit@main</code>
+          (<code>deploy.yml:589-592</code>), the implementation Common&#39;s <code>ci.yml</code> runs by path, so the fail-closed exit-code and
+          report-header checks and the narrow <code>&lt;NuGetAuditSuppress ... Include=&quot;GHSA-...&quot;</code> accept-list reading
+          described in the Common section above apply here unchanged. The comment (<code>deploy.yml:583-588</code>) gives the
+          reason: one implementation for the framework and its consumers instead of a copy per repository that
+          drifts (<a href="https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html" target="_blank" rel="noopener">ADR-038</a>). ADC passes <code>report-path: supply-chain/vulnerable.txt</code>, so the raw report still
+          lands in the uploaded artifact. NuGetAudit at restore already gates the build; this makes the job a
+          deploy-gating belt-and-suspenders check.</p>
           </li>
-          <li><p><strong>CycloneDX SBOM</strong> (<code>deploy.yml:601-614</code>) must exist <strong>and contain components</strong>. The comment records
-          the near-miss (<code>deploy.yml:603-605</code>): the previous <code>test -s</code> check only proved the file was non-empty,
-          which a zero-component skeleton passes, which is exactly how an empty SBOM went unnoticed. The step now
-          asserts <code>jq &#39;.components | length&#39; &gt; 0</code> (<code>deploy.yml:612-614</code>).</p>
+          <li><p><strong>CycloneDX SBOM</strong> (<code>deploy.yml:606-619</code>) must exist <strong>and contain components</strong>. It runs the shared
+          <code>cyclonedx-sbom@main</code> action (<code>deploy.yml:614-619</code>) with <code>name: MMCA.ADC.CI</code> and <code>filename: adc-sbom.json</code>;
+          the action fails unless the file exists and <code>jq &#39;.components | length&#39;</code> is greater than zero
+          (<code>MMCA.Common/.github/actions/cyclonedx-sbom/action.yml:68-71</code>), because a zero-component skeleton passes a
+          plain file-size check, which is exactly how an empty SBOM once went unnoticed. The comment
+          (<code>deploy.yml:608-613</code>) records two further choices: the action normalises the <code>.slnf</code> itself, and the
+          first-party action is referenced by branch rather than by SHA on purpose, since MMCA.Common <code>main</code> is
+          PR-protected and a ref is what keeps the consumer gate from drifting away from the framework&#39;s.</p>
           </li>
           </ul>
           <p><strong>The two non-gating reports</strong> (<code>continue-on-error: true</code>) are <code>supply-chain/deprecated.txt</code>, packages the
@@ -1142,7 +1197,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           conditioned, so a docs-only PR would pay to pull and boot SQL Server for nothing. As a guarded step it is
           skipped with everything else while the job still runs and posts its required status green
           (<code>deploy.yml:641-645</code>). MMCA.Common&#39;s Helpdesk canary now uses the identical pattern for its migration
-          apply (<code>MMCA.Common/.github/workflows/ci.yml:568-571</code>).</p>
+          apply (<code>MMCA.Common/.github/workflows/ci.yml:543-546</code>).</p>
           <p>The password lives in the job&#39;s <code>env:</code> (<code>deploy.yml:649-650</code>) because it is a throwaway SA credential for
           an ephemeral container, not a production secret, and not stored in GitHub Secrets. The comment states it
           explicitly (<code>deploy.yml:644-645</code>): &quot;Throwaway SA password, not a secret.&quot;</p>
@@ -1508,7 +1563,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <code>infra/main.parameters.json</code> does not exist). The <code>jq --arg</code> flag properly JSON-escapes multiline values (critical for the RSA PEM keys,
           which contain newlines). The base parameter set is always present (<code>deploy.yml:1424-1452</code>), including the
           six SHA-tagged image references read from <code>needs.foundation.outputs.acrLoginServer</code>. Optional parameters
-          (OAuth credentials, Anthropic API key, SMTP config, the synthetic-traffic key, managed-identity SQL
+          (OAuth credentials, the AI provider key (<code>AI_API_KEY</code>, fed to the Bicep <code>aiApiKey</code> parameter), SMTP config, the synthetic-traffic key, managed-identity SQL
           settings) are conditionally appended only if their env vars are non-empty:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># deploy.yml:1462-1465</span>
 <span class="hljs-keyword">if</span> [ -n <span class="hljs-string">&quot;<span class="hljs-variable">$OAUTH_GITHUB_CLIENT_ID</span>&quot;</span> ]; <span class="hljs-keyword">then</span>
@@ -2263,6 +2318,15 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           <code>--locked-mode</code>: an Aspire AppHost lock carries a RID-specific <code>Aspire.Dashboard.Sdk.&lt;rid&gt;</code> entry, so
           locked mode fails with NU1004 on a Linux runner whether or not anything drifted. Neither workflow is
           given its own section above, but both are part of the workflow set.)</p>
+          <p>The drill also cleans up when it does not finish. The script deletes its restored copy in a <code>finally</code> block,
+          but a job cancelled at <code>timeout-minutes</code> never reaches it, and the weekly rotation means the next run targets
+          a different database, so its stale-name check would not remove the leftover either; the comment
+          (<code>dr-drill.yml:89-93</code>) records the 2026-09-14 scheduled run that left <code>ADC_Engagement-drill</code> at Basic-tier
+          cost for five days. The <strong>Remove leftover drill copies</strong> step (<code>dr-drill.yml:94-105</code>) runs under
+          <code>if: always()</code>, so on cancel and on failure too, finds the <code>adc-prod-sql-*</code> server (warning and exiting
+          cleanly when there is none) and deletes every database on it whose name ends in <code>-drill</code>, not just this run&#39;s.
+          [Rubric section 31, Cost/FinOps] assesses whether spend is bounded by design rather than by vigilance; this
+          step makes an interrupted drill self-correcting instead of a silent standing charge.</p>
           <p><code>deploy.yml</code> on push or dispatch is the only Azure-mutating workflow in the set today, and it holds the
           <code>prod-azure</code> concurrency group with <code>cancel-in-progress: false</code> so a deploy is never interrupted
           mid-migration; its comment records the standing rule that any future workflow mutating production Azure
