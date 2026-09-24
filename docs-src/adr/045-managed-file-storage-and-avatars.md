@@ -92,9 +92,10 @@ than avatar-shaped:
   random suffix.
 - **`FileUploadOptions`** (`.../Storage/FileUploadOptions.cs:13`) with `Attachment` (`:48`) and
   `Inline` (`:59`), carrying the `Content-Disposition` and `Cache-Control` headers stored on the
-  blob. The options-carrying `UploadAsync` overload is a **default interface member**
-  (`.../Storage/IFileStorageService.cs:42-43`), so adding it broke no existing implementation;
-  `AzureBlobFileStorageService` overrides it and writes both headers
+  blob. The options-carrying `UploadAsync` overload shipped as a default interface member so
+  adding it broke no existing implementation, and became **abstract** in v1.210.0
+  (`.../Storage/IFileStorageService.cs:36`) once no implementation relied on the fallback;
+  `AzureBlobFileStorageService` implements it and writes both headers
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs:27`,
   `:38-43`).
 

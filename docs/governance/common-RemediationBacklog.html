@@ -1585,6 +1585,25 @@
           corrected to v1.203.0 / 267 in both files; 136 / 53 / 19 / ADRs 001-123 unchanged; details under #34 below).</li>
           </ul>
           <hr>
+          <h2 id="progress---code-health-wave-v12100-2026-09-23">Progress - code-health wave (v1.210.0, 2026-09-23)</h2>
+          <p>A code-health pass (read the code, not the rubric) rather than a scored re-score, so no category
+          moves here; the next re-score weighs it. Shipped in v1.210.0 (#439 breaking, #440 internal):</p>
+          <ul>
+          <li><strong>Fixed:</strong> <code>DataGridListPageBase</code> mobile load no longer strands <code>IsLoading</code> when <code>additionalFilters</code>
+          throws (one shared fetch path for the paged, virtualized and mobile loaders; regression test first).</li>
+          <li><strong>Duplication removed:</strong> one relational-target helper and <code>CreateTenantScope</code> (7 and 8 copies); the
+          four cleanup/refresh services on <code>PeriodicBackgroundService</code> (moved to
+          <code>MMCA.Common.Infrastructure.Hosting.Background</code> so <code>NamespaceCycleTests</code> stays unchanged); one polling
+          core, wake-up signal and <code>Truncate</code> for the outbox and internal-command processors; the CSV exporter
+          out of <code>EntityControllerBase</code>.</li>
+          <li><strong>Tightened:</strong> the unused synchronous <code>IUnitOfWork</code> members removed; <code>TimeProvider</code> / <code>refreshSessions</code>
+          required where DI always supplies them; the options <code>UploadAsync</code> overload abstract; one
+          <code>PhysicalDataSource.MigrationsAssembly</code>.</li>
+          <li><strong>New shared gates and fakes:</strong> <code>QueryHandlerReadRepositoryTestsBase</code>, <code>ClockReadTestsBase</code>,
+          <code>E2EPolling</code>, and the in-memory queryable executor and refresh-session store in <code>MMCA.Common.Testing</code>.</li>
+          <li><strong>Considered and kept:</strong> the ADR-017 in-process idempotency lock fallback, and the gated Scheduler /
+          AuditTrail table mapping (ADC Notification enables neither).</li>
+          </ul>
           <h2 id="progress---improvement-wave-gate-coverage--internals-2026-09-20">Progress - improvement wave (gate coverage + internals, 2026-09-20)</h2>
           <blockquote>
           <p>Not a re-score: no category was scored, <strong>no band-table score moves and no category enters or leaves
@@ -2083,6 +2102,7 @@
             <li><a href="#progress---thirty-third-wave-evidence-re-score-at-v11930-2026-09-11">Progress - thirty-third wave (evidence re-score at v1.193.0, 2026-09-11)</a></li>
             <li><a href="#progress---thirty-fourth-wave-evidence-re-score-at-v12020-2026-09-14">Progress - thirty-fourth wave (evidence re-score at v1.202.0, 2026-09-14)</a></li>
             <li><a href="#progress---thirty-fifth-wave-evidence-re-score-at-v12030-2026-09-15">Progress - thirty-fifth wave (evidence re-score at v1.203.0, 2026-09-15)</a></li>
+            <li><a href="#progress---code-health-wave-v12100-2026-09-23">Progress - code-health wave (v1.210.0, 2026-09-23)</a></li>
             <li><a href="#progress---improvement-wave-gate-coverage--internals-2026-09-20">Progress - improvement wave (gate coverage + internals, 2026-09-20)</a></li>
             <li><a href="#deferred---2026-07-19-full-review-recorded-not-scheduled">Deferred - 2026-07-19 full review (recorded, not scheduled)</a></li>
             <li><a href="#recorded---2026-07-31-consumer-discovered-defect-not-scheduled">Recorded - 2026-07-31 consumer-discovered defect (not scheduled)</a></li>

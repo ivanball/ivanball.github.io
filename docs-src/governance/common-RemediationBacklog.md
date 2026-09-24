@@ -1371,6 +1371,26 @@ MMCA.Common PR #271 (squash `8a6c603`, merged 2026-08-22).
 
 ---
 
+## Progress - code-health wave (v1.210.0, 2026-09-23)
+
+A code-health pass (read the code, not the rubric) rather than a scored re-score, so no category
+moves here; the next re-score weighs it. Shipped in v1.210.0 (#439 breaking, #440 internal):
+
+- **Fixed:** `DataGridListPageBase` mobile load no longer strands `IsLoading` when `additionalFilters`
+  throws (one shared fetch path for the paged, virtualized and mobile loaders; regression test first).
+- **Duplication removed:** one relational-target helper and `CreateTenantScope` (7 and 8 copies); the
+  four cleanup/refresh services on `PeriodicBackgroundService` (moved to
+  `MMCA.Common.Infrastructure.Hosting.Background` so `NamespaceCycleTests` stays unchanged); one polling
+  core, wake-up signal and `Truncate` for the outbox and internal-command processors; the CSV exporter
+  out of `EntityControllerBase`.
+- **Tightened:** the unused synchronous `IUnitOfWork` members removed; `TimeProvider` / `refreshSessions`
+  required where DI always supplies them; the options `UploadAsync` overload abstract; one
+  `PhysicalDataSource.MigrationsAssembly`.
+- **New shared gates and fakes:** `QueryHandlerReadRepositoryTestsBase`, `ClockReadTestsBase`,
+  `E2EPolling`, and the in-memory queryable executor and refresh-session store in `MMCA.Common.Testing`.
+- **Considered and kept:** the ADR-017 in-process idempotency lock fallback, and the gated Scheduler /
+  AuditTrail table mapping (ADC Notification enables neither).
+
 ## Progress - improvement wave (gate coverage + internals, 2026-09-20)
 
 > Not a re-score: no category was scored, **no band-table score moves and no category enters or leaves
