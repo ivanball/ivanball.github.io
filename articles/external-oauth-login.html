@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/external-oauth-login.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs">
+  <meta property="og:description" content="Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/external-oauth-login.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-26.png">
+  <meta property="og:image:alt" content="Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs">
+  <meta name="twitter:description" content="Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-26.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs","description":"Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.","url":"https://ivanball.github.io/articles/external-oauth-login.html","mainEntityOfPage":"https://ivanball.github.io/articles/external-oauth-login.html","image":"https://ivanball.github.io/assets/img/articles/article-26.png","datePublished":"2026-07-26T14:22:48Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":26,"sameAs":"https://medium.com/@ivanball76/google-and-github-login-without-leaking-tokens-external-oauth-behind-your-own-jwts-d68ba5e3aca4"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"26 · External OAuth login behind your own JWTs","item":"https://ivanball.github.io/articles/external-oauth-login.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">26 · External OAuth login behind your own JWTs</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html" aria-current="page">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 26</p>
+          <h1 id="google-github-and-apple-login-without-leaking-tokens-external-oauth-behind-your-own-jwts">Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs</h1>
+          <p class="article-meta"><time datetime="2026-07-26T14:22:48Z">July 26, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/google-and-github-login-without-leaking-tokens-external-oauth-behind-your-own-jwts-d68ba5e3aca4" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-26.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">You want &quot;Sign in with Google,&quot; &quot;Sign in with GitHub,&quot; and the &quot;Sign in with Apple&quot;
+          button the store guidelines ask for. So you add the provider packages, wire the callbacks, and
+          redirect the browser back to your app with the freshly minted session token on the query string,
+          because that is the easy way to get it into the client. Now your access token is in the address bar,
+          the browser history, the <code>Referer</code> header, and every proxy log between you and the user. The fix is
+          to terminate federation at the edge and hand the browser a single-use code, never a token.</p>
+          <hr>
+          <p>Social login looks like an afternoon&#39;s work. Add the Google package, add the GitHub package, add the
+          Apple package, register a callback URL, and let the middleware run the OAuth dance. The provider
+          bounces the user back to your app, you read the external identity off the callback, and they are
+          signed in. The demo works on the first try.</p>
+          <p>Then you look at what actually crossed the wire. The naive version redirects back to your SPA with the
+          session token sitting on the URL, because a redirect is the path of least resistance for getting a
+          value into the browser. But a redirect is a GET. The browser writes that GET into history. Any reverse
+          proxy or CDN in front of you logs the full path. The <code>Referer</code> header carries it into whatever the
+          landing page loads next. You have taken your most sensitive credential and printed it in four places
+          you do not control.</p>
+          <p>There is a second trap under the first. The provider hands you its own access token, and maybe a
+          refresh token, and it is tempting to save them. But you never wanted a Google session, you wanted your
+          user signed into your app. Provider tokens you never call are just more secret material to leak. And a
+          third trap, which runs the opposite way to the one most people plan for: a returning user who
+          registered with a password last month clicks &quot;Sign in with GitHub&quot; today, and the obvious kindness is
+          to match the email and drop the provider onto that account. That match is an account-takeover vector.
+          An incoming assertion proves the provider&#39;s side of the address, and nothing proves the local row&#39;s
+          address was ever confirmed, so the account you are about to hand over may belong to whoever typed that
+          address into your registration form first.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>The invariant the rest of the system leans on is small and load-bearing: inside the app, a user is
+          always a local <code>User</code> carrying the app&#39;s own JWT. Every other auth concern is built on that one token.
+          Cross-service validation checks it against the issuer&#39;s JWKS. Permission checks read its role claim.
+          Ownership checks read its subject. The browser session cookies carry it. If social login introduced a
+          <em>second</em> kind of identity, every one of those consumers would have to learn to validate a Google,
+          GitHub or Apple token too.</p>
+          <p>So external identity cannot be a parallel identity system. It has to be an entry path that terminates
+          in the exact same local token pair a password login produces. The moment the provider vouches for the
+          user, you exchange that vouching for your own JWT and throw the external principal away. Downstream,
+          nothing changes, because downstream never sees anything but your token.</p>
+          <p>And it has to be optional. Most hosts, every test, and local dev have no OAuth secrets. Turning the
+          framework&#39;s OAuth support on with nothing configured must leave the JWT-only pipeline exactly as it
+          was, the same inert-until-configured posture the permission system uses (ADR-020).</p>
+          <h2 id="the-mmca-answer-external-oauth-behind-a-local-jwt-exchange">The MMCA answer: external OAuth behind a local-JWT exchange</h2>
+          <p>The mechanism ships in <code>MMCA.Common.API</code>, and adoption is one app deep (more on that below). It has
+          three moving parts and one rule: the tokens never touch the URL.</p>
+          <p><strong>Scheme registration is gated per provider, and inert until configured.</strong> <code>AddExternalAuthProviders</code>
+          reads the <code>OAuth</code> config section and turns on the Google scheme only if <code>OAuth:Google:ClientId</code> is
+          set, the GitHub scheme only if <code>OAuth:GitHub:ClientId</code> is set, and the Apple scheme only if
+          <code>OAuth:Apple:ClientId</code> is set. With all three absent it returns the service collection untouched, so a
+          host with no OAuth secrets keeps exactly the JWT-only pipeline <code>AddCommonAuthentication</code> gave it. It
+          calls <code>AddAuthentication()</code> with no argument on purpose, so the new schemes append rather than
+          displacing the JWT bearer default. Fail-fast is per provider: Google and GitHub throw at startup when a
+          <code>ClientId</code> is set without its matching <code>ClientSecret</code>, while Apple has no static client secret at all
+          (the handler mints a short-lived ES256 assertion instead, <code>GenerateClientSecret = true</code>) and throws on
+          a missing <code>OAuth:Apple:TeamId</code>, <code>OAuth:Apple:KeyId</code> or <code>OAuth:Apple:PrivateKeyPem</code>. Either way a
+          half-wired provider fails at startup rather than at the first sign-in.</p>
+          <p><strong>A ten-minute cookie carries the external principal, and nothing else.</strong> The provider callback signs
+          into a dedicated <code>ExternalLogin</code> cookie scheme (cookie name <code>mmca_external_login</code>, HttpOnly,
+          <code>SameSite=Lax</code>, a ten-minute lifetime). That cookie exists only to hand the external claims from the
+          provider callback to the controller. It is never the app session. GitHub is asked for the <code>user:email</code>
+          scope, because its default scope omits the email the exchange needs to match an account. Apple returns
+          its callback as a cross-site form POST (<code>response_mode=form_post</code> is forced by the name and email
+          scopes), which the middleware handles at <code>/auth/callback/apple</code> like any other provider callback.</p>
+          <p><strong>The exchange swaps the external identity for a local JWT, then hides the tokens behind a single-use
+          code.</strong> The challenge endpoints (<code>GET auth/oauth/google</code>, <code>GET auth/oauth/github</code>,
+          <code>GET auth/oauth/apple</code>) redirect to the provider and back to <code>OAuthControllerBase.CompleteAsync</code>. Each
+          of them takes an optional opaque <code>state</code> value the client round-trips through the provider, which the
+          challenge stashes in the authentication properties and the completion redirect hands back, so the
+          client can prove the code belongs to the flow it started. The server never interprets that value.
+          <code>CompleteAsync</code> authenticates the <code>ExternalLogin</code> cookie, pulls
+          <code>(provider, providerKey, email, firstName, lastName)</code> out of the standard claims, and calls
+          <code>IAuthenticationService.ExternalLoginAsync</code>. On success it signs the external cookie straight out,
+          mints a 32-byte opaque code, stashes the token pair server-side in the cache under a two-minute TTL,
+          and redirects to the UI carrying that code and the client&#39;s state (the web redirect also carries the
+          non-secret <code>returnUrl</code>), never a token. The UI then POSTs the code back to <code>ExchangeAsync</code> out of band
+          to collect the tokens.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// OAuthControllerBase.CompleteAsync (trimmed): swap the external identity for a local JWT pair,</span>
+<span class="hljs-comment">// then hand the UI only a single-use code, never the tokens.</span>
+<span class="hljs-keyword">var</span> (returnUrl, clientState) = ReadChallengeState(authenticateResult.Properties);  <span class="hljs-comment">// stashed at challenge time</span>
+<span class="hljs-keyword">var</span> mobileReturnUrl = GetAllowedMobileReturnUrl(returnUrl);   <span class="hljs-comment">// an allow-listed native scheme, or null for web</span>
+<span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> authenticationService.ExternalLoginAsync(
+    providerName, providerKey, email, firstName, lastName);   <span class="hljs-comment">// by provider, guarded link, or create</span>
+<span class="hljs-keyword">if</span> (result.IsFailure)
+{
+    <span class="hljs-keyword">return</span> RedirectError(uiBaseUrl, mobileReturnUrl, GetErrorCode(result.Errors));
+}
+<span class="hljs-keyword">var</span> response = result.Value;
+
+<span class="hljs-keyword">await</span> HttpContext.SignOutAsync(ExternalLoginScheme);          <span class="hljs-comment">// the external principal dies with the exchange</span>
+
+<span class="hljs-comment">// Stash the minted token pair server-side under a short TTL; the redirect carries only the opaque</span>
+<span class="hljs-comment">// code plus the client&#x27;s own state, so the client can prove the code belongs to the flow it started.</span>
+<span class="hljs-keyword">var</span> exchangeCode = Convert.ToHexString(RandomNumberGenerator.GetBytes(<span class="hljs-number">32</span>));
+<span class="hljs-keyword">await</span> cacheService.SetAsync(
+    <span class="hljs-string">&quot;oauth-exchange:&quot;</span> + exchangeCode, response, TimeSpan.FromMinutes(<span class="hljs-number">2</span>), HttpContext.RequestAborted);
+<span class="hljs-comment">// Web target normally; the allow-listed native scheme when mobileReturnUrl is non-null (ADR-043).</span>
+<span class="hljs-keyword">return</span> Redirect(BuildSuccessRedirectUrl(uiBaseUrl, mobileReturnUrl, exchangeCode, returnUrl, clientState));
+
+<span class="hljs-comment">// OAuthControllerBase.ExchangeAsync (POST, [NonIdempotent], out of band): burn the code on first use.</span>
+<span class="hljs-keyword">if</span> (<span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(request.Code)) { <span class="hljs-keyword">return</span> InvalidCode(); }
+<span class="hljs-keyword">var</span> response = <span class="hljs-keyword">await</span> cacheService.GetAsync&lt;AuthenticationResponse&gt;(<span class="hljs-string">&quot;oauth-exchange:&quot;</span> + request.Code, ct);
+<span class="hljs-keyword">if</span> (<span class="hljs-built_in">string</span>.IsNullOrEmpty(response.AccessToken)) { <span class="hljs-keyword">return</span> InvalidCode(); }  <span class="hljs-comment">// missing/replayed/expired =&gt; 400</span>
+<span class="hljs-keyword">await</span> cacheService.RemoveAsync(<span class="hljs-string">&quot;oauth-exchange:&quot;</span> + request.Code, ct);      <span class="hljs-comment">// single-use</span>
+<span class="hljs-keyword">return</span> Ok(response);</code></pre>
+          <p>Read the redirect line again: it carries <code>code=...</code>, not <code>access_token=...</code>. The access and refresh
+          tokens sit in the server-side cache the whole time. They reach the browser only through a same-origin
+          POST response body, which history, the <code>Referer</code> header, and upstream access logs do not record. The
+          code is burned on first read, so a leaked or replayed code buys nothing, and a blank, missing,
+          replayed, or expired code returns HTTP 400. The exchange is marked <code>[NonIdempotent]</code>, because
+          replaying a stored response would defeat the burn.</p>
+          <h2 id="the-same-handshake-now-for-native-heads">The same handshake, now for native heads</h2>
+          <p>A mobile head cannot intercept a redirect to a web URL, and the providers reject OAuth inside an
+          embedded WebView, so a MAUI app has to run the provider flow in the system browser and then needs
+          the completion redirect to land back inside the app. ADR-043 adds exactly that without touching the
+          property above. <code>CompleteAsync</code> consults <code>OAuth:AllowedReturnUrlSchemes</code> (a config array, empty by
+          default): when the challenge&#39;s stashed <code>returnUrl</code> is an absolute URI whose custom scheme is on that
+          list (for example <code>atldevcon://oauth-complete</code>), the success and failure redirects target that URL
+          instead of <code>OAuth:UIBaseUrl</code>, carrying the same single-use code. <code>http</code> and <code>https</code> schemes never
+          match even if listed, so a web destination always flows through the config-pinned base URL and the
+          allowlist cannot become an open redirect. An empty list reproduces the web-only behavior exactly. On
+          the client, the Login page branches on an injected <code>IExternalAuthBroker</code>: the MAUI implementation
+          (<code>MauiExternalAuthBroker</code>) begins a per-attempt value in an <code>OAuthFlowStateStore</code>, launches the
+          provider in the system browser via <code>WebAuthenticator</code> with that value on the challenge URL, captures
+          <code>code</code> and the returned <code>state</code> off the custom-scheme callback, and hands both to the shared
+          <code>/auth/oauth-complete</code> page, which already owns the same out-of-band <code>ExchangeAsync</code> the browser uses.
+          The completion page refuses a code that does not belong to an attempt started on this device, so a
+          deep link carrying someone else&#39;s code cannot sign the app in as them. Web heads keep the plain anchor
+          flow; the broker reports itself unavailable when no mobile redirect scheme is configured. The code
+          still rides the redirect and a token never does, so the invariant holds identically across web and
+          native: the only thing that differs is where the code lands.</p>
+          <h2 id="finding-the-local-user-three-ways">Finding the local user, three ways</h2>
+          <p><code>ExternalLoginAsync</code> is where the external identity becomes one of your users, and it resolves in a
+          deliberate order inside a single transaction. First it looks for a user already carrying this
+          <code>LoginProvider</code> + <code>ProviderKey</code>: a returning social user, signed in immediately. If there is none, it
+          validates the provider-supplied email with <code>Email.Create</code> (this is the one address in the system no
+          request validator has already gated, and an unparseable claim returns <code>Auth.ExternalEmailInvalid</code>
+          rather than turning the next query into &quot;find the users whose email is null&quot;), then looks the account
+          up by that validated value.</p>
+          <p>When an account already owns that email, nothing is linked until three guards pass, and they are
+          strict on purpose. <strong>One provider link per user:</strong> an account already linked to a <em>different</em> provider
+          is refused with <code>Auth.ExternalProviderAlreadyLinked</code>, because the aggregate holds a single
+          <code>(LoginProvider, ProviderKey)</code> pair and a second link would overwrite the first and strand the
+          original login, which on a pure-OAuth account has no password to fall back on. That check runs ahead
+          of the verifier, so saying no costs no external round trip. <strong>A provider-asserted verified email:</strong> an
+          injected <code>IExternalLoginEmailVerifier</code> is asked whether the provider asserted this address as
+          verified, and an unverified assertion is refused with <code>Auth.ExternalEmailNotVerified</code>. <strong>No local
+          password:</strong> even on a verified assertion, an account whose <code>HasLocalPassword</code> is true is refused with
+          <code>Auth.ExternalLinkRequiresLocalSignIn</code>, and the message tells the person to sign in with their
+          password and link the provider from their profile. The verifier proves only the provider&#39;s side of the
+          address, so only an account nobody can already sign into with a password is claimable by an email
+          match; everyone else proves possession first. Once all three pass, <code>User.LinkExternalProvider</code>
+          attaches the provider to the existing account.</p>
+          <p>When no account owns the email at all, the flow <em>creates</em> one through <code>User.CreateExternal</code>, an
+          <code>Attendee</code> with empty password hash and salt. The verifier runs on this branch too, but it does not
+          gate the create (GitHub&#39;s OAuth flow asserts nothing, and refusing would close GitHub sign-up): the
+          assertion rides along as a sixth <code>emailVerified</code> argument, which starts the account confirmed when the
+          provider vouched for the address and unconfirmed otherwise, in which case it receives a confirmation
+          link exactly like a local registration.</p>
+          <p>An external user is a <code>User</code> with an empty password hash and salt, carrying <code>LoginProvider</code> and
+          <code>ProviderKey</code>; <code>IsExternalLogin</code> is simply <code>LoginProvider is not null</code>, and <code>HasLocalPassword</code> is the
+          complementary question the third guard asks. The linkage is two nullable columns
+          (<code>LoginProvider varchar(50)</code>, <code>ProviderKey varchar(256)</code>) plus a unique index over the pair filtered
+          to non-null rows, so two external identities cannot collide onto one account while local (null, null)
+          accounts stay unconstrained. Whichever of the three paths runs, the exchange finishes through the
+          shared <code>IssueTokensAsync</code> workflow, which opens a refresh <em>session</em> for the device (hashed at rest, a
+          per-user cap, a rotation chain) rather than stamping a plaintext refresh token on the aggregate, and
+          hands back the same <code>AuthenticationResponse</code> shape a password login returns. A brand-new external user
+          also publishes a post-commit <code>UserRegistered</code> integration event, and the one field that differs from
+          the local registration path decides what happens next: the external event carries the provider&#39;s
+          <code>emailVerified</code> assertion, while local registration hard-codes it to <code>false</code>, so the downstream
+          speaker auto-link runs only for an address a provider vouched for and the rest are logged for an
+          organizer to link by hand.</p>
+          <p>The split of responsibility is the point. The handshake, the cookie, and the code exchange are generic
+          and live in the framework&#39;s <code>OAuthControllerBase</code>. The <code>User</code> factory, the default role, the claim
+          set, and the link guards are app-specific and live in the subclass. The interface member
+          <code>ExternalLoginAsync</code> even ships a default implementation that returns a not-supported failure, so a
+          host that never wires the flow degrades safely instead of silently succeeding.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>The pattern buys real safety, and ADR-036 is candid about what it costs.</p>
+          <ul>
+          <li><strong>Opt-in per app, and easy to half-wire.</strong> The flow needs four cooperating pieces: scheme
+          registration, the controller subclass, the service override, and the <code>OAuth__UIBaseUrl</code> redirect
+          target, plus the migration that adds the provider columns. Register schemes but forget the
+          controller, or configure a <code>ClientId</code> without the matching UI flags, and you get a broken or
+          invisible button. Auditing the whole inventory is on the adopter.</li>
+          <li><strong>The link guards are ADC-level, not framework-provided.</strong> Linking on a bare email match would let
+          an unverified address attach to an existing account, so ADC runs all three refusals in its own
+          override: already linked elsewhere, not provider-verified, and still holding a local password.
+          Google&#39;s <code>email_verified</code> claim passes the verifier; GitHub&#39;s OAuth flow asserts nothing, so a
+          GitHub sign-in whose email matches an existing account is refused rather than linked. A verified
+          assertion is still not enough on its own: an account that signs in with a password is refused too,
+          and the message routes that person through the credential they already hold. Those guards live in
+          ADC&#39;s override, not the framework: a non-adopting host gets only the <code>Auth.ExternalLoginNotSupported</code>
+          default, so the check is ADC&#39;s own edge, not a framework guarantee.</li>
+          <li><strong>Not exactly-once account creation across the redirect.</strong> The exchange commits the <code>User</code> before
+          the UI redeems the code, so an abandoned redemption still creates (or links) the account. That is
+          the intended tradeoff (the identity is real the moment the provider vouched for it), but a completed
+          challenge can leave a local account whose token pair was never collected.</li>
+          <li><strong>A second credential shape on <code>User</code>.</strong> External accounts carry empty password hash and salt and
+          rely on <code>LoginProvider</code> / <code>ProviderKey</code>. Any code that assumes every <code>User</code> has a usable password
+          has to check <code>IsExternalLogin</code> first. The pair is single-valued, so a person holds at most one
+          provider link, which is exactly what the first guard enforces.</li>
+          </ul>
+          <p><strong>Adoption is one app deep, by design.</strong> ADC&#39;s Identity module wires the whole flow: a sealed
+          <code>OAuthController</code> subclass carrying the <code>[ApiController]</code> / <code>[Route(&quot;auth/oauth&quot;)]</code> / <code>[ApiVersion(&quot;1.0&quot;)]</code>
+          attributes (the base cannot reliably inherit them), an <code>AuthenticationService</code> that overrides
+          <code>ExternalLoginAsync</code>, an Identity service host that calls <code>AddExternalAuthProviders</code>, and an AppHost
+          that passes the UI&#39;s HTTPS endpoint to the service as <code>OAuth__UIBaseUrl</code> so the post-exchange redirect
+          lands on the right host. MMCA.Store does none of this. It registers no OAuth schemes, defines no
+          <code>OAuthController</code>, adds no provider columns to its <code>User</code>, and leaves <code>ExternalLoginAsync</code> at the
+          not-supported default. Store&#39;s Identity story stays local-credential and RS256 only. That is not a gap
+          to close: partial adoption is the framework&#39;s model (ship the capability, let each app opt in), the
+          same shape as the permission and polyglot-persistence opt-ins.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The shape ports to any app that wants social login without a second identity system:</p>
+          <ol>
+          <li><strong>Terminate federation at the edge.</strong> Exchange the external principal for your own token the moment
+          the callback returns, and keep exactly one internal identity. Downstream code should never see a
+          provider token.</li>
+          <li><strong>Never put tokens on a redirect URL.</strong> Put a single-use, short-TTL, server-side code on the URL and
+          swap it for the tokens over an out-of-band POST. A redirect is a GET, and GETs get logged.</li>
+          <li><strong>Treat an email match as evidence, not proof.</strong> Matching an incoming external email to an existing
+          user is where account takeover lives. Link only when the provider asserts the address is verified
+          <em>and</em> nobody can already sign into that account with a password. Refuse everything else and route
+          the person through the credential they already hold.</li>
+          <li><strong>Make it inert until configured.</strong> Gate each provider on its client id and default the exchange to
+          a not-supported failure, so a host with no secrets behaves exactly as before.</li>
+          <li><strong>Split the handshake from account creation.</strong> The OAuth dance is generic; the user factory, default
+          role, claim set, and link guards are yours. Keep them on opposite sides of an interface.</li>
+          </ol>
+          <p>The takeaway: <strong>social login does not have to mean a second identity system or a token in the address
+          bar. Federate at the edge, exchange the external identity for your own JWT behind a single-use
+          server-side code, attach a provider to an existing account only when the address is provider-verified
+          and nobody can already sign into it with a password, and every layer downstream keeps validating the
+          one token it already understands.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why rolling your own social login leaks the session token through the redirect URL
+          (browser history, the <code>Referer</code> header, and proxy logs) and why storing provider tokens you never call
+          is needless risk, how MMCA.Common closes both gaps with a config-gated <code>AddExternalAuthProviders</code> for
+          Google, GitHub and Apple, a throwaway ten-minute <code>ExternalLogin</code> cookie, and an <code>OAuthControllerBase</code>
+          that swaps the external identity for a local JWT pair and hands the UI a single-use, cache-backed code
+          bound to the client&#39;s own state value instead of the tokens, how <code>ExternalLoginAsync</code> resolves a local
+          <code>User</code> by provider, then by a guarded email match (already linked elsewhere, not provider-verified, or
+          still holding a local password are all refusals), then by create, and the honest costs: a per-app
+          opt-in that is easy to half-wire, link guards that are ADC-level rather than framework ones, a
+          not-exactly-once account creation across the redirect, a second credential shape on <code>User</code>, and
+          adoption that is ADC-only while Store stays local-credential and RS256 only.</p>
+          <p><strong>Next in the series:</strong> refresh tokens that rotate per device, stored only as hashes in a
+          <code>RefreshSession</code> row, and the reuse detection that turns a replayed token into a self-limiting,
+          revoke-on-reuse forced re-login.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read ADR-036 for the decision record, or
+          <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📚 Full series index: <a href="https://ivanball.github.io/writing.html" target="_blank" rel="noopener">https://ivanball.github.io/writing.html</a></li>
+          <li>📄 ADR-036 (external OAuth login) in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, OAuth, Security, Software Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="session-cookie-auth-blazor-ssr.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">25 · Browser session-cookie auth for Blazor SSR</span></a>
+          <a class="article-pager-link article-pager-link--next" href="jwt-refresh-token-rotation.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">27 · One rotating refresh token</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-external-oauth-behind-a-local-jwt-exchange">The MMCA answer: external OAuth behind a local-JWT exchange</a></li>
+            <li><a href="#the-same-handshake-now-for-native-heads">The same handshake, now for native heads</a></li>
+            <li><a href="#finding-the-local-user-three-ways">Finding the local user, three ways</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

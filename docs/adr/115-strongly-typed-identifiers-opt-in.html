@@ -290,7 +290,7 @@
           self-referencing (<code>TSelf : struct, IStronglyTypedId&lt;TSelf, TValue&gt;</code>, <code>:61-62</code>) and declares
           exactly two members: a <code>TValue Value</code> getter (<code>:65</code>) and <code>static abstract TSelf From(TValue)</code>
           (<code>:72</code>). A wrapper is therefore:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">readonly</span> <span class="hljs-keyword">record</span> <span class="hljs-keyword">struct</span> <span class="hljs-title">OrderId</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> Value</span>) : IStronglyTypedId&lt;OrderId, <span class="hljs-built_in">int</span>&gt;</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">readonly</span> <span class="hljs-keyword">record</span> <span class="hljs-keyword">struct</span> <span class="hljs-title">OrderId</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> Value</span>) : IStronglyTypedId&lt;OrderId, <span class="hljs-built_in">int</span>&gt;</span>
 {
     <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> OrderId <span class="hljs-title">From</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> <span class="hljs-keyword">value</span></span>)</span> =&gt; <span class="hljs-keyword">new</span>(<span class="hljs-keyword">value</span>);
 }</code></pre>

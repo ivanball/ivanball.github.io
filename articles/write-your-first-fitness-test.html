@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Write your first architecture fitness test · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Author your first architecture fitness test and watch it fail the build on a violation.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/write-your-first-fitness-test.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Write your first architecture fitness test">
+  <meta property="og:description" content="Author your first architecture fitness test and watch it fail the build on a violation.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/write-your-first-fitness-test.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-40.png">
+  <meta property="og:image:alt" content="Write your first architecture fitness test">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Write your first architecture fitness test">
+  <meta name="twitter:description" content="Author your first architecture fitness test and watch it fail the build on a violation.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-40.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Write your first architecture fitness test","description":"Author your first architecture fitness test and watch it fail the build on a violation.","url":"https://ivanball.github.io/articles/write-your-first-fitness-test.html","mainEntityOfPage":"https://ivanball.github.io/articles/write-your-first-fitness-test.html","image":"https://ivanball.github.io/assets/img/articles/article-40.png","datePublished":"2026-08-09T12:34:49Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":40,"sameAs":"https://medium.com/@ivanball76/write-your-first-architecture-fitness-test-d4e25e6a4741"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"40 · Write your first fitness test","item":"https://ivanball.github.io/articles/write-your-first-fitness-test.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">40 · Write your first fitness test</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html" aria-current="page">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 40</p>
+          <h1 id="write-your-first-architecture-fitness-test">Write your first architecture fitness test</h1>
+          <p class="article-meta"><time datetime="2026-08-09T12:34:49Z">August 9, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/write-your-first-architecture-fitness-test-d4e25e6a4741" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-40.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Your Clean Architecture diagram is a hope, not a guarantee, until something fails the
+          build when it is violated. Here is how to add NetArchTest fitness functions to your own solution in
+          under an hour, by inheriting a rule library instead of writing one.</p>
+          <hr>
+          <p>Every codebase has a layering diagram. Domain depends on nothing above it; Application does not know
+          about EF Core; the message broker stays at the edges. The diagram lives in a README, or a wiki, or a
+          senior engineer&#39;s head, and it is true on the day it is drawn.</p>
+          <p>Then time passes. A handler needs an entity by id, so someone adds a <code>using</code> for the DbContext namespace
+          to the Application layer because it was right there. A domain class references <code>Microsoft.AspNetCore.Http</code>
+          to read a header &quot;just this once.&quot; Each step is reasonable in isolation, and each one quietly erodes the
+          boundary the diagram promised. By the time anyone notices, the dependency graph is a plate of spaghetti
+          and the diagram is a historical document.</p>
+          <p>Code review is supposed to catch this, and it does, sometimes, when the reviewer happens to know the
+          rule and happens to look at the right line. That is not enforcement; that is luck. ADR-015 in
+          MMCA.Common takes the other position: <strong>if an architectural rule matters, it should be an automated
+          check that fails the build, not a comment that depends on a reviewer.</strong> This tutorial shows you how to
+          add those checks to your own solution, and the surprising part is how little code you write to get a
+          large rule library.</p>
+          <h2 id="why-rules-as-code-beats-review">Why rules-as-code beats review</h2>
+          <p>Before the steps, the thesis, because it shapes everything below. An architecture invariant is easy to
+          state (&quot;Domain depends on nothing above it&quot;) and easy to erode by accident. &quot;Remember the rule&quot; does not
+          survive a growing change history across a growing team. Turning &quot;do not do X&quot; into a red build is the
+          only enforcement that scales: it is impartial, it never gets tired, and it catches the violation in the
+          pull request that introduced it, not three months later in a refactor.</p>
+          <p>MMCA.Common enforces its layer rules <strong>twice</strong>, on purpose:</p>
+          <ol>
+          <li><strong>At compile time</strong>, by an MSBuild target (<code>MMCA.Common.LayerEnforcement.targets</code>) that inspects
+          project references in a pre-build step and fails the build with a descriptive error if a layer
+          references a forbidden upstream layer. Fastest possible feedback, catches the most common mistake.</li>
+          <li><strong>At runtime</strong>, by NetArchTest fitness functions that assert the same rules against the compiled
+          assemblies, catching the subtler violations a project-reference check cannot see (a type in the
+          wrong namespace, a transitive <code>using</code>, a missing convention).</li>
+          </ol>
+          <p>A third gate sits alongside those two, and ADR-015 as revised records the enforcement as running in
+          three layers. It is neither MSBuild nor NetArchTest: <code>Microsoft.CodeAnalysis.PublicApiAnalyzers</code> runs on
+          every published package except <code>MMCA.Common.UI.Maui</code> (excluded by name, because it builds only on the
+          Windows MAUI job outside the main solution) against a committed <code>PublicAPI.Shipped.txt</code> baseline (5,034
+          declarations across eighteen files), so adding or removing a public member fails the compile until that
+          text file is updated in the same pull request. It guards the shipped package surface rather than layer
+          flow, which is why the two speeds above are the ones this tutorial teaches.</p>
+          <p>This article is about adding the second layer to your own code, and optionally the first.</p>
+          <h2 id="prerequisites">Prerequisites</h2>
+          <ul>
+          <li>A .NET solution with a layered shape you want to protect. The MMCA layers are
+          API/Grpc -&gt; Infrastructure -&gt; Application -&gt; Domain -&gt; Shared, but the rule library generalizes.</li>
+          <li><strong>Microsoft Testing Platform</strong> as your test runner (MMCA.Common uses it via <code>global.json</code> with
+          xUnit v3). The fitness tests run inside the normal <code>dotnet test</code> tier, so they gate CI like any other
+          test.</li>
+          <li>The package you are about to install: <strong><code>MMCA.Common.Testing.Architecture</code></strong>, one of the nineteen
+          packages the framework publishes. Its README row describes it exactly: &quot;<code>IArchitectureMap</code> + reusable
+          NetArchTest rule library + abstract test bases (consumed by each repo&#39;s <code>*.Architecture.Tests</code>).&quot;</li>
+          </ul>
+          <p>The key design idea: the rule <em>bodies</em> ship in the package once. You do not copy them. You supply a tiny
+          map of your assemblies and subclass the bases, and you inherit roughly the same suite that runs across
+          MMCA.Common, MMCA.Store, MMCA.ADC and MMCA.Helpdesk (136 test methods across 53 abstract <code>*TestsBase</code>
+          classes; the framework&#39;s own build executes 267 of them).</p>
+          <blockquote>
+          <p><strong>If you scaffolded with <code>dotnet new mmca-app</code>, steps 1 through 4 are already done.</strong> The generated
+          solution ships the architecture-test project, the <code>IArchitectureMap</code>, and every applicable base
+          subclassed (31 sealed subclasses in the current reference-app seed), including the wire-contract
+          freeze, which arrives frozen under your own names and green on the first <code>dotnet test</code>. Read those
+          steps anyway to know what you have, then skip to Step 5. If you are retrofitting an existing
+          solution, the steps are the work.</p>
+          </blockquote>
+          <h2 id="step-1-install-the-package-and-create-a-test-project">Step 1: install the package and create a test project</h2>
+          <p>Add a dedicated architecture-test project (mirroring how the framework keeps
+          <code>Tests/Architecture/*.Architecture.Tests</code>), and reference the package:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet add package MMCA.Common.Testing.Architecture</code></pre>
+          <p>The package brings the NetArchTest engine (NetArchTest.eNhancedEdition), the <code>ArchitectureRules</code> rule
+          library, the diagnostic helpers, and the 53 abstract <code>*TestsBase</code> classes. You will not write rule
+          logic; you will point the rules at your assemblies and subclass the bases.</p>
+          <h2 id="step-2-implement-iarchitecturemap-one-anchor-type-per-layer">Step 2: implement <code>IArchitectureMap</code>, one anchor type per layer</h2>
+          <p>This is the only real work, and it is small. <code>IArchitectureMap</code> is the single extension point every rule is
+          parameterized by. You declare your layers (and modules, if you have them) by pinning <strong>one anchor type
+          per layer or package</strong>: a type whose assembly the rules scan. Subclass <code>ArchitectureMapBase</code>, override
+          <code>RepoToken</code> and <code>DefineLayers()</code>, and return a handful of one-line <code>Framework(...)</code> / <code>Module(...)</code>
+          entries:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Your solution&#x27;s MyApp.Architecture.Tests project (representative)</span>
+<span class="hljs-keyword">internal</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">MyAppArchitectureMap</span> : <span class="hljs-title">ArchitectureMapBase</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> <span class="hljs-built_in">string</span> RepoToken =&gt; <span class="hljs-string">&quot;MyApp&quot;</span>;
+
+    <span class="hljs-comment">// One anchor type per layer; the type&#x27;s assembly IS the layer.</span>
+    <span class="hljs-function"><span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IEnumerable&lt;LayerRef&gt; <span class="hljs-title">DefineLayers</span>()</span> =&gt;
+    [
+        Framework(Layer.Shared,         <span class="hljs-keyword">typeof</span>(MyApp.Shared.Result).Assembly),
+        Framework(Layer.Domain,         <span class="hljs-keyword">typeof</span>(MyApp.Domain.Entities.BaseEntity&lt;&gt;).Assembly),
+        Framework(Layer.Application,    <span class="hljs-keyword">typeof</span>(MyApp.Application.DependencyInjection).Assembly),
+        Framework(Layer.Infrastructure, <span class="hljs-keyword">typeof</span>(MyApp.Infrastructure.ApplicationDbContext).Assembly),
+        Framework(Layer.Api,            <span class="hljs-keyword">typeof</span>(MyApp.Api.ApiControllerBase).Assembly),
+
+        <span class="hljs-comment">// If you have modules, declare each module&#x27;s layers the same way:</span>
+        <span class="hljs-comment">// Module(&quot;Sales&quot;, Layer.Domain, typeof(MyApp.Sales.Domain.Order).Assembly),</span>
+    ];
+}</code></pre>
+          <p>That is the &quot;what to scan&quot; half. The package&#39;s <code>ArchitectureRules</code> are the &quot;what to assert&quot; half. The
+          framework&#39;s own <code>CommonArchitectureMap</code> is module-less (every layer is a framework layer, one anchor per
+          package); ADC&#39;s <code>AdcArchitectureMap</code> adds module entries the same way. Your map looks like one of those,
+          scaled to your solution.</p>
+          <h2 id="step-3-subclass-the-test-bases-to-inherit-the-rule-library">Step 3: subclass the test bases to inherit the rule library</h2>
+          <p>Now your test classes shrink to thin sealed subclasses that supply the map and inherit the <code>[Fact]</code>s.
+          Two of the most valuable bases to start with:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Layer-flow rules: 15 facts (13 forbidden edges + 2 map guards) (representative)</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">LayerDependencyTests</span> : <span class="hljs-title">LayerDependencyTestsBase</span>
+{
+    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> MyAppArchitectureMap();
+}
+
+<span class="hljs-comment">// Domain/Shared framework-purity rules (representative)</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DomainPurityTests</span> : <span class="hljs-title">DomainPurityTestsBase</span>
+{
+    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> MyAppArchitectureMap();
+}</code></pre>
+          <p>That is genuinely the whole test class: three lines plus the override. What you just inherited:</p>
+          <ul>
+          <li><strong><code>LayerDependencyTestsBase</code></strong> asserts the inward dependency rule across every assembly your map
+          declares: Domain must not depend on Application/Infrastructure/API, Application must not depend on
+          Infrastructure/API, and so on, with one named <code>[Fact]</code> per forbidden edge. A named test per edge (&quot;UI
+          references Domain&quot;) gives you a precise red instead of an opaque &quot;layering broken.&quot; Thirteen of its
+          fifteen <code>[Fact]</code>s are those edges; the other two assert that your map actually declares every expected
+          layer, and that every module declares its layers, so the edge rules cannot pass vacuously against a
+          map that forgot an assembly.</li>
+          <li><strong><code>DomainPurityTestsBase</code></strong> asserts that Domain and Shared stay free of infrastructure frameworks and
+          that Application stays host-agnostic (no EF Core, no ASP.NET Core in Application). It even exposes a
+          <code>protected virtual ExtraForbiddenDomainDependencies</code> so your repo can <em>add</em> bans on top of the shared
+          list (Store&#39;s subclass bans <code>&quot;RabbitMQ&quot;</code> and <code>&quot;Stripe&quot;</code> from Domain, the broker client and the payment
+          SDK, which the base names only generically in its doc comment as &quot;a payment SDK or a broker client&quot;)
+          without editing the package.</li>
+          </ul>
+          <p>The other bases cover more ground when you are ready: <code>MicroserviceExtractionTestsBase</code> (no MassTransit
+          in Application/Domain/Shared), entity and aggregate conventions (aggregates have no public constructors,
+          a <code>Result</code>-returning <code>Create</code> factory, entities are sealed and live in the Domain layer), concurrency
+          awareness, controller conventions, and PII conventions (<code>[Pii]</code> implies <code>IAnonymizable</code>). You opt into
+          each by adding a subclass.</p>
+          <h2 id="step-4-run-the-suite-under-microsoft-testing-platform">Step 4: run the suite under Microsoft Testing Platform</h2>
+          <p>The fitness tests are ordinary tests in your test tier, so they run with the same command as everything
+          else:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-comment"># Run just the architecture suite</span>
+dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MyApp.Architecture.Tests
+
+<span class="hljs-comment"># Target one rule by method (Microsoft Testing Platform filter, after --)</span>
+dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MyApp.Architecture.Tests <span class="hljs-literal">--</span> <span class="hljs-literal">--filter-method</span> <span class="hljs-string">&quot;*Domain_ShouldNot*&quot;</span></code></pre>
+          <p>Because they run in the normal tier, a violated invariant fails CI exactly like a failing unit test. One
+          operational note: Microsoft Testing Platform fails the build if a test project discovers zero tests, so
+          make sure your subclasses are public and actually inherit <code>[Fact]</code>s. The framework&#39;s CI even floors its
+          test steps with <code>--minimum-expected-tests</code> (<code>1</code> on the ADC and Store CI runs, <code>2000</code> on MMCA.Common&#39;s own
+          solution-wide run, <code>40</code> on its Helpdesk canary) so neither an empty suite nor a silently shrunken one can
+          pass. Where a step carries no floor the workflow says why, as ADC&#39;s live-judge step does: every case
+          there skips itself without an API key, and a zero-run must not red the deploy.</p>
+          <p>Now introduce a violation on purpose to feel the payoff: add a project reference from your Domain project
+          to your Infrastructure project, or a <code>using Microsoft.EntityFrameworkCore;</code> to a Domain class, and run
+          the suite. You get a named red, in the pull request, with the offending type called out. That is the
+          difference between a diagram and a guarantee.</p>
+          <h2 id="step-5-optional-add-the-compile-time-layer-guard-too">Step 5 (optional): add the compile-time layer guard too</h2>
+          <p>The runtime suite is the broad net. For the single most common mistake, a bad project reference, you can
+          get even faster feedback by also adding the compile-time guard, so the build fails before tests even
+          run. MMCA.Common does this with an MSBuild target imported for every source project. The shape:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="XML"><code class="language-xml hljs"><span class="hljs-comment">&lt;!-- Imported from Directory.Build.props for each layer project (representative) --&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">Import</span> <span class="hljs-attr">Project</span>=<span class="hljs-string">&quot;$(MSBuildThisFileDirectory)Source\Build\MMCA.Common.LayerEnforcement.targets&quot;</span>
+        <span class="hljs-attr">Condition</span>=<span class="hljs-string">&quot;$(MSBuildProjectDirectory.Contains(&#x27;Source&#x27;))&quot;</span> /&gt;</span></code></pre>
+          <p>The target runs in a <code>BeforeTargets=&quot;ResolveProjectReferences&quot;</code> step, inspects each project&#39;s
+          <code>ProjectReference</code> set, and fails the build with a descriptive error if a layer references a forbidden
+          upstream layer. This is the &quot;two speeds&quot; design from ADR-015: the MSBuild guard catches the common case
+          at compile time on the developer&#39;s machine; the NetArchTest suite catches the subtler assembly-level
+          violations a reference check cannot see. ADR-015 frames that pair as &quot;two speeds&quot;; counting the public
+          API surface gate described earlier, enforcement runs in three layers, so what pairs here is the speeds,
+          not the layer count. When you change project references or move a type between layers, expect both
+          gates to react, and add new rules in both places.</p>
+          <h2 id="trade-offs-and-gotchas-honestly">Trade-offs and gotchas, honestly</h2>
+          <p>ADR-015 names its own rough edges, and you should know them before you trust the green:</p>
+          <ul>
+          <li><strong>The tests assert structure and registration, not runtime behavior.</strong> A fitness test can prove a
+          client <em>wires</em> a resilience policy; it cannot prove the policy values are correct. Parameter tuning
+          stays a review concern. Do not mistake a green arch suite for &quot;the architecture is good,&quot; only for
+          &quot;these specific invariants hold.&quot;</li>
+          <li><strong>Convention-based rules can be brittle.</strong> Rules that match on naming or namespace shape are inherently
+          fuzzier than a hard layer ban. The mitigation is exactly why the rules live in a shared package: a fix
+          to a brittle rule propagates to every consumer in one change instead of being patched three times.</li>
+          <li><strong>It is opt-in wiring.</strong> The framework ships the rules, but a consumer must implement
+          <code>IArchitectureMap</code> and subclass the bases to get the gating. The rules do not enforce themselves until
+          you wire them. Common-only checks that cannot generalize live in a separate <code>FrameworkSanityTests</code>
+          rather than the shared bases.</li>
+          <li><strong>An empty suite is a false negative.</strong> If your subclasses do not inherit any <code>[Fact]</code>s (wrong
+          accessibility, missing override), the runner may discover zero tests and either fail loudly or, worse,
+          give you a green that proves nothing. The <code>--minimum-expected-tests</code> floor exists precisely for this.</li>
+          <li><strong>A frozen wire contract is only as strong as the care taken updating it.</strong> <code>IntegrationEventContractTestsBase</code>
+          freezes your cross-service API: you override <code>ExpectedContract</code> with the shape of every integration
+          event, so a silent reshape fails the build. The base compares the members inside each event&#39;s braces as
+          a <strong>set</strong>, not a sequence, because JSON carries no member order and failing a build over a reordered
+          property trains the one gate that guards real breakage to be updated by rote. Everything observable
+          stays a failure: a missing member, an extra member, a changed type, and any change to the set of events
+          itself. That set comparison is also what lets <code>dotnet new mmca-app</code> ship the freeze rather than skip it,
+          with the staging pass asserting that exactly one such class is present instead of deleting it, so a
+          generated app carries its own contract under its own names. The discipline is yours: when a red is
+          intentional, version the event and coordinate the consumer rollout in the same change, rather than
+          pasting the new shape in and moving on.</li>
+          </ul>
+          <p>None of these undercut the core value. They are the reasons to scope your rules deliberately and read
+          the failures, not just the color.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>If you are not on MMCA.Common, the pattern still ports to any .NET stack with NetArchTest:</p>
+          <ol>
+          <li>Write each invariant as a <strong>named test</strong>, one per forbidden edge, so a failure points at the exact
+          rule, not &quot;layering is wrong.&quot;</li>
+          <li>Pin assemblies through <strong>anchor types</strong>, not string names, so a rename does not silently disable a
+          rule.</li>
+          <li>Run the suite in your <strong>normal test tier</strong> so it gates CI, and guard against a zero-discovery suite
+          that passes vacuously.</li>
+          <li>For the common case (bad project references), add a <strong>compile-time</strong> check too, so the fastest
+          feedback catches the most frequent mistake.</li>
+          </ol>
+          <p>The rule of thumb is the takeaway: a rule that lives only in a diagram or a reviewer&#39;s memory will be
+          violated. Make it a check, and it becomes a guarantee.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why rules-as-code beats code review for architecture invariants, installing
+          <code>MMCA.Common.Testing.Architecture</code>, implementing <code>IArchitectureMap</code> with one anchor type per layer,
+          subclassing <code>LayerDependencyTestsBase</code> and <code>DomainPurityTestsBase</code> to inherit a large rule library,
+          running the suite under Microsoft Testing Platform, and optionally adding the compile-time MSBuild layer
+          guard for the fastest feedback on the common case. ADR-015 is the decision behind all of it.</p>
+          <p><strong>Next in the series:</strong> two real apps on one framework, the proof that every pattern in this series
+          holds in two unrelated production systems.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-015, or
+          <code>dotnet add package MMCA.Common.Testing.Architecture</code> and protect your layers.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>ADR-015 (architecture fitness functions): <a href="../docs/adr/015-architecture-fitness-functions.html">ADR-015: Architecture Invariants Enforced as Fitness Functions</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Testing, Clean Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="build-your-first-module.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">39 · Build your first module</span></a>
+          <a class="article-pager-link article-pager-link--next" href="two-real-apps-case-study.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">41 · Two real apps on one framework</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-rules-as-code-beats-review">Why rules-as-code beats review</a></li>
+            <li><a href="#prerequisites">Prerequisites</a></li>
+            <li><a href="#step-1-install-the-package-and-create-a-test-project">Step 1: install the package and create a test project</a></li>
+            <li><a href="#step-2-implement-iarchitecturemap-one-anchor-type-per-layer">Step 2: implement IArchitectureMap, one anchor type per layer</a></li>
+            <li><a href="#step-3-subclass-the-test-bases-to-inherit-the-rule-library">Step 3: subclass the test bases to inherit the rule library</a></li>
+            <li><a href="#step-4-run-the-suite-under-microsoft-testing-platform">Step 4: run the suite under Microsoft Testing Platform</a></li>
+            <li><a href="#step-5-optional-add-the-compile-time-layer-guard-too">Step 5 (optional): add the compile-time layer guard too</a></li>
+            <li><a href="#trade-offs-and-gotchas-honestly">Trade-offs and gotchas, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

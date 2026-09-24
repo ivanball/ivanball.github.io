@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Aspire: one command brings up the whole distributed app · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Model services, databases, and the broker as one Aspire graph that runs from laptop to Azure with one command.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/aspire-one-command.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Aspire: one command brings up the whole distributed app">
+  <meta property="og:description" content="Model services, databases, and the broker as one Aspire graph that runs from laptop to Azure with one command.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/aspire-one-command.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-31.png">
+  <meta property="og:image:alt" content="Aspire: one command brings up the whole distributed app">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Aspire: one command brings up the whole distributed app">
+  <meta name="twitter:description" content="Model services, databases, and the broker as one Aspire graph that runs from laptop to Azure with one command.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-31.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Aspire: one command brings up the whole distributed app","description":"Model services, databases, and the broker as one Aspire graph that runs from laptop to Azure with one command.","url":"https://ivanball.github.io/articles/aspire-one-command.html","mainEntityOfPage":"https://ivanball.github.io/articles/aspire-one-command.html","image":"https://ivanball.github.io/assets/img/articles/article-31.png","datePublished":"2026-07-31T11:23:51Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":31,"sameAs":"https://medium.com/@ivanball76/aspire-one-command-brings-up-the-whole-distributed-app-379b5cffdeed"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"31 · Aspire: one command","item":"https://ivanball.github.io/articles/aspire-one-command.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">31 · Aspire: one command</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html" aria-current="page">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Run &amp; extract · No. 31</p>
+          <h1 id="aspire-one-command-brings-up-the-whole-distributed-app">Aspire: one command brings up the whole distributed app</h1>
+          <p class="article-meta"><time datetime="2026-07-31T11:23:51Z">July 31, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/aspire-one-command-brings-up-the-whole-distributed-app-379b5cffdeed" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-31.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Four service processes, four databases, a broker, a cache, a mail interceptor, and a
+          live telemetry dashboard, all from a single <code>dotnet run</code>. Here is how MMCA.Common wires that with
+          .NET Aspire, step by step.</p>
+          <hr>
+          <p>Spinning up a distributed system on a laptop is usually where good intentions go to die. You need SQL
+          Server, a message broker, maybe Redis, a way to read the emails the app sends, and the four service
+          processes themselves. Each one wants a connection string, a port, and an environment variable, and the
+          README that explains the order to start them in is always a little out of date.</p>
+          <p>The result is the worst kind of friction: a new engineer spends a day getting the stack to boot, and
+          even then &quot;works on my machine&quot; hides a topology that does not match production. Integration bugs wait
+          until CI, or worse, until a deploy.</p>
+          <p>This tutorial walks the other path. With .NET Aspire and the two <code>MMCA.Common.Aspire*</code> packages, the
+          whole distributed application is declared once as code, and one command brings it up with a dashboard
+          showing live logs, metrics, and traces from every process. We will go from a clone to a running
+          dashboard, and then look at exactly what the framework wired for you.</p>
+          <h2 id="prerequisites">Prerequisites</h2>
+          <p>You need a few things in place before the first run:</p>
+          <ul>
+          <li><strong>.NET 10 SDK</strong> (the framework targets .NET 10.0 with C# <code>preview</code> language features).</li>
+          <li><strong>Docker</strong> (or a compatible container runtime) running locally. Aspire provisions SQL Server, Redis,
+          RabbitMQ, and a mail interceptor as containers.</li>
+          <li>An app that consumes MMCA.Common. You can scaffold one in a command
+          (<code>dotnet new install MMCA.Templates</code> then <code>dotnet new mmca-app -n Your.App</code>), which generates an
+          AppHost wired to SQL Server plus an API and a Blazor UI. Or clone one of the two reference consumers,
+          <strong>MMCA.ADC</strong> (the Atlanta Developers Conference app) and <strong>MMCA.Store</strong> (e-commerce). The walkthrough
+          below uses ADC&#39;s topology because it is the fuller example: four services, a gateway, and a UI. A
+          scaffolded app starts at the monolith end of that spectrum and grows into it.</li>
+          </ul>
+          <p>The two framework packages that make this work:</p>
+          <ul>
+          <li><strong><code>MMCA.Common.Aspire</code></strong> is the <em>service-side</em> baseline. Every running process opts into it for
+          OpenTelemetry, health checks, service discovery, HTTP resilience, and startup warm-up.</li>
+          <li><strong><code>MMCA.Common.Aspire.Hosting</code></strong> is the <em>AppHost-side</em> orchestration vocabulary. It exports the
+          fluent helpers that wire the broker, JWKS discovery, and per-service databases.</li>
+          </ul>
+          <p>They are deliberately separate assemblies so a running service never drags in the full <code>Aspire.Hosting</code>
+          tooling graph (the doc comment on the hosting package spells this out).</p>
+          <h2 id="step-1-run-the-whole-stack-with-one-command">Step 1: run the whole stack with one command</h2>
+          <p>From the consumer repo, the entire local topology comes up with:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-comment"># From MMCA.ADC/ (or MMCA.Store/)</span>
+dotnet run <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ADC.AppHost</code></pre>
+          <p>That single command brings up everything the application needs locally: four SQL Server databases,
+          Redis, RabbitMQ with its management UI, a MailDev SMTP interceptor, four extracted microservice
+          processes, a YARP gateway pinned to <a href="https://localhost:6001" target="_blank" rel="noopener">https://localhost:6001</a>, and the Blazor UI pinned to
+          <a href="https://localhost:6002" target="_blank" rel="noopener">https://localhost:6002</a>. The Aspire dashboard opens automatically and shows live logs, metrics, and
+          distributed traces from every process via an OTLP endpoint it injects into each one.</p>
+          <p>No Docker Compose file is needed. No environment variables need to be set by hand. The AppHost is the
+          single source of truth for the local topology.</p>
+          <blockquote>
+          <p>A heads-up for headless or scripted runs: the AppHost wants an interactive console to launch the
+          dashboard and the control plane. If you launch it from a background process it can stall at
+          control-plane init. Run it interactively in a terminal you can watch.</p>
+          </blockquote>
+          <p>Once it is up, the dashboard (the URL is printed in the console) is your control panel: every resource,
+          its health, its logs, its traces, and links to the RabbitMQ management UI (<a href="http://localhost:15672" target="_blank" rel="noopener">http://localhost:15672</a>)
+          and the MailDev inbox (<a href="http://localhost:1080" target="_blank" rel="noopener">http://localhost:1080</a>).</p>
+          <h2 id="step-2-understand-what-addservicedefaults-configured">Step 2: understand what <code>AddServiceDefaults()</code> configured</h2>
+          <p>Each service host calls one method first in its <code>Program.cs</code>, before anything app-specific:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// In each service&#x27;s Program.cs (representative shape)</span>
+<span class="hljs-keyword">var</span> builder = WebApplication.CreateBuilder(<span class="hljs-keyword">args</span>);
+builder.AddServiceDefaults();   <span class="hljs-comment">// from MMCA.Common.Aspire</span>
+<span class="hljs-comment">// ... app-specific registration ...</span>
+<span class="hljs-keyword">var</span> app = builder.Build();
+app.MapDefaultEndpoints();      <span class="hljs-comment">// health + liveness probes</span></code></pre>
+          <p><code>AddServiceDefaults()</code> is the service-side baseline, and it is identical across both consumer apps
+          because it lives in the framework, versioned in lockstep, with no per-app copy to drift. It configures
+          three things you would otherwise hand-roll:</p>
+          <ol>
+          <li><strong>OpenTelemetry</strong> for logging, metrics, and tracing. Logs include the formatted message and scopes;
+          metrics always cover ASP.NET Core, and cover <code>HttpClient</code> and the .NET runtime unless a host turns
+          those cost knobs off (Step 6); tracing instruments ASP.NET Core and <code>HttpClient</code> and subscribes
+          four activity sources: the application&#39;s own, <code>MMCA.Common.Outbox</code>,
+          <code>MMCA.Common.InternalCommands</code>, and <code>MMCA.Common.AI</code>. It also registers nine MMCA-specific meters
+          by literal name: <code>MMCA.Common.Outbox</code> (a dead-letter counter, a processed counter, a dispatch-lag
+          histogram, and a pending-depth gauge), <code>MMCA.Common.Cqrs</code> (RED histograms for command and query
+          handlers, plus query cache hit and miss), <code>MMCA.Common.Idempotency</code> (the idempotency filter&#39;s
+          replay, conflict, and degraded counters), <code>MMCA.Common.Scheduler</code> (the recurring scheduler&#39;s run
+          outcomes, duration, and schedule lag, inert in a host that never turns <code>Scheduler:Enabled</code> on),
+          <code>MMCA.Common.Broker</code> (the broker transport&#39;s consumer faults plus outbox circuit-breaker openings,
+          inert in a host that stays on the in-process bus), <code>MMCA.Common.OutputCache</code> (the output-cache
+          eviction consumer&#39;s failed tag evictions), <code>MMCA.Common.BestEffort</code> (the swallowed failures of
+          best-effort side effects), <code>MMCA.Common.InternalCommands</code> (the durable internal-command runner),
+          and <code>MMCA.Common.AI</code> (the optional AI package&#39;s token spend and call duration, inert until a host
+          adds that package and enables <code>Ai:Enabled</code>). Polly&#39;s own <code>Polly</code> meter is subscribed alongside
+          them, so retries, timeouts, and circuit transitions leave the process instead of looking like
+          plain latency from the outside.</li>
+          <li><strong>Service discovery</strong>, so a service resolves a peer by name (<a href="http://identity" target="_blank" rel="noopener">http://identity</a>,
+          <a href="http://conference" target="_blank" rel="noopener">http://conference</a>) rather than a hardcoded address.</li>
+          <li><strong>Polly resilience handlers on every <code>HttpClient</code></strong>: a <strong>30 second per-attempt timeout</strong>, a
+          <strong>60 second circuit-breaker sampling window</strong>, and a <strong>90 second total-request timeout</strong>. Every
+          outbound call rides this pipeline by default (this is the runtime side of ADR-009).</li>
+          </ol>
+          <p>It also installs a <code>SocketsHttpHandler</code> tuned for Azure Container Apps and a startup warm-up gate (the
+          gate is covered in Step 3, the handler in Step 7). The point of Step 2 is simply this: the moment a
+          service calls <code>AddServiceDefaults()</code>, it has production-grade telemetry and resilience without writing any
+          of it.</p>
+          <h2 id="step-3-read-the-health-endpoints-from-mapdefaultendpoints">Step 3: read the health endpoints from <code>MapDefaultEndpoints()</code></h2>
+          <p><code>MapDefaultEndpoints()</code> exposes the probe surface your platform reads:</p>
+          <ul>
+          <li><strong><code>/health</code></strong> runs all registered checks. This is the one for humans and dashboards. It is served
+          through <code>MapCachedHealthChecks</code>, a short-TTL single-flight cache, so an anonymous flood on a path
+          that sits on the rate-limit bypass costs one probe round per window rather than one per request.</li>
+          <li><strong><code>/alive</code></strong> is the liveness probe. It runs only the <code>&quot;live&quot;</code>-tagged &quot;self&quot; check, so a transient
+          dependency outage (SQL Server briefly down, say) does <strong>not</strong> mark the process dead and get it
+          killed and restarted. It is deliberately left uncached.</li>
+          <li><strong><code>/health/ready</code></strong> is the readiness probe, behind the same cache as <code>/health</code>. It reports unhealthy
+          until the warm-up gate opens, so the platform holds traffic off a replica that is still cold, and
+          its predicate excludes both the <code>Live</code> and the <code>Optional</code> tags. A dependency the app degrades
+          gracefully without (a distributed cache behind an in-memory fallback, a broker behind a retrying
+          outbox) must not gate readiness: making it readiness-fatal takes every replica out of rotation at
+          once and turns a partial degradation into a total outage. Those checks still surface on <code>/health</code>.</li>
+          </ul>
+          <p>That split matters. A liveness probe that fails on a downstream outage produces a restart storm; a
+          readiness probe that ignores cold-start produces slow, failing first requests. Separating the two is
+          the difference between a system that rides out a blip and one that amplifies it.</p>
+          <p>The warm-up gate behind <code>/health/ready</code> runs <code>IWarmupTask</code> implementations once at startup, then opens.
+          The built-in task, <code>OpenIdConnectMetadataWarmupTask</code>, pre-fetches the OIDC discovery document so the
+          first authenticated request does not pay a cold connection on a CPU-throttled idle replica (the classic
+          &quot;first request fails, second succeeds&quot; pattern). Failures are logged but never wedge the gate shut.</p>
+          <h2 id="step-4-see-how-the-apphost-wires-the-distributed-app">Step 4: see how the AppHost wires the distributed app</h2>
+          <p>The AppHost <code>Program.cs</code> does not start anything immediately. It builds a <em>resource model</em>: a graph of
+          containers, databases, services, the gateway, and the UI, with their dependency edges. The cross-cutting
+          wiring vocabulary lives in <code>MMCA.Common.Aspire.Hosting</code> as twelve fluent helpers (thirteen methods,
+          because <code>WithBroker</code> has one overload per broker resource). Here is the shape of a service declaration
+          (representative, condensed from ADC&#39;s AppHost):</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Representative: one service host, fully wired</span>
+builder.AddProject&lt;Projects.MMCA_ADC_Conference_Service&gt;(<span class="hljs-string">&quot;conference&quot;</span>, launchProfileName: <span class="hljs-string">&quot;https&quot;</span>)
+    .WithSQLServerDataSource(conferenceDb, <span class="hljs-string">&quot;Conference&quot;</span>)   <span class="hljs-comment">// per-service database (ADR-006)</span>
+    .WithReference(redis)                          <span class="hljs-comment">// distributed cache</span>
+    .WithBroker(rabbit)                            <span class="hljs-comment">// RabbitMQ + MessageBus__Provider=RabbitMq</span>
+    .WaitFor(redis)
+    .WaitFor(mailDev)
+    .WithH2cHealthCheck()                          <span class="hljs-comment">// liveness over the HTTP/2 cleartext endpoint</span>
+    .WithExternalHttpEndpoints();</code></pre>
+          <p>What each framework helper does:</p>
+          <ul>
+          <li><strong><code>AddMessageBroker()</code></strong> wraps <code>builder.AddRabbitMQ(name).WithManagementPlugin()</code>. One call provisions
+          the broker container with its admin UI. <code>AddServiceBusEmulatorBroker()</code> is its peer for the official
+          Azure Service Bus emulator, so the local topology can stand up either transport. In production the
+          same projects point at Azure Service Bus by config alone, with no AppHost change.</li>
+          <li><strong><code>WithBroker(rabbit)</code></strong> chains <code>.WithReference(broker).WaitFor(broker)</code> and sets
+          <code>MessageBus__Provider=RabbitMq</code>. That environment variable is what the service&#39;s <code>AddBrokerMessaging</code>
+          reads to select the RabbitMQ transport over the in-process bus. When the variable is absent (for
+          example in integration tests), messaging short-circuits to in-process, so tests need no real broker.
+          The Service Bus emulator overload is the same shape one resource type over: it sets
+          <code>MessageBus__Provider=AzureServiceBus</code> plus the emulator&#39;s connection string and admin endpoint.</li>
+          <li><strong><code>WithSQLServerDataSource(db, &quot;Conference&quot;)</code></strong> is the AppHost face of database-per-service (ADR-006).
+          (The package also ships <code>WithPostgreSQLDataSource</code>, <code>WithCosmosDataSource</code>, and
+          <code>WithSqliteDataSource</code> for the polyglot engines in ADR-018.) In one
+          chain it references the database, waits for it to be healthy, and injects exactly one
+          connection-string environment variable, the multi-source routing layer&#39;s
+          <code>DataSources__Conference__SQLServerConnectionString</code>. That one entry is the whole configuration:
+          with no top-level connection string, the single database a host declares this way also becomes its
+          <code>Default</code> source, so the framework&#39;s own tables and the readiness health check land on it too, and
+          each service runs as a clean single-database monolith with one change tracker and one migration set,
+          while still owning its own <code>OutboxMessages</code> table.</li>
+          </ul>
+          <h2 id="step-5-wire-the-extraction-points-grpc-and-jwks">Step 5: wire the extraction points (gRPC and JWKS)</h2>
+          <p>The same AppHost wires the extraction boundaries that make the modular monolith behave like real microservices: typed
+          gRPC clients and cross-service auth.</p>
+          <p><strong>gRPC references</strong> are declared as directed edges, only where a real call exists:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Representative: only actual call edges are declared</span>
+notificationService.WithReference(identityService).WaitFor(identityService);
+engagementService.WithReference(conferenceService).WaitFor(conferenceService);
+conferenceService.WithReference(engagementService);   <span class="hljs-comment">// reverse edge, deliberately no WaitFor</span></code></pre>
+          <p><code>WithReference</code> injects the <code>services__{name}__http__0</code> discovery variables the consumer&#39;s
+          <code>AddTypedGrpcClient&lt;T&gt;(serviceName)</code> uses to resolve a peer. The deliberate asymmetry on the
+          Conference and Engagement pair avoids a circular <code>WaitFor</code> deadlock: transient &quot;peer not ready&quot; errors
+          during startup self-heal through the Polly pipeline baked into the typed client.</p>
+          <p><strong>JWKS discovery</strong> is wired with one helper per consuming service:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">notificationService.WithJwksDiscovery(identityService, gateway);
+engagementService.WithJwksDiscovery(identityService, gateway);
+conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
+          <p><code>WithJwksDiscovery</code> sets <code>Authentication__JwtBearer__Authority</code> so each service validates RS256 tokens
+          against Identity&#39;s published keys, with no shared symmetric secret. The non-obvious part: it prefers the
+          <strong>gateway&#39;s</strong> HTTPS endpoint over Identity&#39;s. The services run HTTP/2-only on cleartext so gRPC can use
+          prior-knowledge negotiation, but the default JwtBearer backchannel <code>HttpClient</code> speaks HTTP/1.1, which
+          a Kestrel HTTP/2-only endpoint rejects. The gateway terminates TLS, speaks both protocols via ALPN, and
+          forwards the <code>/.well-known/*</code> fetch to Identity over h2c. The metadata fetch works end to end without
+          weakening any service (ADR-004 and ADR-008).</p>
+          <h2 id="step-6-make-the-telemetry-coherent-and-keep-the-bill-down">Step 6: make the telemetry coherent, and keep the bill down</h2>
+          <p>There are a few more pieces worth knowing, because they shape what you see in the dashboard, and what
+          you pay for it. Start with the noise. The <code>OutboxProcessor</code> background service polls every relational
+          outbox table on a recurring cycle (high in production, for example 300 seconds, to cut idle work). Each
+          idle poll would otherwise generate an <code>OutboxPoll</code> span, plus, under the Azure Monitor distro, a child
+          <code>SqlClient</code> dependency span. At scale, those idle spans would dominate ingestion and clutter the
+          dashboard.</p>
+          <p><code>OutboxPollFilterProcessor</code> (in the Aspire package) is an OpenTelemetry <code>BaseProcessor&lt;Activity&gt;</code> that
+          walks each ending span&#39;s parent chain and, for anything descended from the recurring <code>OutboxPoll</code>
+          activity, clears the <code>Recorded</code> flag so the batch exporters skip it. It is registered before the
+          exporters so its <code>OnEnd</code> runs first. Real per-message <code>OutboxProcess</code> spans use restored parent
+          contexts and are never poll descendants, so genuine outbox telemetry survives. The net effect: your
+          traces show real work, not idle polling, and your observability bill reflects that.</p>
+          <p>Idle polling is not the only chatter worth refusing. Health probes are the other, and they are bigger:
+          Container Apps liveness and readiness probes, the gateway&#39;s downstream aggregate probes, YARP active
+          health checks, and the availability web test account for the whole <code>AppRequests</code> stream in both
+          production workspaces, and their children (the health check&#39;s <code>SELECT 1</code>, the Redis PING, the gateway&#39;s
+          calls to each backend&#39;s <code>/alive</code>) for most of the dependency rows. <code>Telemetry:FilterProbeTelemetry</code> is
+          on by default, so <code>ProbeTelemetryFilter</code> refuses those request and outgoing spans at the
+          instrumentation options and <code>ProbeTelemetryFilterProcessor</code> un-records the dependency children that
+          were sampled independently. Metrics are left untouched on purpose, so probe traffic still shows up on
+          dashboards, just not in the trace bill. Three metric knobs sit next to it:
+          <code>Telemetry:DisableHttpClientMetrics</code> and <code>Telemetry:DisableRuntimeMetrics</code> each drop a whole meter
+          family through a View (a View, rather than simply skipping the instrumentation, because the Azure
+          Monitor distro adds those meters itself, which makes the toggle authoritative instead of advisory), and
+          <code>Telemetry:EnablePollyDurationMetrics</code> runs the other way: Polly&#39;s two duration histograms stay dropped
+          unless a host opts in, while its retry and circuit-breaker event counter always ships.</p>
+          <p>That filtering only matters because of where the telemetry actually flows, and the framework decides
+          that by environment, not by code. <code>AddServiceDefaults()</code> enables the OTLP exporter when
+          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is set, which is exactly the variable the Aspire dashboard injects into
+          every process, so the dashboard on your laptop lights up with no configuration. It enables Azure Monitor
+          (through <code>UseAzureMonitor</code>) when <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is set, which the cloud
+          deployment supplies, so production ships to workspace-based Application Insights instead. Both can run at
+          once, each shipping its own copy, so the same pipeline feeds the local dashboard and the cloud with no
+          code change between them.</p>
+          <p>A dashboard is only as readable as the trail through it, and one id ties that trail together.
+          <code>CorrelationIdMiddleware</code> reads an <code>X-Correlation-ID</code> header off each request; when the client sends
+          none, it falls back to the current W3C trace id, then to ASP.NET Core&#39;s <code>TraceIdentifier</code>. It sets that
+          id on a scoped <code>ICorrelationContext</code> and echoes it on the response header, and the CQRS logging
+          decorators stamp the same id into every log scope they open. So one id lines up a request&#39;s logs, its
+          response header, and its distributed trace: the first thing you reach for when a call that crossed the
+          gateway and three services goes wrong.</p>
+          <p>The last lever is the one a FinOps owner reaches for, because trace volume is the single largest
+          observability line item. <code>Telemetry:TracesSampleRatio</code> is unset by default, so a host keeps every trace
+          and behavior does not change. A deployed host sets a ratio in the open interval (0,1), for example <code>0.1</code>
+          to keep one trace in ten, and the framework wraps a <code>TraceIdRatioBasedSampler</code> in a <code>ParentBasedSampler</code>
+          so a sampled-in request keeps its whole trace intact across service boundaries instead of being shredded
+          hop by hop. The fallback is deliberately biased toward data: a key that is absent, unparseable, or
+          outside (0,1) reverts to sampling everything, so a typo can raise the bill but can never silently drop
+          all telemetry.</p>
+          <h2 id="step-7-harden-the-response-headers-and-reuse-connections">Step 7: harden the response headers, and reuse connections</h2>
+          <p>Two smaller pieces round out the baseline, and both are the kind of thing each host would otherwise
+          hand-roll and drift on.</p>
+          <p>First, <strong>security headers at the host edge.</strong> Instead of each host independently setting <code>X-Frame-Options</code>,
+          <code>Referrer-Policy</code>, <code>Permissions-Policy</code>, HSTS, and a Content-Security-Policy (and slowly disagreeing as
+          they do), the framework ships the pair a host wires in two lines. <code>AddCommonSecurityHeaders</code> binds the
+          <code>&quot;SecurityHeaders&quot;</code> config section and registers the default CSP provider; <code>UseCommonSecurityHeaders</code>
+          inserts the <code>SecurityHeadersMiddleware</code> into the pipeline. Call both and a new host inherits hardened
+          defaults automatically, with per-host overrides through that config section.
+          The CSP comes from an <code>ICspPolicyProvider</code>: the framework ships a <code>StaticCspPolicyProvider</code>, and a host
+          that needs a dynamic policy (the Blazor web host does) registers its own. The policy travels as a
+          <code>CspPolicy(Value, Enforce)</code> record, so a provider can emit <code>Content-Security-Policy</code> to enforce, or
+          <code>Content-Security-Policy-Report-Only</code> to trial a tightened policy without breaking the page first. That
+          enforce-vs-report switch is the standard safe way to roll a CSP out.</p>
+          <p>Second, <strong>connection reuse.</strong> The <code>SocketsHttpHandler</code> that <code>AddServiceDefaults()</code> installs is tuned for
+          Azure Container Apps so outbound HTTP connections are reused across requests rather than reopened on a
+          consumption-plan platform, where idle reconnects cost both latency and CPU. It is the same &quot;configure it
+          once in the shared baseline&quot; move as everything else in this article: the tuning lives in the framework,
+          not copied into each <code>Program.cs</code>.</p>
+          <h2 id="step-8-refuse-to-boot-on-bad-configuration">Step 8: refuse to boot on bad configuration</h2>
+          <p>One command bringing the stack up is only useful if a misconfigured process says so immediately. A bad
+          settings value can surface in two places. At <strong>first use</strong>, where a missing SMTP host becomes a 500 on the
+          first password-reset mail and an unparseable outbox interval becomes a background loop that never drains,
+          both on a replica that already passed its readiness probe and is taking live traffic. Or at <strong>boot</strong>, where
+          the host refuses to start and the platform never routes to it. The framework picks boot (ADR-070).</p>
+          <p>Every settings section binds through one chain, and it is textually the same everywhere:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">services.AddOptions&lt;ConnectionStringSettings&gt;()
+    .Bind(configuration.GetSection(ConnectionStringSettings.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();</code></pre>
+          <p><code>ValidateOnStart()</code> is the load-bearing link. <code>ValidateDataAnnotations()</code> on its own defers evaluation to
+          the first resolution, which for a section only a background service reads can be minutes after the replica
+          started taking traffic; pairing the two converts &quot;configured wrong&quot; into &quot;did not start&quot;. Twenty-three
+          framework sections bind this way (connection strings, SMTP, persistence, outbox, login protection, password
+          reset, refresh sessions, message bus, JWKS, cache, query-cache pipeline, scheduler, two-factor, email
+          confirmation, permission grants, audit trail, tenancy, push notifications, internal commands, idempotency,
+          JWT, the UI&#39;s API settings, and the Blazor host&#39;s CSP settings), including the ones behind opt-in features.
+          The two sections every host needs, <code>ApplicationSettings</code> and <code>ModulesSettings</code>, bind on the identical chain
+          inside the framework&#39;s module-host wiring, so a consuming app inherits them instead of repeating them and
+          adds only its module-level sections, such as Store&#39;s Stripe configuration.</p>
+          <p>Validation lives on the settings type, as data annotations extended by <code>IValidatableObject</code> where a rule
+          spans fields. <code>JwtSettings</code> marks <code>Issuer</code> and <code>Audience</code> required and then checks key material
+          conditionally on the selected algorithm: HS256 demands a secret of at least 32 characters, RS256 demands an
+          RSA private key. So a host configured for RS256 with no private key fails to boot rather than failing to
+          sign its first token.</p>
+          <p>The second half of the contract is uniformity. A section binds in exactly one place, on that one chain, and
+          is read through <code>Microsoft.Extensions.Options</code> at the point of consumption, so there is no second path by
+          which an unvalidated section can reach a handler. The exceptions are deliberate and say so at the call site.
+          <code>OwnerOrAdminFilterOptions</code> validates data annotations but skips <code>ValidateOnStart</code>, because its required
+          <code>BypassRole</code> has no default the framework could know (the framework knows no role names), so validating it
+          at startup would fail every host that never applies the filter; validating on first resolve puts the message
+          in front of the host that actually uses it. A small set of optional sections, the hybrid cache options,
+          native push, and file storage, binds without the validation chain for the same class of reason.</p>
+          <h2 id="trade-offs-and-gotchas-honestly">Trade-offs and gotchas, honestly</h2>
+          <p>A single-command stack is a force multiplier, but it has edges worth naming:</p>
+          <ul>
+          <li><strong>It wants Docker and an interactive console.</strong> No container runtime means no SQL, Redis, or broker.
+          And the AppHost launched headless can stall at control-plane init; run it in a real terminal.</li>
+          <li><strong>Local broker is RabbitMQ by default; production is Azure Service Bus.</strong> The transport switch is
+          entirely environment-driven (<code>MessageBus__Provider</code>), so no code path changes, but they are not the
+          same product. Basic-tier Service Bus also lacks the topics MassTransit needs, so the production tier
+          is Standard. ADC narrows the gap on demand: <code>ADC_BROKER=servicebus</code> swaps the official Azure Service
+          Bus emulator in locally through <code>AddServiceBusEmulatorBroker</code>. That costs a second container and a
+          warm-up, which is why the everyday inner loop still runs on RabbitMQ.</li>
+          <li><strong>MailDev is not a real SMTP relay.</strong> The mail interceptor is a local convenience; production uses a
+          real relay and is not provisioned by Aspire. This is the one deliberate gap between local and cloud
+          topology.</li>
+          <li><strong>Persistent containers keep state across runs.</strong> Aspire marks SQL, Redis, and RabbitMQ as persistent
+          so you are not re-seeding on every restart. That is a feature, but it also means stale local data can
+          outlive a schema change; reset the container when a migration changes shape.</li>
+          <li><strong>Telemetry meters are registered by literal name.</strong> Because the Aspire package has no project
+          reference to the assemblies that define <code>MMCA.Common.Outbox</code>, <code>MMCA.Common.Cqrs</code>,
+          <code>MMCA.Common.Idempotency</code>, <code>MMCA.Common.Scheduler</code>, <code>MMCA.Common.Broker</code>, <code>MMCA.Common.OutputCache</code>,
+          <code>MMCA.Common.BestEffort</code>, <code>MMCA.Common.InternalCommands</code>, and <code>MMCA.Common.AI</code> (nor to Polly&#39;s own
+          assemblies for the <code>Polly</code> meter), those source and meter names are duplicated string literals.
+          Rename a source in one place and you must rename it in the other; the code comments flag this.</li>
+          <li><strong>Nothing gates the fail-fast chain.</strong> No fitness test asserts that a new <code>AddOptions&lt;T&gt;</code> call carries
+          <code>ValidateDataAnnotations().ValidateOnStart()</code>. The uniformity in Step 8 is convention held by review,
+          not an enforced gate, so a section added without the chain fails silently, which is to say it fails
+          later. The related trade: bad configuration becomes a crash loop rather than a degraded start, which is
+          the intended exchange but takes the whole rollout instead of one code path.</li>
+          </ul>
+          <p>None of these are reasons to avoid Aspire. They are the reasons to know what the one command actually
+          stood up.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports cleanly to any Aspire app:</p>
+          <ol>
+          <li>Put <strong>service defaults</strong> (telemetry, discovery, resilience) in one shared method every host calls,
+          not copy-pasted per service. Drift between hosts is where observability gaps hide.</li>
+          <li>Split <strong>liveness</strong> from <strong>readiness</strong>. Liveness ignores dependency outages; readiness gates on
+          warm-up. Conflating them causes restart storms or slow first requests.</li>
+          <li>Declare topology as <strong>code in the AppHost</strong>, with <code>WaitFor</code> edges only where a real dependency
+          exists. The resource graph becomes the documentation.</li>
+          <li><strong>Filter recurring background spans</strong> out of export. Idle polling at scale is a real line item.</li>
+          <li><strong>Validate configuration at startup</strong>, not at first use. Bind every section with
+          <code>ValidateDataAnnotations().ValidateOnStart()</code> so a misconfigured host never reaches the readiness gate
+          and never takes traffic it cannot serve.</li>
+          </ol>
+          <hr>
+          <p><strong>What we covered:</strong> how one <code>dotnet run</code> on the AppHost brings up the full distributed stack with a
+          live dashboard; what <code>AddServiceDefaults()</code> configures (OpenTelemetry, service discovery, Polly
+          resilience at 30s/60s/90s); what <code>MapDefaultEndpoints()</code> exposes (<code>/health</code>, <code>/alive</code>,
+          <code>/health/ready</code>); how the AppHost wires the broker, per-service databases, gRPC references, and JWKS
+          discovery through the <code>MMCA.Common.Aspire.Hosting</code> helpers; how <code>OutboxPollFilterProcessor</code> and the
+          probe-telemetry filter keep idle poll spans and health-probe traffic out of telemetry while
+          <code>Telemetry:TracesSampleRatio</code> and the three metric knobs cap ingestion cost with fail-safe defaults;
+          how <code>CorrelationIdMiddleware</code> ties a request&#39;s logs to its trace and the dual OTLP
+          plus Azure Monitor exporters feed the local dashboard and workspace-based Application Insights; how
+          <code>AddCommonSecurityHeaders</code> plus <code>UseCommonSecurityHeaders</code> and a tuned <code>SocketsHttpHandler</code> harden
+          responses and reuse connections from the same shared baseline; and how the fail-fast configuration
+          contract binds every settings section with <code>ValidateDataAnnotations().ValidateOnStart()</code> so a
+          misconfigured host refuses to boot instead of failing on its first request.</p>
+          <p><strong>Next in the series:</strong> extracting a module out of the monolith into its own gRPC service, live, using
+          the AppHost wiring you just met.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Aspire chapter, or
+          <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>Packages: <code>MMCA.Common.Aspire</code> (service defaults) and <code>MMCA.Common.Aspire.Hosting</code> (AppHost wiring).</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Microservices, DevOps, Observability</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="rate-limiting-brute-force-protection.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">30 · Rate limiting and brute-force protection</span></a>
+          <a class="article-pager-link article-pager-link--next" href="extract-module-to-grpc-service.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">32 · Extracting a module to a gRPC service</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#prerequisites">Prerequisites</a></li>
+            <li><a href="#step-1-run-the-whole-stack-with-one-command">Step 1: run the whole stack with one command</a></li>
+            <li><a href="#step-2-understand-what-addservicedefaults-configured">Step 2: understand what AddServiceDefaults() configured</a></li>
+            <li><a href="#step-3-read-the-health-endpoints-from-mapdefaultendpoints">Step 3: read the health endpoints from MapDefaultEndpoints()</a></li>
+            <li><a href="#step-4-see-how-the-apphost-wires-the-distributed-app">Step 4: see how the AppHost wires the distributed app</a></li>
+            <li><a href="#step-5-wire-the-extraction-points-grpc-and-jwks">Step 5: wire the extraction points (gRPC and JWKS)</a></li>
+            <li><a href="#step-6-make-the-telemetry-coherent-and-keep-the-bill-down">Step 6: make the telemetry coherent, and keep the bill down</a></li>
+            <li><a href="#step-7-harden-the-response-headers-and-reuse-connections">Step 7: harden the response headers, and reuse connections</a></li>
+            <li><a href="#step-8-refuse-to-boot-on-bad-configuration">Step 8: refuse to boot on bad configuration</a></li>
+            <li><a href="#trade-offs-and-gotchas-honestly">Trade-offs and gotchas, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

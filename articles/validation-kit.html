@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Compose validators, don&#39;t copy them: a reusable FluentValidation kit · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A validation kit that composes FluentValidation rules instead of copy-pasting them across features.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/validation-kit.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Compose validators, don&#39;t copy them: a reusable FluentValidation kit">
+  <meta property="og:description" content="A validation kit that composes FluentValidation rules instead of copy-pasting them across features.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/validation-kit.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-08.png">
+  <meta property="og:image:alt" content="Compose validators, don&#39;t copy them: a reusable FluentValidation kit">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Compose validators, don&#39;t copy them: a reusable FluentValidation kit">
+  <meta name="twitter:description" content="A validation kit that composes FluentValidation rules instead of copy-pasting them across features.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-08.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Compose validators, don't copy them: a reusable FluentValidation kit","description":"A validation kit that composes FluentValidation rules instead of copy-pasting them across features.","url":"https://ivanball.github.io/articles/validation-kit.html","mainEntityOfPage":"https://ivanball.github.io/articles/validation-kit.html","image":"https://ivanball.github.io/assets/img/articles/article-08.png","datePublished":"2026-07-06T22:20:33Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":8,"sameAs":"https://medium.com/@ivanball76/compose-validators-dont-copy-them-a-reusable-fluentvalidation-kit-8865a6003a9c"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"08 · Compose validators, don't copy them","item":"https://ivanball.github.io/articles/validation-kit.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">08 · Compose validators, don&#39;t copy them</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html" aria-current="page">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Core patterns · No. 8</p>
+          <h1 id="compose-validators-dont-copy-them-a-reusable-fluentvalidation-kit">Compose validators, don&#39;t copy them: a reusable FluentValidation kit</h1>
+          <p class="article-meta"><time datetime="2026-07-06T22:20:33Z">July 6, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/compose-validators-dont-copy-them-a-reusable-fluentvalidation-kit-8865a6003a9c" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-08.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">&quot;Email must be valid, password must be strong, name is required.&quot; Every command re-declares
+          those rules, and then they drift. Here is a validation kit where the rules are written once, composed with
+          <code>Include(...)</code>, and bridged into the <code>Result</code> railway so a bad request is a 400, not a 500.</p>
+          <hr>
+          <p>Open any codebase with more than a dozen commands and grep for <code>EmailAddress()</code>. You will find it five
+          times. <code>NotEmpty().MaximumLength(...)</code> for a name field, fifteen times. A password regex chain, copied into
+          the register validator, the set-password validator, and the admin-reset validator, each subtly different
+          because someone tightened one and forgot the others. That is the anemic-validation smell: validation is
+          treated as boilerplate you retype per command instead of a building block you compose.</p>
+          <p>The pipeline question (where does validation <em>run</em>) is settled elsewhere: a <code>ValidatingCommandDecorator</code>
+          sits in the CQRS chain and gates every command before the handler, covered in the decorator-pipeline
+          deep-dive. This article is about the <em>other</em> half that no one writes well: the reusable building blocks
+          that make each validator a short list of includes rather than a copy-pasted <code>RuleFor</code> wall. MMCA.Common
+          ships that kit in <code>MMCA.Common.Application</code>, so ADC and Store both inherit identical email, password, and
+          address rules without duplicating a single line.</p>
+          <h2 id="reusable-rule-fragments-composed-with-include">Reusable rule fragments, composed with Include</h2>
+          <p>The core idea is a <em>rule fragment</em>: a tiny <code>AbstractValidator&lt;T&gt;</code> that owns exactly one field&#39;s contract,
+          generic over the parent type <code>T</code> and configured with a selector expression. <code>CommonValidationRules.cs</code>
+          declares eleven of them: <code>RequiredStringRules&lt;T&gt;</code>, <code>OptionalStringRules&lt;T&gt;</code>, <code>EmailRules&lt;T&gt;</code>,
+          <code>AbsoluteUrlRules&lt;T&gt;</code>, <code>PositiveIntRules&lt;T&gt;</code>, <code>PositiveDecimalRules&lt;T&gt;</code>, <code>NonNegativeIntRules&lt;T&gt;</code>,
+          <code>RequiredIdRules&lt;T, TId&gt;</code>, <code>OptionalPositiveIdRules&lt;T, TId&gt;</code>, <code>PasswordRules&lt;T&gt;</code>, and
+          <code>StrongPasswordRules&lt;T&gt;</code>. Each constructor is a single expression body. <code>EmailRules&lt;T&gt;</code>, for example,
+          chains <code>NotEmpty()</code> + <code>EmailAddress()</code> + <code>MaximumLength(maxLength)</code>. <code>StrongPasswordRules&lt;T&gt;</code> repeats
+          <code>PasswordRules&lt;T&gt;</code>&#39;s non-empty plus 8-to-128 length and adds four <code>Matches(...)</code> regexes for an uppercase
+          letter, a lowercase letter, a digit, and a special character.</p>
+          <p>Two design choices make a fragment reusable across unrelated types. First, it is <strong>generic over <code>T</code></strong>, the
+          type that contains the field. Second, it takes a <strong>selector expression</strong> (<code>Expression&lt;Func&lt;T, string&gt;&gt;</code>)
+          rather than inheriting from the parent. So the same <code>EmailRules&lt;T&gt;</code> validates a <code>RegisterRequest</code>, a
+          <code>LoginRequest</code>, or a bare value object, with zero inheritance coupling. A concrete validator pulls a
+          fragment in with FluentValidation&#39;s <code>Include(...)</code>:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">CreateSessionRequestValidator</span> : <span class="hljs-title">AbstractValidator</span>&lt;<span class="hljs-title">CreateSessionRequest</span>&gt;
+{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">CreateSessionRequestValidator</span>()</span>
+    {
+        Include(<span class="hljs-keyword">new</span> RequiredStringRules&lt;CreateSessionRequest&gt;(r =&gt; r.Title, <span class="hljs-string">&quot;Title&quot;</span>, <span class="hljs-number">200</span>));
+        Include(<span class="hljs-keyword">new</span> EmailRules&lt;CreateSessionRequest&gt;(r =&gt; r.ContactEmail, <span class="hljs-string">&quot;Contact Email&quot;</span>, <span class="hljs-number">256</span>));
+    }
+}</code></pre>
+          <p>Read that and the contract is obvious at a glance: a required title capped at 200 characters, a valid
+          contact email capped at 256. No <code>RuleFor</code> chain to re-derive. The &quot;non-empty plus valid format plus max
+          length&quot; logic lives in one place, and a security tweak (tighten the password regex, raise an email length
+          cap) is a one-line edit that propagates to every consumer on the next package bump instead of being missed
+          in some forgotten validator.</p>
+          <p>The address family is the worked example of composition all the way up. <code>AddressValidationRules.cs</code> ships
+          six field fragments (<code>AddressLine1Rules&lt;T&gt;</code> through <code>CountryRules&lt;T&gt;</code>), and <code>AddressValidator</code> is a
+          composite <code>AbstractValidator&lt;Address&gt;</code> whose entire body is six <code>Include(...)</code> calls. It owns <strong>no</strong>
+          <code>RuleFor</code> chains of its own. The address fragments also pull their length limits from <code>AddressInvariants</code>
+          constants in <code>MMCA.Common.Shared</code> rather than baking numeric literals into the rule, so the domain
+          invariant and its validator agree by construction. The max length for a city lives in exactly one place
+          across the entire solution, and the validator references it.</p>
+          <h2 id="one-validator-for-the-request-free-for-the-command">One validator for the request, free for the command</h2>
+          <p>Most commands in this codebase are thin wrappers that carry a request DTO, for example
+          <code>CreateSessionCommand(CreateSessionRequest Request)</code>, and implement <code>ICommandWithRequest&lt;TRequest&gt;</code> (its
+          <code>Request</code> property is the bridge). The naive approach forces you to register a validator for <em>both</em> the
+          request and the command, which means restating the request&#39;s rules at the command level for every single
+          command. That is boilerplate begging to drift.</p>
+          <p><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code> removes it by convention. It is an auto-registered
+          <code>AbstractValidator&lt;TCommand&gt;</code> whose constructor takes <code>IEnumerable&lt;IValidator&lt;TRequest&gt;&gt;</code> by DI and loops
+          over the whole collection, de-duplicated by runtime type with <code>DistinctBy(v =&gt; v.GetType())</code>, applying
+          <code>RuleFor(c =&gt; c.Request).SetValidator(validator)</code> for each one. Every registered validator for the request
+          type runs, not just the first, so a module that authors a validator beside a framework-supplied one gets
+          both sets of rules enforced instead of silently losing one. The generic constraint
+          <code>where TCommand : ICommandWithRequest&lt;TRequest&gt;</code> is what guarantees the <code>c.Request</code> selector compiles.
+          Write one validator for the request, and the command that wraps it is validated for free.</p>
+          <p>The wiring lives in the Application layer&#39;s module scan,
+          <code>ScanModuleApplicationServices&lt;TAssemblyMarker&gt;()</code>, which forwards to an <code>Assembly</code>-typed overload. That
+          overload calls <code>AddValidatorsFromAssembly(moduleAssembly)</code> to discover every hand-written validator by
+          convention, then reflects over the assembly for commands implementing <code>ICommandWithRequest&lt;&gt;</code>, builds the
+          closed <code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code> type per command, and registers it with
+          <strong><code>TryAddTransient</code></strong>. That <code>TryAdd</code> is the load-bearing detail: it is a fallback, not an override. If a
+          module ships an explicit hand-written <code>IValidator&lt;TCommand&gt;</code>, that wins, and the generic bridge stays out
+          of the way. An empty validator collection is not an error either: it just means the request has no rules
+          and the generic validator is a no-op. Convention over configuration, with an escape hatch that never
+          blocks a bespoke case.</p>
+          <h2 id="a-validation-failure-is-a-result-and-the-edge-maps-it-to-400">A validation failure is a Result, and the edge maps it to 400</h2>
+          <p>A validator that runs is useless unless its output flows into the rest of the system cleanly.
+          FluentValidation speaks in <code>ValidationResult</code> and <code>ValidationFailure</code>. The rest of the codebase speaks in
+          the <code>Result</code> railway (covered in the Result-pattern article). One static class bridges them:
+          <code>ValidationFailureExtensions</code>, a C# <code>extension(ValidationResult)</code> block exposing a single method,
+          <code>ToErrors(string source)</code>.</p>
+          <p><code>ToErrors</code> projects each <code>ValidationFailure</code> into an <code>Error.Validation(code, message, source, target)</code>,
+          tagged with the <code>ErrorType.Validation</code> kind. The mapping is exact: the failure&#39;s <code>ErrorCode</code> becomes the
+          error code, its <code>ErrorMessage</code> the message, the caller-supplied <code>source</code> the source, and its
+          <code>PropertyName</code> the <code>target</code> so the client learns <em>which</em> field failed. The <code>ValidatingCommandDecorator</code>
+          calls it with <code>typeof(TCommand).Name</code> as the source, so each error carries the name of the command that
+          produced it. On failure the decorator never calls the inner handler: it converts the failures to errors
+          and returns a <code>Result</code> failure immediately.</p>
+          <p>Two properties of that flow matter to a caller:</p>
+          <ul>
+          <li><strong>Validation runs before the transaction opens.</strong> The <code>ValidatingCommandDecorator</code> sits <em>before</em> the
+          transactional decorator in the pipeline. An invalid command short-circuits before any database
+          transaction is opened. You never pay for a transaction on input that was never going to be persisted.</li>
+          <li><strong>A validation failure is a 400, not a 500.</strong> The <code>ErrorType.Validation</code> tag is what the API edge&#39;s
+          failure mapper turns into <code>400 Bad Request</code> with per-property messages, identical at the boundary
+          regardless of which validator raised it. A bad request is a client error, and the status code says so.
+          Nothing in the domain or the handler ever references FluentValidation: the entire kit is an
+          application-layer concern, consistent with the inward dependency rule of Clean Architecture.</li>
+          </ul>
+          <p>That decoupling cuts both ways. FluentValidation never sees a domain <code>Error</code>, and the domain <code>Error</code> never
+          sees a <code>ValidationFailure</code>. <code>ValidationFailureExtensions</code> is the only join point where the two meet, so
+          neither library knows the other exists.</p>
+          <h2 id="the-two-altitude-rule-validator-versus-domain-factory">The two-altitude rule: validator versus domain factory</h2>
+          <p>A reasonable objection: if the validator checks the input, why does the domain factory also return a
+          <code>Result&lt;T&gt;</code> and re-check things? Because they check at two different altitudes, and they complement rather
+          than duplicate.</p>
+          <p>The validator does <strong>cheap structural checks</strong>: is the string non-empty, is it under the max length, does
+          it look like an email, does the password match the complexity regex. These are properties of the request
+          shape alone. They need no database, no other entity, no business context, and they are exactly what you
+          want to reject at the edge with a 400 before opening a transaction.</p>
+          <p>The domain factory enforces <strong>business invariants</strong>: rules that depend on state the validator cannot see.
+          &quot;This email is already registered.&quot; &quot;A session cannot be scheduled outside its parent event&#39;s window.&quot; &quot;A
+          discount cannot exceed the order total.&quot; Those need other data, so they belong in the domain where that
+          data lives, returned as a <code>Result</code> failure from the factory method.</p>
+          <p>Put the structural check in the validator and the business invariant in the domain factory, and each lives
+          in exactly one place. The anti-pattern is smearing one altitude across both layers: re-doing a regex check
+          inside the factory, or trying to query the database from a validator. The kit&#39;s job is to make the cheap
+          structural layer composable and consistent, so the domain factory is free to focus on the rules only it
+          can enforce.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>It is a FluentValidation dependency.</strong> The kit is a thin composition layer over FluentValidation 12,
+          not a hand-rolled engine. That is a deliberate trade (a mature, well-known library over reinventing
+          validation), but it is a dependency in the Application layer all the same, and your team has to know
+          FluentValidation&#39;s <code>Include</code>, <code>RuleFor</code>, and <code>SetValidator</code> idioms to read a validator fluently.</li>
+          <li><strong>The generic-plus-selector indirection has a learning curve.</strong> A fragment like
+          <code>RequiredStringRules&lt;T&gt;(selector, fieldName, maxLength)</code> is more abstract than a literal
+          <code>RuleFor(x =&gt; x.Title).NotEmpty().MaximumLength(200)</code>. The payoff is reuse, but a newcomer meets a small
+          generic puzzle (what is <code>T</code>, what does the selector bind) before the first <code>Include</code> reads naturally.</li>
+          <li><strong>This layer is structural only.</strong> A fragment validates shape, never cross-entity or stateful rules.
+          That is correct (those belong in the domain factory), but it means the validator is not the whole
+          story, and a reviewer must check both altitudes to know a command is fully guarded.</li>
+          <li><strong>It overlaps the domain factory at the edges.</strong> &quot;Required&quot; and &quot;max length&quot; can be expressed both as a
+          validator fragment and as a domain invariant. The kit keeps the structural copy in the validator and
+          sources address limits from the same <code>AddressInvariants</code> constants the domain uses, so the two agree by
+          construction. Where a field has no shared constant, keeping the two in sync is a discipline, not a
+          compiler guarantee.</li>
+          </ul>
+          <p>None of these argue for copy-pasting <code>RuleFor</code> chains. They argue for knowing which altitude a rule lives
+          at and composing the structural ones deliberately.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any stack with a validation library that supports composition:</p>
+          <ol>
+          <li>Write each field contract once as a <strong>fragment</strong>: a small validator generic over the parent type, taking
+          a selector, owning one field&#39;s rules (required, email, strong password).</li>
+          <li><strong>Compose, never copy.</strong> A real validator is a short list of includes, not a wall of inline rules.</li>
+          <li>Source length limits and similar constants from <strong>the same place the domain uses</strong>, so the validator and
+          the invariant cannot drift apart.</li>
+          <li><strong>Bridge validation output into your error type</strong> at one join point, tag it as a validation-class error,
+          and map that class to HTTP 400 at the edge. Run it before you open a transaction.</li>
+          <li>Keep <strong>structural checks in the validator and business invariants in the domain</strong>. Two altitudes, no
+          smearing.</li>
+          </ol>
+          <p>The takeaway: <strong>validation is a cross-cutting concern, so it deserves the same composition discipline as the
+          rest of your architecture. A copy-pasted RuleFor chain is the anemic-validation smell. Write the rule once,
+          include it everywhere, and let the edge turn a failure into a 400.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why every command re-declaring &quot;email valid, password strong, name required&quot; drifts,
+          how MMCA.Common&#39;s reusable rule fragments (<code>RequiredStringRules&lt;T&gt;</code>, <code>EmailRules&lt;T&gt;</code>,
+          <code>StrongPasswordRules&lt;T&gt;</code>, the address fragments and <code>AddressValidator</code>) compose via <code>Include(...)</code> instead
+          of copy-paste, how <code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code> plus <code>ICommandWithRequest</code> validate a
+          command for free from its request validator, and how <code>ValidationFailureExtensions.ToErrors</code> turns a
+          failure into an <code>ErrorType.Validation</code> <code>Result</code> that the API edge maps to 400 before any transaction opens.</p>
+          <p><strong>Next in the series:</strong> the transactional outbox, the reliability backbone that persists a domain
+          event and publishes it in the same transaction, never losing one.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the validation chapter of the onboarding
+          guide, or <code>dotnet add package MMCA.Common.Application</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Validation, Software Architecture, FluentValidation</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="cqrs-decorator-pipeline.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">07 · The CQRS decorator pipeline</span></a>
+          <a class="article-pager-link article-pager-link--next" href="transactional-outbox-dotnet.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">09 · The transactional outbox</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#reusable-rule-fragments-composed-with-include">Reusable rule fragments, composed with Include</a></li>
+            <li><a href="#one-validator-for-the-request-free-for-the-command">One validator for the request, free for the command</a></li>
+            <li><a href="#a-validation-failure-is-a-result-and-the-edge-maps-it-to-400">A validation failure is a Result, and the edge maps it to 400</a></li>
+            <li><a href="#the-two-altitude-rule-validator-versus-domain-factory">The two-altitude rule: validator versus domain factory</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

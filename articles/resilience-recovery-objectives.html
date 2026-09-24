@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Retries are not a recovery plan: resilience handlers, RTO/RPO, and a restore you actually drilled · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Standard resilience on every outbound client, plus declared RTO/RPO and a drilled restore.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/resilience-recovery-objectives.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Retries are not a recovery plan: resilience handlers, RTO/RPO, and a restore you actually drilled">
+  <meta property="og:description" content="Standard resilience on every outbound client, plus declared RTO/RPO and a drilled restore.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/resilience-recovery-objectives.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-33.png">
+  <meta property="og:image:alt" content="Retries are not a recovery plan: resilience handlers, RTO/RPO, and a restore you actually drilled">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Retries are not a recovery plan: resilience handlers, RTO/RPO, and a restore you actually drilled">
+  <meta name="twitter:description" content="Standard resilience on every outbound client, plus declared RTO/RPO and a drilled restore.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-33.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Retries are not a recovery plan: resilience handlers, RTO/RPO, and a restore you actually drilled","description":"Standard resilience on every outbound client, plus declared RTO/RPO and a drilled restore.","url":"https://ivanball.github.io/articles/resilience-recovery-objectives.html","mainEntityOfPage":"https://ivanball.github.io/articles/resilience-recovery-objectives.html","image":"https://ivanball.github.io/assets/img/articles/article-33.png","datePublished":"2026-08-02T14:19:18Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":33,"sameAs":"https://medium.com/@ivanball76/retries-are-not-a-recovery-plan-resilience-handlers-rto-rpo-and-a-restore-you-actually-drilled-3c7474814123"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"33 · Resilience and recovery objectives","item":"https://ivanball.github.io/articles/resilience-recovery-objectives.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">33 · Resilience and recovery objectives</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html" aria-current="page">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Run &amp; extract · No. 33</p>
+          <h1 id="retries-are-not-a-recovery-plan-resilience-handlers-rtorpo-and-a-restore-you-actually-drilled">Retries are not a recovery plan: resilience handlers, RTO/RPO, and a restore you actually drilled</h1>
+          <p class="article-meta"><time datetime="2026-08-02T14:19:18Z">August 2, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/retries-are-not-a-recovery-plan-resilience-handlers-rto-rpo-and-a-restore-you-actually-drilled-3c7474814123" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-33.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">The last article promised the resilience handler that makes retries happen, and the recovery objectives behind it. Here is both halves: the Polly pipeline on every outbound client, and the part most &quot;resilience&quot; write-ups skip entirely, a declared RTO/RPO per failure scenario and a restore drill that someone actually ran.</p>
+          <hr>
+          <p>The extraction article ended on a promise: the retry pipeline that keeps those cross-service calls self-healing, plus the recovery objectives behind it. This is that article, and the second half of the promise, recovery, is the one that matters most. (Idempotency, a few articles back, was the other half of the same coin: a retry is only safe if the operation it repeats is idempotent.)</p>
+          <p>Here is the uncomfortable framing. Almost every &quot;we made it resilient&quot; story stops at the retry policy. Add Polly, add a circuit breaker, set a timeout, ship it. That is the easy 80%. It is also the half that gives you false confidence, because a retry policy answers exactly one question: &quot;what happens when a single call transiently fails?&quot; It says nothing about the questions that actually wake you at 3am: how much data can we lose, how long until we are back, and have we ever proven we can restore at all. A retry policy without a drilled restore is theater. It looks like business continuity from the outside and collapses the first time you need it.</p>
+          <p>ADR-009 (the row in the primer ADR table reads &quot;Standard resilience handler on every outbound client; declared RTO/RPO + drilled restore&quot;) is deliberately two decisions bolted together, because resilience and recovery are two halves of the same posture. This article walks both.</p>
+          <h2 id="half-one-the-standard-resilience-handler-on-every-outbound-client">Half one: the standard resilience handler on every outbound client</h2>
+          <p>The runtime half is the part already shown elsewhere in this series, so I will summarize and attribute rather than re-derive it. Every outbound HTTP and gRPC client in the system gets the same Polly pipeline: retry, timeout, and a circuit breaker. It is not wired call-site by call-site. It is configured once, in the Aspire service-side baseline, and every client inherits it.</p>
+          <p>The wiring lives in <code>AddServiceDefaults()</code> from <code>MMCA.Common.Aspire</code>, the single method every service host calls first in <code>Program.cs</code>. The Aspire one-command deep-dive (Article 31) walks it in full; the short version is that <code>AddServiceDefaults()</code> configures OpenTelemetry, service discovery, and Polly resilience handlers on every <code>HttpClient</code>, with a 30 second per-attempt timeout, a 60 second circuit-breaker sampling window, and a 90 second total-request timeout. Those are the values that article verified against source. Every outbound call rides this pipeline by default. That is the runtime side of ADR-009 stated plainly: a developer adding a new typed client does not opt into resilience and cannot forget it, because it is applied at the <code>HttpClient</code> defaults layer, not per registration.</p>
+          <p>The gRPC side gets the identical treatment, and the gRPC contracts chapter is explicit about it. <code>AddTypedGrpcClient&lt;TClient&gt;(serviceName)</code> calls <code>AddStandardResilienceHandler()</code>, which gives every gRPC client an explicit Polly pipeline sourced entirely from <code>GrpcResilienceDefaults</code>: the attempt timeout, the total timeout and the retry budget are the same values the HTTP defaults use, and the circuit-breaker values are spelled out on their own (a 0.5 failure ratio, a minimum throughput of 10, a 10 second break), precisely because an east-west gRPC call bypasses the Gateway&#39;s active health checks. There is one sharp edge worth knowing, covered in the module-extraction deep-dive (Article 32): a deliberate <code>SocketsHttpHandler</code> override forces explicit HTTP/2 first, because the global resilience handler can otherwise wrap the primary handler in a way that defeats the h2c negotiation. Resilience is then layered back on top. So the order is &quot;force the transport, then add resilience,&quot; not the reverse.</p>
+          <p>This pipeline is not decorative. It is load-bearing for a specific, documented case. In ADC, Conference and Engagement form a bidirectional gRPC pair, and the AppHost gives Engagement a <code>WaitFor(conference)</code> but deliberately gives the reverse Conference-to-Engagement edge only a <code>WithReference</code> with no <code>WaitFor</code>, because a reciprocal wait would deadlock startup (each service waiting for the other to be healthy). The transient &quot;peer not ready&quot; errors that result during startup self-heal through the resilience pipeline. The gRPC chapter says this directly: &quot;the retry plus circuit breaker is what makes them tolerable.&quot; That is the runtime payoff. Retries are what let a mutual synchronous dependency boot at all.</p>
+          <h2 id="fitness-enforced-not-just-present">Fitness-enforced, not just present</h2>
+          <p>A convention that is &quot;applied everywhere by everyone remembering to&quot; is the same failure mode the idempotency and caching articles kept warning about. The framing across this series is that the standard resilience handler is fitness-enforced: the architecture asserts that outbound clients carry it, rather than trusting each registration. The honest detail is that the primary mechanism for getting it onto every client is structural: it is added at the <code>HttpClient</code> defaults layer in <code>AddServiceDefaults()</code> and inside <code>AddTypedGrpcClient&lt;TClient&gt;</code>, so the only way to get an outbound client without resilience is to bypass the framework&#39;s registration helpers entirely. That structural default is what makes &quot;every outbound client&quot; a statement of fact instead of a hope.</p>
+          <h2 id="the-one-place-resilience-left-the-outbound-client-the-outbox-broker-publish">The one place resilience left the outbound client: the outbox broker publish</h2>
+          <p>For most of this series, &quot;resilience policy&quot; has meant &quot;outbound HTTP or gRPC client.&quot; ADR-087 (accepted 2026-08-18) amends ADR-009 with the first exception, and it is a narrow one: the outbox&#39;s broker publish carries a Polly circuit breaker of its own, and nothing else in the persistence path does.</p>
+          <p>The scope is deliberate. <code>OutboxProcessor</code> holds a per-instance <code>ResiliencePipeline</code> (<code>OutboxProcessor.cs:107</code>, built at <code>:790-801</code>) and wraps exactly one call in it, <code>state.Bus.PublishAsync(state.Event, ct)</code> (<code>:631-635</code>). The in-process dispatch branch sits outside it, because a direct method call into the same process has no transport that can be dead (<code>:627-630</code>, with the <code>else</code> branch at <code>:637-640</code>). The parameters live in <code>BrokerResilienceDefaults</code>: a 0.5 failure ratio (<code>:32</code>), a minimum throughput of 10 attempts before the ratio is evaluated at all (<code>:40</code>), a 30 second sampling window (<code>:47</code>), and a 15 second break (<code>:55</code>). No retry strategy is paired with the breaker (<code>:17-22</code>), because the outbox already <em>is</em> the retry: a Polly retry inside a loop that re-leases and retries would multiply the attempt count without changing the outcome.</p>
+          <p>Note what this breaker does and does not buy, because it is the cleanest small example of the honesty this article is asking for. It adds no delivery guarantee. <code>BrokenCircuitException</code> is caught by the same <code>catch (Exception ex)</code> as any publish failure (<code>:666</code>), increments <code>RetryCount</code> (<code>:668</code>), re-leases the row with the usual backoff (<code>:677-678</code>), and dead-letters at <code>MaxRetries</code> like everything else (<code>:702</code>). Only the observability differs: a <code>broker.circuit.open.count</code> increment (<code>:691-693</code>) and one log line per batch instead of one per message (<code>:696-700</code>). What it fixes is cost and noise. When the broker is unreachable rather than slow, every message in every batch fails identically, and the breaker converts a batch of connection timeouts into a batch of microsecond rejections. The pipeline is also a per-instance field, so N replicas mean N independent circuits and an effective threshold N times the configured one.</p>
+          <p>The other half of that record is what it declined to do, and that is the part worth copying. The symmetric move, a breaker on the query path so a failing database sheds load instead of queueing on it, is explicitly rejected. The reason is composition, not appetite: EF Core&#39;s <code>EnableRetryOnFailure</code> execution strategy (<code>SQLServerDbContext.cs:63-66</code>, 5 retries, a 10 second maximum delay) already owns retrying at the EF layer, and it constrains how a user-initiated transaction may be written. Wrapping a breaker around a call that is already being retried inside that strategy would either count one logical failure many times or force the strategy to be replaced, which is an EF execution-strategy rework rather than a breaker. So the database keeps <code>EnableRetryOnFailure</code> plus <code>CommandTimeoutSeconds</code> (<code>:55</code>) as its posture, and the asymmetry is recorded as a decision. The ADR&#39;s own reason for writing the rejection down is the reusable lesson: an engineer who finds a breaker on the broker and none on the database will otherwise conclude the second was forgotten, and add it.</p>
+          <h2 id="half-two-declared-rto-and-rpo-per-scenario">Half two: declared RTO and RPO per scenario</h2>
+          <p>Now the part that is actually missing from most &quot;resilience&quot; treatments, and the part this article exists to document.</p>
+          <p>ADR-009 requires each consuming app to <em>declare</em>, in writing, its Recovery Time Objective and Recovery Point Objective per failure scenario. Not &quot;we have backups.&quot; Specific numbers, per scenario, that someone signed off on. ADC&#39;s <code>infra/DISASTER-RECOVERY.md</code> is the worked example, and it targets three scenarios with explicit figures:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Scenario</th>
+          <th>RPO</th>
+          <th>RTO</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Accidental data loss / bad migration (within the PITR window)</td>
+          <td>about 10 minutes</td>
+          <td>up to 2 hours</td>
+          </tr>
+          <tr>
+          <td>Single service DB corruption</td>
+          <td>about 10 minutes</td>
+          <td>up to 1 hour (PITR restore-as-new, swap the name)</td>
+          </tr>
+          <tr>
+          <td>Full region loss</td>
+          <td>up to 1 hour (geo-redundant replication lag)</td>
+          <td>up to 4 hours (geo-restore plus redeploy)</td>
+          </tr>
+          </tbody></table></div>
+          <p>These numbers exist in source. They are real and modest, and the runbook says why they are modest on purpose: ADC is a regional, non-24x7 conference app, so sub-hour multi-region failover is explicitly declared a non-goal. That sentence is the whole point of declaring objectives. An RTO is not a brag about how fast you are. It is a statement of how fast you have decided to be, so that the architecture, the backup tier, and the on-call expectations can all be sized to match it. A declared four-hour RTO for a region loss is an honest, scoped commitment. An undeclared one is a fight at 3am about what &quot;back up&quot; even means.</p>
+          <p>The runbook pairs the objectives with the SPOFs it knowingly accepts: one Azure SQL server, one Container Apps environment with every app at <code>minReplicas: 1</code>, one Service Bus namespace, one ACR. Each is listed with its mitigation. Accepting a single point of failure in writing, with the mitigation named, is a different act than having one by accident.</p>
+          <h2 id="the-drilled-restore-backups-you-tested-not-backups-you-assumed">The drilled restore: backups you tested, not backups you assumed</h2>
+          <p>The second word in &quot;declared RTO/RPO and a drilled restore&quot; is the one that separates a posture from a wish.</p>
+          <p>The backup posture in ADC&#39;s runbook is two tiers. Point-in-time restore (PITR) on geo-redundant storage covers the &quot;undo the last bad change&quot; case with an RPO of minutes. Long-term retention (LTR) on all four live per-service databases keeps weekly, monthly, and yearly backups, declared as a <code>serviceDatabaseLtr</code> resource in <code>infra/main.bicep</code>. Those four are the only databases on the SQL server, so the two tiers cover the entire application data estate; the <code>AtlDevCon</code> archive of the legacy shared database lives in blob storage as a bacpac instead, which puts it outside PITR and LTR by design. Backups being declared in infrastructure-as-code, not clicked into existence in a portal, is itself part of the discipline: the retention policy is version-controlled and reviewable.</p>
+          <p>But a backup you have never restored is a hypothesis, not a recovery plan. So the runbook ships an Azure-CLI drill script (<code>az sql db restore</code>, then <code>az sql db show</code>, then <code>az sql db delete</code>): it PITR-restores a throwaway copy of a database, times the restore as the measured RTO, verifies the copy comes back <code>Online</code>, then deletes it. The automated check is deliberately ARM-level (is the restored database <code>Online</code>?); a deeper data check, row counts against the original via the SQL admin login, is a documented manual step you run with <code>-KeepCopy</code>. The objective is not to recover anything. It is to prove the restore path works before you need it under pressure, and to time it against the declared RTO. ADR-009 requires the drill to be recorded in a drill-result table.</p>
+          <p>The drill is executed, repeated and enforced. Its first recorded run, on 2026-06-20, took <code>ADC_Conference</code> through a point-in-time restore to a throwaway copy, verified and timed at <strong>2.6 minutes</strong> against the declared 2-hour RTO, recorded in the drill table in <code>DISASTER-RECOVERY.md</code> and closing TD-10. It runs as a <code>dr-drill.yml</code> workflow over a <code>dr-restore-drill.ps1</code> script, on a weekly cron (Mondays 06:00 UTC) as well as on-demand <code>workflow_dispatch</code>, and the deploy pipeline carries a <code>dr-freshness</code> job in its <code>needs</code> that reads the latest successful drill and fails the deploy if it is older than an 8-day window, so a stale recovery proof blocks the deploy instead of being a soft reminder. The ADC scorecard puts resilience at its top maturity precisely on that gate. Coverage is a rotation rather than a single-database story: the scheduled run picks its target across all four live per-service databases by ISO week number, so each one earns its own recovery proof roughly monthly, and the drill table records six passing restores from 2026-06-20 through 2026-08-10 covering <code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, and <code>ADC_Notification</code>, the slowest at 4.4 minutes against the 2-hour RTO. That is also the cleanest illustration of why &quot;drilled&quot; is a separate requirement from &quot;documented&quot;: a runbook can be complete and correct and still be a hypothesis, and only a run that is timed and written down turns a correct procedure into a measured recovery posture. What remains genuinely open is narrower: every one of those proofs is the same scenario, a single-database point-in-time restore, so the region-loss objective and the full multi-service restore order are declared targets rather than measured ones, and the drill plus its freshness gate live in the consuming app&#39;s pipeline, because ADR-009 makes recovery each app&#39;s obligation rather than something the framework can run for it.</p>
+          <h2 id="database-per-service-multiplies-the-restore-surface">Database-per-service multiplies the restore surface</h2>
+          <p>There is a structural reason recovery is harder here than in a monolith, and it is the direct cost of a decision celebrated elsewhere in this series.</p>
+          <p>ADR-006 (database-per-service) gives every service its own database and its own outbox, the right call for isolation and the outbox-race fix. But it has a recovery consequence: there is no single database to restore. There are four (<code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>), each with its own PITR window, its own LTR policy, and its own place in the restore order. A point-in-time restore of one service to 10:42 does not automatically align with the others, and cross-service references are scalar IDs with consistency flowing through the outbox and broker, so a restore can leave an event mid-flight. The runbook&#39;s per-database, restore-to-new-name-then-repoint procedure is the operational answer, and it is more steps than &quot;restore the database.&quot; Database-per-service multiplies the backup and restore surface. That is not a reason to avoid it. It is a reason to declare the objectives per service and to drill the restore, which is precisely what ADR-009 demands.</p>
+          <h2 id="the-dr-runbook-and-the-deploy-time-auto-revert">The DR runbook and the deploy-time auto-revert</h2>
+          <p>The runbook governs four per-service databases, <code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code> and <code>ADC_Notification</code>, and those four are the entire application data estate: one Basic database per service on the same SQL server, each owned and migrated by exactly one service. The <code>AtlDevCon</code> archive of the legacy shared database is not a database at all. It is a single bacpac blob, <code>sql-archive/AtlDevCon-20260902.bacpac</code>, held in the deployment&#39;s storage account and restorable onto that SQL server with <code>az sql db import</code> in about ten minutes, with its own runbook carrying the exact commands. That blob is the last-resort source of record, and holding it as a blob is what takes it out of the PITR and LTR scope: a static archive nothing writes to does not need a retention policy, it needs a documented import path and a storage account that still accepts the authorization mode that import command uses.</p>
+          <p>The deploy pipeline closes the loop on the runtime side with two post-deploy gates that answer different questions. The activation gate asserts that for every app the newest revision reports healthy, running, and carrying 100% of the traffic, which is what proves the code just built is the code currently serving. The reachability gate then probes every service through the Gateway: <code>/health</code>, the JWKS endpoint, an anonymous <code>GET /Events</code> on Conference, the auth-gated <code>/Bookmarks</code> and <code>/Notifications/inbox</code> (where a 401 is the healthy signal, because it proves the request traversed Gateway to service to auth pipeline), and the UI root. Either gate failing rolls every app back to its last healthy provisioned revision and fails the job. The order matters: HTTP probes all enter through the Gateway, and a healthy Gateway keeps serving from the previous backend revision when the new one never goes ready, so every probe answers from old code and the run goes green, and the activation gate is what catches that. Together the two gates are recovery automation for the most common failure (a bad deploy), beside the manual restore procedures for the rarer, scarier ones.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>RTO/RPO are only as real as the last drill.</strong> ADC&#39;s objectives are declared with specific numbers, and the restore is drilled repeatedly: the drill table records six passing restores from 2026-06-20 through 2026-08-10, covering every live database on a weekly rotation, from a 1.8-minute <code>ADC_Identity</code> restore to a 4.4-minute one, all well inside the 2-hour RTO. That is six timed proofs of a single scenario: a one-database point-in-time restore. The cadence is enforced rather than aspirational: the drill runs on a weekly cron, and a <code>dr-freshness</code> deploy gate blocks the deploy when the latest successful drill goes stale. The recovery <em>time</em> is measured rather than assumed for that path, but the figures for the other scenarios (region loss, the full multi-service restore order) remain declared targets until each is drilled too.</li>
+          <li><strong>Database-per-service multiplies the backup and restore surface.</strong> Four databases mean four PITR windows, four LTR policies, and a restore order to get right. The isolation win from ADR-006 is paid for in recovery complexity. The mitigation is per-service objectives and a per-database restore procedure, not a single &quot;restore everything&quot; button, because that button cannot exist across independent databases.</li>
+          <li><strong>Retries can amplify load.</strong> The resilience handler resends calls that did not visibly succeed, which is the whole reason the idempotency article exists: a retry is only safe if the operation it retries is idempotent. Under a partial outage, aggressive retries across many clients can also pile load onto a struggling dependency. The circuit breaker (the 60 second sampling window) is what bounds that, but the tension is real and the timeouts are tuned, not arbitrary.</li>
+          <li><strong>Single-region by design.</strong> ADC accepts one SQL server, one Container Apps environment, one Service Bus namespace, and one ACR as written-down single points of failure. The four-hour region-loss RTO is honest about this. A system that needs sub-hour multi-region failover would declare different objectives and pay for them; this one declared that it does not, and sized accordingly.</li>
+          </ul>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The posture ports to any stack, and most of it is discipline rather than code:</p>
+          <ol>
+          <li>Put the <strong>resilience handler in one shared place</strong> every client inherits (the <code>HttpClient</code>/gRPC defaults layer), so no caller can ship without it. Make &quot;every outbound client has it&quot; structurally true, not a code-review checklist item.</li>
+          <li><strong>Declare RTO and RPO per failure scenario, in writing, with numbers.</strong> &quot;We have backups&quot; is not an objective. &quot;Up to 2 hours, RPO 10 minutes, for a bad migration&quot; is.</li>
+          <li><strong>Write down the single points of failure you are accepting,</strong> each with its mitigation. An accepted SPOF is an engineering decision; an unnoticed one is an incident.</li>
+          <li><strong>Drill the restore and record the result.</strong> A backup you have never restored is a hypothesis. The drill is what converts it into a recovery plan, and the recorded result is what converts it into a timed one.</li>
+          <li><strong>Account for your data topology.</strong> If you split databases per service, your restore surface multiplied; declare and drill per service, not once for the whole system.</li>
+          </ol>
+          <p>The takeaway: <strong>resilience is not retries; it is a declared, tested recovery posture. A Polly pipeline keeps a single call alive under transient failure. An RTO, an RPO, and a restore you actually drilled keep the business alive after a real one. Ship both, and write down the drill.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> how ADR-009 bolts two decisions together; the standard Polly resilience handler (retry, timeout, circuit breaker) applied to every outbound HTTP and gRPC client through <code>AddServiceDefaults()</code> and <code>AddTypedGrpcClient</code>, and why it is what lets a bidirectional gRPC pair even boot; the one place ADR-087 extends that posture past outbound clients, a circuit breaker around the outbox broker publish and nothing else, plus the per-query database breaker the same record rejects because it does not compose with EF&#39;s execution strategy; why retries alone are insufficient; the declared RTO/RPO per scenario in ADC&#39;s DR runbook; the two-tier PITR/LTR backup posture and the drills that were run and timed rather than assumed (a 2.6-minute <code>ADC_Conference</code> PITR restore on 2026-06-20 closed TD-10, and a weekly rotation records six proofs through 2026-08-10 covering all four live databases); how database-per-service multiplies the restore surface; and the activation and reachability smoke gates that surround the runbook.</p>
+          <p><strong>Next in the series:</strong> architecture fitness functions, the executable rules that keep every
+          pattern in this series honest by failing the build when one is violated.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the operational-runbooks chapter of the onboarding guide, or <code>dotnet add package MMCA.Common.Aspire</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          </ul>
+          <p><em>Tags: .NET, Resilience, Software Architecture, DevOps, Reliability</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="extract-module-to-grpc-service.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">32 · Extracting a module to a gRPC service</span></a>
+          <a class="article-pager-link article-pager-link--next" href="architecture-fitness-functions.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">34 · Architecture fitness functions</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#half-one-the-standard-resilience-handler-on-every-outbound-client">Half one: the standard resilience handler on every outbound client</a></li>
+            <li><a href="#fitness-enforced-not-just-present">Fitness-enforced, not just present</a></li>
+            <li><a href="#the-one-place-resilience-left-the-outbound-client-the-outbox-broker-publish">The one place resilience left the outbound client: the outbox broker publish</a></li>
+            <li><a href="#half-two-declared-rto-and-rpo-per-scenario">Half two: declared RTO and RPO per scenario</a></li>
+            <li><a href="#the-drilled-restore-backups-you-tested-not-backups-you-assumed">The drilled restore: backups you tested, not backups you assumed</a></li>
+            <li><a href="#database-per-service-multiplies-the-restore-surface">Database-per-service multiplies the restore surface</a></li>
+            <li><a href="#the-dr-runbook-and-the-deploy-time-auto-revert">The DR runbook and the deploy-time auto-revert</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

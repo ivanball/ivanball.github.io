@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Generic entity controllers and the dynamic query contract (ADR-034) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A write-once REST surface every entity inherits, plus a bounded dynamic query contract that is never open SQL.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/generic-entity-controllers.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Generic entity controllers and the dynamic query contract (ADR-034)">
+  <meta property="og:description" content="A write-once REST surface every entity inherits, plus a bounded dynamic query contract that is never open SQL.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/generic-entity-controllers.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-28.png">
+  <meta property="og:image:alt" content="Generic entity controllers and the dynamic query contract (ADR-034)">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Generic entity controllers and the dynamic query contract (ADR-034)">
+  <meta name="twitter:description" content="A write-once REST surface every entity inherits, plus a bounded dynamic query contract that is never open SQL.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-28.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Generic entity controllers and the dynamic query contract (ADR-034)","description":"A write-once REST surface every entity inherits, plus a bounded dynamic query contract that is never open SQL.","url":"https://ivanball.github.io/articles/generic-entity-controllers.html","mainEntityOfPage":"https://ivanball.github.io/articles/generic-entity-controllers.html","image":"https://ivanball.github.io/assets/img/articles/article-28.png","datePublished":"2026-07-28T12:10:47Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":28,"sameAs":"https://medium.com/@ivanball76/generic-entity-controllers-and-the-dynamic-query-contract-adr-034-2b5c799bc69f"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"28 · Generic entity controllers","item":"https://ivanball.github.io/articles/generic-entity-controllers.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">28 · Generic entity controllers</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html" aria-current="page">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 28</p>
+          <h1 id="generic-entity-controllers-and-the-dynamic-query-contract-adr-034">Generic entity controllers and the dynamic query contract (ADR-034)</h1>
+          <p class="article-meta"><time datetime="2026-07-28T12:10:47Z">July 28, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/generic-entity-controllers-and-the-dynamic-query-contract-adr-034-2b5c799bc69f" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-28.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">The write-once REST surface every entity inherits. How list, page, lookup, by-id, create, and delete come from two base classes, plus a bounded OData-lite query contract that is dynamic over the wire but never open SQL in the engine.</p>
+          <hr>
+          <p>Here is a controller that looks fine until you have a second entity:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">[<span class="hljs-meta">ApiController</span>]
+[<span class="hljs-meta">Route(<span class="hljs-string">&quot;products&quot;</span>)</span>]
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ProductsController</span> : <span class="hljs-title">ControllerBase</span>
+{
+    [<span class="hljs-meta">HttpGet</span>]
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task&lt;IActionResult&gt; <span class="hljs-title">GetAll</span>(<span class="hljs-params">
+        <span class="hljs-built_in">string</span>? sort, <span class="hljs-built_in">string</span>? dir, <span class="hljs-built_in">int</span> page = <span class="hljs-number">1</span>, <span class="hljs-built_in">int</span> size = <span class="hljs-number">20</span>,
+        <span class="hljs-built_in">string</span>? name = <span class="hljs-literal">null</span>, <span class="hljs-built_in">decimal</span>? minPrice = <span class="hljs-literal">null</span></span>)   <span class="hljs-comment">// ad-hoc filter params</span></span>
+    {
+        <span class="hljs-keyword">var</span> q = _db.Products.AsQueryable();
+        <span class="hljs-keyword">if</span> (name <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span>) q = q.Where(p =&gt; p.Name.Contains(name));      <span class="hljs-comment">// hand-rolled</span>
+        <span class="hljs-keyword">if</span> (minPrice <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span>) q = q.Where(p =&gt; p.Price &gt;= minPrice);    <span class="hljs-comment">// hand-rolled</span>
+        <span class="hljs-keyword">if</span> (sort == <span class="hljs-string">&quot;name&quot;</span>)
+            q = dir == <span class="hljs-string">&quot;desc&quot;</span> ? q.OrderByDescending(p =&gt; p.Name) : q.OrderBy(p =&gt; p.Name);
+        <span class="hljs-keyword">var</span> items = <span class="hljs-keyword">await</span> q.Skip((page - <span class="hljs-number">1</span>) * size).Take(size).ToListAsync();
+        <span class="hljs-keyword">return</span> Ok(items);   <span class="hljs-comment">// no total count, no page-size cap, leaks the entity to the wire</span>
+    }
+    <span class="hljs-comment">// ... GetById, Create, Delete, each subtly different from CategoriesController</span>
+}</code></pre>
+          <p>Now write <code>CategoriesController</code>, <code>OrdersController</code>, and twenty more. A different person writes each one in a different sprint. One paginates with <code>page</code>/<code>size</code>, the next with <code>pageNumber</code>/<code>pageSize</code>. One filters with <code>?name=</code>, another with <code>?nameContains=</code>. One returns a total count, most do not. One forgets the <code>Take</code> clamp entirely, so a query with no filter streams the whole table into memory. Each leaks its EF entity straight to JSON, so a column rename is a silent wire break. This is the single largest pile of boilerplate a modular monolith accumulates as it grows, and the pile drifts in shape with every commit.</p>
+          <p>A client cannot learn one query dialect and reuse it. It learns one per resource, defensively, and still gets surprised. And the day you want a uniform feature (a max page size, a filter operator, a sparse-fieldset projection) you are editing dozens of controllers by hand and missing some.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>Most entities need the same six things: list them, page through them, fetch a lightweight id/name list for a dropdown, get one by id, create one, delete one. That surface is so uniform that hand writing it per entity is pure repetition, and repetition without a single source of truth is how drift gets in. The shape that should be identical across a hundred entities ends up almost-identical, which is worse than identical because callers cannot rely on it.</p>
+          <p>There is also a safety dimension. A read endpoint with no upper bound on result size is one missing <code>Where</code> clause away from a full-table load that pins a database. A filter parameter assembled from raw client input is an injection and over-fetch surface. If those guards are the responsibility of each author, they are missing somewhere.</p>
+          <p>ADR-034 records the framework&#39;s opposite default: write the resource surface and the query contract once, on a base class, and let every entity inherit it. A concrete controller becomes a few lines that close the generic type parameters. The verbs, routes, filtering, sorting, pagination, field projection, include behavior, and the safety ceiling all come from the base. New entities cost almost nothing and cannot drift in shape.</p>
+          <h2 id="the-mmca-answer-two-base-classes-and-an-odata-lite-contract">The MMCA answer: two base classes and an OData-lite contract</h2>
+          <p>The read surface is <code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code>. It is an <code>[ApiController]</code> with <code>[Route(&quot;[controller]&quot;)]</code> and <code>[ApiVersion(&quot;1.0&quot;)]</code>, and it exposes five GET routes that any entity inherits for free: <code>[HttpGet]</code> for the capped list, <code>[HttpGet(&quot;paged&quot;)]</code> for the filterable/sortable page, <code>[HttpGet(&quot;export&quot;)]</code> for a streamed CSV of the same filtered, sorted, projected rows, <code>[HttpGet(&quot;lookup&quot;)]</code> for an id/name dropdown collection (<code>CollectionResult&lt;BaseLookup&lt;TIdentifierType&gt;&gt;</code>), and <code>[HttpGet(&quot;{id}&quot;)]</code> for a single record.</p>
+          <p>The write surface is <code>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;</code>. It inherits all five reads and adds <code>[HttpPost]</code> create (returning <code>201 CreatedAtRoute</code>) and <code>[HttpDelete(&quot;{id}&quot;)]</code> (returning <code>204 NoContent</code>). The create action is decorated <code>[Idempotent]</code>, so a retried POST carrying the same <code>Idempotency-Key</code> header replays the original response instead of creating a duplicate (ADR-017).</p>
+          <p>A concrete controller is the whole thing:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">[<span class="hljs-meta">Route(<span class="hljs-string">&quot;products&quot;</span>)</span>]
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ProductsController</span>(<span class="hljs-params">
+    IEntityQueryService&lt;Product, ProductDTO, <span class="hljs-built_in">int</span>&gt; queryService,
+    ICommandHandler&lt;CreateProductRequest, Result&lt;ProductDTO&gt;&gt; createHandler,
+    ICommandHandler&lt;DeleteEntityCommand&lt;Product, <span class="hljs-built_in">int</span>&gt;, Result&gt; deleteHandler,
+    ILogger&lt;EntityControllerBase&lt;Product, ProductDTO, <span class="hljs-built_in">int</span>&gt;&gt; logger</span>)
+    : <span class="hljs-title">AggregateRootEntityControllerBase</span>&lt;<span class="hljs-title">Product</span>, <span class="hljs-title">ProductDTO</span>, <span class="hljs-title">int</span>, <span class="hljs-title">CreateProductRequest</span>&gt;(<span class="hljs-params">
+        queryService, createHandler, deleteHandler, logger</span>)</span>;
+
+<span class="hljs-comment">// That is the entire controller. GET, GET /paged, GET /export, GET /lookup,</span>
+<span class="hljs-comment">// GET /{id}, POST, and DELETE /{id} are all inherited, with filter, sort, page,</span>
+<span class="hljs-comment">// and field projection on the read routes and idempotent create on the write route.</span></code></pre>
+          <p>What that inheritance buys is a uniform query contract on every list and detail route:</p>
+          <ul>
+          <li><strong>Sparse fieldsets.</strong> A comma-separated <code>fields</code> query parameter drives a server-side projection. <code>QueryFieldService.ApplyFieldSelection</code> builds a <code>MemberInit</code> expression that selects only the requested writable properties, so only those columns leave the database, and the compiled expression is cached per entity type and field set so a repeated <code>fields=</code> request does not rebuild the tree. That cache is capped at 512 entries, since the field set is client-supplied; past the cap a request skips server-side projection instead of growing the cache further, though the response body is still trimmed to the requested fields. Read-only and computed properties are rejected at validation, since the projection needs setters.</li>
+          <li><strong>Dynamic per-type filtering.</strong> The paged route binds <code>Dictionary&lt;string, (string Operator, string Value)&gt; filters</code> through <code>[ModelBinder(typeof(QueryFilterModelBinder))]</code>. The binder parses <code>?filters[Name].operator=contains&amp;filters[Name].value=shirt</code> style keys (case-insensitive, incomplete pairs silently dropped) into the dictionary. <code>QueryFilterService.ApplyFilters</code> then resolves one <code>IFilterStrategy</code> per property CLR type from a strategy registry (string, bool, int, long, DateTime, decimal, Guid and their nullables out of the box), and each strategy declares the operator set it <code>SupportedOperators</code>. This is the load-bearing constraint: filtering is dynamic over the wire but it is not free-form expression evaluation. Every property routes through a registered strategy, and <code>QueryFilterService.ValidateFilters</code> rejects an unknown property or an unsupported operator before the database is touched.</li>
+          <li><strong>Sort.</strong> <code>sortColumn</code> and <code>sortDirection</code> feed <code>QueryFieldService.ApplySorting</code>, an <code>OrderBy(&quot;&lt;col&gt; ascending|descending&quot;)</code> over the entity property the DTO name maps to.</li>
+          <li><strong>Pagination and the <code>X-Pagination</code> header.</strong> The paged route clamps the requested page size with <code>Math.Min(pageSize, MaxPageSize)</code>, where <code>MaxPageSize</code> reads <code>IApplicationSettings.MaxPageSize</code> and falls back to 500. The pagination metadata (total count, page size, current page) is serialized into the <code>X-Pagination</code> response header as JSON, so the body stays just the items.</li>
+          <li><strong>A streamed CSV export.</strong> <code>[HttpGet(&quot;export&quot;)]</code> reuses the same filter, sort, and <code>fields</code> contract and writes rows to the response body a page at a time, so the file never lands in memory. It stops at <code>MaxExportRows</code> (<code>IApplicationSettings.MaxExportRows</code>, falling back to 100,000), announces that ceiling up front in an <code>X-Export-Row-Limit</code> header, and ends a truncated file with a trailing marker row: headers are frozen the moment the first body byte is flushed, so the marker is the only signal still writable once the export is under way. It takes no <code>includeChildren</code>, since a child collection has no faithful representation in a flat CSV cell.</li>
+          <li><strong>A last-resort ceiling.</strong> Independent of the API clamp, <code>EntityQueryPipeline.MaxUnboundedResultLimit = 1000</code> caps any unpaginated query with <code>query.Take(MaxUnboundedResultLimit)</code>. Even a direct service caller who omits pagination entirely cannot trigger an unbounded full-table load.</li>
+          <li><strong>Two include paths.</strong> <code>includeFKs</code> and <code>includeChildren</code> select navigation loading, and <code>EntityQueryPipeline</code> runs one of two strategies. PATH 1 handles source-supported includes via EF Core <code>.Include()</code> translated to SQL (forcing split-query when a child collection is included, so pagination does not truncate the JOIN-expanded rows). PATH 2 handles includes the source cannot JOIN by materializing the page first, then batch-loading related data via an <code>INavigationPopulator</code> (the cross-source loader of ADR-002).</li>
+          </ul>
+          <p>Under all of this sits <code>EntityQueryService</code>, which validates the parameters up front, runs the pipeline, and projects the materialized entities to DTOs through an injected <code>IEntityDTOMapper</code> (the manual mapping of ADR-001). Every action returns a <code>Result</code>, and a failure flows through <code>HandleFailure(result.Errors)</code> into the same RFC 9457 Problem Details shape the rest of the API uses (ADR-013). The wire speaks DTO names; the engine speaks entity names; a per-service <code>DTOToEntityPropertyMap</code> translates between them for filtering and sorting.</p>
+          <h2 id="the-line-where-the-users-value-stops-being-code">The line where the user&#39;s value stops being code</h2>
+          <p>There is one more constraint under all of this, and it is the one that decides whether a
+          user-supplied filter DSL is a good idea or a liability. When a strategy builds its predicate, the
+          property name is interpolated into the expression string but <strong>the user&#39;s value never is</strong>:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-string">&quot;CONTAINS&quot;</span> =&gt; query.Where(DynamicQueryConfig.Parameterized, <span class="hljs-string">$&quot;<span class="hljs-subst">{property}</span>.Contains(@0)&quot;</span>, <span class="hljs-keyword">value</span>),
+<span class="hljs-string">&quot;EQUALS&quot;</span>   =&gt; query.Where(DynamicQueryConfig.Parameterized, <span class="hljs-string">$&quot;<span class="hljs-subst">{property}</span> == @0&quot;</span>, <span class="hljs-keyword">value</span>),</code></pre>
+          <p>The asymmetry is deliberate. <code>property</code> has already survived <code>ValidateFilters</code>, so it is a name from
+          a known allow-list rather than user text. <code>value</code> is arbitrary user input, and it is passed as the
+          <code>@0</code> argument, never concatenated into the predicate.</p>
+          <p>That alone is the injection story, but the <code>DynamicQueryConfig.Parameterized</code> part is the half most
+          teams miss. System.Linq.Dynamic.Core defaults <code>UseParameterizedNamesInDynamicQuery</code> to <code>false</code>, which
+          turns each <code>@0</code> argument into a <code>ConstantExpression</code>. EF inlines constants. So with the default
+          config, <code>filters[&quot;Name&quot;] = (&quot;EQUALS&quot;, &quot;Widget&quot;)</code> emits:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="SQL"><code class="language-sql hljs"><span class="hljs-keyword">WHERE</span> [Name] <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;Widget&#x27;</span></code></pre>
+          <p>A distinct SQL string per distinct filter value. Every search term a user types costs its own SQL
+          Server plan-cache entry and misses EF&#39;s compiled-query cache on the way in. The filter DSL you built
+          for convenience quietly becomes a plan-cache eviction engine, and the symptom is not a slow query,
+          it is the whole instance getting slower as the cache churns.</p>
+          <p>Flipping the flag on makes the value reachable through a member access instead, so EF parameterizes
+          it and one plan serves every value. The config is a single shared static, because building a
+          <code>ParsingConfig</code> per call would reintroduce the parse cost it exists to avoid, and
+          <code>QueryParameterizationTests</code> is the guard that keeps a new strategy from forgetting to pass it.</p>
+          <p>This is worth internalizing as a general shape: the same change bought both a closed injection
+          surface and a fixed plan-cache hit rate, because both problems have the same root cause, which is a
+          user&#39;s value ending up in the text of a query instead of beside it.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>A generic, dynamically queryable contract coupled to the entity model is a real trade against narrow bespoke endpoints. ADR-034 names the costs rather than hiding them.</p>
+          <ul>
+          <li><strong>The wire contract tracks the entity model.</strong> What is filterable, sortable, and projectable is the entity&#39;s property set, so a model change is an API change by default. The boundary that decouples them is the DTO plus <code>DTOToEntityPropertyMap</code>: a subclass overrides the map to point a DTO field name (<code>CategoryName</code>) at an entity path (<code>Category.Name</code>), and the wire name stops moving with the column.</li>
+          <li><strong>Dynamic filtering is an injection and over-fetch surface, and it is bounded, not open.</strong> Arbitrary client-supplied property/operator/value triples are an attack surface. The framework bounds it three ways: <code>ValidateFilters</code> rejects unknown properties and unsupported operators before any query runs, each type is filtered only by its registered <code>IFilterStrategy</code> rather than free-form expression evaluation, and <code>MaxUnboundedResultLimit</code> caps rows. This is per-type strategy filtering, deliberately narrower than full OData.</li>
+          <li><strong>Generic endpoints are less self-documenting than bespoke ones.</strong> One uniform shape per entity is consistent but conveys less domain intent than a named, purpose-built endpoint. The filter-key syntax and operator names are learned once across the API rather than read off each endpoint.</li>
+          <li><strong>Opting out means overriding, not abandoning.</strong> All five reads and both writes are <code>virtual</code>. A controller that needs bespoke behavior overrides the specific action and keeps the rest, but the default surface is opt-out, not opt-in: you inherit the whole contract whether or not you wanted every route.</li>
+          </ul>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any stack where you expose more than a handful of CRUD resources:</p>
+          <ol>
+          <li><strong>Put the CRUD shape on a generic base and close the type parameters per entity.</strong> The verbs, routes, and response shapes belong in one place, inherited, not copied. A new entity should be a few lines, not a new file of near-duplicate actions.</li>
+          <li><strong>Parse filter, sort, and page once into a typed structure.</strong> A single model binder that turns a structured query string into a <code>(property, operator, value)</code> dictionary beats per-action parameter lists that drift in name and semantics.</li>
+          <li><strong>Filter through a per-type strategy registry with validated operators.</strong> Resolve a strategy by the property&#39;s CLR type and validate the operator up front. That is dynamic without being arbitrary, and it keeps free-form expression evaluation (the injection risk) out of the engine.</li>
+          <li><strong>Always cap an unpaginated read.</strong> A last-resort <code>Take(N)</code> ceiling in the query pipeline, independent of any API page-size clamp, means a forgotten pagination clause degrades to a bounded result instead of a database-pinning full scan.</li>
+          <li><strong>Mediate the wire contract through a DTO and a name map.</strong> Projecting entities straight to JSON couples your API to your schema. A DTO plus a DTO-to-entity property map lets a column rename stay an internal change instead of a breaking one.</li>
+          </ol>
+          <hr>
+          <p><strong>What we covered:</strong> why hand writing a list/paged/by-id CRUD controller plus ad-hoc filter/sort/paging parsing per entity is the bulk of a monolith&#39;s boilerplate and drifts in shape, and how MMCA.Common answers with two base classes (<code>EntityControllerBase</code> for the five reads, <code>AggregateRootEntityControllerBase</code> for idempotent create and delete) over a shared <code>EntityQueryService</code> and <code>EntityQueryPipeline</code>, plus a bounded OData-lite query contract: sparse <code>fields</code> projection, <code>QueryFilterModelBinder</code> plus per-type <code>IFilterStrategy</code> filtering with up-front validation, sort, an <code>X-Pagination</code> header with a <code>MaxPageSize</code> clamp, a streamed CSV export bounded by <code>MaxExportRows</code>, a <code>MaxUnboundedResultLimit</code> ceiling, and a two-path include strategy, composing with manual DTO mapping (ADR-001), navigation populators (ADR-002), the Result edge (ADR-013), and idempotency (ADR-017).</p>
+          <p><strong>Next in the series:</strong> resource-ownership authorization, the row-level axis that decides not just what a caller may do but which rows they may touch.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-034 behind this pattern, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 ADR-034 (generic entity query layer): <a href="../docs/adr/034-generic-entity-query-layer.html">ADR-034: Generic Entity Controllers with a Dynamic Query Contract</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Web API, Software Architecture, Programming</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="jwt-refresh-token-rotation.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">27 · One rotating refresh token</span></a>
+          <a class="article-pager-link article-pager-link--next" href="resource-ownership-authorization.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">29 · Resource-ownership authorization</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-two-base-classes-and-an-odata-lite-contract">The MMCA answer: two base classes and an OData-lite contract</a></li>
+            <li><a href="#the-line-where-the-users-value-stops-being-code">The line where the user&#39;s value stops being code</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

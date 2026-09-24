@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Architecture fitness functions: rules that fail the build, not a wiki page · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Architecture rules that fail the build: a compile-time layer guard plus a shared NetArchTest rule library.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/architecture-fitness-functions.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Architecture fitness functions: rules that fail the build, not a wiki page">
+  <meta property="og:description" content="Architecture rules that fail the build: a compile-time layer guard plus a shared NetArchTest rule library.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/architecture-fitness-functions.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-34.png">
+  <meta property="og:image:alt" content="Architecture fitness functions: rules that fail the build, not a wiki page">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Architecture fitness functions: rules that fail the build, not a wiki page">
+  <meta name="twitter:description" content="Architecture rules that fail the build: a compile-time layer guard plus a shared NetArchTest rule library.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-34.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Architecture fitness functions: rules that fail the build, not a wiki page","description":"Architecture rules that fail the build: a compile-time layer guard plus a shared NetArchTest rule library.","url":"https://ivanball.github.io/articles/architecture-fitness-functions.html","mainEntityOfPage":"https://ivanball.github.io/articles/architecture-fitness-functions.html","image":"https://ivanball.github.io/assets/img/articles/article-34.png","datePublished":"2026-08-03T12:57:39Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":34,"sameAs":"https://medium.com/@ivanball76/architecture-fitness-functions-rules-that-fail-the-build-not-a-wiki-page-6562940deceb"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"34 · Architecture fitness functions","item":"https://ivanball.github.io/articles/architecture-fitness-functions.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">34 · Architecture fitness functions</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html" aria-current="page">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 34</p>
+          <h1 id="architecture-fitness-functions-rules-that-fail-the-build-not-a-wiki-page">Architecture fitness functions: rules that fail the build, not a wiki page</h1>
+          <p class="article-meta"><time datetime="2026-08-03T12:57:39Z">August 3, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/architecture-fitness-functions-rules-that-fail-the-build-not-a-wiki-page-6562940deceb" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-34.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">The inward-dependency rule everyone agrees on is the one everyone eventually breaks. Here
+          is how MMCA.Common enforces it twice, defines the rules once, and makes them identical across four
+          codebases.</p>
+          <hr>
+          <p>Open almost any Clean Architecture README and you will find a diagram with arrows pointing inward, and a
+          sentence that says the Domain layer must not depend on EF Core or ASP.NET. Everyone nods. Everyone
+          agrees. And then, eighteen months later, somebody adds a <code>[Table]</code> attribute to a domain entity because
+          it was convenient, the reviewer was busy, and nothing stopped them. The arrows in the diagram were
+          never connected to anything that runs.</p>
+          <p>That is the difference between a convention and a fitness function. A convention is a sentence in a doc.
+          A fitness function is a check that fails the build. MMCA.Common is built on the conviction that <strong>if a
+          rule matters, it should be a check, not a comment</strong>, and the layer-dependency rule is enforced not once
+          but twice, on purpose.</p>
+          <h2 id="why-a-diagram-is-not-enforcement">Why a diagram is not enforcement</h2>
+          <p>The inward-dependency rule is the load-bearing wall of Clean Architecture. The whole value proposition,
+          business logic that is independent of frameworks, UI, and data stores, collapses the moment Domain
+          starts referencing EF Core. And it is precisely the rule that erodes quietly, one convenient shortcut
+          at a time, because each individual violation looks harmless in the PR that introduces it.</p>
+          <p>Code review is the usual line of defense, and it is the wrong tool. Reviewers do not hold the full
+          dependency graph in their heads. They cannot see that a new <code>ProjectReference</code> three layers down now
+          lets Domain transitively reach a serialization library. They get tired, they trust the author, and new
+          contributors do not even know the rule exists. The rubric this framework is scored against
+          (<a href="../docs/governance/ArchitectureEvaluationCriteria.html">Architecture Evaluation Criteria</a>, category 3 Clean Architecture and category 34 Architecture
+          Governance) makes the point bluntly: architecture rules that exist &quot;only as prose nobody checks&quot; are a
+          red flag. The fix is to make conformance executable.</p>
+          <h2 id="enforced-twice-compile-time-and-runtime">Enforced twice: compile-time and runtime</h2>
+          <p>MMCA.Common enforces the dependency rules through two independent gates, and the redundancy is
+          deliberate (<code>MMCA.Common/CLAUDE.md</code>, Architecture Enforcement section).</p>
+          <p><strong>1. Compile-time, via MSBuild.</strong> <code>Source/Build/MMCA.Common.LayerEnforcement.targets</code> is imported from
+          <code>Directory.Build.props</code> for every <code>MMCA.Common.*</code> project under <code>Source/</code>. It runs in a
+          <code>BeforeTargets=&quot;ResolveProjectReferences&quot;</code> step, inspects the project&#39;s <code>ProjectReference</code> list, and
+          <strong>fails the build</strong> with a descriptive error if a layer references a forbidden upstream layer. This is
+          the fastest possible feedback: you cannot even compile a violation. The wall is checked before the code
+          exists.</p>
+          <p><strong>2. Runtime, via NetArchTest.</strong> <code>Tests/Architecture/MMCA.Common.Architecture.Tests</code> (built on
+          NetArchTest.eNhancedEdition) asserts the same rules against the <em>compiled assembly dependencies</em>. This
+          catches what the project-reference check cannot: a forbidden type reach that arrives transitively
+          rather than through a direct <code>ProjectReference</code>. A dependency several packages deep can surface a type
+          that no <code>.csproj</code> names directly, so a project-reference scan never sees it, while an assembly-level
+          test that walks the compiled dependency graph does.</p>
+          <p>Why both? Because they fail at different times and catch different things. The MSBuild guard is
+          instant and stops the obvious direct violation before compilation. The NetArchTest suite is
+          comprehensive and stops the subtle transitive one. The rubric explicitly rewards this: maturity level 4
+          means &quot;enforced automatically,&quot; and two complementary gates are about as enforced as a rule gets. The
+          guidance in the contributor doc is correspondingly blunt: when you add a new layer rule, add it in
+          <strong>both</strong> places.</p>
+          <p>One boundary is worth naming: both gates assert structure and registration, never what a booted host
+          actually does, so the conformance suites that prove the framework&#39;s runtime contracts against a host
+          that really started are a separate shipped tier, covered in Article 35.</p>
+          <h2 id="defined-once-identical-everywhere">Defined once, identical everywhere</h2>
+          <p>Here is the part that makes the fitness functions scale across more than one repo without rotting into
+          three slightly-different copies.</p>
+          <p>The rule <em>bodies</em> do not live in the test project. They live once, in a shipped NuGet package:
+          <code>MMCA.Common.Testing.Architecture</code> (package 15 of the nineteen the framework publishes, with
+          <code>FACTS.md</code> the canonical count). That
+          package defines:</p>
+          <ul>
+          <li><code>ArchitectureRules</code>, the reusable rule library that expresses the actual assertions.</li>
+          <li>A set of 53 abstract <code>*TestsBase</code> classes holding 136 <code>[Fact]</code>s (for example
+          <code>LayerDependencyTestsBase</code>, <code>DomainPurityTestsBase</code>, <code>MicroserviceExtractionTestsBase</code>,
+          <code>PiiConventionTestsBase</code>, <code>FolderWidthTestsBase</code>, <code>DataResidencyTestsBase</code>).</li>
+          <li>One extension point, <code>IArchitectureMap</code>, that every base class is parameterized by, with a shipped
+          <code>ArchitectureMapBase</code> that implements it so a per-repo map is a flat declaration of assemblies.</li>
+          </ul>
+          <p>Each repo supplies exactly <strong>one</strong> map implementation that declares its own layer and module
+          assemblies, and its arch-test classes shrink to thin sealed subclasses (three to ten lines) that
+          inherit the real <code>[Fact]</code>s.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// In MMCA.Common: one anchor type per package, then the test class is a 3-line subclass.</span>
+<span class="hljs-keyword">internal</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">CommonArchitectureMap</span> : <span class="hljs-title">ArchitectureMapBase</span> { <span class="hljs-comment">/* layer + module assemblies */</span> }
+
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">LayerDependencyTests</span> : <span class="hljs-title">LayerDependencyTestsBase</span>
+{
+    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> CommonArchitectureMap();
+    <span class="hljs-comment">// The [Fact]s live in the base. This subclass just supplies the map.</span>
+}</code></pre>
+          <p>MMCA.Store, MMCA.ADC and MMCA.Helpdesk consume the same package and supply their own maps
+          (<code>StoreArchitectureMap</code>, <code>AdcArchitectureMap</code>, <code>HelpdeskArchitectureMap</code>), so the reference app is held
+          to the framework&#39;s own layering, module-isolation and transport-at-edges rules rather than exempted
+          from them. The consequence is that <strong>the same compiled rule runs identically across all four
+          codebases.</strong> &quot;Domain must not depend on Application&quot; is one rule body, not four drifting copies. When
+          the rule improves, every consumer inherits the improvement on the next package bump. One shared package
+          also means no per-repo <code>ArchitectureTestHelper</code> duplication, and so none of the drift that four copies
+          of a rule invite: exactly the kind of drift fitness functions are
+          supposed to prevent. It is also a maintainability win
+          in its own right (rubric category 16): one rule evolves, all consumers inherit the fix.</p>
+          <p>A small honest detail: a few checks genuinely do not generalize, so they stay local. The
+          <code>MMCA.Common.Grpc</code> boundary check and the <code>IMessageBus</code> / <code>IJwksProvider</code> placement checks live in
+          <code>FrameworkSanityTests</code> in the Common repo only, because they are about Common&#39;s own internal structure.
+          And <code>DependencyVersionTests</code> (parsing <code>Directory.Packages.props</code> to fail the build if MassTransit&#39;s
+          major version reaches 9, the v8 licensing pin) is subclassed only in Common, because only Common
+          actually declares that pin.</p>
+          <h2 id="the-rules-that-matter-most">The rules that matter most</h2>
+          <p>Three example rule families show what fitness functions actually assert.</p>
+          <p><strong><code>LayerDependencyTests</code>.</strong> The inward-dependency rule: API reaches down to Infrastructure,
+          Infrastructure to Application, Application to Domain, Domain to Shared, and never the other way. (UI and
+          Grpc are deliberate exceptions, depending only on Shared, so the test encodes that too.)</p>
+          <p><strong><code>DomainPurityTests</code>.</strong> Domain must be framework-pure, and the rule names the ban explicitly rather
+          than gesturing at it: a ten-entry assembly-dependency list covering <code>Microsoft.AspNetCore</code>,
+          <code>Microsoft.EntityFrameworkCore</code>, <code>Serilog</code>, <code>AutoMapper</code>, <code>Newtonsoft.Json</code>, <code>FluentValidation</code>,
+          <code>Scrutor</code>, <code>MudBlazor</code>, <code>Polly</code> and <code>StackExchange.Redis</code>, which each repo can extend with its
+          own bans through an override, a payment SDK or a broker client being the example the rule itself names. Sibling facts hold Shared to the same list and keep Application off EF
+          Core and ASP.NET Core. That is what lets the scorecard record this framework&#39;s domain as verified
+          framework-free, which is the kind of claim a fitness function lets you make with confidence instead of
+          hope.</p>
+          <p><strong><code>MicroserviceExtractionTests</code>.</strong> This one guards the framework&#39;s central thesis, that a module can be
+          lifted out of the monolith into its own service without rewriting application code. The invariant is
+          that application and domain code talk to abstractions while transport choices live at the edges. So the
+          rule asserts that <strong>Application, Domain, and Shared must never reference MassTransit directly.</strong> They
+          depend on <code>IMessageBus</code>, and Infrastructure supplies the broker implementation. If the transport
+          library ever leaks upward, the build fails. The reliability boundary and the extraction boundary are
+          protected by the same mechanism.</p>
+          <p>This is also where the doubled enforcement lifts category 3 and category 34 into the top maturity band
+          (Maturity 4) in the scorecard (Implementation 9 and 8, respectively): the rules that protect the
+          architecture are the ones that fail the build, not the ones written in a doc.</p>
+          <h3 id="a-convention-becomes-a-test-twelve-files-per-folder">A convention becomes a test: twelve files per folder</h3>
+          <p>The clearest case for turning a convention into an executable rule is the one that reads least like
+          architecture: how wide a folder is allowed to get. The layout rule is module by project, feature by
+          folder, use case by leaf, and its failure mode is gradual. A folder named for an aggregate collects one
+          more file per sprint, nobody objects to any single one of them, and eighteen months later it is a
+          technical bucket wearing a feature&#39;s name. <code>FolderWidthTestsBase</code> makes that drift a red build:
+          <code>MaxDirectFiles</code> defaults to 12, and the one inherited <code>[Fact]</code>, <code>Folders_stay_narrow</code>, walks the
+          repo&#39;s <code>Source/</code> and <code>Tests/</code> trees through <code>ArchitectureRules.FoldersStayNarrow</code> (ADR-109). A subclass
+          supplies a repo root and nothing else.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Helpdesk: the entire subclass. The [Fact] and every counting rule live in the base.</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">FolderWidthTests</span> : <span class="hljs-title">FolderWidthTestsBase</span>
+{
+    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> <span class="hljs-built_in">string</span> RepoRoot { <span class="hljs-keyword">get</span>; } = ArchitectureMapBase.FindRepoRoot(<span class="hljs-string">&quot;MMCA.Helpdesk.slnx&quot;</span>);
+}</code></pre>
+          <p>The counting rules are the decision, not an implementation detail, and they are what keeps the gate
+          credible. A <code>.razor</code> component and its co-located code-behind count as one unit, so a component folder
+          is measured in components rather than in files; a <code>.resx</code> does not count at all; generated files never
+          count; and whole trees whose shape nobody chose are skipped outright by path segment, <code>bin</code>, <code>obj</code>,
+          <code>Migrations</code>, <code>Platforms</code>, <code>Resources</code> and <code>wwwroot</code> among them. Without those exclusions an EF
+          <code>Migrations/</code> folder would go red every month for a reason no author controls, and a rule that fires on
+          something nobody chose is a rule teams learn to suppress.</p>
+          <p>All four repos subclass it, and every exemption is code rather than a note in a doc: only MMCA.Common
+          overrides <code>ExemptFolderSuffixes</code>, which means each allowed wide folder is a line in a diff somebody
+          approved. One naming rule travels with the width rule: a folder inside a module project is never called
+          <code>Domain</code>, <code>Application</code>, <code>Infrastructure</code>, <code>API</code> or <code>UI</code>, because <code>ModuleNameConventions.GetModuleName</code>
+          derives the owning module from the namespace by taking the segment before the first layer segment, and
+          that derived name is load-bearing (it is the SQL Server schema). A sub-folder borrowing a layer name
+          would silently re-home a module, which is exactly the class of mistake a convention in prose cannot
+          catch.</p>
+          <h3 id="the-gate-that-reads-a-privacy-policy">The gate that reads a privacy policy</h3>
+          <p>The same technique reaches a claim that is not about code at all. Each deployed app publishes a privacy
+          policy telling a user which region their personal data is stored in. That sentence is typed once, by a
+          human, while the region it describes lives in infrastructure code that moves for reasons having nothing
+          to do with the policy. When the two diverge nothing breaks: no test goes red, no alert fires, and the
+          app keeps serving traffic while a public commitment about a named jurisdiction is false (ADR-105).</p>
+          <p><code>DataResidencyTestsBase</code> turns that into a build failure. The subclass supplies its map and implements
+          exactly one method, <code>ExtractDeployedRegion</code>, which parses the region out of its own repo&#39;s
+          infrastructure source of truth. The inherited <code>[Fact]</code>,
+          <code>PrivacyPolicy_DataStorageRegion_MatchesDeployedRegion</code>, reads <code>PRIVACY.md</code> and asserts it states that
+          region, comparing whitespace-insensitively and case-insensitively so a policy&#39;s &quot;West US 2&quot; matches a
+          workflow&#39;s <code>westus2</code>. A <code>ForbiddenResidencyClaims</code> list blocks the other direction: a stale region, or
+          one copied from a sibling repo&#39;s policy, cannot quietly return.</p>
+          <p>The two deployed apps parse different files, which is the whole reason only the assertion lives in the
+          base. MMCA.ADC reads the SQL region default out of its deploy workflow, because its subscription forces
+          the SQL server into a different region from its Container Apps, and it still blocks by name the stale
+          &quot;central United States&quot; claim its policy once carried. MMCA.Store reads the single-region sentence in
+          its disaster-recovery runbook and forbids ADC&#39;s two regions from being copied across. A compliance
+          statement is usually the last thing anybody thinks of as testable, and it is one of the few that a
+          build can check outright.</p>
+          <h2 id="freezing-the-wire-the-contract-no-single-repos-build-can-see">Freezing the wire: the contract no single repo&#39;s build can see</h2>
+          <p>A <code>.proto</code> file is not source in the ordinary sense. It is a published contract, and what makes it
+          dangerous is that breaking it looks exactly like editing a local file. Renumber a field, retype one,
+          rename an rpc, flip a streaming flag: your repo compiles, your tests pass, and every deployed peer built
+          against the previous generation is now wrong. Nothing in a single repository&#39;s build notices, because
+          everything the change breaks lives in another process.</p>
+          <p>The framework freezes both halves of that surface. <code>IntegrationEventContractTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventContractTestsBase.cs:11</code>)
+          pins every integration-event payload against a committed contract. <code>ProtoContractTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/ProtoContractTestsBase.cs:19</code>) does
+          the same for the synchronous half, the gRPC protos, so a renumbered field, a retyped one, a renamed rpc
+          or a flipped streaming flag fails a build instead of reaching a release on code review alone. Both ship
+          in the <code>MMCA.Common.Testing.Architecture</code> package (ADR-015).</p>
+          <p>The subclass is three declarations and one inherited <code>[Fact]</code>: the solution file that marks the repo root
+          (<code>:22</code>), the <code>.proto</code> files to pin as repo-root-relative paths (<code>:25</code>), and the committed snapshot itself
+          (<code>:30</code>), with the fact at <code>:32-34</code>. The rule body,
+          <code>ArchitectureRules.ProtoContractsMatchFrozenList</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Protos.cs:37</code>), resolves
+          the repo root (<code>:45</code>), re-reads the real files from the working tree, rebuilds the contract, and diffs it
+          against the frozen list <strong>in both directions</strong>: a line present in the protos but not frozen, and a line
+          frozen but no longer present, are each a violation with its own prefix (<code>:67-70</code>). That is the same
+          both-directions discipline the navigation-doc gate uses below, aimed at a wire format instead of a table.</p>
+          <p>What gets pinned is exactly what a peer can observe: the <code>package</code>, every rpc with its name, request and
+          response types and <strong>both</strong> streaming flags (<code>:198-208</code>), every message field with its name, declared
+          type, label and <strong>number</strong> (<code>:219-227</code>), and every enum value with its number (<code>:211-217</code>). Nested
+          messages and enums are qualified under their parent, while a <code>oneof</code> contributes no name segment because
+          on the wire it does not (<code>:182-184</code>). Deliberately not pinned: <code>syntax</code>, <code>import</code> and every <code>option</code>,
+          <code>csharp_namespace</code> included (<code>:27-31</code>). The line is drawn at &quot;would a deployed peer notice.&quot; Pin the
+          file-level options and a reordered import turns into a red build, which is the fastest way to teach a
+          team to regenerate the snapshot without reading it.</p>
+          <p>Adoption is the shape this tier always uses. MMCA.ADC&#39;s subclass pins the seven protos its four
+          <code>*.Contracts</code> projects compile, against seventy-six frozen lines
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Contracts/ProtoContractTests.cs:9-18</code>, list at <code>:20-97</code>);
+          MMCA.Store&#39;s pins four
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/ProtoContractTests.cs:13-19</code>). MMCA.Common
+          ships no <code>.proto</code> of its own, because it supplies the gRPC plumbing and not the contracts, so it
+          deliberately does not subclass. It drives the rule through a matched fixture pair instead, a clean proto
+          and a deliberately drifted twin, which is the only way a repo can test a rule whose subject lives
+          somewhere else: the clean file proves the parser accepts a real contract, and the drifted one proves the
+          rule actually fails, reporting both sides of a renumbered field
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ProtoContractFitnessTests.cs:52-64</code>) and
+          naming a missing file explicitly rather than silently pinning an empty contract (<code>:76-87</code>).</p>
+          <p>Two honest costs. The frozen list is another committed baseline, the same obligation as the performance
+          baseline further down: an intended contract change means regenerating the snapshot by printing
+          <code>ArchitectureRules.BuildProtoContract(...)</code> for the same files, coordinating the peer rollout, and
+          committing the new list in that same change, never editing one line to turn a red test green. Both
+          consumer files say precisely that in a comment above the list
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/ProtoContractTests.cs:21-24</code>). And the
+          unpinned options are not entirely harmless: changing <code>csharp_namespace</code> breaks the generated client code
+          in every consumer while the wire stays byte-identical, and this gate passes it. The rule protects the
+          protocol, not the compile, and that distinction is easy to misread as &quot;protos are gated.&quot;</p>
+          <h2 id="the-other-kind-of-fitness-test-documentation-as-a-contract">The other kind of fitness test: documentation as a contract</h2>
+          <p>Everything above tests code against code. There is a second family that tests <strong>documentation against
+          code</strong>, and it is the one that stops a doc from rotting the moment someone ships a feature.</p>
+          <p><code>NavigationFlow.md</code> is not a wiki page. It is an embedded resource, and a test diffs its routes table
+          against every routable page discovered by reflection, in both directions:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">undocumented.Should().BeEmpty(
+    because: <span class="hljs-string">&quot;every routable page in MMCA.Common.UI must appear in NavigationFlow.md&#x27;s routes table; add the new route (with its auth posture) in the same change (rubric §25)&quot;</span>);
+phantom.Should().BeEmpty(
+    because: <span class="hljs-string">&quot;NavigationFlow.md promises routes that no longer exist; remove or re-route the stale rows in the same change (rubric §25)&quot;</span>);</code></pre>
+          <p>Both directions matter, and the second is the one teams forget. A doc that is missing your new page is
+          merely incomplete. A doc that still promises three pages you deleted is actively lying, and it is the
+          kind of lie nobody notices until someone plans work against it. Making <code>phantom</code> a build failure means
+          the stale row cannot survive the change that made it stale.</p>
+          <p>The test goes one step further and asserts the documented <strong>auth posture</strong> matches the <code>[Authorize]</code>
+          reality on each page. That turns the navigation doc into a security-relevant artifact: if you drop an
+          <code>[Authorize]</code> attribute and the table still says the route is protected, the build fails rather than
+          the doc quietly becoming wrong about who can reach it.</p>
+          <p><code>FormsConventionTestsBase</code> applies the same idea to UX guarantees rather than prose. It asserts every
+          admin create form keeps its <code>UnsavedChangesGuard</code> bound through a live <code>IsDirtyAccessor</code>, plus dirty
+          tracking and a validated <code>MudForm</code>, so the &quot;you have unsaved changes&quot; protection cannot silently
+          regress on one screen out of forty. It also asserts a <strong>minimum discovered form count</strong>, which is the
+          detail that makes it real: without that floor, a refactor that stopped the reflection from finding any
+          forms would leave the test passing vacuously over an empty set, which is the classic way a convention
+          gate dies without anyone noticing.</p>
+          <p>That vacuity guard is the transferable lesson here. A rule that silently matches nothing is worse than
+          no rule, because it reports success. Any reflection-driven gate you write needs an assertion that it
+          actually found the things it claims to be checking.</p>
+          <h2 id="the-same-family-aimed-at-operations-every-alert-needs-a-runbook">The same family, aimed at operations: every alert needs a runbook</h2>
+          <p>The newest member of that family points the idea at your on-call rotation. An alert with no triage
+          steps is a page with no next step, and a runbook section for an alert that no longer exists is worse
+          than useless: it is stale guidance somebody follows at 3am. Both directions rot quietly, because
+          nothing compares the two files. <code>ObservabilityConventionTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/ObservabilityConventionTestsBase.cs:30</code>)
+          ships in the same <code>MMCA.Common.Testing.Architecture</code> package and turns the pairing into a build
+          failure (ADR-062).</p>
+          <p>It fails in three distinct ways. An SLO alert declared in the consumer&#39;s Bicep template with no <code>###</code>
+          section in <code>infra/OPERATIONS.md</code> whose heading carries the matching <code>-alert-&lt;key&gt;</code> infix is a
+          violation, and so is a heading that does carry the key but not the alert&#39;s current severity as
+          <code>(sev N)</code> (<code>:64-84</code>), which means re-tiering an alert without moving its triage steps is a red build
+          rather than a surprise at 3am. In the other direction, an orphan runbook section whose alert the
+          template no longer provisions is a violation too (<code>:92-103</code>). And discovering fewer than
+          <code>MinimumAlertSpecs</code> specs, default 3 (<code>:39</code>), is itself a failure (<code>:54-60</code>).</p>
+          <p>That third rule is the same fail-closed property the forms floor and the cost gate below both rely
+          on, and it earns its keep here more than anywhere: discovery parses the template between two literal
+          anchors, <code>var sloAlertSpecs</code> and <code>resource sloAlerts</code> (<code>:109-114</code>), and a rename would otherwise leave
+          a gate that pairs zero alerts against zero runbook sections and reports success. A key count that
+          disagrees with the severity count fails for the same reason (<code>:117</code>).</p>
+          <p>Adoption is the shape the rest of this tier already uses. MMCA.ADC and MMCA.Store each embed their
+          real <code>infra/main.bicep</code> and <code>infra/OPERATIONS.md</code> as manifest resources
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:17-22</code>)
+          and declare a subclass whose only body is a raised floor, <code>protected override int MinimumAlertSpecs =&gt; 4;</code>, because each repo provisions four specs
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:13</code>).
+          Leaving the shipped default of 3 in place would let the gate pass on three discovered specs if the
+          parse anchors ever drifted, which is the vacuity trap one level up. The
+          base reads those resources from <code>ResourceAssembly</code>, which defaults to the <em>derived</em> type&#39;s assembly
+          (<code>:51</code>), because resolving against its own would look for the consumer&#39;s template inside the
+          framework package and always throw. MMCA.Helpdesk declares no subclass at all: an
+          inapplicable gate rather than an unadopted one. The honest limit is that this is a text gate over
+          infrastructure-as-code. It proves the two files agree; it does not prove the deployment ran or that
+          the query behind an alert measures what it claims. The alerting mechanism itself sits with the
+          telemetry it watches, in Article 48.</p>
+          <h2 id="the-third-kind-a-fitness-function-for-cost">The third kind: a fitness function for cost</h2>
+          <p>Structural rules assert shape. Documentation rules assert honesty. There is a third thing worth failing
+          a build over, and it is the one most teams leave to a dashboard: cost. MMCA.Common has a BenchmarkDotNet
+          harness for its database-free hot paths, and a harness a maintainer runs by hand proves nothing about
+          the pull request in front of them, so the harness got a gate (ADR-060).</p>
+          <p>The mechanics are ordinary. A dedicated CI job, <code>Performance gate (BenchmarkDotNet Short + baseline verify)</code>, runs the suite with <code>--filter &quot;*&quot; --job Short --exporters json</code> (the filter because
+          BenchmarkDotNet otherwise prompts for a selection and would hang the runner), then runs a small
+          dependency-free checker, <code>build/perfgate</code>, over the exported JSON artifacts. It compares them against a
+          <strong>committed</strong> baseline file, <code>Tests/Performance/perf-baseline.json</code>, not against a stored previous run.
+          Moving a number on purpose therefore means editing the baseline in the same PR as the change that moves
+          it. That choice is the reviewable one: the number lives in the diff, so deliberately paying more is a line
+          somebody sees and questions in the same PR as the code that spends it. A gate comparing against the
+          previous run would ratchet silently, every PR only slightly worse than the last, and the sum invisible.</p>
+          <p>The interesting decision is what gets an absolute number and what does not.</p>
+          <p><strong>Allocations are gated absolutely.</strong> Eight per-benchmark ceilings, one for every benchmark in the
+          suite, in managed bytes per operation, compared strictly: measured above the ceiling is a violation.
+          Bytes per operation do not depend on how busy the runner is, which is exactly why an absolute number is
+          legitimate there. The committed values carry roughly 25% headroom over the measurement, so the gate is a
+          ratchet with slack rather than a tripwire.</p>
+          <p><strong>Latency is gated only as a ratio between two benchmarks, never as an absolute time.</strong> This is the part
+          worth stealing. CI runs on shared hosted runners where wall-clock timings move run to run by more than
+          most regressions worth catching, so an absolute threshold is either tight enough to go red on a noisy
+          neighbour or loose enough never to fire at all. A ratio rule instead names a slow benchmark, a fast
+          benchmark, and a floor; the checker divides their means from the same run and fails when the quotient
+          drops below the floor. Both benchmarks ran in the same process, on the same machine, under the same
+          noise, so whatever slows one slows the other and the machine cancels out of the quotient. One floor is
+          committed today: the specification&#39;s cached compiled delegate must stay at least 1000x faster than the
+          recompile-every-call anti-pattern, against a measured value of roughly 120,000x. Delete the cache and
+          the ratio collapses toward 1, where no amount of runner noise can hide it. The gate asks &quot;does the cache
+          still exist,&quot; which survives a noisy measurement, instead of &quot;is the cache exactly this fast,&quot; which
+          does not.</p>
+          <p>The third property connects straight back to the minimum-form-count floor above: <strong>the gate is
+          fail-closed against vacuity.</strong> A rule naming a benchmark that is absent from the results is a violation,
+          and the failure message says so in those words, that the gate would be vacuous. An empty results
+          directory is a failure rather than an empty pass. A benchmark that reports no allocation data fails with
+          an instruction to keep <code>[MemoryDiagnoser]</code> on the suite. Without those three checks a renamed method or
+          a filter that selected nothing would leave a gate that passes while measuring nothing, which is worse
+          than no gate because it reads as evidence.</p>
+          <p>One scope note, because overclaiming here would be precisely the sin this article is about: <strong>this gate
+          is MMCA.Common only.</strong> The harness, the baseline, and the checker exist in that repo and nowhere else.
+          The deployed apps&#39; performance artifact is a different instrument entirely: MMCA.ADC&#39;s <code>Load Test (k6)</code> workflow runs against deployed read endpoints on demand and on a monthly schedule, never on a
+          pull request. Consumers inherit the framework&#39;s bounded hot paths through the released
+          packages; they do not inherit the gate.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>Fitness functions are not free, and the scorecard does not pretend otherwise.</p>
+          <ul>
+          <li><strong>They only cover what you write a rule for.</strong> Read the scorecard category by category and the
+          pattern is hard to miss: a category sits in the top maturity band when a fitness function stands
+          behind it, and stays capped when the design is right but enforcement was left to review. DDD
+          invariants and slice cohesion are the worked example of both halves. Each was review-only, and each
+          moved up only once a rule existed: an <code>AggregateConventionTests</code> gate pinning <code>Create</code> to
+          <code>Result&lt;T&gt;</code>, and a <code>SliceCohesionTestsBase</code> that fails the build when a handler or validator is
+          stranded from its same-assembly command contract. A fitness-function culture creates a blind spot:
+          the dimensions you have not yet written a rule for feel safe because the build is green, when they
+          are merely unchecked.</li>
+          <li><strong>Assembly-level tests have edges.</strong> A rule only inspects the assemblies and types you point it at, so
+          a forbidden reach outside that scope can slip through unnoticed. The tool sees what you aim it at;
+          coverage is a design decision, not automatic.</li>
+          <li><strong>A cost gate is only as sharp as its measurement.</strong> The performance job runs the Short configuration
+          (three warmup plus three iterations) to fit a 15-minute budget, which is plenty for a 1000x ratio floor
+          and for counting bytes and useless for spotting a five-percent slowdown. Add roughly 25% headroom in
+          the ceilings and exactly one ratio floor across the eight benchmarks, and the honest claim is that it
+          catches collapses and new allocations, not creep. Nothing but review stops someone raising a ceiling to
+          turn a red gate green.</li>
+          <li><strong>Prose masquerading as enforcement is the real trap.</strong> The framework&#39;s own backlog records the
+          failure mode in its own history: a blanket dependency update reintroduced the known-bad MassTransit
+          v9, and the response at the time was a comment, not a rule. Only the <code>DependencyVersionTests</code> gate
+          described above made a repeat impossible. The counterpart is instructive too: the last misleading
+          &quot;MassTransit will retry&quot; comment in that family was not retired by a gate but by somebody running a
+          repo-wide search and recording that it returned zero matches. A fitness-function culture must be
+          ruthless that a comment describing a check is not a check.</li>
+          <li><strong>Two gates mean two places to update.</strong> Add a layer rule and you maintain both the MSBuild target and
+          the NetArchTest suite. That is the cost of catching both direct and transitive violations, and the
+          contributor doc calls it out so nobody forgets the second one.</li>
+          </ul>
+          <p>None of these argue against fitness functions. They argue for treating &quot;is this rule actually enforced,
+          or do I just believe it is&quot; as a question you keep asking.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any stack and most of it is one afternoon of work:</p>
+          <ol>
+          <li><strong>Pick the one rule you would be most upset to see violated silently.</strong> For most teams that is the
+          inward-dependency rule. Write a test that fails when it breaks (NetArchTest or ArchUnitNET in .NET,
+          ArchUnit in the JVM world, dependency-cruiser or eslint boundaries in JS).</li>
+          <li><strong>Add a second, cheaper gate where you can.</strong> A project-reference or import-lint check at build time
+          gives instant feedback before the slower assembly-level test runs.</li>
+          <li><strong>Define the rule body once and parameterize the inputs.</strong> If you have more than one service or repo,
+          ship the rules as a shared library with a per-repo map so they cannot drift.</li>
+          <li><strong>Audit your comments for fake enforcement.</strong> Every &quot;this must always be X&quot; comment is a candidate to
+          become a test. If it cannot become a test, at least stop pretending the comment enforces anything.</li>
+          </ol>
+          <p>The rule of thumb is the whole article in one line: <strong>a design rule that is not a check is a hope, and
+          hope is not an architecture.</strong> If a rule matters, make it fail the build.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why a diagram is not enforcement, how MMCA.Common guards the inward-dependency rule
+          twice (compile-time MSBuild plus runtime NetArchTest), how the rule bodies live once in
+          <code>MMCA.Common.Testing.Architecture</code> and run identically across four repos via <code>IArchitectureMap</code>, the
+          three rule families that matter most (<code>LayerDependencyTests</code>, <code>DomainPurityTests</code>,
+          <code>MicroserviceExtractionTests</code>), how a folder-width rule turns a layout convention into a build failure
+          and a residency gate turns a published privacy claim into one, how a committed <code>.proto</code> snapshot
+          freezes the gRPC wire contract in both
+          directions, how the same package pairs every provisioned SLO alert to a
+          severity-correct runbook section, how the same idea extends to cost through a committed benchmark baseline
+          that gates allocations absolutely and latency only as a ratio, and the honest limit that you only
+          enforce what you write a rule for.</p>
+          <p><strong>Next in the series:</strong> the test pyramid behind these fitness functions, roughly 2,254 fast tests with
+          no Docker and no database.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Architecture Enforcement section
+          of the contributor guide, or add one NetArchTest rule to your own codebase this week and watch it catch
+          something.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 The package table (<code>README.md</code>) and the Architecture Enforcement section (<code>CLAUDE.md</code>) are in the
+          repo.</li>
+          </ul>
+          <p><em>Tags: Software Architecture, .NET, C Sharp, Testing, Clean Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="resilience-recovery-objectives.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">33 · Resilience and recovery objectives</span></a>
+          <a class="article-pager-link article-pager-link--next" href="test-pyramid.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">35 · The test pyramid</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-a-diagram-is-not-enforcement">Why a diagram is not enforcement</a></li>
+            <li><a href="#enforced-twice-compile-time-and-runtime">Enforced twice: compile-time and runtime</a></li>
+            <li><a href="#defined-once-identical-everywhere">Defined once, identical everywhere</a></li>
+            <li><a href="#the-rules-that-matter-most">The rules that matter most</a></li>
+            <li><a href="#freezing-the-wire-the-contract-no-single-repos-build-can-see">Freezing the wire: the contract no single repo&#39;s build can see</a></li>
+            <li><a href="#the-other-kind-of-fitness-test-documentation-as-a-contract">The other kind of fitness test: documentation as a contract</a></li>
+            <li><a href="#the-same-family-aimed-at-operations-every-alert-needs-a-runbook">The same family, aimed at operations: every alert needs a runbook</a></li>
+            <li><a href="#the-third-kind-a-fitness-function-for-cost">The third kind: a fitness function for cost</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

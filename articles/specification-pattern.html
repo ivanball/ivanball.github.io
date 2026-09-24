@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Specifications over LINQ spaghetti: composable, reusable query intent · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Compose queries from reusable specification objects instead of scattering LINQ across handlers.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/specification-pattern.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Specifications over LINQ spaghetti: composable, reusable query intent">
+  <meta property="og:description" content="Compose queries from reusable specification objects instead of scattering LINQ across handlers.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/specification-pattern.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-06.png">
+  <meta property="og:image:alt" content="Specifications over LINQ spaghetti: composable, reusable query intent">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Specifications over LINQ spaghetti: composable, reusable query intent">
+  <meta name="twitter:description" content="Compose queries from reusable specification objects instead of scattering LINQ across handlers.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-06.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Specifications over LINQ spaghetti: composable, reusable query intent","description":"Compose queries from reusable specification objects instead of scattering LINQ across handlers.","url":"https://ivanball.github.io/articles/specification-pattern.html","mainEntityOfPage":"https://ivanball.github.io/articles/specification-pattern.html","image":"https://ivanball.github.io/assets/img/articles/article-06.png","datePublished":"2026-06-30T22:20:05Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":6,"sameAs":"https://medium.com/@ivanball76/specifications-over-linq-spaghetti-composable-reusable-query-intent-8a40dafcbd3d"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"06 · Specifications over LINQ spaghetti","item":"https://ivanball.github.io/articles/specification-pattern.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">06 · Specifications over LINQ spaghetti</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html" aria-current="page">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Core patterns · No. 6</p>
+          <h1 id="specifications-over-linq-spaghetti-composable-reusable-query-intent">Specifications over LINQ spaghetti: composable, reusable query intent</h1>
+          <p class="article-meta"><time datetime="2026-06-30T22:20:05Z">June 30, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/specifications-over-linq-spaghetti-composable-reusable-query-intent-8a40dafcbd3d" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-06.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A <code>.Where(s =&gt; s.SpeakerId == id &amp;&amp; !s.IsDeleted &amp;&amp; s.IsPublished)</code> copied into nine
+          controllers is nine places to forget the authorization clause. Here is the Specification pattern that
+          makes query intent a first-class, composable, testable object, and a generic pipeline that keeps the
+          Application layer from ever touching EF Core.</p>
+          <hr>
+          <p>Find the bug:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// SessionsController.GetMine</span>
+<span class="hljs-keyword">var</span> sessions = _db.Sessions
+    .Where(s =&gt; s.SpeakerId == currentUserId &amp;&amp; !s.IsDeleted)
+    .ToList();
+
+<span class="hljs-comment">// SessionsController.GetMinePublished  (added three months later, different dev)</span>
+<span class="hljs-keyword">var</span> sessions = _db.Sessions
+    .Where(s =&gt; s.IsPublished &amp;&amp; !s.IsDeleted)   <span class="hljs-comment">// forgot the SpeakerId scope</span>
+    .ToList();</code></pre>
+          <p>The second query leaked. It returns every published session in the system, not just the current
+          speaker&#39;s, because the <code>SpeakerId</code> authorization clause lived as a loose lambda that someone had to
+          remember to copy. The predicate that <em>matters most</em> (the one that scopes data to the caller who is
+          allowed to see it) is the one most easily dropped, because it is just text in a <code>.Where()</code> that gets
+          re-typed at every call site.</p>
+          <p>This is LINQ spaghetti: query intent scattered across controllers as ad-hoc lambdas, with no name, no
+          reuse, and no way to test &quot;does the own-sessions rule actually restrict to the owner&quot; in isolation. The
+          Specification pattern fixes it by turning a predicate into an object.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>Query predicates are not throwaway plumbing. Some of them encode business rules (&quot;a published event is
+          one whose status is Published and whose start date has not passed&quot;) and some encode authorization
+          (&quot;only the questions this attendee asked&quot;). When those live as inline lambdas:</p>
+          <ul>
+          <li><strong>They cannot be named or reused.</strong> &quot;Published event&quot; is a concept; <code>.Where(e =&gt; e.Status == Published &amp;&amp; e.StartsAt &gt; now)</code> is a spell you recite from memory.</li>
+          <li><strong>They cannot be composed reliably.</strong> Combining two inline predicates with <code>&amp;&amp;</code> works until one of
+          them has to be applied conditionally, at which point you get branching <code>IQueryable</code> plumbing in the
+          controller.</li>
+          <li><strong>They cannot be tested in isolation.</strong> You can only test the controller action that uses them, so
+          the rule and the HTTP plumbing are tangled in every test.</li>
+          <li><strong>The security-critical ones get dropped,</strong> exactly as above.</li>
+          </ul>
+          <p>A specification gives the predicate a type and a name, makes it composable with <code>And</code>/<code>Or</code>/<code>Not</code>, and
+          lets the framework apply it server-side so the filter runs in the database, not in memory after a
+          full-table load.</p>
+          <h2 id="the-mmca-answer-trusted-specifications-untrusted-filters-one-pipeline">The MMCA answer: trusted specifications, untrusted filters, one pipeline</h2>
+          <p>MMCA.Common splits the read side into three cooperating sub-systems, and the split is the point.</p>
+          <h3 id="1-the-specification-pattern-the-trusted-predicate">1. The Specification pattern (the trusted predicate)</h3>
+          <p><code>ISpecification&lt;TEntity, TIdentifierType&gt;</code> exposes two faces of the same rule:</p>
+          <ul>
+          <li>a <code>Criteria</code> expression tree (<code>Expression&lt;Func&lt;TEntity, bool&gt;&gt;</code>) that <strong>EF Core translates to SQL</strong>,
+          so the filter runs in the database, and</li>
+          <li>an <code>IsSatisfiedBy(entity)</code> predicate for <strong>in-memory</strong> evaluation.</li>
+          </ul>
+          <p>The abstract base <code>Specification&lt;TEntity, TIdentifierType&gt;</code> lazy-compiles the expression once and caches
+          the delegate, so repeated in-memory checks do not recompile the tree. Three combinators,
+          <code>AndSpecification</code>, <code>OrSpecification</code>, and <code>NotSpecification</code>, compose specifications into a new one,
+          and they do it by <strong>parameter substitution</strong>: an <code>ExpressionVisitor</code> rebinds the right-hand operand&#39;s
+          parameter onto the left-hand lambda&#39;s own parameter, and the two bodies are joined with
+          <code>Expression.AndAlso</code> / <code>OrElse</code> / <code>Not</code>, so the result is again a single
+          <code>Expression&lt;Func&lt;TEntity, bool&gt;&gt;</code>, indistinguishable from a hand-written predicate. The obvious
+          alternative, <code>Expression.Invoke(spec.Criteria, parameter)</code>, is deliberately avoided, and the source
+          says so in as many words: an <code>InvocationExpression</code> survives into the query tree, and while EF Core&#39;s
+          relational providers can usually unwrap it, others (Cosmos in particular) throw at translation time, so
+          an ANDed specification failed on exactly the engines the framework is meant to be portable across.
+          Substitution translates everywhere. Each combinator also builds its composed expression once per
+          instance and caches it in a lazy field, because the query pipeline reads <code>Criteria</code> at least once per
+          request. That is how both the source XML docs and the onboarding chapter describe it. There is a fluent
+          face as well: <code>And</code>, <code>Or</code>, and <code>Not</code> ship as extension members on <code>ISpecification</code>, so
+          <code>spec.And(other).Not()</code> reads left to right instead of inside out while the abstract base stays
+          untouched. Composition is live in production
+          today, in five consumer read paths across two applications. Three are in ADC: the paged sessions read
+          ANDs the public-session filter with the speaker-scoped one rather than substituting, because dropping
+          the public filter for a speaker-scoped request would leak non-accepted sessions to non-privileged
+          callers; the paged speakers read ANDs the public-speaker filter with an event-scoped one for the same
+          reason; and a shared visibility helper ANDs the public-session status rule with an inline event-scope
+          predicate before projecting session ids. Two are in MMCA.Store, where the public product-reviews
+          endpoint and the domain-event handler that recomputes a product&#39;s rating both AND a by-product review
+          specification with a published-reviews one. Each composed <code>Criteria</code> reaches the database as a single
+          server-side <code>WHERE</code>. All five call the fluent <code>.And()</code>, and the hand-built
+          <code>new AndSpecification&lt;...&gt;(a, b)</code> form appears nowhere in the three consumer repositories. Five call
+          sites in two applications is still a narrow sample, though (MMCA.Helpdesk composes nothing), and <code>Or</code>
+          and <code>Not</code> ship without a caller.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// A named, reusable, server-authored visibility rule (ADC, BR-49): a session is publicly</span>
+<span class="hljs-comment">// visible when it is Accepted, or carries no status (organizer-created sessions never get one).</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">PublicSessionStatusSpecification</span> : <span class="hljs-title">Specification</span>&lt;<span class="hljs-title">Session</span>, <span class="hljs-title">SessionIdentifierType</span>&gt;
+{
+    <span class="hljs-comment">// Exposed on its own because other public read paths compose this predicate into larger expressions.</span>
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">readonly</span> Expression&lt;Func&lt;Session, <span class="hljs-built_in">bool</span>&gt;&gt; StatusCriteria =
+        s =&gt; s.Status == <span class="hljs-literal">null</span> || s.Status == SessionStatuses.Accepted;
+
+    <span class="hljs-comment">// Criteria is an abstract get-only property on the base; override it with an expression body.</span>
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> Expression&lt;Func&lt;Session, <span class="hljs-built_in">bool</span>&gt;&gt; Criteria =&gt; StatusCriteria;
+}
+
+<span class="hljs-comment">// The paged sessions read: the speaker scope (itself a specification, a Session.Id IN (...) filter</span>
+<span class="hljs-comment">// over the SessionSpeaker join) is ANDed with the public rule, never substituted for it.</span>
+<span class="hljs-keyword">return</span> publicSpecification <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>
+    ? speakerResult.Value
+    : publicSpecification.And(speakerResult.Value!);</code></pre>
+          <p>The leaked-query bug from the opening cannot happen here. Both halves of the composed query are named
+          objects, not text someone retypes at every call site: the speaker scope arrives as a specification
+          built by a query handler, and the public visibility rule is a type the controller always ANDs in,
+          because substituting one for the other would leak non-accepted sessions to non-privileged callers (the
+          composing method&#39;s own doc comment says exactly that). The criteria are server-authored, so the client
+          cannot tamper with them, and each rule is reusable and testable in isolation. This is a textbook
+          Specification with security overtones: the authorization predicate is not something the request can
+          override.</p>
+          <p>Scoping a query to the caller&#39;s own rows is common enough that the framework ships it: <code>OwnedByUserSpecification&lt;TEntity, TIdentifierType&gt;</code> filters on the <code>CreatedBy</code> audit field once, in the Domain layer, and is closed over
+          the entity type at the call site. Its generic constraint is deliberately the concrete
+          <code>AuditableBaseEntity&lt;TIdentifierType&gt;</code> rather than an interface, because a member access declared on an
+          interface is not guaranteed to map to the entity&#39;s audit column and the criteria has to stay
+          EF-translatable. ADC&#39;s question-answer controllers show the intended shape: an organizer gets <code>null</code>
+          (no scoping at all), and everyone else gets that specification bound to their own user id.</p>
+          <h3 id="2-dynamic-filtering-the-untrusted-input">2. Dynamic filtering (the untrusted input)</h3>
+          <p>The other half of any list endpoint is user-driven shaping: the <code>?filter=...&amp;sort=...&amp;fields=...</code>
+          querystring. This is <em>untrusted</em> and is handled completely separately. Each CLR type gets an
+          <code>IFilterStrategy</code> (<code>StringFilterStrategy</code>, <code>IntFilterStrategy</code>, <code>DateTimeFilterStrategy</code>, and so on)
+          that knows which operators it supports, and a <code>QueryFilterService</code> registry dispatches by type. It runs
+          in two phases: <code>ValidateFilters</code> checks that the property exists on the entity and the operator is
+          legal for its type <em>before</em> the query (so a bad filter is a 400, not a SQL exception), and
+          <code>ApplyFilters</code> builds the <code>.Where()</code> chain. Untrusted input is allow-listed against real entity
+          metadata, never concatenated blindly.</p>
+          <p>The separation is deliberate and worth stating plainly: <strong>specifications are trusted and live with the
+          domain; dynamic filters are untrusted and are validated, capped, and reflection-cached at the
+          application boundary.</strong> Conflating the two is how authorization clauses end up overridable by a query
+          string.</p>
+          <h3 id="3-the-pipeline-and-entityqueryservice-the-orchestrator">3. The pipeline and EntityQueryService (the orchestrator)</h3>
+          <p><code>IEntityQueryPipeline</code> (implemented by <code>EntityQueryPipeline</code>) executes against an <code>IQueryable&lt;TEntity&gt;</code>
+          and an immutable <code>EntityQueryParameters&lt;TEntity&gt;</code> bundle carrying the specification&#39;s <code>Criteria</code>, the
+          dynamic filters, sort, fields, paging, and include flags. The pipeline applies the criteria plus the
+          user filters as translated SQL <code>WHERE</code> clauses, sorts, counts before paging, applies <code>Skip</code>/<code>Take</code>,
+          projects the requested columns, and materializes. An unpaginated query is capped at
+          <code>MaxUnboundedResultLimit</code> (1000) so a caller who forgets paging can never trigger an unbounded
+          full-table load.</p>
+          <p><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code> is the public face that controllers inject.
+          Its <code>GetAllAsync</code> is a three-step orchestration, and the source labels the steps: <strong>validate</strong> all
+          parameters up front via <code>Result.Combine</code> (a bad <code>fields</code> is a 400 before any DB hit), <strong>execute</strong> the
+          query pipeline (includes, criteria, filters, sort, pagination, field selection), and <strong>shape</strong> the
+          output to the requested fields before wrapping the result in <code>PaginationMetadata</code>. Add a new entity and
+          it inherits filtering, sorting, paging, sparse
+          fieldsets, and eager-loading for free. The methods are <code>virtual</code>, so a module subclass can override one
+          behavior without reimplementing the engine.</p>
+          <h3 id="the-application-purity-payoff-iqueryableexecutor">The Application-purity payoff: IQueryableExecutor</h3>
+          <p>Here is the subtle part that makes the whole pipeline architecturally honest. The Application layer
+          runs queries, but it must never reference EF Core directly (that is an Infrastructure concern, and the
+          inward-dependency rule forbids it). The pipeline therefore works against an <code>IQueryable&lt;TEntity&gt;</code>
+          abstraction, and the actual EF materialization (<code>ToListAsync</code>, <code>CountAsync</code>, and friends) sits behind an
+          <code>IQueryableExecutor</code> abstraction implemented in Infrastructure (the interface lives in
+          <code>MMCA.Common.Application</code>, exposing <code>Include</code> / <code>AsSplitQuery</code> / <code>ToListAsync</code> / <code>CountAsync</code>).
+          Application code asks the abstraction to run the query; Infrastructure supplies the EF Core
+          implementation. The result: the entire read engine lives in the Application layer with zero
+          <code>using Microsoft.EntityFrameworkCore</code>, and the layer-dependency fitness functions stay green. The
+          generic query pipeline is, in effect, EF Core used correctly from a layer that is not allowed to know
+          EF Core exists.</p>
+          <h3 id="the-contract-underneath-repository-plus-specification">The contract underneath: repository plus specification</h3>
+          <p>A specification is only half of the data-access contract. The other half is what a handler is allowed to
+          ask the repository for, and the framework splits that read surface by responsibility rather than
+          shipping one fat interface. <code>IEntityReader&lt;TEntity, TIdentifierType&gt;</code> carries single-entity work
+          (<code>GetByIdAsync</code>, <code>GetByIdsAsync</code>, and the two <code>ExistsAsync</code> overloads).
+          <code>IEntityQuerier&lt;TEntity, TIdentifierType&gt;</code> carries collection work, and its shape is emphatically
+          specification-first: alongside the parameter-driven <code>GetAllAsync</code>, <code>GetProjectedAsync</code>,
+          <code>GetAllForLookupAsync</code>, and <code>CountAsync</code>, it declares reads that take an <code>ISpecification</code> outright
+          (<code>CountAsync(specification)</code>, <code>ListAsync(specification)</code>, a projecting
+          <code>ListAsync&lt;TResult&gt;(specification, select)</code>, <code>AnyAsync(specification)</code>, and
+          <code>FirstOrDefaultAsync(specification)</code>), a keyset-paged <code>GetPageByCursorAsync</code> whose optional
+          specification scopes the page, and expression-predicate aggregates that keep the arithmetic in the
+          database (<code>CountByAsync</code>, <code>SumByAsync</code>, and the soft-delete-aware <code>FindIncludingDeletedAsync</code>). The
+          premise of this whole article, that query intent belongs in an object, is what the read contract
+          itself assumes.
+          <code>IReadRepository</code> composes exactly those two, and it alone
+          exposes the raw queryables: <code>Table</code>, <code>TableNoTracking</code>, <code>TableNoTrackingSingleQuery</code>, and
+          <code>TableNoTrackingSplitQuery</code>. A handler that declares the narrow dependency cannot reach an <code>IQueryable</code>
+          at all, because the member is not on the interface it asked for.</p>
+          <p>Why ban the queryable from a use-case handler? Because a handler written against one is EF-coupled: its
+          query shape means something only to the provider that will translate it, so the same call cannot be
+          answered across a gRPC boundary, and the module quietly loses the monolith-to-microservice extraction
+          promise. <code>GetByIdAsync</code>, <code>GetProjectedAsync</code>, and <code>CountAsync</code> each map onto a request/response message;
+          a composed <code>IQueryable</code> does not. So the rule is not left to code review:
+          <code>ApplicationLayer_DoesNotUseRawQueryableSurfaces</code> is a fitness function that reads the <code>.cs</code> files of
+          each mapped module&#39;s Application project, flags <code>.Table</code> / <code>.TableNoTracking*</code> member access, and fails
+          the build on a hit. It is deliberately a textual line scan rather than IL analysis (the testing package
+          carries no Roslyn or IL dependency on purpose), and its limits are documented on the rule itself.
+          Existing violations go into an <code>AllowedFiles</code> list used as an adoption ratchet, so new code is clean
+          immediately while the list shrinks. The rule is opt-in per repository by subclassing the base:
+          MMCA.Common, MMCA.ADC, and MMCA.Store subclass it today (Store adopted with an empty <code>AllowedFiles</code>,
+          because its Application layer had zero raw-queryable uses at adoption), so only MMCA.Helpdesk&#39;s
+          Application code is not scanned yet.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>The pattern earns its keep, but a few real, specific gaps are worth stating plainly rather than
+          glossing:</p>
+          <ul>
+          <li><strong>Two query vocabularies coexist.</strong> Specifications (typed, programmer-authored) and dynamic filters
+          (string, user-authored) are different mechanisms with different trust levels. That is the right
+          design, but a newcomer has to learn which is which and resist the temptation to express an
+          authorization rule as a dynamic filter.</li>
+          <li><strong>The generic pipeline trades some control for reuse.</strong> Free filtering/sorting/paging for every
+          entity is a large win, but a query with genuinely bespoke shape may fit the pipeline awkwardly and is
+          better written directly. The <code>virtual</code> override points exist for exactly this, but knowing when to
+          override versus when to bypass is judgment.</li>
+          <li><strong>The queryable ban is a textual scan, and it is opt-in.</strong> It skips only whole-line <code>//</code> comments, so
+          a match inside a string literal or a trailing comment is a false positive, and it cannot see through
+          variable indirection or an alias that re-exposes a queryable. Three of the four repositories subclass
+          the rule today; only MMCA.Helpdesk relies on review. The allowlisted files are real coupling, not
+          paperwork: each one would need rework if its module moved behind a transport boundary.</li>
+          </ul>
+          <p>None of these argue against the pattern. They argue for testing your composed specifications and for
+          keeping the trusted/untrusted boundary crisp.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The core ideas port to any stack and any ORM:</p>
+          <ol>
+          <li><strong>Give predicates a type and a name.</strong> A <code>PublishedEvent</code> specification object beats a copied
+          <code>.Where()</code> lambda. Named intent is reusable, testable, and hard to forget.</li>
+          <li><strong>Keep authorization scopes server-authored.</strong> The clause that restricts data to the caller should
+          be an object the server supplies, never something the request can shape. Conflating &quot;what the user
+          filtered for&quot; with &quot;what the user is allowed to see&quot; is a security bug waiting to happen.</li>
+          <li><strong>Validate untrusted query input against real metadata.</strong> Allow-list filter properties and operators
+          against the entity&#39;s actual type before they reach the database, so a bad filter is a 400, not a 500
+          or an injection.</li>
+          <li><strong>Cap unpaginated reads.</strong> A safety ceiling on result size turns &quot;someone forgot <code>Take</code>&quot; from an
+          outage into a clamped response.</li>
+          <li><strong>Combine expression trees by substitution, not invocation.</strong> <code>Expression.Invoke</code> is the tempting
+          way to glue two lambdas together, and it leaves an <code>InvocationExpression</code> in the tree that some
+          providers refuse to translate. Rebinding one lambda&#39;s parameter onto the other with an
+          <code>ExpressionVisitor</code> yields a tree indistinguishable from hand-written code, so it translates
+          everywhere. Then still write a test that asserts the combined query runs in the database rather
+          than falling back to in-memory evaluation.</li>
+          <li><strong>Do not hand a queryable to a use-case handler.</strong> Give it methods it can call (by id, projected,
+          counted) and predicates it can pass, not an <code>IQueryable</code> it can compose. Method calls map onto
+          messages; a composed query means something only to the provider that will translate it, which is the
+          difference between a module you can move later and one you cannot.</li>
+          </ol>
+          <p>The rule of thumb: <strong>query intent that matters (business rules and authorization scopes) deserves to be
+          a named, composable, tested object, not a lambda you re-type at every call site.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why inline LINQ predicates scatter and leak, the Specification pattern with its
+          <code>Criteria</code> expression tree and its <code>And</code>/<code>Or</code>/<code>Not</code> combinators that compose by parameter substitution
+          rather than <code>Expression.Invoke</code>, the separation of trusted specifications
+          from untrusted dynamic filters, the generic <code>EntityQueryPipeline</code> / <code>EntityQueryService</code> that gives
+          every entity filtering/sorting/paging/sparse-fieldsets for free, the <code>IQueryableExecutor</code> abstraction
+          that keeps the Application layer free of EF Core, the ISP-split read contract (<code>IEntityReader</code> and
+          <code>IEntityQuerier</code> under <code>IReadRepository</code>) with a build gate that bans raw queryables from Application
+          code.</p>
+          <p><strong>Next in the series:</strong> the CQRS decorator pipeline, where logging, caching, validation, and
+          transactions wrap every command and query without touching a handler.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the querying chapter, or
+          <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>Onboarding chapter: <a href="../docs/onboarding/group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a>.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Programming, Entity Framework</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="kill-anemic-domain-model.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">05 · Kill the anemic domain model</span></a>
+          <a class="article-pager-link article-pager-link--next" href="cqrs-decorator-pipeline.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">07 · The CQRS decorator pipeline</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-trusted-specifications-untrusted-filters-one-pipeline">The MMCA answer: trusted specifications, untrusted filters, one pipeline</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

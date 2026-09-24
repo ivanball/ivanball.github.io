@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Field-Level Encryption in EF Core: AES-GCM for PII Columns · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="An AES-256-GCM value converter that keeps a PII column ciphertext even for someone who can query the database.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/field-level-encryption-ef-core.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Field-Level Encryption in EF Core: AES-GCM for PII Columns">
+  <meta property="og:description" content="An AES-256-GCM value converter that keeps a PII column ciphertext even for someone who can query the database.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/field-level-encryption-ef-core.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-46.png">
+  <meta property="og:image:alt" content="Field-Level Encryption in EF Core: AES-GCM for PII Columns">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Field-Level Encryption in EF Core: AES-GCM for PII Columns">
+  <meta name="twitter:description" content="An AES-256-GCM value converter that keeps a PII column ciphertext even for someone who can query the database.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-46.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Field-Level Encryption in EF Core: AES-GCM for PII Columns","description":"An AES-256-GCM value converter that keeps a PII column ciphertext even for someone who can query the database.","url":"https://ivanball.github.io/articles/field-level-encryption-ef-core.html","mainEntityOfPage":"https://ivanball.github.io/articles/field-level-encryption-ef-core.html","image":"https://ivanball.github.io/assets/img/articles/article-46.png","datePublished":"2026-08-15T13:18:07Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":46,"sameAs":"https://medium.com/@ivanball76/field-level-encryption-in-ef-core-aes-gcm-for-pii-columns-06ece340ea25"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"46 · Field-level encryption in EF Core","item":"https://ivanball.github.io/articles/field-level-encryption-ef-core.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">46 · Field-level encryption in EF Core</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html" aria-current="page">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Data &amp; persistence · No. 46</p>
+          <h1 id="field-level-encryption-in-ef-core-aes-gcm-for-pii-columns">Field-Level Encryption in EF Core: AES-GCM for PII Columns</h1>
+          <p class="article-meta"><time datetime="2026-08-15T13:18:07Z">August 15, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/field-level-encryption-in-ef-core-aes-gcm-for-pii-columns-06ece340ea25" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-46.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Transparent database encryption protects the file, then decrypts for anyone who can query
+          it. When a column holds data sensitive enough that a database reader should still see ciphertext, you
+          need a second layer: an AES-256-GCM EF Core value converter that encrypts a PII column per property,
+          formalized in ADR-037.</p>
+          <hr>
+          <p>You turned on Transparent Data Encryption (TDE) and closed the &quot;data at rest&quot; line item. The database
+          files are encrypted, the backups are encrypted, the audit checkbox is green. Then a backup gets restored
+          onto a host it should never have touched, or an over-privileged reporting connection runs a <code>SELECT</code>, and
+          every email address, every phone number, every national ID comes back in plaintext.</p>
+          <p>That is not a TDE bug. That is TDE working exactly as designed. TDE encrypts the pages on disk and
+          decrypts them transparently for any principal that can open the database. Its threat model is a stolen
+          disk, not a stolen query. The moment a reader is inside the database boundary, the whole point of the
+          control has already been served, and the data is clear.</p>
+          <p>Some columns are sensitive enough to deserve a second, tighter boundary: the value should be ciphertext
+          the instant it leaves the application, so that only a holder of the application key, not merely a database
+          reader, can turn it back into text. In MMCA.Common that boundary is one EF Core value converter.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>The gap between &quot;the database is encrypted&quot; and &quot;this column is protected&quot; is where compliance findings
+          live. A PII inventory (rubric §30 asks for exactly this: what is collected, where it is stored, who can
+          access it) will list columns whose readership you cannot actually constrain to your application. A DBA, a
+          replicated read model, a support tool with a broad connection, a restored backup on a laptop: each is a
+          legitimate database reader, and under TDE alone each sees plaintext.</p>
+          <p>Rubric §11 makes the same demand from the attacker&#39;s side: data-at-rest protection and PII handling as a
+          correctness property, not a deployment afterthought. The two categories meet on one column. §11 defends
+          against whoever should not have the data; §30 answers to the regulator who asks where the data is and who
+          can read it. Field-level encryption is a single control that speaks to both, because it moves the trust
+          boundary from &quot;can reach the database&quot; to &quot;holds the application key.&quot;</p>
+          <p>This is a distinct control from the two sensitive-data mechanisms the framework already records.
+          Password hashing (ADR-032) is deliberately one-way: a credential is stored so it can be verified, never
+          recovered. Erasure (ADR-005) removes or anonymizes personal data on a data-subject request. Neither
+          covers the case of a field that must stay retrievable in plaintext to the application yet be unreadable
+          in the database itself. That is the case ADR-037 answers: an at-rest, reversible, column-level
+          confidentiality control.</p>
+          <h2 id="the-mmca-answer-one-value-converter-applied-per-property">The MMCA answer: one value converter, applied per property</h2>
+          <p>The mechanism is <code>EncryptedStringConverter</code>, a sealed <code>ValueConverter&lt;string, string&gt;</code> in the
+          <code>MMCA.Common.Infrastructure.Persistence.Encryption</code> namespace. You attach it to a single property in an
+          EF entity configuration, and from that point on the property encrypts on write and decrypts on read.
+          Application code, domain code, DTOs, handlers: all of them keep working with an ordinary <code>string</code> and
+          never see ciphertext.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Wire the converter onto the sensitive column in the entity configuration.</span>
+<span class="hljs-comment">// (Illustrative: the first HasConversion call is the converter&#x27;s own documented usage,</span>
+<span class="hljs-comment">//  the second paraphrases the key-ring constructor, and the layout comment</span>
+<span class="hljs-comment">//  describes what Encrypt actually writes.)</span>
+builder.Property(e =&gt; e.SocialSecurityNumber)
+    .HasConversion(<span class="hljs-keyword">new</span> EncryptedStringConverter(encryptionKey)); <span class="hljs-comment">// encryptionKey: 32 bytes</span>
+
+<span class="hljs-comment">// The same converter over a ring of versioned keys, writing under version 2.</span>
+builder.Property(e =&gt; e.SocialSecurityNumber)
+    .HasConversion(<span class="hljs-keyword">new</span> EncryptedStringConverter(
+        <span class="hljs-keyword">new</span> Dictionary&lt;<span class="hljs-built_in">byte</span>, <span class="hljs-built_in">byte</span>[]&gt; { [<span class="hljs-number">1</span>] = retiringKey, [<span class="hljs-number">2</span>] = currentKey },
+        currentKeyVersion: <span class="hljs-number">2</span>));
+
+<span class="hljs-comment">// On write, the stored value is Base64 of:</span>
+<span class="hljs-comment">//   [key version (1)] [nonce (12)] [ciphertext (N)] [tag (16)]</span>
+<span class="hljs-comment">// On read, the version byte picks the key, and the tag (which covers that byte) is verified.</span></code></pre>
+          <p>Four properties of that converter are worth naming precisely, because they are the whole design.</p>
+          <p><strong>It is authenticated, not merely confidential.</strong> Both directions use <code>AesGcm</code>, AES-256 in Galois/Counter
+          Mode, which binds a 128-bit authentication tag to the ciphertext. Encryption gives you confidentiality;
+          the tag gives you integrity for free. A value that has been tampered with, truncated, or corrupted fails
+          the tag check inside <code>AesGcm.Decrypt</code> and throws rather than silently returning garbage plaintext. The
+          converter also rejects, up front, any stored value too short to even hold a key version, a nonce and a
+          tag, throwing a <code>CryptographicException</code> before it ever calls into the primitive.</p>
+          <p><strong>Every key is exactly 256 bits, and the converter refuses anything else.</strong> There are two constructors.
+          The single-key one takes a raw <code>byte[]</code>, null-checks it with <code>ArgumentNullException.ThrowIfNull</code>, and
+          throws <code>ArgumentException</code> unless the key is exactly 32 bytes (256 bits); it is sugar for a one-entry
+          key ring registered at version 1. The other takes an <code>IReadOnlyDictionary&lt;byte, byte[]&gt;</code> key ring plus
+          the version to write with, and validates the whole thing once at construction: the ring must be non-null
+          and non-empty, no entry may be null, every key must be exactly 32 bytes, and the nominated current
+          version must actually be present. The validated ring is then copied into a <code>FrozenDictionary</code>, so
+          mutating the dictionary you passed in cannot change which keys the converter uses afterwards. There is a
+          <code>GenerateKey()</code> helper that produces a cryptographically random 32-byte key via
+          <code>RandomNumberGenerator.GetBytes(32)</code> for initial setup. The envelope sizes are fixed constants: a 1-byte
+          key version, a 12-byte nonce (96 bits, the size NIST recommends for GCM) and a 16-byte tag (128 bits).</p>
+          <p><strong>The storage envelope is versioned and self-describing, and the ciphertext is non-deterministic.</strong> On
+          write, <code>Encrypt</code> resolves the current key from the ring, takes the UTF-8 bytes of the plaintext, draws a
+          fresh random 12-byte nonce, runs <code>AesGcm.Encrypt</code>, then lays out
+          <code>[key version] [nonce] [ciphertext] [tag]</code> in one buffer and Base64-encodes it into the string column. On
+          read, <code>Decrypt</code> Base64-decodes, reads the version byte at position 0 to select the key, slices the three
+          remaining regions back out by their fixed offsets using spans, and calls <code>AesGcm.Decrypt</code>, which validates
+          the tag while decrypting. Because the nonce is fresh on every write, the same plaintext encrypts to
+          different ciphertext every single time. That is the correct confidentiality default: a deterministic
+          scheme would leak equality and frequency over the column, and this one does not.</p>
+          <p><strong>The version byte is authenticated, and that makes rotation a supported operation.</strong> The version is not
+          merely stored next to the ciphertext, it is passed to AES-GCM as associated data on both encrypt and
+          decrypt, so the authentication tag covers it. Rewriting the version byte of a stored value therefore fails
+          the tag check instead of quietly redirecting decryption to a different key, and it fails even when the
+          substituted version happens to map to the same key: a test registers one key under two versions, flips the
+          byte, and still gets a <code>CryptographicException</code>. Because writes always stamp the current version while
+          reads take their key from the data, rotation is a four-step operation with no maintenance window: add the
+          new key to the ring and make it current while keeping the old version registered, deploy (new writes carry
+          the new version, existing rows keep decrypting under theirs), re-encrypt the old rows in the background at
+          whatever pace the table allows, then drop the retired version from the ring. A value whose version is no
+          longer registered throws a <code>CryptographicException</code> naming only the version number, never key material,
+          which is the loud failure rather than the silent one.</p>
+          <p>There is one deliberate passthrough: both directions short-circuit on a null-or-empty string, so a NULL
+          or empty column stays as-is rather than becoming a block of ciphertext for the empty string.</p>
+          <p>Where do the keys come from? Not from the framework. The converter takes raw key material as a
+          constructor argument, one <code>byte[]</code> or a whole ring, and stops there: no DI registration, no options type,
+          no key-provider abstraction in Infrastructure, and no automatic refresh, since the ring is frozen at
+          construction and adding a version means constructing a new converter. The adopting entity configuration
+          supplies the keys, and the converter&#39;s own XML documentation is explicit that they belong in Azure Key
+          Vault, user-secrets, or an environment variable, and never hardcoded. That lines up with rubric §11&#39;s
+          secrets criterion (in a vault or managed identity, never in source or plain config), and it keeps the
+          crypto primitive free of any opinion about your secret store.</p>
+          <p>It is also stateless and context-free on purpose. Version resolution is data-driven from the stored
+          envelope and never consults the <code>DbContext</code>, because a value converter is a pair of compiled expressions
+          running inside the provider&#39;s materialization path: it cannot reach the context, the current user, or any
+          ambient request scope. Per-tenant and per-request key selection are therefore deliberately out of scope
+          here; that shape wants a <code>SaveChanges</code> interceptor or application-layer encryption above EF Core, where
+          the request context is still reachable.</p>
+          <h2 id="the-honest-part-shipped-tested-latent">The honest part: shipped, tested, latent</h2>
+          <p>Here is what separates this from a &quot;look what we built&quot; post. This converter is not in production. Zero
+          columns across the four repositories are encrypted with it today. The plumbing is complete and the
+          encrypt/decrypt round-trip, the tag-validated integrity path, the 32-byte key guard on both construction
+          paths, the four ring-validation guards, the defensive copy of the caller&#39;s dictionary, the version byte
+          each write stamps, a full rotation round-trip, an unregistered version, a rewritten version byte, the
+          empty-string passthrough, and the too-short-ciphertext rejection are all exercised by
+          <code>EncryptedStringConverterTests</code> (21 cases), but no <code>*Configuration.cs</code> in
+          any repo calls <code>.HasConversion(new EncryptedStringConverter(...))</code>. ADR-037 records that posture in the
+          open: the capability is proven by tests, not by any deployed column.</p>
+          <p>That is deliberate. The framework&#39;s job is to decide the algorithm, the key size, the nonce size, and the
+          storage envelope once, in a single shared type, so that the first team to adopt it inherits a reviewed
+          primitive instead of hand-rolling AES-GCM in a module. ADR-005 already names this converter as the
+          mechanism for erasure fields &quot;that must remain retrievable,&quot; so the pairing is designed and available. It
+          is not yet wired. Telling you that is the point: a security control you claim but have not adopted is
+          worse than one you have honestly labeled latent.</p>
+          <p>The zero-adoption posture is also what paid for the versioned envelope. A layout of nonce, ciphertext and
+          tag with no key identifier leaves the obvious question unanswered: what happens when the key has to
+          change. That answer belongs in the storage format rather than in a paragraph explaining the gap, which is
+          why the envelope leads with a key-version byte and the converter reads its key from the data. There is no
+          legacy-decode path and there will not be one: a value in an un-versioned form does not read back under
+          this converter, because its first byte is a nonce byte rather than a version. That break is free
+          precisely because no column stores one. The window in which a storage format is free to change closes at
+          the first adopted column, which is exactly why the format is settled now rather than after adoption.</p>
+          <h2 id="column-level-crypto-vs-tde-the-trade-you-are-actually-making">Column-level crypto vs TDE: the trade you are actually making</h2>
+          <p>TDE and field-level encryption are not competitors; they are different threat models, and the honest
+          framing is when each earns its cost.</p>
+          <p>TDE is cheap, global, and transparent to queries. It encrypts everything at rest with no application
+          changes and no queryability loss, and it protects against exactly one thing: someone walking off with the
+          storage. If your risk is a stolen disk or an unencrypted backup, TDE is the whole answer.</p>
+          <p>Field-level encryption is targeted, and you pay for the targeting. It moves the trust boundary inside the
+          database, so a database reader without the application key sees ciphertext, but that same non-determinism
+          that makes it strong also makes the column unqueryable. You cannot equality-filter, index-seek, sort, or
+          join on an encrypted column, because the same plaintext never produces the same bytes twice. A field that
+          must be both encrypted and looked up needs a separate deterministic scheme or a blind index, and this
+          converter provides neither. It is the right control for a genuinely sensitive column the application
+          reads by primary key, not by the encrypted value itself. That is why the converter&#39;s own shipped usage
+          example targets a stored-only field rather than a login lookup: the XML documentation spells out that a
+          <code>Where</code> against an encrypted column compares to a ciphertext that will never match and returns no rows
+          silently, so encrypting an address the authentication flow queries by value would have broken sign-in
+          quietly instead of loudly.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>Encrypted columns are not queryable.</strong> The random nonce makes ciphertext non-deterministic, so there
+          is no equality filter, index seek, sort, or join on an encrypted column. Encrypt the columns you read by
+          key, not the ones you search by value.</li>
+          <li><strong>Key management is still entirely yours; the ring is a mechanism, not a service.</strong> The converter holds
+          whatever key material you hand it, frozen at construction. There is no key-provider abstraction, no Key
+          Vault integration, no automatic refresh, and no envelope encryption over a key-encryption key. Losing a
+          key still makes every row written under that version permanently unrecoverable; the ring makes that
+          failure mode more granular, not less likely.</li>
+          <li><strong>Rotation is enabled, not automated.</strong> The versioned envelope makes a zero-downtime rotation possible,
+          but the re-encryption pass is yours to write and to run, and nothing in the framework reports how many
+          rows still carry an old version. Retire a version early and every unconverted row throws on read: loud,
+          but still an outage for that column. The version prefix is one <code>byte</code>, so a ring caps at 256 live
+          versions, which is ample for annual or quarterly rotation and a real ceiling for anything faster.</li>
+          <li><strong>Per-property wiring, not a global switch.</strong> Encryption is one <code>HasConversion</code> call at a time in each
+          entity configuration. A column that should be encrypted but is never wired stays silently plaintext, so
+          the control is only as good as the audit of your PII inventory (which is why §30 wants that inventory in
+          the first place).</li>
+          <li><strong>Storage and CPU overhead.</strong> Every value grows by 29 bytes (a 1-byte key version, a 12-byte nonce, and a
+          16-byte tag) before Base64 inflation, and every read and write performs an AES-GCM operation.</li>
+          <li><strong>Latent until adopted.</strong> Proven by <code>EncryptedStringConverterTests</code>, not by production. The round-trip
+          works; the decision to encrypt a specific column is still yours to make and to audit.</li>
+          </ul>
+          <p>None of these are reasons to skip encrypting genuinely sensitive columns. They are the reasons to encrypt
+          deliberately: the columns you read by key, with a key lifecycle you have designed, tracked against a PII
+          inventory you actually keep.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any EF Core codebase, and to most ORMs with a value-conversion or type-handler hook:</p>
+          <ol>
+          <li>Use an <strong>EF Core <code>ValueConverter&lt;string, string&gt;</code></strong> (or your ORM&#39;s equivalent) so encryption lives on
+          the property mapping and the rest of the code keeps a plain <code>string</code>.</li>
+          <li>Choose an <strong>authenticated cipher (AES-GCM)</strong>, not a bare block mode, so integrity comes with
+          confidentiality and tampering fails loudly instead of decrypting to garbage.</li>
+          <li><strong>Store the nonce with the ciphertext</strong> in a self-describing envelope
+          (<code>[key version][nonce][ciphertext][tag]</code>, Base64 into a string column) and draw a <strong>fresh random nonce
+          per write</strong> so the same plaintext never repeats its ciphertext.</li>
+          <li><strong>Put a key version in the envelope on day one, and authenticate it.</strong> Pass the version as associated
+          data so the tag covers it: a self-describing envelope whose description can be rewritten is an
+          invitation to rewrite it. One byte buys you both a rotation path and tamper detection on the version
+          itself.</li>
+          <li><strong>Keep the keys out of the code.</strong> Take them from a vault, managed identity, user-secrets, or an
+          environment variable, and design the rotation drill (add the new version as current, deploy, re-encrypt
+          in the background, retire the old version) before you encrypt the first column, because the format
+          stops being free to change the moment a row uses it.</li>
+          <li><strong>Encrypt by threat model.</strong> Column-level crypto is a second boundary above TDE for the few columns a
+          database reader should never see in the clear, and you trade away queryability to get it.</li>
+          </ol>
+          <p>The takeaway: <strong>TDE protects the file from whoever steals the disk; field-level encryption protects the
+          column from whoever can run a query. Pick the columns you read by key, encrypt them with an authenticated
+          cipher, a fresh nonce per write, and an authenticated key version in the envelope, keep the keys in a
+          vault, and know going in that you are trading queryability for a trust boundary the database itself
+          cannot cross.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why TDE leaves a plaintext gap for any principal who can query the database, how
+          <code>EncryptedStringConverter</code> closes it per column with AES-256-GCM authenticated encryption, its
+          self-describing <code>[key version][nonce][ciphertext][tag]</code> envelope and non-deterministic ciphertext, the
+          key ring that makes a zero-downtime rotation possible and the authenticated version byte that keeps it
+          honest, the 32-byte key guard and vault-only key handling, the honest &quot;shipped, tested, not yet adopted&quot;
+          posture from ADR-037, and the trade of queryability for a trust boundary the database cannot cross.</p>
+          <p><strong>Previously:</strong> Article 45, &quot;Feature Flags in the CQRS Pipeline: Gate Commands, Not Code.&quot;</p>
+          <p><strong>Next in the series:</strong> Article 47, &quot;Security Headers and CSP for Blazor: One Middleware, Every Host,&quot;
+          where the data-protection story moves from the column to the response.</p>
+          <p><em>Full reading order: the MMCA.Common series index (Article 50).</em></p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the persistence chapter of the
+          onboarding guide, or <code>dotnet add package MMCA.Common.Infrastructure</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Encryption, Data Security, EF Core</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="feature-flags-cqrs-pipeline.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">45 · Feature flags in the CQRS pipeline</span></a>
+          <a class="article-pager-link article-pager-link--next" href="security-headers-csp-blazor.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">47 · Security headers and CSP for Blazor</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-one-value-converter-applied-per-property">The MMCA answer: one value converter, applied per property</a></li>
+            <li><a href="#the-honest-part-shipped-tested-latent">The honest part: shipped, tested, latent</a></li>
+            <li><a href="#column-level-crypto-vs-tde-the-trade-you-are-actually-making">Column-level crypto vs TDE: the trade you are actually making</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

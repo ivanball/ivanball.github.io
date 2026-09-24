@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Two real apps on one framework: a conference platform and a store · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A case study: a conference platform and an e-commerce store built on the same kernel.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/two-real-apps-case-study.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Two real apps on one framework: a conference platform and a store">
+  <meta property="og:description" content="A case study: a conference platform and an e-commerce store built on the same kernel.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/two-real-apps-case-study.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-41.png">
+  <meta property="og:image:alt" content="Two real apps on one framework: a conference platform and a store">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Two real apps on one framework: a conference platform and a store">
+  <meta name="twitter:description" content="A case study: a conference platform and an e-commerce store built on the same kernel.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-41.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Two real apps on one framework: a conference platform and a store","description":"A case study: a conference platform and an e-commerce store built on the same kernel.","url":"https://ivanball.github.io/articles/two-real-apps-case-study.html","mainEntityOfPage":"https://ivanball.github.io/articles/two-real-apps-case-study.html","image":"https://ivanball.github.io/assets/img/articles/article-41.png","datePublished":"2026-08-10T11:12:03Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":41,"sameAs":"https://medium.com/@ivanball76/two-real-apps-on-one-framework-a-conference-platform-and-a-store-12f694d2a361"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"41 · Two real apps on one framework","item":"https://ivanball.github.io/articles/two-real-apps-case-study.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">41 · Two real apps on one framework</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html" aria-current="page">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 41</p>
+          <h1 id="two-real-apps-on-one-framework-a-conference-platform-and-a-store">Two real apps on one framework: a conference platform and a store</h1>
+          <p class="article-meta"><time datetime="2026-08-10T11:12:03Z">August 10, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/two-real-apps-on-one-framework-a-conference-platform-and-a-store-12f694d2a361" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-41.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A framework&#39;s README can claim anything. The real test is whether two unrelated
+          applications, with different domains and different deployments, can both run on it without forking it.
+          Here are the two that do.</p>
+          <hr>
+          <p>Every architecture framework looks clean in its own repository. The author controls the examples, the
+          tests pass, the diagrams are tidy. The question a senior engineer actually asks is harder: <strong>does this
+          survive contact with a real domain, real users, and a real deployment, or is it a toy that only its
+          author can run?</strong></p>
+          <p>MMCA.Common answers that question with two applications built on it. They are not demos in a <code>samples/</code>
+          folder. They are separate repositories with their own business domains, their own databases, their own
+          CI/CD, and their own production deployments to Azure. Both consume the framework&#39;s published packages
+          at one lockstep version, and they prove different things the framework cannot prove about itself.</p>
+          <p>This article is the case study. It is also the honest part: the framework&#39;s own scorecard flags that a
+          few categories are demonstrated mainly in these consumer apps, not in the framework, and that is exactly
+          why the apps matter.</p>
+          <h2 id="the-two-apps">The two apps</h2>
+          <p><strong>MMCA.ADC</strong> is the Atlanta Developers Conference application. Its domain is events: conferences,
+          sessions, speakers, rooms, categories, and the questions attendees ask. It carries four modules:</p>
+          <ul>
+          <li><strong>Identity</strong> (the <code>User</code> aggregate, JWT auth, plus social login via Google and GitHub),</li>
+          <li><strong>Conference</strong> (events, sessions, speakers, rooms, categories, questions and answers, social
+          activities, partners and session assets, across eighteen domain REST controllers),</li>
+          <li><strong>Engagement</strong> (session bookmarks, event and session feedback, and the conference-day live layer:
+          the <code>LivePolls</code> and <code>SessionQuestions</code> aggregates behind Happening Now, the session Live view, and
+          the presenter UI),</li>
+          <li><strong>Notification</strong> (a thin SignalR module hosting the real-time notification hub).</li>
+          </ul>
+          <p>It is deployed to Azure Container Apps, one container image per deployable (the four services, the
+          Gateway, and the web UI), and a merge to <code>main</code> is the deploy: the pipeline builds, tests, and rolls
+          the release out. That is a harder claim than &quot;it builds&quot;: the framework is carrying a six-image
+          production topology, not a sample project.</p>
+          <p><strong>MMCA.Store</strong> is an e-commerce application. Its domain is selling things: a product catalog, orders and
+          carts, and the payment plumbing around them. It carries three modules:</p>
+          <ul>
+          <li><strong>Catalog</strong> (<code>Category</code>, <code>Product</code>, <code>ProductVariant</code> with an owned <code>VariantDiscount</code> resolved by
+          <code>GetEffectivePrice(now)</code>, plus the <code>Reviews</code> aggregate: <code>ProductReview</code> and <code>VerifiedPurchase</code>, with
+          a derived <code>RatingSummary</code> owned by <code>Product</code>),</li>
+          <li><strong>Sales</strong> (<code>Order</code> with <code>OrderLine</code> and an owned <code>Shipment</code>, <code>ShoppingCart</code>, <code>InventoryItem</code>, plus
+          Stripe payment integration and a webhook route the Gateway keeps on HTTP/1.1),</li>
+          <li><strong>Identity</strong> (the <code>User</code> aggregate, <code>Customer</code> entity, JWT auth with refresh tokens).</li>
+          </ul>
+          <p>These are genuinely different bounded contexts. A <code>Speaker</code> linked to a <code>User</code> by email and a
+          <code>ProductVariant</code> that fans out into a zero-stock <code>InventoryItem</code> are not the same shape of problem. That
+          difference is the point. A framework that only fits one domain is a template; a framework that fits two
+          unrelated domains is infrastructure.</p>
+          <h2 id="what-they-actually-share">What they actually share</h2>
+          <p>Both apps sit at the <strong>same architecture stage</strong>, and that is deliberate. Each one has its modules
+          extracted into separate service hosts (one process per module) behind a YARP reverse-proxy Gateway
+          pinned to <a href="https://localhost:6001" target="_blank" rel="noopener">https://localhost:6001</a>. Services talk to each other synchronously over gRPC (typed clients
+          defined in <code>*.Contracts</code> projects) and asynchronously over a broker using the outbox pattern. Tokens are
+          signed with RS256 and validated through JWKS discovery, with no shared secret.</p>
+          <p>None of that topology is hand-rolled per app. It comes from the framework:</p>
+          <ul>
+          <li><strong>The same packages, at the same number.</strong> MMCA.Common publishes nineteen packages, and each app pins
+          the subset it uses at one identical version literal: ADC pins eighteen <code>MMCA.Common.*</code> entries
+          (<code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>, <code>.AI</code>, <code>.API</code>, <code>.Grpc</code>, <code>.Gateway</code>, <code>.UI</code>,
+          <code>.UI.Maui</code>, <code>.UI.Web</code>, <code>.Aspire</code>, <code>.Aspire.Hosting</code>, <code>.Testing</code>, <code>.Testing.Architecture</code>,
+          <code>.Testing.Aspire</code>, <code>.Testing.E2E</code>, <code>.Testing.UI</code>), Store pins seventeen of those, taking no <code>.AI</code>.</li>
+          <li><strong>The same patterns.</strong> <code>Result&lt;T&gt;</code> for error flow, the CQRS command/query split with the same
+          decorator order (commands run FeatureGate then Authorization then Logging then Caching then
+          Validating then Timeout then Transactional then the handler; queries run FeatureGate then
+          Authorization then Logging then Caching then Validating then Timeout then the handler), the
+          <code>AuditableAggregateRootEntity</code> base with <code>AddDomainEvent()</code>, the transactional outbox captured in
+          <code>SaveChangesAsync()</code>, and database-per-service routing by logical data source name. Both apps run one
+          SQL database per service (<code>ADC_Identity</code>, <code>ADC_Conference</code>, and so on for ADC; <code>Store_Catalog</code>,
+          <code>Store_Sales</code>, <code>Store_Identity</code> for Store), each with its own <code>OutboxMessages</code> table so no service
+          races another for outbox rows.</li>
+          <li><strong>The same fitness rules, applied to their own code.</strong> This is the part most &quot;reference architecture&quot;
+          repos skip. The architecture tests are not copy-pasted into each app. The rule bodies live once in the
+          <code>MMCA.Common.Testing.Architecture</code> package as a rule library plus abstract test bases parameterized by
+          an <code>IArchitectureMap</code>. Each app supplies <strong>its own map</strong> (one anchor type per package) and subclasses
+          the same bases, so the layer, purity, and extraction rules are literally identical across MMCA.Common,
+          MMCA.ADC, and MMCA.Store. The transport-leakage rule that forbids Domain and Application from touching
+          MassTransit applies to all three the same way.</li>
+          </ul>
+          <p>The shared abstractions are exactly the swap points the framework promises. The same <code>IMessageBus</code>-backed
+          event that fires in-process in a monolith fires over a broker once the module is its own service, and
+          the consuming app does not change its handler code to make that switch.</p>
+          <h2 id="how-a-framework-change-ships">How a framework change ships</h2>
+          <p>The interesting operational property is not that the apps share code. It is <strong>how a change to the shared
+          code reaches them.</strong> There is no phased rollout, no opt-in flag, no per-consumer compatibility shim.</p>
+          <p>The release is a lockstep sweep:</p>
+          <ol>
+          <li>Tag a new MMCA.Common version (the version comes from the git tag via MinVer). All nineteen packages
+          publish at that same version.</li>
+          <li>In each consumer, bump every <code>MMCA.Common.*</code> entry in <code>Directory.Packages.props</code> to the new version
+          in one pass. ADC keeps its eighteen entries and Store its seventeen on the same number.</li>
+          <li>Build, run the fitness tests and the rest of the suite, deploy.</li>
+          </ol>
+          <p>The framework&#39;s versioning policy doc (<code>common-VERSIONING.md</code>, canonical in the published docs
+          library rather than in the framework repo) states the policy
+          plainly: the packages are versioned and released together as a single unit (the authoritative list and
+          count live in <code>FACTS.md</code>), versions come from MinVer git
+          tags, and consumers are swept in one pass with no phased rollout. That is
+          a real constraint, and it is the trade the framework makes on purpose: every consumer stays on one
+          coherent version of the contract, so there is never a matrix of &quot;ADC is on 1.74 but Store is on 1.71 of
+          three of the packages.&quot; The cost is that a breaking change has to be absorbed everywhere at once, which
+          is why breaking changes go through a new event type plus an upcaster rather than a silent reshape (the
+          event-schema-versioning ADR), and why the MassTransit v8 pin is guarded by a test in the framework
+          rather than a comment.</p>
+          <h2 id="what-each-app-proves-that-the-framework-cannot">What each app proves that the framework cannot</h2>
+          <p>A framework can demonstrate a pattern. It cannot, by itself, demonstrate that the pattern survives a
+          real domain and a real deployment. That is the division of labor between MMCA.Common and its consumers.</p>
+          <p><strong>ADC proves real bounded contexts and real eventing.</strong> Identity publishing <code>UserRegistered</code> so
+          Conference can auto-link a speaker by email match is a genuine cross-context workflow, not a contrived
+          one. Conference calling Engagement&#39;s bookmark-count service over gRPC, with a disabled-module stub
+          standing in when Engagement is not co-hosted, is the extraction boundary working in a running system
+          rather than in a unit test. And the deployment is the operability proof: four services plus a gateway
+          and a web UI, each
+          service owning its own database and its own <code>OutboxMessages</code> table, rolled to Azure Container Apps.</p>
+          <p><strong>Store proves a second, independent shape.</strong> Catalog publishing <code>ProductVariantChanged</code> so Sales
+          auto-creates a zero-stock inventory record is a different integration than ADC&#39;s, with a different
+          consistency story (publish-after-commit so the database-generated variant ID is known). Store also
+          exercises surfaces ADC does not: Stripe payments with a webhook, and compensating saga handlers that
+          restore inventory on order cancellation. Ownership authorization is not one of them: both apps
+          configure the framework&#39;s <code>OwnerOrAdminFilter</code>, Store over customer-owned rows and ADC over its
+          bookmark list endpoints, which is a nice illustration of the same extension point landing in two
+          different vocabularies. Notably,
+          Store and ADC <strong>deliberately diverge</strong> on one point: when a user registers, Store raises an in-process
+          <em>domain</em> event (its <code>Customer</code> lives in the same Identity service) while ADC raises a cross-service
+          <em>integration</em> event. Same idea, different mechanism, each correct for its topology. A framework that
+          forced them to be identical would be wrong; the framework lets each app make the right local call.</p>
+          <h2 id="the-honest-note">The honest note</h2>
+          <p>Here is the caveat the framework writes about itself. It is not a preamble or a methodology section:
+          it is written into the category rows. Because the framework is a library and not a runnable app, a
+          few categories can only be judged on the substrate it provides, not on realized behavior. The §4
+          Domain-Driven Design row holds its implementation score at 8 because strategic DDD is &quot;still realized
+          downstream (only Notifications lives here)&quot;, and the §5 Vertical Slice Architecture row holds at 8
+          because &quot;the enforced in-repo slicing surface is still the Notifications family&quot;: the framework ships
+          a second sliced family (the <code>Users</code> use cases, thirteen abstract handler bases across nine folders) and
+          the slice gate does reach abstract bases, but twelve of the thirteen declare their handler contract over
+          a generic parameter and are exempt by design, and every one of them logs through the shared
+          <code>UserUseCaseLog</code> switchboard, so the family deepens the pattern without widening the enforced surface.
+          <strong>For both, the real surface lives in MMCA.Store and MMCA.ADC.</strong> For performance and
+          cost, the framework ships an in-repo BenchmarkDotNet hot-path harness (§12) and a released cost guide
+          (§31); only full load/stress data lives in the consumer apps.</p>
+          <p>That is not a weakness to hide; it is the reason the two apps exist. The framework supplies the base
+          classes, the enforced layering, and the extraction points. The apps supply the proof that those things
+          hold up against two different real domains and two different production deployments. The
+          framework&#39;s two-axis evaluation scores it at roughly 97% maturity and 86% implementation (97.0% and 86.0%
+          exactly), with implementation
+          the weaker axis precisely because some of the most important &quot;does this actually model a domain well&quot;
+          evidence lives downstream, in the consumers, where it should.</p>
+          <h2 id="what-we-covered--next">What we covered / Next</h2>
+          <p><strong>What we covered:</strong> two unrelated applications, a conference platform and an e-commerce store, both
+          running on the same MMCA.Common packages at the same lockstep version and the same architecture stage;
+          what they share (the packages, the same fitness rules via their own architecture maps, the same
+          Result/CQRS/outbox/
+          database-per-service patterns); how a framework change ships as a lockstep sweep with no phased rollout;
+          what each app proves that the framework cannot (real bounded contexts, real eventing, real production
+          deployments); and the framework&#39;s own honest note, written into the §4 and §5 scorecard rows, that a
+          few categories are best evidenced in these consumers.</p>
+          <p><strong>Next in the series:</strong> a device-capability layer that lets one Blazor UI run in a browser and inside a
+          native MAUI phone app, talking to native hardware through small per-capability contracts chosen at DI
+          composition per host.</p>
+          <hr>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. The fastest way to judge whether it is a toy is to look at
+          what runs on it. Star the repo, skim the scorecard&#39;s §4 and §5 rows (the downstream-evidence note is the
+          honest part), or <code>dotnet add package MMCA.Common.API</code> and build your own third app on it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>The 34-category scorecard, including those downstream-evidence rows, is published in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, Software Architecture, Microservices, DDD, Open Source</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="write-your-first-fitness-test.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">40 · Write your first fitness test</span></a>
+          <a class="article-pager-link article-pager-link--next" href="device-capability-abstraction.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">42 · One Blazor UI, two hosts</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-two-apps">The two apps</a></li>
+            <li><a href="#what-they-actually-share">What they actually share</a></li>
+            <li><a href="#how-a-framework-change-ships">How a framework change ships</a></li>
+            <li><a href="#what-each-app-proves-that-the-framework-cannot">What each app proves that the framework cannot</a></li>
+            <li><a href="#the-honest-note">The honest note</a></li>
+            <li><a href="#what-we-covered--next">What we covered / Next</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

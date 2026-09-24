@@ -6,19 +6,48 @@
     <atom:link href="https://ivanball.github.io/feed.xml" rel="self" type="application/rss+xml"/>
     <description>A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.</description>
     <language>en-us</language>
-    <lastBuildDate>Thu, 20 Aug 2026 12:18:00 GMT</lastBuildDate>
+    <lastBuildDate>Thu, 24 Sep 2026 12:00:00 GMT</lastBuildDate>
     <managingEditor>noreply@ivanball.github.io (Ivan Ball-llovera)</managingEditor>
     <item>
       <title>The series index</title>
-      <link>https://medium.com/@ivanball76/the-mmca-series-every-pattern-one-place-28cf2cee7be8</link>
+      <link>https://ivanball.github.io/articles/series-index.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/the-mmca-series-every-pattern-one-place-28cf2cee7be8</guid>
       <pubDate>Thu, 20 Aug 2026 12:18:00 GMT</pubDate>
       <description>The full series index and recommended reading order.</description>
       <category>Proof &amp; getting started</category>
     </item>
     <item>
+      <title>Finishing identity</title>
+      <link>https://ivanball.github.io/articles/identity-completions.html</link>
+      <guid isPermaLink="true">https://ivanball.github.io/articles/identity-completions.html</guid>
+      <pubDate>Thu, 24 Sep 2026 12:00:00 GMT</pubDate>
+      <description>A TOTP second factor, an email-confirmation gate, and operator-editable permission grants, each arriving as an opt-in extension.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 116</category>
+    </item>
+    <item>
+      <title>Four ways to do work later</title>
+      <link>https://ivanball.github.io/articles/durable-internal-commands.html</link>
+      <guid isPermaLink="true">https://ivanball.github.io/articles/durable-internal-commands.html</guid>
+      <pubDate>Thu, 24 Sep 2026 12:00:00 GMT</pubDate>
+      <description>Channels, cron, the outbox, and durable internal commands: an ordinary CQRS command written inside your transaction and claimed by a leased worker.</description>
+      <category>Core patterns</category>
+      <category>ADR 114</category>
+      <category>ADR 121</category>
+    </item>
+    <item>
+      <title>The governed LLM boundary</title>
+      <link>https://ivanball.github.io/articles/governed-llm-boundary.html</link>
+      <guid isPermaLink="true">https://ivanball.github.io/articles/governed-llm-boundary.html</guid>
+      <pubDate>Thu, 24 Sep 2026 12:00:00 GMT</pubDate>
+      <description>A chat completion as a governed dependency: a pipeline of delegating clients that caps, guards, and meters every call to the model.</description>
+      <category>Run &amp; extract</category>
+      <category>ADR 120</category>
+      <category>ADR 111</category>
+    </item>
+    <item>
       <title>Saga compensation and the reconciliation backstop</title>
-      <link>https://medium.com/@ivanball76/undo-is-a-feature-saga-compensation-and-the-reconciliation-backstop-fa017f9591b8</link>
+      <link>https://ivanball.github.io/articles/saga-compensation-reconciliation.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/undo-is-a-feature-saga-compensation-and-the-reconciliation-backstop-fa017f9591b8</guid>
       <pubDate>Wed, 19 Aug 2026 12:56:23 GMT</pubDate>
       <description>Undo as a first-class event handler: give back stock a committed transaction already took, with a periodic sweep as the saga-timeout backstop.</description>
@@ -27,7 +56,7 @@
     </item>
     <item>
       <title>Observability by default</title>
-      <link>https://medium.com/@ivanball76/observability-by-default-opentelemetry-and-azure-monitor-in-mmca-673c1886e9e0</link>
+      <link>https://ivanball.github.io/articles/observability-opentelemetry.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/observability-by-default-opentelemetry-and-azure-monitor-in-mmca-673c1886e9e0</guid>
       <pubDate>Tue, 18 Aug 2026 11:47:53 GMT</pubDate>
       <description>A shared OpenTelemetry baseline with CQRS duration metrics, correlation IDs, and outbox-poll span filtering, exported to Azure Monitor.</description>
@@ -36,7 +65,7 @@
     </item>
     <item>
       <title>Security headers and CSP for Blazor</title>
-      <link>https://medium.com/@ivanball76/security-headers-and-csp-for-blazor-one-middleware-every-host-af82df95236e</link>
+      <link>https://ivanball.github.io/articles/security-headers-csp-blazor.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/security-headers-and-csp-for-blazor-one-middleware-every-host-af82df95236e</guid>
       <pubDate>Mon, 17 Aug 2026 11:44:16 GMT</pubDate>
       <description>One middleware stamps hardened response headers on every host, with the Blazor CSP resolved through a pluggable provider.</description>
@@ -45,7 +74,7 @@
     </item>
     <item>
       <title>Field-level encryption in EF Core</title>
-      <link>https://medium.com/@ivanball76/field-level-encryption-in-ef-core-aes-gcm-for-pii-columns-06ece340ea25</link>
+      <link>https://ivanball.github.io/articles/field-level-encryption-ef-core.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/field-level-encryption-in-ef-core-aes-gcm-for-pii-columns-06ece340ea25</guid>
       <pubDate>Sat, 15 Aug 2026 13:18:07 GMT</pubDate>
       <description>An AES-256-GCM value converter that keeps a PII column ciphertext even for someone who can query the database.</description>
@@ -54,7 +83,7 @@
     </item>
     <item>
       <title>Feature flags in the CQRS pipeline</title>
-      <link>https://medium.com/@ivanball76/feature-flags-in-the-cqrs-pipeline-gate-commands-not-code-e58b9ea8d098</link>
+      <link>https://ivanball.github.io/articles/feature-flags-cqrs-pipeline.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/feature-flags-in-the-cqrs-pipeline-gate-commands-not-code-e58b9ea8d098</guid>
       <pubDate>Fri, 14 Aug 2026 12:11:19 GMT</pubDate>
       <description>Gate commands and queries at the outermost decorator, so a handler never checks a flag and a disabled feature is rejected before any work runs.</description>
@@ -63,7 +92,7 @@
     </item>
     <item>
       <title>HTTP API versioning, proven not just claimed</title>
-      <link>https://medium.com/@ivanball76/http-api-versioning-proven-not-just-claimed-2b0381e4b533</link>
+      <link>https://ivanball.github.io/articles/http-api-versioning.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/http-api-versioning-proven-not-just-claimed-2b0381e4b533</guid>
       <pubDate>Thu, 13 Aug 2026 11:53:04 GMT</pubDate>
       <description>Header-based versioning introduced without breaking a single caller, plus a fitness contract that proves two live versions coexist.</description>
@@ -72,7 +101,7 @@
     </item>
     <item>
       <title>Managed file storage: uploads you don&#39;t have to trust</title>
-      <link>https://medium.com/@ivanball76/managed-file-storage-uploads-you-dont-have-to-trust-8dfe8bf016bc</link>
+      <link>https://ivanball.github.io/articles/managed-file-storage-avatars.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/managed-file-storage-uploads-you-dont-have-to-trust-8dfe8bf016bc</guid>
       <pubDate>Wed, 12 Aug 2026 14:02:48 GMT</pubDate>
       <description>Attacker-controlled bytes become safe avatars: content sniffing, metadata stripping, re-encoding, and pluggable blob storage.</description>
@@ -81,7 +110,7 @@
     </item>
     <item>
       <title>One Blazor UI, two hosts</title>
-      <link>https://medium.com/@ivanball76/one-blazor-ui-two-hosts-a-device-capability-layer-that-stays-resolvable-everywhere-b85444693161</link>
+      <link>https://ivanball.github.io/articles/device-capability-abstraction.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/one-blazor-ui-two-hosts-a-device-capability-layer-that-stays-resolvable-everywhere-b85444693161</guid>
       <pubDate>Tue, 11 Aug 2026 11:54:26 GMT</pubDate>
       <description>The same Blazor components run in a browser and inside a MAUI hybrid app; small per-capability contracts reach native hardware without ever asking &#39;am I on mobile?&#39;.</description>
@@ -91,7 +120,7 @@
     </item>
     <item>
       <title>Two real apps on one framework</title>
-      <link>https://medium.com/@ivanball76/two-real-apps-on-one-framework-a-conference-platform-and-a-store-12f694d2a361</link>
+      <link>https://ivanball.github.io/articles/two-real-apps-case-study.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/two-real-apps-on-one-framework-a-conference-platform-and-a-store-12f694d2a361</guid>
       <pubDate>Mon, 10 Aug 2026 11:12:03 GMT</pubDate>
       <description>A case study: a conference platform and an e-commerce store built on the same kernel.</description>
@@ -99,7 +128,7 @@
     </item>
     <item>
       <title>Write your first fitness test</title>
-      <link>https://medium.com/@ivanball76/write-your-first-architecture-fitness-test-d4e25e6a4741</link>
+      <link>https://ivanball.github.io/articles/write-your-first-fitness-test.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/write-your-first-architecture-fitness-test-d4e25e6a4741</guid>
       <pubDate>Sun, 09 Aug 2026 12:34:49 GMT</pubDate>
       <description>Author your first architecture fitness test and watch it fail the build on a violation.</description>
@@ -108,7 +137,7 @@
     </item>
     <item>
       <title>Build your first module</title>
-      <link>https://medium.com/@ivanball76/scaffold-a-net-modular-monolith-in-one-command-then-build-your-first-module-b10aacd16d33</link>
+      <link>https://ivanball.github.io/articles/build-your-first-module.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/scaffold-a-net-modular-monolith-in-one-command-then-build-your-first-module-b10aacd16d33</guid>
       <pubDate>Sat, 08 Aug 2026 12:04:28 GMT</pubDate>
       <description>A hands-on walkthrough of building a new module across all five layers.</description>
@@ -116,7 +145,7 @@
     </item>
     <item>
       <title>i18n and theming on one preference pipeline</title>
-      <link>https://medium.com/@ivanball76/one-preference-two-switches-shipping-i18n-and-dark-mode-on-a-single-cookie-and-profile-pipeline-f97186038909</link>
+      <link>https://ivanball.github.io/articles/i18n-and-theming.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/one-preference-two-switches-shipping-i18n-and-dark-mode-on-a-single-cookie-and-profile-pipeline-f97186038909</guid>
       <pubDate>Fri, 07 Aug 2026 12:18:10 GMT</pubDate>
       <description>A culture choice and a theme choice ride the same cookie, profile column, and login reconciliation: one persistence path, two switches.</description>
@@ -126,7 +155,7 @@
     </item>
     <item>
       <title>A reusable Blazor UI framework</title>
-      <link>https://medium.com/@ivanball76/a-list-page-in-a-few-lines-a-reusable-blazor-ui-framework-with-the-same-discipline-as-the-backend-c66fa16cd561</link>
+      <link>https://ivanball.github.io/articles/reusable-blazor-ui-framework.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/a-list-page-in-a-few-lines-a-reusable-blazor-ui-framework-with-the-same-discipline-as-the-backend-c66fa16cd561</guid>
       <pubDate>Thu, 06 Aug 2026 11:47:02 GMT</pubDate>
       <description>A shared Blazor and MudBlazor UI layer with accessibility enforced by axe in CI.</description>
@@ -134,7 +163,7 @@
     </item>
     <item>
       <title>Soft-delete vs the right to erasure</title>
-      <link>https://medium.com/@ivanball76/soft-delete-vs-the-right-to-erasure-the-gdpr-conflict-and-the-erasure-pathway-e1d350007509</link>
+      <link>https://ivanball.github.io/articles/soft-delete-vs-erasure.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/soft-delete-vs-the-right-to-erasure-the-gdpr-conflict-and-the-erasure-pathway-e1d350007509</guid>
       <pubDate>Wed, 05 Aug 2026 10:22:23 GMT</pubDate>
       <description>Soft-delete for lifecycle, anonymization plus outbox purge for GDPR/CCPA erasure, and why both exist.</description>
@@ -143,7 +172,7 @@
     </item>
     <item>
       <title>The test pyramid</title>
-      <link>https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9</link>
+      <link>https://ivanball.github.io/articles/test-pyramid.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9</guid>
       <pubDate>Tue, 04 Aug 2026 11:46:55 GMT</pubDate>
       <description>How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.</description>
@@ -151,7 +180,7 @@
     </item>
     <item>
       <title>Architecture fitness functions</title>
-      <link>https://medium.com/@ivanball76/architecture-fitness-functions-rules-that-fail-the-build-not-a-wiki-page-6562940deceb</link>
+      <link>https://ivanball.github.io/articles/architecture-fitness-functions.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/architecture-fitness-functions-rules-that-fail-the-build-not-a-wiki-page-6562940deceb</guid>
       <pubDate>Mon, 03 Aug 2026 12:57:39 GMT</pubDate>
       <description>Architecture rules that fail the build: a compile-time layer guard plus a shared NetArchTest rule library.</description>
@@ -160,7 +189,7 @@
     </item>
     <item>
       <title>Resilience and recovery objectives</title>
-      <link>https://medium.com/@ivanball76/retries-are-not-a-recovery-plan-resilience-handlers-rto-rpo-and-a-restore-you-actually-drilled-3c7474814123</link>
+      <link>https://ivanball.github.io/articles/resilience-recovery-objectives.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/retries-are-not-a-recovery-plan-resilience-handlers-rto-rpo-and-a-restore-you-actually-drilled-3c7474814123</guid>
       <pubDate>Sun, 02 Aug 2026 14:19:18 GMT</pubDate>
       <description>Standard resilience on every outbound client, plus declared RTO/RPO and a drilled restore.</description>
@@ -169,7 +198,7 @@
     </item>
     <item>
       <title>Extracting a module to a gRPC service</title>
-      <link>https://medium.com/@ivanball76/extracting-a-module-to-a-grpc-service-live-799926cf8a32</link>
+      <link>https://ivanball.github.io/articles/extract-module-to-grpc-service.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/extracting-a-module-to-a-grpc-service-live-799926cf8a32</guid>
       <pubDate>Sat, 01 Aug 2026 13:30:35 GMT</pubDate>
       <description>A step-by-step extraction of an in-process module into its own gRPC service, database, and auth.</description>
@@ -180,7 +209,7 @@
     </item>
     <item>
       <title>Aspire: one command</title>
-      <link>https://medium.com/@ivanball76/aspire-one-command-brings-up-the-whole-distributed-app-379b5cffdeed</link>
+      <link>https://ivanball.github.io/articles/aspire-one-command.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/aspire-one-command-brings-up-the-whole-distributed-app-379b5cffdeed</guid>
       <pubDate>Fri, 31 Jul 2026 11:23:51 GMT</pubDate>
       <description>Model services, databases, and the broker as one Aspire graph that runs from laptop to Azure with one command.</description>
@@ -191,7 +220,7 @@
     </item>
     <item>
       <title>Rate limiting and brute-force protection</title>
-      <link>https://medium.com/@ivanball76/defending-the-api-edge-three-controls-that-cover-the-whole-surface-d958ecae1091</link>
+      <link>https://ivanball.github.io/articles/rate-limiting-brute-force-protection.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/defending-the-api-edge-three-controls-that-cover-the-whole-surface-d958ecae1091</guid>
       <pubDate>Thu, 30 Jul 2026 12:20:41 GMT</pubDate>
       <description>Two layers that cover the whole API edge: endpoint rate limits plus lockout-based brute-force defense on identity.</description>
@@ -201,7 +230,7 @@
     </item>
     <item>
       <title>Resource-ownership authorization</title>
-      <link>https://medium.com/@ivanball76/resource-ownership-authorization-which-rows-you-may-touch-not-just-which-actions-cb8e78867bae</link>
+      <link>https://ivanball.github.io/articles/resource-ownership-authorization.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/resource-ownership-authorization-which-rows-you-may-touch-not-just-which-actions-cb8e78867bae</guid>
       <pubDate>Wed, 29 Jul 2026 13:02:35 GMT</pubDate>
       <description>Beyond roles and permissions: which rows you may touch, enforced per resource.</description>
@@ -210,7 +239,7 @@
     </item>
     <item>
       <title>Generic entity controllers</title>
-      <link>https://medium.com/@ivanball76/generic-entity-controllers-and-the-dynamic-query-contract-adr-034-2b5c799bc69f</link>
+      <link>https://ivanball.github.io/articles/generic-entity-controllers.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/generic-entity-controllers-and-the-dynamic-query-contract-adr-034-2b5c799bc69f</guid>
       <pubDate>Tue, 28 Jul 2026 12:10:47 GMT</pubDate>
       <description>A write-once REST surface every entity inherits, plus a bounded dynamic query contract that is never open SQL.</description>
@@ -219,7 +248,7 @@
     </item>
     <item>
       <title>One rotating refresh token</title>
-      <link>https://medium.com/@ivanball76/one-rotating-refresh-token-and-reuse-detection-that-makes-theft-self-limiting-fab42234a04a</link>
+      <link>https://ivanball.github.io/articles/jwt-refresh-token-rotation.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/one-rotating-refresh-token-and-reuse-detection-that-makes-theft-self-limiting-fab42234a04a</guid>
       <pubDate>Mon, 27 Jul 2026 10:27:05 GMT</pubDate>
       <description>A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.</description>
@@ -228,7 +257,7 @@
     </item>
     <item>
       <title>External OAuth login behind your own JWTs</title>
-      <link>https://medium.com/@ivanball76/google-and-github-login-without-leaking-tokens-external-oauth-behind-your-own-jwts-d68ba5e3aca4</link>
+      <link>https://ivanball.github.io/articles/external-oauth-login.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/google-and-github-login-without-leaking-tokens-external-oauth-behind-your-own-jwts-d68ba5e3aca4</guid>
       <pubDate>Sun, 26 Jul 2026 14:22:48 GMT</pubDate>
       <description>Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.</description>
@@ -237,7 +266,7 @@
     </item>
     <item>
       <title>Browser session-cookie auth for Blazor SSR</title>
-      <link>https://medium.com/@ivanball76/browser-session-cookie-auth-for-blazor-ssr-surviving-the-f5-eb0ea317820e</link>
+      <link>https://ivanball.github.io/articles/session-cookie-auth-blazor-ssr.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/browser-session-cookie-auth-for-blazor-ssr-surviving-the-f5-eb0ea317820e</guid>
       <pubDate>Sat, 25 Jul 2026 12:25:21 GMT</pubDate>
       <description>HttpOnly session cookies and an SSR-time scheme so [Authorize] passes during prerender, with the API still the boundary.</description>
@@ -246,7 +275,7 @@
     </item>
     <item>
       <title>Permission-based authorization over roles</title>
-      <link>https://medium.com/@ivanball76/permission-based-authorization-capabilities-over-role-checks-ea6574cbee27</link>
+      <link>https://ivanball.github.io/articles/permission-based-authorization.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/permission-based-authorization-capabilities-over-role-checks-ea6574cbee27</guid>
       <pubDate>Fri, 24 Jul 2026 11:34:48 GMT</pubDate>
       <description>A capability layer over RBAC: permission policies that resolve on demand from a central registry.</description>
@@ -255,7 +284,7 @@
     </item>
     <item>
       <title>Delete AutoMapper: manual DTO mapping</title>
-      <link>https://medium.com/@ivanball76/delete-automapper-explicit-compile-time-dto-mapping-that-you-can-actually-test-9c7013cc5d3f</link>
+      <link>https://ivanball.github.io/articles/manual-dto-mapping.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/delete-automapper-explicit-compile-time-dto-mapping-that-you-can-actually-test-9c7013cc5d3f</guid>
       <pubDate>Thu, 23 Jul 2026 11:52:24 GMT</pubDate>
       <description>Why source-generated, per-entity mappers beat reflection-based mapping for clarity and speed.</description>
@@ -264,7 +293,7 @@
     </item>
     <item>
       <title>Live channels over one SignalR hub</title>
-      <link>https://medium.com/@ivanball76/ephemeral-by-design-sub-second-live-channels-over-one-signalr-hub-0248050e0c8b</link>
+      <link>https://ivanball.github.io/articles/live-channel-push.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/ephemeral-by-design-sub-second-live-channels-over-one-signalr-hub-0248050e0c8b</guid>
       <pubDate>Wed, 22 Jul 2026 11:40:19 GMT</pubDate>
       <description>Sub-second ephemeral events (polls, Q&amp;A, live counts) fanned out over the existing notification hub, with nothing persisted.</description>
@@ -273,7 +302,7 @@
     </item>
     <item>
       <title>Notifications as a vertical slice</title>
-      <link>https://medium.com/@ivanball76/notifications-as-a-vertical-slice-in-app-inbox-real-time-push-native-push-and-email-c59d5a4f3b69</link>
+      <link>https://ivanball.github.io/articles/notifications-vertical-slice.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/notifications-as-a-vertical-slice-in-app-inbox-real-time-push-native-push-and-email-c59d5a4f3b69</guid>
       <pubDate>Tue, 21 Jul 2026 12:01:10 GMT</pubDate>
       <description>A notifications feature built as a clean vertical slice across every layer.</description>
@@ -282,7 +311,7 @@
     </item>
     <item>
       <title>Problem Details across HTTP and gRPC</title>
-      <link>https://medium.com/@ivanball76/problem-details-across-http-and-grpc-rfc-9457-9f20157cf7de</link>
+      <link>https://ivanball.github.io/articles/problem-details-http-grpc.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/problem-details-across-http-and-grpc-rfc-9457-9f20157cf7de</guid>
       <pubDate>Mon, 20 Jul 2026 13:33:53 GMT</pubDate>
       <description>One error contract mapped consistently to HTTP Problem Details and gRPC status.</description>
@@ -290,7 +319,7 @@
     </item>
     <item>
       <title>The self-invalidating cache</title>
-      <link>https://medium.com/@ivanball76/the-self-invalidating-cache-that-lives-in-the-pipeline-not-your-handlers-e11548062d2f</link>
+      <link>https://ivanball.github.io/articles/self-invalidating-cache.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/the-self-invalidating-cache-that-lives-in-the-pipeline-not-your-handlers-e11548062d2f</guid>
       <pubDate>Fri, 17 Jul 2026 12:07:08 GMT</pubDate>
       <description>A caching decorator where commands invalidate and queries populate, plus an authenticated output-cache tier at the API edge.</description>
@@ -300,7 +329,7 @@
     </item>
     <item>
       <title>Idempotency in one attribute</title>
-      <link>https://medium.com/@ivanball76/idempotency-in-one-attribute-safe-retries-for-http-apis-065848fd03f4</link>
+      <link>https://ivanball.github.io/articles/idempotency-attribute.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/idempotency-in-one-attribute-safe-retries-for-http-apis-065848fd03f4</guid>
       <pubDate>Thu, 16 Jul 2026 13:46:11 GMT</pubDate>
       <description>Dedup client retries with an Idempotency-Key header and cached replay, plus a consumer-side inbox for brokers.</description>
@@ -310,7 +339,7 @@
     </item>
     <item>
       <title>Password hashing done right</title>
-      <link>https://medium.com/@ivanball76/password-hashing-done-right-pbkdf2-sha512-600k-iterations-timing-safe-d64ddb802403</link>
+      <link>https://ivanball.github.io/articles/password-hashing.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/password-hashing-done-right-pbkdf2-sha512-600k-iterations-timing-safe-d64ddb802403</guid>
       <pubDate>Wed, 15 Jul 2026 12:22:21 GMT</pubDate>
       <description>The non-negotiables of password storage in .NET, done correctly and tested.</description>
@@ -319,7 +348,7 @@
     </item>
     <item>
       <title>JWKS cross-service auth</title>
-      <link>https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e</link>
+      <link>https://ivanball.github.io/articles/jwks-cross-service-auth.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e</guid>
       <pubDate>Tue, 14 Jul 2026 11:17:47 GMT</pubDate>
       <description>Validate another service&#39;s RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.</description>
@@ -328,7 +357,7 @@
     </item>
     <item>
       <title>Event-schema versioning</title>
-      <link>https://medium.com/@ivanball76/event-schema-versioning-never-silently-reshape-an-event-93cd5d4a156d</link>
+      <link>https://ivanball.github.io/articles/event-schema-versioning.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/event-schema-versioning-never-silently-reshape-an-event-93cd5d4a156d</guid>
       <pubDate>Mon, 13 Jul 2026 11:24:59 GMT</pubDate>
       <description>Every integration event carries a schema version; breaking changes get a new event type and an upcaster, never a silent reshape.</description>
@@ -337,7 +366,7 @@
     </item>
     <item>
       <title>Self-ordering modules</title>
-      <link>https://medium.com/@ivanball76/self-ordering-modules-discovered-kahn-ordered-and-extractable-2ce7283a26b5</link>
+      <link>https://ivanball.github.io/articles/self-ordering-modules.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/self-ordering-modules-discovered-kahn-ordered-and-extractable-2ce7283a26b5</guid>
       <pubDate>Sun, 12 Jul 2026 16:36:58 GMT</pubDate>
       <description>Modules declare their dependencies and load in topological order, so registration is never hand-sequenced.</description>
@@ -345,7 +374,7 @@
     </item>
     <item>
       <title>Optimistic concurrency: RowVersion round-trips</title>
-      <link>https://medium.com/@ivanball76/optimistic-concurrency-that-survives-the-round-trip-rowversion-from-database-to-dto-and-back-93d4a794716f</link>
+      <link>https://ivanball.github.io/articles/optimistic-concurrency-rowversion.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/optimistic-concurrency-that-survives-the-round-trip-rowversion-from-database-to-dto-and-back-93d4a794716f</guid>
       <pubDate>Sat, 11 Jul 2026 10:42:46 GMT</pubDate>
       <description>Carry the RowVersion from database to DTO and back, so a concurrent edit fails fast as a conflict instead of silently overwriting.</description>
@@ -354,7 +383,7 @@
     </item>
     <item>
       <title>Navigation populators</title>
-      <link>https://medium.com/@ivanball76/ef-core-include-chains-are-a-trap-navigation-populators-decouple-eager-loading-c378fa4497ac</link>
+      <link>https://ivanball.github.io/articles/navigation-populators.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/ef-core-include-chains-are-a-trap-navigation-populators-decouple-eager-loading-c378fa4497ac</guid>
       <pubDate>Sat, 11 Jul 2026 00:13:54 GMT</pubDate>
       <description>Eager-load relationships that cross containers and data sources without N+1 or a leaky abstraction.</description>
@@ -363,7 +392,7 @@
     </item>
     <item>
       <title>Polyglot persistence: one model, three engines</title>
-      <link>https://medium.com/@ivanball76/one-entity-model-three-databases-polyglot-persistence-behind-a-single-attribute-760e77974d5d</link>
+      <link>https://ivanball.github.io/articles/polyglot-persistence.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/one-entity-model-three-databases-polyglot-persistence-behind-a-single-attribute-760e77974d5d</guid>
       <pubDate>Thu, 09 Jul 2026 14:20:41 GMT</pubDate>
       <description>SQL Server, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.</description>
@@ -372,7 +401,7 @@
     </item>
     <item>
       <title>Database-per-service inside a monolith</title>
-      <link>https://medium.com/@ivanball76/database-per-service-inside-a-monolith-and-why-265092eb03f1</link>
+      <link>https://ivanball.github.io/articles/database-per-service.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/database-per-service-inside-a-monolith-and-why-265092eb03f1</guid>
       <pubDate>Wed, 08 Jul 2026 12:16:31 GMT</pubDate>
       <description>Give each module its own database and outbox before you extract it, so extraction changes hosting, not data.</description>
@@ -381,7 +410,7 @@
     </item>
     <item>
       <title>The transactional outbox</title>
-      <link>https://medium.com/@ivanball76/the-transactional-outbox-in-net-10-never-lose-an-event-again-f5a9b7a89e51</link>
+      <link>https://ivanball.github.io/articles/transactional-outbox-dotnet.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/the-transactional-outbox-in-net-10-never-lose-an-event-again-f5a9b7a89e51</guid>
       <pubDate>Tue, 07 Jul 2026 12:17:41 GMT</pubDate>
       <description>Events that survive a crash: persist them atomically with your data, then dispatch at least once.</description>
@@ -390,7 +419,7 @@
     </item>
     <item>
       <title>Compose validators, don&#39;t copy them</title>
-      <link>https://medium.com/@ivanball76/compose-validators-dont-copy-them-a-reusable-fluentvalidation-kit-8865a6003a9c</link>
+      <link>https://ivanball.github.io/articles/validation-kit.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/compose-validators-dont-copy-them-a-reusable-fluentvalidation-kit-8865a6003a9c</guid>
       <pubDate>Mon, 06 Jul 2026 22:20:33 GMT</pubDate>
       <description>A validation kit that composes FluentValidation rules instead of copy-pasting them across features.</description>
@@ -398,7 +427,7 @@
     </item>
     <item>
       <title>The CQRS decorator pipeline</title>
-      <link>https://medium.com/@ivanball76/the-cqrs-decorator-pipeline-logging-caching-and-transactions-without-touching-a-handler-fb7679b8bde8</link>
+      <link>https://ivanball.github.io/articles/cqrs-decorator-pipeline.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/the-cqrs-decorator-pipeline-logging-caching-and-transactions-without-touching-a-handler-fb7679b8bde8</guid>
       <pubDate>Wed, 01 Jul 2026 21:31:01 GMT</pubDate>
       <description>Thin command and query handlers wrapped by a Scrutor decorator chain whose order is load-bearing.</description>
@@ -407,7 +436,7 @@
     </item>
     <item>
       <title>Specifications over LINQ spaghetti</title>
-      <link>https://medium.com/@ivanball76/specifications-over-linq-spaghetti-composable-reusable-query-intent-8a40dafcbd3d</link>
+      <link>https://ivanball.github.io/articles/specification-pattern.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/specifications-over-linq-spaghetti-composable-reusable-query-intent-8a40dafcbd3d</guid>
       <pubDate>Tue, 30 Jun 2026 22:20:05 GMT</pubDate>
       <description>Compose queries from reusable specification objects instead of scattering LINQ across handlers.</description>
@@ -416,7 +445,7 @@
     </item>
     <item>
       <title>Kill the anemic domain model</title>
-      <link>https://medium.com/@ivanball76/kill-the-anemic-domain-model-rich-aggregates-with-factory-methods-that-return-result-44f2e3d89794</link>
+      <link>https://ivanball.github.io/articles/kill-anemic-domain-model.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/kill-the-anemic-domain-model-rich-aggregates-with-factory-methods-that-return-result-44f2e3d89794</guid>
       <pubDate>Mon, 29 Jun 2026 12:38:35 GMT</pubDate>
       <description>Push behavior into rich aggregates with factory methods and invariants instead of bags of public setters.</description>
@@ -424,7 +453,7 @@
     </item>
     <item>
       <title>The Result railway in C#</title>
-      <link>https://medium.com/@ivanball76/stop-throwing-exceptions-for-control-flow-the-result-railway-in-c-7a02050b554e</link>
+      <link>https://ivanball.github.io/articles/result-railway-csharp.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/stop-throwing-exceptions-for-control-flow-the-result-railway-in-c-7a02050b554e</guid>
       <pubDate>Sat, 27 Jun 2026 13:17:31 GMT</pubDate>
       <description>Model expected failures as Result values with a transport-agnostic error type, and keep exceptions for the genuinely exceptional.</description>
@@ -433,7 +462,7 @@
     </item>
     <item>
       <title>The 34-category architecture rubric</title>
-      <link>https://medium.com/@ivanball76/what-good-architecture-actually-means-a-34-category-rubric-you-can-score-yourself-against-4002291a6b6a</link>
+      <link>https://ivanball.github.io/articles/34-category-architecture-rubric.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/what-good-architecture-actually-means-a-34-category-rubric-you-can-score-yourself-against-4002291a6b6a</guid>
       <pubDate>Thu, 25 Jun 2026 23:34:59 GMT</pubDate>
       <description>A two-axis rubric for scoring architecture on maturity and implementation, so &#39;good architecture&#39; stops being a vibe.</description>
@@ -441,7 +470,7 @@
     </item>
     <item>
       <title>Modular monolith to microservices</title>
-      <link>https://medium.com/@ivanball76/modular-monolith-to-microservices-without-the-rewrite-8c3603614f12</link>
+      <link>https://ivanball.github.io/articles/modular-monolith-to-microservices.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/modular-monolith-to-microservices-without-the-rewrite-8c3603614f12</guid>
       <pubDate>Wed, 24 Jun 2026 23:44:46 GMT</pubDate>
       <description>The cornerstone idea: build the monolith now and extract a service later with no rewrite, via module discovery, gRPC contracts, and a YARP gateway.</description>
@@ -452,7 +481,7 @@
     </item>
     <item>
       <title>Open-sourced and graded against 34 categories</title>
-      <link>https://medium.com/@ivanball76/i-open-sourced-the-enterprise-net-77f9200f3728</link>
+      <link>https://ivanball.github.io/articles/open-sourced-enterprise-dotnet-34-categories.html</link>
       <guid isPermaLink="true">https://medium.com/@ivanball76/i-open-sourced-the-enterprise-net-77f9200f3728</guid>
       <pubDate>Mon, 22 Jun 2026 22:41:45 GMT</pubDate>
       <description>Why I open-sourced a production .NET framework and scored it against a 34-category architecture rubric, gaps and all.</description>

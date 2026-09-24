@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Problem Details across HTTP and gRPC (RFC 9457) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="One error contract mapped consistently to HTTP Problem Details and gRPC status.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/problem-details-http-grpc.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Problem Details across HTTP and gRPC (RFC 9457)">
+  <meta property="og:description" content="One error contract mapped consistently to HTTP Problem Details and gRPC status.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/problem-details-http-grpc.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-20.png">
+  <meta property="og:image:alt" content="Problem Details across HTTP and gRPC (RFC 9457)">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Problem Details across HTTP and gRPC (RFC 9457)">
+  <meta name="twitter:description" content="One error contract mapped consistently to HTTP Problem Details and gRPC status.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-20.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Problem Details across HTTP and gRPC (RFC 9457)","description":"One error contract mapped consistently to HTTP Problem Details and gRPC status.","url":"https://ivanball.github.io/articles/problem-details-http-grpc.html","mainEntityOfPage":"https://ivanball.github.io/articles/problem-details-http-grpc.html","image":"https://ivanball.github.io/assets/img/articles/article-20.png","datePublished":"2026-07-20T13:33:53Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":20,"sameAs":"https://medium.com/@ivanball76/problem-details-across-http-and-grpc-rfc-9457-9f20157cf7de"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"20 · Problem Details across HTTP and gRPC","item":"https://ivanball.github.io/articles/problem-details-http-grpc.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">20 · Problem Details across HTTP and gRPC</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html" aria-current="page">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 20</p>
+          <h1 id="problem-details-across-http-and-grpc-rfc-9457">Problem Details across HTTP and gRPC (RFC 9457)</h1>
+          <p class="article-meta"><time datetime="2026-07-20T13:33:53Z">July 20, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/problem-details-across-http-and-grpc-rfc-9457-9f20157cf7de" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-20.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">One error model, two transports. How a <code>Result</code> failure becomes the same RFC 9457 shape
+          whether the caller reached you over HTTP or gRPC, and the honest gaps that still cost the category points.</p>
+          <hr>
+          <p>Here is an error contract that looks fine until you have more than one client:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">[<span class="hljs-meta">HttpGet(<span class="hljs-string">&quot;{id}&quot;</span>)</span>]
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task&lt;IActionResult&gt; <span class="hljs-title">Get</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> id</span>)</span>
+{
+    <span class="hljs-keyword">var</span> session = <span class="hljs-keyword">await</span> _service.GetByIdAsync(id);
+    <span class="hljs-keyword">if</span> (session <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>) <span class="hljs-keyword">return</span> NotFound();          <span class="hljs-comment">// 404, empty body</span>
+    <span class="hljs-keyword">if</span> (!_user.CanView(session)) <span class="hljs-keyword">return</span> Forbid();    <span class="hljs-comment">// 403, no body</span>
+    <span class="hljs-keyword">return</span> Ok(session);                              <span class="hljs-comment">// 200</span>
+}</code></pre>
+          <p>Multiply that across a few hundred actions written by a few different people and you get a few
+          different error dialects. One endpoint returns <code>404</code> with an empty body, another returns <code>200</code> with
+          <code>{ &quot;error&quot;: &quot;not found&quot; }</code>, a third throws and the framework&#39;s default handler emits a stack trace in
+          development. A client integrating against you cannot write one error handler. It writes one per
+          endpoint, defensively, and still gets surprised.</p>
+          <p>Now add a second transport. The day a module is extracted and called over gRPC instead of HTTP, the
+          caller is reading <code>RpcException</code> status codes and trailing metadata, not HTTP status and bodies. If the
+          error mapping was hand-written per endpoint, none of it carries over. You re-derive the whole contract
+          on the wire.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>A consistent error contract is not cosmetic. It is the difference between a client that can branch on
+          &quot;was this a validation problem, a not-found, or a conflict?&quot; mechanically, and a client that has to
+          pattern-match on prose. RFC 9457 (Problem Details for HTTP APIs, the successor to RFC 7807) exists
+          precisely so that &quot;machine-readable error&quot; is a settled, standard shape: a <code>type</code>, <code>title</code>, <code>status</code>,
+          <code>detail</code>, and extension members, served as <code>application/problem+json</code>.</p>
+          <p>In a framework whose thesis is &quot;monolith now, services later, no rewrite,&quot; the error contract has an
+          extra requirement: it has to be transport-agnostic. The same logical failure (a not-found, a
+          forbidden, a conflict) has to look the same to a caller whether the answer came from an in-process
+          object, an HTTP hop, or a gRPC hop. If it does not, extraction is a breaking change for every consumer.</p>
+          <h2 id="the-mmca-answer-one-mapping-table-reused-on-both-transports">The MMCA answer: one mapping table, reused on both transports</h2>
+          <p>MMCA.Common&#39;s whole error story starts from one decision recorded across the codebase: expected
+          failures are <em>values</em>, not exceptions. Handlers return <code>Result&lt;T&gt;</code> carrying an <code>Error</code> list, each error
+          typed by an <code>ErrorType</code>. The edge&#39;s only job is to translate that value into the right wire shape.</p>
+          <p>On the <strong>HTTP</strong> side, every controller derives from <code>ApiControllerBase</code>, whose single job is
+          <code>HandleFailure(IEnumerable&lt;Error&gt;)</code>. It produces an <code>ObjectResult</code> whose status belongs to the <em>most
+          severe</em> <code>ErrorType</code> present, deliberately not the first error&#39;s, so an aggregate built by
+          <code>Result.Combine</code> cannot be downgraded by error ordering: a 403 or a 500 travelling alongside a
+          validation error still answers 403 or 500, and equal ranks keep the earliest error. Every error still
+          travels in the Problem Details <code>errors</code> array; only the status is ranked. The actual
+          <code>ErrorType -&gt; status</code> table does not live in the controller. It lives once in <code>ErrorHttpMapping</code>, a
+          <code>FrozenDictionary</code> keyed by error type:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// ErrorHttpMapping - the single ErrorType -&gt; HTTP status table (FrozenDictionary):</span>
+<span class="hljs-comment">//   Validation         -&gt; 400</span>
+<span class="hljs-comment">//   Invariant          -&gt; 400</span>
+<span class="hljs-comment">//   NotFound           -&gt; 404</span>
+<span class="hljs-comment">//   Conflict           -&gt; 409</span>
+<span class="hljs-comment">//   Unauthorized       -&gt; 401</span>
+<span class="hljs-comment">//   Forbidden          -&gt; 403</span>
+<span class="hljs-comment">//   UnprocessableEntity-&gt; 422</span>
+<span class="hljs-comment">//   Failure            -&gt; 400</span>
+<span class="hljs-comment">//   Unexpected         -&gt; 500</span>
+<span class="hljs-comment">//</span>
+<span class="hljs-comment">// A multi-error failure is ranked, not indexed: GetStatusCode(errors) asks</span>
+<span class="hljs-comment">// ErrorTypeSeverity.MostSevere which type wins, most to least severe:</span>
+<span class="hljs-comment">//   Unexpected &gt; Unauthorized &gt; Forbidden &gt; Conflict &gt; NotFound</span>
+<span class="hljs-comment">//              &gt; UnprocessableEntity &gt; Invariant / Validation / Failure</span>
+<span class="hljs-comment">//</span>
+<span class="hljs-comment">// Centralizing the map is what keeps every endpoint&#x27;s error shape identical.</span></code></pre>
+          <p>Thrown exceptions get folded into the <em>same</em> Problem Details shape by an ordered, most-specific-first
+          chain of <code>IExceptionHandler</code>s: <code>OperationCanceledExceptionHandler</code> (client disconnect -&gt; 499, so
+          monitoring can tell an abandoned request from a server error), <code>DomainExceptionHandler</code> (business-rule
+          violation -&gt; 400), <code>DbUpdateExceptionHandler</code> (concurrency or constraint -&gt; 409, with a deliberately
+          generic message so schema names do not leak), <code>ValidationExceptionHandler</code> (FluentValidation -&gt; 400
+          with a per-property errors dictionary), and <code>GlobalExceptionHandler</code> as the catch-all 500. Together
+          they guarantee one invariant: every error leaving the API, thrown or returned, is an RFC 9457 Problem
+          Details with a sensible status.</p>
+          <p>There is also a guard against the most insidious bug in this space: a controller that calls
+          <code>Ok(result)</code> on a <em>failed</em> <code>Result</code>. Without a guard that serializes as a misleading <code>200 OK</code> carrying
+          an error body. <code>UnhandledResultFailureFilter</code> is an always-run result filter, registered globally, that
+          catches exactly that programmer mistake, rewrites the response to the correct error status using the
+          <em>same</em> <code>ErrorHttpMapping</code> table, and logs a warning. The 200-with-an-error-body trap is closed
+          structurally, not by code review.</p>
+          <p>On the <strong>gRPC</strong> side, the same <code>Result</code> model crosses the wire unchanged. A gRPC service implementation
+          calls the inner C# service, gets a <code>Result</code>, and calls <code>result.ThrowIfFailure()</code>. That throws a
+          <code>ResultFailureException</code> carrying the <code>Error</code> list. <code>GrpcResultExceptionInterceptor</code>, registered by
+          <code>AddGrpcServiceDefaults()</code>, catches it for all four call shapes (unary and the three streaming kinds),
+          logs it, and rethrows <code>errors.ToRpcException()</code>: an <code>RpcException</code> whose <code>StatusCode</code> comes from a
+          <code>FrozenDictionary&lt;ErrorType, StatusCode&gt;</code> that <em>mirrors</em> the HTTP table, picked from the most severe
+          error by the same <code>ErrorTypeSeverity</code> ranking the HTTP edge uses, and whose trailing metadata carries
+          every error as <code>error-{i}-code/-message/-type/-source/-target</code> entries.</p>
+          <p>Both halves of that round trip ship in the framework, in the same file. <code>errors.ToRpcException()</code> lives
+          in MMCA.Common&#39;s gRPC package (<code>ResultGrpcExtensions</code>), so every extracted service emits the same
+          structured trailers for free, and <code>Metadata.ToErrors()</code> is the exact inverse: it walks the
+          <code>error-{i}-*</code> entries back into an <code>Error</code> list, omitting an absent source or target exactly as the
+          encoder omitted it, and falling back to <code>ErrorType.Failure</code> on a type name it does not recognize so a
+          newer peer cannot break an older client. <code>RpcException.ToResult()</code> and <code>ToResult&lt;T&gt;()</code> sit on top of it
+          and rebuild <code>Result.Failure(errors)</code>, degrading a transport fault that carries no trailers (a reset
+          connection, an exceeded deadline) to a single <code>Failure</code> error coded <code>Grpc.{StatusCode}</code> rather than
+          letting an exception escape. A consumer&#39;s client adapter is then a two-line <code>catch</code>: ADC&#39;s
+          <code>SessionBookmarkValidationServiceGrpcAdapter</code> and <code>EventLiveValidationServiceGrpcAdapter</code> catch
+          <code>RpcException</code> and <code>return ex.ToResult&lt;T&gt;()</code>, and the caller sees the same <code>Result</code> it would have seen
+          in-process.</p>
+          <p>That status-mapping symmetry is the point. The <code>ErrorType -&gt; status</code> decision is made once per transport in a frozen
+          table, the translation is a pipeline concern written once in an interceptor, and a <code>NotFound</code> is a 404
+          over HTTP and a <code>NotFound</code> <code>RpcException</code> over gRPC because both tables agree.</p>
+          <h2 id="the-rest-of-the-9-contract">The rest of the §9 contract</h2>
+          <p>The same edge standardizes the things that drift if left to each endpoint:</p>
+          <ul>
+          <li><strong>Pagination and filtering.</strong> The generic read controllers expose <code>GET /paged</code> with filter, sort, and
+          page parameters, and emit pagination metadata in an <code>X-Pagination</code> response header. A structured
+          <code>?filters[Name].operator=contains&amp;filters[Name].value=shirt</code> query syntax is parsed by a model binder
+          into the dynamic filter the query service applies server-side. Every list endpoint speaks the same
+          query and pagination dialect because it inherits it.</li>
+          <li><strong>Header-based API versioning.</strong> Versioning is configured at the host edge as a header concern, not
+          baked into route strings per controller.</li>
+          <li><strong>Disabled features speak the same dialect.</strong> A <code>[FeatureGate]</code> on an off flag returns an RFC 9457
+          404 (via <code>DisabledFeatureHandler</code>), not a bespoke 403, so a disabled feature is indistinguishable
+          from a route that does not exist and still matches the API&#39;s error shape.</li>
+          </ul>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>The scorecard scores §9 (API and Contract Design) at Maturity 4 of 4 and Implementation 9 of 10
+          (weighted 8/18). The category sits at the maturity ceiling: the contract is defined once and checked by
+          a build, not by review. What is left is the last implementation point, and two honest notes say where
+          it lives.</p>
+          <ul>
+          <li><strong>The contract snapshot is guarded at two levels, on purpose.</strong> The framework generates an OpenAPI
+          document: <code>AddCommonOpenApi()</code> calls ASP.NET Core&#39;s built-in <code>AddOpenApi()</code>, <code>MapCommonOpenApi()</code>
+          serves <code>/openapi/v1.json</code> outside Production, and an opt-in <code>MapCommonScalarUi()</code> renders the Scalar
+          reference UI from that document. <code>OpenApiBaselineTests</code> closes the loop in the framework&#39;s own CI: it
+          boots an in-memory host over that exact registration path (<code>AddCommonApiVersioning()</code> +
+          <code>AddCommonOpenApi()</code> + <code>MapCommonOpenApi()</code>), fetches <code>/openapi/v1.json</code>, normalizes it (the
+          host-assigned <code>servers</code> block is dropped, object properties are ordered ordinally so generator
+          ordering is not mistaken for drift, array order is preserved because it is contractual), and diffs the
+          result against a committed <code>openapi-baseline.v1.json</code>. A change to the generated surface fails the
+          build; an intended change is regenerated deliberately, by setting <code>MMCA_UPDATE_OPENAPI_BASELINE=1</code>
+          and committing the new baseline in the same pull request. What that gate covers is the
+          framework-owned surface: the probe controllers stand in for a consumer&#39;s real controllers precisely
+          so the test guards document generation rather than any concrete API. The concrete surface stays
+          guarded by the consumer hosts&#39; own contract-snapshot tests, where the endpoints actually live. Two
+          levels, one boundary, nothing duplicated.</li>
+          <li><strong><code>[ServiceContract]</code> has a dedicated rule that guards more than it currently catches.</strong> The
+          Shared-layer <code>[ServiceContract]</code> attribute tags the wire surface of an extracted service (the
+          interfaces, event records, and boundary DTOs). <code>ServiceContractsDoNotDependOnServiceInternals</code> scans
+          every assembly the architecture map registers for types carrying that marker and fails the build,
+          naming the offending type, when one reaches into the producing service&#39;s Domain, Application, or
+          Infrastructure. It is attribute-driven rather than layer-driven for a specific reason: no repo
+          registers a Contracts layer in its map today, so a layer-iterating rule would pass vacuously forever,
+          while an attribute-driven one starts biting the moment a repo marks its first contract type. The
+          honest part is that MMCA.Common marks no type with the attribute, so the framework&#39;s own run of the
+          rule asserts nothing. The attribute is an adoptable marker, and the rule standing behind it is a
+          ratchet rather than a check that catches violations daily.</li>
+          </ul>
+          <p>So the enforcement story reads cleanly in three parts. The error <em>mapping</em> is enforced where it is
+          defined (a frozen table reused on both transports, plus the 200-with-error-body filter). The contract
+          <em>shape</em> is enforced by a baseline a build diffs. The contract <em>purity</em> invariant is enforced by a
+          dedicated fitness rule, alongside the layer and transport rules (ADR-015) that guard the same boundary
+          from the layer side. The remaining implementation point is exactly the honesty above: a purity rule no
+          framework type exercises yet, and half of the snapshot gate that by design can only run in the repos
+          that own the concrete API surface.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any stack with more than one client or more than one transport:</p>
+          <ol>
+          <li><strong>Model expected failures as typed values, not exceptions or ad-hoc status codes.</strong> A small
+          <code>ErrorType</code> enum is enough.</li>
+          <li><strong>Map that enum to wire status in one table, per transport.</strong> A <code>FrozenDictionary</code> (or any single
+          lookup) reused by every endpoint beats a <code>return NotFound()</code> scattered across actions.</li>
+          <li><strong>Make every exit produce the standard shape.</strong> Fold thrown exceptions into the same Problem Details
+          via an ordered handler chain, and add a guard that catches the &quot;success status on a failed result&quot;
+          mistake before it ships.</li>
+          <li><strong>If you might extract a module, mirror the table on the other transport.</strong> The gRPC status mapping
+          should be the same decision as the HTTP status mapping, written once, so a caller sees one error
+          model across the hop.</li>
+          <li><strong>Put the contract under a check.</strong> A versioned OpenAPI snapshot diffed by CI, or an architecture
+          test on the contract types, is the difference between a contract and a hope. The framework above
+          does both: it diffs its generated document against a committed baseline and asserts contract purity
+          with a dedicated fitness rule, while the concrete API surface is snapshotted in the hosts that own
+          it. Wherever a given check lives, make sure it actually runs on every build.</li>
+          </ol>
+          <hr>
+          <p><strong>What we covered:</strong> why per-endpoint error handling produces inconsistent contracts that do not
+          survive a transport change, how MMCA.Common maps <code>ErrorType</code> to status through a single frozen table
+          reused by <code>ApiControllerBase.HandleFailure</code> over HTTP and <code>GrpcResultExceptionInterceptor</code> over gRPC,
+          how a guard closes the 200-with-error-body trap, and how §9 keeps that contract honest (a committed
+          OpenAPI baseline the framework&#39;s own build diffs, consumer hosts snapshotting their concrete surface,
+          and a dedicated <code>[ServiceContract]</code> purity rule waiting on the first marked type).</p>
+          <p><strong>Next in the series:</strong> notifications as a vertical slice, the one concrete bounded context the
+          framework ships, across push, in-app inbox, and email.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the §9 scorecard entry (gaps
+          included), or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>The full 34-category scorecard, §9 included, lives in <a href="../docs/governance/common-ArchitectureScorecard.html">MMCA.Common: Architecture Scorecard</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, gRPC, API Design</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="self-invalidating-cache.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">19 · The self-invalidating cache</span></a>
+          <a class="article-pager-link article-pager-link--next" href="notifications-vertical-slice.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">21 · Notifications as a vertical slice</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-one-mapping-table-reused-on-both-transports">The MMCA answer: one mapping table, reused on both transports</a></li>
+            <li><a href="#the-rest-of-the-9-contract">The rest of the §9 contract</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

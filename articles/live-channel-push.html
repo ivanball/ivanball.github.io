@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Ephemeral by design: sub-second live channels over one SignalR hub · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Sub-second ephemeral events (polls, Q&amp;A, live counts) fanned out over the existing notification hub, with nothing persisted.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/live-channel-push.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Ephemeral by design: sub-second live channels over one SignalR hub">
+  <meta property="og:description" content="Sub-second ephemeral events (polls, Q&amp;A, live counts) fanned out over the existing notification hub, with nothing persisted.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/live-channel-push.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-22.png">
+  <meta property="og:image:alt" content="Ephemeral by design: sub-second live channels over one SignalR hub">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Ephemeral by design: sub-second live channels over one SignalR hub">
+  <meta name="twitter:description" content="Sub-second ephemeral events (polls, Q&amp;A, live counts) fanned out over the existing notification hub, with nothing persisted.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-22.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Ephemeral by design: sub-second live channels over one SignalR hub","description":"Sub-second ephemeral events (polls, Q&A, live counts) fanned out over the existing notification hub, with nothing persisted.","url":"https://ivanball.github.io/articles/live-channel-push.html","mainEntityOfPage":"https://ivanball.github.io/articles/live-channel-push.html","image":"https://ivanball.github.io/assets/img/articles/article-22.png","datePublished":"2026-07-22T11:40:19Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":22,"sameAs":"https://medium.com/@ivanball76/ephemeral-by-design-sub-second-live-channels-over-one-signalr-hub-0248050e0c8b"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"22 · Live channels over one SignalR hub","item":"https://ivanball.github.io/articles/live-channel-push.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">22 · Live channels over one SignalR hub</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html" aria-current="page">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 22</p>
+          <h1 id="ephemeral-by-design-sub-second-live-channels-over-one-signalr-hub">Ephemeral by design: sub-second live channels over one SignalR hub</h1>
+          <p class="article-meta"><time datetime="2026-07-22T11:40:19Z">July 22, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/ephemeral-by-design-sub-second-live-channels-over-one-signalr-hub-0248050e0c8b" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-22.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Conference-day polls and Q&amp;A need small events fanned out to whoever is watching the page
+          right now, and persisting them is wrong. Here is how MMCA.Common adds interest-group channels to its
+          single SignalR notification hub and splits durable from ephemeral at the publisher boundary, without a
+          second WebSocket.</p>
+          <hr>
+          <p>You have a durable notification pipeline. It is careful and correct: it resolves recipients, writes one
+          inbox row per user, and fires a best-effort real-time push, with the inbox as the source of truth. It is
+          the pattern from Article 21 in this series, and it is the right shape when a user must be able to find
+          the message minutes later.</p>
+          <p>Now the conference floor opens a live poll. Two hundred phones are looking at the same question, votes
+          are landing several per second, and every one of them needs to light up the running tally on every other
+          screen in under a second. Reach for the durable pipeline here and you inherit all the wrong costs. The
+          outbox deliberately delays eligibility (<code>Outbox:ProcessingDelaySeconds</code>, default 5s, ADR-003) so an
+          in-process handler can run first, which is exactly the latency you cannot pay. You would write a per-user
+          inbox row for a tally that is worthless a second later and that nobody will ever open. You would persist
+          data whose entire value is that it is on screen right now.</p>
+          <p>The other instinct is to stand up a second SignalR hub for live traffic. That doubles the WebSocket
+          connection count per client and forces you to solve auth, reconnect, and the scale-out backplane twice,
+          then split the client-side connection management in two. You now maintain two of everything to carry one
+          more kind of message.</p>
+          <h2 id="two-message-shapes-not-two-transports">Two message shapes, not two transports</h2>
+          <p>The mistake in both approaches is treating &quot;durable notification&quot; and &quot;live update&quot; as if the difference
+          lives in the transport. It does not. Both are small messages pushed over a WebSocket. The difference is
+          the delivery contract:</p>
+          <ul>
+          <li>A <strong>durable notification</strong> is something a user must be able to find later. It is inbox-backed, it
+          survives an offline user, and losing it is a bug.</li>
+          <li>A <strong>live channel event</strong> is something that only matters while it is on screen. It is broadcast to an
+          interest group rather than a user list, it is never persisted, and it carries no delivery guarantee.
+          Losing it is fine, because the next fetch shows the truth anyway.</li>
+          </ul>
+          <p>ADR-039 makes that the whole design: one realtime transport, and the durable-versus-ephemeral decision is
+          taken at the <strong>publisher boundary</strong>, not the transport. <code>IPushNotificationSender</code> for the first kind,
+          <code>ILiveChannelPublisher</code> for the second. Same hub, same connection, two contracts.</p>
+          <h2 id="the-mmca-answer-one-hub-two-publisher-paths">The MMCA answer: one hub, two publisher paths</h2>
+          <p>The single <code>NotificationHub</code> gains channel semantics. A channel is just a SignalR group named by a key
+          like <code>event:1</code> or <code>session:123</code>, and the hub gets its first client-invokable methods: <code>JoinChannelAsync</code>
+          and <code>LeaveChannelAsync</code> (surfaced as the <code>JoinChannel</code> and <code>LeaveChannel</code> hub-method-name constants) map
+          the calling connection into or out of that group. Alongside the existing <code>ReceiveNotification</code> method
+          name it now also declares <code>ReceiveChannelEvent</code>, the client-side method channel events arrive on. Four
+          method-name constants, one hub.</p>
+          <p>Publishing rides a new Application-layer port, <code>ILiveChannelPublisher</code>, that sits right beside
+          <code>IPushNotificationSender</code>:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The publisher interface. Application code depends only on the port, never on SignalR:</span>
+<span class="hljs-comment">//   ILiveChannelPublisher.PublishAsync(channelKey, eventName, payloadJson, ct)   // ephemeral, no persistence</span>
+<span class="hljs-comment">//   IPushNotificationSender.SendToUsersAsync(...)                                // durable, inbox-backed</span>
+
+<span class="hljs-comment">// 1. The command handler commits the durable truth and returns the caller&#x27;s fresh tallies.</span>
+<span class="hljs-comment">//    It holds neither the publisher nor the queue: the aggregate raised LivePollVoteChanged,</span>
+<span class="hljs-comment">//    and the broadcast hangs off that event instead.</span>
+<span class="hljs-keyword">await</span> unitOfWork.SaveChangesAsync(ct);
+<span class="hljs-keyword">var</span> results = <span class="hljs-keyword">await</span> resultsBuilder.BuildAsync(poll, command.UserId, ct);  <span class="hljs-comment">// includes the caller&#x27;s own vote</span>
+<span class="hljs-keyword">return</span> Result.Success(results);
+
+<span class="hljs-comment">// 2. The domain-event handler runs after that commit, off the request path. It rebuilds the</span>
+<span class="hljs-comment">//    tallies with no caller identity, so MyVoteOptionId stays null and no per-user field can</span>
+<span class="hljs-comment">//    ride the broadcast.</span>
+<span class="hljs-keyword">var</span> results = <span class="hljs-keyword">await</span> resultsBuilder.BuildAsync(poll, userId: <span class="hljs-literal">null</span>, ct);
+<span class="hljs-keyword">var</span> channelKey = poll.SessionId <span class="hljs-keyword">is</span> { } sessionId
+    ? LivePollChannel.ForSession(sessionId)                               <span class="hljs-comment">// &quot;session:123&quot;</span>
+    : LivePollChannel.ForEvent(poll.EventId);                             <span class="hljs-comment">// &quot;event:1&quot;</span>
+
+<span class="hljs-comment">// Enqueue returns void, deliberately: the channel is DropOldest, so it evicts to make room</span>
+<span class="hljs-comment">// rather than refusing the write, and there is nothing here for a caller to branch on. Drops</span>
+<span class="hljs-comment">// surface through the channel&#x27;s itemDropped callback: DroppedCount plus a warning per drop.</span>
+liveChannelPublishQueue.Enqueue(<span class="hljs-keyword">new</span> LiveChannelPublishWorkItem(
+    channelKey,
+    LivePollChannel.PollResultsChanged,
+    JsonSerializer.Serialize(results, JsonSerializerOptions.Web)));</code></pre>
+          <p>Three things in that block are load-bearing. First, the broadcast is enqueued <strong>after</strong> the commit, and
+          it is the placement that guarantees it. Enqueue inline in the command handler and the enqueue runs while
+          the transactional decorator still holds the transaction open, so a rollback can leave clients already
+          told about a vote that never persisted. Hanging the enqueue off a handler for the <code>LivePollVoteChanged</code>
+          domain event buys post-commit delivery with no sequencing code at all: in-process domain-event dispatch
+          inside a transactional command is deferred until after the commit succeeds and dropped on rollback, so
+          the guarantee follows from where the work is attached. The enqueue itself is a non-blocking write to a
+          bounded in-process queue, and a single-reader hosted drain worker forwards each item to the publisher
+          off the request path (BR-229), so a hub hiccup, a slow peer, or a down Notification service can neither
+          stall nor fail the command.</p>
+          <p>Second, the payload is a <strong>pre-serialized JSON string</strong>. There is exactly one serialization point,
+          at the enqueue edge, and the same opaque string rides every hop unchanged. The port&#39;s contract is
+          <code>PublishAsync(channelKey, eventName, payloadJson, ct)</code>, and no serializer type crosses it.</p>
+          <p>Third, a queue that evicts cannot report a drop through its return value. The channel is configured
+          <code>DropOldest</code>, so the underlying <code>TryWrite</code> always succeeds: it makes room rather than refusing the write.
+          A bool return would therefore be a promise the queue cannot break, and an &quot;if the enqueue failed, log
+          it&quot; branch written against it is dead code that makes every drop under backpressure look impossible. So
+          the port method is <code>void Enqueue(LiveChannelPublishWorkItem workItem)</code>, and its own contract says the
+          queue never rejects an item, leaving nothing for a caller to branch on. Drops go through the channel&#39;s
+          <code>itemDropped</code> callback instead: each one increments a <code>DroppedCount</code> and logs a warning with the running
+          total, so a drain falling behind is visible rather than inferred from missing client updates.</p>
+          <p>The implementation is chosen at the composition root, the same null-object discipline the durable sender
+          uses. Infrastructure registers a no-op <code>NullLiveChannelPublisher</code> as the default, so the port resolves in
+          every host whether or not real-time transport is configured. <code>AddPushNotifications(configuration)</code> then
+          replaces it with <code>SignalRLiveChannelPublisher</code>, which is a nine-line class: it group-sends
+          <code>ReceiveChannelEvent</code> through <code>IHubContext&lt;NotificationHub&gt;</code>. It never holds a hub connection itself, so a
+          host that never calls <code>AddPushNotifications</code> keeps the no-op and the publishing code still resolves and
+          runs with nothing on the wire.</p>
+          <h2 id="joining-a-channel-and-why-the-key-is-validated">Joining a channel, and why the key is validated</h2>
+          <p>Channel membership is a property of the one existing connection, which is the point of not adding a second
+          hub. On the browser side, <code>NotificationHubService</code> carries both traffic kinds on that connection.
+          <code>JoinChannelAsync</code> and <code>LeaveChannelAsync</code> track membership, and <code>OnChannelEvent</code> registers <strong>multicast</strong>
+          subscriptions, so an invisible layout listener and the page in front of you can observe the same channel
+          concurrently without fighting over one callback. Every tracked channel is re-joined automatically on
+          <code>Reconnected</code>, because SignalR group membership does not survive an automatic reconnect: the server starts
+          the new connection with no groups, so the client has to rejoin or it goes silent after the first blip.</p>
+          <p>The join is not a free-for-all. <code>JoinChannelAsync</code> on the hub validates the requested key against
+          <code>PushNotificationSettings.ChannelKeyPattern</code> (default <code>NotificationScopeKey.Pattern</code>, which is
+          <code>^(event|session):[0-9]+$</code>) and throws a <code>HubException</code> on a miss, so a client cannot subscribe itself to
+          <code>admin:secrets</code> by inventing a group name. The pattern is a configurable regex (compiled once and cached,
+          with a one-second match timeout), so the framework closes the obvious abuse vector without hardcoding any
+          app&#39;s channel vocabulary.</p>
+          <p>Shape is not entitlement, though, and the hub says so in its own comment: a well-formed key is any
+          authenticated caller&#39;s for the asking unless the host supplies one more thing. That thing is
+          <code>IChannelJoinAuthorizer</code>, an optional, defaulted constructor dependency the hub consults after the
+          pattern check and before the group membership exists, so a caller who is not entitled to a channel never
+          receives a single payload published to it. The default of &quot;no authorizer&quot; keeps an existing host working
+          unchanged, and a host that publishes anything to a channel that is not public to every signed-in user is
+          expected to register one. The connection itself is bounded on the same hub:
+          <code>PushNotificationSettings.MaxConnectionsPerUser</code> (default 20) caps live connections per user identifier
+          per replica, and a refused connection hands its slot straight back, so aborted connections draining out
+          cannot lock an account out of its own tab.</p>
+          <h2 id="crossing-a-service-boundary-the-grpc-ingress">Crossing a service boundary: the gRPC ingress</h2>
+          <p>Here is where the publisher abstraction earns its keep. In ADC the module that raises live events (Engagement, running the
+          poll and Q&amp;A handlers) is <strong>not</strong> the host that maps the hub. The Notification service maps it, because it
+          is the only process whose <code>IHubContext</code> can reach the connected clients. So Engagement cannot call
+          <code>SignalRLiveChannelPublisher</code> directly, there is no hub in its process.</p>
+          <p>ADR-039 anticipated exactly this: &quot;a host that does not map the hub can replace the registration with its
+          own transport.&quot; ADC does that with a gRPC adapter. Engagement calls <code>AddNotificationLiveChannelClient()</code>,
+          which registers a typed gRPC client and <code>Replace</code>s (not <code>TryAdd</code>s) the <code>ILiveChannelPublisher</code>
+          registration with <code>LiveChannelPublisherGrpcAdapter</code>. The publishing handlers do not resolve that port at
+          all: the vote and upvote domain-event handlers enqueue the pre-serialized payload onto the in-process
+          publish queue and return. The single-reader drain worker resolves <code>ILiveChannelPublisher</code> per item, which in this process
+          is the gRPC adapter, and it forwards the payload over <code>PushToChannel</code> under a tight two-second deadline,
+          swallowing every failure (transport, resolution, broken circuit). Best-effort all the way down, and because
+          the forwarding runs off the request path, neither a slow nor a down Notification service can add a
+          millisecond to an Engagement vote.</p>
+          <p>The queue is applied everywhere, not just on the two hot paths. The four lower-frequency command handlers
+          (closing a poll, opening one, submitting a question, moderating one) publish one broadcast per operator
+          action, which is little enough to argue for awaiting <code>PublishAsync</code> inline. They enqueue anyway, and the
+          argument for that is not latency: an inline await also makes every one of those commands hostage to a
+          peer it has no reason to depend on. All four inject the queue and enqueue after the save, so not one
+          command handler in the module awaits a gRPC publish, and none of them wraps a publish in a hand-rolled
+          <code>try</code>/<code>catch</code>. The two question handlers do carry a guard, because their pending branch reads a fresh
+          count from the database before it enqueues and that read must never fail a question that has already
+          committed, but the guard is the framework&#39;s <code>BestEffort.ExecuteAsync</code> helper rather than a local catch:
+          one Warning plus one increment of a <code>besteffort.dispatch.failed</code> meter tagged by operation name. What is
+          guarded is a database read rather than a publish, which is a much smaller thing to have to swallow, and a
+          broadcast path that has quietly stopped working is a number an operator can alert on instead of a log
+          line nobody reads.</p>
+          <p>On the Notification side, <code>LiveChannelGrpcService</code> receives the RPC and simply delegates to its own
+          <code>ILiveChannelPublisher</code>, which in that host is the real <code>SignalRLiveChannelPublisher</code>. The payload&#39;s
+          opacity is what makes this trivial: no service on the path deserializes it, so no shared payload type has
+          to cross the wire.</p>
+          <p>The one piece of real infrastructure this needs is the transport profile from ADR-012. Notification&#39;s
+          default Kestrel endpoint stays <code>Http1AndHttp2</code> so the SignalR WebSocket upgrade handshake still works,
+          and its cleartext gRPC ingress lives on a <strong>dedicated <code>Http2</code>-only endpoint</strong> named <code>grpc</code> alongside it.
+          That mixed-endpoint profile is what lets one service serve both a WebSocket to browsers and an h2c gRPC
+          ingress to peers.</p>
+          <h2 id="the-queue-is-where-you-say-what-the-work-is-worth">The queue is where you say what the work is worth</h2>
+          <p>The publish queue in this article is one instance of a general contract (ADR-052): work that outlives
+          a request goes on a bounded <code>Channel&lt;T&gt;</code> singleton, drained by a <code>SingleReader</code> hosted worker. What
+          makes the contract interesting is that the <em>same</em> shape encodes two opposite correctness decisions,
+          and the field that carries the decision is <code>FullMode</code>.</p>
+          <p>The live-channel queue is the permissive end:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">private</span> <span class="hljs-keyword">const</span> <span class="hljs-built_in">int</span> Capacity = <span class="hljs-number">1024</span>;
+
+_channel = Channel.CreateBounded&lt;LiveChannelPublishWorkItem&gt;(
+    <span class="hljs-keyword">new</span> BoundedChannelOptions(Capacity)
+    {
+        FullMode = BoundedChannelFullMode.DropOldest,
+        SingleReader = <span class="hljs-literal">true</span>,
+        SingleWriter = <span class="hljs-literal">false</span>,
+    },
+    itemDropped: OnItemDropped);</code></pre>
+          <p><code>DropOldest</code> is the right answer here precisely because the payload is ephemeral. If the drain falls
+          behind, the oldest pending broadcast is the <em>least</em> valuable thing in the queue, since a newer poll
+          tally supersedes it anyway. A consequence worth knowing: under <code>DropOldest</code>, <code>TryWrite</code> always
+          succeeds, because the channel evicts to make room rather than refusing. A caller checking the return
+          value learns nothing, so a drop is observable only through the <code>itemDropped</code> callback and the
+          discarded-broadcast counter it feeds.</p>
+          <p>The other end of the same field is <code>FullMode = BoundedChannelFullMode.Wait</code>, paired with the
+          <strong>non-blocking</strong> <code>TryWrite</code> rather than an awaited <code>WriteAsync</code>. That combination makes a full queue
+          <em>refuse</em> the request outright instead of either discarding it or blocking the request thread, which is
+          the right answer when silently dropping work someone asked for is a bug rather than backpressure. A
+          small capacity goes with it, because the bound then exists to refuse a runaway caller rather than to
+          absorb a burst.</p>
+          <p>There is a prior question, though, and it decides whether a channel is the right home at all. An
+          in-process queue is exactly as durable as the replica holding it: a deploy or a crash between the
+          enqueue and the drain takes the pending items with it. That is the correct trade for a poll tally,
+          whose value expires in a second anyway, and it is why the live-publish queue is the only bounded
+          <code>Channel&lt;T&gt;</code> in MMCA.Common, MMCA.Store and MMCA.ADC. Work that a restart must not lose goes
+          in a row instead. ADC&#39;s AI scoring pass over an event&#39;s sessions is that kind of work, so the
+          organizer&#39;s request writes one durable internal command row and returns, and the framework&#39;s processor
+          claims it, restores the requesting organizer&#39;s principal and runs the pass through the ordinary CQRS
+          pipeline under a per-event distributed-lock claim taken with a zero wait, so a duplicate trigger skips
+          rather than queues behind the run in flight. That mechanism, and how it sits beside channels and cron,
+          is Article 51 in this series, &quot;Four ways to do work later: channels, cron and durable internal
+          commands&quot;.</p>
+          <p>The reusable idea is that &quot;put it on a queue&quot; is not a design decision, it is the start of one. The
+          decisions are what happens when the queue is full, and whether losing the item on restart is
+          acceptable at all, and the honest answers differ for a presence ping and for a job someone is waiting
+          on.</p>
+          <h2 id="the-sibling-contract-work-a-clock-owns">The sibling contract: work a clock owns</h2>
+          <p>The queue above and the durable row beside it answer the same question: a request started work and must
+          not wait for it. Neither can answer the other one. Nothing starts a nightly retention purge except the calendar, and an
+          in-process bounded queue is exactly the wrong home for it. It is empty at boot, it belongs to one
+          replica, and it is gone on restart.</p>
+          <p>The first instinct is a periodic hosted service with a 24-hour interval, and it fails twice. An
+          interval is not a time of day, so &quot;every 24 hours&quot; lands at whatever hour the last deploy happened to
+          be and drifts with every restart after. And an interval-driven hosted service runs on <strong>every</strong>
+          replica, so scaling a service to three instances silently triples the purge. The second instinct is
+          Hangfire or Quartz.NET: a schema, a storage abstraction, a dashboard to authorize and host, and an
+          upgrade obligation that every extracted service host inherits. ADR-074 declines both, on the grounds
+          that the framework already ran a durable, multi-replica-safe polling loop in production. The outbox
+          claims a batch of rows with one <code>ExecuteUpdateAsync</code> that stamps a lease and a token, and only one
+          racing replica matches the predicate. The missing piece was a cron expression, not a product.</p>
+          <p>So the scheduler is that same claim-lease idiom pointed at a calendar:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// A job is a name, a schedule and a body. Nothing else.</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title">IScheduledJob</span>
+{
+    <span class="hljs-built_in">string</span> Name { <span class="hljs-keyword">get</span>; }              <span class="hljs-comment">// primary key of the persisted row: renaming it strands the old schedule</span>
+    <span class="hljs-built_in">string</span> CronExpression { <span class="hljs-keyword">get</span>; }    <span class="hljs-comment">// five-field, UTC, parsed by Cronos; Scheduler:Jobs:{Name}:Cron overrides it</span>
+    <span class="hljs-function">Task <span class="hljs-title">ExecuteAsync</span>(<span class="hljs-params">CancellationToken cancellationToken</span>)</span>;
+}
+
+<span class="hljs-comment">// The claim is what makes scale-out safe: two replicas racing on the same row both issue this</span>
+<span class="hljs-comment">// update, and exactly one of them matches the still-unleased predicate.</span>
+<span class="hljs-keyword">var</span> claimed = <span class="hljs-keyword">await</span> context.Set&lt;ScheduledJobEntry&gt;()
+    .Where(e =&gt; e.JobName == jobName
+        &amp;&amp; e.NextRunOn &lt;= now
+        &amp;&amp; (e.LockedUntil == <span class="hljs-literal">null</span> || e.LockedUntil &lt; now))
+    .ExecuteUpdateAsync(
+        s =&gt; s.SetProperty(e =&gt; e.LockedUntil, leaseUntil)
+              .SetProperty(e =&gt; e.LockToken, lockToken),
+        cancellationToken);</code></pre>
+          <p>Three members, and the third one is ordinary application code. Jobs are resolved <strong>scoped, in a fresh
+          DI scope per execution</strong>, the same way a request handler is, so a job body can take a unit of work, a
+          repository or a command handler and nothing about it knows it is on a schedule. It also means the
+          long-lived runner never captures a scoped dependency, which is the failure mode a hand-rolled timer
+          usually ships with.</p>
+          <p>The state is one row per job (<code>JobName</code> as the primary key, plus the cron expression, <code>NextRunOn</code>,
+          <code>LastRunOn</code>, the last outcome and duration, and the lease pair), and it lives in the <strong>Default</strong> data
+          source only. That is a deliberate split from the outbox, which exists once per physical database
+          because an outbox row has to be written in the same transaction as the aggregate that produced it. A
+          schedule has no such tie: a job belongs to the host that registered it, so a four-database host gets
+          one schedule rather than four copies of it contending for one occurrence. The token that won the
+          claim also guards the outcome stamp, so a replica whose lease expired mid-run writes nothing and
+          drops its stale result instead of overwriting the current holder&#39;s.</p>
+          <p>The runner is a plain <code>BackgroundService</code> rather than a fixed-period one, for the same reason the
+          outbox is: after each cycle it sleeps until the <strong>earliest</strong> <code>NextRunOn</code> across the store, read
+          through <code>TimeProvider</code>, capped at the polling interval (30 seconds by default) and floored at one
+          second so an overdue row another replica already holds cannot spin the loop. A host with one nightly
+          job is not waking 2,880 times a day to find nothing due, and because every timestamp comes from
+          <code>TimeProvider</code>, a test can drive months of schedule in microseconds. Cronos (MIT, zero dependencies)
+          is the one piece bought rather than built: it turns a string into the next occurrence and has no
+          opinion about storage or hosting.</p>
+          <p>Two consequences worth stating plainly. A missed schedule runs <strong>once</strong> and then advances: the next
+          occurrence is computed from the instant the run finished, not from the occurrence that was missed, so
+          a host that was down for six hours fires one purge instead of six. That is right for a purge and
+          wrong for a job that must produce an artifact per window, which has to make the window explicit in
+          its own state rather than infer it from the schedule. And the lease is a time lease, not a fence: a
+          run that overstays it can be claimed by another replica, so job bodies carry the same idempotency
+          obligation the outbox already puts on event handlers.</p>
+          <p>The capability is opt-in, and the proof is a test rather than a promise: build the real model for a
+          host that never called <code>AddScheduledJobs</code> and the job entity is simply absent, so a consumer that
+          wants none of this gains no table in its next migration. In the adoption sweep all three Store
+          services, three ADC services and the Helpdesk web host turned it on, each running its own runner
+          against its own database. Engagement is the neat one for this article: the same composition root that
+          swaps in the gRPC live-channel adapter registers the cron runner earlier in the same file. One host,
+          three kinds of background work, and the thing that tells them apart is not the mechanism but who owns
+          the work: a request, a clock, or a committed transaction.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>The ADR names the sharp edges, and they are all consequences of the ephemeral contract, not accidents:</p>
+          <ul>
+          <li><strong>Ephemeral means lossy.</strong> A client that connects after an event was published never sees it. This is
+          the defining constraint, and it shapes every consumer: features must treat a channel event as a
+          cache-invalidation hint over fetchable state, not as the state itself. The high-frequency tally events
+          carry the fresh counts in their payload so a page can patch in place, but the safety net is always that
+          the next fetch shows the truth.</li>
+          <li><strong>Type safety is by convention.</strong> Handlers receive raw JSON and deserialize themselves. There is no
+          compile-time contract on the payload; the discipline is a shared payload record in the consuming app&#39;s
+          Shared project, referenced by both the publisher and the subscriber.</li>
+          <li><strong>Durable notifications are still single-subscriber.</strong> Only channel events are multicast. The single
+          settable <code>NotificationCallback</code> for durable notifications remains one subscriber. Unifying the two is
+          deliberate future work, not something this decision blocks.</li>
+          <li><strong>Multi-replica needs the backplane.</strong> If a hub-hosting service runs more than one replica, group sends
+          only reach connections on other replicas through the Redis backplane that <code>AddPushNotifications</code> wires
+          when a <code>redis</code> connection string is present. Single-replica deployments need nothing extra.</li>
+          <li><strong>Best-effort is not delivery.</strong> A publish can still be discarded at three points: the queue evicts its
+          oldest item under sustained backpressure, the drain worker swallows a publish failure, and the gRPC
+          adapter swallows a transport failure. None of them are silent now (the eviction is counted on
+          <code>DroppedCount</code> and logged with a running total, the drain&#39;s swallow is the shared <code>BestEffort</code> helper
+          so it is both logged and counted on a meter, and the adapter&#39;s is logged per occurrence), but that is
+          observability, not delivery. It is the correct posture for a hint over durable state, and it still means
+          &quot;the event fired&quot; is never a guarantee. If you ever need one, you are describing a durable notification,
+          which is the other publisher path.</li>
+          </ul>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The idea ports to any real-time stack:</p>
+          <ol>
+          <li><strong>Split on the delivery contract, not the transport.</strong> &quot;Must survive an offline user&quot; and &quot;only matters
+          on screen&quot; are different guarantees. Give each its own publisher abstraction and let one connection
+          carry both, rather than standing up a second hub.</li>
+          <li><strong>Attach the broadcast where post-commit is structural, not where it reads well.</strong> The durable write is
+          the truth; the broadcast is an optimization over it. If your framework already defers domain-event
+          dispatch until after the transaction commits, hang the broadcast off the event rather than writing it
+          inline in the command handler, where a later rollback can leave clients told about state that never
+          landed. Then hand it to a background drain (or at least wrap and swallow), log the failure, move on.</li>
+          <li><strong>Serialize once, at the edge, and keep the payload opaque across hops.</strong> A pre-serialized string makes
+          a cross-service relay trivial: no hop in the middle needs the payload type.</li>
+          <li><strong>Validate client-supplied group names against a pattern.</strong> The moment a client can name the group it
+          joins, an unconstrained join is a subscription to anyone&#39;s data. A configurable regex closes it without
+          hardcoding your channel vocabulary.</li>
+          <li><strong>If a queue cannot meaningfully reject, do not give it a return value to ignore.</strong> An evict-on-full
+          queue accepts every write by design, so a caller&#39;s &quot;if the enqueue failed, log it&quot; branch is dead code
+          and every drop is invisible. Deleting the branch is the small fix. The honest one is to take the return
+          value off the method, so the next caller cannot write the branch again. Then count and log the drop
+          where the eviction actually happens, and carry a running total so a drain falling behind shows up in
+          logs rather than in confused users.</li>
+          <li><strong>Ask who owns the work before you pick the mechanism.</strong> Work a request started and can afford to
+          lose belongs on an in-process queue. Work a request started and cannot afford to lose belongs in a
+          row, because an in-memory queue is only as durable as the replica holding it. Work a clock owns and
+          a restart must not skip belongs in a row too, with a claim lease so three replicas do not run it
+          three times. If you already have a durable polling loop (an outbox, usually), the gap between it and
+          a scheduler is a cron parser, not a scheduling product.</li>
+          </ol>
+          <p>The takeaway: real-time features do not need a second WebSocket, they need a second contract. Decide
+          durable-versus-ephemeral at the publisher boundary and one hub carries both.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why the durable notification pipeline is the wrong shape for high-frequency live
+          updates, how ADR-039 keeps one SignalR hub and splits durable from ephemeral at the <code>ILiveChannelPublisher</code>
+          boundary (with a no-op default, a SignalR group-send implementation, and channel join/leave with validated
+          keys), why the hot-path enqueue belongs on a post-commit domain-event handler rather than inline in the
+          command, how an evict-on-full queue has to report its own drops, how a remote module enqueues into the
+          hub&#39;s channels through a best-effort, off-request-path gRPC ingress on the ADR-012 mixed-endpoint profile,
+          why an ephemeral event must be treated as a hint over fetchable state, and how the sibling contract for
+          clock-owned work (ADR-074) gets durable, multi-replica-safe cron out of the outbox&#39;s claim lease plus a
+          cron parser, with no scheduling product.</p>
+          <p><strong>Next in the series:</strong> explicit, compile-time DTO mapping that retires reflection-based AutoMapper and
+          keeps a bad request a 400, not a 500.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-039 behind this
+          pattern, or <code>dotnet add package MMCA.Common.Infrastructure</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📚 Full series index: <a href="https://ivanball.github.io/writing.html" target="_blank" rel="noopener">https://ivanball.github.io/writing.html</a></li>
+          <li>📄 ADR-039 (live channel push): <a href="../docs/adr/039-live-channel-push.html">ADR-039: Live channel push (ephemeral events over the notification hub)</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, SignalR, Real Time, Software Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="notifications-vertical-slice.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">21 · Notifications as a vertical slice</span></a>
+          <a class="article-pager-link article-pager-link--next" href="manual-dto-mapping.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">23 · Delete AutoMapper: manual DTO mapping</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#two-message-shapes-not-two-transports">Two message shapes, not two transports</a></li>
+            <li><a href="#the-mmca-answer-one-hub-two-publisher-paths">The MMCA answer: one hub, two publisher paths</a></li>
+            <li><a href="#joining-a-channel-and-why-the-key-is-validated">Joining a channel, and why the key is validated</a></li>
+            <li><a href="#crossing-a-service-boundary-the-grpc-ingress">Crossing a service boundary: the gRPC ingress</a></li>
+            <li><a href="#the-queue-is-where-you-say-what-the-work-is-worth">The queue is where you say what the work is worth</a></li>
+            <li><a href="#the-sibling-contract-work-a-clock-owns">The sibling contract: work a clock owns</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

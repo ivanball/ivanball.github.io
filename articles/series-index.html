@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>The MMCA series: every pattern, one place · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="The full series index and recommended reading order.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/series-index.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="The MMCA series: every pattern, one place">
+  <meta property="og:description" content="The full series index and recommended reading order.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/series-index.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-53.png">
+  <meta property="og:image:alt" content="The MMCA series: every pattern, one place">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The MMCA series: every pattern, one place">
+  <meta name="twitter:description" content="The full series index and recommended reading order.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-53.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"The MMCA series: every pattern, one place","description":"The full series index and recommended reading order.","url":"https://ivanball.github.io/articles/series-index.html","mainEntityOfPage":"https://ivanball.github.io/articles/series-index.html","image":"https://ivanball.github.io/assets/img/articles/article-53.png","datePublished":"2026-08-20T12:18:00Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":53,"sameAs":"https://medium.com/@ivanball76/the-mmca-series-every-pattern-one-place-28cf2cee7be8"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"53 · The series index","item":"https://ivanball.github.io/articles/series-index.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">53 · The series index</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html" aria-current="page">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 53</p>
+          <h1 id="the-mmca-series-every-pattern-one-place">The MMCA series: every pattern, one place</h1>
+          <p class="article-meta"><time datetime="2026-08-20T12:18:00Z">August 20, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/the-mmca-series-every-pattern-one-place-28cf2cee7be8" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-53.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A single map of the whole series. Start at the top if MMCA.Common is new to you, or jump
+          straight to the pattern you came for.</p>
+          <hr>
+          <p>MMCA.Common is an Apache-2.0 licensed .NET 10 framework that gives you DDD, Clean Architecture, and CQRS as a
+          modular monolith that extracts to microservices without a rewrite, and it grades itself against a
+          34-category architecture rubric in the open. This series teaches it one pattern at a time: the failure
+          mode each pattern fixes, the real type and ADR behind the MMCA.Common implementation, the honest
+          trade-offs, and how to apply the idea even if you never install the package.</p>
+          <p>Each article stands on its own if you land on it from a search. This page is the index that ties them
+          together: 52 deep-dives plus this map, 53 articles in all. The groups below run roughly from &quot;why this
+          exists&quot; to &quot;how to build with it,&quot; so reading top to bottom is a reasonable curriculum, but every link
+          is also a fine place to start.</p>
+          <h2 id="start-here">Start here</h2>
+          <p>The thesis and the framing. Read these first if you have not met the framework.</p>
+          <ul>
+          <li>01 · <a href="open-sourced-enterprise-dotnet-34-categories.html">I open-sourced the enterprise .NET plumbing I never want to rewrite, and graded it against 34 categories</a></li>
+          <li>02 · <a href="modular-monolith-to-microservices.html">Modular monolith to microservices, without the rewrite</a></li>
+          <li>03 · <a href="34-category-architecture-rubric.html">What good architecture actually means: a 34-category rubric you can score yourself against</a></li>
+          </ul>
+          <h2 id="core-patterns">Core patterns</h2>
+          <p>The day-one building blocks. Error handling, the domain model, query intent, the handler pipeline, the
+          reliability backbone that ties them together, the compensating handlers that undo a step no
+          transaction can roll back, and the durable queue that runs an ordinary command later.</p>
+          <ul>
+          <li>04 · <a href="result-railway-csharp.html">Stop throwing exceptions for control flow: the Result railway in C#</a></li>
+          <li>05 · <a href="kill-anemic-domain-model.html">Kill the anemic domain model: rich aggregates with factory methods that return Result</a></li>
+          <li>06 · <a href="specification-pattern.html">Specifications over LINQ spaghetti: composable, reusable query intent</a></li>
+          <li>07 · <a href="cqrs-decorator-pipeline.html">The CQRS decorator pipeline: logging, caching, and transactions without touching a handler</a></li>
+          <li>08 · <a href="validation-kit.html">Compose validators, don&#39;t copy them: a reusable FluentValidation kit</a></li>
+          <li>09 · <a href="transactional-outbox-dotnet.html">The transactional outbox in .NET 10: never lose an event again</a></li>
+          <li>45 · <a href="feature-flags-cqrs-pipeline.html">Feature Flags in the CQRS Pipeline: Gate Commands, Not Code</a></li>
+          <li>49 · <a href="saga-compensation-reconciliation.html">Undo Is a Feature: Saga Compensation and the Reconciliation Backstop</a></li>
+          <li>51 · <a href="durable-internal-commands.html">Four Ways to Do Work Later: Channels, Cron, the Outbox and Durable Internal Commands</a></li>
+          </ul>
+          <h2 id="data-and-persistence">Data and persistence</h2>
+          <p>How the data layer is built so a module owns its own database, and even its own storage engine, and can
+          become its own service later without a rewrite.</p>
+          <ul>
+          <li>10 · <a href="database-per-service.html">Database-per-service inside a monolith (and why)</a></li>
+          <li>11 · <a href="polyglot-persistence.html">One entity model, four databases: polyglot persistence behind a single attribute</a></li>
+          <li>12 · <a href="navigation-populators.html">EF Core Include chains are a trap: navigation populators decouple eager loading</a></li>
+          <li>13 · <a href="optimistic-concurrency-rowversion.html">Optimistic concurrency you cannot opt out of: RowVersion from the database to a required If-Match</a></li>
+          <li>14 · <a href="self-ordering-modules.html">Self-ordering modules: discovered, Kahn-ordered, and extractable</a></li>
+          <li>15 · <a href="event-schema-versioning.html">Event-schema versioning: never silently reshape an event</a></li>
+          </ul>
+          <h2 id="auth-the-api-edge-and-cross-cutting">Auth, the API edge, and cross-cutting</h2>
+          <p>The concerns that sit across every module: authentication between services, authorization (by role, by
+          permission, and by row ownership), password storage, safe retries, caching, error contracts,
+          notifications, DTO mapping, browser session auth, the generic REST surface, defending the edge,
+          encrypting PII columns at rest, the hardened response headers every host stamps, and the optional
+          second factor, email-confirmation gate and stored permission grants that complete the identity story.</p>
+          <ul>
+          <li>16 · <a href="jwks-cross-service-auth.html">Cross-service auth without a shared secret: JWKS dual-fetch</a></li>
+          <li>17 · <a href="password-hashing.html">Password hashing done right: PBKDF2-SHA512, 600k iterations, timing-safe</a></li>
+          <li>18 · <a href="idempotency-attribute.html">Idempotency in one attribute: safe retries for HTTP APIs</a></li>
+          <li>19 · <a href="self-invalidating-cache.html">The self-invalidating cache that lives in the pipeline, not your handlers</a></li>
+          <li>20 · <a href="problem-details-http-grpc.html">Problem Details across HTTP and gRPC (RFC 9457)</a></li>
+          <li>21 · <a href="notifications-vertical-slice.html">Notifications as a vertical slice: in-app inbox, real-time push, native push, and email</a></li>
+          <li>22 · <a href="live-channel-push.html">Ephemeral by design: sub-second live channels over one SignalR hub</a></li>
+          <li>23 · <a href="manual-dto-mapping.html">Delete AutoMapper: explicit, compile-time DTO mapping that you can actually test</a></li>
+          <li>24 · <a href="permission-based-authorization.html">Permission-based authorization: capabilities over role checks</a></li>
+          <li>25 · <a href="session-cookie-auth-blazor-ssr.html">Browser session-cookie auth for Blazor SSR: surviving the F5</a></li>
+          <li>26 · <a href="external-oauth-login.html">Google, GitHub and Apple login without leaking tokens: external OAuth behind your own JWTs</a></li>
+          <li>27 · <a href="jwt-refresh-token-rotation.html">Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting</a></li>
+          <li>28 · <a href="generic-entity-controllers.html">Generic entity controllers and the dynamic query contract (ADR-034)</a></li>
+          <li>29 · <a href="resource-ownership-authorization.html">Resource-ownership authorization: which rows you may touch, not just which actions</a></li>
+          <li>30 · <a href="rate-limiting-brute-force-protection.html">Defending the API edge: three controls that cover the whole surface</a></li>
+          <li>46 · <a href="field-level-encryption-ef-core.html">Field-Level Encryption in EF Core: AES-GCM for PII Columns</a></li>
+          <li>47 · <a href="security-headers-csp-blazor.html">Security Headers and CSP for Blazor: One Middleware, Every Host</a></li>
+          <li>52 · <a href="identity-completions.html">Finishing Identity: Second Factor, Email Confirmation and Stored Permission Grants</a></li>
+          </ul>
+          <h2 id="run-extract-and-harden">Run, extract, and harden</h2>
+          <p>Bring the whole stack up with one command, then cut a module out into its own service, make the
+          running system survive failure, see what it is doing in production, and put bounds, guardrails and
+          token metering around the model call. Read these in order: Aspire first, then extraction, then
+          resilience, then observability, then the governed LLM boundary.</p>
+          <ul>
+          <li>31 · <a href="aspire-one-command.html">Aspire: one command brings up the whole distributed app</a></li>
+          <li>32 · <a href="extract-module-to-grpc-service.html">Extracting a module to a gRPC service, live</a></li>
+          <li>33 · <a href="resilience-recovery-objectives.html">Retries are not a recovery plan: resilience handlers, RTO/RPO, and a restore you actually drilled</a></li>
+          <li>48 · <a href="observability-opentelemetry.html">Observability by Default: OpenTelemetry and Azure Monitor in MMCA</a></li>
+          <li>50 · <a href="governed-llm-boundary.html">The LLM Is a Dependency: A Bounded, Guarded, Metered Boundary for Chat Completions</a></li>
+          </ul>
+          <h2 id="proof-front-end-and-getting-started">Proof, front end, and getting started</h2>
+          <p>The evidence that the patterns hold (fitness functions, the test pyramid, the erasure pathway), the
+          reusable Blazor UI framework and the internationalization and theming that ride on it, the hands-on
+          path from <code>dotnet new mmca-app</code> to your first module, your first fitness test, and the two real apps
+          that run on all of it, the
+          device-capability layer that lets one Blazor UI run in a browser and inside a native phone app, and two
+          later additions that round out the framework surface: managed file storage with untrusted-upload
+          handling, and provable HTTP API versioning.</p>
+          <ul>
+          <li>34 · <a href="architecture-fitness-functions.html">Architecture fitness functions: rules that fail the build, not a wiki page</a></li>
+          <li>35 · <a href="test-pyramid.html">The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker</a></li>
+          <li>36 · <a href="soft-delete-vs-erasure.html">Soft-delete vs the right to erasure: the GDPR conflict and the erasure pathway</a></li>
+          <li>37 · <a href="reusable-blazor-ui-framework.html">A list page in a few lines: a reusable Blazor UI framework with the same discipline as the backend</a></li>
+          <li>38 · <a href="i18n-and-theming.html">One preference, two switches: shipping i18n and dark mode on a single cookie-and-profile pipeline</a></li>
+          <li>39 · <a href="build-your-first-module.html">Scaffold a .NET modular monolith in one command, then build your first module</a></li>
+          <li>40 · <a href="write-your-first-fitness-test.html">Write your first architecture fitness test</a></li>
+          <li>41 · <a href="two-real-apps-case-study.html">Two real apps on one framework: a conference platform and a store</a></li>
+          <li>42 · <a href="device-capability-abstraction.html">One Blazor UI, two hosts: a device-capability layer that stays resolvable everywhere</a></li>
+          <li>43 · <a href="managed-file-storage-avatars.html">Managed file storage: uploads you don&#39;t have to trust</a></li>
+          <li>44 · <a href="http-api-versioning.html">HTTP API versioning, proven not just claimed</a></li>
+          </ul>
+          <h2 id="where-to-go-next">Where to go next</h2>
+          <p>If you are evaluating the framework, read 01 then 03 then 41: the thesis, the rubric, and the proof. If
+          you are here to solve a specific problem, the core-patterns and cross-cutting groups are the toolbox. If
+          you want to build, start at 39: it scaffolds the whole solution in one command, then explains what you
+          were handed. Then 40, to make the conventions fail the build.</p>
+          <p><em>Previous: Article 52, &quot;Finishing Identity: Second Factor, Email Confirmation and Stored Permission
+          Grants.&quot; This index is article 53 of 53, the last one in the series, so it has no next.</em></p>
+          <hr>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the scorecard (the gaps are the honest
+          part), or <code>dotnet add package MMCA.Common.API</code> and tell me what breaks. New patterns land regularly,
+          then monthly evergreen.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>The 34-category scorecard and the ADRs are committed in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, Software Architecture, C Sharp, Microservices, Programming</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="identity-completions.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">52 · Finishing identity</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#start-here">Start here</a></li>
+            <li><a href="#core-patterns">Core patterns</a></li>
+            <li><a href="#data-and-persistence">Data and persistence</a></li>
+            <li><a href="#auth-the-api-edge-and-cross-cutting">Auth, the API edge, and cross-cutting</a></li>
+            <li><a href="#run-extract-and-harden">Run, extract, and harden</a></li>
+            <li><a href="#proof-front-end-and-getting-started">Proof, front end, and getting started</a></li>
+            <li><a href="#where-to-go-next">Where to go next</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

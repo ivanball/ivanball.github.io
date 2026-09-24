@@ -8,6 +8,8 @@
  *                                         working files are excluded)
  *   - ../docs-src/governance/*.md        (rubric + per-repo scorecards/backlogs)
  *   - ../docs-src/guides/*.md            (getting-started, specs, workflows, notes)
+ *   - ../docs-src/articles/*.md          (the article series; one entry each in
+ *                                         assets/data/articles.js)
  *
  * Output (committed):
  *   - ../docs/index.html                 Reference-library hub
@@ -15,6 +17,7 @@
  *   - ../docs/onboarding/index.html + onboarding/*.html
  *   - ../docs/governance/index.html + governance/*.html
  *   - ../docs/guides/index.html + guides/*.html
+ *   - ../articles/index.html + articles/*.html   (under Writing, not the Reference library)
  *
  * Re-run whenever the source docs change:  npm install && npm run build
  * No runtime JS dependency ships to readers: everything is pre-rendered.
@@ -35,6 +38,7 @@ const ADR_SRC = path.join(DOCS_SRC, "adr");
 const ONB_SRC = path.join(DOCS_SRC, "onboarding");
 const GOV_SRC = path.join(DOCS_SRC, "governance");
 const GUIDES_SRC = path.join(DOCS_SRC, "guides");
+const ARTICLES_SRC = path.join(DOCS_SRC, "articles");
 const SITE = "https://ivanball.github.io";
 const SRC_GITHUB = "https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/";
 const MEDIUM_PROFILE = "https://medium.com/@ivanball76";
@@ -135,6 +139,20 @@ const { ARTICLES = [], ARTICLE_CATEGORIES = [] } = loadWindowData("assets/data/a
 const { ADR_CARDS = {} } = loadWindowData("assets/data/adr-cards.js");
 const { PLATFORM_FACTS = {} } = loadWindowData("assets/data/platform-facts.js");
 
+/* articles.js points `hero` at the 1600x840 PNG, the full-size source (and the file
+   uploaded as a Medium story's hero). Pages serve the 800px WebP that `npm run images`
+   derives from it (about 97% smaller across the heroes). Keeping the swap here means the
+   data file keeps naming the real source and no page references a 35 MB asset. If a WebP
+   is missing, fall back to the PNG rather than emit a broken src. */
+const HERO_W = 800;
+const HERO_H = 420;
+const catLabels = new Map(ARTICLE_CATEGORIES.map((c) => [c.key, c.label]));
+
+function webHero(hero) {
+  const webp = hero.replace(/\.png$/i, ".webp");
+  return existsSync(path.join(WEBSITE_ROOT, webp)) ? webp : hero;
+}
+
 const stat = (num, label) =>
   `          <div class="stat"><div class="num">${num}</div><div class="label">${label}</div></div>`;
 
@@ -197,6 +215,33 @@ const govFiles = readdirSync(GOV_SRC)
 const guideFiles = readdirSync(GUIDES_SRC)
   .filter((f) => f.endsWith(".md") && f !== "README.md")
   .sort();
+const articleFiles = readdirSync(ARTICLES_SRC)
+  .filter((f) => f.endsWith(".md") && f !== "README.md" && !f.startsWith("_"))
+  .sort();
+
+/* The article number lives in two places: the source's header blockquote
+   ("Article #9") and articles.js (`n`), which drives the cards, the sidebar order
+   and prev/next. The file name carries no number on purpose, because it is the
+   permanent URL and a renumber must not move it. So the two copies of the number
+   are checked against each other here, and a source with no card (or a card with
+   no source) fails the build instead of publishing a page nothing links to. */
+const articleByPage = new Map(ARTICLES.filter((a) => a.page).map((a) => [a.page, a]));
+{
+  const problems = [];
+  for (const f of articleFiles) {
+    const page = f.replace(/\.md$/i, "");
+    const a = articleByPage.get(page);
+    const m = /Article #(\d+)/.exec(readFileSync(path.join(ARTICLES_SRC, f), "utf8"));
+    if (!a) problems.push(`docs-src/articles/${f} has no entry with page: "${page}" in articles.js`);
+    else if (!m) problems.push(`docs-src/articles/${f} has no "Article #N" in its header blockquote`);
+    else if (Number(m[1]) !== a.n) problems.push(`docs-src/articles/${f} says Article #${m[1]} but articles.js has n: ${a.n}`);
+  }
+  for (const a of ARTICLES) {
+    if (!a.page) problems.push(`articles.js entry n: ${a.n} has no page`);
+    else if (!articleFiles.includes(`${a.page}.md`)) problems.push(`articles.js entry n: ${a.n} points at missing docs-src/articles/${a.page}.md`);
+  }
+  if (problems.length) throw new Error(`Article series out of step:\n  ${problems.join("\n  ")}`);
+}
 
 const collections = [
   {
@@ -243,6 +288,23 @@ const collections = [
     files: ["README.md", ...guideFiles],
     github: `${SRC_GITHUB}guides/`,
   },
+  /* Last on purpose: prepareArticleMd() links the docs-src paths an article cites to
+     their published page by title, so every other collection must already be in the
+     manifest. Lives under Writing, not the Reference library: its own top-level
+     directory, its own breadcrumb root, and the Writing nav entry marked current. */
+  {
+    id: "articles",
+    outDir: "articles",
+    srcDir: ARTICLES_SRC,
+    kicker: "Article series",
+    title: "The MMCA.Common series",
+    navTitle: `All ${articleFiles.length} articles`,
+    indexSrc: "README.md",
+    files: ["README.md", ...articleFiles],
+    github: null,
+    crumbs: [["Writing", "writing.html"]],
+    nav: "writing.html",
+  },
 ];
 
 /* Output filename for a source file within a collection. */
@@ -264,6 +326,10 @@ function onbRank(file) {
 
 /* Concise sidebar label per file. */
 function navLabel(col, file, title) {
+  if (col.id === "articles") {
+    const a = articleByPage.get(file.replace(/\.md$/i, ""));
+    return `${String(a.n).padStart(2, "0")} · ${a.title}`;
+  }
   if (col.id === "adr") {
     const n = file.slice(0, 3);
     const t = title.replace(/^ADR[-\s]?\d+:\s*/i, "").trim();
@@ -305,9 +371,55 @@ for (const col of collections) {
     docsMeta.push({ col, file, absSrc, outRel, title, label, desc: metaDescription(md), md });
   }
 }
-// sort onboarding docs into reading order; ADRs are already numeric
+/* An article source is also its own evidence file: a metadata blockquote under the H1
+   (series, number, rubric, grounding files) and a trailing `*Notes:` ledger citing
+   path:line for every claim. Both are the audit trail the maintenance command re-checks,
+   not reader content, so they stay in the source and are dropped here, before rendering
+   AND before indexing (a search hit inside the ledger would land on nothing visible).
+   Two in-prose conventions become real links on the way: a backticked docs-src path
+   (`Website/docs-src/adr/003-...md`) links to that published page under its title, and a
+   backticked URL becomes a link. Fenced code is left alone. */
+const DOCS_SRC_PATH = /`Website\/docs-src\/((?:adr|onboarding|governance|guides|articles)\/[^`\s:#]+\.md)`/g;
+function prepareArticleMd(md, srcDir) {
+  let lines = md.split(/\r?\n/);
+  const h1 = lines.findIndex((l) => /^#\s/.test(l));
+  let i = h1 + 1;
+  while (i < lines.length && lines[i].trim() === "") i++;
+  if (h1 !== -1 && /^>\s*Series:/.test(lines[i] || "")) {
+    let end = i;
+    while (end < lines.length && /^>/.test(lines[end])) end++;
+    lines.splice(i, end - i);
+  }
+  const notes = lines.findIndex((l) => /^\*Notes\b/.test(l));
+  if (notes !== -1) lines = lines.slice(0, notes);
+  let fenced = false;
+  return lines.map((line) => {
+    if (/^\s{0,3}(```|~~~)/.test(line)) { fenced = !fenced; return line; }
+    if (fenced) return line;
+    return line
+      .replace(DOCS_SRC_PATH, (whole, rel) => {
+        const abs = path.join(DOCS_SRC, rel);
+        const target = docsMeta.find((d) => norm(d.absSrc) === norm(abs));
+        return target ? `[${target.title}](${toPosix(path.relative(srcDir, abs))})` : whole;
+      })
+      .replace(/`(https?:\/\/[^`\s]+)`/g, "[$1]($1)");
+  }).join("\n").trimEnd() + "\n";
+}
+for (const doc of docsMeta.filter((d) => d.col.id === "articles")) {
+  doc.md = prepareArticleMd(doc.md, doc.col.srcDir);
+  const a = articleByPage.get(doc.file.replace(/\.md$/i, ""));
+  if (a) {
+    doc.article = a;
+    doc.desc = a.summary;
+  }
+}
+
+// sort onboarding docs into reading order; ADRs are already numeric; articles by number
 for (const col of collections) {
-  if (col.id === "onboarding") {
+  if (col.id === "articles") {
+    col.docs = docsMeta.filter((d) => d.col === col)
+      .sort((a, b) => (a.article ? a.article.n : 0) - (b.article ? b.article.n : 0));
+  } else if (col.id === "onboarding") {
     col.docs = docsMeta.filter((d) => d.col === col)
       .sort((a, b) => {
         const [ra, sa] = onbRank(a.file), [rb, sb] = onbRank(b.file);
@@ -342,6 +454,9 @@ const LANG_LABELS = {
   bicep: "Bicep",
   js: "JavaScript", javascript: "JavaScript", ts: "TypeScript", typescript: "TypeScript",
   html: "HTML", css: "CSS", diff: "Diff", text: "Text", plaintext: "Text",
+  http: "HTTP", protobuf: "Protobuf",
+  /* No highlight.js grammar either; labelled and rendered plain like bicep. */
+  razor: "Razor",
 };
 
 function rewriteHref(href) {
@@ -417,7 +532,10 @@ function makeRenderer(slugCounts) {
         }
       }
       const label = language ? ` data-lang="${escapeAttr(LANG_LABELS[language] || language)}"` : "";
-      return `<pre class="doc-pre"${label}><code class="${langClass.trim()}">${body}</code></pre>\n`;
+      /* tabindex: a block wider than the column scrolls horizontally, and a scroll
+         region a keyboard cannot reach fails WCAG 2.1.1 (axe scrollable-region-focusable).
+         Which blocks overflow depends on the viewport, so every block is focusable. */
+      return `<pre class="doc-pre" tabindex="0"${label}><code class="${langClass.trim()}">${body}</code></pre>\n`;
     },
   };
 }
@@ -617,13 +735,15 @@ function mermaidHtml(prefix) {
   </script>`;
 }
 
-function page({ outRel, title, description, contentHtml, hasMermaid, jsonLd }) {
+function page({ outRel, title, description, contentHtml, hasMermaid, jsonLd, nav, ogImage }) {
   const prefix = assetPrefix(outRel);
   const canonical = `${SITE}/${outRel}`;
   const fullTitle = `${title} · MMCA · Ivan Ball-llovera`;
-  const ld = jsonLd
-    ? `\n  <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`
-    : "";
+  const image = ogImage || `${SITE}/assets/img/og-image.png`;
+  const imageAlt = ogImage ? title : "Ivan Ball-llovera, Senior Software Architect";
+  const ld = (Array.isArray(jsonLd) ? jsonLd : jsonLd ? [jsonLd] : [])
+    .map((o) => `\n  <script type="application/ld+json">${JSON.stringify(o)}</script>`)
+    .join("");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -640,19 +760,19 @@ ${THEME_COLOR_META}
   <meta property="og:title" content="${escapeAttr(title)}">
   <meta property="og:description" content="${escapeAttr(description)}">
   <meta property="og:url" content="${escapeAttr(canonical)}">
-  <meta property="og:image" content="${SITE}/assets/img/og-image.png">
-  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:image" content="${escapeAttr(image)}">
+  <meta property="og:image:alt" content="${escapeAttr(imageAlt)}">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escapeAttr(title)}">
   <meta name="twitter:description" content="${escapeAttr(description)}">
-  <meta name="twitter:image" content="${SITE}/assets/img/og-image.png">${ld}
+  <meta name="twitter:image" content="${escapeAttr(image)}">${ld}
 ${headAssetsHtml(prefix, "assets/css/docs.css")}
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
-${headerHtml(prefix)}
+${headerHtml(prefix, nav)}
 
   <main id="main">
 ${contentHtml}
@@ -687,10 +807,11 @@ ${items}
 
 /* Machine-readable twin of breadcrumbHtml below: the visual trail has existed for a while with no
    markup behind it, so search results could not show the hierarchy. */
+const DEFAULT_CRUMBS = [["Platform", "platform.html"], ["Reference", "docs/index.html"]];
+
 function breadcrumbJsonLd(col, currentLabel, outRel) {
   const crumbs = [
-    ["Platform", `${SITE}/platform.html`],
-    ["Reference", `${SITE}/docs/index.html`],
+    ...(col.crumbs || DEFAULT_CRUMBS).map(([name, href]) => [name, `${SITE}/${href}`]),
     [col.title, `${SITE}/${col.outDir}/index.html`],
     [currentLabel, `${SITE}/${outRel}`],
   ];
@@ -710,11 +831,12 @@ function breadcrumbHtml(col, prefix, currentLabel, hasRail = false) {
   const railBtn = hasRail
     ? `\n        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>`
     : "";
+  const roots = (col.crumbs || DEFAULT_CRUMBS)
+    .map(([name, href]) => `        <a href="${prefix}${href}">${escapeHtml(name)}</a>
+        <span aria-hidden="true">/</span>`)
+    .join("\n");
   return `      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
-        <a href="${prefix}platform.html">Platform</a>
-        <span aria-hidden="true">/</span>
-        <a href="${prefix}docs/index.html">Reference</a>
-        <span aria-hidden="true">/</span>
+${roots}
         <a href="${prefix}${col.outDir}/index.html">${escapeHtml(col.title)}</a>
         <span aria-hidden="true">/</span>
         <span class="current">${escapeHtml(currentLabel)}</span>${railBtn}
@@ -740,6 +862,60 @@ ${items}
         </aside>`;
 }
 
+/* ----- article pages: byline, hero, pager, structured data ----- */
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August",
+  "September", "October", "November", "December"];
+/* Spelled out by hand rather than toLocaleDateString, so the output never depends on
+   the ICU data of whichever Node the freshness gate happens to run. */
+function longDate(iso) {
+  const d = new Date(iso);
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}
+
+/* Stamped directly under the H1: date, author, the optional Medium copy, then the hero. */
+function articleHeadHtml(a, prefix) {
+  const bits = [];
+  if (a.date) bits.push(`<time datetime="${escapeAttr(a.date)}">${longDate(a.date)}</time>`);
+  bits.push("Ivan Ball-llovera");
+  if (a.url) bits.push(`<a href="${escapeAttr(a.url)}" target="_blank" rel="noopener">Also on Medium ↗</a>`);
+  const hero = a.hero
+    ? `\n<figure class="article-hero"><img src="${prefix}${escapeAttr(webHero(a.hero))}" alt="" width="${HERO_W}" height="${HERO_H}" decoding="async"></figure>`
+    : "";
+  return `<p class="article-meta">${bits.join(' <span aria-hidden="true">·</span> ')}</p>${hero}\n`;
+}
+
+function articlePagerHtml(col, doc) {
+  const list = col.docs.filter((d) => d.article);
+  const i = list.indexOf(doc);
+  const link = (d, rel, dir) => {
+    const href = toPosix(path.relative(path.dirname(doc.outRel), d.outRel));
+    return `<a class="article-pager-link article-pager-link--${dir}" href="${escapeAttr(href)}" rel="${rel}"><span class="article-pager-dir">${dir === "prev" ? "← Previous" : "Next →"}</span><span class="article-pager-title">${escapeHtml(d.label)}</span></a>`;
+  };
+  const parts = [];
+  if (i > 0) parts.push(link(list[i - 1], "prev", "prev"));
+  if (i !== -1 && i < list.length - 1) parts.push(link(list[i + 1], "next", "next"));
+  return parts.length
+    ? `        <nav class="article-pager" aria-label="Series navigation">\n          ${parts.join("\n          ")}\n        </nav>\n`
+    : "";
+}
+
+function articleJsonLd(a, doc) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    headline: doc.title,
+    description: a.summary,
+    url: `${SITE}/${doc.outRel}`,
+    mainEntityOfPage: `${SITE}/${doc.outRel}`,
+    ...(a.hero ? { image: `${SITE}/${a.hero}` } : {}),
+    ...(a.date ? { datePublished: a.date } : {}),
+    author: { "@type": "Person", name: "Ivan Ball-llovera", url: SITE },
+    isPartOf: { "@type": "CreativeWorkSeries", name: "The MMCA.Common series", url: `${SITE}/articles/index.html` },
+    position: a.n,
+    ...(a.url ? { sameAs: a.url } : {}),
+  };
+}
+
 function docFootHtml(col, doc) {
   const prefix = assetPrefix(doc.outRel);
   const parts = [`<a class="btn btn--ghost" href="${prefix}${col.outDir}/index.html">← Back to ${escapeHtml(col.title)}</a>`];
@@ -756,6 +932,7 @@ mkdirSync(path.join(WEBSITE_ROOT, "docs", "adr"), { recursive: true });
 mkdirSync(path.join(WEBSITE_ROOT, "docs", "onboarding"), { recursive: true });
 mkdirSync(path.join(WEBSITE_ROOT, "docs", "governance"), { recursive: true });
 mkdirSync(path.join(WEBSITE_ROOT, "docs", "guides"), { recursive: true });
+mkdirSync(path.join(WEBSITE_ROOT, "articles"), { recursive: true });
 
 let written = 0, mermaidPages = 0, tocPages = 0;
 
@@ -925,7 +1102,14 @@ const WRITTEN_DOCS = new Set();
 for (const col of collections) {
   for (const doc of col.docs) {
     const ctx = { srcDir: col.srcDir, outRel: doc.outRel, hasMermaid: false, toc: [] };
-    const body = renderMarkdown(doc.md, ctx);
+    let body = renderMarkdown(doc.md, ctx);
+    const a = doc.article;
+    if (a) {
+      /* The source's bold "Subtitle:" paragraph is the article's standfirst. */
+      body = body
+        .replace(/<\/h1>\n/, () => `</h1>\n${articleHeadHtml(a, assetPrefix(doc.outRel))}`)
+        .replace(/<p><strong>Subtitle:<\/strong>\s*/, '<p class="article-subtitle">');
+    }
     if (ctx.hasMermaid) mermaidPages++;
     const isIndex = doc.file === col.indexSrc;
     const currentLabel = isIndex ? "Overview" : doc.label;
@@ -972,20 +1156,23 @@ ${breadcrumbHtml(col, prefix, currentLabel, Boolean(aside))}
       <div class="doc-layout${aside ? " doc-layout--toc" : ""}">
 ${sidebarHtml(col, doc.outRel)}
         <article class="doc-content">
-          <p class="eyebrow doc-kicker">${escapeHtml(col.kicker)}</p>
+          <p class="eyebrow doc-kicker">${escapeHtml(a ? `${catLabels.get(a.cat) || col.kicker} · No. ${a.n}` : col.kicker)}</p>
 ${indentedBody}
-${docFootHtml(col, doc)}
+${a ? articlePagerHtml(col, doc) : ""}${docFootHtml(col, doc)}
         </article>
 ${aside}
       </div>
     </div>`;
+    const crumbLd = breadcrumbJsonLd(col, currentLabel, doc.outRel);
     const html = page({
       outRel: doc.outRel,
       title: doc.title,
       description: doc.desc || `${col.title}: ${doc.title}.`,
       contentHtml: content,
       hasMermaid: ctx.hasMermaid,
-      jsonLd: breadcrumbJsonLd(col, currentLabel, doc.outRel),
+      jsonLd: a ? [articleJsonLd(a, doc), crumbLd] : crumbLd,
+      nav: col.nav,
+      ogImage: a && a.hero ? `${SITE}/${a.hero}` : undefined,
     });
     writeFileSync(path.join(WEBSITE_ROOT, doc.outRel), html);
     WRITTEN_DOCS.add(toPosix(doc.outRel));
@@ -1065,6 +1252,7 @@ const pruned = [];
     }
   };
   walk(path.join(WEBSITE_ROOT, "docs"));
+  walk(path.join(WEBSITE_ROOT, "articles"));
 }
 
 /* ----- vendor mermaid (only referenced by pages that contain diagrams) ----- */
@@ -1118,8 +1306,9 @@ for (const [pkg, file] of FONT_FILES) {
    ============================================================================ */
 
 const adrByNum = new Map(adrFiles.map((f) => [f.slice(0, 3), f]));
-const catLabels = new Map(ARTICLE_CATEGORIES.map((c) => [c.key, c.label]));
-const publishedArticles = ARTICLES.filter((a) => a.url).sort((a, b) => b.n - a.n);
+/* Published = has a page on this site. The Medium `url` is an optional second copy. */
+const publishedArticles = ARTICLES.filter((a) => a.page).sort((a, b) => b.n - a.n);
+const articleHref = (a, prefix = "") => `${prefix}articles/${a.page}.html`;
 
 /* "ADR 006/007/008" -> ["006", "007", "008"] */
 function adrNumbers(adr) {
@@ -1129,19 +1318,6 @@ function adrNumbers(adr) {
 function adrHref(num, prefix = "") {
   const f = adrByNum.get(String(num).padStart(3, "0"));
   return f ? `${prefix}docs/adr/${f.replace(/\.md$/i, ".html")}` : null;
-}
-
-/* articles.js points `hero` at the 1600x840 PNG, because that file is the source hero
-   uploaded to Medium when a piece publishes. The site serves the 800px WebP that
-   `npm run images` derives from it (about 97% smaller across the 50 heroes). Keeping the
-   swap here means the data file keeps naming the real source and no page references a
-   35 MB asset. If a WebP is missing, fall back to the PNG rather than emit a broken src. */
-const HERO_W = 800;
-const HERO_H = 420;
-
-function webHero(hero) {
-  const webp = hero.replace(/\.png$/i, ".webp");
-  return existsSync(path.join(WEBSITE_ROOT, webp)) ? webp : hero;
 }
 
 /* Same markup assets/js/writing.js used to build at runtime, with two additions: the ADR reference
@@ -1159,9 +1335,10 @@ function articleCardHtml(a) {
       ? `<li class="tag tag--accent"><a href="${escapeAttr(href)}">${escapeHtml(label)}</a></li>`
       : `<li class="tag tag--accent">${escapeHtml(label)}</li>`;
   }).join("");
-  const foot = a.url
-    ? `<a href="${escapeAttr(a.url)}" target="_blank" rel="noopener">Read on Medium ↗</a>`
-    : `<span class="coming-soon">● Coming soon</span>`;
+  const medium = a.url
+    ? ` <a class="card-alt" href="${escapeAttr(a.url)}" target="_blank" rel="noopener">Also on Medium ↗</a>`
+    : "";
+  const foot = `<a href="${escapeAttr(articleHref(a))}">Read the article →</a>${medium}`;
   return `          <article class="card card--link article-card" data-cat="${escapeAttr(a.cat)}">
             <div class="thumb">${thumb}</div>
             <div class="body">
@@ -1226,22 +1403,24 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
   /* ----- featured writing -----
      The home page used to carry three hand-written summaries of articles, which meant
      three more places to keep in sync with articles.js and no hero image on any of
-     them. These are the three most recently published pieces, rendered from the same
-     data and the same hero art as the Writing page, and they refresh themselves the
-     moment a new Medium URL lands in articles.js. */
+     them. These are the three most recently published pieces that have hero art,
+     rendered from the same data as the Writing page, and they refresh themselves the
+     moment a new entry lands in articles.js. Hero art is what this row is for, so a
+     piece still waiting for its hero is skipped here (it keeps its Writing card)
+     rather than shown as a numbered placeholder. */
   const featured = publishedArticles
-    .slice()
+    .filter((a) => a.hero)
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || b.n - a.n)
     .slice(0, 3);
   html = replaceRegion(html, "featured-articles",
     featured.map((a) =>
-`          <a class="card card--link article-card" href="${escapeAttr(a.url)}" target="_blank" rel="noopener">
+`          <a class="card card--link article-card" href="${escapeAttr(articleHref(a))}">
             <div class="thumb"><img src="${escapeAttr(webHero(a.hero))}" alt="" width="${HERO_W}" height="${HERO_H}" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">${escapeHtml(catLabels.get(a.cat) || "Article")} · No. ${a.n}</span>
               <h3>${escapeHtml(a.title)}</h3>
               <p>${escapeHtml(a.summary)}</p>
-              <div class="card-foot"><span class="go">Read on Medium ↗</span></div>
+              <div class="card-foot"><span class="go">Read the article →</span></div>
             </div>
           </a>`).join("\n"), file);
 
@@ -1294,8 +1473,8 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
           "@type": "TechArticle",
           headline: a.title,
           description: a.summary,
-          url: a.url,
-          image: `${SITE}/${a.hero}`,
+          url: `${SITE}/${articleHref(a)}`,
+          ...(a.hero ? { image: `${SITE}/${a.hero}` } : {}),
           ...(a.date ? { datePublished: a.date } : {}),
           author: { "@type": "Person", name: "Ivan Ball-llovera", url: SITE },
         },
@@ -1456,17 +1635,8 @@ ${bar("Implementation", grab("Implementation"), true)}
     }
   }
 
-  /* The published series. These leave the site (they live on Medium), so the
-     result list marks them and the link opens in a new tab. */
-  for (const a of publishedArticles) {
-    SEARCH_RECORDS.push({
-      u: a.url, t: a.title, d: `Article no. ${a.n}`,
-      k: catLabels.get(a.cat) || "Writing", x: a.summary, e: 1,
-      /* The summary IS the whole text this site holds for an article; the
-         article itself lives on Medium. */
-      b: a.summary,
-    });
-  }
+  /* The article series needs nothing here: its pages are a collection, so they
+     are indexed full-text, section by section, with everything else above. */
 
   /* The runtime reads these options straight back out of the envelope and hands
      them to MiniSearch.loadJS, so both sides are guaranteed to agree on which
@@ -1495,8 +1665,9 @@ ${bar("Implementation", grab("Implementation"), true)}
 
 /* ----- feed.xml -----
    The aggregators and feed readers subscribe to this; Morning Dew's Dew Submitter takes a feed URL
-   once instead of a link per article. Entries point at Medium (where the article lives), not at the
-   site, so a subscriber lands on the real thing. */
+   once instead of a link per article. Entries link to the article's page on this site, the
+   canonical copy. The guid stays the Medium URL for a piece that was first announced there, so a
+   reader that already holds that item does not see it again as new. */
 {
   /* Derived from the newest published article, NOT from the wall clock. A build-time
      timestamp here rewrote feed.xml on every run, which made the build non-idempotent
@@ -1513,8 +1684,8 @@ ${bar("Implementation", grab("Implementation"), true)}
     const adrs = adrNumbers(a.adr).map((n) => `\n      <category>ADR ${n}</category>`).join("");
     return `    <item>
       <title>${escapeHtml(a.title)}</title>
-      <link>${escapeHtml(a.url)}</link>
-      <guid isPermaLink="true">${escapeHtml(a.url)}</guid>${pub}
+      <link>${escapeHtml(`${SITE}/${articleHref(a)}`)}</link>
+      <guid isPermaLink="true">${escapeHtml(a.url || `${SITE}/${articleHref(a)}`)}</guid>${pub}
       <description>${escapeHtml(a.summary)}</description>
       <category>${escapeHtml(catLabels.get(a.cat) || "Article")}</category>${adrs}
     </item>`;

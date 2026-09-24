@@ -283,7 +283,7 @@
           (<code>DependencyInjection.cs:57-58</code>). The command registrations (<code>DependencyInjection.cs:134-140</code>), read
           top to bottom, therefore list innermost-first, and the XML doc above them draws the resulting nesting
           (<code>DependencyInjection.cs:63-70</code>):</p>
-          <pre class="doc-pre"><code class="">FeatureGateCommandDecorator                    outermost (registered last)
+          <pre class="doc-pre" tabindex="0"><code class="">FeatureGateCommandDecorator                    outermost (registered last)
   -&gt; AuthorizationCommandDecorator
     -&gt; LoggingCommandDecorator
       -&gt; CachingCommandDecorator
@@ -293,7 +293,7 @@
               -&gt; ConcreteHandler               the actual business logic</code></pre>
           <p>The query side (<code>DependencyInjection.cs:143-148</code>, drawn at <code>DependencyInjection.cs:76-82</code>) is the same
           chain minus the transaction, since there is nothing to commit on a read:</p>
-          <pre class="doc-pre"><code class="">FeatureGateQueryDecorator
+          <pre class="doc-pre" tabindex="0"><code class="">FeatureGateQueryDecorator
   -&gt; AuthorizationQueryDecorator
     -&gt; LoggingQueryDecorator
       -&gt; CachingQueryDecorator

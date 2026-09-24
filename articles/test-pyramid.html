@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/test-pyramid.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker">
+  <meta property="og:description" content="How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/test-pyramid.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-35.png">
+  <meta property="og:image:alt" content="The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker">
+  <meta name="twitter:description" content="How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-35.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker","description":"How the framework's tests stack up: fast unit and architecture tests at the base, E2E at the tip.","url":"https://ivanball.github.io/articles/test-pyramid.html","mainEntityOfPage":"https://ivanball.github.io/articles/test-pyramid.html","image":"https://ivanball.github.io/assets/img/articles/article-35.png","datePublished":"2026-08-04T11:46:55Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":35,"sameAs":"https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"35 · The test pyramid","item":"https://ivanball.github.io/articles/test-pyramid.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">35 · The test pyramid</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html" aria-current="page">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 35</p>
+          <h1 id="the-test-pyramid-not-the-ice-cream-cone-2254-fast-tests-zero-docker">The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker</h1>
+          <p class="article-meta"><time datetime="2026-08-04T11:46:55Z">August 4, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/the-test-pyramid-not-the-ice-cream-cone-1-880-fast-tests-zero-docker-cb459fda73d9" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-35.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A suite you run constantly is worth more than a suite you run nervously. Here is how
+          MMCA.Common keeps 2,254 tests fast enough to live in the inner loop, with real-database
+          integration coverage and no Docker in sight.</p>
+          <hr>
+          <p>There is a failure mode that almost every long-lived codebase drifts into, and it has a name: the
+          ice-cream cone. The pyramid is inverted. A thin layer of unit tests sits at the bottom, and the bulk of
+          the verification is a fat layer of slow, flaky, Docker-dependent end-to-end tests at the top. The suite
+          takes twenty minutes, fails intermittently for reasons nobody can reproduce, and developers stop running
+          it locally because the inner loop is too painful. The tests that were supposed to give you confidence
+          instead give you a reason to avoid them.</p>
+          <p>MMCA.Common deliberately builds the right shape. <strong>About 2,254 <code>[Fact]</code>/<code>[Theory]</code>, weighted to Core,</strong>
+          form a correct, non-inverted pyramid, with a wide base that runs in milliseconds and needs no database
+          and no Docker. That number, and the architecture behind it, is the single most-cited evidence in the
+          framework&#39;s testability score: category 14 stands at <strong>maturity 4 / implementation 9</strong>, carried by
+          the enforced coverage floor and the size of the suite behind it.</p>
+          <h2 id="why-the-shape-matters-more-than-the-count">Why the shape matters more than the count</h2>
+          <p>The test-count number is not the point. The shape is. The rubric (<a href="../docs/governance/ArchitectureEvaluationCriteria.html">Architecture Evaluation Criteria</a>,
+          category 14) describes a healthy pyramid as &quot;many fast unit tests on domain and application, fewer
+          integration, few E2E,&quot; and names the inverted pyramid, &quot;mostly slow E2E, flaky tests, tests disabled
+          without tracking,&quot; as the headline red flag.</p>
+          <p>The reason is the inner loop. A wide base of fast tests is one you run after every change, which means
+          defects surface in seconds, while you still have the context to fix them. A top-heavy suite is one you
+          run at the end, in CI, after you have moved on, which means defects surface as a red build an hour later
+          with no context. Speed is not a vanity metric. It is what determines whether the tests are part of how
+          you write code or a tax you pay at the end.</p>
+          <h2 id="the-base-fast-pure-no-infrastructure">The base: fast, pure, no infrastructure</h2>
+          <p>The wide base of the MMCA.Common pyramid is pure unit tests with no I/O
+          (<a href="../docs/onboarding/group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a>): domain entity factories and invariants, value
+          objects, the <code>Result</code>/<code>Error</code> primitives, CQRS handlers with mocked repositories, FluentValidation
+          validators, and DTO and request mappers. These dominate the type count and run in-memory in
+          milliseconds. The whole reason this layer can be wide is the framework&#39;s design: Clean Architecture
+          keeps the Domain framework-pure and the Application layer testable without infrastructure, so the
+          logic worth testing is reachable without booting a host or touching a database.</p>
+          <p>Two design choices keep this layer honest. First, time is injected: tests use <code>FakeTimeProvider</code> rather
+          than <code>DateTime.Now</code>, so time-dependent logic (audit stamping, outbox eligibility delays) is
+          deterministic instead of flaky. Second, there is no shared mutable infrastructure to coordinate, so the
+          tests are isolated and parallelizable by construction.</p>
+          <h2 id="the-middle-real-sqlite-two-real-databases-still-no-docker">The middle: real SQLite, two real databases, still no Docker</h2>
+          <p>Above the base sit the persistence and EF-configuration tests, and this is where the &quot;no Docker&quot; claim
+          gets interesting. Rather than mock the ORM (which proves nothing about whether your EF model actually
+          builds) or spin up a SQL Server container (which is slow and adds a runtime dependency to the inner
+          loop), the framework exercises a <strong>real EF Core stack against embedded SQLite.</strong> That means real model
+          building: entity configurations, the outbox, repositories, and the multi-data-source resolver are
+          verified against a real database engine, just a fast embedded one.</p>
+          <p>The standout here is <code>MultiSourceSqliteIntegrationTests</code>, which validates the database-per-service
+          routing over <strong>two real SQLite databases</strong>, a throwaway GUID-named file per logical source under the
+          temp directory. It proves the framework&#39;s hardest data-architecture claims against actual databases
+          rather than a stub: entity routing through the unit of work, per-source outbox capture, the collapse of
+          two logical source names sharing one connection onto a single context, and cross-source navigation
+          population through <code>NavigationLoader</code>. The Data Architecture category, whose evidence list names the same
+          cross-source degrade convention, scores maturity 4 in the evaluation, and this tier does it all without a
+          container.</p>
+          <p>Above that tier, integration tests boot a whole service host through <code>WebApplicationFactory&lt;Program&gt;</code>
+          and hit it over HTTP with a real, resettable database. This is also where the framework&#39;s
+          <strong>ship-the-test-base-as-a-package</strong> decision pays off, which I will come back to.</p>
+          <h2 id="the-cap-and-an-orthogonal-tier">The cap, and an orthogonal tier</h2>
+          <p>At the top of the pyramid are the component tests (bUnit, rendering Blazor components in isolation) and
+          the end-to-end tests (Playwright, driving a real browser). These are deliberately the <em>thinnest</em> layer,
+          the few broad journeys that justify their cost.</p>
+          <p>Sitting <em>outside</em> the pyramid entirely is a fourth, orthogonal tier: the architecture-fitness tests.
+          They assert structural rules over compiled assemblies (the layer-dependency, domain-purity, and
+          microservice-extraction rules) and need neither a database nor a browser. They are the cheapest,
+          fastest tier of all, pure reflection, and they catch a class of regression that no functional test
+          would.</p>
+          <h2 id="shipped-test-packages-consumers-do-not-re-invent-the-harness">Shipped test packages: consumers do not re-invent the harness</h2>
+          <p>Five of the framework&#39;s nineteen published NuGet packages are test <em>infrastructure</em>, not test code, and this is
+          how the pyramid stays consistent across three codebases instead of being rebuilt three times:</p>
+          <ul>
+          <li><code>MMCA.Common.Testing</code>, the integration base: <code>IntegrationTestBase&lt;TFixture&gt;</code> supplies a configured
+          <code>HttpClient</code>, bearer-token management, typed <code>GetAsync&lt;T&gt;</code>/<code>PostAsync&lt;T&gt;</code>/<code>PutAsync&lt;T&gt;</code>/<code>DeleteAsync</code>
+          helpers, per-test database reset, and a thread-safe ID counter. <code>JwtTokenGenerator</code> signs RS256 tokens
+          with an embedded dev keypair so tests exercise the same JWKS validation path production runs.</li>
+          <li><code>MMCA.Common.Testing.E2E</code>, the Playwright base: browser fixtures, Blazor-aware navigation helpers that
+          handle the InteractiveAuto hydration race, Identity page objects, and abstract workflow bases for the
+          Login, Register, Profile, Logout, password-reset and authorization journeys, four of which close with
+          an axe-core WCAG 2.1 AA assertion.</li>
+          <li><code>MMCA.Common.Testing.UI</code>, the bUnit base: <code>BunitComponentTestBase</code> registers MudBlazor&#39;s services,
+          configures loose JSInterop, and wires real auth doubles so component tests resolve <code>&lt;AuthorizeView&gt;</code>
+          cascades.</li>
+          <li><code>MMCA.Common.Testing.Aspire</code>, the AppHost base: <code>AppHostFixtureBase</code> boots a real AppHost once per
+          test collection and waits on each resource&#39;s own readiness signal, while <code>AppHostTestBase&lt;TFixture&gt;</code>
+          hands a test a client bound to a named resource plus typed health, readiness and JWKS assertions.</li>
+          <li><code>MMCA.Common.Testing.Architecture</code>, the fitness-rule library: the architecture rules defined once and
+          consumed by each repo&#39;s thin test suite.</li>
+          </ul>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// A downstream integration test: a few lines of fixture glue, then real HTTP calls.</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">CatalogTests</span> : <span class="hljs-title">IntegrationTestBase</span>&lt;<span class="hljs-title">CatalogFixture</span>&gt;
+{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">CatalogTests</span>(<span class="hljs-params">CatalogFixture fixture</span>) : <span class="hljs-title">base</span>(<span class="hljs-params">fixture</span>)</span> { }
+
+    [<span class="hljs-meta">Fact</span>]
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task <span class="hljs-title">Get_returns_seeded_product</span>()</span>
+    {
+        <span class="hljs-keyword">var</span> product = <span class="hljs-keyword">await</span> GetAsync&lt;ProductDto&gt;(<span class="hljs-string">&quot;/api/products/1&quot;</span>);
+        product.Name.Should().Be(<span class="hljs-string">&quot;Widget&quot;</span>);
+    }
+    <span class="hljs-comment">// HttpClient, auth token, typed helpers, and per-test DB reset all come from the base.</span>
+}</code></pre>
+          <p>The rubric calls this out explicitly under category 14: &quot;Shared test infrastructure (page objects,
+          fixtures, base classes) reused across consumers, not duplicated.&quot; ADC and Store write integration tests
+          with a few lines of fixture glue instead of re-deriving the HTTP, auth, and reset plumbing. One base
+          evolves, all consumers inherit the fix.</p>
+          <p>That first package carries more than an integration base, though. <code>MMCA.Common.Testing</code> also ships the
+          framework&#39;s <strong>runtime conformance suites</strong> (ADR-058): seven abstract contract bases, one per runtime
+          contract, that a consuming host subclasses to prove it wired the framework correctly.</p>
+          <ul>
+          <li><code>ProblemDetailsContractTestsBase&lt;TFixture&gt;</code> asserts both error-shaping paths, ASP.NET Core model
+          validation (400, <code>application/problem+json</code> carrying <code>type</code>, <code>traceId</code>, and <code>errors</code>) and the
+          framework&#39;s <code>HandleFailure</code> Result mapping (404), against one shared
+          <code>AssertProblemDetailsShapeAsync</code> check.</li>
+          <li><code>OpenApiContractTestsBase&lt;TFixture&gt;</code> asserts the served <code>/openapi/v1.json</code> is OpenAPI 3.x and still
+          describes every public resource the host pinned.</li>
+          <li><code>ServiceInfoVersioningContractTestsBase&lt;TFixture&gt;</code> drives <code>/ServiceInfo</code> at <code>api-version: 1.0</code> and
+          then <code>2.0</code> and checks the deprecated and supported reporting headers.</li>
+          <li><code>SecurityHeadersTestsBase</code> probes <code>/alive</code> and pins six response headers, including
+          <code>Content-Security-Policy: frame-ancestors &#39;none&#39;</code> and an HSTS <code>max-age</code>.</li>
+          <li><code>GracefulShutdownTestsBase&lt;TEntryPoint&gt;</code> calls a real <code>IHost.StopAsync</code> under a bounded token and
+          asserts <code>ApplicationStopping</code> then <code>ApplicationStopped</code> fired.</li>
+          <li><code>MmcaGatewayHardeningTestsBase&lt;TEntryPoint&gt;</code> drives a booted gateway through eight edge gates: the
+          per-client-IP rate limiter and its bypass list, the tighter named policy on the credential route, a
+          correlation id generated when the caller supplies none and echoed when it does, one readiness check
+          per downstream service, an active health probe on every cluster, and partitioning by the forwarded
+          client IP rather than the proxy IP.</li>
+          <li><code>DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;</code> resolves the
+          decorated handler out of a built provider and walks the constructed object graph, asserting the
+          documented nesting order.</li>
+          </ul>
+          <p>This is the boundary against the architecture-fitness tier from the section above. Those rules assert
+          structure and registration, and their ADR draws that line itself in its trade-offs: &quot;The tests assert
+          <strong>structure / registration</strong>, not runtime behavior.&quot; Fitness functions check shape. These check
+          behavior, and nothing here is inferred from a registration list. Service hosts boot through
+          <code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code>, which creates a GUID-named throwaway SQL Server
+          database, lets the host&#39;s own migrate-on-start strategy apply the schema, resets data between tests
+          with Respawn, and drops the database on disposal. Database-free hosts (the two YARP gateways) boot
+          through <code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code>, which pins <code>UseEnvironment(&quot;Production&quot;)</code> so
+          the production-only branches (restrictive CORS, HSTS emission) are the ones actually under test, and
+          captures the started <code>IHost</code>, because <code>StopAsync</code> is not reachable through the <code>WebApplicationFactory</code>
+          surface at all.</p>
+          <p>The cost of adopting one stays small, which is the point of writing the body once: a subclass supplies
+          two probe requests, or a path-count floor plus a pinned resource list, or a client factory, and the two
+          gateway shutdown subclasses are single-line declarations with no body. There are no committed snapshots
+          either. The OpenAPI guard asserts against the live document rather than a checked-in file, so a new
+          controller can never leave a stale snapshot behind.</p>
+          <p>Adoption is partial, and that is worth reporting as an inventory rather than a clean sweep. The OpenAPI
+          guard and the problem-details guard both run on every extracted REST host: four ADC services and three
+          Store services. Versioning is subclassed once per repo (ADC Conference and Store Catalog), enough to keep
+          the machinery exercised and no more; Article 44 takes that one apart in detail. Security headers run on
+          four hosts, the two Gateways plus both web heads, while graceful shutdown stays <strong>on the two Gateways
+          only</strong>, so no service host asserts that contract. And MMCA.Helpdesk, the minimal reference app, takes the
+          two bases that need no booted service: it subclasses <code>DecoratorPipelineOrderTestsBase</code> and the
+          <code>MiddlewarePipelineOrderTestsBase</code> that ships beside the conformance suites, and leaves the HTTP contracts
+          to the two larger apps. Shipping a base is not the same as gating a host, and the inventory, not the
+          package list, is the honest answer to &quot;is this contract actually guarded here.&quot;</p>
+          <h2 id="the-apphost-tier-a-compiled-claim-about-the-composition">The AppHost tier: a compiled claim about the composition</h2>
+          <p>There is one file the tiers above never execute: the AppHost. It is the only place that states how a
+          whole stack fits together, which project resources exist, which database each one owns, which broker they
+          share, where JWKS discovery points, and the <code>WaitFor</code> graph that orders the startup. A solution build
+          type-checks that file and never runs it, so a resource renamed on one side of a <code>WithReference</code> still
+          compiles. The in-process integration tier boots hosts directly through <code>WebApplicationFactory</code>, which is
+          the point of that tier and also means it never sees the orchestration. The E2E tier runs against a
+          deployed environment, by which time a composition mistake is an incident rather than a test failure.
+          ADR-117 closes that gap as a package rather than a per-repo copy, and both consumer smoke tiers subclass
+          it.</p>
+          <p><code>AppHostFixtureBase</code> is a collection fixture: it boots the real AppHost once through an
+          <code>IDistributedApplicationTestingBuilder</code>, starts it, waits for the resources to report ready, and hands the
+          running <code>DistributedApplication</code> to every test in the collection. The wait is the design point. &quot;The
+          application started&quot; only means the orchestrator launched the processes, so the fixture awaits each
+          resource&#39;s own health signal instead: resources that carry a health check are awaited healthy, resources
+          that carry none can only be awaited Running, and the fixture says which happened rather than pretending
+          the two are the same. Teardown stops and disposes the application and restores every environment variable
+          the fixture pushed, so one collection cannot leak key material into the next.</p>
+          <p>A missing precondition is a skip, not a failure, and that is what keeps the tier honest on a laptop.
+          <code>AppHostEnvironmentGate</code> reads the opt-in variable <code>MMCA_APPHOST_TESTS</code> and the default requirement is
+          that variable plus a container runtime, so the tier is off unless you ask for it; when something is
+          missing, <code>SkipReason</code> carries a sentence a human can act on and nothing is started. The fixture also mints
+          an ephemeral RS256 keypair into <code>E2E_JWT_*</code> when the environment has none, because an Identity resource
+          without key material answers every request including its liveness probe with a 500, never turns healthy,
+          and takes every <code>WaitFor</code> edge behind it down with it. That failure mode is in the record because it cost
+          an eight-day red nightly to diagnose.</p>
+          <p><code>AppHostTestBase&lt;TFixture&gt;</code> then gives a test the two things only a running stack can hand it, an
+          <code>HttpClient</code> bound to a named resource and a resolved connection string, plus typed assertions over the
+          wiring contracts: <code>AssertHealthyAsync</code>, <code>AssertAliveAsync</code>, <code>AssertReadyAsync</code>, <code>AssertJwksAsync</code> and
+          <code>AssertH2cAsync</code>. The probe paths are constants (<code>/health</code>, <code>/alive</code>, <code>/health/ready</code>,
+          <code>/.well-known/jwks.json</code>) mirrored from the framework&#39;s own, with a unit test cross-asserting each pair so
+          a rename cannot silently orphan a probe. One rule is written into the constant&#39;s own documentation: a
+          startup gate probes liveness, never readiness, because a readiness endpoint aggregates downstream checks
+          and gating startup on it can deadlock the dependency graph.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Illustrative: the consumer names the AppHost, the base owns boot, readiness, skip, and teardown.</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">MyAppHostFixture</span> : <span class="hljs-title">AppHostFixtureBase</span>&lt;<span class="hljs-title">Projects.MyApp_AppHost</span>&gt;
+{
+    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> AppHostEnvironmentRequirement RequiredEnvironment =&gt;
+        AppHostEnvironmentRequirement.OptIn | AppHostEnvironmentRequirement.Docker;
+}
+
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">StackSmokeTests</span>(<span class="hljs-params">MyAppHostFixture fixture</span>) : <span class="hljs-title">AppHostTestBase</span>&lt;<span class="hljs-title">MyAppHostFixture</span>&gt;(<span class="hljs-params">fixture</span>)</span>
+{
+    [<span class="hljs-meta">Fact</span>]
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task <span class="hljs-title">Identity_publishes_its_key_set</span>()</span>
+    {
+        Assert.SkipWhen(!Fixture.IsAvailable, Fixture.SkipReason!);
+        <span class="hljs-keyword">await</span> AssertJwksAsync(<span class="hljs-string">&quot;identity&quot;</span>);
+    }
+}</code></pre>
+          <h2 id="accessibility-as-a-shipped-test-contract">Accessibility as a shipped test contract</h2>
+          <p>The E2E package carries one more contract, and it is the tier where a published standard turns into a
+          build failure instead of a review comment. ADR-063 records it: WCAG 2.1 AA ships as a named constant in
+          <code>MMCA.Common.Testing.E2E</code> rather than as a setting each repo retypes.</p>
+          <p><code>AxeOptions.Wcag21Aa</code> pins every axe scan to exactly four tags, <code>wcag2a</code>, <code>wcag2aa</code>, <code>wcag21a</code>, and
+          <code>wcag21aa</code>: levels A and AA across WCAG 2.0 and 2.1. What is left out is the load-bearing part. axe&#39;s
+          &quot;best-practice&quot; rules are deliberately outside the target, and that exclusion is what makes the check
+          blockable rather than advisory. Best-practice findings are opinions, A and AA findings are a standard,
+          and a gate that can go red on an opinion gets demoted to a suggestion within a month.</p>
+          <p>A violation is a thrown failure, not a report. <code>AssertNoAccessibilityViolationsAsync</code> runs axe and
+          throws <code>AccessibilityViolationException</code> carrying each rule&#39;s impact, id, help text, and the offending
+          markup compacted to one line per node, so a red gate points at the element. The package&#39;s Identity
+          workflow bases call it themselves: <code>UserLoginTestsBase</code>, <code>UserRegistrationTestsBase</code>,
+          <code>ProfileManagementTestsBase</code>, and <code>PasswordResetTestsBase</code> each end their journey by asserting against
+          <code>AxeOptions.Wcag21Aa</code>, so an app that subclasses them inherits the scan without writing one. For its own
+          pages a consumer picks between two helpers on <code>E2ETestBase</code>, and the pick is the declaration of which rule
+          set applies: <code>ScanAsync</code> waits for any loading bar to clear and asserts the strict options, <code>ScanGridAsync</code>
+          waits for a seeded data row and asserts with the one recorded exception.</p>
+          <p>There is exactly one exception, and it exists as a second option value rather than a suppression flag.
+          <code>Wcag21AaExceptMudPagerCombobox</code> carries the same four tags and disables a single rule,
+          <code>aria-input-field-name</code>, for pages whose only combobox is MudBlazor&#39;s own <code>MudTablePager</code> &quot;rows per
+          page&quot; select, which gets no accessible name and exposes no <code>Label</code> parameter to fix it from app markup.
+          Every other WCAG 2.1 AA rule still runs on those pages. One named, scoped, recorded exception is the
+          honest shape here: the caller has to say which contract it is scanning under, and the cost is written
+          down rather than buried, because the rule is off for the whole page scan and not just for the pager
+          node.</p>
+          <p>Enforcement then differs per repo, and precision matters more than a slogan. MMCA.Common scans its own
+          backend-less gallery across chromium, firefox, and webkit, and all three are required merge checks. ADC
+          and Store run a chromium-only leg against the full Aspire stack as a deploy gate, and that gate is
+          scoped to UI changes, so a backend-only or infra-only deploy legitimately skips it: &quot;deployed&quot; does not
+          always mean &quot;axe ran on this commit&quot;. MMCA.Helpdesk adopts none of it. It pins the package version,
+          references it from no project, and has no E2E test project at all, so the seed demonstrates the layers
+          and not this contract.</p>
+          <h2 id="runner-and-gate-xunit-v3-mtp-and-a-coverage-floor">Runner and gate: xUnit v3, MTP, and a coverage floor</h2>
+          <p>A detail that trips up people coming from older .NET projects: the suite runs on the <strong>Microsoft Testing
+          Platform (MTP), not VSTest</strong>, configured in <code>global.json</code>, with <strong>xUnit v3</strong>, AwesomeAssertions, and
+          Moq. To run one class or method you target the project and pass an MTP filter after <code>--</code>
+          (<code>-- --filter-class &quot;*FooTests*&quot;</code> or <code>-- --filter-method &quot;*Pattern*&quot;</code>). One sharp edge worth knowing: every test
+          project must contain at least one test or MTP exits with code 8, so the unit run floors at
+          <code>--minimum-expected-tests 2000</code> (the suite is about 2,254): a discovery or filter regression that
+          silently drops thousands of tests fails the job instead of passing green with a handful discovered.</p>
+          <p>And the suite is a real gate, not a suggestion. CI collects coverage via <code>dotnet-coverage</code> (which wraps
+          the MTP run and returns its exit code, so a test failure still fails the build) and <strong>enforces a
+          coverage floor</strong>: the unit tier must stay at or above <strong>68.3%</strong> line coverage (measured about 70.3%) as
+          a regression backstop, gated on the unit tier alone rather than a gallery-diluted merged report, and
+          the floor only ever moves upward.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>The shape is right, but the scorecard names real gaps and one is squarely in the testing story.</p>
+          <ul>
+          <li><strong>The UI tier&#39;s visual check is markup-deep, not pixel-deep.</strong> The framework ships roughly a dozen
+          reusable Blazor primitives in <code>MMCA.Common.UI</code>, some with real branching logic (<code>MobileCardList</code>,
+          <code>MobileInfiniteScrollList</code>), and the pyramid carries a fast base layer <em>for the UI</em> under them: the
+          <code>MMCA.Common.Testing.UI</code> bUnit base backs their component tests, a real-browser render-smoke gate
+          runs in CI, and a render-snapshot regression tier diffs their markup against committed baselines.
+          Category 28 (Front-End Testing) scores maturity 4 / implementation 9 on that evidence. The limit is
+          what a snapshot compares: markup structure, not rendered pixels.</li>
+          <li><strong>SQLite is not SQL Server.</strong> The middle tier is fast precisely because it uses SQLite, which means
+          SQL-Server-specific behavior (certain query translations, concurrency-token semantics) is validated
+          against an approximation. The scorecard&#39;s Data Architecture row is candid about the surrounding
+          shape: it holds maturity at 4 with implementation at 9, and ADR-018 records the non-SQL engines as
+          deliberately latent, with no production entity on them. The trade buys a fast, Docker-free inner loop
+          at the cost of needing the consumer apps and CI to cover the SQL-Server-specific paths.</li>
+          <li><strong>The honest limit is mutation testing, not coverage.</strong> The unit tier holds a <strong>68.3%</strong> line-coverage
+          floor (measured about 70.3%), enforced in CI and ratcheted up as the suite grows rather than left as
+          an aspiration. What holds category 14 below the top band is a single Exemplary gap: there is no
+          mutation testing on the Core tier, so a green suite proves the lines run, not that every assertion
+          would catch a mutant. That is a real limit, stated plainly.</li>
+          </ul>
+          <p>None of these argue against the pyramid. They are the cost of keeping the base fast and honest about
+          what each tier actually proves.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The shape ports to any stack:</p>
+          <ol>
+          <li><strong>Make the base fast enough to run on every save.</strong> No Docker, no network, no shared database in the
+          layer you run constantly. If your unit tests need a container, they are not unit tests.</li>
+          <li><strong>Use a real but embedded database for persistence tests.</strong> A throwaway SQLite file (or your stack&#39;s
+          equivalent) proves the ORM mapping actually builds without the cost of a container. Mocking the ORM
+          proves nothing.</li>
+          <li><strong>Inject time and other ambient state.</strong> A <code>FakeTimeProvider</code>-style swap point turns flaky time-dependent
+          tests into deterministic ones.</li>
+          <li><strong>Ship your test harness, do not copy it.</strong> If you have more than one service, put the fixtures, page
+          objects, and base classes in a shared package so every consumer reuses one evolving harness.</li>
+          <li><strong>Gate it, then ratchet.</strong> A modest coverage floor that only goes up beats an aspirational target
+          nobody enforces.</li>
+          </ol>
+          <p>The rule of thumb is the title: build the pyramid, not the ice-cream cone. A suite you run constantly,
+          because it is fast and green, is worth more than a comprehensive suite you run nervously, because it is
+          slow and flaky.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why the pyramid&#39;s shape matters more than its count, the fast no-Docker base
+          (pure unit tests plus <code>FakeTimeProvider</code>), the real-SQLite middle tier with two databases in
+          <code>MultiSourceSqliteIntegrationTests</code>, the thin bUnit/Playwright cap and the orthogonal fitness-test tier,
+          the five shipped test packages that let consumers reuse the harness, the seven runtime conformance bases
+          that prove a really-booted host wired the framework&#39;s contracts (ADR-058) and their partial adoption, the
+          AppHost tier that compiles a claim about the composition itself (ADR-117), WCAG 2.1 AA shipped as a named
+          axe target with one recorded exception (ADR-063), the xUnit v3 / MTP runner and the CI coverage floor, and
+          the UI tier&#39;s honest limit: markup-deep snapshots rather than pixel-deep rendering.</p>
+          <p><strong>Next in the series:</strong> soft-delete vs the right to erasure, the GDPR conflict that was this
+          framework&#39;s lowest-scoring category, and the boundary that resolved it.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Testing section of the
+          contributor guide, or <code>dotnet add package MMCA.Common.Testing</code> and reuse the integration base in your
+          own app.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 The Testing and Build &amp; Test Commands sections (<code>CLAUDE.md</code>) are in the repo; the testability
+          score (§14/§28) is the current number in <a href="../docs/governance/common-ArchitectureScorecard.html">MMCA.Common: Architecture Scorecard</a>.</li>
+          </ul>
+          <p><em>Tags: .NET, Testing, C Sharp, Software Architecture, Test Automation</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="architecture-fitness-functions.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">34 · Architecture fitness functions</span></a>
+          <a class="article-pager-link article-pager-link--next" href="soft-delete-vs-erasure.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">36 · Soft-delete vs the right to erasure</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-the-shape-matters-more-than-the-count">Why the shape matters more than the count</a></li>
+            <li><a href="#the-base-fast-pure-no-infrastructure">The base: fast, pure, no infrastructure</a></li>
+            <li><a href="#the-middle-real-sqlite-two-real-databases-still-no-docker">The middle: real SQLite, two real databases, still no Docker</a></li>
+            <li><a href="#the-cap-and-an-orthogonal-tier">The cap, and an orthogonal tier</a></li>
+            <li><a href="#shipped-test-packages-consumers-do-not-re-invent-the-harness">Shipped test packages: consumers do not re-invent the harness</a></li>
+            <li><a href="#the-apphost-tier-a-compiled-claim-about-the-composition">The AppHost tier: a compiled claim about the composition</a></li>
+            <li><a href="#accessibility-as-a-shipped-test-contract">Accessibility as a shipped test contract</a></li>
+            <li><a href="#runner-and-gate-xunit-v3-mtp-and-a-coverage-floor">Runner and gate: xUnit v3, MTP, and a coverage floor</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

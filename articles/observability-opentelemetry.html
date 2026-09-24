@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Observability by Default: OpenTelemetry and Azure Monitor in MMCA · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A shared OpenTelemetry baseline with CQRS duration metrics, correlation IDs, and outbox-poll span filtering, exported to Azure Monitor.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/observability-opentelemetry.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Observability by Default: OpenTelemetry and Azure Monitor in MMCA">
+  <meta property="og:description" content="A shared OpenTelemetry baseline with CQRS duration metrics, correlation IDs, and outbox-poll span filtering, exported to Azure Monitor.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/observability-opentelemetry.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-48.png">
+  <meta property="og:image:alt" content="Observability by Default: OpenTelemetry and Azure Monitor in MMCA">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Observability by Default: OpenTelemetry and Azure Monitor in MMCA">
+  <meta name="twitter:description" content="A shared OpenTelemetry baseline with CQRS duration metrics, correlation IDs, and outbox-poll span filtering, exported to Azure Monitor.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-48.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Observability by Default: OpenTelemetry and Azure Monitor in MMCA","description":"A shared OpenTelemetry baseline with CQRS duration metrics, correlation IDs, and outbox-poll span filtering, exported to Azure Monitor.","url":"https://ivanball.github.io/articles/observability-opentelemetry.html","mainEntityOfPage":"https://ivanball.github.io/articles/observability-opentelemetry.html","image":"https://ivanball.github.io/assets/img/articles/article-48.png","datePublished":"2026-08-18T11:47:53Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":48,"sameAs":"https://medium.com/@ivanball76/observability-by-default-opentelemetry-and-azure-monitor-in-mmca-673c1886e9e0"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"48 · Observability by default","item":"https://ivanball.github.io/articles/observability-opentelemetry.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">48 · Observability by default</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html" aria-current="page">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Run &amp; extract · No. 48</p>
+          <h1 id="observability-by-default-opentelemetry-and-azure-monitor-in-mmca">Observability by Default: OpenTelemetry and Azure Monitor in MMCA</h1>
+          <p class="article-meta"><time datetime="2026-08-18T11:47:53Z">August 18, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/observability-by-default-opentelemetry-and-azure-monitor-in-mmca-673c1886e9e0" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-48.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Auto-instrumentation gives you HTTP and runtime signals for free, but it is blind to the
+          two paths that carry almost all of your framework&#39;s own work: the CQRS pipeline and the outbox. Here is
+          how one shared hosting call wires OpenTelemetry logs, metrics, and traces, ships to the Aspire dashboard
+          locally and to Azure Monitor in the cloud with no code change, and filters idle poll and probe spans so
+          telemetry does not quietly become your biggest cloud line item.</p>
+          <hr>
+          <p>You split the monolith into a handful of services, wire up OpenTelemetry because that is what you are
+          supposed to do, deploy, and open the dashboard. HTTP spans are there. Runtime counters are there. Then
+          someone asks the two questions that actually matter in an incident: &quot;how long is this command taking and
+          how often is it failing&quot; and &quot;is the outbox dead-lettering.&quot; And you realize the traces cannot answer
+          either one.</p>
+          <p>That is not a gap in your setup. It is the ceiling of auto-instrumentation. The ASP.NET Core, <code>HttpClient</code>,
+          and .NET-runtime instrumentations give you generic transport and process signals, but they are structurally
+          blind to the two paths that carry almost all of a CQRS-and-outbox framework&#39;s real work: the use-case
+          pipeline and the background message drain. Nobody instruments those unless the framework does it for them.</p>
+          <p>And then the first Application Insights bill arrives. A deployed fleet polls every relational outbox table
+          around the clock, and if every idle poll ships a span (plus the SqlClient child the Azure Monitor distro
+          attaches to it), steady-state nothing becomes the loudest thing in your telemetry. Full-fidelity tracing
+          is already the single largest observability line item; idle polling piles on top of it.</p>
+          <p>MMCA.Common treats observability as a hosting-layer default: one call on the host builder, and every
+          service in the model gets the same logs, metrics, and traces, the same framework-specific instrumentation
+          where auto-instrumentation is blind, and the same cost knobs that fail toward keeping data.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>Observability is the category you do not miss until production, and by then retrofitting it is expensive.
+          The rubric names the bar directly: structured logging with correlation IDs across boundaries, distributed
+          tracing and RED metrics wired to a backend, health checks for orchestrators, and (the part most teams
+          skip) deliberate noise control so high-volume low-value telemetry does not run up the bill
+          (<code>ArchitectureEvaluationCriteria.md:408-413</code>). It is a weight-2 category (<code>:421</code>).</p>
+          <p>Two forces pull against each other here. You want enough signal to operate the system, and you do not want
+          the signal to cost more than the system. Most teams pick one end: they either instrument everything at full
+          fidelity and get a telemetry invoice that rivals compute, or they trim so hard that an incident becomes a
+          guessing game. The interesting engineering is in wiring the useful signal by default while making the
+          expensive fidelity a knob you turn per host, not a rewrite.</p>
+          <p>The other reason it matters: in a modular monolith that extracts into services (ADR-008), the same
+          telemetry has to make sense whether a request stays in one process or crosses a gateway and three service
+          hosts. If observability is bolted on per app, it drifts. If it lives in the shared hosting defaults, every
+          host, in-process or extracted, tells the same story the same way.</p>
+          <h2 id="the-mmca-answer-one-call-one-baseline-on-every-host">The MMCA answer: one call, one baseline, on every host</h2>
+          <p>Every framework-consuming host calls <code>AddServiceDefaults()</code> first in <code>Program.cs</code>, and that method calls
+          <code>ConfigureOpenTelemetry()</code> (<code>Extensions.cs:87</code>, the call at <code>:89</code>) before anything module-specific. So a
+          host opts in once and every project in the Aspire model inherits the identical telemetry pipeline. There
+          is no per-app ServiceDefaults copy: all four ADC services and all three Store services consume this one
+          implementation directly (for example <code>MMCA.ADC.Conference.Service/Program.cs:103</code> and
+          <code>MMCA.Store.Catalog.Service/Program.cs:72</code>), as do both gateways and both web UIs.</p>
+          <p><code>ConfigureOpenTelemetry</code> (<code>Extensions.cs:170</code>) does four things.</p>
+          <p><strong>It wires logging, metrics, and tracing.</strong> Logs go through the OpenTelemetry logger with
+          <code>IncludeFormattedMessage</code> and <code>IncludeScopes</code> on (<code>Extensions.cs:172-176</code>) so a scope carries its
+          structured state. The metrics half is a separate private method, <code>ConfigureMetrics</code> (<code>Extensions.cs:534</code>,
+          called through a one-line lambda at <code>:179</code>), and it starts from ASP.NET Core instrumentation, always on
+          (<code>:536</code>). Tracing adds four activity sources by name (<code>:182-185</code>) and then ASP.NET Core and <code>HttpClient</code>
+          instrumentation (<code>:205-208</code> or <code>:212-213</code>, depending on a knob below). That is the free
+          auto-instrumentation floor plus the framework&#39;s own sources.</p>
+          <p><strong>It instruments only where auto-instrumentation is blind.</strong> Nine framework-owned meters carry custom
+          signals, subscribed here by literal name because the Aspire package deliberately has no project reference to
+          the assemblies that define them:</p>
+          <ul>
+          <li>The CQRS pipeline publishes RED metrics through a single meter <code>MMCA.Common.Cqrs</code>
+          (<code>CqrsMetrics.cs:24</code>): two duration histograms, <code>cqrs.command.duration</code> (<code>CqrsMetrics.cs:29-32</code>) and
+          <code>cqrs.query.duration</code> (<code>:35-38</code>), both in milliseconds, recorded by the logging decorators and tagged by
+          the operation name and an <code>outcome</code> tag. Count gives rate, the tag gives errors, the histogram gives
+          duration. RED falls out of a pipeline layer that already exists (the logging decorator), so there is no
+          per-handler discipline to keep up. The same meter carries <code>cqrs.query.cache.hit</code> and
+          <code>cqrs.query.cache.miss</code> counters (<code>:41-50</code>), recorded by the caching query decorator, so a hit ratio per
+          query is chartable off the same subscription, plus two short-circuit counters recorded by the
+          authorization and timeout decorators: <code>cqrs.authorization.denied.count</code> (<code>:53-56</code>) and <code>cqrs.timeout.count</code>
+          (<code>:59-62</code>), both tagged <code>request_type</code>, so a permission denying more traffic than expected or a handler
+          that keeps exhausting its execution budget is visible as a metric rather than only as a client-side error
+          rate.</li>
+          <li>The outbox owns a meter <code>MMCA.Common.Outbox</code>, declared with all of its instruments in a dedicated
+          <code>OutboxMetrics</code> class rather than in the processor (<code>OutboxMetrics.cs:19</code>, meter at <code>:21</code>), and it carries
+          five: a dead-letter counter <code>outbox.dead_letter.count</code> (<code>:41-44</code>), a success counter
+          <code>outbox.processed.count</code> (<code>:47-50</code>), an end-to-end dispatch-lag histogram in seconds (<code>:57-60</code>), an
+          <code>ObservableGauge</code> for pending depth (<code>:75-79</code>) published each cycle from the depth the processor observed
+          (<code>OutboxProcessor.cs:251</code>), and a second gauge, <code>outbox.oldest_pending.age</code> in seconds tagged
+          <code>data_source</code> (<code>:98-102</code>, fed by <code>SetOldestPendingAge</code> at <code>:115</code>). The two say different things: the
+          histogram reports how late the messages that did get delivered were, the age gauge reports how late a
+          backlog already is while it is still stuck, which is the number an alert on a wedged outbox fires on
+          (<code>:81-86</code>). The dead-letter counter has two increment sites, tagged <code>event_type</code> and <code>reason</code>: an
+          unresolvable event type (<code>OutboxProcessor.cs:752-755</code>, reason <code>type_unresolvable</code>) and an exhausted retry
+          budget (<code>:707-710</code>, reason <code>retries_exhausted</code>). The same activity source emits outbox spans
+          (<code>OutboxProcessor.cs:93</code>).</li>
+          <li>The durable internal-command queue owns <code>MMCA.Common.InternalCommands</code>
+          (<code>InternalCommandMetrics.cs:20</code>, meter at <code>:22</code>) with the same shape one drain over a table needs:
+          processed, failed and dead-letter counters (<code>:38</code>, <code>:48</code>, <code>:57</code>), a duration histogram (<code>:66</code>), a
+          schedule-lag histogram (<code>:75</code>), a pending-depth gauge (<code>:92</code>) and an oldest-due-age gauge (<code>:104</code>). It is
+          Article 51&#39;s subject; here it matters because it is the second background drain the trace filter has to
+          know about.</li>
+          <li>The API idempotency filter owns a meter <code>MMCA.Common.Idempotency</code> (<code>IdempotencyMetrics.cs:19</code>) with
+          three counters: <code>idempotency.replayed</code> (<code>:36-39</code>), <code>idempotency.conflict</code> tagged by kind (<code>:41-44</code>), and
+          <code>idempotency.degraded</code> (<code>:46-49</code>) for a request that ran without the guarantee because the cache or lock
+          faulted.</li>
+          <li>The recurring job scheduler (ADR-074) owns a meter <code>MMCA.Common.Scheduler</code>
+          (<code>SchedulerMetrics.cs:19</code>, meter at <code>:21</code>) with three instruments: a <code>scheduler.job.runs</code> counter tagged
+          by job name and by outcome, Succeeded, Failed or Skipped (<code>:28-31</code>), a <code>scheduler.job.duration</code>
+          histogram in seconds measured around the job&#39;s own execution (<code>:39-42</code>), and a <code>scheduler.job.lag</code>
+          histogram in seconds between an occurrence becoming due and actually starting (<code>:50-53</code>), which is the
+          number that answers &quot;is the scheduler keeping up.&quot; A host that never enables the scheduler simply
+          publishes nothing on that meter, so the subscription costs it nothing.</li>
+          <li>Four more meters cover paths a host opts into. The
+          broker transport owns <code>MMCA.Common.Broker</code> (<code>BrokerMetrics.cs:21</code>, ADR-087) with two counters tagged
+          <code>event_type</code>: <code>broker.fault.count</code> (<code>:30-33</code>) for integration events that exhausted their retry policy and
+          were published as a MassTransit <code>Fault&lt;TEvent&gt;</code>, which is the natural alert target for consumer health,
+          and <code>broker.circuit.open.count</code> (<code>:42-45</code>) for outbox publishes the open circuit breaker rejected before
+          they ever reached the broker. The output-cache eviction consumer owns <code>MMCA.Common.OutputCache</code>
+          (<code>OutputCacheMetrics.cs:19</code>) with one counter, <code>cache.eviction.failed</code> (<code>:29-32</code>) tagged <code>cache_tag</code>: a
+          non-zero rate means this host is still serving cached responses it was told to drop, so it is the alert
+          target for cross-service cache coherence. Best-effort side effects own <code>MMCA.Common.BestEffort</code>
+          (<code>BestEffort.cs:102</code>) with <code>besteffort.dispatch.failed</code> (<code>:107-110</code>) tagged <code>operation</code>, the count of
+          failures that were deliberately swallowed. That last one is a meter of its own rather than a counter
+          folded into <code>MMCA.Common.Cqrs</code> precisely because best-effort dispatch is not part of the CQRS pipeline
+          (hosts call it from handlers, hosted services and consumers alike), so an operator can drop or keep it
+          independently of the RED metrics (<code>BestEffort.cs:92-97</code>). And the optional language-model package
+          publishes its token spend and call duration under one name, <code>MMCA.Common.AI</code>, used as both meter and
+          trace source (<code>Extensions.cs:62</code>, subscribed at <code>:606</code>), inert in a host that never adds that package.
+          All four publish nothing in a host that stays on the in-process bus, takes no output cache, dispatches no
+          best-effort work, and calls no model.</li>
+          </ul>
+          <p>The Aspire defaults subscribe all nine by literal name in one chain (<code>Extensions.cs:598-606</code>), with a
+          comment enumerating what each one carries (<code>:587-597</code>), and then subscribe a tenth meter that nobody in
+          this repo defines: Polly&#39;s own (<code>:613</code>). The standard resilience handler sits on every <code>HttpClient</code> and
+          every gRPC typed client, so it is the component that decides whether an inter-service call is retried,
+          timed out, or refused by an open circuit, and <code>resilience.polly.strategy.events</code> is what makes a brownout
+          look like a brownout rather than like latency (<code>:608-612</code>).</p>
+          <p><strong>It exposes cost knobs that default to safe.</strong> There are five, and only the first two are about volume
+          for its own sake. <code>HttpClient</code> connection and request metrics are on unless
+          <code>Telemetry:DisableHttpClientMetrics</code> is set (<code>Extensions.cs:545</code>), and .NET runtime metrics
+          (<code>dotnet.gc.*</code>, <code>jit.*</code>, <code>thread_pool.*</code>) unless <code>Telemetry:DisableRuntimeMetrics</code> is set (<code>:572</code>). Both
+          keys are read by <code>IsInstrumentationDisabled</code> (<code>Extensions.cs:499</code>), which drops the family only when the
+          value parses as boolean <code>true</code>; absent, blank, or unparseable keeps the instrumentation, so a typo cannot
+          silently blind a whole metric family. Skipping the <code>Add</code> call is not enough on its own, and the source says
+          why (<code>:547-556</code>): a deployed host also calls <code>UseAzureMonitor()</code>, and the Azure Monitor distro adds the
+          <code>System.Net.Http</code> meter itself, so the toggle stayed advisory. Each disabled branch therefore installs a
+          drop <code>View</code>, over <code>System.Net.Http</code> plus <code>System.Net.NameResolution</code> (<code>:557-561</code>) and over <code>System.Runtime</code>
+          (<code>:577-580</code>); a <code>View</code> applies to the whole <code>MeterProvider</code> regardless of which component added the meter,
+          which is what makes the knob authoritative. The third knob is the mirror image: Polly&#39;s two duration
+          histograms are dropped by a <code>View</code> unless a host opts in with <code>Telemetry:EnablePollyDurationMetrics</code>
+          (<code>:43</code>, read by <code>IsInstrumentationEnabled</code> at <code>:512</code>, the <code>View</code> at <code>:623-631</code>), while the
+          strategy-events counter is never dropped (<code>:620-622</code>). Head-based trace sampling is the fourth:
+          <code>Telemetry:TracesSampleRatio</code> (read at <code>Extensions.cs:479</code>), parsed by <code>TryGetTraceSampleRatio</code>
+          (<code>Extensions.cs:476</code>, called at <code>:236</code>), is unset by default so a host samples everything. Set a ratio in
+          the open interval (0,1) and it installs a <code>TraceIdRatioBasedSampler</code> wrapped in a <code>ParentBasedSampler</code>
+          (<code>Extensions.cs:237</code>) so a sampled-in request keeps its whole trace intact across service boundaries. A
+          value that is absent, unparseable, or outside (0,1) falls back to sample-all (<code>Extensions.cs:478-485</code>), so
+          a typo can never silently drop all telemetry.</p>
+          <p><strong>It filters idle poll and probe spans out of export.</strong> That is the fifth knob and the sharpest decision in
+          the file. More on it below.</p>
+          <p>Then <code>AddOpenTelemetryExporters</code> (<code>Extensions.cs:348</code>) decides where telemetry goes, from the environment,
+          with no code change: OTLP when <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.cs:350-356</code>, the Aspire
+          dashboard sets it locally) and Azure Monitor via <code>UseAzureMonitor</code> when <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>
+          is present (<code>Extensions.cs:358-364</code>, set by the cloud deployment). Both can be active at once
+          (<code>Extensions.cs:346</code>). Local development ships to the Aspire dashboard; production ships to workspace-based
+          Application Insights; the same binary does both depending on which variable is set.</p>
+          <p>Here is the shape of the pipeline (condensed from <code>Extensions.cs:170-243</code> and <code>:534-632</code>, comments trimmed,
+          body faithful):</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> TBuilder <span class="hljs-title">ConfigureOpenTelemetry</span>()</span>
+{
+    builder.Logging.AddOpenTelemetry(logging =&gt;
+    {
+        logging.IncludeFormattedMessage = <span class="hljs-literal">true</span>;
+        logging.IncludeScopes = <span class="hljs-literal">true</span>;
+    });
+
+    builder.Services.AddOpenTelemetry()
+        .WithMetrics(metrics =&gt; ConfigureMetrics(metrics, builder.Configuration))
+        .WithTracing(tracing =&gt;
+        {
+            tracing.AddSource(builder.Environment.ApplicationName)
+                .AddSource(<span class="hljs-string">&quot;MMCA.Common.Outbox&quot;</span>)
+                .AddSource(<span class="hljs-string">&quot;MMCA.Common.InternalCommands&quot;</span>)
+                .AddSource(AiTelemetryName);
+
+            <span class="hljs-comment">// On by default: health-probe requests and their dependency children stay out of traces.</span>
+            <span class="hljs-keyword">var</span> filterProbeTelemetry = IsProbeTelemetryFilterEnabled(builder.Configuration);
+            <span class="hljs-keyword">if</span> (filterProbeTelemetry)
+            {
+                tracing.AddAspNetCoreInstrumentation(options =&gt;
+                        options.Filter = Telemetry.ProbeTelemetryFilter.ShouldCollectRequest)
+                    .AddHttpClientInstrumentation(options =&gt;
+                        options.FilterHttpRequestMessage = Telemetry.ProbeTelemetryFilter.ShouldCollectOutgoing);
+            }
+            <span class="hljs-keyword">else</span>
+            {
+                tracing.AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation();
+            }
+
+            <span class="hljs-comment">// Both processors run before the exporters, so their OnEnd clears Recorded first:</span>
+            tracing.AddProcessor(<span class="hljs-keyword">new</span> Telemetry.OutboxPollFilterProcessor());
+            <span class="hljs-keyword">if</span> (filterProbeTelemetry)
+                tracing.AddProcessor(<span class="hljs-keyword">new</span> Telemetry.ProbeTelemetryFilterProcessor());
+
+            <span class="hljs-comment">// Off by default; a deployed host opts into head-based sampling:</span>
+            <span class="hljs-keyword">if</span> (TryGetTraceSampleRatio(builder.Configuration, <span class="hljs-keyword">out</span> <span class="hljs-keyword">var</span> traceSampleRatio))
+                tracing.SetSampler(<span class="hljs-keyword">new</span> ParentBasedSampler(<span class="hljs-keyword">new</span> TraceIdRatioBasedSampler(traceSampleRatio)));
+        });
+
+    builder.AddOpenTelemetryExporters(); <span class="hljs-comment">// OTLP and/or Azure Monitor, by env var</span>
+    <span class="hljs-keyword">return</span> builder;
+}
+
+<span class="hljs-function"><span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title">ConfigureMetrics</span>(<span class="hljs-params">MeterProviderBuilder metrics, IConfiguration configuration</span>)</span>
+{
+    metrics.AddAspNetCoreInstrumentation();
+
+    <span class="hljs-comment">// Two highest-volume families, on by default. Disabling drops the whole meter with a View,</span>
+    <span class="hljs-comment">// because the Azure Monitor distro adds these meters itself:</span>
+    <span class="hljs-keyword">if</span> (IsInstrumentationDisabled(configuration, <span class="hljs-string">&quot;Telemetry:DisableHttpClientMetrics&quot;</span>))
+        metrics.AddView(instrument =&gt;
+            instrument.Meter.Name <span class="hljs-keyword">is</span> <span class="hljs-string">&quot;System.Net.Http&quot;</span> <span class="hljs-keyword">or</span> <span class="hljs-string">&quot;System.Net.NameResolution&quot;</span>
+                ? MetricStreamConfiguration.Drop
+                : <span class="hljs-literal">null</span>);
+    <span class="hljs-keyword">else</span>
+        metrics.AddHttpClientInstrumentation();
+
+    <span class="hljs-keyword">if</span> (IsInstrumentationDisabled(configuration, <span class="hljs-string">&quot;Telemetry:DisableRuntimeMetrics&quot;</span>))
+        metrics.AddView(instrument =&gt;
+            instrument.Meter.Name <span class="hljs-keyword">is</span> <span class="hljs-string">&quot;System.Runtime&quot;</span> ? MetricStreamConfiguration.Drop : <span class="hljs-literal">null</span>);
+    <span class="hljs-keyword">else</span>
+        metrics.AddRuntimeInstrumentation();
+
+    <span class="hljs-comment">// Framework meters, subscribed by literal name:</span>
+    metrics.AddMeter(<span class="hljs-string">&quot;MMCA.Common.Outbox&quot;</span>)
+        .AddMeter(<span class="hljs-string">&quot;MMCA.Common.Cqrs&quot;</span>)
+        .AddMeter(<span class="hljs-string">&quot;MMCA.Common.Idempotency&quot;</span>)
+        .AddMeter(<span class="hljs-string">&quot;MMCA.Common.Scheduler&quot;</span>)
+        .AddMeter(<span class="hljs-string">&quot;MMCA.Common.Broker&quot;</span>)
+        .AddMeter(<span class="hljs-string">&quot;MMCA.Common.OutputCache&quot;</span>)
+        .AddMeter(<span class="hljs-string">&quot;MMCA.Common.BestEffort&quot;</span>)
+        .AddMeter(<span class="hljs-string">&quot;MMCA.Common.InternalCommands&quot;</span>)
+        .AddMeter(AiTelemetryName);
+
+    <span class="hljs-comment">// Polly&#x27;s meter, minus its two duration histograms unless a host opts in:</span>
+    metrics.AddMeter(PollyMeterName);
+    <span class="hljs-keyword">if</span> (!IsInstrumentationEnabled(configuration, EnablePollyDurationMetricsConfigKey))
+        metrics.AddView(instrument =&gt;
+            instrument.Meter.Name == PollyMeterName
+            &amp;&amp; instrument.Name <span class="hljs-keyword">is</span> PollyAttemptDurationInstrument <span class="hljs-keyword">or</span> PollyPipelineDurationInstrument
+                ? MetricStreamConfiguration.Drop
+                : <span class="hljs-literal">null</span>);
+}</code></pre>
+          <h2 id="the-one-that-pays-for-itself-filtering-idle-poll-spans">The one that pays for itself: filtering idle poll spans</h2>
+          <p>The <code>OutboxProcessor</code> polls every relational outbox table on a recurring cycle (both deployment templates
+          push the interval to 300 seconds precisely so idle polls cost less: <code>Outbox__PollingIntervalSeconds</code> is set
+          to <code>300</code> on every container app, four in <code>MMCA.ADC/infra/main.bicep</code> (<code>:1591</code>, <code>:1812</code>, <code>:1950</code>, <code>:2102</code>)
+          and three in <code>MMCA.Store/infra/main.bicep</code> (<code>:1461</code>, <code>:1635</code>, <code>:1762</code>), against the 2-second default in
+          <code>OutboxSettings.cs:31</code>). Each poll runs inside an <code>OutboxPoll</code>
+          activity (<code>OutboxProcessor.cs:426</code>, named at <code>:75</code>), and under the Azure Monitor distro that span gets a
+          child SqlClient dependency span for the poll query. A second <code>OutboxPoll</code> activity wraps the backlog-depth
+          count that feeds the pending-depth gauge (<code>OutboxProcessor.cs:373</code>, inside <code>CountPendingAsync</code> at <code>:361</code>),
+          deliberately reusing the same name so the same filter suppresses it. The internal-command queue drains the
+          same way, under its own <code>InternalCommandPoll</code> name (<code>InternalCommandProcessor.cs:63</code>, opened at <code>:318</code> and
+          <code>:351</code>). At fleet scale, that steady stream of
+          idle-poll spans would dominate Application Insights ingestion and spam the local dashboard, telemetry about
+          nothing happening, priced like something happening.</p>
+          <p><code>OutboxPollFilterProcessor</code> (<code>OutboxPollFilterProcessor.cs:17</code>) is a <code>BaseProcessor&lt;Activity&gt;</code> that drops
+          exactly those spans. Its <code>OnEnd</code> (<code>:32</code>) walks the ending span&#39;s in-process parent chain
+          (<code>:42</code>) and clears the <code>Recorded</code> flag (<code>:49</code>) as soon as one ancestor matches <code>IsSuppressedPoll</code> (<code>:60-64</code>),
+          which is true for two pairs of literals: <code>OutboxPoll</code> on source <code>MMCA.Common.Outbox</code>, or
+          <code>InternalCommandPoll</code> on source <code>MMCA.Common.InternalCommands</code> (<code>:26-29</code>). Matching operation name and
+          source together is what stops an unrelated span that happens to be named &quot;OutboxPoll&quot; from being
+          suppressed. Clearing <code>Recorded</code> makes the batch exporters skip the activity, which is why the processor is
+          registered before the exporters (<code>Extensions.cs:221</code>, ahead of <code>AddOpenTelemetryExporters()</code> at <code>:240</code>):
+          its <code>OnEnd</code> runs first, and the exporters never see the span. A second processor,
+          <code>ProbeTelemetryFilterProcessor</code>, is registered right behind it under the same ordering requirement
+          (<code>:228</code>), because the inbound filter refuses the probe request span itself while its dependency children
+          are sampled independently and need un-recording before the exporters look (<code>:225-227</code>).</p>
+          <p>Real work survives untouched. Each per-message <code>OutboxProcess</code> span is started under an explicit parent
+          context rebuilt from the message&#39;s stored trace and span ids and passed straight into <code>StartActivity</code>
+          (<code>OutboxProcessor.cs:808</code>, the start call at <code>:820</code>), so it is never a child of the poll span and never
+          matched by the parent-chain walk. Per-command <code>InternalCommandExecute</code> spans work the same way
+          (<code>OutboxPollFilterProcessor.cs:13-15</code>). The outbox counters, the lag histogram, and the two gauges are
+          metrics, not spans, so they are unaffected too. You lose the noise and keep the signal.</p>
+          <p>The poll-span and source literals live on both sides of the package boundary: the filter
+          (<code>OutboxPollFilterProcessor.cs:26-29</code>) and the two processors that emit them, where the outbox declares its
+          pair across three sites, <code>PollActivityName</code> (<code>OutboxProcessor.cs:75</code>), the activity source (<code>:93</code>), and the
+          meter name (<code>OutboxMetrics.cs:19</code>). They are duplicated on purpose, with a sync comment on both sides
+          (<code>OutboxPollFilterProcessor.cs:19-25</code>, <code>OutboxMetrics.cs:6-15</code>), because the Aspire package must not take a
+          project reference on Infrastructure: its one <code>ProjectReference</code> is <code>MMCA.Common.Shared</code>, which is what keeps
+          <code>AddServiceDefaults</code> usable from a host that takes no persistence stack. That is the honest price of a
+          decoupled package graph, and it is a trade-off, not an accident.</p>
+          <h2 id="the-other-half-which-signal-wakes-a-human">The other half: which signal wakes a human</h2>
+          <p>Everything above is emission. Which of those signals pages somebody, at what threshold, at what severity,
+          is a separate decision, and for a long time it lived in the deployment templates and an operations runbook
+          with no record behind it. ADR-062 (<code>Website/docs-src/adr/062-slo-alerting-as-code.md:4</code>, accepted
+          2026-08-01) is that record.</p>
+          <p>Each consuming app declares its SLO alerts as <strong>data in its Bicep template</strong>. <code>sloAlertSpecs</code> is one array
+          of records carrying <code>key</code>, <code>description</code>, <code>query</code>, <code>timeAggregation</code>, <code>metricMeasureColumn</code>, <code>threshold</code>,
+          and <code>severity</code> (<code>MMCA.ADC/infra/main.bicep:330</code>, <code>MMCA.Store/infra/main.bicep:282</code>), materialized
+          one-for-one into Log Analytics <code>scheduledQueryRules</code> named <code>${prefix}-alert-${spec.key}-v2</code>
+          (<code>MMCA.ADC/infra/main.bicep:372,376</code>) and evaluated every 15 minutes over a 15-minute window (<code>:390-391</code>),
+          a frequency the template&#39;s own comment ties to the bill: a scheduled-query rule is billed per evaluation,
+          and the 5-minute tier costs $1.47 per month per rule against about $0.50 at 15 minutes (<code>:385-389</code>). Both
+          apps declare the same four SLOs with the same numbers: <code>failed-requests</code> at severity 2 (<code>:332-338</code>),
+          <code>server-response-time</code> at severity 3 (<code>:341-347</code>), <code>dependency-failures</code> at severity 2 (<code>:350-356</code>), and
+          <code>resilience-circuit-open</code> at severity 2 with a threshold of 0 (<code>:362-368</code>, Store&#39;s at <code>:314-320</code>), which
+          queries the <code>resilience.polly.strategy.events</code> instrument for an <code>OnCircuitOpened</code> event and so fires on
+          the first breaker opening rather than on a rate (<code>:358-360</code>). An alert
+          clicked together in the portal is invisible to review, absent from the next environment, and impossible
+          to diff; an array in the template that provisions the workloads is all three.</p>
+          <p><strong>Why log-search rules and not metric alerts.</strong> This is the decision worth stealing. A metric alert on
+          <code>requests/failed</code>, <code>requests/duration</code>, or <code>dependencies/failed</code> has no status-code or URL predicate, so at
+          this traffic level it pages on completely routine traffic. A 401 (expired or absent auth) and a 499 (client
+          disconnected mid-request) both count as failed requests, a long-lived SignalR hub connection reports its
+          <strong>connection lifetime</strong> as request duration, and a crawler&#39;s first contact with a host is a <code>GET /robots.txt</code> followed by a <code>GET /sitemap.xml</code>. ADC&#39;s own template records three pages that made the case
+          (<code>MMCA.ADC/infra/main.bicep:318-327</code>): one window held eight 401s plus two 499s plus a single readiness 503
+          and zero other failures, all from one browser session retrying with an expired token; five hub connections
+          averaging 11.3 seconds dragged the fleet-wide average to 5539ms against a 3000ms threshold with every real
+          request fast; and twelve robots and sitemap 404s arrived from a single Azure-hosted crawler inside one
+          15-minute window. A metric alert has no way to say &quot;exclude 401 and 499&quot;, &quot;exclude <code>/hubs/</code> before
+          averaging&quot;, or &quot;exclude a 404 on <code>/sitemap.xml</code>&quot;; a KQL query says exactly that (<code>:334</code>, <code>:343</code>, <code>:352</code>).
+          Only those codes and the two crawler etiquette paths are excluded, so a genuine 400, 404 or 500 burst
+          still pages at the same number (<code>:328-329</code>). Thresholds and severities are unchanged by the exclusions, so
+          this is a precision fix, not a sensitivity cut.</p>
+          <p><strong>The operational trap: a rule name is an identity.</strong> An incremental ARM deployment never removes a
+          resource just because it left the template, and a name is how Azure decides whether a deployment updates a
+          resource or creates a second one. That cuts both ways when a metric alert is superseded by a query rule
+          covering the same signal: the old resource has to be deleted deliberately, and the replacement must not
+          reuse its name, or the deployment renames the live metric alert instead of provisioning a rule. So every
+          generated query rule carries the <code>-v2</code> suffix, and the template says in place that the suffix is part of
+          the rule&#39;s identity in Azure and must stay stable (<code>MMCA.ADC/infra/main.bicep:374-376</code>). Cheap to respect,
+          expensive to discover.</p>
+          <p>Two smaller properties matter as much. Every active rule routes to <strong>one unconditional action group</strong>:
+          <code>alertEmailAddress</code> is a required parameter with no default (<code>MMCA.ADC/infra/main.bicep:124</code>, Store&#39;s at
+          <code>:91</code>), so the email receiver is never conditional (<code>:297</code>, receivers at <code>:303-307</code>) and every rule points
+          at it (<code>:414</code>, and the same <code>actionGroups: [ actionGroup.id ]</code> line on each ungated rule). An alert wired to
+          no channel is worse than no alert, because it looks like coverage and pages nobody. And a saved workbook
+          renders the same signals off the same workspace, embedded at compile time from a JSON file in the repo
+          (<code>:701</code>, <code>:710</code>), so the dashboard cannot drift from the alerts by being maintained somewhere else.</p>
+          <p>The other half of ADR-062 is a build gate that fails when an alert has no severity-matching runbook
+          section, or when a runbook section outlives its alert. That belongs with the rest of the fitness tier, so
+          it is Article 34&#39;s subject rather than this one&#39;s.</p>
+          <p>Two honest limits. The gate covers only what sits inside the parsed spec window, and both apps provision
+          alerts outside it, more of them every time an incident teaches something. ADC has four: the
+          <code>outbox-dead-letter</code>, <code>sql-dependency-failures</code> and <code>revision-activation-failed</code> scheduled query rules
+          (<code>scheduledQueryAlertSpecs</code> at <code>MMCA.ADC/infra/main.bicep:442</code>, keys at <code>:444</code>, <code>:450</code>, <code>:456</code>, materialized
+          at <code>:463</code>) and a severity 1 gateway-availability alert (<code>:662</code>, severity at <code>:668</code>) over a three-location
+          web test against <code>/health</code> (<code>:629</code>, locations at <code>:645-649</code>, the URL at <code>:651</code>). Store has six, each its own
+          resource: <code>outboxDeadLetterAlert</code> (<code>MMCA.Store/infra/main.bicep:389</code>, severity 2 at <code>:396</code>),
+          <code>revisionActivationAlert</code> (<code>:439</code>), <code>authFailureSpikeAlert</code> (<code>:507</code>), <code>forbiddenBurstAlert</code> (<code>:547</code>),
+          <code>logIngestionQuotaAlert</code> (<code>:593</code>), and its own severity 1 <code>gatewayAvailabilityAlert</code> (<code>:674</code>, severity at
+          <code>:680</code>) over the same kind of three-location <code>/health</code> web test (<code>:641</code>). All of them can be added,
+          renamed, or re-tiered with no runbook consequence. And MMCA.Helpdesk has no <code>infra/</code> template at all, so it
+          has neither the alerts nor anything for a pairing gate to check.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>The literal names can drift.</strong> The meter, activity-source, and poll-span names are duplicated as string
+          literals across the Aspire package (<code>OutboxPollFilterProcessor.cs:26-29</code> and the ten <code>AddMeter</code> literals
+          at <code>Extensions.cs:598-606</code> and <code>:613</code>) and the defining assemblies (<code>CqrsMetrics.cs</code>, <code>OutboxMetrics.cs</code>,
+          <code>InternalCommandMetrics.cs</code>, <code>IdempotencyMetrics.cs</code>, <code>SchedulerMetrics.cs</code>, <code>BrokerMetrics.cs</code>,
+          <code>OutputCacheMetrics.cs</code>, <code>BestEffort.cs</code> and <code>OutboxProcessor.cs</code>), plus one name, <code>Polly</code>, that no
+          assembly here owns at all. Every new meter family widens that surface, and each family lands with the same
+          duplicated-literal note in its own doc comment. A rename on one side silently stops the
+          matching export or subscription until the literal is updated. The decoupled package graph is worth it;
+          the sync discipline is real.</li>
+          <li><strong>Sampling trades trace completeness for cost.</strong> A sampled-out trace is gone, so deep debugging of one
+          specific request can miss it. Metrics and logs are unaffected (sampling is trace-only), so RED rates and
+          error counts stay whole even at a low ratio. Size the ratio to your debugging horizon, not to zero.</li>
+          <li><strong>Poll-span and probe-span filtering hide steady-state activity by design.</strong> &quot;Is the poller alive and
+          looping&quot; and &quot;are the probes passing&quot; are not questions traces answer once both filters are on. Those
+          signals live in metrics on purpose, and the metrics that answer them exist: <code>outbox.processed.count</code>
+          (<code>OutboxMetrics.cs:47</code>), the dispatch-lag histogram (<code>:57</code>), the pending-depth gauge (<code>:75</code>), the
+          oldest-pending-age gauge (<code>:98</code>) and the dead-letter counter (<code>:41-44</code>) on one side, and the untouched
+          <code>http.server.request.duration</code> and Kestrel instruments on the other (<code>Extensions.cs:197-198</code>). If you rely
+          on poll or probe spans for a liveness check, chart those instead.</li>
+          <li><strong>Exporters are opt-in per host.</strong> A host that sets neither <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> nor
+          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> emits to nothing. And four of the five cost knobs fail toward
+          keeping data (higher cost), not toward silence, so a misconfigured ratio is a possible cost surprise,
+          never a silent data gap. The exception is deliberate and documented: the probe-telemetry filter defaults
+          to on, because probe chatter is ingestion nobody wants billed (<code>Extensions.cs:515-525</code>). That is the
+          intended bias, but it is a bias worth naming.</li>
+          </ul>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any OpenTelemetry stack, with or without Aspire:</p>
+          <ol>
+          <li><strong>Put the telemetry baseline in one shared bootstrap</strong> every host calls, not in each app. One place to
+          change the meter list, tighten a timeout, or add a processor means every service moves in lockstep.</li>
+          <li><strong>Instrument only where auto-instrumentation is blind.</strong> Let ASP.NET Core, <code>HttpClient</code>, and the runtime
+          ride the free instrumentation. Add your own meters and activity sources for the paths that carry your
+          real work (a use-case pipeline, a background drain), and emit RED from a layer you already have (a
+          logging decorator) rather than sprinkling it through every handler.</li>
+          <li><strong>Make expensive fidelity a knob, not a rewrite.</strong> Gate the highest-volume metric families and
+          head-based trace sampling behind configuration, and make every knob fail toward keeping data: drop a
+          family only on an explicit boolean, ignore an out-of-range sample ratio, and treat a typo as sample-all.</li>
+          <li><strong>Check that a metrics toggle is actually authoritative.</strong> If a vendor distro adds a meter behind your
+          back, skipping your own <code>Add</code> call changes nothing; a drop <code>View</code> on the meter applies to the whole
+          provider and does.</li>
+          <li><strong>Filter high-volume low-value spans before export.</strong> A recurring poll, a health-check ping, an idle
+          heartbeat: drop them with a processor that clears the <code>Recorded</code> flag, registered before your exporters,
+          and match on both operation name and source so you never suppress an unrelated span by name alone.</li>
+          <li><strong>Choose the exporter from the environment.</strong> Ship to a local dashboard when the OTLP endpoint variable is
+          set and to your cloud backend when its connection-string variable is set, both at once if you like, so
+          the same binary works from laptop to production with no code change.</li>
+          </ol>
+          <p>The takeaway: <strong>observability is a hosting-layer default, not a per-app afterthought. Wire the useful signal
+          once for every host, instrument the paths auto-instrumentation cannot see, and make the expensive fidelity a
+          knob that fails toward data, because the two ways this goes wrong in production are a telemetry bill you did
+          not expect and a trace that cannot answer the question you actually have.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why auto-instrumentation is structurally blind to the CQRS pipeline and the outbox, how
+          one <code>ConfigureOpenTelemetry</code> call in the shared Aspire defaults wires logs, metrics, and traces plus nine
+          framework meters (<code>MMCA.Common.Cqrs</code> RED histograms plus its cache and short-circuit counters, the
+          <code>MMCA.Common.Outbox</code> counters, histogram and two gauges, the <code>MMCA.Common.InternalCommands</code> drain
+          instruments, the <code>MMCA.Common.Idempotency</code> counters, the
+          <code>MMCA.Common.Scheduler</code> run, duration and lag instruments, and the <code>MMCA.Common.Broker</code>,
+          <code>MMCA.Common.OutputCache</code>, <code>MMCA.Common.BestEffort</code> and <code>MMCA.Common.AI</code> streams) plus Polly&#39;s resilience
+          meter on
+          every host, how five
+          cost knobs (<code>Telemetry:DisableHttpClientMetrics</code>, <code>Telemetry:DisableRuntimeMetrics</code>,
+          <code>Telemetry:EnablePollyDurationMetrics</code>, <code>Telemetry:TracesSampleRatio</code> and <code>Telemetry:FilterProbeTelemetry</code>)
+          trim spend without going dark, why a drop <code>View</code> is what makes a metrics toggle authoritative over the
+          Azure Monitor distro, how <code>OutboxPollFilterProcessor</code> drops idle poll spans from two drains before export
+          while real work survives, how the exporter (OTLP or Azure Monitor, or
+          both) is chosen from environment variables with no code change, and how the SLO alerts that actually page
+          a human are declared as data in each app&#39;s deployment template, as Log Analytics query rules rather than
+          metric alerts, under names whose <code>-v2</code> suffix is part of their identity in Azure.</p>
+          <p><strong>Next in the series:</strong> Article 49, &quot;Undo Is a Feature: Saga Compensation and the Reconciliation Backstop,&quot;
+          the deep-dive on undoing a cross-boundary workflow when there is no two-phase commit to roll it back for you.</p>
+          <p><em>MMCA.Common is open source. Star the repo, read the 2-minute ADR-041 behind this pattern, or
+          <code>dotnet add package MMCA.Common.Aspire</code> and call <code>AddServiceDefaults()</code>.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>This pattern&#39;s decision record: <a href="../docs/adr/041-observability-and-telemetry.html">ADR-041: Observability and Telemetry Strategy</a></li>
+          <li>The full 34-category scorecard, §13 included, lives in <a href="../docs/governance/common-ArchitectureScorecard.html">MMCA.Common: Architecture Scorecard</a> in the docs site.</li>
+          </ul>
+          <p><em>Previous: Article 47, &quot;Security Headers and CSP for Blazor: One Middleware, Every Host.&quot; Next: Article 49,
+          &quot;Undo Is a Feature: Saga Compensation and the Reconciliation Backstop.&quot;</em></p>
+          <p><em>Tags: .NET, C Sharp, OpenTelemetry, Observability, Distributed Systems</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="security-headers-csp-blazor.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">47 · Security headers and CSP for Blazor</span></a>
+          <a class="article-pager-link article-pager-link--next" href="saga-compensation-reconciliation.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">49 · Saga compensation and the reconciliation backstop</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-one-call-one-baseline-on-every-host">The MMCA answer: one call, one baseline, on every host</a></li>
+            <li><a href="#the-one-that-pays-for-itself-filtering-idle-poll-spans">The one that pays for itself: filtering idle poll spans</a></li>
+            <li><a href="#the-other-half-which-signal-wakes-a-human">The other half: which signal wakes a human</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>A list page in a few lines: a reusable Blazor UI framework with the same discipline as the backend · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A shared Blazor and MudBlazor UI layer with accessibility enforced by axe in CI.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/reusable-blazor-ui-framework.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="A list page in a few lines: a reusable Blazor UI framework with the same discipline as the backend">
+  <meta property="og:description" content="A shared Blazor and MudBlazor UI layer with accessibility enforced by axe in CI.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/reusable-blazor-ui-framework.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-37.png">
+  <meta property="og:image:alt" content="A list page in a few lines: a reusable Blazor UI framework with the same discipline as the backend">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="A list page in a few lines: a reusable Blazor UI framework with the same discipline as the backend">
+  <meta name="twitter:description" content="A shared Blazor and MudBlazor UI layer with accessibility enforced by axe in CI.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-37.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"A list page in a few lines: a reusable Blazor UI framework with the same discipline as the backend","description":"A shared Blazor and MudBlazor UI layer with accessibility enforced by axe in CI.","url":"https://ivanball.github.io/articles/reusable-blazor-ui-framework.html","mainEntityOfPage":"https://ivanball.github.io/articles/reusable-blazor-ui-framework.html","image":"https://ivanball.github.io/assets/img/articles/article-37.png","datePublished":"2026-08-06T11:47:02Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":37,"sameAs":"https://medium.com/@ivanball76/a-list-page-in-a-few-lines-a-reusable-blazor-ui-framework-with-the-same-discipline-as-the-backend-c66fa16cd561"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"37 · A reusable Blazor UI framework","item":"https://ivanball.github.io/articles/reusable-blazor-ui-framework.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">37 · A reusable Blazor UI framework</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html" aria-current="page">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 37</p>
+          <h1 id="a-list-page-in-a-few-lines-a-reusable-blazor-ui-framework-with-the-same-discipline-as-the-backend">A list page in a few lines: a reusable Blazor UI framework with the same discipline as the backend</h1>
+          <p class="article-meta"><time datetime="2026-08-06T11:47:02Z">August 6, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/a-list-page-in-a-few-lines-a-reusable-blazor-ui-framework-with-the-same-discipline-as-the-backend-c66fa16cd561" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-37.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">This series has been backend all the way down. But the front end is where DRY usually goes to die: every list screen re-implements paging, sort, filter, loading, and teardown. Here is the same ports-and-base-classes discipline, applied to Blazor, so a list page is a few lines instead of a few hundred.</p>
+          <hr>
+          <p>Count the list screens in any line-of-business app. Products. Orders. Users. Sessions. Speakers. Now look at what each one actually does: fetch one page of rows from an API, render them in a grid, let the user sort a column, type a filter, flip to the next page, and show a spinner while it loads. That is the same screen, over and over, wearing different column headers.</p>
+          <p>So why does each one usually carry its own copy of the plumbing? Because the plumbing is annoying. Server-side paging means turning a grid&#39;s sort-and-filter state into a query string. Loading state means a flag and a try/catch. Cancellation means a <code>CancellationTokenSource</code> you have to dispose without racing the next request. And in modern Blazor there is a render-mode twist on top: the page renders statically on the server, then again as an interactive Server circuit, then again in WebAssembly, and a naive page re-fetches at every transition and flashes an empty grid in between.</p>
+          <p>Almost everyone writes that plumbing once, copies it to the second screen, and by the fifth screen the copies have quietly diverged. One page disposes its token source correctly and one does not. One persists filters to the URL and one loses them on a back-button press. The bugs are per-page because the code is per-page.</p>
+          <p>The backend half of this series kept making one move: a cross-cutting concern does not belong in the use case, it belongs in a base class or a pipeline. <code>MMCA.Common.UI</code> makes exactly that move on the front end. The result is a Blazor presentation package where a concrete list page declares its title and its data call, and inherits everything else.</p>
+          <h2 id="the-package-that-is-allowed-to-depend-on-almost-nothing">The package that is allowed to depend on almost nothing</h2>
+          <p>One structural fact sets the tone. <code>MMCA.Common.UI</code> is allowed to reference <code>MMCA.Common.Shared</code> and nothing else. Not Application, not Domain, not Infrastructure. That is a deliberate Clean Architecture constraint, and it has a hard technical reason: the package has to compile into a Blazor WebAssembly bundle that runs in the browser, where it cannot drag EF Core or your database adapters along.</p>
+          <p>That constraint is what forces the design to be honest. The UI cannot reach into a repository or call a handler directly, so it has to talk to the backend through a contract over HTTP, binding to DTOs and interfaces it shares with the API, never to server internals. The same dependency rule that protects the domain protects the browser bundle. Ports in, adapters at the edge, all the way out to the screen.</p>
+          <h2 id="datagridlistpagebase-the-screen-you-stop-rewriting">DataGridListPageBase: the screen you stop rewriting</h2>
+          <p>The centerpiece is an abstract Blazor component, <code>DataGridListPageBase&lt;TDto&gt;</code>. Every server-paged list screen in every consumer app derives from it. It folds into one reusable place the concerns that were otherwise copy-pasted onto each page: server-side paging against MudBlazor&#39;s <code>MudDataGrid&lt;T&gt;</code>, the <code>CancellationTokenSource</code> lifecycle, the loading flag, extracting filter and sort out of MudBlazor&#39;s <code>GridState&lt;T&gt;</code>, surfacing errors through <code>ISnackbar</code>, viewport-driven mobile-versus-desktop rendering, and a careful <code>IAsyncDisposable</code> / <code>IDisposable</code> teardown.</p>
+          <p>Because all of that lives in the base, a concrete page is tiny. It supplies a <code>Title</code>, points the grid&#39;s <code>ServerData</code> at the inherited load method, and declares its columns in markup. That is the whole page. It does not write a query string, does not manage a token source, does not branch on screen size, and does not handle its own disposal.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="Razor"><code class="language-razor">@inherits DataGridListPageBase&lt;ProductDto&gt;
+@page &quot;/products&quot;
+
+&lt;MudDataGrid T=&quot;ProductDto&quot; @ref=&quot;GridRef&quot;
+             ServerData=&quot;@(state =&gt; LoadServerDataAsync(state, _service.GetPagedAsync))&quot;
+             Filterable=&quot;true&quot; SortMode=&quot;SortMode.Multiple&quot;&gt;
+    &lt;Columns&gt;
+        &lt;PropertyColumn Property=&quot;x =&gt; x.Name&quot; Title=&quot;Name&quot; /&gt;
+        &lt;PropertyColumn Property=&quot;x =&gt; x.Price&quot; Title=&quot;Price&quot; /&gt;
+    &lt;/Columns&gt;
+&lt;/MudDataGrid&gt;</code></pre>
+          <p>The single inherited method doing the work, <code>LoadServerDataAsync</code>, is the heart of the desktop path. It resets the cancellation source, extracts filters and sort from the <code>GridState&lt;TDto&gt;</code> MudBlazor hands it, runs the fetch, and maps a cancellation or an exception to an empty grid plus an optional snackbar instead of an unhandled error. Paging is genuinely server-side: only the requested page is fetched, never the whole table.</p>
+          <p>Two of the gnarliest details in this base are battle scars, and they are the best argument for consolidating. The first is a MudDataGrid v9 quirk: a parameter setter that clobbers the current page, worked around in one place by re-restoring the page after a rows-per-page reset. The second is a disposed-token-source race, where a debounced reload firing after the component disposed threw <code>ObjectDisposedException</code> and left the <code>blazor-error-ui</code> banner stuck onto the next page. Both were found through end-to-end tests, both were fixed once, and because the fix lives in the base, every list page got it for free. That is the entire thesis in one observation: when the concern is in one place, so is the fix.</p>
+          <h2 id="the-same-page-on-a-phone-without-a-second-page">The same page on a phone, without a second page</h2>
+          <p>The desktop path above is only half of what <code>DataGridListPageBase</code> does, because a data grid is the
+          wrong control on a 390px screen and no amount of CSS fixes that. The base handles this by swapping the
+          control rather than restyling it, and the switch is a real subscription, not a one-time media query.</p>
+          <p>The base injects MudBlazor&#39;s <code>IBrowserViewportService</code> and reacts to viewport changes:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> wasMobile = IsMobile;
+IsMobile = BreakpointConstants.IsMobileBreakpoint(browserViewportEventArgs.Breakpoint);
+
+<span class="hljs-keyword">if</span> (IsMobile &amp;&amp; !wasMobile)
+{
+    MobileCurrentPage = <span class="hljs-number">1</span>;
+    <span class="hljs-keyword">await</span> OnMobileDataRequestedAsync();
+}</code></pre>
+          <p><code>IsMobileBreakpoint</code> is the single place the threshold is defined, <code>Xs or Sm</code>, which is below 960px.
+          That matters more than it looks: a breakpoint constant duplicated across twenty components is a
+          guarantee that some of them will disagree after the first redesign.</p>
+          <p>The <code>wasMobile</code> comparison is the part worth stealing. It only refetches on a genuine <strong>crossing</strong> of
+          the boundary, not on every resize event, and it resets to page 1 when it crosses, because a user who
+          was on page 7 of a desktop grid has no meaningful page 7 in an infinite-scroll list. Getting this
+          wrong produces either a refetch storm while someone drags a window, or a mobile list that opens
+          scrolled into the middle of nowhere.</p>
+          <p>On the mobile side the grid is replaced by <code>MobileInfiniteScrollList</code>, which carries a defense the
+          desktop grid gets for free from paging:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">[<span class="hljs-meta">Parameter</span>] <span class="hljs-keyword">public</span> <span class="hljs-built_in">int</span> MaxRenderedItems { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; } = <span class="hljs-number">500</span>;
+
+<span class="hljs-comment">// Stop fetching once the rendered-item cap is reached so the DOM (and memory) stay</span>
+<span class="hljs-comment">// bounded even for very large result sets.</span>
+_hasMore = _items.Count &lt; _totalCount &amp;&amp; _items.Count &lt; MaxRenderedItems;</code></pre>
+          <p>Infinite scroll has an obvious failure mode that is easy to ship without noticing: it is unbounded by
+          construction, so a 40,000-row result set becomes 40,000 DOM nodes on the least capable device you
+          support. The cap makes &quot;there is more data&quot; and &quot;we will keep rendering it&quot; two different questions,
+          and answers the second one no.</p>
+          <p>Note what is <em>not</em> here: there is no separate mobile app, no duplicated page, and no parallel route
+          tree. One page class serves both layouts, which is why the responsive behavior is verifiable at all.
+          The three-engine E2E matrix (chromium, firefox, and webkit, all blocking merge gates) exercises the
+          same pages rather than a mobile-specific build that could drift.</p>
+          <h2 id="the-data-access-boundary-bind-to-an-interface-never-to-httpclient">The data-access boundary: bind to an interface, never to HttpClient</h2>
+          <p>A page in this framework never injects a raw <code>HttpClient</code>. It injects <code>IEntityService&lt;TEntityDTO, TIdentifierType&gt;</code>, a generic CRUD contract: <code>GetAllAsync</code>, <code>GetPagedAsync</code>, <code>GetByIdAsync</code>, <code>AddAsync</code>, <code>UpdateAsync</code>, <code>DeleteAsync</code>, plus a <code>GetAllForLookupAsync</code> for dropdowns. The grid&#39;s <code>ServerData</code> callback above is just calling <code>GetPagedAsync</code>, which returns an <code>(Items, TotalItems)</code> tuple shaped exactly for a server-side grid.</p>
+          <p>The behavior behind that interface comes from an abstract base, <code>EntityServiceBase&lt;TEntityDTO, TIdentifierType&gt;</code>. A concrete module service is mostly an endpoint string. Every verb routes through one dispatch chokepoint, <code>SendRequestAsync</code>, so retry, auth, and error extraction are applied identically to every call. The error extraction is the subtle, valuable part: before letting <code>EnsureSuccessStatusCode</code> throw a contextless <code>HttpRequestException</code>, the base calls a helper that pulls the server&#39;s structured Problem Details payload (a domain failure, a validation failure) out of the response body. A backend <code>Result.Failure</code> therefore surfaces to the page as the server&#39;s real message, not a generic &quot;server error.&quot;</p>
+          <p><code>EntityServiceBase</code> derives in turn from <code>AuthenticatedServiceBase</code>, which owns the two cross-cutting concerns of any outbound API call. One is a Polly retry policy: three attempts with exponential backoff on <code>HttpRequestException</code> or any 5xx. The other is stamping the JWT bearer token onto a freshly created <code>&quot;APIClient&quot;</code> <code>HttpClient</code> from <code>IHttpClientFactory</code>. That base exists for a precise Blazor Server reason, documented in source: <code>IHttpClientFactory</code> builds its handler chain in a separate DI scope from the Blazor circuit, so the conventional delegating handler cannot reach the circuit-scoped storage that holds the in-memory access token. Reading the token directly and setting the header on a fresh client is the smallest correct fix for that scope mismatch.</p>
+          <p>The shape is the same one the backend uses for everything: an interface the consumer programs against, a base class that carries the 80 percent, and a composition root that wires the transport. The UI is just another consumer of ports.</p>
+          <h2 id="theming-one-set-of-tokens-guarded-by-a-fitness-test">Theming: one set of tokens, guarded by a fitness test</h2>
+          <p>Visual consistency lives in one static <code>MudTheme</code>, exposed as <code>MMCATheme.Instance</code> and handed to <code>MudThemeProvider</code> by a shared component, <code>MmcaThemeProviders</code>, that a root layout drops in as a single tag. It defines a light palette, a dark palette, an Inter typography scale, and a 6px border radius.</p>
+          <p>That default is not a lock-in. <code>MmcaThemeProviders</code> takes an optional <code>Theme</code> parameter that defaults to <code>MMCATheme.Instance</code>, so an app with its own brand passes a derived <code>MudTheme</code> in one attribute instead of forking the provider block and re-implementing the day/dark lifecycle wired behind it. Two honest limits. The override reaches MudBlazor&#39;s own components and stops there: the raw CSS rules in <code>app.css</code> read their colors from <code>--mmca-*</code> custom properties whose literal hex mirrors <code>BrandColors</code>, so a host that swaps the theme object and nothing else gets rebranded Mud components sitting on framework-colored stylesheet rules. And the extension point is unexercised: every root layout across these repos renders <code>&lt;MmcaThemeProviders /&gt;</code> bare, so &quot;one theme everywhere&quot; is the observed state rather than an enforced one.</p>
+          <p>The interesting move is what feeds it. The brand palette is a single C# source of truth, <code>BrandColors</code>, six <code>const</code> hex values (a primary and a secondary each with a darkened and lightened variant) that <code>MMCATheme</code> references. The catch is that raw CSS rules in <code>app.css</code> need those same colors as custom properties, so the palette exists twice: once in C# for MudBlazor, once in CSS for stylesheet rules. That is a textbook drift hazard. The codebase neutralizes it with a fitness test, <code>BrandColorTokenTests</code>, which parses <code>app.css</code> and asserts each CSS token equals its <code>BrandColors</code> constant. If the two drift, the build fails before it ships.</p>
+          <p>This is the same &quot;executable governance&quot; idea the backend uses to enforce its layer rules: an invariant that matters is enforced by a test, not by hope and code review. And the color choices themselves carry accessibility reasoning. The theme&#39;s <code>Secondary</code> color was deliberately bumped from Teal 600 (around 4.0:1 on light surfaces, below the WCAG AA 4.5:1 floor for normal text) to Teal 700 (around 5.3:1), with the contrast calculation written into the source comment, because that color drives muted helper text.</p>
+          <p>The typography half of the theme had a quieter version of the same duplication problem, and for a while it was losing. <code>MMCATheme</code> names <code>Inter</code> first in its font stack and <code>app.css</code> names it again on <code>html, body</code>, but the package shipped no Inter faces, so the stack silently fell through to Segoe UI on Windows and to a generic sans-serif everywhere else. The &quot;professional typography&quot; was declared in two files and rendered in neither. The fix was to vendor the font rather than link it: five latin-subset <code>woff2</code> files (weights 400 through 800, about 24 KB each) now live under the package&#39;s <code>wwwroot/fonts</code> with their SIL OFL license, declared by five <code>@font-face</code> blocks at the top of <code>app.css</code> and served same-origin from <code>_content/MMCA.Common.UI/fonts/</code>. Two details there are deliberate. Self-hosting fits the host&#39;s existing <code>font-src &#39;self&#39;</code> content-security policy with no CDN allowance to add, which is the kind of default worth taking when the alternative is loosening a header. And <code>font-display: swap</code> keeps first paint on the fallback face instead of blocking text, which is exactly what the LCP budget in the Web Vitals E2E suite is watching. The cost is honest: roughly 120 KB of font in the package, latin glyphs only, and a family name that now exists in two places with a comment in each asking you to keep them in step.</p>
+          <h2 id="render-mode-state-persistence-no-flash-no-double-fetch">Render-mode state persistence: no flash, no double fetch</h2>
+          <p>Modern Blazor&#39;s <code>InteractiveAuto</code> renders a page up to three times: static SSR, then interactive Server, then WASM. Naively, each transition re-runs the data fetch, and the user sees a grid populate, blank, and re-populate. <code>DataGridListPageBase</code> solves this with Blazor&#39;s <code>PersistentComponentState</code>.</p>
+          <p>During the SSR pre-render pass, the base serializes the grid&#39;s already-fetched rows into a tiny private record, <code>PersistedGridState</code>, a <code>(List&lt;TDto&gt; Items, int TotalItems)</code> payload embedded in the pre-rendered HTML. On the first interactive <code>ServerData</code> call, the base takes that payload back out and returns it directly, skipping the round-trip entirely. The fetch-cancel-refetch flicker of the render-mode handoff disappears.</p>
+          <p>Navigation state is handled with a complementary principle: the URL is the source of truth. Paging, sort, and filter live in the query string (terse keys like <code>p</code>, <code>ps</code>, <code>s</code>, <code>sd</code>, <code>f:&lt;name&gt;</code>), so deep links and browser back-and-forward replay a list view exactly. A companion service codes state into and out of the address bar, emitting a key only when it differs from the default so a pristine list page yields a clean query-less URL, and using replace-history rather than push so each filter keystroke does not pollute the back stack. The noisier scroll position lives in a per-circuit <code>ListPageStateService</code> backed by an in-memory dictionary that mirrors through <code>sessionStorage</code>, so state survives circuit teardown, force-load navigations, and the SSR-to-WASM transition. URL plus memory plus session plus the prerender cache cover the full matrix of how a user can leave a list and come back to it.</p>
+          <h2 id="the-shell-ships-in-the-package-too-modules-plug-in-with-iuimodule">The shell ships in the package too: modules plug in with IUIModule</h2>
+          <p>A base class removes the duplication inside a page. The next duplication up is the application shell
+          itself: the router, the layout, the nav menu, and the handful of pages every app has anyway. Left to
+          each host, every Blazor head grows its own <code>Routes</code>, its own <code>MainLayout</code>, and its own nav markup,
+          and adding a module means editing all three.</p>
+          <p><code>MMCA.Common.UI</code> ships that shell instead. The package owns the router, the main layout, the nav
+          menu, and the routable pages an app should not have to re-author: sign in, register, home,
+          not-found, forbidden, and the notification surfaces including the inbox. A module edits none of it.
+          It implements a four-member interface, <code>IUIModule</code>, and registers itself:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title">IUIModule</span>
+{
+    IReadOnlyList&lt;NavItem&gt; NavItems { <span class="hljs-keyword">get</span>; }
+    Assembly Assembly { <span class="hljs-keyword">get</span>; }
+    IReadOnlyList&lt;Type&gt; AppBarComponentTypes =&gt; [];
+    IReadOnlyList&lt;Type&gt; LayoutComponentTypes =&gt; [];
+}</code></pre>
+          <p>Two of the four default to empty, so a module that contributes only pages and navigation is two
+          properties. <code>NavItems</code> are the module&#39;s links, each with an optional required role or claim, so the
+          shell trims the menu to what the current user may actually reach. <code>Assembly</code> is how the module&#39;s
+          <code>@page</code> routes get discovered. The last two are extension points: component types the shell renders
+          into the top app bar (a cart icon with a badge) or at the root of the layout (a drawer, an overlay).</p>
+          <p>The discovery happens at runtime, not compile time. <code>Routes.razor</code> injects <code>IEnumerable&lt;IUIModule&gt;</code>
+          and hands <code>UIModules.Select(m =&gt; m.Assembly)</code> to the <code>Router</code>&#39;s <code>AdditionalAssemblies</code>, while
+          <code>NavMenu</code> and <code>MainLayout</code> inject the same enumeration to assemble the menu and render the
+          contributed components. Nothing in the shell names a module. That is the UI-layer counterpart of the
+          server-side <code>IModule</code> contract from earlier in this series: &quot;add a module&quot; becomes one registration
+          on each side instead of a host edit per contribution point, and the same shell serves a web head, a
+          WASM client, and a MAUI hybrid head with different module sets.</p>
+          <p>Every module UI in both consumer apps implements it, as do the framework&#39;s own notification module
+          and the backend-less component gallery. One honest caveat: the reference seed does not. MMCA.Helpdesk
+          deliberately keeps its own <code>Routes.razor</code> and <code>MainLayout</code>, so an adopter reading that seed gets the
+          framework&#39;s components without this composition model.</p>
+          <h2 id="host-polymorphic-token-refresh-one-component-set-three-platforms">Host-polymorphic token refresh: one component set, three platforms</h2>
+          <p>Here is where the front-end ports pay off the most. The same Razor component set runs on Blazor Server, Blazor WebAssembly, and a .NET MAUI hybrid host (Android, iOS, macOS, Windows) with no per-platform reimplementation. The primer&#39;s phrase for this is &quot;write-once UI, render everywhere.&quot; A component never asks &quot;am I on MAUI?&quot; It asks an injected abstraction, and each host registers its own implementation.</p>
+          <p>Token refresh is the cleanest example, because the right answer genuinely differs per platform for security reasons. The swap point is a one-method interface, <code>ITokenRefresher</code>, with two implementations chosen per host:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Browser (Blazor Server + WASM): the refresh token lives in an HttpOnly cookie.</span>
+<span class="hljs-comment">// A same-origin JS helper POSTs to /auth/session/token; the cookie rides along;</span>
+<span class="hljs-comment">// the host refreshes server-side and returns ONLY the access token. JS never</span>
+<span class="hljs-comment">// sees the refresh token, so there is no XSS exfiltration surface.</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">SameOriginProxyTokenRefresher</span> : <span class="hljs-title">ITokenRefresher</span> { <span class="hljs-comment">/* ... */</span> }
+
+<span class="hljs-comment">// MAUI: there is no browser DOM, hence no XSS surface. The refresh token sits in</span>
+<span class="hljs-comment">// OS SecureStorage (iOS Keychain / Android Keystore) and is exchanged directly</span>
+<span class="hljs-comment">// against auth/refresh.</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DirectApiTokenRefresher</span> : <span class="hljs-title">ITokenRefresher</span> { <span class="hljs-comment">/* ... */</span> }</code></pre>
+          <p>Both return <code>Task&lt;string?&gt;</code>, and the null is load-bearing: <code>null</code> means &quot;no valid session exists,&quot; and the caller treats that as a logout, not an error to catch. The higher-level <code>AuthUIService</code> calls the same code path regardless of host. Above it, a custom <code>JwtAuthenticationStateProvider</code> reads claims from the stored JWT client-side and pushes auth-state changes so Blazor&#39;s <code>AuthorizeView</code> and <code>CascadingAuthenticationState</code> react instantly after login or refresh, with the server still validating every request as the real authority. The whole client-side auth surface, login, register, OAuth code-exchange, logout, refresh, change-password, sits behind <code>IAuthUIService</code> and depends only on <code>Shared</code> auth DTOs, so it too honors the UI-to-Shared-only rule.</p>
+          <p>The payoff is concrete. Adding a platform is &quot;implement these interfaces,&quot; not &quot;fork the UI.&quot; The threat model differs per host, so the implementations differ, but the components above them never know.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>This is opinionated UI infrastructure coupled to MudBlazor.</strong> <code>DataGridListPageBase</code> is built around <code>MudDataGrid&lt;T&gt;</code>, <code>GridState&lt;T&gt;</code>, and MudBlazor&#39;s viewport observer. The base is reusable across your screens, but it is not framework-agnostic: swapping out MudBlazor would mean rewriting it. The trade is the usual one for a design system, a smaller surface and consistency in exchange for a hard dependency.</li>
+          <li><strong>The test layer is thorough, and its residuals are narrow.</strong> The shared primitives and the two mobile list components both carry a fast bUnit suite, a render-snapshot tier diffs their markup against committed baselines and fails the build on an unintended structural change, and Playwright axe (WCAG 2.1 AA) plus a render smoke run as a real-browser CI job against a self-hosted gallery, with all three engines (chromium, firefox, and webkit) blocking merge gates. The most logic-heavy component, the desktop <code>DataGridListPageBase</code>, carries its own direct bUnit suite (<code>DataGridListPageBaseTests</code>, thirty facts that drive the base through a concrete test page, covering initial load, grid filters translated into the fetch call, page and sort state mirrored to the URL, error and cancel snackbar severities, URL-driven restoration, density and scroll persistence, the mobile card path, the virtualized-window fetch path, and a regression guard for the disposed-token-source race). What the layer does not cover is narrow: the visual check is markup-snapshot rather than pixel diffing, and there is no mutation testing on the core tier.</li>
+          <li><strong>Render-mode handling is genuinely complex.</strong> The three-channel persistence (URL, memory, session) plus the prerender cache, plus the <code>BL0005</code> suppressions to set the grid page from outside the component, plus catch-and-degrade around every JS interop call, is a lot of machinery. It is the right machinery for the InteractiveAuto lifecycle, but it is not simple, and it earns its keep only because it is written once.</li>
+          <li><strong>There is still design-system residue.</strong> The source still carries Bootstrap chrome (<code>navbar</code>, <code>navbar-brand</code>, <code>navbar-toggler</code>) coexisting with MudBlazor in the shared <code>NavMenu</code>. The mobile infinite-scroll list is DOM-bounded by a <code>MaxRenderedItems</code> cap, so it is not part of that residue. The design-system scorecard&#39;s pair is that leftover Bootstrap chrome plus some <code>app.css</code> blocks that use <code>!important</code> overrides and raw hex outside the token set. The dark palette clears its own contrast scan: the filled-primary button label and error-alert text take dark on-color text (<code>rgba(0,0,0,0.87)</code>), locked by a blocking dark-mode axe gate, so both light and dark modes are AA-gated. Client-side Web Vitals are measured too: a <code>WebVitalsE2ETests</code> suite asserts LCP, TTFB, and CLS budgets against the gallery inside the blocking chromium E2E gate, so a catastrophic front-end-performance regression fails the build.</li>
+          </ul>
+          <p>None of these argue for going back to per-page plumbing. They argue for closing the last gaps (retiring the leftover NavMenu chrome, adding pixel-level visual regression) and being clear-eyed that a UI framework is still a framework: a dependency you adopt, not a thing you get for free.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The moves port to any component framework, not just Blazor:</p>
+          <ol>
+          <li>Put a <strong>list-page base component</strong> in charge of paging, sort, filter, loading, cancellation, and teardown. A concrete screen should declare its data source and its columns, nothing else.</li>
+          <li>Bind pages to a <strong>typed service interface over a named HTTP client</strong>, never to a raw client. Route every call through one method so retry, auth, and error extraction are applied uniformly, and surface the server&#39;s real error instead of a generic one.</li>
+          <li>Make the <strong>design tokens one source of truth</strong> and guard the duplication with a <strong>fitness test</strong> if the tokens have to exist in two languages.</li>
+          <li>Treat the <strong>URL as the source of truth</strong> for list state so deep links and back-forward just work, and persist transient state across render-mode or navigation transitions so the screen does not flash or refetch.</li>
+          <li>Hide every <strong>platform difference behind an interface</strong> declared in the shared layer, with one implementation per host. Adding a platform should be &quot;implement these ports,&quot; not &quot;fork the UI.&quot;</li>
+          </ol>
+          <p>The takeaway: <strong>a UI framework is &quot;compose, don&#39;t repeat&quot; applied to the front end. The same ports, base classes, and fitness tests that keep your backend honest do not stop at the API. Push them into the components, and a list screen becomes a few lines that inherit the hard parts instead of re-deriving them, one diverged copy at a time.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why every list screen re-implements the same paging and loading plumbing, how <code>DataGridListPageBase&lt;TDto&gt;</code> folds it into one reusable Blazor base so a concrete page is tiny, how the <code>IEntityService</code> / <code>EntityServiceBase</code> / <code>AuthenticatedServiceBase</code> pipeline binds the UI to a DTO contract with Polly retry and real server errors, how <code>MMCATheme</code> plus a <code>BrandColors</code> fitness test keep the design tokens from drifting, how <code>PersistentComponentState</code> and URL-as-source-of-truth kill the render-mode flash, how the package ships the application shell so a module plugs into it by implementing <code>IUIModule</code> instead of the host wiring it in by hand, and how one <code>ITokenRefresher</code> interface with two host implementations lets one component set run on Server, WASM, and MAUI.</p>
+          <p><strong>Next in the series:</strong> internationalization and theming, en-US and Spanish localization plus a
+          day/dark mode toggle, both persisted on one cookie-and-profile mechanism.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the UI-framework chapter of the onboarding guide, or <code>dotnet add package MMCA.Common.UI</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          </ul>
+          <p><em>Tags: .NET, Blazor, C Sharp, Front End, Software Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="soft-delete-vs-erasure.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">36 · Soft-delete vs the right to erasure</span></a>
+          <a class="article-pager-link article-pager-link--next" href="i18n-and-theming.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">38 · i18n and theming on one preference pipeline</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-package-that-is-allowed-to-depend-on-almost-nothing">The package that is allowed to depend on almost nothing</a></li>
+            <li><a href="#datagridlistpagebase-the-screen-you-stop-rewriting">DataGridListPageBase: the screen you stop rewriting</a></li>
+            <li><a href="#the-same-page-on-a-phone-without-a-second-page">The same page on a phone, without a second page</a></li>
+            <li><a href="#the-data-access-boundary-bind-to-an-interface-never-to-httpclient">The data-access boundary: bind to an interface, never to HttpClient</a></li>
+            <li><a href="#theming-one-set-of-tokens-guarded-by-a-fitness-test">Theming: one set of tokens, guarded by a fitness test</a></li>
+            <li><a href="#render-mode-state-persistence-no-flash-no-double-fetch">Render-mode state persistence: no flash, no double fetch</a></li>
+            <li><a href="#the-shell-ships-in-the-package-too-modules-plug-in-with-iuimodule">The shell ships in the package too: modules plug in with IUIModule</a></li>
+            <li><a href="#host-polymorphic-token-refresh-one-component-set-three-platforms">Host-polymorphic token refresh: one component set, three platforms</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

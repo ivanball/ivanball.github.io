@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Browser session-cookie auth for Blazor SSR: surviving the F5 · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="HttpOnly session cookies and an SSR-time scheme so [Authorize] passes during prerender, with the API still the boundary.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/session-cookie-auth-blazor-ssr.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Browser session-cookie auth for Blazor SSR: surviving the F5">
+  <meta property="og:description" content="HttpOnly session cookies and an SSR-time scheme so [Authorize] passes during prerender, with the API still the boundary.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/session-cookie-auth-blazor-ssr.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-25.png">
+  <meta property="og:image:alt" content="Browser session-cookie auth for Blazor SSR: surviving the F5">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Browser session-cookie auth for Blazor SSR: surviving the F5">
+  <meta name="twitter:description" content="HttpOnly session cookies and an SSR-time scheme so [Authorize] passes during prerender, with the API still the boundary.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-25.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Browser session-cookie auth for Blazor SSR: surviving the F5","description":"HttpOnly session cookies and an SSR-time scheme so [Authorize] passes during prerender, with the API still the boundary.","url":"https://ivanball.github.io/articles/session-cookie-auth-blazor-ssr.html","mainEntityOfPage":"https://ivanball.github.io/articles/session-cookie-auth-blazor-ssr.html","image":"https://ivanball.github.io/assets/img/articles/article-25.png","datePublished":"2026-07-25T12:25:21Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":25,"sameAs":"https://medium.com/@ivanball76/browser-session-cookie-auth-for-blazor-ssr-surviving-the-f5-eb0ea317820e"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"25 · Browser session-cookie auth for Blazor SSR","item":"https://ivanball.github.io/articles/session-cookie-auth-blazor-ssr.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">25 · Browser session-cookie auth for Blazor SSR</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html" aria-current="page">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 25</p>
+          <h1 id="browser-session-cookie-auth-for-blazor-ssr-surviving-the-f5">Browser session-cookie auth for Blazor SSR: surviving the F5</h1>
+          <p class="article-meta"><time datetime="2026-07-25T12:25:21Z">July 25, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/browser-session-cookie-auth-for-blazor-ssr-surviving-the-f5-eb0ea317820e" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-25.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Your Blazor app authenticates with a bearer token. Then a user presses F5 on an
+          <code>[Authorize]</code> page and gets bounced to the login screen even though they are signed in. The fix is an
+          HttpOnly cookie and a server-side reader, without that reader ever becoming the security boundary.</p>
+          <hr>
+          <p>You build a Blazor Web App, you wire up JWT auth against your API, and it works. Login returns an access
+          token and a refresh token, the interactive client holds the access token, and every API call carries it
+          as a bearer header. You click around the app, protected pages render, the demo is clean.</p>
+          <p>Then someone presses F5 on a protected page. Or pastes a deep link into a new tab. Or just refreshes after
+          lunch. The page is decorated <code>[Authorize]</code>, and it bounces them to <code>/login</code>, even though they are very much
+          still logged in.</p>
+          <p>Here is what happened. A Blazor Web App renders in two phases: a server-side (SSR) prerender pass runs on
+          that first request, and only afterward does the interactive phase (Blazor Server or WebAssembly) take over.
+          On a fresh GET, there is no interactive client yet, and the browser issues a plain navigation with <strong>no
+          <code>Authorization</code> header</strong>. So at prerender time, <code>[Authorize]</code> sees an anonymous request and redirects. The
+          access token sitting in the client&#39;s memory, or in <code>localStorage</code>, is no help: SSR runs on the server and
+          cannot read either. And you do not <em>want</em> the refresh token in <code>localStorage</code> anyway, because anything a
+          script can read, an XSS payload can exfiltrate.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>This is the gap between &quot;the user has a valid session&quot; and &quot;the server rendering the first paint can see
+          it.&quot; A pure bearer-header design has nowhere to put the session that the SSR pass can read. So the choices
+          look like: redirect every fresh GET to a round-trip through login (ugly and wrong, they are logged in), or
+          store the token somewhere the server can read it.</p>
+          <p>The somewhere has to satisfy three constraints at once. The SSR pass must be able to read the user&#39;s
+          identity to render <code>[Authorize]</code> pages. The refresh token must stay unreadable to JavaScript, because it is
+          the long-lived credential. And none of this can become a second, weaker place to validate auth, because you
+          already have one validation boundary (the API) and a second one is a second thing to get wrong.</p>
+          <p>The answer is an HttpOnly cookie for transport, a non-validating SSR reader for prerender, and a strict rule
+          that the cookie reader is for rendering only. The API stays the boundary.</p>
+          <h2 id="the-mmca-answer-httponly-cookies-plus-an-ssr-time-reader">The MMCA answer: HttpOnly cookies plus an SSR-time reader</h2>
+          <p>The mechanism ships in <code>MMCA.Common.API</code> (a <code>SessionCookies/</code> folder) with a <code>MMCA.Common.UI</code> companion,
+          and both apps&#39; Web UI hosts wire it. It has four moving parts.</p>
+          <p><strong>Two HttpOnly cookies, seeded from the client at login.</strong> <code>mmca_auth_access</code> carries the JWT and
+          <code>mmca_auth_refresh</code> carries the refresh token (the names are constants on <code>SessionCookieEndpoints</code>). After a
+          successful login the browser POSTs to <code>/auth/session-cookie</code>, and <code>SessionCookieJar.Append</code> writes both
+          cookies HttpOnly with <code>SameSite=Lax</code>; logout DELETEs them. Because they are HttpOnly, no script can read
+          either one.</p>
+          <p><strong>An SSR-time scheme reads the access cookie, and deliberately does not validate its signature.</strong>
+          <code>SessionCookieAuthenticationHandler</code> (scheme <code>&quot;SessionCookie&quot;</code>) reads <code>mmca_auth_access</code> during prerender,
+          parses its claims, checks expiry, and populates <code>HttpContext.User</code> so <code>[Authorize]</code> passes.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// SessionCookieAuthenticationHandler.HandleAuthenticateAsync: read claims for prerender, no signature check.</span>
+<span class="hljs-keyword">var</span> token = cookieTokenReader.ReadAccessToken();
+<span class="hljs-keyword">if</span> (<span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(token))
+{
+    <span class="hljs-keyword">return</span> Task.FromResult(AuthenticateResult.NoResult());
+}
+
+<span class="hljs-keyword">var</span> jwtHandler = <span class="hljs-keyword">new</span> JwtSecurityTokenHandler();
+<span class="hljs-keyword">if</span> (!jwtHandler.CanReadToken(token))
+{
+    <span class="hljs-keyword">return</span> Task.FromResult(AuthenticateResult.Fail(<span class="hljs-string">&quot;Session cookie is not a valid JWT.&quot;</span>));
+}
+
+<span class="hljs-keyword">var</span> jwt = jwtHandler.ReadJwtToken(token);          <span class="hljs-comment">// ReadJwtToken, NOT ValidateToken: no signature check</span>
+<span class="hljs-keyword">if</span> (jwt.ValidTo &lt; TimeProvider.GetUtcNow().UtcDateTime)  <span class="hljs-comment">// injectable clock, same as the rest of the auth stack</span>
+{
+    <span class="hljs-keyword">return</span> Task.FromResult(AuthenticateResult.Fail(<span class="hljs-string">&quot;Session cookie JWT is expired.&quot;</span>));
+}
+
+<span class="hljs-keyword">var</span> identity  = <span class="hljs-keyword">new</span> ClaimsIdentity(jwt.Claims, Scheme.Name, ClaimTypes.NameIdentifier, ClaimTypes.Role);
+<span class="hljs-keyword">var</span> principal = <span class="hljs-keyword">new</span> ClaimsPrincipal(identity);
+<span class="hljs-keyword">return</span> Task.FromResult(AuthenticateResult.Success(<span class="hljs-keyword">new</span> AuthenticationTicket(principal, Scheme.Name)));</code></pre>
+          <p>That missing signature check is the part that looks alarming and is actually the crux of the design. The
+          handler calls <code>ReadJwtToken</code> (parse) rather than <code>ValidateToken</code> (verify). It is safe for exactly one
+          reason: the cookie was minted by the UI host from a token the API already issued, and <strong>every API call
+          still fully validates the JWT</strong> (the cross-service JWKS story from the auth article). The SSR handler only
+          needs the user&#39;s claims to render the first paint; it is explicitly not the security boundary.</p>
+          <p><strong>The refresh token never leaves the server.</strong> When the interactive client starts, it calls
+          <code>POST /auth/session/token</code>, a same-origin &quot;validate-or-refresh&quot; endpoint, to hydrate its in-memory access
+          token. <code>CookieSessionRefresher.GetOrRefreshAsync</code> reads the HttpOnly refresh cookie server-side, refreshes
+          the access token if it has expired, writes fresh cookies back, and returns <strong>only</strong> the access token and
+          its expiry.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// POST /auth/session/token: hydrate the in-memory access token; the refresh token never leaves the server.</span>
+endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</span>, <span class="hljs-keyword">async</span> (
+    HttpContext httpContext, ICookieSessionRefresher refresher, CancellationToken cancellationToken) =&gt;
+{
+    <span class="hljs-keyword">if</span> (IsCrossSite(httpContext.Request))                       <span class="hljs-comment">// Sec-Fetch-Site CSRF guard</span>
+    {
+        <span class="hljs-keyword">return</span> Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> refresher.GetOrRefreshAsync(httpContext, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
+    <span class="hljs-keyword">return</span> result <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>
+        ? Results.Json(<span class="hljs-keyword">new</span> { error = <span class="hljs-string">&quot;no_session&quot;</span> }, statusCode: StatusCodes.Status401Unauthorized)
+        : Results.Json(<span class="hljs-keyword">new</span> SessionTokenResponse(result.Value.AccessToken, result.Value.AccessTokenExpiry));
+});</code></pre>
+          <p>The response is a <code>SessionTokenResponse(AccessToken, AccessTokenExpiry)</code>. The refresh token is never
+          serialized to the browser. On the UI side, <code>ITokenStorageService</code> keeps the access token <strong>in memory</strong> and
+          treats the refresh token as living only in the HttpOnly cookie, and <code>ISessionCookieSync</code> (implemented by
+          <code>JsFetchSessionCookieSync</code>) mirrors the client&#39;s tokens back into the cookies via a small JS shim so the
+          next prerender sees a current session.</p>
+          <p><strong>A refresh middleware closes the expiry race.</strong> <code>CookieSessionRefreshMiddleware</code> runs <em>before</em>
+          <code>UseAuthentication</code> and, only on GET requests that accept HTML, refreshes the access token server-side if it
+          has expired but the refresh cookie is still good. So a fresh GET after the access token lapsed still renders
+          authenticated, because the middleware has already minted a fresh access token (read by <code>CookieTokenReader</code>
+          from <code>HttpContext.Items</code>) before the SSR scheme runs.</p>
+          <p>This is a backend-for-frontend (BFF) token-storage layer: the browser holds an HttpOnly session whose
+          refresh half it cannot read, the SSR pass authenticates from the access cookie without trusting it as the
+          boundary, and the real enforcement stays at the API.</p>
+          <h2 id="the-csrf-tax-and-how-it-is-paid">The CSRF tax, and how it is paid</h2>
+          <p>Cookie-based auth reintroduces a concern that a pure bearer-header design does not have: a cross-site page
+          can cause the browser to send your cookies. The framework pays that tax with defense-in-depth rather than a
+          single control. The cookies are <code>SameSite=Lax</code>, so they are not sent on cross-site subrequests. The
+          refresh endpoint additionally rejects cross-site POSTs by checking the <code>Sec-Fetch-Site</code> header
+          (<code>IsCrossSite</code>). The cookie endpoints disable antiforgery deliberately (they carry no antiforgery token and
+          are guarded by <code>SameSite</code> + <code>Sec-Fetch-Site</code> + POST-only instead). Three overlapping checks, none of them
+          load-bearing alone.</p>
+          <h2 id="scaling-out-the-key-ring-has-to-be-shared">Scaling out: the key ring has to be shared</h2>
+          <p>One replica is a special case. Add a second and a failure appears that has nothing to do with the design
+          above: ASP.NET Core&#39;s DataProtection key ring lives <strong>in memory, per process</strong>, so every replica generates
+          its own keys and a payload minted by replica A cannot be decrypted by replica B. The symptom follows the
+          load balancer rather than the user: random sign-outs and &quot;The antiforgery token could not be decrypted&quot;
+          errors that fit no pattern.</p>
+          <p><code>AddCommonDataProtection</code> (ADR-069) is the one-call answer. Given a <code>DataProtection:BlobStorageUri</code> it
+          persists the key ring to a <strong>single Azure blob</strong> under <code>DefaultAzureCredential</code> and sets an application
+          discriminator, so the cookies and antiforgery tokens minted by one replica decrypt on another. Encrypting
+          that key ring at rest with a Key Vault key is a <strong>second, deliberately independent gate</strong>
+          (<code>DataProtection:KeyVaultKeyUri</code>): the correctness fix has to work <em>without</em> the Key Vault Crypto User
+          role, because that role assignment is granted out of band and can lag a deployment, and folding the two
+          into one switch would turn an optional hardening gap into a total authentication outage. Both consumer
+          templates ship that second gate with its parameter defaulting to off, and the deployed value of that
+          parameter is not readable from the repositories, so the record states what ships rather than what is
+          switched on: on default parameters the ring is protected by a private container and a narrow account grant
+          instead of by a Key Vault key. ADR-069 keeps that as a named trade-off rather than hiding it.</p>
+          <p>Absent configuration is a <strong>full no-op</strong>: with no blob URI the method returns the builder untouched and
+          registers no DataProtection services at all. A developer machine, a test host and the Helpdesk seed all run
+          single-process, keep the in-memory default, and take no Azure dependency at startup.</p>
+          <p>Adoption is per host, and the shape of it is worth saying plainly. MMCA.ADC calls it on exactly the two
+          hosts that mint those payloads, its Identity service and its Web UI host, and points both at one private
+          container on a storage account it already had. MMCA.Store&#39;s Web UI host calls it as well, on a storage
+          account provisioned for this and nothing else, with one extra catch on the infrastructure side: the blob
+          URI is injected only when a <code>dataProtectionStorageReady</code> parameter is true (it defaults to false), because
+          <code>AddCommonDataProtection</code> gates on the <em>presence</em> of the URI and never on its reachability, so wiring the
+          URI before the blob role assignment exists would fail the first protect call rather than degrade. That flag
+          is true in production today. Store&#39;s Identity service still makes no call, and its container app also runs
+          two replicas.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>The pattern fixes a real gap, and the §26 review names what it costs.</p>
+          <ul>
+          <li><strong>A non-validating auth scheme exists in your codebase.</strong> <code>SessionCookieAuthenticationHandler</code> trusts a
+          cookie it does not cryptographically verify. That is sound only because the cookie is HttpOnly and
+          host-minted and the API independently validates every call. Authorize a sensitive action on the SSR
+          principal <em>without</em> an API round-trip and you have broken the safety argument. The rule &quot;the API is the
+          boundary&quot; is not a nicety here, it is the whole proof.</li>
+          <li><strong>The session now lives in two places.</strong> Cookies for browser GETs and SSR, an in-memory bearer token for
+          interactive API calls. The two must stay in sync, which is exactly what <code>/auth/session/token</code> and the UI&#39;s
+          <code>ISessionCookieSync</code> exist to manage. A bug in that sync shows up as a flicker of the wrong auth state.</li>
+          <li><strong>CSRF surface a header-only design would not have.</strong> <code>SameSite=Lax</code> plus <code>Sec-Fetch-Site</code> plus POST-only
+          is solid, but it is a surface, and a reviewer has to understand all three to trust the cookie endpoints.</li>
+          <li><strong>Expiry is checked, not cryptographically enforced, at the SSR edge.</strong> A tampered cookie produces claims
+          that fail at the API on the next call, but the one prerendered HTML pass is produced from unverified
+          claims. For rendering, that is acceptable; for a decision, it is not, which loops back to the first point.</li>
+          <li><strong>Scaling out adds a shared-state dependency.</strong> A cookie session is only as portable as the key ring
+          behind it, so a multi-replica host has to persist that ring where every replica can read it (ADR-069):
+          one more piece of infrastructure and one more credential that has to resolve at startup. It is also
+          opt-in per host, so adoption has to be audited. A scaled-out host that never makes the call keeps the
+          broken per-replica default and fails intermittently rather than loudly.</li>
+          </ul>
+          <p>None of these are reasons to redirect every F5 to a login round-trip. They are the reasons to keep the SSR
+          reader honest about what it is for.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The shape ports to any server-prerendered SPA with token auth:</p>
+          <ol>
+          <li><strong>Put the session in an HttpOnly cookie, not <code>localStorage</code>.</strong> The server can read a cookie during
+          render; it cannot read <code>localStorage</code>. And the refresh token belongs somewhere a script cannot reach it.</li>
+          <li><strong>Let the prerender pass read claims, not verify them, and make the API the only validator.</strong> A
+          parse-don&#39;t-validate reader is safe only if a real validation boundary sits behind every state-changing
+          call. Write that invariant down.</li>
+          <li><strong>Keep the refresh token server-side behind a hydrate endpoint.</strong> The browser asks a same-origin
+          endpoint for a fresh access token; the refresh token is exchanged on the server and never serialized to
+          the client.</li>
+          <li><strong>Refresh before authentication on GETs.</strong> A small middleware that mints a fresh access token before the
+          auth handler runs closes the &quot;expired between requests&quot; gap without a client round-trip.</li>
+          <li><strong>Budget for CSRF.</strong> Cookies bring it back. <code>SameSite=Lax</code> plus a <code>Sec-Fetch-Site</code> check plus POST-only
+          endpoints is a defensible, layered answer.</li>
+          <li><strong>Share the key ring before you scale out.</strong> The moment a cookie-minting host runs more than one
+          replica, per-process keys become random sign-outs. Persist the ring to one shared store with an
+          application discriminator, and keep encryption of the ring at rest as a separate switch so a lagging
+          role assignment costs you hardening rather than login.</li>
+          </ol>
+          <p>The takeaway: <strong>the SSR prerender gap is real, and the fix is an HttpOnly cookie the server can read plus
+          the discipline that reading it is for rendering, never for deciding. Keep the refresh token off the client,
+          keep the API as the one validator, and an <code>[Authorize]</code> page survives an F5 without weakening anything.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why a Blazor Web App&#39;s SSR prerender pass bounces <code>[Authorize]</code> pages to login on a
+          fresh GET (no <code>Authorization</code> header, no server-readable token), how MMCA.Common closes the gap with two
+          HttpOnly cookies, a <code>SessionCookieAuthenticationHandler</code> that reads claims for prerender without validating
+          the signature, a server-side <code>/auth/session/token</code> refresher that keeps the refresh token off the client,
+          and a pre-auth refresh middleware, why the design is safe only because the API stays the validation
+          boundary, why a scaled-out cookie host also needs a shared DataProtection key ring (ADR-069, adopted by
+          both apps, with Store&#39;s blob URI gated behind a readiness flag), and the CSRF and dual-path costs that buys.</p>
+          <p><strong>Next in the series:</strong> external OAuth login, adding Google and GitHub sign-in behind your own local
+          JWTs (ADR-036), where an <code>OAuthControllerBase</code> swaps a single-use, short-lived cached code for the JWT
+          pair so the tokens never ride the redirect URL.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-022 behind this
+          pattern, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 ADR-022 (browser session-cookie auth): <a href="../docs/adr/022-browser-session-cookie-auth.html">ADR-022: Browser Session-Cookie Authentication for Blazor SSR</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Blazor, Security, Authentication</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="permission-based-authorization.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">24 · Permission-based authorization over roles</span></a>
+          <a class="article-pager-link article-pager-link--next" href="external-oauth-login.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">26 · External OAuth login behind your own JWTs</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-httponly-cookies-plus-an-ssr-time-reader">The MMCA answer: HttpOnly cookies plus an SSR-time reader</a></li>
+            <li><a href="#the-csrf-tax-and-how-it-is-paid">The CSRF tax, and how it is paid</a></li>
+            <li><a href="#scaling-out-the-key-ring-has-to-be-shared">Scaling out: the key ring has to be shared</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

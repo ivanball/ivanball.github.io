@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Notifications as a vertical slice: in-app inbox, real-time push, native push, and email · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A notifications feature built as a clean vertical slice across every layer.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/notifications-vertical-slice.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Notifications as a vertical slice: in-app inbox, real-time push, native push, and email">
+  <meta property="og:description" content="A notifications feature built as a clean vertical slice across every layer.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/notifications-vertical-slice.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-21.png">
+  <meta property="og:image:alt" content="Notifications as a vertical slice: in-app inbox, real-time push, native push, and email">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Notifications as a vertical slice: in-app inbox, real-time push, native push, and email">
+  <meta name="twitter:description" content="A notifications feature built as a clean vertical slice across every layer.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-21.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Notifications as a vertical slice: in-app inbox, real-time push, native push, and email","description":"A notifications feature built as a clean vertical slice across every layer.","url":"https://ivanball.github.io/articles/notifications-vertical-slice.html","mainEntityOfPage":"https://ivanball.github.io/articles/notifications-vertical-slice.html","image":"https://ivanball.github.io/assets/img/articles/article-21.png","datePublished":"2026-07-21T12:01:10Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":21,"sameAs":"https://medium.com/@ivanball76/notifications-as-a-vertical-slice-in-app-inbox-real-time-push-native-push-and-email-c59d5a4f3b69"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"21 · Notifications as a vertical slice","item":"https://ivanball.github.io/articles/notifications-vertical-slice.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">21 · Notifications as a vertical slice</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html" aria-current="page">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 21</p>
+          <h1 id="notifications-as-a-vertical-slice-in-app-inbox-real-time-push-native-push-and-email">Notifications as a vertical slice: in-app inbox, real-time push, native push, and email</h1>
+          <p class="article-meta"><time datetime="2026-07-21T12:01:10Z">July 21, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/notifications-as-a-vertical-slice-in-app-inbox-real-time-push-native-push-and-email-c59d5a4f3b69" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-21.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A framework is mostly horizontal layers and abstract base classes. Notifications is the
+          one concrete bounded context MMCA.Common ships, and it is built as a textbook vertical slice: domain,
+          application ports, infrastructure adapters, and API, all owned by one feature.</p>
+          <hr>
+          <p>Open most &quot;Clean Architecture&quot; frameworks and you find a great deal of horizontal plumbing and very
+          little vertical feature. There is a <code>Domain</code> project, an <code>Application</code> project, an <code>Infrastructure</code>
+          project, and they are full of base classes and interfaces. That is fine, and it is necessary, but it
+          leaves a question unanswered for anyone trying to learn the framework: what does a complete feature
+          built on this thing actually look like, top to bottom?</p>
+          <p>MMCA.Common answers that by shipping exactly one concrete bounded context: Notifications. It is the
+          worked example. And the way it is organized is the point of this article, because it is built as a
+          vertical slice rather than smeared across the horizontal layers.</p>
+          <h2 id="horizontal-layer-cut-vs-vertical-slice">Horizontal layer cut vs. vertical slice</h2>
+          <p>The horizontal instinct is to organize by technical role. All the controllers in one folder, all the
+          handlers in another, all the EF configurations in a third. The cost shows up later: to change one
+          behavior of one feature, you touch four folders, and nothing about the folder structure tells you which
+          files belong together. Cohesion is low; the things that change together do not live together.</p>
+          <p>A vertical slice flips that. You organize by feature, and within the feature you keep the domain, the
+          use cases, the adapters, and the API surface together. Adding a capability to the feature means working
+          in one place. Notifications is that, and it touches every layer on purpose so it doubles as a complete
+          port-and-adapter reference:</p>
+          <ul>
+          <li><strong>Domain</strong> owns two small aggregates (<code>PushNotification</code> and <code>UserNotification</code>), the
+          <code>PushNotificationCreated</code> event, and the <code>PushNotificationStatus</code> enum.</li>
+          <li><strong>Application</strong> defines the ports (<code>IPushNotificationSender</code>, <code>INativePushSender</code>,
+          <code>IPushDeviceRegistrar</code>, <code>IEmailSender</code>, <code>INotificationRecipientProvider</code>) and the CQRS slices that
+          orchestrate them.</li>
+          <li><strong>Infrastructure</strong> supplies the adapters (<code>SignalRPushNotificationSender</code>,
+          <code>AzureNotificationHubNativePushSender</code>, <code>AzureNotificationHubDeviceRegistrar</code>, <code>SmtpEmailSender</code>,
+          <code>NotificationHub</code>) plus their no-op fallbacks.</li>
+          <li><strong>API</strong> exposes three REST controllers, split by who is allowed to call them.</li>
+          </ul>
+          <p>Four loosely coupled delivery legs share one feature flag and one set of application ports: an in-app
+          inbox (durable per-user record), a SignalR real-time push (best-effort delivery to connected clients),
+          an OS-level native push (FCM and APNs to backgrounded or killed devices, added in ADR-044), and email
+          (system mail).</p>
+          <h2 id="sending-a-push-notification-end-to-end">Sending a push notification, end to end</h2>
+          <p>The send flow is the most instructive because it touches distinct consistency concerns: a
+          deduplication check, a durable audit record, a per-user inbox, and two best-effort delivery legs
+          (real-time SignalR and OS-level native push). It is driven by <code>SendPushNotificationHandler</code>, reached
+          by POSTing to <code>NotificationsController</code>. The handler runs in a deliberate order:</p>
+          <ol>
+          <li><strong>Deduplicate, if the caller opted in.</strong> The command carries an optional <code>DedupKey</code>. A blank or
+          whitespace-only value is normalized to null, so an empty header cannot claim the single &quot;empty&quot;
+          key. When a key is present the handler looks the notification up first, and a hit returns the
+          existing DTO without sending anything at all. No key means no lookup, which is the default path:
+          every send creates a new notification.</li>
+          <li><strong>Resolve recipients.</strong> The handler does not know who the audience is. It asks the injected
+          <code>INotificationRecipientProvider</code> for the user IDs. This is the key swap point: the framework ships a no-op
+          <code>NullNotificationRecipientProvider</code> that returns an empty list, and the consuming app overrides it.
+          ADC registers <code>AttendeeNotificationRecipientProvider</code>, which calls the Identity module to mean &quot;every
+          attendee.&quot; An empty recipient set short-circuits to a <code>Validation</code> failure, so the framework stays
+          domain-agnostic while the app decides scope.</li>
+          <li><strong>Persist the audit aggregate, in its own save.</strong>
+          <code>PushNotification.Create(title, body, sentByUserId, recipientCount, dedupKey, scopeKey)</code> validates
+          title and body via <code>PushNotificationInvariants</code>, checks that the dedup key and the optional scope
+          key each stay within 128 characters, and returns a <code>Result&lt;PushNotification&gt;</code>. It is saved with
+          <code>Status = Pending</code> and a snapshot <code>RecipientCount</code>. That save stands alone precisely so a lost
+          race on the dedup key can be caught and answered (next section).</li>
+          <li><strong>Fan out the inbox rows, in a second save.</strong> For every recipient the handler creates a
+          <code>UserNotification</code> row, the durable per-user inbox entry that survives a missed real-time delivery.
+          Both writes are issued before any transport is touched. Storage first, delivery second.</li>
+          <li><strong>Deliver in real time, best-effort.</strong> The handler calls <code>IPushNotificationSender.SendToUsersAsync</code>.
+          That call is wrapped in a try/catch that swallows any exception by design: a SignalR or broker hiccup
+          must not lose the already-persisted inbox rows. On success it calls <code>notification.MarkAsSent()</code>, on
+          failure <code>notification.MarkAsFailed()</code>. This SignalR leg alone owns the audit status.</li>
+          <li><strong>Deliver OS-level native push, best-effort (ADR-044).</strong> The handler then calls
+          <code>INativePushSender.SendToUsersAsync</code> inside its own non-fatal try/catch, reaching devices the hub
+          cannot (app backgrounded or killed). This leg is fire-and-forget: a failure is logged via
+          <code>LogNativePushFailed</code> and does not touch the audit status the SignalR leg already decided. The
+          default <code>NullNativePushSender</code> keeps it a no-op until a notification hub is configured.</li>
+          <li><strong>Save and return the DTO.</strong> The handler saves the observed status a third time, then maps the
+          saved aggregate and returns <code>201 Created</code>.</li>
+          </ol>
+          <p>Those three saves are one unit of work, not three. <code>SendPushNotificationCommand</code> declares
+          <code>ITransactional</code>, and <code>TransactionalCommandDecorator</code> wraps any command carrying that marker in a
+          single database transaction that commits when the handler returns and rolls back on a thrown
+          exception. The dedup key is the reason. A fault between the audit save and the inbox fan-out would
+          otherwise leave a committed notification row carrying a key that nothing ever delivered, and every
+          later retry of that key would short-circuit on the dedup lookup and report success forever. Rolling
+          the attempt back whole is what lets the retry re-run the send. A failed delivery does not trigger that
+          rollback: both delivery legs swallow their exceptions and <code>MarkAsFailed</code> ends in a success result, so
+          a send nobody received is still recorded.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// SendPushNotificationHandler, in order: dedup first, then audit + inbox are written</span>
+<span class="hljs-comment">// BEFORE any delivery is attempted. The whole method runs in one transaction (ITransactional).</span>
+<span class="hljs-keyword">var</span> dedupKey = <span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(command.DedupKey) ? <span class="hljs-literal">null</span> : command.DedupKey;
+<span class="hljs-keyword">if</span> (dedupKey <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span>)
+{
+    <span class="hljs-keyword">var</span> alreadySent = <span class="hljs-keyword">await</span> FindByDedupKeyAsync(dedupKey, ct);
+    <span class="hljs-keyword">if</span> (alreadySent <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span>) { <span class="hljs-keyword">return</span> Result.Success(_mapper.MapToDTO(alreadySent)); } <span class="hljs-comment">// no second send</span>
+}
+
+<span class="hljs-keyword">var</span> recipients = <span class="hljs-keyword">await</span> _recipients.GetRecipientUserIdsAsync(ct);   <span class="hljs-comment">// app decides &quot;who&quot;</span>
+<span class="hljs-keyword">if</span> (recipients.Count == <span class="hljs-number">0</span>) { <span class="hljs-keyword">return</span> Result.Failure(...Validation...); }
+
+<span class="hljs-keyword">var</span> notification = PushNotification.Create(
+    title, body, sentByUserId, recipients.Count, dedupKey, scopeKey);  <span class="hljs-comment">// scopeKey: optional view filter</span>
+<span class="hljs-keyword">await</span> _repository.AddAsync(notification, ct);
+<span class="hljs-keyword">try</span> { <span class="hljs-keyword">await</span> _unitOfWork.SaveChangesAsync(ct); }                    <span class="hljs-comment">// save 1: the audit row alone</span>
+<span class="hljs-keyword">catch</span> { <span class="hljs-comment">/* CA1031: lost the filtered-unique-index race? requery by key, return the winner */</span> <span class="hljs-keyword">throw</span>; }
+
+<span class="hljs-keyword">foreach</span> (<span class="hljs-keyword">var</span> userId <span class="hljs-keyword">in</span> recipients) { <span class="hljs-comment">/* create a UserNotification inbox row */</span> }
+<span class="hljs-keyword">await</span> _unitOfWork.SaveChangesAsync(ct);                            <span class="hljs-comment">// save 2: the inbox rows, still no delivery</span>
+
+<span class="hljs-keyword">try</span> { <span class="hljs-keyword">await</span> _push.SendToUsersAsync(recipients, title, body, ct); notification.MarkAsSent(); }
+<span class="hljs-keyword">catch</span> { notification.MarkAsFailed(); }                            <span class="hljs-comment">// CA1031: SignalR leg owns the status</span>
+
+<span class="hljs-keyword">try</span> { <span class="hljs-keyword">await</span> _nativePush.SendToUsersAsync(recipients, title, body, ct); } <span class="hljs-comment">// ADR-044: OS-level leg</span>
+<span class="hljs-keyword">catch</span> { <span class="hljs-comment">/* LogNativePushFailed; native delivery is best-effort, audit status untouched */</span> } <span class="hljs-comment">// CA1031</span>
+
+<span class="hljs-keyword">await</span> _unitOfWork.SaveChangesAsync(ct);                           <span class="hljs-comment">// record observed status; commit on return</span></code></pre>
+          <p>Notice what this ordering buys you. <code>PushNotificationStatus</code> is an observed-delivery audit field, not a
+          gate, and it is decided by the SignalR leg alone. The answer to &quot;what if the user is offline?&quot; is built
+          in: they read it later from the inbox, the native leg tries their pocket, and the organizer sees a Sent
+          or Failed history. Durability lives in the database, not in any transport: the inbox row is what a
+          missed delivery falls back to, and it commits with the send rather than on a transport acknowledging
+          anything. This shape, a durable per-user
+          inbox plus two transient best-effort delivery legs (the SignalR real-time push recorded in ADR-024 and
+          the OS-level native push added in ADR-044) written in that order, keeps the inbox as the single source
+          of truth.</p>
+          <p>The send carries a second optional key alongside <code>DedupKey</code>: an opaque <code>ScopeKey</code> (for example
+          <code>&quot;event:2&quot;</code>), stamped by the sending application and stored on the audit aggregate. The framework
+          attaches no meaning to it. An app whose notifications belong to one edition of something sets it, and
+          every caller that omits it sends exactly as it always did. ADC resolves the current published event
+          and scopes to <code>event:{id}</code>, degrading to null (unscoped) if no event resolves, which is the safe
+          direction because scope is a view filter, not a security boundary. That is also why the column is
+          deliberately unindexed: the filter runs after the primary-key join from the inbox, over a table that
+          holds one row per send, so an index would cost writes without buying a read.</p>
+          <h2 id="retry-safety-on-two-levels-the-idempotency-filter-and-the-dedup-key">Retry safety on two levels: the idempotency filter and the dedup key</h2>
+          <p>A broadcast is exactly the operation you never want to run twice, and the two ways it gets run twice
+          are different problems. The client retries the HTTP call; or two retries arrive close enough together
+          that both pass the same check. The slice answers both, at two different levels.</p>
+          <p>At the edge, the send endpoint carries <code>[Idempotent]</code>. The framework&#39;s idempotency filter caches the
+          first response against the caller&#39;s <code>Idempotency-Key</code> and replays it for a repeat, which is the cheap
+          answer to a retried HTTP call. Then the controller reads that same <code>Idempotency-Key</code> header itself
+          and passes it into the command as <code>DedupKey</code> (absent or whitespace-only stays null, which leaves the
+          send on the default undeduplicated path). The division of labor is the point: <strong>the filter protects
+          the response, the dedup key protects the delivery.</strong> When the filter&#39;s cache is cold, evicted, or
+          degraded (a restarted host, an expired entry, an unreachable distributed cache) the response replay is
+          gone, but the domain still refuses to send a second time.</p>
+          <p>Underneath, <code>DedupKey</code> is a real column on the <code>PushNotification</code> aggregate (max 128 characters,
+          validated in the factory), with a filtered unique index over it. That matters because the handler&#39;s
+          up-front lookup is a check-then-act: two concurrent retries of the same send can both pass it, and
+          the loser only discovers the conflict when it tries to insert. So the audit save is its own
+          <code>SaveChangesAsync</code>, wrapped in a catch that requeries by key: if the row exists now, the concurrent
+          send is the cause and the caller gets that notification back; anything else is rethrown untouched and
+          reaches the exception middleware. The database, not the application, arbitrates the race.</p>
+          <p>That catch is deliberately broad (a suppressed CA1031), and the reason is a layer rule rather than
+          laziness: Application has no EF Core dependency, so <code>DbUpdateException</code> is not a type this file is
+          allowed to name. The requery is what narrows it. It is the same swallow-and-requery shape the
+          framework&#39;s inbox store uses on its own unique index; only the nameable exception differs.</p>
+          <h2 id="the-push-channel-an-adapter-chosen-at-composition-not-branched-at-runtime">The push channel: an adapter chosen at composition, not branched at runtime</h2>
+          <p>The real-time channel is two cooperating types. <code>NotificationHub</code> is an <code>[Authorize]</code>d SignalR <code>Hub</code>.
+          For this durable-push slice it contributes a <code>ReceiveNotification</code> method-name constant, the client-side
+          listener that <code>SignalRPushNotificationSender</code> targets. Connection-to-user mapping is handled by SignalR&#39;s
+          <code>IUserIdProvider</code> (a <code>ClaimBasedUserIdProvider</code>). <code>SignalRPushNotificationSender</code> then pushes out of band
+          through <code>IHubContext&lt;NotificationHub&gt;</code>. It never holds a hub connection itself; it addresses
+          <code>Clients.User(id)</code>, <code>Clients.Users(batch)</code>, or <code>Clients.All</code>. Large audiences are chunked into batches of
+          100 user IDs so a single send does not overwhelm the connection manager.</p>
+          <p>The hub is not method-less, though. Per ADR-039 the same hub also hosts a live-channel layer on the one
+          connection: <code>JoinChannel</code> and <code>LeaveChannel</code> methods that map a connection into SignalR groups for
+          ephemeral broadcasts (live polls, session Q&amp;A, live counters) that are deliberately never persisted. That
+          layer is out of scope for this durable-notification slice; the next article in the series is the
+          deep-dive on it.</p>
+          <p>The important design decision is that <strong>which sender is live is a registration decision, not a runtime
+          branch.</strong> Infrastructure registers the safe default: <code>AddInfrastructure</code> calls <code>AddServices</code>, which
+          does <code>TryAddTransient&lt;IPushNotificationSender, NullPushNotificationSender&gt;()</code> (the no-op lives in
+          <code>MMCA.Common.Infrastructure.Services</code>, so it is an Infrastructure registration, not an Application one).
+          Infrastructure&#39;s <code>AddPushNotifications(configuration)</code> then replaces <code>IPushNotificationSender</code> with the
+          SignalR implementation, wires <code>AddSignalR()</code>, and, if a <code>redis</code> connection string is present, adds a
+          Redis backplane for SignalR scale-out across replicas. A host that never calls <code>AddPushNotifications</code>
+          keeps that no-op <code>NullPushNotificationSender</code>, so the send pipeline still resolves and runs (audit and
+          inbox rows are written) with no real-time transport at all.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The null-object discipline: the handler depends on the port; the adapter is chosen at the root.</span>
+<span class="hljs-comment">// Infrastructure default (AddServices): IPushNotificationSender -&gt; NullPushNotificationSender  (no-op)</span>
+<span class="hljs-comment">// AddPushNotifications(configuration):  IPushNotificationSender -&gt; SignalRPushNotificationSender</span>
+<span class="hljs-comment">//                                       (+ AddSignalR, + Redis backplane if &quot;redis&quot; is configured)</span></code></pre>
+          <p>This is dependency inversion done properly. The handler depends on <code>IPushNotificationSender</code>. There is
+          no <code>if (signalRConfigured)</code> anywhere in the handler. The choice between real and no-op lives at the
+          composition root, and the same null-object discipline applies to recipients via
+          <code>NullNotificationRecipientProvider</code>. The handler is genuinely transport-agnostic.</p>
+          <h2 id="the-native-push-channel-reaching-devices-the-hub-cannot">The native push channel: reaching devices the hub cannot</h2>
+          <p>The SignalR leg stops at the edge of a connected client. A phone with the app backgrounded, killed, or
+          offline hears nothing until the next launch, and conference announcements (&quot;lunch is served&quot;, &quot;room
+          change&quot;) are exactly the messages that must reach pockets, not open tabs. ADR-044 adds a fourth delivery
+          leg for that: OS-level native push through Firebase Cloud Messaging (Android) and APNs (iOS), fanned out
+          by Azure Notification Hubs.</p>
+          <p>It follows the same abstraction discipline as the SignalR channel, with two new Application ports.
+          <code>INativePushSender</code> does the user-targeted send, and <code>IPushDeviceRegistrar</code> upserts and deletes the
+          per-device installations that sends target. Infrastructure <code>TryAdd</code>s inert defaults
+          (<code>NullNativePushSender</code> and <code>NullPushDeviceRegistrar</code>), and <code>AddNativePushNotifications(configuration)</code>
+          swaps in the Azure Notification Hubs implementations (<code>AzureNotificationHubNativePushSender</code> and
+          <code>AzureNotificationHubDeviceRegistrar</code>) only when the <code>NativePush</code> configuration section is enabled and
+          complete. Hosts call it unconditionally, so a deployment flips the channel on by configuration alone, and
+          a build without push credentials is wired but inert end to end. Installations are tagged <code>user:{id}</code>, so
+          a send targets a user (never a raw token) and reaches every device that user registered.</p>
+          <p>The registration surface is <code>DevicesController</code>, the third REST controller. Any authenticated user
+          manages their own device installations: <code>PUT /Notifications/Devices</code> upserts (called after sign-in and
+          on token rotation), <code>DELETE /Notifications/Devices/{installationId}</code> removes one (called before
+          sign-out) and is idempotent. Ownership is stamped server-side from the current user, and installation
+          ids are client-generated GUIDs, so they are not enumerable.</p>
+          <h2 id="the-in-app-inbox-pure-cqrs-readwrite-scoped-to-the-caller">The in-app inbox: pure CQRS read/write, scoped to the caller</h2>
+          <p>The inbox is the durable channel, exposed by <code>InboxController</code> to any authenticated user (unlike the
+          organizer-only send and history endpoints). Four slices back it:</p>
+          <ul>
+          <li><code>GetMyNotificationsHandler</code> joins <code>UserNotification</code> to <code>PushNotification</code> (title and body live on the
+          push aggregate, read state lives on the per-user row) and projects a <code>UserNotificationDTO</code>, newest
+          first, paginated and capped at 500 rows per page. This cross-aggregate read is done in the query, not
+          via a navigation populator, because the two aggregates reference each other by ID only. That matters:
+          in ADC <code>UserNotification</code> lives in its own database.</li>
+          <li><code>GetUnreadNotificationCountHandler</code> counts unread rows for the bell badge.</li>
+          <li><code>MarkNotificationReadHandler</code> verifies the row belongs to the requesting user before flipping it. The
+          domain method <code>UserNotification.MarkAsRead(DateTime readOnUtc)</code> takes the read instant as a parameter
+          (the handler supplies it from an injected <code>TimeProvider</code>, keeping the domain clock-agnostic) and is
+          itself idempotent: a second call preserves the original read timestamp.</li>
+          <li><code>MarkAllNotificationsReadHandler</code> bulk-marks the caller&#39;s unread rows.</li>
+          </ul>
+          <p>Three of those four slices accept the optional scope key, read from a <code>scope</code> query-string parameter
+          on the controller: the list, the unread count (so the badge and the list agree), and the bulk
+          mark-read (so a scoped client never marks rows it cannot see). A supplied scope narrows the read to
+          the notifications carrying that scope plus every unscoped one; omitting it returns everything,
+          exactly as before, which is what keeps the pre-scope callers working.</p>
+          <p>Both the per-row read and the mark-read scope by the caller&#39;s <code>UserId</code> from <code>ICurrentUserService</code>, so
+          one user cannot read or mutate another&#39;s inbox. Security is part of the slice, not a cross-cutting
+          afterthought.</p>
+          <h2 id="the-email-channel-and-the-feature-gate-over-all-of-it">The email channel, and the feature gate over all of it</h2>
+          <p>Email is the smallest channel: one port <code>IEmailSender</code> and one SMTP adapter <code>SmtpEmailSender</code>, which
+          constructs and disposes a fresh <code>SmtpClient</code> per send. It is independent of the push and inbox flow;
+          nothing in the send handler calls it, and it is wired separately. Locally it points at an Aspire MailDev
+          container for visual inspection. Unlike push, email has no null-object default and is not opt-in:
+          Infrastructure&#39;s <code>AddServices</code> does <code>TryAddTransient&lt;IEmailSender, SmtpEmailSender&gt;()</code> unconditionally,
+          and <code>AddInfrastructure</code> always calls it, so every host that registers infrastructure gets the SMTP
+          sender. There is no <code>NullEmailSender</code> analogue.</p>
+          <p>The entire push, inbox, and device surface sits behind one feature flag,
+          <code>NotificationFeatures.PushNotifications</code>. All three controllers carry
+          <code>[FeatureGate(NotificationFeatures.PushNotifications)]</code>, so the whole channel can be switched off
+          per-environment with no code change. Authorization splits along the three controllers:
+          <code>NotificationsController</code> (send plus history) requires the organizer policy, while <code>InboxController</code>
+          and <code>DevicesController</code> require only an authenticated caller. That asymmetry encodes the rule &quot;anyone
+          reads their own inbox and registers their own devices, only organizers broadcast.&quot;</p>
+          <h2 id="identifier-aliases-keep-the-ids-honest">Identifier aliases keep the IDs honest</h2>
+          <p>A small but consistent detail: the notification entities do not type their keys as bare <code>int</code>. The slice
+          uses solution-wide identifier aliases declared once in
+          <code>MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs</code> and linked into every project. A
+          <code>UserNotification</code> has an <code>Id</code> of <code>UserNotificationIdentifierType</code> and a foreign key
+          <code>PushNotificationId</code> of <code>PushNotificationIdentifierType</code>; a <code>MarkNotificationReadCommand</code> carries a
+          <code>UserNotificationIdentifierType NotificationId</code> and a <code>UserIdentifierType UserId</code>. They are <code>global using ... = int;</code> aliases today, but typing the keys distinctly makes a &quot;passed the wrong id&quot; mistake visible
+          at the call site and gives you a single place to change the underlying type later.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>Best-effort real-time, durable record.</strong> The deliberate swallow of delivery exceptions means a push
+          can fail silently as far as the WebSocket is concerned. That is the right call (the inbox row commits
+          with the send either way), but it means real-time delivery is not a guarantee, it is an optimization.
+          The status field is your audit trail, not a delivery receipt.</li>
+          <li><strong>The send is one transaction, so the sender calls run inside it.</strong> <code>ITransactional</code> is what keeps the
+          dedup key honest: a fault between the audit row and the inbox rows would otherwise leave a committed
+          key that nothing delivered, and every retry of that key would answer success forever. The price is
+          that the SignalR and native calls happen with the transaction still open. Both are bounded by their
+          own timeouts and hold locks only on rows this request just inserted, but it is still a transaction
+          held across an out-of-process call.</li>
+          <li><strong>Inbox fan-out cost.</strong> Step 4 writes one <code>UserNotification</code> row per recipient. For a broadcast to a
+          large audience that is a lot of rows in one save. It is the price of a durable per-user inbox with
+          per-user read state, and it is bounded by the recipient count, but it is real write amplification.</li>
+          <li><strong>Deduplication is opt-in, and it is check-then-act plus a database index.</strong> A send that carries no
+          key behaves exactly as it always did: no protection at all. When a key is present, the up-front
+          lookup is a race the handler cannot win on its own, so correctness rests on the filtered unique
+          index and on a broad catch that has to requery to classify what it caught. That is a real cost in
+          handler complexity, paid to keep Application free of an EF Core dependency.</li>
+          <li><strong>The scope key is a view filter, not a security boundary.</strong> It narrows what a scoped read returns,
+          but a read that supplies no scope still sees every notification, scoped ones included. It organizes
+          an inbox by edition; it does not isolate anything. Authorization remains the caller-scoped <code>UserId</code>
+          check, and a real isolation requirement needs a real boundary, not this column.</li>
+          <li><strong>Scale-out needs the backplane.</strong> SignalR across multiple replicas only works correctly with the
+          Redis backplane wired. Forget the <code>redis</code> connection string in a multi-replica deployment and pushes
+          reach only the users connected to the replica that handled the send.</li>
+          <li><strong>Native push is inert until provisioned, and fire-and-forget once live.</strong> The native leg stays a
+          no-op until a notification hub with platform credentials (a Firebase service account, an APNs key) is
+          provisioned and the <code>NativePush</code> section is enabled. Once live it does no per-device delivery
+          tracking: the hub&#39;s telemetry is the observability surface, and the inbox remains the recovery path.</li>
+          <li><strong>It is one example, not a notification platform.</strong> This is a reference vertical slice, not a
+          full-featured notification product. There is no retry queue for failed real-time delivery, no template
+          engine, no per-channel user preferences. The slice is shaped to teach the pattern and to be extended,
+          not to be a drop-in SaaS.</li>
+          </ul>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The vertical-slice discipline ports to any stack:</p>
+          <ol>
+          <li><strong>Organize by feature, not by technical role.</strong> Keep a feature&#39;s domain, use cases, adapters, and
+          endpoints together so the things that change together live together.</li>
+          <li><strong>Write the durable record before attempting best-effort delivery,</strong> make delivery failure update a
+          status rather than abort the operation, and commit the writes as one unit so a fault partway through
+          cannot leave a record nothing delivered. Offline users are a normal case, not an error.</li>
+          <li><strong>Choose adapters at the composition root, never branch on configuration in the handler.</strong> Ship a
+          null-object default so the pipeline resolves and runs even when the real transport is absent.</li>
+          <li><strong>Scope every read and mutation to the caller</strong> inside the slice, rather than relying on a
+          cross-cutting filter to remember.</li>
+          <li><strong>Let the database arbitrate a deduplication race.</strong> An application-level &quot;does it already exist?&quot;
+          check is check-then-act and two retries will both pass it. Back it with a unique index and treat
+          the insert failure as an answer, not just an error.</li>
+          </ol>
+          <p>The takeaway: a framework earns trust by showing one complete feature built on its own rules. Build that
+          feature as a cohesive vertical slice, and it teaches the patterns better than any amount of base-class
+          documentation.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why MMCA.Common ships notifications as the one concrete bounded context, how a
+          vertical slice beats a horizontal layer cut for cohesion, the end-to-end send flow (deduplicate,
+          resolve recipients, persist audit, fan out inbox, then best-effort deliver over SignalR and OS-level
+          native push, the whole sequence one <code>ITransactional</code> transaction), the two levels of retry safety (the <code>[Idempotent]</code> filter replaying the response, the
+          <code>DedupKey</code> plus its filtered unique index protecting the delivery), the optional <code>ScopeKey</code> that
+          narrows a read without isolating anything, why each
+          sender is a composition-root choice with a null-object fallback, the ADR-044 native push channel and its
+          <code>DevicesController</code> registration surface, the CQRS inbox scoped to the caller, the email channel and the
+          single feature gate over all three controllers, and the notification identifier aliases.</p>
+          <p><strong>Next in the series:</strong> live channel push, the other half of this hub. Ephemeral events (live polls,
+          session Q&amp;A, live counters) fan out through the same <code>NotificationHub</code> via channel groups without ever
+          being persisted, and the durable-vs-ephemeral decision is made at the publisher boundary
+          (<code>IPushNotificationSender</code> versus <code>ILiveChannelPublisher</code>).</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the notifications slice as a worked
+          example, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📚 Full series index: <a href="https://ivanball.github.io/writing.html" target="_blank" rel="noopener">https://ivanball.github.io/writing.html</a></li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, SignalR, Vertical Slice</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="problem-details-http-grpc.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">20 · Problem Details across HTTP and gRPC</span></a>
+          <a class="article-pager-link article-pager-link--next" href="live-channel-push.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">22 · Live channels over one SignalR hub</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#horizontal-layer-cut-vs-vertical-slice">Horizontal layer cut vs. vertical slice</a></li>
+            <li><a href="#sending-a-push-notification-end-to-end">Sending a push notification, end to end</a></li>
+            <li><a href="#retry-safety-on-two-levels-the-idempotency-filter-and-the-dedup-key">Retry safety on two levels: the idempotency filter and the dedup key</a></li>
+            <li><a href="#the-push-channel-an-adapter-chosen-at-composition-not-branched-at-runtime">The push channel: an adapter chosen at composition, not branched at runtime</a></li>
+            <li><a href="#the-native-push-channel-reaching-devices-the-hub-cannot">The native push channel: reaching devices the hub cannot</a></li>
+            <li><a href="#the-in-app-inbox-pure-cqrs-readwrite-scoped-to-the-caller">The in-app inbox: pure CQRS read/write, scoped to the caller</a></li>
+            <li><a href="#the-email-channel-and-the-feature-gate-over-all-of-it">The email channel, and the feature gate over all of it</a></li>
+            <li><a href="#identifier-aliases-keep-the-ids-honest">Identifier aliases keep the IDs honest</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

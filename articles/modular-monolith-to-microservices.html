@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Modular monolith to microservices, without the rewrite · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="The cornerstone idea: build the monolith now and extract a service later with no rewrite, via module discovery, gRPC contracts, and a YARP gateway.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/modular-monolith-to-microservices.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Modular monolith to microservices, without the rewrite">
+  <meta property="og:description" content="The cornerstone idea: build the monolith now and extract a service later with no rewrite, via module discovery, gRPC contracts, and a YARP gateway.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/modular-monolith-to-microservices.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-02.png">
+  <meta property="og:image:alt" content="Modular monolith to microservices, without the rewrite">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Modular monolith to microservices, without the rewrite">
+  <meta name="twitter:description" content="The cornerstone idea: build the monolith now and extract a service later with no rewrite, via module discovery, gRPC contracts, and a YARP gateway.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-02.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Modular monolith to microservices, without the rewrite","description":"The cornerstone idea: build the monolith now and extract a service later with no rewrite, via module discovery, gRPC contracts, and a YARP gateway.","url":"https://ivanball.github.io/articles/modular-monolith-to-microservices.html","mainEntityOfPage":"https://ivanball.github.io/articles/modular-monolith-to-microservices.html","image":"https://ivanball.github.io/assets/img/articles/article-02.png","datePublished":"2026-06-24T23:44:46Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":2,"sameAs":"https://medium.com/@ivanball76/modular-monolith-to-microservices-without-the-rewrite-8c3603614f12"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"02 · Modular monolith to microservices","item":"https://ivanball.github.io/articles/modular-monolith-to-microservices.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">02 · Modular monolith to microservices</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html" aria-current="page">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Orientation · No. 2</p>
+          <h1 id="modular-monolith-to-microservices-without-the-rewrite">Modular monolith to microservices, without the rewrite</h1>
+          <p class="article-meta"><time datetime="2026-06-24T23:44:46Z">June 24, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/modular-monolith-to-microservices-without-the-rewrite-8c3603614f12" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-02.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">&quot;Monolith or microservices&quot; is the wrong question. Build the extraction point now, keep it tested,
+          and cut the service later, on a boundary you have already proven.</p>
+          <hr>
+          <p>There is a decision a lot of teams make far too early, and then spend two years paying for.</p>
+          <p>Day one, someone asks &quot;monolith or microservices?&quot; and the room splits. One camp wants a single
+          deployable so they can ship. The other wants service boundaries so they never have to do the
+          &quot;big migration&quot; later. Both are right, and the argument is a false binary. The thing that actually
+          hurts is not which one you pick. It is that whichever you pick, the boundary you draw on a whiteboard
+          in week one is almost never the boundary the system needs in year two. A premature service split
+          calcifies the wrong join point in a network you cannot refactor across. A monolith with no internal
+          boundaries calcifies no join point at all, and the eventual extraction is a rewrite.</p>
+          <p>MMCA.Common takes a third position. Build the boundary now, inside one deployable, and make it
+          <strong>real and tested</strong> rather than aspirational. The day a module genuinely needs to be its own service,
+          extraction is a hosting and configuration change, not a rewrite of business logic.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>The reason the &quot;we will split it later&quot; plan usually fails is that the monolith quietly grows
+          couplings that the eventual split has to unwind. Two modules share a database, so a foreign key
+          spans them. One module calls another&#39;s class directly, so the call assumes in-process semantics
+          (synchronous, transactional, never fails for network reasons). Events are dispatched by a direct
+          method call, so nobody ever wrote the durable handoff a broker needs. None of these are visible in a
+          demo. All of them are load-bearing the day you try to pull a module out, and that is exactly when you
+          discover the boundary was a fiction.</p>
+          <p>So the boundary has to be enforced while it is cheap to enforce: while everything still runs in one
+          process and a violation is a one-line fix instead of a distributed-systems incident. That is the
+          whole design center of this framework. The invariant, stated once: <strong>application and domain code talks
+          to abstractions; transport choices live at the edges.</strong></p>
+          <h2 id="the-mmca-answer-four-extraction-points-all-enforced-in-the-monolith">The MMCA answer: four extraction points, all enforced in the monolith</h2>
+          <p>There are four places a &quot;split it later&quot; plan leaks, and the framework closes each one with a real
+          mechanism, not a guideline.</p>
+          <h3 id="1-database-per-service-even-inside-the-monolith-adr-006">1. Database-per-service, even inside the monolith (ADR-006)</h3>
+          <p>The first leak is the shared database. In MMCA.Common, every entity resolves to a physical data
+          source: a <code>DataSourceKey(Engine, Name)</code> pair. <code>DataSourceResolver</code> maps logical names (a module&#39;s name)
+          onto physical connection strings, and <code>EntityDataSourceRegistry</code> maps every entity to its source at
+          startup. The clever part is collapse: a host with no <code>DataSources</code> configuration collapses every
+          logical name onto a single <code>Default</code> source, so it behaves <strong>exactly</strong> like a single-database
+          monolith (one context, one change tracker, foreign keys intact). Point one config entry at a separate
+          database and that module&#39;s data is now physically isolated, with no code change. This is the deep-dive
+          of its own article; the point here is that the data boundary exists from day one and costs nothing
+          until you use it.</p>
+          <h3 id="2-a-transport-agnostic-message-bus">2. A transport-agnostic message bus</h3>
+          <p>The second leak is event delivery. There is one abstraction, <code>IMessageBus</code>, defined in the
+          Application layer, with two implementations in Infrastructure: <code>InProcessMessageBus</code> (delivery is a
+          method call, used in the monolith) and <code>BrokerMessageBus</code> (delivery is over a MassTransit broker,
+          RabbitMQ locally and Azure Service Bus in production, used once a module is its own service).
+          <code>MessageBusSettings</code> selects the mode. Your handler code does not change when you flip it.</p>
+          <p>The rule that keeps this honest is that <strong>Application, Domain, and Shared must never reference
+          MassTransit directly.</strong> That is not a code-review comment. It is a fitness test,
+          <code>MicroserviceExtractionTests</code>, that fails the build if a transport type leaks into the core. The
+          transactional outbox (its own article in this series) is what makes the flip safe: the same durable
+          event record drains to an in-process handler today and to a broker tomorrow.</p>
+          <h3 id="3-grpc-contracts-for-synchronous-calls-adr-007">3. gRPC contracts for synchronous calls (ADR-007)</h3>
+          <p>The third leak is the synchronous call between modules: &quot;how many bookmarks does this session have?&quot;
+          needs an answer, not a fire-and-forget event. In the monolith that is a direct interface call. Across
+          a process boundary it is gRPC, exposed through <code>MMCA.Common.Grpc</code>.</p>
+          <p>The convention is what makes extraction a registration change. Any project whose name ends in
+          <code>.Contracts</code> auto-compiles its <code>Protos/**/*.proto</code> with both server and client stubs. Each
+          <code>.Contracts</code> project ships a hand-written adapter that implements <strong>the same C# interface the modules
+          already used in-process.</strong> Concretely, a <code>BookmarkCountServiceGrpcAdapter</code> implements
+          <code>IBookmarkCountService</code>, holds a generated gRPC client, and translates the interface call into a wire
+          call. Because the in-process service and the adapter satisfy the identical interface, the composition
+          root just does <code>services.Replace(...)</code> to swap one for the other. The calling code never learns which
+          it got.</p>
+          <p>The error model survives the hop too. On the server, <code>GrpcResultExceptionInterceptor</code> turns a failed
+          <code>Result</code> (raised as a <code>ResultFailureException</code>) into an <code>RpcException</code> carrying the errors, and the typed
+          client adapter reconstructs <code>Result.Failure(errors)</code> from the trailers, so callers keep
+          programming against <code>Result&lt;T&gt;</code> whether the answer came from an object or a network round-trip. This
+          is &quot;Result over the wire,&quot; and it is why the wire hop does not poison your error handling.</p>
+          <h3 id="4-federated-auth-a-gateway-and-aspire-hosting-adr-008">4. Federated auth, a gateway, and Aspire hosting (ADR-008)</h3>
+          <p>The last leak is everything around the services. Cross-service auth uses JWKS, not a shared secret:
+          <code>IJwksProvider</code> (<code>RsaJwksProvider</code>) exposes signing keys, and <code>JwksEndpointExtensions</code> serves
+          <code>/.well-known/jwks.json</code>, so an extracted service validates a forwarded token against the issuer&#39;s
+          public keys, discovered through the gateway. A single YARP reverse-proxy gateway is the only client
+          entry point, owning the route-to-service map; clients never address a service directly.
+          <code>MMCA.Common.Aspire.Hosting</code> wires the broker, JWKS discovery, and the per-service data sources for
+          the extracted topology.</p>
+          <p>ADR-008 names the payoff precisely: each extracted service is just <strong>the monolith with one module
+          enabled.</strong> The <code>ModuleLoader</code> still runs, only with one module&#39;s <code>Enabled=true</code>; disabled peers are
+          satisfied by <code>Disabled*</code> stubs, which the host then replaces with gRPC clients. The Domain,
+          Application, and Shared code is byte-for-byte identical whether it runs in-process or extracted.</p>
+          <h2 id="what-the-boundary-looks-like-in-code">What the boundary looks like in code</h2>
+          <p>The whole thesis fits in one DI swap. The same handler depends on the same interface; only the
+          registration line differs between the two topologies.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Application/Domain code depends ONLY on the interface. It never sees the transport.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">GetSessionBookmarkCountHandler</span>(<span class="hljs-params">IBookmarkCountService counts</span>)</span>
+{
+    <span class="hljs-comment">// ... calls counts.GetBookmarkCountForSessionAsync(sessionId), which returns a plain int (Task&lt;int&gt;);</span>
+    <span class="hljs-comment">// the handler wraps that count as Result.Success(count) and returns Result&lt;int&gt;.</span>
+}
+
+<span class="hljs-comment">// MONOLITH host: the real in-process implementation is registered (peer module enabled).</span>
+<span class="hljs-comment">//   -&gt; IBookmarkCountService = the concrete Engagement service. Delivery is a method call.</span>
+
+<span class="hljs-comment">// EXTRACTED host: after ModuleLoader runs, the peer is disabled (a Disabled* stub holds the slot),</span>
+<span class="hljs-comment">// then the .Contracts DI helper overwrites it with the gRPC adapter:</span>
+services.Replace(ServiceDescriptor.Scoped&lt;IBookmarkCountService, BookmarkCountServiceGrpcAdapter&gt;());
+<span class="hljs-comment">//   -&gt; same interface, now a gRPC call. GetSessionBookmarkCountHandler does not change.</span></code></pre>
+          <p>The transport choice is one line at the composition edge. Everything above it is untouched.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>Reversibility is not free, and the ADRs are candid about the bill.</p>
+          <ul>
+          <li><strong>Distributed-systems semantics arrive the moment you split.</strong> Cross-service consistency is
+          eventual (outbox plus integration events), not transactional. There are no cross-service
+          transactions and no cross-database foreign keys (ADR-006). Referential integrity across services
+          becomes the application&#39;s responsibility; a compensating index survives, the FK constraint does not.</li>
+          <li><strong>Operational surface grows.</strong> A split means multiple deployables, a gateway, service discovery, a
+          broker, and per-service databases to provision, migrate, and back up, versus one process. Aspire
+          orchestrates this locally and Bicep/Azure Container Apps in production, but the complexity is real.</li>
+          <li><strong>Bidirectional gRPC pairs need care.</strong> When two services call each other synchronously, the
+          AppHost deliberately omits a reciprocal <code>WaitFor</code> to avoid a startup deadlock; the transient &quot;peer
+          not ready&quot; errors self-heal through the resilience pipeline. That is a known sharp edge, not a free
+          lunch.</li>
+          <li><strong>The boundary costs a little even when unused.</strong> Carrying <code>IMessageBus</code>, the data-source resolver, and
+          the <code>.Contracts</code> convention in a monolith you may never split is overhead. The bet is that the
+          overhead is small and the optionality is worth it. It is a bet, not a theorem.</li>
+          </ul>
+          <p>The honest version of the thesis is not &quot;microservices for free.&quot; It is &quot;the boundary is cheap to
+          keep and tested, so the decision to split stays open instead of being foreclosed by accreted
+          coupling.&quot;</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>You do not need this framework to keep the extraction point open. You need three habits.</p>
+          <ol>
+          <li><strong>Give each module its own logical data ownership now,</strong> even in one database. No cross-module
+          foreign keys, no joins across modules. If you cannot draw the data boundary today, you do not have
+          a module, you have a tangle.</li>
+          <li><strong>Put one transport-agnostic interface between modules</strong> for both events and synchronous calls.
+          Application code depends on the interface; the in-process implementation and the future remote
+          implementation both satisfy it. Swapping them is a registration change.</li>
+          <li><strong>Make the boundary executable.</strong> A test that fails the build when transport types leak into your
+          core is worth more than any architecture diagram, because the diagram does not run in CI and the
+          test does.</li>
+          </ol>
+          <p>The rule of thumb: a service boundary you have not enforced in the monolith is a boundary you have not
+          actually built. You have drawn a picture of one.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why monolith-versus-microservices is a false binary, the four extraction points MMCA.Common
+          enforces inside one deployable (database-per-service, the transport-agnostic <code>IMessageBus</code>, gRPC
+          <code>.Contracts</code> with Result-over-the-wire, and JWKS auth behind a YARP gateway with Aspire hosting), and
+          the one invariant that ties them together: application code talks to abstractions, transport lives at
+          the edge, enforced by <code>MicroserviceExtractionTests</code>.</p>
+          <p><strong>Next in the series:</strong> what good architecture actually means, the 34-category rubric this framework
+          grades itself against, and why enforced beats convention-only.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the three ADRs behind this boundary, or
+          install it and try the split for yourself.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 ADR-006 (database per service), ADR-007 (gRPC extraction), ADR-008 (service-extraction topology):
+          in <code>Website/docs-src/adr/</code> in the docs site.</li>
+          <li><code>dotnet add package MMCA.Common.API</code></li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Microservices, Modular Monolith</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="open-sourced-enterprise-dotnet-34-categories.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">01 · Open-sourced and graded against 34 categories</span></a>
+          <a class="article-pager-link article-pager-link--next" href="34-category-architecture-rubric.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">03 · The 34-category architecture rubric</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-four-extraction-points-all-enforced-in-the-monolith">The MMCA answer: four extraction points, all enforced in the monolith</a></li>
+            <li><a href="#what-the-boundary-looks-like-in-code">What the boundary looks like in code</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

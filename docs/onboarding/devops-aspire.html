@@ -161,7 +161,7 @@
           and the per-type reference in <a href="group-16-aspire-orchestration.html">group 16, Aspire orchestration and service defaults</a>.</p>
           <hr>
           <h2 id="the-one-command-local-run">The one-command local run</h2>
-          <pre class="doc-pre"><code class="">dotnet run --project Source/Hosting/MMCA.ADC.AppHost</code></pre>
+          <pre class="doc-pre" tabindex="0"><code class="">dotnet run --project Source/Hosting/MMCA.ADC.AppHost</code></pre>
           <p>That command brings up everything the application needs locally: four SQL Server databases, Redis,
           RabbitMQ with management UI, a MailDev SMTP interceptor, four extracted microservice processes, a YARP
           gateway pinned to <code>https://localhost:6001</code>, and the Blazor UI pinned to <code>https://localhost:6002</code>. The
@@ -213,7 +213,7 @@
           <code>ContainerLifetime.Persistent</code> option keeps the container alive across AppHost restarts, preserving
           data and avoiding re-seeding during inner-loop development (Program.cs:12-14 comment). Four databases
           are carved from it (Program.cs:37-40):</p>
-          <pre class="doc-pre"><code class="">adc-identity     -&gt;  ADC_Identity      (Identity service)
+          <pre class="doc-pre" tabindex="0"><code class="">adc-identity     -&gt;  ADC_Identity      (Identity service)
 adc-conference   -&gt;  ADC_Conference    (Conference service)
 adc-engagement   -&gt;  ADC_Engagement    (Engagement service)
 adc-notification -&gt;  ADC_Notification  (Notification service)</code></pre>
@@ -230,7 +230,7 @@ adc-notification -&gt;  ADC_Notification  (Notification service)</code></pre>
           and <code>ICacheService</code>. All four service hosts receive <code>WithReference(redis)</code> and <code>WaitFor(redis)</code>.</p>
           <p><strong>The broker is chosen, not hardcoded.</strong> The AppHost picks one of two broker resources up front and
           captures the choice as a delegate (Program.cs:89-101):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">Func&lt;IResourceBuilder&lt;ProjectResource&gt;, IResourceBuilder&lt;ProjectResource&gt;&gt; withBroker;
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">Func&lt;IResourceBuilder&lt;ProjectResource&gt;, IResourceBuilder&lt;ProjectResource&gt;&gt; withBroker;
 
 <span class="hljs-keyword">if</span> (<span class="hljs-built_in">string</span>.Equals(Environment.GetEnvironmentVariable(<span class="hljs-string">&quot;ADC_BROKER&quot;</span>), <span class="hljs-string">&quot;servicebus&quot;</span>, StringComparison.OrdinalIgnoreCase))
 {
@@ -260,7 +260,7 @@ adc-notification -&gt;  ADC_Notification  (Notification service)</code></pre>
           its state in SQL Server (Extensions.cs:176-181, <code>SQL_SERVER</code> and <code>MSSQL_SA_PASSWORD</code> at 228-233, and a
           <code>WaitFor(sqlServer)</code> at 237 because the emulator&#39;s first act is to create its schema).</p>
           <p><strong>MailDev</strong> comes from a framework helper rather than an inline container declaration (Program.cs:109):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> mailDev = builder.AddMailDev();</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> mailDev = builder.AddMailDev();</code></pre>
           <p><code>AddMailDev</code> (Common.Aspire.Hosting/Extensions.cs:141-150) adds the <code>maildev/maildev</code> container with a
           persistent lifetime and two <strong>fixed</strong> host ports: 1080 for the web UI and 1025 for SMTP
           (<code>MailDevHttpPort</code> / <code>MailDevSmtpPort</code>, Extensions.cs:118 and 124). Fixed rather than Aspire&#39;s dynamic
@@ -332,7 +332,7 @@ adc-notification -&gt;  ADC_Notification  (Notification service)</code></pre>
           consumers in one lockstep release, <a href="https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html" target="_blank" rel="noopener">ADR-016</a>.)</p>
           <p>It is declared inside a C# preview <code>extension(...)</code> block rather than as a classic <code>this</code>-parameter
           static method (Extensions.cs:410), which is why the receiver does not appear in the signature:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">extension(IResourceBuilder&lt;ProjectResource&gt; service)
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">extension(IResourceBuilder&lt;ProjectResource&gt; service)
 {
     <span class="hljs-function"><span class="hljs-keyword">public</span> IResourceBuilder&lt;ProjectResource&gt; <span class="hljs-title">WithSQLServerDataSource</span>(<span class="hljs-params">
         IResourceBuilder&lt;SqlServerDatabaseResource&gt; database,
@@ -377,7 +377,7 @@ adc-notification -&gt;  ADC_Notification  (Notification service)</code></pre>
           <p>Services are declared in this order: Notification (Program.cs:127-141), Engagement (156-167), Conference
           (199-214), Identity (227-248). Declaration order matters because the gateway and UI references are added
           after all four are declared (Program.cs:344 onward). Each service follows the same pattern:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">builder.AddProject&lt;Projects.MMCA_ADC_{Module}_Service&gt;(<span class="hljs-string">&quot;{name}&quot;</span>, launchProfileName: <span class="hljs-string">&quot;https&quot;</span>)
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">builder.AddProject&lt;Projects.MMCA_ADC_{Module}_Service&gt;(<span class="hljs-string">&quot;{name}&quot;</span>, launchProfileName: <span class="hljs-string">&quot;https&quot;</span>)
     .WithSQLServerDataSource({moduleDb}, <span class="hljs-string">&quot;{Module}&quot;</span>)
     .WithReference(redis)
     .WithSelectedBroker(withBroker)
@@ -401,7 +401,7 @@ adc-notification -&gt;  ADC_Notification  (Notification service)</code></pre>
           <code>AddBrokerMessaging</code> short-circuits to in-process mode so existing tests continue to work without a real
           broker (Program.cs:61-64).</p>
           <p><strong>Conference service</strong> has one extra line (Program.cs:210):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">.WithEnvironment(<span class="hljs-string">&quot;Seeding__IncludeSampleConferenceData&quot;</span>, <span class="hljs-string">&quot;true&quot;</span>)</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">.WithEnvironment(<span class="hljs-string">&quot;Seeding__IncludeSampleConferenceData&quot;</span>, <span class="hljs-string">&quot;true&quot;</span>)</code></pre>
           <p>This seeds sample speakers and sessions so the public browse grids are non-empty for the Playwright E2E
           suite. The comment (Program.cs:207-209) explicitly restricts this to local dev and E2E CI; production
           leaves it unset, and the AppHost never runs in production at all.</p>
@@ -417,7 +417,7 @@ adc-notification -&gt;  ADC_Notification  (Notification service)</code></pre>
           used instead.</p>
           <h3 id="grpc-cross-service-references">gRPC cross-service references</h3>
           <p>Six directed edges express the gRPC topology (Program.cs:268-292):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Notification -&gt; Identity</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Notification -&gt; Identity</span>
 notificationService.WithReference(identityService).WaitFor(identityService);
 <span class="hljs-comment">// Engagement -&gt; Conference</span>
 engagementService.WithReference(conferenceService).WaitFor(conferenceService);
@@ -474,7 +474,7 @@ identityService.WithReference(notificationService);</code></pre>
           failures. The no-WaitFor choice on the reverse edges, combined with a resilience pipeline on the typed
           gRPC clients, means a slow-starting peer never blocks the whole stack from reaching a healthy state.</p>
           <h3 id="the-gateway">The Gateway</h3>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> gateway = builder.AddProject&lt;Projects.MMCA_ADC_Gateway&gt;(<span class="hljs-string">&quot;gateway&quot;</span>)
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> gateway = builder.AddProject&lt;Projects.MMCA_ADC_Gateway&gt;(<span class="hljs-string">&quot;gateway&quot;</span>)
     .WithReference(notificationService)
     .WithReference(engagementService)
     .WithReference(conferenceService)
@@ -502,14 +502,14 @@ identityService.WithReference(notificationService);</code></pre>
           a Kestrel <code>Http2</code>-only endpoint rejects. The solution (Program.cs:357-366 and
           Common.Aspire.Hosting/Extensions.cs:309-337) is <code>WithJwksDiscovery</code>, which sets
           <code>Authentication__JwtBearer__Authority</code> to the <strong>gateway&#39;s</strong> HTTPS endpoint rather than Identity&#39;s:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">notificationService.WithJwksDiscovery(identityService, gateway);
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">notificationService.WithJwksDiscovery(identityService, gateway);
 engagementService.WithJwksDiscovery(identityService, gateway);
 conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           <p>The gateway accepts both HTTP/1.1 and HTTP/2 via ALPN, and its <code>/.well-known/*</code> route forwards the
           discovery fetch on to Identity over h2c internally. So the JwtBearer middleware&#39;s HTTP/1.1 metadata
           fetch works end-to-end without any workaround on the services themselves.</p>
           <p>The other half of that contract is one line further down (Program.cs:375):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">identityService.WithEnvironment(<span class="hljs-string">&quot;Jwt__Issuer&quot;</span>, gateway.GetEndpoint(<span class="hljs-string">&quot;https&quot;</span>));</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">identityService.WithEnvironment(<span class="hljs-string">&quot;Jwt__Issuer&quot;</span>, gateway.GetEndpoint(<span class="hljs-string">&quot;https&quot;</span>));</code></pre>
           <p>The issuer Identity stamps into every token it signs has to be the same URL its peers just discovered,
           or every cross-service call fails validation on the issuer claim. The <code>appsettings</code> default hardcodes
           the pinned dev port for a standalone F5 run, so deriving the value from the gateway resource means an
@@ -521,7 +521,7 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           (cleartext h2c) invisible to callers, and deriving the issuer from the same resource keeps discovery and
           issuance from drifting apart.</p>
           <h3 id="the-blazor-ui">The Blazor UI</h3>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> ui = builder.AddProject&lt;Projects.MMCA_ADC_UI_Web&gt;(<span class="hljs-string">&quot;ui&quot;</span>, launchProfileName: <span class="hljs-string">&quot;https&quot;</span>)
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> ui = builder.AddProject&lt;Projects.MMCA_ADC_UI_Web&gt;(<span class="hljs-string">&quot;ui&quot;</span>, launchProfileName: <span class="hljs-string">&quot;https&quot;</span>)
     .WithExternalHttpEndpoints()
     .WithReference(gateway)
     .WithReference(notificationService)
@@ -560,7 +560,7 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           (Program.cs:400-405, 411-415). <code>E2E_FORCE_SERVER</code> sets <code>E2E__ForceServer</code> to pin the UI to
           InteractiveServer, and loses to <code>E2E_FORCE_WASM</code> when both are set (Program.cs:417-426).</p>
           <p>The other two switches are not <code>if</code> blocks in the AppHost at all, they are single calls:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">identityService.WithE2eRegistrationThrottleLift(alsoLiftWhen: forceWasm);   <span class="hljs-comment">// Program.cs:428</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">identityService.WithE2eRegistrationThrottleLift(alsoLiftWhen: forceWasm);   <span class="hljs-comment">// Program.cs:428</span>
 gateway.WithE2eGatewayRateLimitLift(alsoLiftWhen: forceWasm);               <span class="hljs-comment">// Program.cs:435</span></code></pre>
           <p>For both, the trigger (<code>E2E_LIFT_REGISTRATION_THROTTLE</code>), the target setting names and the lifted values
           live inside the framework extension, so the AppHost passes only its own extra condition: forcing WASM
@@ -983,7 +983,7 @@ gateway.WithE2eGatewayRateLimitLift(alsoLiftWhen: forceWasm);               <spa
           <code>ICspPolicyProvider</code> (lines 177-199).</p>
           <p>The default static policy is a <strong>complete hardened baseline</strong>, not a minimal one
           (SecurityHeaders.cs:53-55):</p>
-          <pre class="doc-pre"><code class="">default-src &#39;self&#39;; script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39;;
+          <pre class="doc-pre" tabindex="0"><code class="">default-src &#39;self&#39;; script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39;;
 object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; frame-ancestors &#39;none&#39;</code></pre>
           <p>It ships <code>script-src</code> and <code>style-src</code> at exactly the strength Blazor (<code>&#39;wasm-unsafe-eval&#39;</code>) and MudBlazor
           (<code>&#39;unsafe-inline&#39;</code> styles) require, so an HTML host that never registers a provider still gets a
@@ -1520,7 +1520,7 @@ object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; 
           call site: three of the four services wait on Identity without any explicit <code>WaitFor</code> in the AppHost
           (<code>WithJwksDiscovery</code> adds it, Common.Aspire.Hosting/Extensions.cs:316-318), and every one of those waits
           gates on a <strong>liveness</strong> answer over the protocol the target actually serves, not on readiness.</p>
-          <pre class="doc-pre"><code class="">SQL Server container health
+          <pre class="doc-pre" tabindex="0"><code class="">SQL Server container health
   |- Database resources health (adc-identity, adc-conference, adc-engagement, adc-notification)
        |- Identity Service  (WaitFor: identityDb, redis, mailDev, broker; gate: h2c /alive)
             |- Conference Service (WaitFor: conferenceDb, redis, mailDev, broker,

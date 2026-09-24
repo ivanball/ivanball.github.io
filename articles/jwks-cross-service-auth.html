@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Cross-service auth without a shared secret: JWKS dual-fetch · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Validate another service&#39;s RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/jwks-cross-service-auth.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Cross-service auth without a shared secret: JWKS dual-fetch">
+  <meta property="og:description" content="Validate another service&#39;s RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/jwks-cross-service-auth.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-16.png">
+  <meta property="og:image:alt" content="Cross-service auth without a shared secret: JWKS dual-fetch">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Cross-service auth without a shared secret: JWKS dual-fetch">
+  <meta name="twitter:description" content="Validate another service&#39;s RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-16.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Cross-service auth without a shared secret: JWKS dual-fetch","description":"Validate another service's RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.","url":"https://ivanball.github.io/articles/jwks-cross-service-auth.html","mainEntityOfPage":"https://ivanball.github.io/articles/jwks-cross-service-auth.html","image":"https://ivanball.github.io/assets/img/articles/article-16.png","datePublished":"2026-07-14T11:17:47Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":16,"sameAs":"https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"16 · JWKS cross-service auth","item":"https://ivanball.github.io/articles/jwks-cross-service-auth.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">16 · JWKS cross-service auth</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html" aria-current="page">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 16</p>
+          <h1 id="cross-service-auth-without-a-shared-secret-jwks-dual-fetch">Cross-service auth without a shared secret: JWKS dual-fetch</h1>
+          <p class="article-meta"><time datetime="2026-07-14T11:17:47Z">July 14, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-16.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">When you split a monolith into services, the easy answer is to copy the JWT signing
+          secret into every validator. That is also the answer that turns one leaked key into a system-wide
+          breach. Here is the asymmetric boundary that fixes it.</p>
+          <hr>
+          <p>You have a monolith that mints its own JWTs. One process signs the token, the same process validates
+          it, and the signing key is a symmetric secret (HS256). This is fine. The signer and the validator are
+          the same code, so the shared secret is not really shared with anyone.</p>
+          <p>Then you extract a module into its own service. Now the Orders service needs to validate a token that
+          the Identity service minted. The obvious move is to copy the HS256 secret into the Orders service
+          config so it can validate. Then into the Catalog service. Then into the gateway. Then into the
+          notification worker.</p>
+          <p>Stop and look at what just happened. With a symmetric secret, <strong>the key that validates a token is the
+          same key that mints one.</strong> Every service that can check a token can also forge one. You have taken a
+          single high-value secret and replicated it across every deployment unit, log scrape, and environment
+          variable in the fleet. The blast radius of one leak is now &quot;the entire system can be impersonated.&quot;</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>Symmetric signing couples trust to secret distribution. The more services you have, the more copies of
+          the forge-anything key exist, and the more places it can leak: a misconfigured config map, a debug log
+          that dumped the environment, a developer laptop, a third-party APM that captured an env var. You cannot
+          rotate it without a coordinated flag day across every service at once, because they all share it.</p>
+          <p>The correct model for distributed token validation is <strong>asymmetric</strong>: the issuer signs with a private
+          key it never shares, and every other service validates with the matching public key. A public key is
+          public. It cannot mint tokens. Leaking it is a non-event. That is the property you want for a boundary that
+          many services depend on.</p>
+          <p>The problem is that &quot;just switch to RS256&quot; is not the whole story. The validators still need to <em>get</em>
+          the public key, keep getting it as it rotates, and refuse to be tricked into validating the wrong way.
+          That is what MMCA.Common&#39;s JWKS layer is built to handle.</p>
+          <h2 id="the-mmca-answer-publish-the-public-half-as-a-jwks-document">The MMCA answer: publish the public half as a JWKS document</h2>
+          <p>The framework&#39;s token service supports two signing algorithms, selected by the concrete
+          <code>JwtSettings.SigningAlgorithm</code>, which defaults to <code>RS256</code>:</p>
+          <ul>
+          <li><strong>Monolith mode: HS256</strong> (symmetric HMAC-SHA256). One process signs and validates with a shared
+          Base64 secret. A shared secret inside one process is not actually shared, so this is correct here.</li>
+          <li><strong>Microservice mode: RS256</strong> (asymmetric RSA-SHA256). The issuer signs with its RSA private key;
+          other services validate with the matching public key and hold no secret at all.</li>
+          </ul>
+          <p>The join point that makes RS256 work across services is <strong>JWKS</strong> (JSON Web Key Set). In MMCA.Common,
+          <code>IJwksProvider</code> (in <code>MMCA.Common.Infrastructure</code>, implemented by <code>RsaJwksProvider</code>) materializes a
+          <code>JsonWebKeySet</code> from a PEM-encoded RSA <strong>public</strong> key. Critically, it exports only the public
+          parameters: the private key never leaves the issuer. The set is built lazily on the first request, and
+          only a successful result is cached: the <code>Lazy&lt;JsonWebKeySet&gt;</code> is created with
+          <code>LazyThreadSafetyMode.PublicationOnly</code>, so one transient failure reading the PEM is retried on the next
+          call rather than cached for the life of the process.</p>
+          <p>The API layer&#39;s <code>JwksEndpointExtensions</code> serves that key set at the standard discovery path,
+          <code>/.well-known/jwks.json</code>. A downstream service points its <code>JwtBearer</code> handler at that URL and the
+          ASP.NET Core JWKS machinery fetches the issuer&#39;s public keys, validates incoming RS256 tokens against
+          them, and refreshes the key set on its own schedule. The Identity service holds the one private key;
+          every validator holds nothing.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Issuer side (Identity API): RsaJwksProvider exposes ONLY the public key.</span>
+<span class="hljs-comment">// Served at GET /.well-known/jwks.json by JwksEndpointExtensions.</span>
+<span class="hljs-function">JsonWebKeySet <span class="hljs-title">GetJsonWebKeySet</span>()</span>;   <span class="hljs-comment">// public parameters only; private key never leaves</span>
+
+<span class="hljs-comment">// Validator side (any extracted service): JwtBearer fetches the issuer&#x27;s JWKS URL</span>
+<span class="hljs-comment">// (routed through the YARP gateway) and validates RS256 tokens against the public keys.</span>
+<span class="hljs-comment">// The validator holds NO secret. A leaked public key cannot mint tokens.</span></code></pre>
+          <p>(Source: <code>RsaJwksProvider.cs</code>, <code>IJwksProvider.cs</code>, and the JWKS notes in <code>MMCA.Common/CLAUDE.md</code>&#39;s
+          microservices extraction section.)</p>
+          <h2 id="the-dual-fetch-and-the-graceful-empty-set">The dual-fetch, and the graceful empty set</h2>
+          <p>The dual-fetch ADR-004 describes is in the key discovery itself: a validator <strong>discovers</strong> the issuer&#39;s
+          public key from the JWKS endpoint, and the framework <strong>falls back gracefully</strong> when the key is not
+          there. When JWKS publishing is disabled (the default for a monolith) or no key is configured,
+          <code>RsaJwksProvider</code> returns an <strong>empty key set</strong> rather than throwing. The endpoint stays a valid, pollable
+          URL instead of erroring. A monolith that never turns JWKS on still answers <code>/.well-known/jwks.json</code> with
+          an empty document, so flipping a service into extracted mode does not require standing up new endpoints.
+          Discover the key; fall back when it is not there. That is the dual-fetch.</p>
+          <p>A different two-fetch is easy to conflate with this one, so it is worth naming plainly: the shared login
+          flow, <code>AuthenticationServiceBase&lt;TUser&gt;.LoginAsync</code> in <code>MMCA.Common.Application</code>, does an <strong>untracked</strong>
+          read to validate credentials (so the adversarial majority of login traffic, the failed attempts, never
+          pays EF Core change-tracking cost), then a <strong>tracked</strong> re-fetch only on success to persist the rotated
+          refresh token. The base&#39;s own doc comment names it the &quot;untracked-then-tracked dual-fetch&quot;; the ADC and
+          Store Identity modules are thin sealed subclasses that supply the app-specific hooks (the untracked
+          lookup, the claim set) and re-label it &quot;dual-fetch pattern&quot; in their class doc comments
+          (<code>AuthenticationService.cs:17</code> in ADC, <code>:16</code> in Store). It is shared framework login code, not a
+          per-app copy, but it is still not part of ADR-004&#39;s cross-service validation design.</p>
+          <p>JWKS discovery is routed through the <strong>YARP gateway</strong>, not pointed at each service&#39;s internal address.
+          The validator asks the gateway for the issuer&#39;s JWKS document, and the gateway forwards it to whichever
+          host currently owns Identity. This keeps the validator&#39;s config stable across topology changes: when
+          Identity moves, redeploys, or scales, the gateway route updates, not every consumer.</p>
+          <h2 id="jwt-algorithm-pinning-the-attack-you-would-otherwise-ship">JWT algorithm pinning: the attack you would otherwise ship</h2>
+          <p>Switching to asymmetric keys opens a specific, classic attack, and the framework closes it explicitly.</p>
+          <p>Once the RSA <strong>public</strong> key is published (which is the entire point of JWKS), an attacker has it. If a
+          validator naively trusts the token&#39;s own <code>alg</code> header, the attacker can craft a token that claims
+          <code>alg: HS256</code> and sign it using the <em>public RSA key bytes as the HMAC secret</em>. A validator that reads
+          <code>alg</code> from the attacker-controlled header would happily verify it. This is the well-known algorithm-
+          confusion / key-substitution attack.</p>
+          <p>MMCA.Common&#39;s <code>TokenService</code> pins the algorithm. On the refresh path, <code>GetPrincipalFromExpiredToken</code>
+          deliberately skips lifetime validation (its job is to read claims out of an already-expired token, with
+          the relevant analyzer warning suppressed inline and justified) but it re-checks the token&#39;s <code>alg</code>
+          header against the expected algorithm and restricts <code>ValidAlgorithms</code> to the single expected value. An
+          attacker cannot substitute an HS256-signed token in place of a real RS256 one. The same pin guards
+          the cross-service path: the JWKS-forwarded bearer handler (<code>AddForwardedJwtBearer</code>, used by extracted
+          services validating against the issuer&#39;s published keys) also restricts <code>ValidAlgorithms</code> to
+          <code>[RsaSha256]</code> (added in v1.82.0), so a token whose header claims <code>HS256</code> is rejected on the discovery
+          path too, not only in-process. The token service is also <code>IDisposable</code> and owns its RSA handles,
+          releasing the native key handles on disposal.</p>
+          <p>The rule of thumb: never let the token tell you how to verify it. The validator decides the algorithm;
+          the token only supplies the signature.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>The JWKS layer is the right model, but it is not free, and the §11 review of the framework names the
+          rough edges.</p>
+          <ul>
+          <li><strong>Two round trips on successful login.</strong> The Identity service&#39;s login flow (the shared login
+          dual-fetch above, not the JWKS layer itself) pays a tracked re-fetch, a second query on the success
+          path. In practice the first query warms the database buffer pool so the second is near-instantaneous,
+          and failed logins (the adversarial majority) pay nothing extra. It is a deliberate trade, not an
+          oversight.</li>
+          <li><strong>A small race window between the two fetches.</strong> A user could be deleted between the untracked
+          validation and the tracked re-fetch. The re-fetch then returns NotFound, which is the correct
+          outcome, so the window is acceptable rather than hidden.</li>
+          <li><strong>Plain-HTTP metadata discovery is an explicit, auditable opt-out.</strong> <code>AddForwardedJwtBearer</code>
+          resolves <code>RequireHttpsMetadata</code> in three steps: explicit argument, then the
+          <code>Authentication:JwtBearer:RequireHttpsMetadata</code> config key, then <code>true</code> everywhere except
+          Development, and a resolved <code>false</code> outside Development logs one startup warning naming the key. The
+          honest residual is that an operator can still set that key to <code>false</code>, and both production
+          deployments do: ADC and Store validate against an internal-ingress cleartext <a href="http://identity" target="_blank" rel="noopener">http://identity</a>, so
+          their bicep sets it explicitly with the justification written beside it. That is a reviewable line in
+          a deployment template rather than a default nobody chose. Permissive dev CORS is a development-only
+          affordance, selected by environment.</li>
+          <li><strong>The invariants in this article fail the build.</strong> Executable tests run the real registration code
+          and read the produced options back: the forwarded bearer handler&#39;s <code>ValidAlgorithms</code> must stay
+          <code>[RsaSha256]</code>, the <code>RequireHttpsMetadata</code> resolution above is asserted step by step (including the
+          fail-fast on a cleartext authority with no opt-out), the permissive CORS policy must never support
+          credentials while the credentialed one must never widen to any origin, and <code>RsaJwksProvider</code> must
+          export only the public RSA parameters even when handed a private-key PEM. Beside them, a shared
+          <code>AnonymousEndpointTestsBase</code> scans controllers and routable components by reflection and ships five
+          facts: it fails on any <code>[AllowAnonymous]</code> outside an explicit allow-list, on a stale allow-list entry,
+          on an empty scan, on an endpoint that declares neither <code>[Authorize]</code> nor <code>[AllowAnonymous]</code> (a
+          stricter gate each suite opts into, which the framework turns on for itself), and on a stale entry in
+          that second, undecorated allow-list. The framework&#39;s own allow-list holds 18 entries: ten
+          credential-exchange actions that cannot require a token because issuing one is what they do (login,
+          register, refresh, the OAuth exchange, the three provider challenges and the provider callback,
+          forgot-password and reset-password), the five credential pages, and three landing and outcome pages
+          that render nothing depending on the caller. NetArchTest&#39;s fluent API cannot express this pair, which is why
+          the rules live as full-name reflection and options-resolution tests instead. Two residuals stay
+          honest. Minimal-API endpoints opt out through an <code>.AllowAnonymous()</code> builder call, which is endpoint
+          metadata rather than an attribute, so the JWKS and OIDC discovery endpoints themselves sit outside
+          the scan&#39;s reach. And the anonymous-endpoint scan is only as complete as the suites that subclass it:
+          each consuming repo owns its own allow-list. The framework&#39;s thesis is that a rule that matters
+          should fail the build, and these rules do.</li>
+          </ul>
+          <p>None of these are reasons to share a symmetric secret across services. They are the reasons to wire the
+          asymmetric boundary deliberately.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any stack with a JWT story:</p>
+          <ol>
+          <li><strong>In a single process, symmetric (HS256) is fine.</strong> Do not add asymmetric complexity you do not
+          need. The signer and validator are the same code.</li>
+          <li><strong>The moment a second service validates tokens it did not mint, go asymmetric (RS256/ES256).</strong> The
+          issuer keeps the private key; everyone else gets the public key. A validator should never hold a key
+          that can also forge.</li>
+          <li><strong>Publish the public key as a JWKS document at <code>/.well-known/jwks.json</code></strong> and let the standard
+          <code>JwtBearer</code> discovery fetch and refresh it. Route discovery through your gateway so topology changes
+          do not ripple into every consumer&#39;s config.</li>
+          <li><strong>Pin the algorithm on the validator.</strong> Set the allowed algorithms explicitly and re-check the
+          token&#39;s <code>alg</code> against your expectation. Never let the token&#39;s own header choose the verification
+          method, or you have shipped the algorithm-confusion attack.</li>
+          <li><strong>Fall back gracefully.</strong> Serve an empty key set rather than erroring when JWKS is off, so the same
+          code path works in monolith and extracted modes.</li>
+          </ol>
+          <p>The takeaway: <strong>the key that validates a token should never be the key that mints one.</strong> Asymmetric
+          signing plus JWKS discovery is how you keep that true across a fleet, and it is the extraction point that makes
+          pulling a module out into its own service a config change rather than an auth rewrite.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why a shared symmetric secret turns one leak into a system-wide forgery, how
+          RS256 + a published JWKS document lets extracted services validate against the issuer&#39;s public keys
+          with no secret of their own, how ADR-004&#39;s dual-fetch (discover the key, fall back to an empty set)
+          and gateway-routed discovery keep the boundary stable, and why algorithm pinning closes the key-
+          substitution attack that publishing a public key would otherwise open.</p>
+          <p><strong>Next in the series:</strong> password hashing done right: PBKDF2-SHA512, 600k iterations, and timing-safe
+          comparison, the credential-at-rest half of the same security story.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-004 behind this
+          pattern, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 ADR-004 (authentication dual-fetch): <a href="../docs/adr/004-authentication-dual-fetch.html">ADR-004: Cross-Service Token Validation via JWKS / OIDC Discovery</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Microservices, Authentication</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="event-schema-versioning.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">15 · Event-schema versioning</span></a>
+          <a class="article-pager-link article-pager-link--next" href="password-hashing.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">17 · Password hashing done right</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-publish-the-public-half-as-a-jwks-document">The MMCA answer: publish the public half as a JWKS document</a></li>
+            <li><a href="#the-dual-fetch-and-the-graceful-empty-set">The dual-fetch, and the graceful empty set</a></li>
+            <li><a href="#jwt-algorithm-pinning-the-attack-you-would-otherwise-ship">JWT algorithm pinning: the attack you would otherwise ship</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

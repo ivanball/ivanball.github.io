@@ -129,7 +129,7 @@
           <p><em>As of: 2026-08-30.</em></p>
           <p>Two <code>mmca-app</code> options decide the shape of the <strong>solution</strong> rather than the shape of the sample
           module, and together they are the smallest thing the framework generates:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
 dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Notes <span class="hljs-literal">--module</span> Notes <span class="hljs-literal">--aggregate</span> Note <span class="hljs-literal">--database</span> sqlite <span class="hljs-literal">--no-aspire</span></code></pre>
           <p>That is two hosts, one module, one database file, and <code>dotnet run</code>. No Docker, no SQL Server, no
           orchestrator, and no broker. Everything else is the same framework the two production applications
@@ -202,13 +202,13 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           <hr>
           <h2 id="the-five-minute-path">The five-minute path</h2>
           <h3 id="1-scaffold">1. Scaffold</h3>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
 dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Notes <span class="hljs-literal">--module</span> Notes <span class="hljs-literal">--aggregate</span> Note <span class="hljs-literal">--database</span> sqlite <span class="hljs-literal">--no-aspire</span>
 <span class="hljs-built_in">cd</span> Contoso.Notes</code></pre>
           <p>Add <code>--flat</code> if the aggregate owns no child collection; the four module-shape flags all still apply
           (see the <a href="common-TEMPLATES.html#shaping-the-sample-module">templates guide</a>).</p>
           <h3 id="2-build-and-test-before-you-change-anything">2. Build and test before you change anything</h3>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build Contoso.Notes.slnx
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build Contoso.Notes.slnx
 dotnet test  <span class="hljs-literal">--solution</span> Contoso.Notes.slnx</code></pre>
           <p>Warning-free under all five analyzers with <code>TreatWarningsAsErrors</code>, and a passing run of the domain,
           application and architecture-fitness tests, with no database. That green line is what you bisect
@@ -220,7 +220,7 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Notes.slnx</co
           <code>DataSources:Notes</code> entry names a <code>SqliteMigrationsAssembly</code>, and a SQLite source that names one is
           <strong>migrated</strong> at startup rather than created outright, so an empty migrations assembly leaves you with
           an empty file and a first request that fails on a missing table.</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
   <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
   <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Notes.Migrations.Sqlite.Notes `
   <span class="hljs-literal">--context</span> SqliteDbContext</code></pre>
@@ -232,7 +232,7 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Notes.slnx</co
           running database, and every later schema change is the same two steps: add the migration, restart the
           host.</p>
           <h3 id="4-run-the-api">4. Run the API</h3>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosts/Contoso.Notes.Web</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosts/Contoso.Notes.Web</code></pre>
           <p>The host listens on <code>https://localhost:60801</code> (and <code>http://localhost:60802</code>), from its own
           <code>Properties/launchSettings.json</code>. On startup it applies the migrations to <code>notes.db</code> beside the host,
           under the generated <code>DatabaseInitStrategy: &quot;Migrate&quot;</code> (the strategy takes <code>Migrate</code> or <code>None</code>, and
@@ -245,7 +245,7 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Notes.slnx</co
           <p>The generated app has tenancy enabled with one tenant, <code>acme</code>, and resolution is claim first then the
           <code>X-Tenant-Id</code> header. It runs issuer-less, so no request carries a claim: <strong>send the header on every
           write.</strong></p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">curl -k -X POST https://localhost:60801/Notes \
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">curl -k -X POST https://localhost:60801/Notes \
   -H <span class="hljs-string">&quot;Content-Type: application/json&quot;</span> \
   -H <span class="hljs-string">&quot;X-Tenant-Id: acme&quot;</span> \
   -d <span class="hljs-string">&#x27;{&quot;title&quot;:&quot;First note&quot;,&quot;description&quot;:&quot;Written by curl&quot;,&quot;requesterUserId&quot;:1}&#x27;</span>
@@ -254,7 +254,7 @@ curl -k -H <span class="hljs-string">&quot;X-Tenant-Id: acme&quot;</span> https:
           <p>Expect 201 then 200, with audit fields stamped, soft-deleted rows filtered out, and the <code>Note</code>
           aggregate&#39;s creation integration event dispatched in process.</p>
           <h3 id="6-browse-the-ui">6. Browse the UI</h3>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosts/UI/Contoso.Notes.UI.Web</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosts/UI/Contoso.Notes.UI.Web</code></pre>
           <p>In a second terminal, with the API already up: the UI&#39;s first page render calls it. The Blazor host
           reads the API address from <code>Api:BaseAddress</code> in its own <code>appsettings.json</code>, fixed at the API&#39;s
           development URL, and sends <code>X-Tenant-Id</code> from <code>Api:TenantId</code> (default <code>acme</code>) on every call, so the

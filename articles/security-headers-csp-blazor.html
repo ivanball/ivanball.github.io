@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Security Headers and CSP for Blazor: One Middleware, Every Host · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="One middleware stamps hardened response headers on every host, with the Blazor CSP resolved through a pluggable provider.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/security-headers-csp-blazor.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Security Headers and CSP for Blazor: One Middleware, Every Host">
+  <meta property="og:description" content="One middleware stamps hardened response headers on every host, with the Blazor CSP resolved through a pluggable provider.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/security-headers-csp-blazor.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-47.png">
+  <meta property="og:image:alt" content="Security Headers and CSP for Blazor: One Middleware, Every Host">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Security Headers and CSP for Blazor: One Middleware, Every Host">
+  <meta name="twitter:description" content="One middleware stamps hardened response headers on every host, with the Blazor CSP resolved through a pluggable provider.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-47.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Security Headers and CSP for Blazor: One Middleware, Every Host","description":"One middleware stamps hardened response headers on every host, with the Blazor CSP resolved through a pluggable provider.","url":"https://ivanball.github.io/articles/security-headers-csp-blazor.html","mainEntityOfPage":"https://ivanball.github.io/articles/security-headers-csp-blazor.html","image":"https://ivanball.github.io/assets/img/articles/article-47.png","datePublished":"2026-08-17T11:44:16Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":47,"sameAs":"https://medium.com/@ivanball76/security-headers-and-csp-for-blazor-one-middleware-every-host-af82df95236e"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"47 · Security headers and CSP for Blazor","item":"https://ivanball.github.io/articles/security-headers-csp-blazor.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">47 · Security headers and CSP for Blazor</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html" aria-current="page">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 47</p>
+          <h1 id="security-headers-and-csp-for-blazor-one-middleware-every-host">Security Headers and CSP for Blazor: One Middleware, Every Host</h1>
+          <p class="article-meta"><time datetime="2026-08-17T11:44:16Z">August 17, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/security-headers-and-csp-for-blazor-one-middleware-every-host-af82df95236e" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-47.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Every client-facing host must stamp the same hardened response headers, but a Blazor host
+          needs a Content-Security-Policy no static string can express. Here is one middleware that centralizes the
+          headers and resolves the CSP through a pluggable provider, applied at both edges of both apps, formalized
+          in ADR-023.</p>
+          <hr>
+          <p>You add <code>X-Frame-Options: DENY</code>, HSTS, and a strict Content-Security-Policy to your Blazor app. You deploy.
+          The page loads white. The browser console is a wall of red: <code>Refused to evaluate a string as JavaScript because &#39;unsafe-eval&#39; is not an allowed source of script</code>. Blazor WebAssembly cannot boot, MudBlazor cannot
+          style a single component, and your &quot;hardening&quot; just took the whole front-end offline.</p>
+          <p>So you loosen the CSP until the app works again. Then you copy that policy into the second host, and the
+          gateway, and the next app. Six months later the Gateway sends <code>frame-ancestors &#39;none&#39;</code> and the UI host sends
+          nothing, because someone edited one copy and forgot the others. A new edge host ships with no headers at all,
+          because adding them was a manual step nobody remembered. The headers that were supposed to be a baseline
+          became per-host folklore that drifts.</p>
+          <p>The two problems are linked. The header set wants to be defined once and inherited everywhere. But the CSP,
+          the one header that actually breaks the app when it is wrong, cannot be a single constant: an API or gateway
+          serving JSON and WebSockets wants a strict fixed policy, while a Blazor host needs <code>script-src &#39;wasm-unsafe-eval&#39;</code>, <code>style-src &#39;unsafe-inline&#39;</code>, and a <code>connect-src</code> pinned to an API origin it only learns
+          at runtime. One string cannot serve both, and a wrong string is an outage.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>Security response headers are cheap defence-in-depth: <code>X-Content-Type-Options: nosniff</code> stops MIME
+          sniffing, <code>X-Frame-Options</code> and <code>frame-ancestors</code> stop clickjacking, HSTS forces HTTPS, and a
+          Content-Security-Policy shrinks the blast radius of an XSS bug by refusing to load script and connect to
+          origins you did not allow. None of them cost a request. All of them are worthless if a host forgets to send
+          them.</p>
+          <p>The failure mode is silence. A host that stamps no <code>X-Frame-Options</code> does not throw, does not log, and passes
+          every functional test. You find out it was frameable when someone clickjacks it. A CSP that drifted permissive
+          between two copies protects the strict copy and quietly stops protecting the other. Security headers are
+          exactly the kind of cross-cutting concern that rots when it lives as copied boilerplate in each host&#39;s
+          <code>Program.cs</code>, because the cost of getting one wrong is invisible until it is an incident.</p>
+          <p>And the CSP raises the stakes further, because it is the one header where the safe direction and the working
+          direction point opposite ways. Tighten it and you protect the page; tighten it wrong and you blank the page.
+          That tension is why the framework ships its static baseline at exactly the strength a Blazor page needs and
+          still resolves the policy through an extension point instead of freezing all of it in one constant.</p>
+          <h2 id="the-mmca-answer-one-middleware-a-pluggable-csp">The MMCA answer: one middleware, a pluggable CSP</h2>
+          <p>MMCA.Common ships a single <code>SecurityHeadersMiddleware</code>
+          (<code>MMCA.Common.Aspire/Security/SecurityHeaders.cs:145</code>) in the <code>MMCA.Common.Aspire.Security</code> layer, registered
+          with <code>AddCommonSecurityHeaders(configuration?, configure?)</code> (<code>SecurityHeaders.cs:246</code>) and mounted early with
+          <code>UseCommonSecurityHeaders()</code> (<code>SecurityHeaders.cs:271</code>). Every response gets the same hardened set, and the
+          CSP is resolved through an extension point rather than baked in as a constant.</p>
+          <p>The static part is the easy part. <code>InvokeAsync</code> (<code>SecurityHeaders.cs:180</code>) stamps
+          <code>X-Content-Type-Options: nosniff</code> (<code>:185</code>), <code>X-Frame-Options</code> (<code>:186</code>, default <code>DENY</code>), <code>Referrer-Policy</code>
+          (<code>:187-189</code>, default <code>strict-origin-when-cross-origin</code>), <code>Permissions-Policy</code> (<code>:190</code>, default
+          <code>geolocation=(), microphone=(), camera=(), payment=()</code>), and HSTS (<code>:198-200</code>, <code>max-age=31536000; includeSubDomains</code>). Every value lives on <code>SecurityHeadersSettings</code> (<code>SecurityHeaders.cs:19</code>) with those
+          hardened defaults, overridable via the <code>&quot;SecurityHeaders&quot;</code> configuration section (<code>:22</code>) or the <code>configure</code>
+          delegate. HSTS is emitted only when <code>EnableHsts</code> is set and the environment is not Development: the middleware
+          computes <code>_enableHsts = options.Value.EnableHsts &amp;&amp; !environment.IsDevelopment()</code> once in its constructor
+          (<code>:170</code>), so localhost never gets pinned to HTTPS for a year.</p>
+          <p>Two of those headers are path-sensitive. <code>CredentialPathPrefixes</code> (<code>:46</code>, default <code>[&quot;/reset-password&quot;, &quot;/auth/oauth-complete&quot;]</code>) names the paths a single-use secret arrives on, matched segment-based and
+          case-insensitively by <code>IsCredentialPath</code> (<code>:174-177</code>). On a hit the response answers <code>Referrer-Policy: no-referrer</code> instead of the site-wide value (<code>:187-189</code>) and adds <code>Cache-Control: no-store, no-cache, must-revalidate, max-age=0</code> with <code>Pragma: no-cache</code> (<code>:192-196</code>), so a reset token or an OAuth authorization
+          code sitting in the URL never travels onward in a <code>Referer</code> header and the rendered page never lingers in a
+          browser or proxy cache (ADR-023:114-125).</p>
+          <p>The interesting part is the CSP. Instead of stamping a string, the middleware asks an <code>ICspPolicyProvider</code>
+          (<code>SecurityHeaders.cs:84</code>) for a <code>CspPolicy(string Value, bool Enforce)</code> (<code>:76</code>). When <code>Enforce</code> is true it
+          writes <code>Content-Security-Policy</code> (<code>:219</code>); when false it writes <code>Content-Security-Policy-Report-Only</code>
+          (<code>:223</code>); a <code>null</code> return emits no CSP at all (<code>:203-204</code>). The enforce-versus-report split is what lets a
+          host trial a tightened policy against real traffic and collect violations before anything blocks.</p>
+          <p>One substitution sits between the provider and the header write. A resolved policy carrying the literal token
+          <code>{nonce}</code> (<code>NoncePlaceholder</code>, <code>:148</code>) gets a fresh 128-bit value per request (<code>NonceByteCount = 16</code>, <code>:151</code>),
+          stashed raw in <code>HttpContext.Items</code> under <code>CspNonce.ItemKey</code> (<code>:125</code>) before the rest of the pipeline runs, and
+          spliced into the header as <code>&#39;nonce-&lt;value&gt;&#39;</code> (<code>:210-215</code>). A page reads it back with
+          <code>CspNonce.Get(HttpContext)</code> (<code>:122-137</code>) and stamps it onto its own script and style tags, which is the
+          supported route off <code>&#39;unsafe-inline&#39;</code> (documented on the setting, <code>:62-63</code>; ADR-023:42-45). A policy without
+          the token generates nothing and stores nothing.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// SecurityHeadersMiddleware.InvokeAsync, condensed from SecurityHeaders.cs:180-228</span>
+<span class="hljs-keyword">var</span> headers = context.Response.Headers;
+headers.XContentTypeOptions = <span class="hljs-string">&quot;nosniff&quot;</span>;
+headers.XFrameOptions = _settings.FrameOptions;                      <span class="hljs-comment">// &quot;DENY&quot;</span>
+headers[<span class="hljs-string">&quot;Referrer-Policy&quot;</span>] = IsCredentialPath(context.Request.Path)  <span class="hljs-comment">// &quot;/reset-password&quot;, &quot;/auth/oauth-complete&quot;</span>
+    ? <span class="hljs-string">&quot;no-referrer&quot;</span>
+    : _settings.ReferrerPolicy;                                      <span class="hljs-comment">// &quot;strict-origin-when-cross-origin&quot;</span>
+headers[<span class="hljs-string">&quot;Permissions-Policy&quot;</span>] = _settings.PermissionsPolicy;
+
+<span class="hljs-keyword">if</span> (IsCredentialPath(context.Request.Path))
+{
+    headers.CacheControl = <span class="hljs-string">&quot;no-store, no-cache, must-revalidate, max-age=0&quot;</span>;
+    headers.Pragma = <span class="hljs-string">&quot;no-cache&quot;</span>;
+}
+
+<span class="hljs-keyword">if</span> (_enableHsts)                                                     <span class="hljs-comment">// EnableHsts &amp;&amp; !IsDevelopment()</span>
+{
+    headers.StrictTransportSecurity = _settings.HstsValue;           <span class="hljs-comment">// &quot;max-age=31536000; includeSubDomains&quot;</span>
+}
+
+<span class="hljs-keyword">var</span> csp = _cspPolicyProvider.GetPolicy(context);                     <span class="hljs-comment">// the extension point</span>
+<span class="hljs-keyword">if</span> (csp <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span>)
+{
+    <span class="hljs-keyword">var</span> <span class="hljs-keyword">value</span> = csp.Value;
+    <span class="hljs-keyword">if</span> (<span class="hljs-keyword">value</span>.Contains(NoncePlaceholder, StringComparison.Ordinal))  <span class="hljs-comment">// the literal {nonce} token</span>
+    {
+        <span class="hljs-keyword">var</span> nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(NonceByteCount));
+        context.Items[CspNonce.ItemKey] = nonce;
+        <span class="hljs-keyword">value</span> = <span class="hljs-keyword">value</span>.Replace(NoncePlaceholder, <span class="hljs-string">$&quot;&#x27;nonce-<span class="hljs-subst">{nonce}</span>&#x27;&quot;</span>, StringComparison.Ordinal);
+    }
+
+    <span class="hljs-keyword">if</span> (csp.Enforce) headers.ContentSecurityPolicy = <span class="hljs-keyword">value</span>;
+    <span class="hljs-keyword">else</span>             headers.ContentSecurityPolicyReportOnly = <span class="hljs-keyword">value</span>;
+}
+
+<span class="hljs-keyword">await</span> _next(context).ConfigureAwait(<span class="hljs-literal">false</span>);</code></pre>
+          <p>The default provider is <code>StaticCspPolicyProvider</code> (<code>SecurityHeaders.cs:91</code>), registered with
+          <code>TryAddSingleton</code> (<code>:263</code>) so a host can override it. It computes its policy once in the constructor
+          (<code>:95-102</code>) and returns the cached value for every request (<code>:104</code>). The baseline itself lives on
+          <code>SecurityHeadersSettings.ContentSecurityPolicy</code> (<code>:65-67</code>): <code>default-src &#39;self&#39;; script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39;; object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; frame-ancestors &#39;none&#39;</code>. Nothing is left out, including the two directives that blank a Blazor page when they
+          are wrong: the XML doc on the setting calls it a complete hardened baseline that ships <code>script-src</code> and
+          <code>style-src</code> at exactly the strength Blazor (<code>&#39;wasm-unsafe-eval&#39;</code>) and MudBlazor (<code>&#39;unsafe-inline&#39;</code> styles)
+          require (<code>:51-64</code>). An HTML host that never registers a fuller provider gets a functional policy instead of
+          one silently missing both directives, and the JSON, WebSocket, and static-page responses an API or gateway
+          serves are unaffected either way (ADR-023:46-53).</p>
+          <h2 id="the-blazor-policy-built-at-runtime">The Blazor policy, built at runtime</h2>
+          <p>An HTML host opts into the origin-pinned policy by registering its own provider before calling
+          <code>AddCommonSecurityHeaders</code>. Both apps register one shared <code>BlazorCspPolicyProvider</code>
+          (<code>MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:28</code>) via <code>AddCommonBlazorCsp()</code>
+          (<code>MMCA.Common.UI.Web/DependencyInjection.cs:52</code>), which does three things: binds <code>BlazorCspSettings</code> from the
+          <code>&quot;BlazorCsp&quot;</code> configuration section with <code>ValidateOnStart()</code> (<code>:54-56</code>), registers
+          <code>BlazorCspSettingsValidator</code> through <code>TryAddEnumerable</code> so calling it twice validates once (<code>:59-60</code>), and
+          registers <code>AddSingleton&lt;ICspPolicyProvider, BlazorCspPolicyProvider&gt;</code> (<code>:62</code>). Because the static default is
+          registered with <code>TryAdd</code>, the first-registered provider wins, so the call order is load-bearing:
+          <code>AddCommonBlazorCsp()</code> must run before <code>AddCommonSecurityHeaders(...)</code>.</p>
+          <p>The provider builds the full policy once, at construction (<code>BlazorCspPolicyProvider.cs:33-42</code>), and returns
+          the cached result for every request (<code>:45</code>). <code>BuildPolicy</code> (<code>:103-113</code>) assembles what a Blazor + MudBlazor
+          page actually needs: <code>default-src &#39;self&#39;</code>, <code>script-src &#39;self&#39; &#39;wasm-unsafe-eval&#39;</code> (the WASM runtime),
+          <code>style-src &#39;self&#39; &#39;unsafe-inline&#39;</code> (MudBlazor), <code>img-src &#39;self&#39; data: https:</code> (profile pictures and CDN
+          images are low XSS-risk, so images stay open while the directives that matter for exfiltration stay locked),
+          <code>font-src &#39;self&#39;</code>, plus <code>base-uri</code>, <code>form-action</code>, and <code>frame-ancestors &#39;none&#39;</code>.</p>
+          <p>One directive in that list is opt-in. <code>BuildFrameSrc</code> (<code>:85-97</code>) emits <code>frame-src &#39;self&#39; &lt;origins&gt;</code> only when
+          <code>BlazorCspSettings.FrameSources</code> lists at least one origin, canonicalized and de-duplicated before the splice
+          (<code>:92-96</code>, spliced into the policy at <code>:110</code>); with the default empty list there is no <code>frame-src</code> at all and
+          frames fall back to <code>default-src &#39;self&#39;</code> (<code>:82</code>). Entries are validated at boot rather than trusted, so a
+          wildcard or a stray semicolon fails startup with a message naming it instead of landing verbatim in a security
+          response header (ADR-023:185-197). ADC&#39;s Blazor host configures it for the embedded Google Maps venue maps on
+          its public event page (<code>MMCA.ADC.UI.Web/appsettings.json:47-52</code>). <code>frame-ancestors &#39;none&#39;</code> is never relaxed by
+          that path (<code>:21-24</code>).</p>
+          <p>The hard directive is <code>connect-src</code>, because it is per-deployment. <code>BuildCsp</code> (<code>:49</code>) reads the API origin
+          from <code>ApiSettings</code> (<code>WasmApiEndpoint ?? ApiEndpoint</code>, <code>:51</code>), and if it resolves to a real http(s) URL it pins
+          <code>connect-src</code> to <code>&#39;self&#39;</code> plus that origin and its WebSocket form (<code>wss://...</code> for the SignalR notification
+          hub, <code>:66-68</code>), enforced (<code>:79</code>). Development loosens two directives, not one: <code>connect-src</code> gains
+          <a href="http://localhost:*" target="_blank" rel="noopener">http://localhost:*</a> and <code>ws://localhost:*</code> (<code>:74-77</code>), and <code>script-src</code> gains <code>&#39;unsafe-inline&#39;</code> (<code>:105</code>),
+          because Visual Studio&#39;s Browser Link and Hot Reload inject an inline bootstrap script as well as opening a
+          WebSocket on a port that changes every run (<code>:70-73</code>). Only the first of those is localhost-scoped, and
+          neither reaches a non-Development host, because the flag is <code>IWebHostEnvironment.IsDevelopment()</code> read once at
+          construction (<code>:41</code>; ADR-023:178-184).</p>
+          <p>The detail worth stealing is the failure path. If the origin cannot be parsed, or on Linux parses as a
+          <code>file://</code> URI instead of http(s), the provider does not guess and it does not stop enforcing. It narrows
+          <code>connect-src</code> to <code>&#39;self&#39;</code>, the strictest value it can be sure of, leaves the rest of the policy exactly as it
+          was, and returns it with <code>Enforce: true</code> (<code>:62</code>). The policy fails closed. A deployment whose <code>ApiSettings</code>
+          endpoint is wrong still serves its pages, and every cross-origin API call and the SignalR hub are blocked
+          loudly in the browser console, because the alternative is a permissive Report-Only header that protects
+          nothing and that nobody notices (<code>:16-20</code>, <code>:60-61</code>; ADR-023:85-88). A security response header that quietly
+          stops being enforced is the worse failure mode.</p>
+          <p><code>font-src &#39;self&#39;</code> (<code>:108</code>) reads like the boring entry in that list, and it is the one that carries a real web
+          font. The shared MudBlazor theme names Inter first in its font stack, and the reflex way to supply it is a
+          Google Fonts link tag, with the reflex follow-on of widening <code>font-src</code> to that CDN&#39;s origin plus a
+          <code>style-src</code> allowance for its stylesheet: a third-party origin welded into the policy of every host,
+          permanently, because of a typography change. Instead the font ships from the framework. <code>MMCA.Common.UI</code>
+          vendors the Inter woff2 files (weights 400, 500, 600, 700, 800, latin subset, SIL OFL 1.1 notice alongside
+          them) under its own <code>wwwroot/fonts/</code>, and its <code>app.css</code> declares the five faces with <code>font-display: swap</code>
+          (<code>MMCA.Common.UI/wwwroot/app.css:9-47</code>).
+          Because a Razor class library&#39;s static assets are served from <code>_content/MMCA.Common.UI/</code>, the fonts are
+          same-origin, the existing <code>font-src &#39;self&#39;</code> already permits them, and not one character of the CSP changed to
+          land the refresh.</p>
+          <p>That is the part worth generalizing. A CSP directive is only a real constraint if it is allowed to shape
+          decisions, because the moment a design choice arrives the path of least resistance is to widen the policy to
+          fit it. Here the policy shaped the implementation instead. The honest costs: the vendored subset is latin
+          only, so non-latin text still falls back to the platform font; the woff2 bytes ride inside the NuGet package,
+          so updating the font means a framework release and a lockstep consumer bump rather than swapping a CDN
+          version; and self-hosting forfeits any shared cross-site CDN cache, so each origin downloads its own copy.
+          <code>font-display: swap</code> trades a visible flash of the fallback face for not blocking first paint. All of that was
+          cheaper than an extra origin in the policy.</p>
+          <h2 id="adopted-at-both-edges-of-both-apps">Adopted at both edges of both apps</h2>
+          <p>This is not a library that exists and waits to be used. Store and ADC each wire it at both client-facing
+          edges. The Gateway hosts call <code>AddCommonSecurityHeaders(builder.Configuration)</code> and <code>UseCommonSecurityHeaders()</code>
+          with the strict static baseline, exactly right for a YARP proxy serving JSON, WebSockets, and a static privacy
+          page (ADC Gateway <code>Program.cs:118,168</code>; Store Gateway <code>Program.cs:71,159</code>). The Blazor UI hosts register
+          <code>AddCommonBlazorCsp()</code> first, then the same plain <code>AddCommonSecurityHeaders(builder.Configuration)</code> with no
+          configure delegate, then <code>UseCommonSecurityHeaders()</code> (ADC UI <code>Program.cs:162,163,192</code>; Store UI
+          <code>Program.cs:191,192,215</code>). Each UI origin emits its own HSTS on purpose, because an HSTS pin is per-origin and
+          the Gateway&#39;s header says nothing about the sibling hostname a user actually types (ADC UI
+          <code>Program.cs:156-161</code>; Store UI <code>Program.cs:184-190</code>). The built-in <code>app.UseHsts()</code> stays uncalled on both,
+          since it would run later in the pipeline and overwrite the shared one-year value with its own weaker default
+          (ADC UI <code>Program.cs:188-191</code>).</p>
+          <p>The cross-origin posture at that same edge is a separate decision with its own record: two policies, an
+          allow-listed one for service hosts and a deliberately broader one for gateways (ADR-082,
+          <code>Website/docs-src/adr/082-two-tier-cors-posture.md:28-34</code>), which names ADR-023 as its edge sibling (<code>:19-25</code>).
+          The middleware carries a unit test, <code>SecurityHeadersMiddlewareTests</code> in <code>MMCA.Common.Aspire.Tests</code>, and each
+          app&#39;s Gateway has its own <code>SecurityHeadersTests</code> asserting the headers are present.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>The baseline is complete, not maximal.</strong> A default that works for a Blazor and MudBlazor host is a default
+          that carries <code>style-src &#39;unsafe-inline&#39;</code> (<code>SecurityHeaders.cs:65-67</code>), so inline styles are not blocked out
+          of the box, and an API or gateway host that serves no HTML inherits a script and style allowance it does not
+          need. Tightening past that is an explicit act: configure the <code>&quot;SecurityHeaders&quot;</code> section, register your own
+          provider, or move to the <code>{nonce}</code> placeholder (ADR-023:91-96).</li>
+          <li><strong>Registration order is a foot-gun.</strong> Because the provider uses <code>TryAddSingleton</code> (<code>SecurityHeaders.cs:263</code>),
+          a host that calls <code>AddCommonSecurityHeaders</code> before registering its custom <code>ICspPolicyProvider</code> silently
+          keeps the static default. The order is correct in both apps, but nothing forces it.</li>
+          <li><strong>Failing closed moves the pain onto a running app.</strong> A Blazor host whose <code>ApiSettings</code> endpoint is wrong
+          still serves pages, but the enforced <code>connect-src &#39;self&#39;</code> blocks every cross-origin API call and the SignalR
+          notification hub (<code>BlazorCspPolicyProvider.cs:62</code>). That loud signal is the point, and the cost is that the
+          configuration mistake lands on the users of that deployment rather than in a passive report
+          (ADR-023:105-109).</li>
+          <li><strong>One shared Blazor provider constrains divergence.</strong> <code>BlazorCspPolicyProvider</code> lives once in
+          <code>MMCA.Common.UI.Web</code> over the shared <code>ApiSettings</code>, so a host that needs genuinely different CSP logic
+          cannot tweak an app-local copy. It has to supply its own <code>ICspPolicyProvider</code> instead, registered before
+          <code>AddCommonSecurityHeaders</code>.</li>
+          </ul>
+          <p>None of these argue against centralizing the headers. They argue for keeping the extension point visible and
+          for treating the CSP as the one header you test in every host that renders HTML.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The shape ports to any ASP.NET Core stack, and the idea ports to any web framework:</p>
+          <ol>
+          <li>Put the hardened header set in <strong>one middleware</strong> with strongly-typed, overridable settings, and mount it
+          early so every response gets it. A new edge host inherits the baseline instead of remembering to copy it.</li>
+          <li>Do not stamp the CSP as a constant. Resolve it through a <strong>provider abstraction</strong> that returns the policy
+          string plus an enforce-or-report flag. Static hosts get a fixed strict policy; HTML hosts inject a dynamic
+          one.</li>
+          <li>For a Blazor or SPA host, build <code>connect-src</code> from the <strong>API origin at runtime</strong>, and put the
+          <code>script-src</code>/<code>style-src</code> sources the framework actually requires (<code>&#39;wasm-unsafe-eval&#39;</code> for Blazor WASM) in
+          the <strong>static default too</strong>, so a host that registers nothing still gets a policy it can run under.</li>
+          <li>Make the failure path <strong>fail closed, not permissive</strong>. If the dynamic part of the policy cannot be built,
+          narrow that one directive to the strictest value you can be sure of and keep enforcing, so the mistake
+          surfaces as blocked calls somebody chases instead of a header that is emitted and inert.</li>
+          </ol>
+          <p>The takeaway: <strong>security headers want to be defined once and inherited everywhere, but the CSP is the one
+          header that breaks the app when it is wrong. Centralize the headers in a middleware, resolve the CSP through a
+          provider, and when the dynamic part cannot be built, narrow that directive and keep enforcing rather than
+          emitting a policy that protects nothing.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why per-host security headers drift and why a static CSP cannot serve both an API and a
+          Blazor host, how MMCA.Common&#39;s <code>SecurityHeadersMiddleware</code> stamps one hardened header set (with a stricter
+          referrer and cache posture on credential paths, and a per-request <code>{nonce}</code> substitution) while resolving the
+          CSP through a pluggable <code>ICspPolicyProvider</code>, how the default static provider ships a complete hardened
+          baseline a Blazor page can still run under, how <code>BlazorCspPolicyProvider</code> pins <code>connect-src</code> to the runtime API
+          origin and fails closed when it cannot, and how both apps adopt it at their Gateway and UI edges (ADR-023).</p>
+          <p><strong>Next in the series:</strong> Article 48, &quot;Observability by Default: OpenTelemetry and Azure Monitor in MMCA,&quot; on the
+          tracing, metrics, and logging pipeline every host gets for free.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-023 behind this
+          pattern, or <code>dotnet add package MMCA.Common.Aspire</code> and try the middleware.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>This pattern&#39;s decision record: <a href="../docs/adr/023-security-response-headers.html">ADR-023: Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+          <li>The full 34-category scorecard, §26 included, lives in <a href="../docs/governance/common-ArchitectureScorecard.html">MMCA.Common: Architecture Scorecard</a> in the docs site.</li>
+          </ul>
+          <p><em>Previous: Article 46, &quot;Field-Level Encryption in EF Core: AES-GCM for PII Columns.&quot; Next: Article 48,
+          &quot;Observability by Default: OpenTelemetry and Azure Monitor in MMCA.&quot;</em></p>
+          <p><em>Tags: .NET, C Sharp, Blazor, Web Security, Content Security Policy</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="field-level-encryption-ef-core.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">46 · Field-level encryption in EF Core</span></a>
+          <a class="article-pager-link article-pager-link--next" href="observability-opentelemetry.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">48 · Observability by default</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-one-middleware-a-pluggable-csp">The MMCA answer: one middleware, a pluggable CSP</a></li>
+            <li><a href="#the-blazor-policy-built-at-runtime">The Blazor policy, built at runtime</a></li>
+            <li><a href="#adopted-at-both-edges-of-both-apps">Adopted at both edges of both apps</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

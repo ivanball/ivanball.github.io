@@ -187,7 +187,7 @@
           deployments are reproducible. This workflow embodies §17 as the automated gate that every MMCA.Common
           change must pass before it can influence downstream consumers.</p>
           <h3 id="triggers">Triggers</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># ci.yml:14-16</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># ci.yml:14-16</span>
 <span class="hljs-attr">on:</span>
   <span class="hljs-attr">pull_request:</span>
     <span class="hljs-attr">branches:</span> [<span class="hljs-string">main</span>]</code></pre>
@@ -200,7 +200,7 @@
           concurrency slots as the PR runs they duplicated.</p>
           <p>Release verification does not depend on this, which is what makes the deletion safe: <code>release.yml</code> runs
           its own restore, build, and test against the <code>v*</code> tag before publishing.</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># ci.yml:27-32</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># ci.yml:27-32</span>
 <span class="hljs-attr">env:</span>
   <span class="hljs-attr">FORCE_JAVASCRIPT_ACTIONS_TO_NODE24:</span> <span class="hljs-literal">true</span>
   <span class="hljs-attr">PLAYWRIGHT_BROWSERS_PATH:</span> <span class="hljs-string">${{</span> <span class="hljs-string">github.workspace</span> <span class="hljs-string">}}/.ms-playwright</span></code></pre>
@@ -209,7 +209,7 @@
           <code>~/.cache/ms-playwright</code> and into the workspace, which is what lets <code>actions/cache</code> carry the browser
           binaries between runs. It has to be workflow-level rather than step-level because both the install step
           and the test run read it.</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># ci.yml:36-38</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># ci.yml:36-38</span>
 <span class="hljs-attr">concurrency:</span>
   <span class="hljs-attr">group:</span> <span class="hljs-string">ci-${{</span> <span class="hljs-string">github.ref</span> <span class="hljs-string">}}</span>
   <span class="hljs-attr">cancel-in-progress:</span> <span class="hljs-string">${{</span> <span class="hljs-string">github.event_name</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;pull_request&#x27;</span> <span class="hljs-string">}}</span></code></pre>
@@ -233,7 +233,7 @@
           case-sensitive, so path-casing bugs that Windows masks are caught in CI. This is a deliberate choice
           documented in <code>MMCA.Common/CLAUDE.md</code> (&quot;CI runs on Ubuntu, file paths are case-sensitive&quot;).</p>
           <p><strong>Step 1, Checkout with full history</strong> (<code>ci.yml:91-94</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span> <span class="hljs-comment"># v7</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1</span> <span class="hljs-comment"># v7</span>
   <span class="hljs-attr">with:</span>
     <span class="hljs-attr">persist-credentials:</span> <span class="hljs-literal">false</span>
     <span class="hljs-attr">fetch-depth:</span> <span class="hljs-number">0</span> <span class="hljs-comment"># MinVer needs full history</span></code></pre>
@@ -249,7 +249,7 @@
           setup-dotnet&#39;s cache-save step would otherwise fail the whole job with &quot;Cache folder path does not exist
           on disk&quot;.</p>
           <p><strong>Step 3, Verify FACTS.md is current</strong> (<code>ci.yml:115-118</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet run --project build/facts -- . --check</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet run --project build/facts -- . --check</code></pre>
           <p>A fast, dependency-free drift gate. <code>build/facts</code> recomputes the framework-wide facts from source (version
           from the git tag, package count, fitness-method and base-class counts) and fails if the committed
           <code>FACTS.md</code> disagrees. Regenerate with <code>dotnet run --project build/facts -- .</code>. The ADR count and range are
@@ -262,7 +262,7 @@
           with time: the numbers other documents are told to link rather than restate are themselves machine-checked
           against the code.</p>
           <p><strong>Step 4, Restore</strong> (<code>ci.yml:120-122</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet restore MMCA.Common.slnx --locked-mode</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet restore MMCA.Common.slnx --locked-mode</code></pre>
           <p>MMCA.Common uses NuGet lock files (<code>RestorePackagesWithLockFile</code>) and pins <code>packageSourceMapping</code> to
           nuget.org only, no <code>GITHUB_TOKEN</code> is needed to restore. This is explicitly documented in
           <code>MMCA.Common/CLAUDE.md</code> (&quot;building/testing Common needs NO GitHub token&quot;). The lock file makes the
@@ -277,7 +277,7 @@
           supply-chain risks are visible. The pinned source mapping plus committed lock files are the §32
           implementation: a compromised or mutated transitive package cannot silently enter the build.</p>
           <p><strong>Step 5, Build in Release mode</strong> (<code>ci.yml:131-133</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.Common.slnx -c Release --no-restore</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.Common.slnx -c Release --no-restore</code></pre>
           <p>Building in <code>Release</code> mode matters because the five analyzers (Meziantou, SonarAnalyzer, StyleCop,
           Roslynator, Microsoft.VisualStudio.Threading) run at error severity. Some analyzer rules only trigger
           in Release (e.g. certain null-forgiving suppression patterns). <code>TreatWarningsAsErrors</code> is globally
@@ -286,7 +286,7 @@
           <p>[Rubric §15, Best Practices &amp; Code Quality] (quality enforcement via analyzers at error severity) is
           realized here: the build <em>is</em> the static-analysis gate.</p>
           <p><strong>Step 6, Vulnerability audit</strong> (<code>ci.yml:135-143</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Audit</span> <span class="hljs-string">dependencies</span> <span class="hljs-string">(fail</span> <span class="hljs-string">on</span> <span class="hljs-string">known</span> <span class="hljs-string">vulnerabilities)</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Audit</span> <span class="hljs-string">dependencies</span> <span class="hljs-string">(fail</span> <span class="hljs-string">on</span> <span class="hljs-string">known</span> <span class="hljs-string">vulnerabilities)</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">needs.changes.outputs.code</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span>
   <span class="hljs-attr">uses:</span> <span class="hljs-string">./.github/actions/nuget-vulnerability-audit</span>
   <span class="hljs-attr">with:</span>
@@ -320,7 +320,7 @@
           (assesses whether secrets, auth, and dependency security are properly managed) is also touched: the
           vulnerability audit ensures the framework&#39;s own dependencies do not carry known CVEs.</p>
           <p><strong>Steps 7 and 8, Test with coverage and the discovery-regression floor</strong> (<code>ci.yml:145-158</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet tool install --global dotnet-coverage
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet tool install --global dotnet-coverage
 dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
   <span class="hljs-string">&quot;dotnet test --solution MMCA.Common.slnx -c Release --no-build --minimum-expected-tests 2000&quot;</span></code></pre>
           <p>The test run is wrapped in <code>dotnet-coverage collect</code> (installed in the step before), which emits a
@@ -386,13 +386,13 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           as <code>build-and-test</code>.</p>
           </li>
           <li><p><strong>Build the E2E project directly</strong> (<code>ci.yml:280-284</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet build Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release</code></pre>
           <p>Building by csproj path, not solution, ensures only the gallery and E2E graphs are compiled (restore
           included). The E2E project references MMCA.Common source projects directly (via project references, not
           NuGet packages), so no <code>GITHUB_TOKEN</code> is needed.</p>
           </li>
           <li><p><strong>Cache and install Playwright for the matrix browser</strong> (<code>ci.yml:289-307</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">script=$(find Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release -name playwright.ps1 | <span class="hljs-built_in">head</span> -1)
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">script=$(find Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release -name playwright.ps1 | <span class="hljs-built_in">head</span> -1)
 <span class="hljs-keyword">if</span> [ <span class="hljs-string">&quot;<span class="hljs-variable">${{ steps.playwright-cache.outputs.cache-hit }</span>}&quot;</span> = <span class="hljs-string">&quot;true&quot;</span> ]; <span class="hljs-keyword">then</span>
   pwsh <span class="hljs-string">&quot;<span class="hljs-variable">$script</span>&quot;</span> install-deps <span class="hljs-variable">${{ matrix.browser }</span>}
 <span class="hljs-keyword">else</span>
@@ -410,7 +410,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <li><p><strong>Run the E2E suite</strong> (<code>ci.yml:309-326</code>): the chromium leg installs <code>dotnet-coverage</code>
           (<code>ci.yml:309-311</code>) and wraps the run in <code>dotnet-coverage collect</code>; the firefox and webkit legs run the
           same command plain (<code>eval &quot;$CMD&quot;</code>). The inner command is:</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">env:</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">env:</span>
   <span class="hljs-attr">E2E_HEADLESS:</span> <span class="hljs-string">&quot;true&quot;</span>
   <span class="hljs-attr">E2E_BROWSER:</span> <span class="hljs-string">${{</span> <span class="hljs-string">matrix.browser</span> <span class="hljs-string">}}</span>
 <span class="hljs-attr">run:</span> <span class="hljs-string">dotnet</span> <span class="hljs-string">test</span> <span class="hljs-string">--project</span> <span class="hljs-string">Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj</span> <span class="hljs-string">-c</span> <span class="hljs-string">Release</span> <span class="hljs-string">--no-build</span> <span class="hljs-string">--</span> <span class="hljs-string">--minimum-expected-tests</span> <span class="hljs-number">1</span></code></pre>
@@ -429,7 +429,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <li><p><strong>Upload coverage and Playwright traces</strong>, the chromium leg uploads its E2E cobertura report as the
           <code>coverage-e2e</code> artifact (<code>ci.yml:328-334</code>), and on failure each leg uploads its traces
           (<code>ci.yml:336-342</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">if:</span> <span class="hljs-string">failure()</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">if:</span> <span class="hljs-string">failure()</span>
 <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/upload-artifact@v7</span>
 <span class="hljs-attr">with:</span>
   <span class="hljs-attr">name:</span> <span class="hljs-string">ui-e2e-traces-${{</span> <span class="hljs-string">matrix.browser</span> <span class="hljs-string">}}</span>
@@ -450,7 +450,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           committed baseline, which makes it two gates in one. Its context, <code>Performance gate (BenchmarkDotNet Short + baseline verify)</code>, is one of the eight required merge gates on <code>main</code>
           (<code>MMCA.Common/CONTRIBUTING.md:60-71</code>).</p>
           <p>The run itself (<code>ci.yml:379-385</code>) uses <code>--filter &quot;*&quot;</code> and <code>--job Short</code>:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet run -c Release --project Tests/Performance/MMCA.Common.Benchmarks --no-launch-profile -- --filter <span class="hljs-string">&quot;*&quot;</span> --job Short --exporters json</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet run -c Release --project Tests/Performance/MMCA.Common.Benchmarks --no-launch-profile -- --filter <span class="hljs-string">&quot;*&quot;</span> --job Short --exporters json</code></pre>
           <p><code>--filter &quot;*&quot;</code> selects every benchmark non-interactively, and without it BenchmarkDotNet prompts for a
           selection and hangs in CI. <code>--job Short</code> (3 warmup + 3 iterations) produces real measurements in under a
           minute instead of a full multi-iteration timing run. <code>--no-launch-profile</code> keeps it deterministic on
@@ -632,7 +632,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p>[Rubric §17, DevOps &amp; Deployment] is embodied: releasing is a tag-driven, automated, reproducible action
           with no manual steps after the tag is pushed.</p>
           <h3 id="trigger">Trigger</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># release.yml:3-5</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># release.yml:3-5</span>
 <span class="hljs-attr">on:</span>
   <span class="hljs-attr">push:</span>
     <span class="hljs-attr">tags:</span> [<span class="hljs-string">&#x27;v*&#x27;</span>]</code></pre>
@@ -641,7 +641,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           from <code>main</code>.</p>
           <h3 id="job-publish">Job: <code>publish</code></h3>
           <p><strong>Permissions</strong> (<code>release.yml:17-20</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">permissions:</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">permissions:</span>
   <span class="hljs-attr">packages:</span> <span class="hljs-string">write</span>
   <span class="hljs-attr">contents:</span> <span class="hljs-string">read</span>
   <span class="hljs-attr">id-token:</span> <span class="hljs-string">write</span> <span class="hljs-comment"># OIDC token for nuget.org trusted publishing (ADR-053)</span></code></pre>
@@ -671,30 +671,30 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           packages that are about to be packed, SBOM&#39;d and pushed irreversibly come from the committed lock graph
           rather than from whatever the feed resolves at tag time; no <code>GITHUB_TOKEN</code> is needed.</p>
           <p><strong>Step 4, Determine version from tag</strong> (<code>release.yml:65-67</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;VERSION=<span class="hljs-variable">${GITHUB_REF_NAME#v}</span>&quot;</span> &gt;&gt; <span class="hljs-variable">$GITHUB_OUTPUT</span></code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;VERSION=<span class="hljs-variable">${GITHUB_REF_NAME#v}</span>&quot;</span> &gt;&gt; <span class="hljs-variable">$GITHUB_OUTPUT</span></code></pre>
           <p><code>GITHUB_REF_NAME</code> is the full tag name (e.g. <code>v1.52.0</code>). The <code>#v</code> parameter expansion strips the leading
           <code>v</code>, yielding <code>1.52.0</code>. This string is then passed to the build and pack steps as an explicit version
           override.</p>
           <p><strong>Step 5, Build with explicit version</strong> (<code>release.yml:69-70</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=<span class="hljs-literal">true</span> -p:Version=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=<span class="hljs-literal">true</span> -p:Version=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
           <p><code>-p:MinVerSkip=true</code> disables MinVer&#39;s git-tag-based version derivation and <code>-p:Version=...</code> injects the
           tag-derived version directly. This pattern avoids a subtle race: if MinVer ran here, it would derive the
           version from the tag, which should be the same value, but in edge cases (e.g. detached HEAD, retagged
           commit) the two sources could diverge. Making the version explicit from the start removes the ambiguity.</p>
           <p><strong>Step 6, Test</strong> (<code>release.yml:72-73</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --solution MMCA.Common.slnx -c Release --no-build</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --solution MMCA.Common.slnx -c Release --no-build</code></pre>
           <p>Tests run again (no <code>--minimum-expected-tests</code> floor here, the release workflow is not the primary test
           gate; CI already covered this). This is a belt-and-suspenders pass to ensure the tagged commit is green
           before packaging.</p>
           <p><strong>Step 7, Pack</strong> (<code>release.yml:75-76</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=<span class="hljs-literal">true</span> -p:PackageVersion=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=<span class="hljs-literal">true</span> -p:PackageVersion=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
           <p><code>dotnet pack</code> over the entire solution packs every packable project it contains (<code>Source/**</code>) in
           one command. <code>-p:PackageVersion</code> sets the NuGet package version metadata. <code>-o ./nupkgs</code> collects all
           <code>.nupkg</code> files in one directory for the push step. The packages produced here all share the same
           version string. <code>MMCA.Common.UI.Maui</code> is not in the solution and is packed by the <code>publish-maui</code> windows
           job into its own <code>./nupkgs-maui</code> directory from the same tag (ADR-042).</p>
           <p><strong>Steps 8 and 9, SBOM generation and upload</strong> (<code>release.yml:90-101</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Attest</span> <span class="hljs-string">build</span> <span class="hljs-string">provenance</span> <span class="hljs-string">(nupkgs)</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Attest</span> <span class="hljs-string">build</span> <span class="hljs-string">provenance</span> <span class="hljs-string">(nupkgs)</span>
   <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8</span> <span class="hljs-comment"># v4.2.2</span>
   <span class="hljs-attr">with:</span>
     <span class="hljs-attr">subject-path:</span> <span class="hljs-string">./nupkgs/*.nupkg</span>
@@ -727,7 +727,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           &quot;know your dependencies&quot; requirement for regulated or commercially-distributed software, and gating on it
           guarantees no version ships without one.</p>
           <p><strong>Step 10, Push to GitHub Packages</strong> (<code>release.yml:103-104</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet nuget push ./nupkgs/*.nupkg \
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet nuget push ./nupkgs/*.nupkg \
   --<span class="hljs-built_in">source</span> <span class="hljs-string">&quot;https://nuget.pkg.github.com/ivanball/index.json&quot;</span> \
   --api-key <span class="hljs-variable">${{ secrets.GITHUB_TOKEN }</span>} \
   --skip-duplicate</code></pre>
@@ -738,7 +738,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p><code>GITHUB_TOKEN</code> is automatically provided by GitHub Actions when <code>packages: write</code> is in the job
           permissions. No external secret is needed.</p>
           <p><strong>Steps 11 and 12, Push to nuget.org via trusted publishing</strong> (<code>release.yml:115-124</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">NuGet</span> <span class="hljs-string">login</span> <span class="hljs-string">(OIDC</span> <span class="hljs-string">to</span> <span class="hljs-string">short-lived</span> <span class="hljs-string">key)</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">NuGet</span> <span class="hljs-string">login</span> <span class="hljs-string">(OIDC</span> <span class="hljs-string">to</span> <span class="hljs-string">short-lived</span> <span class="hljs-string">key)</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">github.repository_owner</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;ivanball&#x27;</span>
   <span class="hljs-attr">uses:</span> <span class="hljs-string">NuGet/login@v1</span>
   <span class="hljs-attr">id:</span> <span class="hljs-string">nuget-login</span>
@@ -804,7 +804,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <code>cross-browser-freshness</code> keeps firefox and webkit coverage mandatory without putting either engine back
           on the per-deploy critical path (<code>:1034-1110</code>).</p>
           <h3 id="triggers-and-concurrency">Triggers and concurrency</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:3-8</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:3-8</span>
 <span class="hljs-attr">on:</span>
   <span class="hljs-attr">push:</span>
     <span class="hljs-attr">branches:</span> [<span class="hljs-string">main</span>]
@@ -813,7 +813,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
   <span class="hljs-attr">workflow_dispatch:</span></code></pre>
           <p>The dispatch trigger also carries two inputs, <code>skip_freshness_gates</code> and <code>skip_justification</code>
           (<code>deploy.yml:8-20</code>), the break-glass described under the freshness gates below.</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:42-44</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:42-44</span>
 <span class="hljs-attr">concurrency:</span>
   <span class="hljs-attr">group:</span> <span class="hljs-string">${{</span> <span class="hljs-string">github.event_name</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;pull_request&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">format(&#x27;pr-{0}&#x27;,</span> <span class="hljs-string">github.ref)</span> <span class="hljs-string">||</span> <span class="hljs-string">&#x27;prod-azure&#x27;</span> <span class="hljs-string">}}</span>
   <span class="hljs-attr">cancel-in-progress:</span> <span class="hljs-string">${{</span> <span class="hljs-string">github.event_name</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;pull_request&#x27;</span> <span class="hljs-string">}}</span></code></pre>
@@ -830,7 +830,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           patterns that protect against partial-update failures) is served by the non-cancellable production
           concurrency group: it is a mechanical guarantee that two competing mutations cannot interleave.</p>
           <p><strong>Permissions</strong> (<code>deploy.yml:28-34</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">permissions:</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">permissions:</span>
   <span class="hljs-attr">id-token:</span> <span class="hljs-string">write</span>
   <span class="hljs-attr">contents:</span> <span class="hljs-string">read</span>
   <span class="hljs-attr">packages:</span> <span class="hljs-string">read</span>
@@ -903,7 +903,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           CI on the post-merge push is redundant. Every heavy step below additionally carries <code>if: needs.changes.outputs.code == &#39;true&#39;</code>, so a docs-only PR still posts this job&#39;s required status green.
           (The deploy-path complement of this decision is <code>backend-test-gate</code>, covered after this job.)</p>
           <p><strong>Step 1, Setup and restore</strong> (<code>deploy.yml:276-291</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Restore</span> <span class="hljs-string">dependencies</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Restore</span> <span class="hljs-string">dependencies</span>
   <span class="hljs-attr">run:</span> <span class="hljs-string">dotnet</span> <span class="hljs-string">restore</span> <span class="hljs-string">MMCA.ADC.CI.slnf</span> <span class="hljs-string">--locked-mode</span>
   <span class="hljs-attr">env:</span>
     <span class="hljs-attr">GITHUB_TOKEN:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.GITHUB_TOKEN</span> <span class="hljs-string">}}</span></code></pre>
@@ -919,7 +919,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p><strong>Step 2, Build</strong> (<code>deploy.yml:293-295</code>): <code>dotnet build MMCA.ADC.CI.slnf --no-restore -c Release</code>, same
           TreatWarningsAsErrors + five-analyzer enforcement as Common.</p>
           <p><strong>Step 3, Unit and architecture tests with coverage</strong> (<code>deploy.yml:301-309</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet tool install --global dotnet-coverage
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet tool install --global dotnet-coverage
 dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
   <span class="hljs-string">&quot;dotnet test --solution MMCA.ADC.CI.slnf --no-build -c Release --minimum-expected-tests 1&quot;</span></code></pre>
           <p>As in Common&#39;s CI, the run is wrapped in <code>dotnet-coverage collect</code> (it returns the inner exit code so a
@@ -962,7 +962,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           otherwise let the floor pass vacuously. That is the same instinct as the <code>--minimum-expected-tests</code> floors
           throughout this chapter: a gate whose input went missing must be indistinguishable from a gate that failed.</p>
           <p><strong>Step 6, EF migrations model-drift gate</strong> (<code>deploy.yml:384-398</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-keyword">for</span> module <span class="hljs-keyword">in</span> Identity Conference Engagement Notification; <span class="hljs-keyword">do</span>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-keyword">for</span> module <span class="hljs-keyword">in</span> Identity Conference Engagement Notification; <span class="hljs-keyword">do</span>
   project=<span class="hljs-string">&quot;Source/Hosting/MMCA.ADC.Migrations.SqlServer.<span class="hljs-variable">$module</span>&quot;</span>
   dotnet ef migrations has-pending-model-changes \
     --project <span class="hljs-string">&quot;<span class="hljs-variable">$project</span>&quot;</span> --startup-project <span class="hljs-string">&quot;<span class="hljs-variable">$project</span>&quot;</span> \
@@ -986,7 +986,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           enforcement of the &quot;migrations-before-code&quot; discipline.</p>
           <p><strong>The expand/contract migration guard</strong> (<code>deploy.yml:226-274</code>) is the job&#39;s <em>first</em> step, ahead of even
           the .NET SDK setup, because it needs nothing but <code>git</code>, <code>awk</code> and <code>grep</code>:</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:226-227</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:226-227</span>
 <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Expand/contract</span> <span class="hljs-string">migration</span> <span class="hljs-string">guard</span> <span class="hljs-string">(schema</span> <span class="hljs-string">rollback</span> <span class="hljs-string">safety)</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">needs.changes.outputs.code</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span></code></pre>
           <p>It is the other half of the schema-safety story the model-drift gate starts. The drift gate proves a
@@ -1056,7 +1056,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           detection after the rollout rather than prevention. The comment states that chain in full
           (<code>deploy.yml:400-418</code>).</p>
           <p>The fix is a complement, not a new unconditional gate:</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:421</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:421</span>
 <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;pull_request&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">needs.changes.outputs.code</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">needs.changes.outputs.ui</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;true&#x27;</span></code></pre>
           <p>Compare it against <code>e2e-gate</code>&#39;s condition (<code>deploy.yml:799</code>): the two are exact complements over a code
           deploy, so <strong>exactly one of them runs</strong> on any given code deploy. The invariant &quot;no production deploy
@@ -1172,7 +1172,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           dependencies that would create licensing obligations.</p>
           <h3 id="job-integration-tests">Job: <code>integration-tests</code></h3>
           <p>This job is <strong>pull-request-only</strong> (<code>deploy.yml:640,544</code>), and <code>deploy</code> does not list it:</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">needs:</span> <span class="hljs-string">changes</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">needs:</span> <span class="hljs-string">changes</span>
 <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;pull_request&#x27;</span></code></pre>
           <p>It runs the per-service <code>WebApplicationFactory</code> integration tests against a real SQL Server, covering
           roughly 420 test methods across the four projects <code>MMCA.ADC.Integration.slnf</code> lists: Identity,
@@ -1186,7 +1186,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <code>deploy.yml</code> does not re-run the integration tier at all, and that the deploy-path test coverage comes
           from <code>e2e-gate</code> or <code>backend-test-gate</code> instead.</p>
           <p><strong>SQL Server as a guarded step, not a <code>services:</code> block</strong> (<code>deploy.yml:654-662</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Start</span> <span class="hljs-string">SQL</span> <span class="hljs-string">Server</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Start</span> <span class="hljs-string">SQL</span> <span class="hljs-string">Server</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">needs.changes.outputs.code</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span>
   <span class="hljs-attr">run:</span> <span class="hljs-string">|
     docker run -d --name sqlserver \
@@ -1213,7 +1213,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p><strong>Integration test run</strong> (<code>deploy.yml:706-713</code>): like the unit tier, the test command is wrapped in
           <code>dotnet-coverage collect</code> (emitting the <code>coverage.integration.cobertura.xml</code> artifact at
           <code>deploy.yml:715-723</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">env:</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">env:</span>
   <span class="hljs-attr">ADC_TEST_SQL_BASE:</span> <span class="hljs-string">&quot;Server=localhost,1433;User Id=sa;Password=$<span class="hljs-template-variable">{{ env.MSSQL_SA_PASSWORD }}</span>;TrustServerCertificate=True;Encrypt=False;&quot;</span>
 <span class="hljs-attr">run:</span> <span class="hljs-string">dotnet</span> <span class="hljs-string">test</span> <span class="hljs-string">--solution</span> <span class="hljs-string">MMCA.ADC.Integration.slnf</span> <span class="hljs-string">--no-build</span> <span class="hljs-string">-c</span> <span class="hljs-string">Release</span> <span class="hljs-string">--minimum-expected-tests</span> <span class="hljs-number">1</span></code></pre>
           <p>The <code>ADC_TEST_SQL_BASE</code> connection string is consumed by <code>IntegrationTestBase</code> to provision per-test
@@ -1238,7 +1238,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p>[Rubric §14, Testability &amp; Test Strategy] is served in two tiers here: the floors are the gate, the merged
           report is the visibility.</p>
           <h3 id="job-cost-guard-a-scheduled-check-promoted-to-a-deploy-gate">Job: <code>cost-guard</code>, a scheduled check promoted to a deploy gate</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:776-779</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:776-779</span>
 <span class="hljs-attr">cost-guard:</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;pull_request&#x27;</span>
   <span class="hljs-attr">uses:</span> <span class="hljs-string">./.github/workflows/cost-guard.yml</span>
@@ -1253,7 +1253,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <p>[Rubric §31, Cost Efficiency / FinOps] is served in the strongest available form: an un-reverted surge
           does not merely raise an alert, it stops the next deploy until someone reverts it.</p>
           <h3 id="job-e2e-gate-one-chromium-leg-against-the-full-aspire-stack">Job: <code>e2e-gate</code>, one chromium leg against the full Aspire stack</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:788-803</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:788-803</span>
 <span class="hljs-attr">e2e-gate:</span>
   <span class="hljs-attr">needs:</span> <span class="hljs-string">changes</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;pull_request&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">needs.changes.outputs.ui</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span>
@@ -1420,7 +1420,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           the event pipeline still works end to end, now across both the RabbitMQ round-trip and the Service Bus
           emulator that mirrors the production transport.</p>
           <h3 id="job-foundation-phase-1">Job: <code>foundation</code>, Phase 1</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:1120-1135</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:1120-1135</span>
 <span class="hljs-attr">foundation:</span>
   <span class="hljs-attr">needs:</span> <span class="hljs-string">changes</span>
   <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;pull_request&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">needs.changes.outputs.code</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span>
@@ -1492,7 +1492,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           succeed). Re-importing the identical digest is a registry-side manifest copy: <code>:latest</code> keeps pointing at
           the same image and only its timestamp moves. The build-and-push branch already pushes <code>:latest</code> on every
           build, so both branches keep the tag alive.</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-string">az</span> <span class="hljs-string">acr</span> <span class="hljs-string">import</span> <span class="hljs-string">\</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-string">az</span> <span class="hljs-string">acr</span> <span class="hljs-string">import</span> <span class="hljs-string">\</span>
   <span class="hljs-string">--name</span> <span class="hljs-string">${{</span> <span class="hljs-string">needs.foundation.outputs.acrName</span> <span class="hljs-string">}}</span> <span class="hljs-string">\</span>
   <span class="hljs-string">--source</span> <span class="hljs-string">${{</span> <span class="hljs-string">needs.foundation.outputs.acrLoginServer</span> <span class="hljs-string">}}/${{</span> <span class="hljs-string">matrix.image</span> <span class="hljs-string">}}:latest</span> <span class="hljs-string">\</span>
   <span class="hljs-string">--image</span> <span class="hljs-string">${{</span> <span class="hljs-string">matrix.image</span> <span class="hljs-string">}}:${{</span> <span class="hljs-string">github.sha</span> <span class="hljs-string">}}</span> <span class="hljs-string">\</span>
@@ -1510,7 +1510,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           therefore leaves an unreferenced image in ACR, which the scheduled purge task in <code>foundation.bicep</code>
           reaps. Building speculatively is only safe when publishing and <em>referencing</em> are separate acts.</p>
           <p><strong>The token is a BuildKit secret, not a build arg</strong> (<code>deploy.yml:1238-1239</code>, comment <code>:1164-1167</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">secrets:</span> <span class="hljs-string">|</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">secrets:</span> <span class="hljs-string">|</span>
   <span class="hljs-string">github_token=${{</span> <span class="hljs-string">secrets.GITHUB_TOKEN</span> <span class="hljs-string">}}</span></code></pre>
           <p><code>--build-arg</code> bakes a value into the image layer where <code>docker history</code> can read it back; a BuildKit
           secret is mounted only for the <code>RUN</code> steps that need it (restore and publish) and never enters a layer.
@@ -1534,7 +1534,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <h3 id="job-deploy">Job: <code>deploy</code></h3>
           <p>Runs only on push to <code>main</code> or <code>workflow_dispatch</code>, never on pull requests, and only when every gate
           above has reported. Its <code>needs</code> list is the pipeline in one line (<code>deploy.yml:1305</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">needs:</span> [<span class="hljs-string">changes</span>, <span class="hljs-string">supply-chain</span>, <span class="hljs-string">cost-guard</span>, <span class="hljs-string">dr-freshness</span>, <span class="hljs-string">load-freshness</span>,
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">needs:</span> [<span class="hljs-string">changes</span>, <span class="hljs-string">supply-chain</span>, <span class="hljs-string">cost-guard</span>, <span class="hljs-string">dr-freshness</span>, <span class="hljs-string">load-freshness</span>,
         <span class="hljs-string">cross-service-freshness</span>, <span class="hljs-string">cross-browser-freshness</span>, <span class="hljs-string">e2e-gate</span>, <span class="hljs-string">backend-test-gate</span>,
         <span class="hljs-string">ai-eval-gate</span>, <span class="hljs-string">foundation</span>, <span class="hljs-string">build-images</span>]</code></pre>
           <p>Note what is <em>not</em> there: <code>build-and-test</code>, <code>integration-tests</code> and <code>coverage</code>. Those are the required PR
@@ -1568,7 +1568,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           six SHA-tagged image references read from <code>needs.foundation.outputs.acrLoginServer</code>. Optional parameters
           (OAuth credentials, the AI provider key (<code>AI_API_KEY</code>, fed to the Bicep <code>aiApiKey</code> parameter), SMTP config, the synthetic-traffic key, managed-identity SQL
           settings) are conditionally appended only if their env vars are non-empty:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># deploy.yml:1462-1465</span>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># deploy.yml:1462-1465</span>
 <span class="hljs-keyword">if</span> [ -n <span class="hljs-string">&quot;<span class="hljs-variable">$OAUTH_GITHUB_CLIENT_ID</span>&quot;</span> ]; <span class="hljs-keyword">then</span>
   jq --arg k <span class="hljs-string">&quot;<span class="hljs-variable">$OAUTH_GITHUB_CLIENT_ID</span>&quot;</span> <span class="hljs-string">&#x27;.parameters.githubOAuthClientId = {&quot;value&quot;: $k}&#x27;</span> ...
 <span class="hljs-keyword">fi</span></code></pre>
@@ -1607,7 +1607,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           defaults to <code>westus2</code> but honors the <code>AZURE_SQL_LOCATION</code> repo variable (passed in as
           <code>SQL_LOCATION_OVERRIDE</code> at <code>deploy.yml:1370</code>) so a different subscription or region can override it.</p>
           <p><strong>Phase 3 (continued), Application infrastructure</strong> (<code>deploy.yml:1580-1586</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Deploy</span> <span class="hljs-string">application</span> <span class="hljs-string">infrastructure</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Deploy</span> <span class="hljs-string">application</span> <span class="hljs-string">infrastructure</span>
   <span class="hljs-attr">id:</span> <span class="hljs-string">deploy</span>
   <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/arm-deploy@v2</span>
   <span class="hljs-attr">with:</span>
@@ -1641,7 +1641,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <code>healthState</code> <code>Healthy</code>, <code>runningState</code> <code>Running</code> or <code>RunningAtMaxScale</code>, and <code>trafficWeight</code> 100. The
           predicate is factored into its own helper so the rollback below can reuse it (<code>deploy.yml:1660-1664</code>),
           and the poll is thirty attempts at twenty seconds, ten minutes per app (<code>deploy.yml:1666-1687</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># deploy.yml:1651-1657</span>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># deploy.yml:1651-1657</span>
 <span class="hljs-function"><span class="hljs-title">revision_status</span></span>() {
   <span class="hljs-built_in">local</span> app=<span class="hljs-string">&quot;<span class="hljs-variable">$1</span>&quot;</span> json
   json=$(az containerapp revision list -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> \
@@ -1666,7 +1666,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           <em>something is serving</em>, not <em>your new code is serving</em>, and only the control plane can tell you which.</p>
           <p><strong>5b, the reachability probes</strong> (<code>deploy.yml:1699-1710</code>) are the older half, six endpoints covering every
           deployable:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/health&quot;</span>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/health&quot;</span>
 probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/.well-known/jwks.json&quot;</span>
 probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/Events&quot;</span>
 probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/Bookmarks&quot;</span> 401
@@ -1692,7 +1692,7 @@ probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${UI_F
           predicate and skips it when it is already healthy, running and taking 100% of the traffic. Without that
           check, one failed probe would take five healthy apps down with it.</p>
           <p><strong>Guard 2 is in the query that picks the target revision</strong> (<code>deploy.yml:1740-1751</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">prev=$(az containerapp revision list -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> \
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">prev=$(az containerapp revision list -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> \
   --query <span class="hljs-string">&quot;reverse(sort_by([?properties.provisioningState==&#x27;Provisioned&#x27; &amp;&amp; properties.healthState==&#x27;Healthy&#x27; &amp;&amp; properties.active==\`true\`], &amp;properties.createdTime))[?name!=&#x27;<span class="hljs-variable">${newest}</span>&#x27;] | [0].name&quot;</span> ...)
 az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> --from-revision <span class="hljs-string">&quot;<span class="hljs-variable">$prev</span>&quot;</span> -o none</code></pre>
           <p>Three filters, each correcting a way the choice could go wrong. The original query took index <code>[1]</code> of
@@ -1721,7 +1721,7 @@ az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hl
           endpoint printed, and the rollback log names each app and its rollback revision.</p>
           <p><strong>Post-deploy, reclaiming BuildKit cache storage</strong> (<code>deploy.yml:1773-1791</code>):</p>
           <p>The last step in the job is housekeeping, not a gate:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">az acr run \
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">az acr run \
   --registry <span class="hljs-variable">${{ needs.foundation.outputs.acrName }</span>} \
   --cmd <span class="hljs-string">&quot;acr purge --filter &#x27;buildcache:.*&#x27; --ago 1h --keep 10 --untagged&quot;</span> \
   /dev/null</code></pre>
@@ -1747,7 +1747,7 @@ az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hl
           <p>[Rubric §28, Front-End Testing &amp; Quality] (assesses whether browser-level tests cover real user
           journeys in a production-like environment) is the primary category this workflow serves.</p>
           <h3 id="triggers-three-entry-points-including-the-deploy-gate">Triggers, three entry points including the deploy gate</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># e2e.yml:27-50</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># e2e.yml:27-50</span>
 <span class="hljs-attr">on:</span>
   <span class="hljs-attr">workflow_dispatch:</span>
   <span class="hljs-attr">workflow_call:</span>
@@ -1765,7 +1765,7 @@ az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hl
           reproduce anything. <strong><code>schedule</code></strong> runs one engine per night, alternating.</p>
           <p>The alternating schedule is worth reading closely, because the mechanism is not obvious
           (<code>e2e.yml:138-141</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">browser:</span> <span class="hljs-string">${{</span> <span class="hljs-string">fromJson(inputs.browsers</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">browser:</span> <span class="hljs-string">${{</span> <span class="hljs-string">fromJson(inputs.browsers</span>
   <span class="hljs-string">||</span> <span class="hljs-string">(github.event.schedule</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;0 7 * * 1&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">&#x27;[&quot;firefox&quot;]&#x27;</span><span class="hljs-string">)</span>
   <span class="hljs-string">||</span> <span class="hljs-string">(github.event.schedule</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;0 7 * * 4&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">&#x27;[&quot;webkit&quot;]&#x27;</span><span class="hljs-string">)</span>
   <span class="hljs-string">||</span> <span class="hljs-string">&#x27;[&quot;chromium&quot;, &quot;firefox&quot;, &quot;webkit&quot;]&#x27;</span><span class="hljs-string">)</span> <span class="hljs-string">}}</span></code></pre>
@@ -1782,7 +1782,7 @@ az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hl
           leg through <code>e2e-gate</code>, so a scheduled chromium leg would re-test an already-tested tree. What the nightly
           uniquely buys is the <em>other two</em> engines.</p>
           <p><code>continue-on-error</code> encodes the same split (<code>e2e.yml:147</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">continue-on-error:</span> <span class="hljs-string">${{</span> <span class="hljs-string">github.event_name</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;schedule&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">matrix.browser</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;chromium&#x27;</span> <span class="hljs-string">}}</span></code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">continue-on-error:</span> <span class="hljs-string">${{</span> <span class="hljs-string">github.event_name</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;schedule&#x27;</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">matrix.browser</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;chromium&#x27;</span> <span class="hljs-string">}}</span></code></pre>
           <p>Note the <code>event_name</code> clause. On the <strong>scheduled</strong> nightly, non-chromium legs stay advisory so a one-off
           engine flake alerts without blocking anything. In the <strong>deploy gate</strong> (where <code>event_name</code> is the caller&#39;s
           push or dispatch) every invoked engine can fail the gate, promoted 2026-07-16 after eight consecutive
@@ -1813,13 +1813,13 @@ az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hl
           night finish and report real numbers. The matrix is <code>fail-fast: false</code> (<code>e2e.yml:126</code>) so one engine&#39;s
           flake does not cancel the others.</p>
           <p><strong>Step 1, Trust the dev HTTPS certificate</strong> (<code>e2e.yml:160-161</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet dev-certs https --trust || dotnet dev-certs https</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet dev-certs https --trust || dotnet dev-certs https</code></pre>
           <p>The <code>--trust</code> flag only succeeds on a runner that supports certificate trust stores (Linux runners may
           not). The <code>|| dotnet dev-certs https</code> fallback generates the certificate without trusting it. Playwright
           probes use <code>-k</code> (skip verification) for the HTTPS UI endpoint, so the certificate does not need to be
           trusted for the test suite, the certificate only needs to exist so the Aspire AppHost can bind to HTTPS.</p>
           <p><strong>Step 2, Build</strong> (<code>e2e.yml:163-171</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build Source/Hosting/MMCA.ADC.AppHost -c Release
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet build Source/Hosting/MMCA.ADC.AppHost -c Release
 dotnet build Tests/E2E/MMCA.ADC.E2E.Tests -c Release</code></pre>
           <p>Both project graphs are built directly (not via the <code>.slnx</code>) to avoid pulling in the MAUI UI project,
           which requires a <code>maui-android</code> workload not available on standard Ubuntu runners (<code>e2e.yml:164-166</code>
@@ -1833,7 +1833,7 @@ dotnet build Tests/E2E/MMCA.ADC.E2E.Tests -c Release</code></pre>
           each leg installs only its own. On a cache hit the step runs <code>install-deps</code> rather than <code>install --with-deps</code> (<code>e2e.yml:187-193</code>): the OS-level shared libraries live outside the cached directory, so a
           restored cache still needs the cheap half.</p>
           <p><strong>Step 4, Start the Aspire stack</strong> (<code>e2e.yml:195-225</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out artifacts/jwt-priv.pem
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out artifacts/jwt-priv.pem
 openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem -out artifacts/jwt-pub.pem
 <span class="hljs-built_in">export</span> E2E_JWT_PRIVATE_KEY_PEM=<span class="hljs-string">&quot;<span class="hljs-subst">$(cat artifacts/jwt-priv.pem)</span>&quot;</span>
 <span class="hljs-built_in">export</span> E2E_JWT_PUBLIC_KEY_PEM=<span class="hljs-string">&quot;<span class="hljs-subst">$(cat artifacts/jwt-pub.pem)</span>&quot;</span>
@@ -1862,7 +1862,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           <p>[Rubric §11, Security] is served: the ephemeral keypair is generated fresh per run (no long-lived key
           material in secrets), and the private key file is deleted before any subsequent step runs.</p>
           <p><strong>Step 5, Wait for the stack (per-service readiness gate)</strong> (<code>e2e.yml:227-250</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-function"><span class="hljs-title">ready</span></span>() {
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-function"><span class="hljs-title">ready</span></span>() {
   ui=$(curl -k -s -o /dev/null -w <span class="hljs-string">&#x27;%{http_code}&#x27;</span> --max-time 10 <span class="hljs-string">&quot;<span class="hljs-variable">$UI_URL</span>/health&quot;</span>)
   <span class="hljs-built_in">id</span>=$(curl -k -s -o /dev/null -w <span class="hljs-string">&#x27;%{http_code}&#x27;</span> --max-time 10 <span class="hljs-string">&quot;<span class="hljs-variable">$GATEWAY_URL</span>/.well-known/jwks.json&quot;</span>)
   conf=$(curl -k -s -o /dev/null -w <span class="hljs-string">&#x27;%{http_code}&#x27;</span> --max-time 20 <span class="hljs-string">&quot;<span class="hljs-variable">$GATEWAY_URL</span>/Events&quot;</span>)
@@ -1887,7 +1887,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           UI host&#39;s <code>/</code>, <code>/login</code>, <code>/register</code>. It closes by capturing a verbose Gateway-to-Conference probe into
           <code>artifacts/conference-probe.txt</code> for cross-referencing against the service logs (<code>e2e.yml:287-293</code>).</p>
           <p><strong>Step 7, Run E2E tests</strong> (<code>e2e.yml:296-332</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">env:</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">env:</span>
   <span class="hljs-attr">E2E_BASE_URL:</span> <span class="hljs-string">${{</span> <span class="hljs-string">env.UI_URL</span> <span class="hljs-string">}}</span>
   <span class="hljs-attr">E2E_HEADLESS:</span> <span class="hljs-string">&quot;true&quot;</span>
   <span class="hljs-attr">E2E_BROWSER:</span> <span class="hljs-string">${{</span> <span class="hljs-string">matrix.browser</span> <span class="hljs-string">}}</span>
@@ -1943,7 +1943,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           over-provisioned relative to actual load. The cost-guard exists in part because the cost of a forgotten
           surge is non-trivial: SQL Server Standard S4 costs roughly 60× more per DTU than Basic tier.</p>
           <h3 id="triggers-1">Triggers</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># cost-guard.yml:10-17</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># cost-guard.yml:10-17</span>
 <span class="hljs-attr">on:</span>
   <span class="hljs-attr">schedule:</span>
     <span class="hljs-bullet">-</span> <span class="hljs-attr">cron:</span> <span class="hljs-string">&quot;0 7 * * 1&quot;</span> <span class="hljs-comment"># Mondays 07:00 UTC</span>
@@ -1960,7 +1960,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           without a separate credential. As with <code>deploy.yml</code>&#39;s own jobs, the declaration is required for the token
           subject to match, not merely for an approval gate.</p>
           <p><strong>Step, Check replica caps and SQL tiers</strong> (<code>cost-guard.yml:41-86</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">BASELINE_MAX_REPLICAS: <span class="hljs-string">&quot;2&quot;</span>   <span class="hljs-comment"># cost-guard.yml:25</span>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">BASELINE_MAX_REPLICAS: <span class="hljs-string">&quot;2&quot;</span>   <span class="hljs-comment"># cost-guard.yml:25</span>
 
 <span class="hljs-keyword">for</span> app <span class="hljs-keyword">in</span> $(az containerapp list -g <span class="hljs-string">&quot;<span class="hljs-variable">$rg</span>&quot;</span> --query <span class="hljs-string">&quot;[?starts_with(name, &#x27;adc-&#x27;)].name&quot;</span> -o tsv); <span class="hljs-keyword">do</span>
   max=$(az containerapp show ... --query <span class="hljs-string">&quot;properties.template.scale.maxReplicas&quot;</span> -o tsv)
@@ -2023,7 +2023,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           and Identity endpoints (auth) have different performance profiles and carry real-write risk, they are
           not targeted by this load test.</p>
           <h3 id="triggers-2">Triggers</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># load-test.yml:13-23</span>
+          <pre class="doc-pre" tabindex="0" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># load-test.yml:13-23</span>
 <span class="hljs-attr">on:</span>
   <span class="hljs-attr">workflow_dispatch:</span>
     <span class="hljs-attr">inputs:</span>
@@ -2044,7 +2044,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           <p><strong>Environment: <code>production</code></strong> (<code>load-test.yml:37</code>): OIDC-scoped to the production federated credential
           so the Azure CLI step can discover the Gateway FQDN from the resource group.</p>
           <p><strong>Step, Resolve target URL</strong> (<code>load-test.yml:48-63</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">url=<span class="hljs-string">&quot;<span class="hljs-variable">${{ inputs.base_url }</span>}&quot;</span>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">url=<span class="hljs-string">&quot;<span class="hljs-variable">${{ inputs.base_url }</span>}&quot;</span>
 <span class="hljs-keyword">if</span> [ -z <span class="hljs-string">&quot;<span class="hljs-variable">$url</span>&quot;</span> ]; <span class="hljs-keyword">then</span>
   fqdn=$(az containerapp list -g <span class="hljs-string">&quot;<span class="hljs-variable">$AZURE_RESOURCE_GROUP</span>&quot;</span> \
     --query <span class="hljs-string">&quot;[?contains(name, &#x27;gateway&#x27;)].properties.configuration.ingress.fqdn | [0]&quot;</span> -o tsv)
@@ -2057,7 +2057,7 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           URL (<code>load-test.yml:59</code>). An explicit <code>base_url</code> input allows targeting a non-production environment
           (e.g. a staging slot) without modifying the workflow.</p>
           <p><strong>Step, Run k6</strong> (<code>load-test.yml:65-85</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">docker run --<span class="hljs-built_in">rm</span> -i \
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">docker run --<span class="hljs-built_in">rm</span> -i \
   -e BASE_URL=<span class="hljs-string">&quot;<span class="hljs-variable">$BASE_URL</span>&quot;</span> \
   -e PEAK_VUS=<span class="hljs-string">&quot;<span class="hljs-variable">$PEAK_VUS</span>&quot;</span> \
   -e SYNTHETIC_TRAFFIC_KEY=<span class="hljs-string">&quot;<span class="hljs-variable">$SYNTHETIC_TRAFFIC_KEY</span>&quot;</span> \

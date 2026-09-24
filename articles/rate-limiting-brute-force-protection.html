@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Defending the API edge: three controls that cover the whole surface · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Two layers that cover the whole API edge: endpoint rate limits plus lockout-based brute-force defense on identity.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/rate-limiting-brute-force-protection.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Defending the API edge: three controls that cover the whole surface">
+  <meta property="og:description" content="Two layers that cover the whole API edge: endpoint rate limits plus lockout-based brute-force defense on identity.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/rate-limiting-brute-force-protection.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-30.png">
+  <meta property="og:image:alt" content="Defending the API edge: three controls that cover the whole surface">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Defending the API edge: three controls that cover the whole surface">
+  <meta name="twitter:description" content="Two layers that cover the whole API edge: endpoint rate limits plus lockout-based brute-force defense on identity.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-30.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Defending the API edge: three controls that cover the whole surface","description":"Two layers that cover the whole API edge: endpoint rate limits plus lockout-based brute-force defense on identity.","url":"https://ivanball.github.io/articles/rate-limiting-brute-force-protection.html","mainEntityOfPage":"https://ivanball.github.io/articles/rate-limiting-brute-force-protection.html","image":"https://ivanball.github.io/assets/img/articles/article-30.png","datePublished":"2026-07-30T12:20:41Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":30,"sameAs":"https://medium.com/@ivanball76/defending-the-api-edge-three-controls-that-cover-the-whole-surface-d958ecae1091"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"30 · Rate limiting and brute-force protection","item":"https://ivanball.github.io/articles/rate-limiting-brute-force-protection.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">30 · Rate limiting and brute-force protection</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html" aria-current="page">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 30</p>
+          <h1 id="defending-the-api-edge-three-controls-that-cover-the-whole-surface">Defending the API edge: three controls that cover the whole surface</h1>
+          <p class="article-meta"><time datetime="2026-07-30T12:20:41Z">July 30, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/defending-the-api-edge-three-controls-that-cover-the-whole-surface-d958ecae1091" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-30.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A global &quot;N requests per minute&quot; limiter feels like edge protection until you notice what
+          it cannot do: it cannot key an anonymous login attempt to a principal, because at login time there is no
+          principal yet. So the credential-stuffing bot sails straight through the exemption. Lock the account
+          after five failures and you catch the bot guessing one address; you still miss one password sprayed
+          across a thousand of them. Here are the three complementary controls that close the gap, and why it
+          takes three.</p>
+          <hr>
+          <p>You turn on rate limiting and you feel safer. The middleware ships in ASP.NET Core, you wire a global
+          limiter at &quot;300 requests per minute,&quot; and the abusive-client problem feels handled. A scraper stuck in a
+          loop, a buggy SPA retrying forever, one account hammering an expensive endpoint: all capped.</p>
+          <p>Then you think about how you would actually cap that 300-per-minute. By what key? If you partition by IP,
+          you have a problem the moment a Blazor Server UI fronts your public browsing: every anonymous visitor
+          shares the UI host&#39;s outbound IP, so the IP bucket throttles all of them as if they were a single abuser.
+          If you partition by authenticated principal instead, you have the opposite problem: an anonymous request
+          has no principal to key on. And the single most attractive anonymous target you have, the login and
+          registration endpoints, is exactly where there is no principal yet. A credential-stuffing bot submitting a
+          thousand email/password guesses is, to a per-principal limiter, a thousand unauthenticated requests with
+          nothing to count them by.</p>
+          <p>So the global limiter has to make a choice, and it makes the honest one: it exempts anonymous traffic
+          rather than throttle legitimate shared-origin browsing, with one narrow metered exception for the
+          real-time hub paths. Which means the most-attacked endpoints in the whole application are the ones the
+          limiter deliberately does not cover. That is not a bug in the limiter. It is the boundary of what a
+          per-principal request cap can do, and it is the reason one layer is never enough at the edge.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>&quot;Add rate limiting&quot; is not a decision. The load-bearing questions are <em>who</em> gets limited, <em>by what
+          partition key</em>, and <em>what is exempt</em>. A naive global IP bucket gets all three wrong for this deployment:
+          it throttles cached public reads that should be cheap, it throttles every Blazor Server visitor as one
+          shared-IP abuser, and it treats login brute-force as if it were the same threat as general overload when
+          it is a completely different one with a completely different control.</p>
+          <p>The threats genuinely differ. General overload is an authenticated principal driving too much database
+          work, and the right control is a per-principal request cap. Credential stuffing is an anonymous attacker
+          guessing passwords against a <em>known</em> email, and the right control is account lockout keyed on the
+          submitted identity. Registration spam is an anonymous attacker creating accounts in bulk from an IP, and
+          the right control is a per-IP signup throttle. And password spray is one password tried once each against
+          a thousand different emails, which every per-account counter reads as a single failure and the
+          anonymous-exempt global limiter never sees at all: the right control there is a cap on credential
+          submission per source. One global bucket conflates all of them and serves none of them well.</p>
+          <p>So MMCA.Common does not ship one limiter. It ships three controls, drawn precisely along the lines the
+          first one cannot cross: an authenticated-only global limiter that caps attributable, expensive traffic per
+          principal, a pre-authentication service that keys on the identity being tried rather than on a principal,
+          and a per-IP throttle on the anonymous auth endpoints that catches the spray neither of the other two can
+          count. Together they cover the whole edge.</p>
+          <h2 id="the-mmca-answer-an-authenticated-only-global-limiter-plus-two-controls-for-the-surface-it-exempts">The MMCA answer: an authenticated-only global limiter, plus two controls for the surface it exempts</h2>
+          <h3 id="layer-one-cap-the-traffic-that-is-both-attributable-and-expensive">Layer one: cap the traffic that is both attributable and expensive</h3>
+          <p><code>AddCommonRateLimiting</code> (in <code>MMCA.Common.API</code>,
+          <code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:386</code>) installs a
+          <code>GlobalLimiter</code> (<code>:430-431</code>) that runs on every request. Its partition function,
+          <code>GlobalRateLimitPartition</code> (<code>WebApplicationBuilderExtensions.cs:169-194</code>), makes three decisions in
+          order, and the order is the whole design.</p>
+          <p>First, it exempts infrastructure traffic outright. <code>IsRateLimitBypassed</code>
+          (<code>WebApplicationBuilderExtensions.cs:75-79</code>) returns <code>GetNoLimiter(&quot;__infra&quot;)</code> (<code>:173</code>) for <code>/health</code>
+          (<code>:76</code>), <code>/alive</code> (<code>:77</code>), JWKS and OIDC discovery under <code>/.well-known</code> (<code>:78</code>), and any request that
+          routed to a mapped gRPC method (<code>IsGrpcEndpoint</code>, <code>:79</code>, implemented at <code>:136-155</code>). That last arm is
+          keyed on the routed endpoint&#39;s <code>Grpc.AspNetCore.Server</code> metadata (<code>GrpcServerMetadataNamespace</code>,
+          <code>:128</code>), never on the request&#39;s <code>Content-Type</code>, and the remark above it says why (<code>:62-68</code>,
+          SEC-Common-44): a content type is caller-supplied and unverifiable, so keying on one hands any
+          authenticated account the no-limiter partition for the price of stamping
+          <code>Content-Type: application/grpc</code> on an ordinary request. Endpoint metadata is produced by routing from
+          the server&#39;s own <code>MapGrpcService</code> registrations, so it cannot be forged, and the predicate runs from
+          middleware that sits after <code>UseRouting</code>, so the endpoint is already resolved (<code>:66-68</code>). All of these
+          are legitimately high-frequency: a probe that gets throttled is an outage, and a JWKS fetch the auth
+          middleware depends on must never be capped.</p>
+          <p>Second, it hands anonymous traffic to its own partition, which is a no-limiter for almost all of it. When
+          <code>httpContext.User?.Identity?.IsAuthenticated != true</code> (<code>:176</code>) the request goes to <code>AnonymousPartition</code>
+          (<code>:178</code>, declared at <code>:91-101</code>), which returns <code>GetNoLimiter(&quot;__anonymous&quot;)</code> (<code>:101</code>) for every path but
+          one. That is the deliberate gap: public reads are output-cached and cheap, anonymous Blazor Server
+          browsing shares one IP, and login brute-force has its own controls. None of those should be counted by a
+          per-principal limiter.</p>
+          <p>The exception is a real-time hub. <code>IsAnonymousHubRequest</code> (<code>:111-121</code>) matches the request path against
+          <code>HubPathPrefixes</code> (default <code>[&quot;/hubs&quot;]</code>, <code>RateLimitingSettings.cs:91</code>), and a match is metered per client
+          IP at <code>AnonymousHubPermitLimit</code> (default 60, <code>RateLimitingSettings.cs:99</code>) under Redis scope <code>&quot;hub&quot;</code> with
+          <code>allowDistributed: true</code> (<code>WebApplicationBuilderExtensions.cs:93-100</code>). The reason sits on the setting
+          (<code>RateLimitingSettings.cs:74-90</code>, SEC-ADC-25): the gateway bypasses <code>/hubs</code> at the edge, because ADR-024&#39;s
+          hub authenticates from a query-string token the edge cannot read, which leaves <code>/hubs/*/negotiate</code> as the
+          one anonymous route nothing else counts, where an unauthenticated loop costs full middleware plus
+          auth-reject CPU per request. Authenticated hub traffic is untouched by this: it already takes the per-user
+          partition (<code>RateLimitingSettings.cs:87-89</code>).</p>
+          <p>Third, and only for an authenticated caller, it caps. The partition key is the principal&#39;s identity name,
+          falling back to <code>FindUserIdValue()</code>, the subject claim (<code>:182</code>), then the remote IP, then a literal
+          <code>&quot;authenticated&quot;</code> (<code>WebApplicationBuilderExtensions.cs:181-184</code>). That key goes to
+          <code>CreateLimitedPartition</code> (<code>:186-193</code>, declared at <code>:238-289</code>), which by default builds a fixed one-minute
+          window with a permit limit of <code>GlobalPermitLimit</code>, which defaults to 300 (<code>RateLimitingSettings.cs:40</code>),
+          and a queue limit of zero so overage is rejected rather than buffered
+          (<code>WebApplicationBuilderExtensions.cs:282-288</code>). Rejection is a <code>429 Too Many Requests</code> (<code>:428</code>).</p>
+          <p>The code is short enough to read whole. This is condensed from the real partition function
+          (<code>WebApplicationBuilderExtensions.cs:169-194</code>) plus the anonymous partition it delegates to (<code>:91-101</code>).
+          The factory both of them call has two further branches, a sliding window (<code>:270-280</code>) and a shared Redis
+          counter (<code>:247-268</code>), which are the configuration layer covered further down; neither is on by default:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Illustrative of the real GlobalRateLimitPartition shape (condensed, default settings).</span>
+<span class="hljs-comment">// Order is load-bearing: infra exempt, then the anonymous partition, then cap the principal.</span>
+<span class="hljs-function"><span class="hljs-keyword">internal</span> <span class="hljs-keyword">static</span> RateLimitPartition&lt;<span class="hljs-built_in">string</span>&gt; <span class="hljs-title">GlobalRateLimitPartition</span>(<span class="hljs-params">HttpContext ctx, RateLimitingSettings settings</span>)</span>
+{
+    <span class="hljs-keyword">if</span> (IsRateLimitBypassed(ctx))                          <span class="hljs-comment">// /health, /alive, /.well-known, gRPC endpoints</span>
+        <span class="hljs-keyword">return</span> RateLimitPartition.GetNoLimiter(<span class="hljs-string">&quot;__infra&quot;</span>);
+
+    <span class="hljs-keyword">if</span> (ctx.User?.Identity?.IsAuthenticated != <span class="hljs-literal">true</span>)       <span class="hljs-comment">// the deliberate gap layers two and three fill</span>
+        <span class="hljs-keyword">return</span> AnonymousPartition(ctx, settings);
+
+    <span class="hljs-keyword">var</span> partitionKey = ctx.User.Identity.Name              <span class="hljs-comment">// attributable to a principal</span>
+        ?? ctx.User.FindUserIdValue()                      <span class="hljs-comment">// the subject claim</span>
+        ?? ctx.Connection.RemoteIpAddress?.ToString()
+        ?? <span class="hljs-string">&quot;authenticated&quot;</span>;
+
+    <span class="hljs-keyword">return</span> CreateLimitedPartition(ctx, partitionKey, redisScope: <span class="hljs-string">&quot;global&quot;</span>,
+        permitLimit: settings.GlobalPermitLimit,           <span class="hljs-comment">// default 300</span>
+        queueLimit: <span class="hljs-number">0</span>,                                     <span class="hljs-comment">// reject overage, do not buffer</span>
+        settings, allowDistributed: <span class="hljs-literal">true</span>);
+}
+
+<span class="hljs-comment">// ...and the anonymous partition: no limiter anywhere except a configured hub path.</span>
+<span class="hljs-function"><span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> RateLimitPartition&lt;<span class="hljs-built_in">string</span>&gt; <span class="hljs-title">AnonymousPartition</span>(<span class="hljs-params">HttpContext ctx, RateLimitingSettings settings</span>)</span> =&gt;
+    IsAnonymousHubRequest(ctx, settings)
+        ? CreateLimitedPartition(ctx,
+            partitionKey: ctx.Connection.RemoteIpAddress?.ToString() ?? <span class="hljs-string">&quot;anonymous-hub&quot;</span>,
+            redisScope: <span class="hljs-string">&quot;hub&quot;</span>,
+            permitLimit: settings.AnonymousHubPermitLimit, <span class="hljs-comment">// default 60</span>
+            queueLimit: <span class="hljs-number">0</span>,
+            settings, allowDistributed: <span class="hljs-literal">true</span>)
+        : RateLimitPartition.GetNoLimiter(<span class="hljs-string">&quot;__anonymous&quot;</span>);</code></pre>
+          <p>The same method registers three named policies alongside the global limiter. Two of them, <code>FixedPolicy</code>
+          (<code>WebApplicationBuilderExtensions.cs:436-443</code>) and <code>UserPolicy</code> (<code>:445</code>), are purely opt-in: nothing
+          applies them automatically, and they are there for the endpoint that knows it is special. The third is the
+          per-IP auth throttle registered at <code>:455-457</code>, and unlike the other two the framework attaches it for
+          you. That is layer three.</p>
+          <h3 id="layer-two-a-pre-authentication-guard-keyed-on-the-submitted-identity">Layer two: a pre-authentication guard keyed on the submitted identity</h3>
+          <p>The second layer exists for one reason: the first layer exempts the anonymous surface, and the login and
+          registration endpoints live on it. <code>ILoginProtectionService</code>
+          (<code>Source/Core/MMCA.Common.Application/Auth/ILoginProtectionService.cs:10</code>) is the contract, and
+          <code>LoginProtectionService</code> (<code>Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:19</code>) is
+          the implementation. It is registered unconditionally by <code>AddInfrastructure</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:72</code>) via
+          <code>TryAddScoped&lt;ILoginProtectionService, LoginProtectionService&gt;()</code> (<code>DependencyInjection.cs:168</code>), so every
+          host that wires infrastructure has it. Its state lives entirely in <code>ICacheService</code>, never in a table.</p>
+          <p>It keys on the <em>submitted</em> identity and the client IP, not on a principal, which is exactly what lets it
+          work before authentication.</p>
+          <p><strong>Login lockout, keyed by email.</strong> <code>IncrementFailedAttemptsAsync(email)</code>
+          (<code>LoginProtectionService.cs:64</code>) counts consecutive failures under a <code>login:attempts:{email}</code> cache key
+          (<code>AttemptsKey</code>, <code>:47</code>) inside a window of <code>FailedAttemptWindowMinutes</code> (default 30,
+          <code>LoginProtectionSettings.cs:31</code>). Once the count reaches <code>MaxFailedAttempts</code> (default 5,
+          <code>LoginProtectionSettings.cs:18</code>), it writes a lockout key with exponential backoff:
+          <code>Math.Min(1 &lt;&lt; Math.Min(excessAttempts, 30), _settings.MaxLockoutSeconds)</code>
+          (<code>LoginProtectionService.cs:88</code>), so each extra failure doubles the wait up to the <code>MaxLockoutSeconds</code>
+          cap (default 300, <code>LoginProtectionSettings.cs:24</code>). The inner <code>Math.Min(excessAttempts, 30)</code> clamps the
+          shift exponent: a large <code>excessAttempts</code> would overflow the <code>int</code> shift (C# masks the count to five
+          bits, so <code>1 &lt;&lt; 32</code> wraps back to 1), silently shrinking the lockout, and 30 already exceeds any
+          permitted cap. <code>CheckLockoutAsync(email)</code> (<code>LoginProtectionService.cs:50</code>) returns
+          <code>Result.Failure(Error.Unauthorized(&quot;Auth.TooManyAttempts&quot;, ...))</code> while the lockout key is present
+          (<code>:55-60</code>), and <code>ResetFailedAttemptsAsync(email)</code> (<code>:94</code>) clears both the attempt and lockout keys on a
+          successful login (<code>:96-97</code>).</p>
+          <p>That <code>{email}</code> is the <em>normalized</em> address, not the raw request string, and the difference is the whole
+          control. Both key builders route the submitted value through <code>NormalizeIdentity</code>
+          (<code>LoginProtectionService.cs:34-43</code>), which runs it through the same <code>Email</code> value object the user lookup
+          uses (trim and lowercase, falling back to a plain trim-and-lowercase when the address is malformed), so
+          <code>LockoutKey</code> (<code>:45</code>) and <code>AttemptsKey</code> (<code>:47</code>) build one key per account. Key off raw input instead and
+          <code>User@x.com</code>, <code>user@x.com</code> and a padded variant hit one account but get three independent counters:
+          an attacker defeats the backoff by varying capitalization.</p>
+          <p><strong>Registration throttle, keyed by IP.</strong> <code>CheckRegistrationRateLimitAsync(ip)</code>
+          (<code>LoginProtectionService.cs:101</code>) fails with
+          <code>Error.Unauthorized(&quot;Auth.RegistrationRateLimitExceeded&quot;, ...)</code> (<code>:111-116</code>) once
+          <code>MaxRegistrationsPerIpPerHour</code> (default 10, <code>LoginProtectionSettings.cs:37</code>) signups from one IP land
+          inside <code>RegistrationRateLimitWindowMinutes</code> (default 60, <code>LoginProtectionSettings.cs:43</code>), tracked under a
+          <code>registration:ip:{ip}</code> key (<code>RegistrationKey</code>, <code>LoginProtectionService.cs:136</code>, read at <code>:108</code>).
+          <code>IncrementRegistrationCountAsync(ip)</code> (<code>:120</code>) bumps that counter. A missing or empty IP is a deliberate
+          no-op that fails open (<code>:103-106</code>, <code>:122-125</code>): the check returns <code>Result.Success()</code> rather than blocking
+          a request it cannot attribute.</p>
+          <p>Every check returns <code>Result</code> (ADR-013), so the HTTP edge maps a lockout or a throttle to a uniform <code>401</code>
+          without the endpoint special-casing it. And because the counters live in the same swappable
+          <code>ICacheService</code> substrate, they self-expire by TTL: a lockout is inherently ephemeral, so cache expiry
+          <em>is</em> the reset.</p>
+          <p>Here is the backoff, the one line that does the work. It mirrors the tail of
+          <code>IncrementFailedAttemptsAsync</code> (<code>LoginProtectionService.cs:80-90</code>), with the source comment condensed and
+          the trailing <code>.ConfigureAwait(false)</code> elided:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">if</span> (newCount &gt;= _settings.MaxFailedAttempts)              <span class="hljs-comment">// default 5</span>
+{
+    <span class="hljs-comment">// newCount is a long; clamp before the int shift.</span>
+    <span class="hljs-keyword">var</span> excessAttempts = (<span class="hljs-built_in">int</span>)Math.Min(newCount - _settings.MaxFailedAttempts, <span class="hljs-built_in">int</span>.MaxValue);
+    <span class="hljs-comment">// Clamp the shift exponent to 30: a large excessAttempts would overflow the int shift</span>
+    <span class="hljs-comment">// (C# masks the count to 5 bits, so 1 &lt;&lt; 32 wraps back to 1, shrinking the lockout).</span>
+    <span class="hljs-keyword">var</span> lockoutSeconds = Math.Min(<span class="hljs-number">1</span> &lt;&lt; Math.Min(excessAttempts, <span class="hljs-number">30</span>), _settings.MaxLockoutSeconds); <span class="hljs-comment">// doubles, cap 300s</span>
+    <span class="hljs-comment">// LockoutKey normalizes the email first: one key per account, no principal needed.</span>
+    <span class="hljs-keyword">await</span> cacheService.SetAsync(LockoutKey(email), <span class="hljs-literal">true</span>, TimeSpan.FromSeconds(lockoutSeconds), cancellationToken);
+}</code></pre>
+          <h3 id="layer-three-throttle-anonymous-credential-submission-per-source-by-default">Layer three: throttle anonymous credential submission per source, by default</h3>
+          <p>Two layers still leave one threat standing, and it is the one an attacker reaches for precisely because
+          lockout works. Per-email lockout counts failures against a <em>single</em> account, so it sees five bad guesses
+          at one address. Password spray inverts the shape: one popular password tried once each against a
+          thousand different addresses. Every per-account counter reads one failure, nothing trips, and the global
+          limiter never sees it either, because the attempts are anonymous and the anonymous partition meters only
+          the hub paths.</p>
+          <p><code>RateLimitPolicyAuthIp</code>, the <code>&quot;auth-ip&quot;</code> policy (<code>WebApplicationBuilderExtensions.cs:48</code>, rationale in its
+          XML docs at <code>:41-47</code>), is the control shaped for that: a fixed one-minute window keyed on the client IP,
+          applied to the anonymous credential endpoints only. Its partition selector is <code>AuthIpRateLimitPartition</code>
+          (<code>:311-325</code>), which reads <code>Connection.RemoteIpAddress</code> (<code>:313</code>), the same canonical source the global
+          partition uses and the value <code>UseForwardedHeaders</code> has already resolved from <code>X-Forwarded-For</code> earlier in
+          the shared pipeline (<code>:447-454</code>). An IP it cannot read returns <code>GetNoLimiter(&quot;__unknown-ip&quot;)</code> (<code>:316</code>)
+          rather than collapsing every unattributable request into one shared bucket, which would throttle the
+          in-process test server to a standstill; that is the same fail-open posture the global limiter takes for
+          traffic it cannot attribute. Everything else goes through the same factory with
+          <code>PermitLimit = AuthIpPermitLimit</code> and <code>QueueLimit = 0</code> (<code>:317-324</code>), rejected with the same <code>429</code>. It is
+          registered by the same <code>AddCommonRateLimiting</code> call (<code>:455-457</code>), which takes a fifth parameter for it:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Illustrative of the real AuthIpRateLimitPartition shape (condensed).</span>
+<span class="hljs-comment">// Fail open on an IP it cannot read, rather than pooling every such request into one bucket.</span>
+<span class="hljs-function"><span class="hljs-keyword">internal</span> <span class="hljs-keyword">static</span> RateLimitPartition&lt;<span class="hljs-built_in">string</span>&gt; <span class="hljs-title">AuthIpRateLimitPartition</span>(<span class="hljs-params">HttpContext ctx, RateLimitingSettings settings</span>)</span>
+{
+    <span class="hljs-keyword">var</span> clientIp = ctx.Connection.RemoteIpAddress?.ToString();
+
+    <span class="hljs-keyword">return</span> clientIp <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>
+        ? RateLimitPartition.GetNoLimiter(<span class="hljs-string">&quot;__unknown-ip&quot;</span>)
+        : CreateLimitedPartition(ctx, clientIp, redisScope: <span class="hljs-string">&quot;auth-ip&quot;</span>,
+            permitLimit: settings.AuthIpPermitLimit,       <span class="hljs-comment">// default 30</span>
+            queueLimit: <span class="hljs-number">0</span>,
+            settings, allowDistributed: <span class="hljs-literal">false</span>);            <span class="hljs-comment">// never the shared counter: see below</span>
+}</code></pre>
+          <p>The signature that registers all of this reads
+          <code>AddCommonRateLimiting(int permitLimit = 100, int queueLimit = 2, int perUserPermitLimit = 30, int globalPermitLimit = 300, int authIpPermitLimit = 30)</code>
+          (<code>WebApplicationBuilderExtensions.cs:386</code>), and every host calls exactly that overload. The default of 30
+          rather than a tighter 10 is documented on the parameter itself (<code>:378-385</code>): Blazor Server circuits issue
+          the login call server-side, so every Server-circuit user shares the UI host&#39;s IP and a legitimate login
+          burst has to fit inside the window. At 30 a minute a spray still drops from unlimited to roughly 43,000
+          attempts per day per IP, with per-account lockout intact on top (<code>:382-384</code>). Tightening toward 10 waits
+          on real client IPs being forwarded end to end.</p>
+          <p>The part worth copying is not the policy, though. It is that the framework attaches it for you.
+          <code>AuthControllerBase.LoginAsync</code>
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:72</code>, action at <code>:76</code>) and
+          <code>RegisterAsync</code> (<code>:96</code>, action at <code>:101</code>) both carry
+          <code>[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]</code>, so any consumer
+          inheriting the base gets per-IP protection without opting in. Its sibling
+          <code>PasswordResetAuthControllerBase</code> carries the same attribute on <code>forgot-password</code> (<code>:78</code>) and
+          <code>reset-password</code> (<code>:102</code>), so the framework&#39;s default surface is four anonymous credential actions; ADR-019
+          records both apps extending the same policy to the two email-confirmation actions on their
+          <code>EmailConfirmationController</code>, which the framework bases do not own
+          (<code>Website/docs-src/adr/019-rate-limiting.md:66-69</code>). The base documents why the default is attached rather
+          than opt-in (<code>AuthControllerBase.cs:20-29</code>): a policy that ships in the framework but leaves each app to
+          attach it is a policy an app can silently lack, and an app that simply inherited these actions would
+          have no spray protection at all. A consumer that inherits the base without calling <code>AddCommonRateLimiting</code> fails
+          at startup on an unregistered policy (<code>:37-41</code>), which is the loud failure rather than the silent one.</p>
+          <p><code>RefreshAsync</code> carries no rate-limit attribute at all (attribute block <code>:117-121</code>, action <code>:122</code>), and
+          that is deliberate rather than an oversight (<code>:30-36</code>): refresh is automatic and periodic rather than
+          user-initiated, Blazor Server circuits issue it server-side so every Server-circuit user shares one IP,
+          and refresh tokens are high-entropy, so brute force is not the threat password spraying is. A per-IP
+          window there would throttle ordinary token renewal for everyone behind that host.</p>
+          <h3 id="the-settings-layer-the-same-three-controls-tunable-without-a-recompile">The settings layer: the same three controls, tunable without a recompile</h3>
+          <p>There are three controls, not four: the settings layer is configuration, not another defence. ADR-019
+          (<code>Website/docs-src/adr/019-rate-limiting.md:142-199</code>) records what it buys, the ability to tune the three
+          without a recompile, and one way to make several of them mean the same thing behind a load balancer.</p>
+          <p>The limits live in <code>RateLimitingSettings</code>
+          (<code>Source/Presentation/MMCA.Common.API/RateLimiting/RateLimitingSettings.cs:21</code>), bound from a
+          <code>&quot;RateLimiting&quot;</code> configuration section (<code>:24</code>) with a <code>[Range]</code> on every count.
+          <code>AddCommonRateLimiting</code> has three overloads: the permit-count one quoted above
+          (<code>WebApplicationBuilderExtensions.cs:386</code>), which only builds a settings object and delegates; an
+          <code>IConfiguration</code> one that binds the section and falls back to a default instance when it is absent
+          (<code>:404-412</code>); and the settings one that actually calls <code>AddRateLimiter</code> (<code>:422</code>). Every default matches
+          the framework&#39;s shipped value, so a host that configures nothing behaves exactly as described above.</p>
+          <p>The section also holds the two hub controls layer one uses, <code>HubPathPrefixes</code>
+          (<code>RateLimitingSettings.cs:91</code>) and <code>AnonymousHubPermitLimit</code> (<code>:99</code>), so which anonymous paths are
+          metered, and how hard, is a deployment decision rather than a constant.</p>
+          <p>Two knobs do more than relocate a constant. <code>Algorithm</code> (<code>RateLimitingSettings.cs:53</code>) can select
+          <code>RateLimitAlgorithm.SlidingWindow</code> (<code>RateLimitAlgorithm.cs:22</code>) instead of the default <code>FixedWindow</code>
+          (<code>:15</code>), dividing the same one-minute window into <code>SegmentsPerWindow</code> segments (default 4,
+          <code>RateLimitingSettings.cs:62</code>) so a caller can no longer spend a full minute&#39;s allowance at the end of one
+          window and again at the start of the next. That is a smoothing choice, not a new cap. And <code>Distributed</code>
+          (<code>:72</code>, default <code>false</code>) swaps the in-process counter for <code>RedisFixedWindowRateLimiter</code>
+          (<code>RateLimiting/RedisFixedWindowRateLimiter.cs:37</code>), which counts one key per partition per minute in
+          Redis so N replicas share one allowance instead of holding N of them.</p>
+          <p>Exactly three partitions may take that shared counter: the global limiter
+          (<code>WebApplicationBuilderExtensions.cs:186-193</code>, Redis scope <code>&quot;global&quot;</code> at <code>:189</code>), <code>UserPolicy</code>
+          (<code>UserPolicyRateLimitPartition</code>, <code>:204-218</code>, scope <code>&quot;user&quot;</code> at <code>:213</code>), and the anonymous hub partition
+          (<code>:93-100</code>, scope <code>&quot;hub&quot;</code> at <code>:96</code>). The <code>&quot;auth-ip&quot;</code> policy passes <code>allowDistributed: false</code> (<code>:324</code>), and
+          so does <code>FixedPolicy</code> (<code>:436-443</code>). That is deliberate, and the reason sits on the factory parameter
+          itself (<code>:233-237</code>): the per-IP window is a coarse backstop in front of a control that is already global
+          and stateful, the per-email lockout, so buying a tighter limit with a Redis round trip on the login path is
+          the wrong trade. ADR-019 states the same three-partition scope (<code>019-rate-limiting.md:171-175</code>).</p>
+          <p>The honest framing is that the section reaches almost none of it. ADC&#39;s Notification service is the one
+          host that declares one: <code>&quot;RateLimiting&quot;: { &quot;AnonymousHubPermitLimit&quot;: 600 }</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:53-55</code>), with a nine-line
+          rationale above it (<code>:44-52</code>) that the venue&#39;s NAT puts roughly 67 attendees behind a single address, so a
+          60-per-minute budget goes in seconds when the room reconnects. A declared section only reaches the limiter
+          through the <code>IConfiguration</code> overload, and no host calls it: that service calls the permit-count overload
+          (<code>MMCA.ADC.Notification.Service/Program.cs:141</code>), which builds a <code>RateLimitingSettings</code> from its five
+          integer parameters (<code>WebApplicationBuilderExtensions.cs:386-394</code>) and never reads
+          <code>RateLimitingSettings.SectionName</code>, so the hub limit in force there is the shipped default of 60
+          (<code>RateLimitingSettings.cs:99</code>). Every other host calls the same permit-count overload, and the one value
+          either app passes into it is ADC Identity&#39;s <code>authIpPermitLimit</code>
+          (<code>MMCA.ADC.Identity.Service/Program.cs:161-162</code>). Both apps therefore run the in-memory fixed-window
+          defaults this article describes.</p>
+          <h3 id="where-the-three-controls-meet">Where the three controls meet</h3>
+          <p>This is the connective tissue, and it is worth stating plainly. The global limiter protects authenticated
+          <em>throughput</em> per principal and exempts anonymous traffic outside the hub paths. The <code>&quot;auth-ip&quot;</code> policy
+          covers that exempted surface at the HTTP edge, keyed per <em>source</em>, and catches the one-guess-per-account
+          spray that no per-account counter can see. The login-protection service covers the same surface one level
+          in, keyed per <em>submitted identity</em> for lockout and per <em>IP</em> for signup, and catches the
+          many-guesses-at-one-account run the per-source window would not reach on its own. Anonymous read abuse,
+          meanwhile, is absorbed by output caching rather than any of the three. Four mechanisms, one edge, no
+          overlap: each one is keyed on something the others structurally cannot key on.</p>
+          <p>Both real apps adopt the second layer through one shared base rather than wiring it per app. The
+          check-before, increment-on-failure, reset-on-success sequence around login and the registration check
+          around sign-up lives in <code>AuthenticationServiceBase&lt;TUser&gt;</code>
+          (<code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs</code>), which calls
+          <code>CheckLockoutAsync</code> (<code>:169</code>), <code>IncrementFailedAttemptsAsync</code> (<code>:189</code>, <code>:196</code>), <code>ResetFailedAttemptsAsync</code>
+          (<code>:240</code>), <code>CheckRegistrationRateLimitAsync</code> (<code>:267</code>), and <code>IncrementRegistrationCountAsync</code> (<code>:326</code>). The
+          ADC and Store <code>AuthenticationService</code> are sealed subclasses that take <code>ILoginProtectionService</code> as a
+          constructor parameter (ADC <code>AuthenticationService.cs:50</code>, Store <code>:26</code>) and forward it to the base
+          constructor (ADC <code>:60</code>, Store <code>:35</code>); ADC&#39;s subclass additionally injects <code>IExternalLoginEmailVerifier</code>
+          (<code>:51</code>) for its external OAuth flow. The login and registration workflow, and every protection call in it,
+          lives once in the base. One framework call site sits outside it: <code>ResetPasswordHandlerBase</code> takes
+          <code>ILoginProtectionService</code> as a constructor dependency
+          (<code>Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:47</code>) and
+          calls <code>ResetFailedAttemptsAsync(request.Email)</code> once the new credential is persisted (<code>:110</code>), so a user
+          who resets the password because of a lockout is not left locked out by it, which ADR-029 records at
+          <code>Website/docs-src/adr/029-authentication-brute-force-protection.md:95-98</code>. Settings bind from the
+          <code>&quot;LoginProtection&quot;</code> configuration section (<code>LoginProtectionSettings.cs:12</code>).</p>
+          <p>They adopt the third the same way, and the redundancy in that is deliberate. ADC&#39;s Identity service
+          re-declares the attribute on both actions it overrides
+          (<code>MMCA.ADC.Identity.API/Controllers/AuthController.cs:54</code> on register and <code>:108</code> on login, the overrides
+          at <code>:58</code> and <code>:112</code>) and tunes the window from configuration
+          (<code>MMCA.ADC.Identity.Service/Program.cs:161-162</code>, after deleting its own local copy of the policy because a
+          duplicate policy name throws at startup, <code>:153-160</code>). Store&#39;s Identity service takes the framework default
+          (<code>MMCA.Store.Identity.Service/Program.cs:136</code>) and its <code>RegisterAsync</code> override re-declares the attribute
+          too (<code>MMCA.Store.Identity.API/Controllers/AuthController.cs:50</code>, the override at <code>:54</code>), with a doc
+          comment saying exactly what that line is for (<code>:41-46</code>): the attribute is inherited by an override, so
+          re-applying it is convention parity with ADC plus a regression pin, not a live hole being closed.</p>
+          <p>That an override keeps the policy anyway is asserted rather than taken on faith about framework
+          internals. <code>AuthControllerBaseRateLimitTests</code> pins both halves of it directly.
+          <code>EnableRateLimitingAttribute_IsDeclaredInherited</code>
+          (<code>MMCA.Common.API.Tests/Controllers/Auth/AuthControllerBaseRateLimitTests.cs:51-55</code>) reads
+          <code>AttributeUsage.Inherited</code> off the attribute type by reflection and requires it to be <code>true</code>, because
+          ADR-019 cites attribute inheritance as the reason a derived override keeps the per-IP policy.
+          <code>DerivedOverride_WithoutTheAttribute_StillCarriesTheAuthIpPolicy</code> (<code>:61-79</code>) then builds a derived
+          controller that overrides <code>RegisterAsync</code> without the attribute and asserts the policy still resolves
+          through <code>GetCustomAttributes(inherit: true)</code>. The test&#39;s own comment is careful about what that buys
+          (<code>:57-60</code>): it pins the mechanism, it does not bless a bare override. Applying the attribute on every
+          override stays the convention precisely because a dropped security attribute is invisible.</p>
+          <h3 id="the-ui-origin-needs-a-different-ceiling-and-it-lives-in-the-apps">The UI origin needs a different ceiling, and it lives in the apps</h3>
+          <p>Every control above bounds an arrival rate at an API host. The server-rendered Blazor UI host is the case
+          none of them reaches: it is a separate externally reachable origin on its own Container Apps FQDN, so the
+          gateway&#39;s edge limiter guards the gateway&#39;s own hostname and never sees a single request to the front door
+          a browser actually loads (ADR-124, <code>Website/docs-src/adr/124-blazor-circuit-ceiling-ui-edge.md:9-15</code>).</p>
+          <p>A page load there is also not a cheap request. Under the Interactive Auto render strategy the first render
+          is always a Server circuit, so every page load opens one, and each open circuit holds live render state
+          for as long as the connection lives, inside a container of 0.25 vCPU and 0.5 GiB
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:13-19</code>,
+          <code>BlazorCircuitLimitSettings.cs:27-28</code>). The framework knob that looks like the answer is not one:
+          <code>CircuitOptions</code> exposes <code>DisconnectedCircuitMaxRetained</code> and <code>DisconnectedCircuitRetentionPeriod</code>, and
+          both bound only circuits that have already dropped their connection and are being held for reconnect
+          (<code>BlazorCircuitLimitSettings.cs:13-15</code>). A rate limiter does not close it from the other direction either:
+          it bounds how fast requests arrive, while a caller who opens circuits slowly enough to stay inside the
+          window still accumulates them (<code>BlazorCircuitLimitSettings.cs:10-13</code>).</p>
+          <p>So the ceiling is on concurrency, and it is held by a <code>CircuitHandler</code>. <code>BoundedCircuitHandler</code>
+          (<code>MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:37-39</code>) counts opens and closes and refuses anything
+          past <code>MaxActiveCircuits</code>, default 200 per replica (<code>BlazorCircuitLimitSettings.cs:40</code>, derived from that
+          container&#39;s memory and vCPU at <code>:27-35</code>). It is registered as a singleton so one count spans the replica:
+          circuit handlers are resolved from each circuit&#39;s own scope, so a scoped registration would count to one
+          and cap nothing (<code>BoundedCircuitHandler.cs:30-33</code>). It runs last among the registered handlers,
+          <code>Order =&gt; int.MaxValue</code> (<code>:46-50</code>), so a refusal lands after cheaper handlers have done their work. The
+          count is race-safe by construction in both directions: the open path increments first and rolls back on
+          refusal (<code>:57-62</code>), because reading and then incrementing would let two simultaneous opens both take the
+          last free slot, and the close path floors at zero rather than trusting the pairing (<code>:74-83</code>), because a
+          close without a counted open would drive the count negative and hand out permits forever.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The real open path (MMCA.ADC.UI.Web/Hardening/BoundedCircuitHandler.cs:53-71), logging elided.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> Task <span class="hljs-title">OnCircuitOpenedAsync</span>(<span class="hljs-params">Circuit circuit, CancellationToken cancellationToken</span>)</span>
+{
+    <span class="hljs-keyword">var</span> ceiling = settings.Value.MaxActiveCircuits;
+
+    <span class="hljs-comment">// Increment first and roll back on refusal: reading then incrementing would let two</span>
+    <span class="hljs-comment">// simultaneous opens both observe the last free slot and both take it.</span>
+    <span class="hljs-keyword">var</span> active = Interlocked.Increment(<span class="hljs-keyword">ref</span> _activeCircuits);
+    <span class="hljs-keyword">if</span> (active &gt; ceiling)
+    {
+        Interlocked.Decrement(<span class="hljs-keyword">ref</span> _activeCircuits);
+
+        <span class="hljs-keyword">return</span> Task.FromException(<span class="hljs-keyword">new</span> InvalidOperationException(<span class="hljs-comment">/* ...the ceiling, to the user... */</span>));
+    }
+
+    <span class="hljs-keyword">return</span> Task.CompletedTask;
+}</code></pre>
+          <p>The refusal is a thrown exception, and the type says in place that this is the one spot where the <code>Result</code>
+          pattern does not apply (<code>:22-27</code>): <code>CircuitHandler.OnCircuitOpenedAsync</code> returns <code>Task</code> and has no
+          &quot;refuse&quot; return value, so a faulted task is the only way to stop a circuit from starting, and the contract
+          belongs to the framework. Refusal is observable rather than silent, one Warning per refusal naming the
+          ceiling (<code>:88-91</code>).</p>
+          <p>Say the ownership plainly: this one is app code, not a framework package. <code>BoundedCircuitHandler</code> and
+          <code>BlazorCircuitLimitSettings</code> sit in each UI host&#39;s own <code>Hardening/</code> folder, identical in MMCA.ADC and
+          MMCA.Store (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Hardening/BoundedCircuitHandler.cs:37-39</code>,
+          <code>BlazorCircuitLimitSettings.cs:39</code>), and ADR-124 records it as a decision about those two hosts
+          (<code>124-blazor-circuit-ceiling-ui-edge.md:37-51</code>). A limiter and a ceiling bound different resources, so
+          having the rate limiter in a shared package does not mean the concurrency bound belongs there too.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>None of the three is a complete edge defence on its own, and the §11 review is explicit about the
+          boundaries.</p>
+          <ul>
+          <li><strong>Per-principal keying needs an authenticated identity, full stop.</strong> The global limiter can only key
+          what it can attribute, so the anonymous surface <em>must</em> be covered separately. That is not a workaround;
+          it is precisely why the other two controls exist. An uncached anonymous endpoint added later would have
+          no global cap and would need its own control or a named policy.</li>
+          <li><strong>The limiter&#39;s placement is load-bearing.</strong> Per-user partitioning depends on the authenticated
+          principal already being populated when the limiter runs
+          (<code>WebApplicationBuilderExtensions.cs:176,181</code>). Move the limiter relative to authentication in the
+          pipeline and the partition sees a different or empty principal. The gRPC exemption has the same
+          property in the other direction: it reads the routed endpoint, so it depends on running after
+          <code>UseRouting</code> (<code>:66-68</code>). This is a config-order trap, not a code bug.</li>
+          <li><strong>Attribute-shaped protection fails silently when it goes missing.</strong> The per-IP throttle is applied by
+          an attribute, so dropping it breaks nothing loudly: the endpoint simply stops being throttled and the
+          app keeps serving traffic. A host missing the attribute has no spray protection while every build
+          and analyzer stays green, which is why
+          <code>AuthControllerBaseRateLimitTests</code> asserts the attribute&#39;s presence on the anonymous credential
+          endpoints and its deliberate absence on refresh, directly
+          (<code>MMCA.Common.API.Tests/Controllers/Auth/AuthControllerBaseRateLimitTests.cs:15-21</code> for the reasoning,
+          <code>:24-34</code> and <code>:40-45</code> for the assertions). A security control that is invisible when
+          it is missing needs a test whose only job is to notice.</li>
+          <li><strong>The per-IP auth throttle is coarse, fail-open, and deliberately loose.</strong> Shared NAT, proxies and
+          Blazor Server circuits put many users behind one IP, which is exactly why the default is 30 a minute
+          rather than 10 (<code>WebApplicationBuilderExtensions.cs:378-385</code>), and an IP it cannot read is not limited
+          at all (<code>:316</code>). It covers the four anonymous credential actions the framework bases carry and the two
+          email-confirmation actions each app adds, and deliberately not refresh. It raises the cost of spray
+          from one source by orders of magnitude; it does not stop an attacker rotating across many.</li>
+          <li><strong>Email-keyed lockout is a denial-of-service-on-the-user lever.</strong> An attacker can lock a <em>known</em>
+          account out by deliberately failing its logins. That is why the control is exponential backoff with a
+          short cap (default 300s, <code>LoginProtectionSettings.cs:24</code>) plus a generic <code>401</code>, not a hard permanent
+          block. It bounds the harm to a brief self-healing lockout, an accepted availability-for-security trade.</li>
+          <li><strong>Cache-scoped state weakens under scale-out, and for the limiter the fix is opt-in.</strong> In memory mode
+          the login-protection counters are per-replica and evaporate on restart, so a multi-replica deployment
+          that did not wire a distributed cache does not aggregate an attacker hitting different replicas; the
+          answer there is to wire a distributed cache once scaled out, which both apps do. The global limiter&#39;s
+          in-process counters have the same shape: across N replicas the effective ceiling is roughly N times the
+          configured limit. The framework ships a way out for that one, the shared Redis counter behind
+          <code>Distributed = true</code> for the global, <code>UserPolicy</code> and anonymous-hub partitions
+          (<code>RateLimitingSettings.cs:64-72</code>, <code>WebApplicationBuilderExtensions.cs:93-100</code>), but
+          it defaults to <code>false</code> and neither app sets it, so the ceiling is N times the limit
+          everywhere. ADR-019 calls the trade-off narrowed rather than removed
+          (<code>Website/docs-src/adr/019-rate-limiting.md:195-199</code>), and it stands exactly as written for <code>auth-ip</code>
+          and <code>FixedPolicy</code>, which never take the shared counter.</li>
+          <li><strong>Turning the shared counter on can silently do nothing.</strong> Setting <code>Distributed = true</code> in a host with
+          no <code>IConnectionMultiplexer</code> registered degrades to the in-memory limiter rather than failing startup
+          (<code>WebApplicationBuilderExtensions.cs:247-268</code>, documented at <code>RateLimitingSettings.cs:64-71</code>), and the
+          Redis limiter itself fails open on a Redis fault, granting the lease and warning at most once per
+          window (<code>Website/docs-src/adr/019-rate-limiting.md:184-193</code>). Both are the right posture for a backstop
+          that must never become an outage, and both mean a misconfiguration here looks exactly like success.</li>
+          <li><strong>The counter increment is not atomic, by decision.</strong> <code>IncrementAsync</code> is a read-modify-write on the
+          cache, and the code says why in place (<code>LoginProtectionService.cs:66-74</code>): a Redis <code>INCR</code> writes a
+          plain string key, while <code>IDistributedCache</code> reads entries back as hashes, so an atomic increment issued
+          underneath the cache abstraction leaves a counter the cache itself cannot read. A readable counter is
+          worth more than an atomic one. The accepted cost is that genuinely parallel attempts can overwrite each
+          other&#39;s increments and undercount, so a concurrent burst can stay under <code>MaxFailedAttempts</code>; sequential
+          guessing, which is what a credential-stuffing run against one account looks like, still trips the
+          lockout. The same shape means each write refreshes the TTL, so both windows slide rather than staying
+          anchored to the first attempt (<code>:127-129</code>), which only ever tightens the limit. ADR-029 records the
+          whole trade, including the opt-in <code>HybridCacheService</code> that overrides the member with the same shape
+          (<code>029-authentication-brute-force-protection.md:69-85</code>).</li>
+          <li><strong>The per-IP registration throttle is coarse and fail-open.</strong> Shared NAT or proxy IPs throttle innocents
+          together, per-attacker IP rotation evades it, and a missing IP is a deliberate no-op
+          (<code>LoginProtectionService.cs:103-106</code>). It raises the cost of bulk signup; it does not stop a determined
+          distributed attacker.</li>
+          <li><strong>The defaults are deployment-agnostic.</strong> 300 requests per minute per user is a coarse backstop, not a
+          tuned SLO. A service with heavier legitimate per-user traffic must raise <code>GlobalPermitLimit</code>, a host
+          with real client IPs can tighten <code>AuthIpPermitLimit</code> (ADC binds that one value to configuration), and a
+          stricter endpoint must opt into a named policy. Those knobs have a <code>&quot;RateLimiting&quot;</code> section to live
+          in (<code>RateLimitingSettings.cs:21-99</code>), which makes tuning a deployment concern rather than a recompile,
+          but reaching the section at all takes the <code>IConfiguration</code> overload (<code>WebApplicationBuilderExtensions.cs:404-412</code>),
+          and no host calls it.</li>
+          </ul>
+          <p>None of these argue against the layering. They are the edges of what each control is for: a per-principal
+          cap protects attributable throughput, a per-source window protects anonymous credential submission, a
+          pre-auth service protects the account being guessed, and together they cover what none of them covers
+          alone.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The shape ports to any ASP.NET Core service, with or without this framework:</p>
+          <ol>
+          <li><strong>Pick the partition key before you pick the limit.</strong> &quot;300 a minute&quot; is meaningless until you answer
+          &quot;per what.&quot; Per authenticated principal caps attributable load without punishing shared-origin
+          anonymous browsing; per IP does the opposite. Choose deliberately, because the key determines who you
+          actually protect.</li>
+          <li><strong>Exempt infrastructure traffic explicitly, on something the caller cannot set.</strong> Health and liveness
+          probes, JWKS and OIDC discovery, and inter-service RPC are legitimately high-frequency, and a limiter
+          that throttles a probe causes the outage it was meant to prevent. Key the exemption on the routed
+          endpoint rather than on a request header: a header is caller-supplied, so an exemption keyed on one is
+          an exemption anybody can claim.</li>
+          <li><strong>Do not pretend one limiter covers the anonymous surface.</strong> A per-principal cap structurally cannot
+          key a pre-authentication request. Name that gap and cover it with controls shaped to the threats that
+          live there, rather than stretching the limiter to fit. Where an anonymous route is expensive and
+          nothing upstream counts it, a real-time hub negotiate being the usual case, meter that one per client
+          IP instead of exempting it with the rest.</li>
+          <li><strong>Key brute-force protection on the submitted identity, not the principal.</strong> At login there is no
+          principal. Lockout has to key on the email being tried and the client IP, which is exactly what lets it
+          run before authentication.</li>
+          <li><strong>Count the attempts a per-account counter cannot see.</strong> One password against a thousand addresses
+          reads as one failure per account and trips nothing. A per-source window over the credential endpoints
+          is the control for that, and it belongs on the shared base class so an endpoint
+          has to opt <em>out</em> rather than opt in. Then test that the attribute is still there: a dropped
+          security attribute breaks no behaviour a human would notice.</li>
+          <li><strong>Prefer backoff to a hard block, and TTL to a table.</strong> Exponential backoff frustrates automated
+          guessing while a legitimate user&#39;s brief lockout self-heals, and cache-with-TTL state means a lockout&#39;s
+          natural lifetime is its expiry, not a row you have to clean up.</li>
+          <li><strong>Bound concurrency separately from arrival rate.</strong> A rate limiter caps how fast requests come in; it
+          says nothing about how much state stays resident. Where a request opens something that lives on (a
+          server-rendered circuit, a long-lived connection, a session), cap the number held at once, in the host
+          that holds them.</li>
+          </ol>
+          <p>The takeaway: <strong>a request cap, a per-source credential throttle and a brute-force guard are not three
+          flavors of the same control. The cap protects the authenticated surface it can attribute; the throttle
+          protects the anonymous surface the cap must exempt; the guard protects the individual account neither of
+          them counts. Draw the lines where each key runs out, put the right control on each side, and the whole
+          edge is covered with no single mechanism pretending to do a job it structurally cannot.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why &quot;turn on rate limiting&quot; is not one decision but three (who, by what key, what is
+          exempt), how MMCA.Common&#39;s authenticated-only global limiter (<code>AddCommonRateLimiting</code>) caps attributable
+          per-principal traffic and exempts infrastructure and anonymous traffic outside the real-time hub paths,
+          why that exemption leaves the most-attacked endpoints uncovered, how <code>ILoginProtectionService</code> closes part
+          of that gap with email-keyed exponential-backoff lockout and a per-IP registration throttle that key on
+          the submitted identity rather than a principal, how the <code>&quot;auth-ip&quot;</code> per-source window closes the rest by
+          catching password spray that no per-account counter can see and is attached by default on
+          <code>AuthControllerBase</code> and <code>PasswordResetAuthControllerBase</code> rather than left to each app to remember, what
+          the settings layer adds on top (a bound <code>&quot;RateLimiting&quot;</code> section, the hub-path controls, a selectable
+          sliding window, and an opt-in shared Redis counter for three of the partitions, none of which either app
+          has turned on), why the UI origin gets a concurrency ceiling in app code rather than another limiter, and
+          the honest boundaries in all three: principal-dependence, config order, silently-droppable attributes,
+          shared-IP coarseness, the DoS-on-the-user lever, and cache state under scale-out.</p>
+          <p><strong>Next in the series:</strong> Aspire, the one command that brings up the whole distributed stack locally.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the ADRs behind this pattern, or
+          <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 ADR-019 (rate limiting), ADR-029 (brute-force protection) and ADR-124 (the UI-origin circuit
+          ceiling): <code>Website/docs-src/adr/</code> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Security, Web API, Software Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="resource-ownership-authorization.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">29 · Resource-ownership authorization</span></a>
+          <a class="article-pager-link article-pager-link--next" href="aspire-one-command.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">31 · Aspire: one command</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-an-authenticated-only-global-limiter-plus-two-controls-for-the-surface-it-exempts">The MMCA answer: an authenticated-only global limiter, plus two controls for the surface it exempts</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

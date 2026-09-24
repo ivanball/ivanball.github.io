@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>The self-invalidating cache that lives in the pipeline, not your handlers · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A caching decorator where commands invalidate and queries populate, plus an authenticated output-cache tier at the API edge.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/self-invalidating-cache.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="The self-invalidating cache that lives in the pipeline, not your handlers">
+  <meta property="og:description" content="A caching decorator where commands invalidate and queries populate, plus an authenticated output-cache tier at the API edge.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/self-invalidating-cache.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-19.png">
+  <meta property="og:image:alt" content="The self-invalidating cache that lives in the pipeline, not your handlers">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The self-invalidating cache that lives in the pipeline, not your handlers">
+  <meta name="twitter:description" content="A caching decorator where commands invalidate and queries populate, plus an authenticated output-cache tier at the API edge.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-19.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"The self-invalidating cache that lives in the pipeline, not your handlers","description":"A caching decorator where commands invalidate and queries populate, plus an authenticated output-cache tier at the API edge.","url":"https://ivanball.github.io/articles/self-invalidating-cache.html","mainEntityOfPage":"https://ivanball.github.io/articles/self-invalidating-cache.html","image":"https://ivanball.github.io/assets/img/articles/article-19.png","datePublished":"2026-07-17T12:07:08Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":19,"sameAs":"https://medium.com/@ivanball76/the-self-invalidating-cache-that-lives-in-the-pipeline-not-your-handlers-e11548062d2f"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"19 · The self-invalidating cache","item":"https://ivanball.github.io/articles/self-invalidating-cache.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">19 · The self-invalidating cache</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html" aria-current="page">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 19</p>
+          <h1 id="the-self-invalidating-cache-that-lives-in-the-pipeline-not-your-handlers">The self-invalidating cache that lives in the pipeline, not your handlers</h1>
+          <p class="article-meta"><time datetime="2026-07-17T12:07:08Z">July 17, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/the-self-invalidating-cache-that-lives-in-the-pipeline-not-your-handlers-e11548062d2f" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-19.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A read-through cache is easy. Keeping it correct is the hard part. Here is a cache where a
+          write invalidates the reads it staled automatically, because invalidation lives in the pipeline instead
+          of in every handler.</p>
+          <hr>
+          <p>Adding a cache is the easy 80%. Here is the read path almost everyone writes first:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> cached = <span class="hljs-keyword">await</span> _cache.GetAsync&lt;ProductDto&gt;(key);
+<span class="hljs-keyword">if</span> (cached <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span>) { <span class="hljs-keyword">return</span> cached; }
+<span class="hljs-keyword">var</span> product = <span class="hljs-keyword">await</span> LoadProduct(id);
+<span class="hljs-keyword">await</span> _cache.SetAsync(key, product);
+<span class="hljs-keyword">return</span> product;</code></pre>
+          <p>Reasonable. The hard 20% is the <em>other</em> side: the moment something changes the product, every cached read
+          of it is now a lie. So you start sprinkling <code>RemoveAsync</code> calls into your write handlers. The update
+          handler evicts one key. The bulk-import handler forgets. The price-change command evicts the product but
+          not the paged product list it appears in. Six months later you are debugging &quot;the price updated in the
+          database but the API still shows the old one,&quot; and the cause is a missing eviction in a handler nobody
+          thought to touch.</p>
+          <p>Cache invalidation is famously one of the two hard problems in computer science. It gets <em>harder</em> when you
+          scatter it across every command handler that might stale a read. So MMCA.Common does not put it there. It
+          puts it in the pipeline.</p>
+          <h2 id="why-invalidation-belongs-in-the-pipeline-not-the-handler">Why invalidation belongs in the pipeline, not the handler</h2>
+          <p>A handler&#39;s job is one use case. The fact that succeeding at that use case happens to stale some cached
+          reads is a cross-cutting concern, not part of the use case. Tie the two together and you get the failure
+          mode above: invalidation is correct only in the handlers where someone remembered it.</p>
+          <p>The fix is the same Decorator-pattern move the whole CQRS pipeline is built on (covered in the pipeline
+          deep-dive). The cache logic lives in two decorators that wrap <em>every</em> command and query, and a handler
+          opts into caching by implementing a marker interface, not by calling the cache. The read path caches. The
+          write path invalidates. The handler does neither.</p>
+          <h2 id="the-cache-abstraction">The cache abstraction</h2>
+          <p>The whole subsystem is small and deliberate. The Application layer depends on one port:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title">ICacheService</span>
+{
+    Task&lt;T?&gt; GetAsync&lt;T&gt;(<span class="hljs-built_in">string</span> key, CancellationToken ct);
+    <span class="hljs-function">Task <span class="hljs-title">SetAsync</span>&lt;<span class="hljs-title">T</span>&gt;(<span class="hljs-params"><span class="hljs-built_in">string</span> key, T <span class="hljs-keyword">value</span>, TimeSpan? expiration = <span class="hljs-literal">null</span>, CancellationToken ct = <span class="hljs-literal">default</span></span>)</span>;
+    <span class="hljs-function">Task <span class="hljs-title">RemoveAsync</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> key, CancellationToken ct</span>)</span>;
+    <span class="hljs-function">Task <span class="hljs-title">RemoveByPrefixAsync</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> prefix, CancellationToken ct</span>)</span>;   <span class="hljs-comment">// the load-bearing one</span>
+    <span class="hljs-function"><span class="hljs-title">Task</span>&lt;<span class="hljs-title">long</span>&gt; <span class="hljs-title">IncrementAsync</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> key, TimeSpan expiration, CancellationToken ct</span>)</span>;
+    <span class="hljs-function"><span class="hljs-title">Task</span>&lt;<span class="hljs-title">T</span>&gt; <span class="hljs-title">GetOrCreateAsync</span>&lt;<span class="hljs-title">T</span>&gt;(<span class="hljs-params"><span class="hljs-built_in">string</span> key, Func&lt;CancellationToken, Task&lt;T&gt;&gt; factory,
+                                TimeSpan? expiration = <span class="hljs-literal">null</span>, CancellationToken ct = <span class="hljs-literal">default</span></span>)</span>;
+}</code></pre>
+          <p>Four cache operations, a counter primitive, and one composed read-through helper. <code>RemoveByPrefixAsync</code> is
+          the member that earns its keep. It is what lets a single write evict a whole <em>family</em> of cached reads
+          (every paged and filtered view under one prefix) in one call, without enumerating individual keys. It is
+          also why the backends had to be hand-built rather than pulled off the shelf: <code>IMemoryCache</code> has no key
+          enumeration, and <code>IDistributedCache</code> has no prefix delete. (<code>IncrementAsync</code> was the first late arrival, a
+          default interface member so no existing implementer broke, added as the single entry point for the
+          brute-force and rate-limit counters of ADR-029 instead of a read-then-write pair at each call site. The
+          distributed backend overrides it, but with the same read-modify-write shape rather than a Redis <code>INCR</code>,
+          because the counter lives in the adapter&#39;s own JSON layout: the override buys one call site, not
+          atomicity.)</p>
+          <p><code>GetOrCreateAsync</code> is the second late arrival and the more interesting one, because of who does <em>not</em> use
+          it. It is also a default interface member: get, then take a per-key lock from a process-wide stripe,
+          double-check, run the factory, store the result. That is the read-through shape the query decorator below
+          implements, offered to the callers that are not queries. The decorators still do not route through it, and
+          the interface says so in its own remarks: <code>GetOrCreateAsync</code> caches whatever the factory returns,
+          unconditionally, including a failed <code>Result</code>. The decorator must not, so it keeps its own
+          read/execute/write sequence. A convenience helper that quietly relaxes a correctness rule is worth having
+          only if the code that depends on the rule stays off it.</p>
+          <p><code>ICacheService</code> is defined in the Application layer; the concrete backend is chosen by DI at the
+          composition root. Handlers and decorators never see <code>StackExchange.Redis</code> or
+          <code>Microsoft.Extensions.Caching</code> directly. That is a textbook Clean Architecture port/adapter split: the
+          business code programs against the contract, the transport is a deployment concern.</p>
+          <h2 id="one-contract-three-backends">One contract, three backends</h2>
+          <p><code>AddCaching()</code> picks a backend by probing the container. If a real distributed cache is registered (an
+          <code>IDistributedCache</code> that is not the default <code>MemoryDistributedCache</code>, typically Redis wired by Aspire), it
+          builds a <code>DistributedCacheService</code>. Otherwise it falls back to a <code>MemoryCacheService</code> over the in-process
+          <code>IMemoryCache</code>. No flag, no per-environment branch in application code:</p>
+          <ul>
+          <li><strong><code>MemoryCacheService</code></strong> is the single-instance fast path. Because <code>IMemoryCache</code> cannot enumerate its
+          own keys, it maintains a side <code>ConcurrentDictionary</code> key set so it can satisfy <code>RemoveByPrefixAsync</code>,
+          and keeps that index honest with a post-eviction callback so expired entries prune themselves rather
+          than leaking.</li>
+          <li><strong><code>DistributedCacheService</code></strong> is the out-of-process adapter, serializing values to UTF-8 JSON. When a
+          Redis <code>IConnectionMultiplexer</code> is available, prefix eviction reaches past <code>IDistributedCache</code> to the raw
+          connection and uses server-side <code>SCAN</code> to find and delete matching keys (that scan lives in a shared
+          <code>RedisPrefixScanner</code>, because two backends need it). This is the cache with a Redis
+          backplane the architecture scorecard carries in its §10 row as former Cross-Cutting Concerns evidence,
+          retained for the record now that those facets are scored in §5, §6, §9, §12, §17 and §29, and whose
+          substrate is recorded in ADR-026: a single-host monolith caches in-process for free, and the
+          same code transparently uses a shared Redis once the distributed cache is present, so cached reads stay
+          coherent when a module is scaled out or extracted into its own service.</li>
+          </ul>
+          <p>That auto-swap covers two of the three implementations. The third sits outside the probe, which
+          deliberately never selects it, so a host has to ask for it by name:</p>
+          <ul>
+          <li><strong><code>HybridCacheService</code></strong> puts an in-process L1 in front of the distributed L2, over
+          <code>Microsoft.Extensions.Caching.Hybrid</code>, so a repeat read inside one replica never leaves the process
+          while invalidation still crosses replicas through L2. It is opt-in: a host calls <code>AddCommonHybridCache()</code>
+          and that call replaces whatever <code>ICacheService</code> was registered, in either call order. Its defining
+          constraint is a keyspace rule, not a performance one. <code>HybridCache</code> writes its own payload layout, which
+          is not the UTF-8 JSON the distributed adapter writes, so it writes under a disjoint <code>hc:</code> keyspace: an
+          old-format entry is simply invisible to the new service and vice versa, including while a rolling deploy
+          runs both. That rule generalizes a real production failure this framework already took once, a Redis
+          <code>INCR</code> counter written as a string and read back by a hash-shaped path, which answered <code>WRONGTYPE</code> and
+          surfaced as a 500 on login. Two serialization formats must never share one keyspace, so the second
+          writer gets its own.</li>
+          </ul>
+          <p>Be honest about what &quot;opt-in&quot; means in a deployed system: all seven ADC and Store services call
+          <code>AddCommonHybridCache()</code> inside the same Redis conditional that wires everything else, so the effective
+          Tier-1 substrate in production is the hybrid one, not the distributed adapter, and the memory-or-Redis
+          swap is what a host gets when it does <em>not</em> state a preference. The contract that makes that
+          substitution a one-line change is the point. Nothing in any handler, decorator, or query changes.</p>
+          <p>A short, conservative default TTL keeps the cache erring toward correctness over hit-rate: 30 seconds.
+          The constant sits in one place (<code>CacheOptions.DefaultDuration</code>, a bare <code>TimeSpan</code>) precisely so the
+          hybrid backend, whose entry options are a different type entirely, defaults to the same policy instead of
+          hard-coding the figure a second time, and one binding layer sits above it: <code>CacheSettings.DefaultDuration</code>
+          is bound from the <code>Cache</code> configuration section, defaults to that same constant, and is what both the
+          distributed and the hybrid adapter actually read, so a host can retune the figure without the two
+          disagreeing. A query only earns a longer life when it explicitly declares one.</p>
+          <h2 id="the-read-path-opt-in-by-marker-interface">The read path: opt in by marker interface</h2>
+          <p>A query caches by implementing <code>IQueryCacheable</code> (it supplies the cache key and the retention duration).
+          The <code>CachingQueryDecorator</code> does the read-through:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">GetProductQuery</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> ProductId</span>) : IQueryCacheable</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CacheKey =&gt; <span class="hljs-string">$&quot;Catalog:Products:<span class="hljs-subst">{ProductId}</span>&quot;</span>;
+    <span class="hljs-keyword">public</span> TimeSpan CacheDuration =&gt; TimeSpan.FromMinutes(<span class="hljs-number">5</span>);
+}</code></pre>
+          <p>On a hit, the decorator returns the cached value and the handler never runs, with no lock on that fast
+          path. On a miss it takes a per-key lock from a fixed-width stripe shared process-wide, re-checks the
+          cache, and only then runs the inner handler and stores the result, <strong>but only when the <code>Result</code> is not a
+          failure</strong>, so error states are never cached. That double-check is stampede protection: when a hot key
+          expires under load, one request per process runs the handler and the waiters are served the entry it just
+          wrote. The guarantee is per process, not cluster-wide, and deliberately so: a shared-cache deployment
+          gets at most one execution per instance, which is harmless duplication rather than a distributed lock.
+          The wait on that lock is itself bounded and fail-open: <code>QueryCachePipelineSettings.PopulateLockTimeout</code>
+          (bound from <code>Cache:PopulateLockTimeout</code>, unbounded by default) arms a linked cancellation budget, and a
+          waiter that exhausts it logs at Debug, counts a miss, and runs the query uncached instead of failing,
+          while a genuine cancellation still propagates. Stampede protection is an optimization, so it degrades
+          like one. A query that does not implement the interface is passed straight through, paying nothing.</p>
+          <h2 id="the-write-path-invalidate-on-success-outside-the-transaction">The write path: invalidate on success, outside the transaction</h2>
+          <p>A command invalidates by implementing <code>ICacheInvalidating</code>, which exposes a <code>CachePrefix</code>. The
+          <code>CachingCommandDecorator</code> runs the inner handler first, then evicts:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">UpdateProductCommand</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> ProductId, <span class="hljs-built_in">decimal</span> NewPrice</span>)
+    : ICacheInvalidating, ITransactional</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CachePrefix =&gt; <span class="hljs-string">&quot;Catalog:Products&quot;</span>;
+}</code></pre>
+          <p>The decorator calls <code>RemoveByPrefixAsync(&quot;Catalog:Products&quot;)</code> only when <strong>three conditions</strong> hold: the
+          command implements <code>ICacheInvalidating</code>, its <code>CachePrefix</code> is not blank, <em>and</em> the <code>Result</code> is not a
+          failure. The blank-prefix guard is not a formality: <code>RemoveByPrefixAsync(&quot;&quot;)</code> would evict the entire
+          cache, so an empty or whitespace prefix is the deliberate opt-out for a command that carries a defaulted
+          prefix. Two consequences follow that matter:</p>
+          <ul>
+          <li><strong>Failed commands skip invalidation.</strong> If the write did not persist, there is nothing stale to evict, so
+          the cache is left intact. (This is the same business-failure rule the transactional decorator follows:
+          a failed <code>Result</code> rolls the transaction back, exactly like an exception, and skips invalidation.)</li>
+          <li><strong>Invalidation runs outside the transaction boundary.</strong> Because the caching decorator sits <em>outside</em> the
+          transactional decorator in the pipeline, eviction happens after the inner transaction has committed.
+          Eviction is against committed state, never in-flight state. You can never evict valid cache for a
+          mutation that then rolls back.</li>
+          </ul>
+          <p>That prefix eviction clears every read the mutation could have staled. The price change under
+          <code>&quot;Catalog:Products&quot;</code> drops the single-product read <em>and</em> every paged and filtered product list cached
+          under that prefix, in one operation. The handler that changed the price did not name a single cache key.</p>
+          <p>It evicts twice, though, and the second one is the interesting part. A read that missed the cache
+          <em>before</em> this command committed can still be running its handler against pre-write state and repopulate
+          the entry a moment after the first eviction lands. So the decorator schedules a second, fire-and-forget
+          eviction of the same prefix five seconds later, which removes that repopulated entry. Both evictions are
+          best-effort and deliberately non-cancellable (they run on <code>CancellationToken.None</code>, because the command
+          has already committed and a client that walks away must not strand stale entries), and any failure is
+          logged at warning level and swallowed: a cache outage must never turn a committed command into a failed
+          one. Whatever the two evictions cannot clear still expires on its own TTL.</p>
+          <h2 id="swallowing-a-failure-is-a-discipline-not-a-catch">Swallowing a failure is a discipline, not a <code>catch</code></h2>
+          <p>That swallow is the right call here and a dangerous habit everywhere else, so the framework gives it a
+          name: <code>BestEffort.ExecuteAsync(operation, logger, action, ct)</code>, for a side effect that must never fail
+          its caller. It awaits the action, and turns any non-cancellation failure into exactly one Warning log
+          plus one increment of <code>besteffort.dispatch.failed</code> on a <code>MMCA.Common.BestEffort</code> meter, tagged by the
+          operation name. Three details are what separate it from a bare <code>catch (Exception)</code>:</p>
+          <ul>
+          <li><strong>Cancellation is rethrown, not swallowed.</strong> When the caller&#39;s own token is the reason the action
+          stopped, the <code>OperationCanceledException</code> propagates, so a host shutdown or an abandoned request
+          unwinds promptly instead of being recorded as a spurious failure. A side effect that must outlive the
+          request passes <code>CancellationToken.None</code> itself, exactly as the eviction above does.</li>
+          <li><strong>The failure is counted, not just logged.</strong> A side effect that has quietly stopped working shows up
+          as a metric an operator can alert on, rather than only as a warning in a log nobody reads.</li>
+          <li><strong>The operation name is a metric tag</strong>, so it has to be a short low-cardinality constant. That is a
+          real constraint on the caller, and it is the price of the signal.</li>
+          </ul>
+          <p>Be honest about its reach: it is a helper, not a rule the compiler enforces, and the two caching
+          decorators still hand-roll the same shape against their own logger. The API package does route through
+          it: its tag-eviction extension wraps every <code>EvictByTagAsync</code> in <code>BestEffort.ExecuteAsync</code> under
+          <code>CancellationToken.None</code>, so the posture crosses the package boundary rather than stopping at the
+          Application layer. The cross-service eviction consumer in the edge-tier section below is the one caller
+          that still hand-rolls the swallow, log and count, against its own <code>cache.eviction.failed</code> instrument. The
+          portable part is the shape, not the call site. Log once, count once, never rethrow, except cancellation.</p>
+          <h2 id="the-two-key-transformations-the-pipeline-applies">The two key transformations the pipeline applies</h2>
+          <p>Everything above treats the query&#39;s <code>CacheKey</code> and the command&#39;s <code>CachePrefix</code> as literal strings. At the
+          decorator layer there are two exceptions, and they are the parts of key design the framework refuses to
+          leave to you, because getting either wrong leaks data rather than merely serving it late: tenant scoping
+          and caller scoping. The query decorator composes them in one expression,
+          <code>TenantCacheKey.Scope(tenantContext, UserCacheKey.Scope(cacheable, cacheable.CacheKey))</code>. Take the
+          tenant one first.</p>
+          <p><code>ICacheService</code> is a singleton and cannot observe a scoped tenant, so a key that two tenants both compute
+          would serve one tenant&#39;s rows to the other. That is not a stale-cache bug, it is a data-leak bug. So
+          isolation is applied one layer up, where the key is computed: both decorators take an optional
+          <code>ITenantContext</code> and run the key or prefix through a single helper, <code>TenantCacheKey.Scope</code>, which returns
+          <code>t:{tenantId}:{key}</code> when a tenant is resolved and the untouched key when none is. Three properties fall
+          out of that shape:</p>
+          <ul>
+          <li><strong>It is a prefix, not a suffix</strong>, so prefix eviction keeps working. Evicting <code>t:acme:products</code> removes
+          that tenant&#39;s product entries and nothing else, and no command in one tenant can evict another tenant&#39;s
+          cache.</li>
+          <li><strong>Both decorators call the same helper</strong>, which is what keeps reads and invalidations symmetric. A query
+          cached under <code>t:acme:products</code> is evicted by a command whose prefix became <code>t:acme:products</code> through
+          exactly the same transformation. Scoping one side only would be worse than scoping neither: the write
+          would evict a key nobody wrote.</li>
+          <li><strong>With no tenant resolved, keys are byte-identical to the pre-tenancy framework.</strong> A single-tenant host
+          keeps its keyspace and no cache entry is orphaned by upgrading.</li>
+          </ul>
+          <p>The stampede stripe locks the same scoped key, so one tenant never waits on another tenant&#39;s lock. And the
+          honest limit: this lives in the decorators, so code that resolves <code>ICacheService</code> directly gets no tenant
+          prefix at all. Today&#39;s direct consumers (login counters, OAuth state, idempotency records) are keyed by
+          subject already, so they are safe by the shape of their keys rather than by a rule that would catch the
+          next one. The rest of the tenancy model (resolution middleware, the named query filter, the write
+          interceptor, database-per-tenant routing) is ADR-073&#39;s, and belongs to the multi-tenancy deep-dive.</p>
+          <p>The second transformation answers the parameter that is never on the request: who is asking. A query
+          implementing <code>IUserScopedRequest</code> (a &quot;my orders&quot; or &quot;my profile&quot; read) has its key scoped to the caller
+          by <code>UserCacheKey.Scope</code>, which appends <code>:u:{UserId}</code> unless the query opts out of caller scoping by also
+          implementing <code>ISharedQueryCache</code>. Without it, two users compute one key against one shared cache and the
+          second is served the first&#39;s rows for the whole cache duration. That marker is a <em>suffix</em>, and the
+          asymmetry with the tenant prefix is deliberate: a caller segment inserted ahead of the key would put
+          every user&#39;s entry outside the prefix an invalidating command computes, so nothing would ever be evicted.
+          Appended, the prefix stays intact and one command still clears every caller&#39;s copy. Over-eviction across
+          users is harmless; the leak it closes is not.</p>
+          <p>Two further transformations do happen, but underneath the port rather than in key design. The
+          distributed and hybrid backends prepend a service namespace to every key on get, set, remove <em>and</em> the
+          prefix scan, so two services sharing one Redis instance cannot collide. It is bound from
+          <code>Cache:KeyPrefix</code>, and left unset it is not empty: the framework resolves a per-application default of
+          <code>{application namespace}:</code>, because an empty default would put two applications sharing one Redis into
+          one keyspace for both cache entries and distributed locks, silently. It is applied inside the adapter
+          rather than through <code>RedisCacheOptions.InstanceName</code> precisely so prefix eviction still matches the keys
+          that were actually written. The in-process backend skips it, its keyspace being private by construction.
+          The hybrid backend adds its <code>hc:</code> segment on top, for the serialization-format reason above. Neither
+          transformation changes what your key <em>means</em>: they are keyspace hygiene applied uniformly under the
+          contract, which is why tenant and caller scoping stay the only places the framework decides part of your
+          key for you.</p>
+          <h2 id="what-the-cache-is-and-is-not">What the cache is, and is not</h2>
+          <p>This is a request-result read-through cache for query handlers. It is not a session store and not a
+          write-behind buffer. The cross-source consistency mechanism in this framework is the outbox (ADR-003,
+          ADR-006), not the cache. The short default TTL and the failure-skipping rules are the right defaults for
+          an opt-in cache layered onto a database-per-service system: it errs toward correctness over hit-rate.</p>
+          <p>ADR-026 decides two tiers, and this <code>ICacheService</code> substrate is the first. The second is an HTTP
+          output-cache edge (<code>app.UseOutputCache()</code>, with per-host opt-in policies) that lets a public read
+          endpoint skip the handler entirely. A third sits in the framework as a capability rather than a
+          decision: <code>IUiReadCache</code>, a read-through cache in front of the API client, registered scoped by the UI
+          package so it is one instance per Blazor Server circuit, and keyed on the relative URL to line up with
+          the edge tier&#39;s query-string variance rule. It ships and it is wired, and no consumer app switches it
+          on. The edge tier is host-configured rather than part of the pipeline, but it hides a correctness trap
+          sharp enough to earn the section that follows.</p>
+          <h2 id="the-edge-tier-caching-authenticated-reads-without-leaking-identity">The edge tier: caching authenticated reads without leaking identity</h2>
+          <p>Tier 2 sits in front of the handler instead of inside the pipeline. <code>MMCA.Common.API</code> always calls
+          <code>app.UseOutputCache()</code> but ships no policies: each host opts in. A read-heavy public service (ADC&#39;s
+          Conference service, Store&#39;s Catalog) declares named short-TTL policies on its <code>[AllowAnonymous]</code> GET
+          controllers, so an anonymous agenda or speaker read is served straight from the output cache and never
+          reaches a query handler. Store&#39;s Catalog runs four such policies, all on the 5-minute TTL; ADC&#39;s
+          Conference service runs twelve, ten at 5 minutes and two at 60 seconds where the payload turns over
+          faster. This is also the lever ADR-019 leans on: the global rate limiter partitions by authenticated user
+          and routes anonymous traffic to a <code>NoLimiter</code> partition, so output caching, not a throttle, is what
+          absorbs that load.</p>
+          <p>The sharp mismatch sits in ASP.NET Core&#39;s built-in default output-cache policy, which
+          refuses <em>both</em> cache lookup and cache storage for any request carrying an <code>Authorization</code> header or an
+          authenticated identity. The framework UI attaches a Bearer token to <em>every</em> outgoing API request,
+          including reads of these <code>[AllowAnonymous]</code>, user-independent endpoints. So the default caches the traffic
+          that does not matter (anonymous) and skips the traffic that does (logged-in): on a conference day, when
+          every attendee is signed in, 100% of the agenda, session, and speaker reads bypass the cache and hit a
+          Basic-tier SQL database. The gap is one load evidence cannot see, because the k6 scripts and the startup
+          warmup requests are anonymous, exactly the slice the default policy still caches.</p>
+          <p>You can register a raw <code>IOutputCachePolicy</code> for those endpoints, and here is the sharp edge: a raw policy
+          registration replaces the <em>whole</em> default chain, so you inherit none of the built-in policy&#39;s safeguards
+          and must restate every one by hand. Drop the query-string variance rule, for example, and every variant
+          of a path (search, paging, filters, field projections) collapses onto a single cache entry, so one
+          filter serves another filter&#39;s cached rows. Replacing a framework default is never a one-line swap; it
+          is a promise to re-implement everything the default did.</p>
+          <p>So the framework ships <code>PublicEndpointOutputCachePolicy</code>, an <code>IOutputCachePolicy</code> that mirrors the built-in
+          default except where it deliberately differs: it does not bail out on an <code>Authorization</code> header or an
+          authenticated identity, and it varies the cache key by the resolved tenant (<code>VaryByValues[&quot;t&quot;]</code>, the
+          mirror of the <code>t:{tenantId}</code> prefix the decorators apply), because one path and query mean different rows
+          per tenant and the entry is shared. It re-implements the safeguards it displaced, GET/HEAD only, never
+          store a <code>Set-Cookie</code> response or a non-200, and vary the key by every query-string parameter
+          (<code>CacheVaryByRules.QueryKeys = &quot;*&quot;</code>, the exact rule a hand-rolled policy most easily drops). Hosts register it per named
+          policy via <code>OutputCacheOptions.AddPublicEndpointPolicy(name, expiration, tags)</code> and reference it from
+          <code>[OutputCache(PolicyName = ...)]</code> like any built-in policy.</p>
+          <p>The contract is strict, because the failure mode here is a data leak, not a slow page: apply it <em>only</em> to
+          endpoints that are <code>[AllowAnonymous]</code> <em>and</em> whose response does not vary by caller. A cached response is
+          served verbatim to every later caller, so a user-dependent payload behind this policy is an
+          information-disclosure bug, not a perf tweak. For a payload identical for everyone except a <em>privileged read
+          audience</em> (ADC organizers and content editors see unpublished rows), the <code>AddPublicEndpointPolicy(name, expiration, bypassRoles, tags)</code> overload makes callers in a bypass role skip the cache entirely, so that
+          audience always reads fresh and its elevated responses are never stored. The audience is declared once and
+          shared, never restated per policy: ADC keeps it in a single <code>ConferenceReadAudience.PrivilegedRoles</code> list
+          (<code>Organizer</code>, <code>ContentEditor</code>) that both the host&#39;s bypass array and the API layer&#39;s read-visibility check
+          read, because two lists naming different roles would put a privileged payload into the shared public entries
+          and serve it to everyone. Nor is the bypass a rare exception: eleven of ADC&#39;s twelve public-read policies pass
+          it, and only <code>NowNextCache</code> (a 60-second now/next feed of published-only data) passes none, because its
+          response varies for nobody.</p>
+          <h3 id="crossing-a-service-boundary-with-a-tag-eviction-event">Crossing a service boundary with a tag-eviction event</h3>
+          <p>The edge tier&#39;s other limit is structural rather than sharp. <code>IOutputCacheStore</code> is a per-host store,
+          so a host can evict its own tags and nothing else. In a database-per-service system the write that
+          stales a cached read routinely happens somewhere else, so on its own the only invalidation that crosses
+          a process boundary is the expiry clock. The framework closes that distance with its first concrete
+          integration event, <code>OutputCacheEvictionRequested</code>, whose entire payload is a list of output-cache tags
+          (defaulting to empty, so a malformed or older message degrades to a no-op instead of a cache-wide
+          purge), and the consumer that answers it, <code>OutputCacheEvictionHandler</code>, which drops each tag from <em>this</em>
+          host&#39;s store through <code>EvictByTagAsync</code>. Delivery adds no channel: the owning service raises the event,
+          the outbox persists and publishes it, the broker carries it, the inbox dedups the redelivery. Nothing
+          here is transactional or exactly-once and it does not need to be, because evicting twice is free and
+          evicting late is what a TTL is for.</p>
+          <p>Eviction is per tag and best-effort: one failing tag does not abandon the rest, and a failure is logged
+          and counted on a <code>cache.eviction.failed</code> counter (meter <code>MMCA.Common.OutputCache</code>) rather than
+          rethrown. Rethrowing would hand the message back to the retry policy, re-evict every tag that already
+          succeeded, and eventually dead-letter a message whose worst outcome is an entry that expires on its own
+          TTL anyway. Only <code>OperationCanceledException</code> propagates, so a stopping host is not counted as a cache
+          failure.</p>
+          <p>ADC is the first worked case. Bookmark counts are owned by Engagement and served by Conference. Engagement&#39;s
+          bookmark handler subscribes to the <em>domain</em> event the aggregate raises on create, reactivate and delete
+          alike (the delete path runs on the framework&#39;s generic <code>DeleteEntityCommand</code> and has no handler of its
+          own to hook), and publishes the eviction carrying the tag <code>conference:sessions</code>. Conference registers
+          both halves: the handler in its service collection and the consumer inside its broker configuration. A
+          star lands in about a broker round trip. The 60-second TTL on <code>BookmarkCountsCache</code> is the backstop for
+          a dropped or delayed message, not the mechanism that clears the entry.</p>
+          <p>Store runs the same path from the other kind of caller. Catalog&#39;s <code>CustomerErasedHandler</code> consumes
+          Identity&#39;s <code>CustomerErased</code>, clears the reviewer&#39;s name, title and body while keeping the star rating,
+          then publishes the eviction for its <code>catalog:products</code> tag inside <code>BestEffort.ExecuteAsync</code>. That adopter
+          sits in an Application-layer integration-event handler rather than behind a write endpoint, which is the
+          shape to copy when the mutation that stales a cached read arrives as a message.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>Cache key correctness is the consumer&#39;s responsibility.</strong> The framework gives you read-through caching
+          and prefix invalidation. It cannot know that <code>GetProductQuery</code>&#39;s key and <code>UpdateProductCommand</code>&#39;s prefix
+          refer to the same data. If a query caches under <code>&quot;Catalog:Product&quot;</code> and a command invalidates
+          <code>&quot;Catalog:Products&quot;</code>, the cache silently goes stale and nothing complains. The pipeline guarantees that
+          invalidation <em>runs</em> on success; it does not guarantee that your keys and prefixes line up. That mapping
+          is yours to design and test. The tenant prefix and the caller suffix above are the only exceptions, and
+          they are a good model for the rule: the framework only takes over a piece of key construction when
+          getting it wrong leaks data rather than merely serving it late.</li>
+          <li><strong>Distributed prefix eviction needs a Redis <code>IConnectionMultiplexer</code>, and every deployed service wires
+          one.</strong> <code>RemoveByPrefixAsync</code> can scan-and-delete by prefix only when a multiplexer is in the container.
+          All seven ADC and Store services reach Redis through one framework wrapper, <code>builder.AddRedisCaching()</code>,
+          which registers the distributed cache and the multiplexer together and no-ops when the named connection
+          string is blank, so whenever Redis is configured, prefix-based invalidation runs and cached reads are
+          evicted on write. The hosts call that wrapper rather than Aspire&#39;s integrations directly, because the raw
+          integrations register an untagged Redis health check that gates readiness (ADR-025). The 30-second TTL is
+          the backstop only for the no-Redis case
+          (in-memory mode), where prefix removal self-heals within the window instead. And when a multiplexer is
+          absent, <code>DistributedCacheService</code> does not fail silently: it logs the dead invalidation once
+          (<code>Interlocked</code>-guarded, so a mutating command does not flood the log) so an unwired backplane is
+          observable instead of invisible. Single-key <code>RemoveAsync</code> is unaffected in either mode.</li>
+          <li><strong>A cache outage degrades reads instead of failing them, and the one fail-open on the auth path has a
+          bounded cost.</strong> Every cache call in <code>CachingQueryDecorator</code> is fail-open: a failed read is logged at
+          warning level and treated as a miss, so the query falls through to the inner handler and still answers
+          correctly, just uncached, and it is <em>counted</em> as a miss so an outage shows up in the cache-hit metrics
+          rather than hiding; a failed populate returns the handler&#39;s result uncached. Only
+          <code>OperationCanceledException</code> is excluded from the guard, so a genuinely cancelled request still surfaces
+          exactly as the inner handler would. A Redis outage therefore costs latency and database load, not a 500
+          on every cacheable query. The same posture on the authenticated hot path is where it turns into a real
+          trade-off: <code>SoftDeletedUserMiddleware</code> caches the soft-deleted marker, falls back to the validator query
+          when that cache is unreachable, and proceeds open when the query fails too, rather than locking out every
+          authenticated caller on one blip. The exposure that buys is bounded by access-token lifetime: tokens live
+          15 minutes, and the deletion already revoked the refresh token, so the residual risk is one
+          already-issued token running out its remainder while the cache or database is unhealthy. That bound is
+          what makes the fail-open a deliberate choice rather than an accident of the code path.</li>
+          <li><strong>Per-instance memory caches diverge, and the hybrid backend buys its L1 hit rate with a smaller
+          version of the same problem.</strong> The in-process backend is not shared across instances, so two hosts hold
+          independent copies until each entry&#39;s TTL reconciles them. That is exactly why the distributed adapter
+          exists for scaled-out deployments. The two-level backend narrows the window rather than closing it: an
+          eviction clears L2 and the evicting process&#39;s L1, but every other replica&#39;s L1 copy survives until its
+          local expiration, capped at 30 seconds. That is a deliberate trade, and it is the same order of
+          staleness as the delayed second eviction the write path already performs.</li>
+          <li><strong>The edge tier trades a data-leak risk for its speed.</strong> <code>PublicEndpointOutputCachePolicy</code> serves one
+          cached response verbatim to every later caller, so it is safe only on endpoints that are
+          <code>[AllowAnonymous]</code> and identity-independent. Adopting it is an audit, not a toggle: a permission-gated or
+          per-user endpoint must never move onto it, and the bypass-roles overload covers role-shaped variance
+          only, never per-user variance. The store behind it is the other thing to get right: <code>AddOutputCache</code>
+          defaults to per-replica memory, so under scale-out a tag eviction reaches only the replica that handled
+          the mutation. Both deployed adopters register a Redis-backed output-cache store inside the same Redis
+          conditional that wires the pipeline tier, and ADR-040 makes the shared store the expected posture
+          wherever a service runs more than one replica; the in-memory store is the single-replica case.</li>
+          <li><strong>Cross-service tag eviction is a coherence hint, not a guarantee.</strong> The eviction event is what lets a
+          payload written by a different service be cleared from this one&#39;s edge cache at all, and that reach
+          comes with four honest costs. It is asynchronous and unordered relative to the write, so the stale
+          window is an outbox poll plus broker delivery plus the consumer&#39;s scheduling, and a reader can still
+          observe the old response after the writer committed: keep the TTL as the floor. The tag vocabulary is a
+          shared string contract nothing validates, and the producer&#39;s tag must match the consumer&#39;s policy
+          exactly; a typo evicts nothing and <em>counts</em> nothing, because evicting an unknown tag succeeds, so the
+          likeliest error is the one with no signal. Both registrations are opt-in per host and live in two
+          different packages, and a host that wires one half gets silence rather than a build or startup error.
+          And the two tiers do not meet: one mutation may need a Tier-1 prefix invalidation <em>and</em> a Tier-2 tag
+          eviction, and nothing coordinates them. Before you cache an endpoint, check which process owns every
+          write that can change its response. What the event buys is that &quot;another service&quot; is a wiring exercise
+          rather than a dead end.</li>
+          <li><strong>The cache path is not measured by any benchmark.</strong> Common runs a <code>performance-smoke</code> CI job on every
+          code-changing pull request (CI is deliberately pull-request-only, and a docs-only PR skips the two perf
+          steps) that invokes the BenchmarkDotNet harness with <code>--filter &quot;*&quot; --job Short --exporters json</code>, then a
+          <code>build/perfgate</code> step that verifies the results against a committed <code>perf-baseline.json</code> and fails on an
+          allocation-ceiling or ratio regression, so it is a real latency-regression gate, not just a runs-clean
+          smoke. It is a required merge gate too: its context is in the branch&#39;s required status checks, so a
+          regression it catches blocks the merge. One caveat still keeps it from covering this design: the harness
+          lives outside the <code>.slnx</code>, and its two suites benchmark the specification compiled-cache and composition
+          plus the query filter/sort/shape pipeline, not these cache decorators. The caching design is sound, but
+          its effect on the cache path is still not measured.</li>
+          </ul>
+          <p>None of these are reasons to scatter invalidation back into handlers. They are the reasons to design your
+          keys deliberately and pick the backend that matches your topology.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any stack with a decoratable handler pipeline:</p>
+          <ol>
+          <li>Put the cache behind a <strong>port</strong> the business layer depends on (<code>Get</code>, <code>Set</code>, <code>Remove</code>,
+          <code>RemoveByPrefix</code>), and choose the backend at the composition root.</li>
+          <li>Cache on the <strong>read decorator</strong>, never inside the query handler, and never cache a failure result.</li>
+          <li>Invalidate on the <strong>write decorator</strong>, on success only, and <strong>after</strong> the transaction commits.</li>
+          <li>Invalidate by <strong>prefix</strong>, not by enumerating keys, so one write clears every read it could have staled.</li>
+          <li>Accept that <strong>key correctness is yours</strong>: design the key-and-prefix mapping deliberately and test it.</li>
+          <li>If entries are scoped to anything the cache itself cannot see (a tenant, a caller, a region), apply
+          that scope from <strong>one helper both decorators call</strong>, so reads and invalidations can never disagree,
+          and pick its position by what your invalidation walks: a <strong>prefix</strong> when the scope should partition
+          eviction too, a <strong>suffix</strong> when one eviction must still clear every scoped copy under one prefix.</li>
+          <li>When a cached response is built from data <strong>another process owns</strong>, do not settle for its TTL:
+          broadcast the eviction as an event on the messaging path you already have, keep it per item and
+          best-effort, and keep the TTL as the backstop for the message you drop.</li>
+          </ol>
+          <p>The takeaway: <strong>a read-through cache is a feature; a self-invalidating cache is a discipline. Move the
+          discipline into the pipeline and your handlers stop carrying it, one missing eviction at a time.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why scattering cache invalidation across handlers goes stale by omission, how
+          MMCA.Common&#39;s <code>ICacheService</code> port plus two pipeline decorators cache reads and invalidate writes
+          automatically, how one contract over three backends (memory, Redis, and the opt-in two-level hybrid every
+          deployed service selects) keeps the same code coherent from monolith to scaled-out service, why
+          invalidation runs on success outside the transaction and then runs again five seconds later, which two
+          pieces of key construction the framework takes over for you (the tenant prefix and the caller suffix),
+          why every cache call is fail-open
+          so an outage degrades to uncached reads instead of 500s, what <code>BestEffort.ExecuteAsync</code> makes of that
+          posture for any side effect that must not fail its caller, and how the HTTP edge tier caches authenticated
+          reads of public endpoints without leaking identity (ADR-040) and evicts across a service boundary over
+          an integration event instead of waiting out a TTL.</p>
+          <p><strong>Next in the series:</strong> Problem Details across HTTP and gRPC, the one error-mapping table that turns
+          every Result failure into the same RFC 9457 shape on both transports.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the caching chapter of the onboarding
+          guide, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Caching, Software Architecture, Performance</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="idempotency-attribute.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">18 · Idempotency in one attribute</span></a>
+          <a class="article-pager-link article-pager-link--next" href="problem-details-http-grpc.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">20 · Problem Details across HTTP and gRPC</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-invalidation-belongs-in-the-pipeline-not-the-handler">Why invalidation belongs in the pipeline, not the handler</a></li>
+            <li><a href="#the-cache-abstraction">The cache abstraction</a></li>
+            <li><a href="#one-contract-three-backends">One contract, three backends</a></li>
+            <li><a href="#the-read-path-opt-in-by-marker-interface">The read path: opt in by marker interface</a></li>
+            <li><a href="#the-write-path-invalidate-on-success-outside-the-transaction">The write path: invalidate on success, outside the transaction</a></li>
+            <li><a href="#swallowing-a-failure-is-a-discipline-not-a-catch">Swallowing a failure is a discipline, not a catch</a></li>
+            <li><a href="#the-two-key-transformations-the-pipeline-applies">The two key transformations the pipeline applies</a></li>
+            <li><a href="#what-the-cache-is-and-is-not">What the cache is, and is not</a></li>
+            <li><a href="#the-edge-tier-caching-authenticated-reads-without-leaking-identity">The edge tier: caching authenticated reads without leaking identity</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

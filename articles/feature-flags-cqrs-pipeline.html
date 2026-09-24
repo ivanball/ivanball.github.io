@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Feature Flags in the CQRS Pipeline: Gate Commands, Not Code · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Gate commands and queries at the outermost decorator, so a handler never checks a flag and a disabled feature is rejected before any work runs.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/feature-flags-cqrs-pipeline.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Feature Flags in the CQRS Pipeline: Gate Commands, Not Code">
+  <meta property="og:description" content="Gate commands and queries at the outermost decorator, so a handler never checks a flag and a disabled feature is rejected before any work runs.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/feature-flags-cqrs-pipeline.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-45.png">
+  <meta property="og:image:alt" content="Feature Flags in the CQRS Pipeline: Gate Commands, Not Code">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Feature Flags in the CQRS Pipeline: Gate Commands, Not Code">
+  <meta name="twitter:description" content="Gate commands and queries at the outermost decorator, so a handler never checks a flag and a disabled feature is rejected before any work runs.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-45.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Feature Flags in the CQRS Pipeline: Gate Commands, Not Code","description":"Gate commands and queries at the outermost decorator, so a handler never checks a flag and a disabled feature is rejected before any work runs.","url":"https://ivanball.github.io/articles/feature-flags-cqrs-pipeline.html","mainEntityOfPage":"https://ivanball.github.io/articles/feature-flags-cqrs-pipeline.html","image":"https://ivanball.github.io/assets/img/articles/article-45.png","datePublished":"2026-08-14T12:11:19Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":45,"sameAs":"https://medium.com/@ivanball76/feature-flags-in-the-cqrs-pipeline-gate-commands-not-code-e58b9ea8d098"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"45 · Feature flags in the CQRS pipeline","item":"https://ivanball.github.io/articles/feature-flags-cqrs-pipeline.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">45 · Feature flags in the CQRS pipeline</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html" aria-current="page">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Core patterns · No. 45</p>
+          <h1 id="feature-flags-in-the-cqrs-pipeline-gate-commands-not-code">Feature Flags in the CQRS Pipeline: Gate Commands, Not Code</h1>
+          <p class="article-meta"><time datetime="2026-08-14T12:11:19Z">August 14, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/feature-flags-in-the-cqrs-pipeline-gate-commands-not-code-e58b9ea8d098" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-45.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Decoupling release from deploy means shipping code dark and flipping a switch. Here is how
+          MMCA.Common gates commands and queries with feature flags at the outermost decorator, so a handler never
+          checks a flag itself, and a disabled feature is rejected before any work runs.</p>
+          <hr>
+          <p>Product wants to ship a feature dark: merge it now, turn it on later, and be able to kill it in seconds
+          if it misbehaves in production. The mechanism is a feature flag, and the first instinct is almost always
+          the wrong one.</p>
+          <p>The wrong one looks like this. You inject an <code>IFeatureManager</code> into the handler that does the work, and
+          at the top of the method you write <code>if (!await featureManager.IsEnabledAsync(&quot;X&quot;)) return ...</code>. It works.
+          Then the same feature turns out to be reachable from a second endpoint, so you copy the check there too.
+          Then a third handler needs a different flag, and now every use case in the module opens with a few lines
+          of flag plumbing that has nothing to do with the business logic underneath it. The flag check has become
+          a cross-cutting concern that you are pasting by hand into every place it applies.</p>
+          <p>That is exactly the kind of concern MMCA.Common refuses to let leak into handlers. Logging, caching,
+          validation, and transactions already live in the decorator pipeline, written once and applied to every
+          handler. Feature gating is the same shape of problem, so it gets the same treatment: a decorator at the
+          outermost slot, and a one-property marker interface that a use case implements to opt in.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>A feature flag is a branch in production behavior, and branches that are copy-pasted drift. If the gate
+          lives inside the handler, then whether a feature is on is decided in as many places as the feature is
+          reachable from, and nothing forces those places to agree. Miss one and you have a half-protected feature:
+          disabled on the button the UI shows, still live on the endpoint a script can call.</p>
+          <p>There is also a cost argument. If the flag check is the first line of the handler, then everything the
+          request touches on the way to that handler (a log scope opened, a cache looked at, a validator resolved,
+          a database transaction begun) has already happened by the time you discover the feature is off. A kill
+          switch you flip during an incident should reject the request with as little machinery spun up as
+          possible, not do most of the work and then decline at the last moment.</p>
+          <p>And the deepest reason: a handler that checks its own flag knows about feature management. That is one
+          more ambient dependency in code whose entire job is supposed to be a single use case. The pipeline exists
+          so that the handler can stay ignorant of logging, caching, transactions, and flags alike, and be the same
+          code whether it runs in a monolith or an extracted service.</p>
+          <h2 id="the-mmca-answer-an-outermost-decorator-plus-a-marker-interface">The MMCA answer: an outermost decorator plus a marker interface</h2>
+          <p>The whole mechanism is two small types plus a registration.</p>
+          <p>The opt-in signal is <code>IFeatureGated</code> (<code>UseCases/Markers/IFeatureGated.cs:10</code>), an interface with exactly
+          one member, <code>string FeatureName { get; }</code> (<code>IFeatureGated.cs:16</code>). A command or query implements it to
+          declare &quot;I am gated behind this flag.&quot; The name has to match a key in the <code>&quot;FeatureManagement&quot;</code>
+          configuration section.</p>
+          <p>The enforcement is a pair of decorators, one per handler side. <code>FeatureGateCommandDecorator&lt;TCommand, TResult&gt;</code> (<code>FeatureGateCommandDecorator.cs:20</code>) wraps <code>ICommandHandler</code>, and its query twin
+          <code>FeatureGateQueryDecorator&lt;TQuery, TResult&gt;</code> (<code>FeatureGateQueryDecorator.cs:20</code>) wraps <code>IQueryHandler</code>.
+          Both do the identical three-step thing in <code>HandleAsync</code>:</p>
+          <ol>
+          <li>If the command or query is <code>not IFeatureGated</code>, call the inner handler and return
+          (<code>FeatureGateCommandDecorator.cs:50-51</code>). A use case that does not opt in pays nothing.</li>
+          <li>If it is gated, check <code>featureManager.IsEnabledAsync(featureGated.FeatureName)</code>
+          (<code>FeatureGateCommandDecorator.cs:53</code>). Enabled means delegate to the inner handler as normal.</li>
+          <li>If the flag is off, short-circuit: build and return a failure result carrying
+          <code>Error.NotFoundError(&quot;Feature.Disabled&quot;, ...)</code> (<code>FeatureGateCommandDecorator.cs:56-59</code>), without ever
+          invoking the handler.</li>
+          </ol>
+          <p>Manufacturing that typed failure is the one subtle piece. <code>TResult</code> is unconstrained (it is <code>Result</code> for
+          some handlers and <code>Result&lt;T&gt;</code> for others), so the decorator cannot just <code>new</code> up a failure. It holds a
+          cached delegate, <code>CreateFailure</code>, built once per closed generic type via <code>ResultFailureFactory.Build</code>
+          (<code>FeatureGateCommandDecorator.cs:44-45</code>), which turns an error list into the right <code>TResult</code> failure with no
+          per-call reflection.</p>
+          <p>The last, load-bearing detail is where the decorator sits. In <code>AddApplicationDecorators</code> the feature gate
+          is registered last on both sides (<code>DependencyInjection.cs:143</code> for commands, <code>:151</code> for queries). Because
+          the pipeline applies decorators in reverse registration order (ADR-014), last-registered is outermost, so
+          the feature gate is the first decorator every request meets. A command runs feature gate, authorization,
+          logging, caching, validation, timeout, transaction, handler; a query runs feature gate, authorization,
+          logging, caching, validation, timeout, handler. A disabled feature is rejected with zero downstream work: no
+          permission check, no log scope, no cache touch, no validator, no timeout budget, no <code>BEGIN TRANSACTION</code>.</p>
+          <p>Here is the shape, drawn from the real decorator and two real gated use cases:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The opt-in marker (IFeatureGated.cs)</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title">IFeatureGated</span>
+{
+    <span class="hljs-built_in">string</span> FeatureName { <span class="hljs-keyword">get</span>; }  <span class="hljs-comment">// must match a &quot;FeatureManagement&quot; config key</span>
+}
+
+<span class="hljs-comment">// A real gated command (VerifyPaymentCommand.cs, Store Sales)</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">VerifyPaymentCommand</span>(<span class="hljs-params">OrderIdentifierType OrderId</span>)
+    : ICacheInvalidating, IFeatureGated, IHasTimeout</span>
+{
+    <span class="hljs-keyword">public</span> TimeSpan Timeout =&gt; TimeSpan.FromSeconds(<span class="hljs-number">20</span>);
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CachePrefix =&gt; <span class="hljs-string">$&quot;<span class="hljs-subst">{<span class="hljs-keyword">typeof</span>(Order).FullName}</span>:&quot;</span>;
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> FeatureName =&gt; SalesFeatures.PaymentVerification;  <span class="hljs-comment">// &quot;Sales.PaymentVerification&quot;</span>
+}
+
+<span class="hljs-comment">// The outermost decorator, the whole enforcement (FeatureGateCommandDecorator.cs)</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task&lt;TResult&gt; <span class="hljs-title">HandleAsync</span>(<span class="hljs-params">TCommand command, CancellationToken cancellationToken = <span class="hljs-literal">default</span></span>)</span>
+{
+    <span class="hljs-keyword">if</span> (command <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> IFeatureGated featureGated)
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> inner.HandleAsync(command, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
+
+    <span class="hljs-keyword">if</span> (<span class="hljs-keyword">await</span> featureManager.IsEnabledAsync(featureGated.FeatureName).ConfigureAwait(<span class="hljs-literal">false</span>))
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> inner.HandleAsync(command, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
+
+    <span class="hljs-keyword">var</span> createFailure = CreateFailure();
+    <span class="hljs-keyword">return</span> createFailure([Error.NotFoundError(
+        <span class="hljs-string">&quot;Feature.Disabled&quot;</span>,
+        <span class="hljs-string">$&quot;Feature &#x27;<span class="hljs-subst">{featureGated.FeatureName}</span>&#x27; is not currently available.&quot;</span>)]);
+}</code></pre>
+          <p>(This block is a faithful composite: the interface and the <code>HandleAsync</code> body are verbatim from source,
+          and <code>VerifyPaymentCommand</code> is a real gated command, shown together so the opt-in and the enforcement read
+          in one place. See the Notes ledger for the exact files and lines.)</p>
+          <p>Two things make this more than a toy. First, the provider is real: <code>AddAPI</code> registers
+          <code>services.AddFeatureManagement().WithTargeting&lt;CurrentUserTargetingContextAccessor&gt;()</code> plus the
+          disabled-response handler (<code>MMCA.Common.API/DependencyInjection.cs:104-107</code>), which brings the built-in
+          Percentage, TimeWindow, and Targeting filters with a per-user audience already supplied, so &quot;roll this
+          out to 10 percent&quot; is a config change, not a code change. Second, flag
+          names are module constants, not magic strings scattered through handlers: <code>SalesFeatures.PaymentVerification</code>
+          = <code>&quot;Sales.PaymentVerification&quot;</code> (<code>SalesFeatures.cs:23</code>), <code>ConferenceFeatures.SessionizeIntegration</code> =
+          <code>&quot;Conference.SessionizeIntegration&quot;</code> (<code>ConferenceFeatures.cs:23</code>), <code>NotificationFeatures.PushNotifications</code>
+          = <code>&quot;Notification.PushNotifications&quot;</code> (<code>NotificationFeatures.cs:12</code>). ADC&#39;s <code>RefreshFromSessionizeCommand</code>
+          gates the Sessionize sync this way (<code>RefreshFromSessionizeCommand.cs:13,19</code>); Store&#39;s <code>VerifyPaymentCommand</code>
+          gates the direct Stripe verification path (<code>VerifyPaymentCommand.cs:20,35</code>).</p>
+          <h2 id="the-second-surface-and-why-disabled-means-404">The second surface, and why disabled means 404</h2>
+          <p>A feature can be reachable from the CQRS pipeline, but it can also be reachable straight from an MVC
+          action that never dispatches a command. So the same flag name is enforced at a second, independent
+          surface at the HTTP edge (ADR-031). There you put <code>[FeatureGate(&quot;X&quot;)]</code> (from <code>Microsoft.FeatureManagement.Mvc</code>)
+          on the controller or action; the framework&#39;s own push-device controller carries
+          <code>[FeatureGate(NotificationFeatures.PushNotifications)]</code> on the class
+          (<code>MMCA.Common.API/Controllers/Notifications/DevicesController.cs:24</code>), not app-specific code in ADC.
+          When the flag is off, <code>DisabledFeatureHandler</code>
+          (<code>DisabledFeatureHandler.cs:13</code>) writes an RFC 9457 ProblemDetails response with status
+          <code>404 Not Found</code> and the title <code>&quot;Feature not available&quot;</code> (<code>DisabledFeatureHandler.cs:18-26</code>).</p>
+          <p>Both surfaces agree on one convention that is worth stating plainly: a disabled feature returns
+          not-found, never <code>403 Forbidden</code>. The pipeline decorator short-circuits with <code>ErrorType.NotFound</code>; the
+          edge handler returns <code>404</code>. A disabled feature is therefore indistinguishable from a nonexistent one. That
+          is deliberate: <code>404</code> hides the feature&#39;s existence rather than advertising a capability the caller is not
+          allowed to use. Turning a flag off makes the feature vanish, not merely refuse.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>The two surfaces must be kept in agreement by hand.</strong> Gating the controller but not the command (or
+          the reverse) leaves a half-protected feature reachable through the entry you missed. ADR-031 is explicit
+          that no fitness rule asserts both are wired, so coherence is a convention and an audit concern, not
+          something the build enforces.</li>
+          <li><strong>A missing config key resolves to disabled.</strong> <code>IsEnabledAsync</code> returns false for a name that is not in
+          the <code>&quot;FeatureManagement&quot;</code> section. That is the right default for a kill switch (fail safe), but it also
+          means forgetting to add the key in a given service silently hides a feature you meant to ship. Per
+          service, the flag has to be present.</li>
+          <li><strong>Flag debt is declared on the constant, and the expiry gate is opt-in per repo.</strong> Every flag is a
+          branch that has to be removed once the feature is permanent, so a flag constant carries its own
+          lifecycle: <code>[FeatureFlag]</code> (<code>FeatureFlagAttribute.cs:32</code>) takes a <code>FeatureFlagLifetime</code> (<code>:38</code>,
+          <code>Permanent</code> and <code>Temporary</code> at <code>FeatureFlagLifetime.cs:15,21</code>) plus an optional <code>Owner</code> (<code>:52</code>) and a
+          <code>RemoveBy</code> date written as ISO <code>yyyy-MM-dd</code> (<code>:46</code>), required on a temporary flag and forbidden on a
+          permanent one. <code>FeatureFlagRegistry</code> (<code>FeatureFlagRegistry.cs:35</code>) reads a host&#39;s own inventory off the
+          <code>*Features</code> classes, and two fitness rules turn the date into a build gate:
+          <code>ArchitectureRules.FeatureFlagsDeclareLifetime</code> (<code>ArchitectureRules.FeatureFlags.cs:28</code>) fails on a
+          constant with no attribute, and <code>TemporaryFeatureFlagsAreNotPastRemoveBy</code> (<code>:70</code>) fails the day a
+          temporary flag passes its date, naming the flag, the date and the owner. Both are exposed as facts on
+          <code>FeatureFlagLifecycleTestsBase</code> (<code>:10</code>, the two facts at <code>:20-25</code>). The limits are real: like every
+          fitness base, the gate exists only where a repo subclasses it, so a repo that has not still carries its
+          flag debt uncounted (ADR-031), and a <code>Permanent</code> flag is deliberately outside the expiry check, so the
+          judgement about whether a capability toggle has outlived its branch is still a human one.</li>
+          <li><strong>Rollout bucketing is per user, but only as stable as the claim behind it.</strong> Percentage and
+          Targeting filters evaluate locally, so consistent assignment needs a targeting context, and the
+          framework supplies one: <code>CurrentUserTargetingContextAccessor</code>
+          (<code>CurrentUserTargetingContextAccessor.cs:54-55</code>) implements <code>ITargetingContextAccessor</code> and is wired by
+          <code>AddFeatureManagement().WithTargeting&lt;CurrentUserTargetingContextAccessor&gt;()</code>
+          (<code>MMCA.Common.API/DependencyInjection.cs:105-106</code>), so every host that goes through <code>AddAPI</code> buckets a
+          given user the same way on every replica (ADR-031). The residual caveat is that the stickiness is only
+          as stable as the identifier behind it: the accessor sets <code>UserId</code> from <code>FindUserIdValue()</code>
+          (<code>CurrentUserTargetingContextAccessor.cs:86</code>), which reads the JWT <code>sub</code> claim
+          (<code>AuthClaimTypes.Subject</code>, <code>AuthClaimTypes.cs:34</code>) and falls back to the mapped
+          <code>ClaimTypes.NameIdentifier</code> (<code>ClaimsPrincipalExtensions.cs:26-28</code>) and then to <code>Identity.Name</code>. A filter
+          configured with no targeting audience gains no stickiness from the accessor at all.</li>
+          <li><strong>It is opt-in, and the pipeline side is adopted narrowly.</strong> Exactly two use cases implement
+          <code>IFeatureGated</code> across both apps, both of them commands: ADC&#39;s <code>RefreshFromSessionizeCommand</code>
+          (<code>RefreshFromSessionizeCommand.cs:13</code>) and Store&#39;s <code>VerifyPaymentCommand</code> (<code>VerifyPaymentCommand.cs:20</code>).
+          No query is gated. The flag inventory is wider than the pipeline usage: twelve flag-name constants
+          across six <code>*Features</code> classes (Common&#39;s Notifications and Privacy, ADC&#39;s Conference and Engagement,
+          Store&#39;s Catalog and Sales), every one of them annotated <code>Permanent</code>, with the rest enforced at the HTTP
+          edge by <code>[FeatureGate]</code>. It is a capability the pipeline offers uniformly, not something every handler
+          uses.</li>
+          </ul>
+          <p>None of these are reasons to check flags inside handlers instead. They are the reasons to keep flag names
+          in one constant per module and to treat every flag as something you will later delete.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any pipeline that already wraps its handlers (MediatR behaviors, an interceptor,
+          your own decorator chain):</p>
+          <ol>
+          <li>Make feature gating <strong>a marker interface with one property</strong>, not a base-class method or an attribute
+          the handler reads. The use case declares the flag name; it does not perform the check.</li>
+          <li>Put the gate <strong>at the outermost position</strong> so a disabled feature is rejected before logging, caching,
+          validation, or a transaction. The cheapest request is the one you decline first.</li>
+          <li><strong>Manufacture a typed failure</strong>, do not throw, when the flag is off. In a Result-based codebase that is
+          a not-found value flowing back through the pipeline; the caller translates it to a <code>404</code>.</li>
+          <li><strong>Return not-found, never forbidden</strong>, for a disabled feature, so turning a flag off hides the feature
+          rather than announcing a capability behind a locked door.</li>
+          <li><strong>Name flags as constants next to the module</strong> they belong to, matched to config keys, so a flag flips
+          at config-and-restart and there are no magic strings in handlers.</li>
+          </ol>
+          <p>The takeaway: <strong>a feature flag is a cross-cutting concern, so put it where the other cross-cutting concerns
+          live. Gate the pipeline at its outermost edge with a one-property marker interface, and your handlers stay
+          flag-free, your kill switch rejects with zero wasted work, and a disabled feature simply is not there.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why a flag check inside a handler is a copy-paste cross-cutting concern, how
+          <code>IFeatureGated</code> plus the outermost <code>FeatureGateCommandDecorator</code> / <code>FeatureGateQueryDecorator</code> gate
+          commands and queries with zero handler involvement, how the same flag name is enforced at the HTTP edge by
+          <code>[FeatureGate]</code> and <code>DisabledFeatureHandler</code>, and why a disabled feature returns <code>404</code> rather than <code>403</code>.</p>
+          <p><strong>Previously in the series (Article 44):</strong> HTTP API versioning, proven not just claimed, a header-based
+          setup with a fitness contract that proves two live versions coexist.</p>
+          <p><strong>Next in the series (Article 46):</strong> Field-Level Encryption in EF Core: AES-GCM for PII Columns, encrypting
+          sensitive values at the property boundary so they are ciphertext at rest and plaintext only in the domain.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR behind this
+          pattern (ADR-031), or <code>dotnet add package MMCA.Common.Application</code> and gate your first command.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, CQRS, Feature Flags</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="http-api-versioning.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">44 · HTTP API versioning, proven not just claimed</span></a>
+          <a class="article-pager-link article-pager-link--next" href="field-level-encryption-ef-core.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">46 · Field-level encryption in EF Core</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-an-outermost-decorator-plus-a-marker-interface">The MMCA answer: an outermost decorator plus a marker interface</a></li>
+            <li><a href="#the-second-surface-and-why-disabled-means-404">The second surface, and why disabled means 404</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
