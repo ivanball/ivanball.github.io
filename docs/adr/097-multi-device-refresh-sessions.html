@@ -500,7 +500,7 @@
           logs its count <strong>including zero</strong>, deliberately, because a log that speaks only when it deleted
           something gives an operator no evidence that retention is running at all (<code>:150-151</code>, argued at
           <code>:127-128</code>):</p>
-          <pre class="doc-pre" data-lang="Text"><code class="language-text hljs">Purged {Count} refresh sessions that stopped being usable more than {RetentionDays} days ago</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Text"><code class="language-text hljs">Purged {Count} refresh sessions that stopped being usable more than {RetentionDays} days ago</code></pre>
           <p>Registration is gated on <code>Enabled</code> alone, not on <code>DataSourceName</code>
           (<code>.../MMCA.Common.Infrastructure/DependencyInjection.cs:154-158</code>): registering unconditionally would
           start a sweep in every service of a modular host, all but one of which has no table to sweep

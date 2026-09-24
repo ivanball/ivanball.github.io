@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Self-ordering modules: discovered, Kahn-ordered, and extractable · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Modules declare their dependencies and load in topological order, so registration is never hand-sequenced.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/self-ordering-modules.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Self-ordering modules: discovered, Kahn-ordered, and extractable">
+  <meta property="og:description" content="Modules declare their dependencies and load in topological order, so registration is never hand-sequenced.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/self-ordering-modules.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-14.png">
+  <meta property="og:image:alt" content="Self-ordering modules: discovered, Kahn-ordered, and extractable">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Self-ordering modules: discovered, Kahn-ordered, and extractable">
+  <meta name="twitter:description" content="Modules declare their dependencies and load in topological order, so registration is never hand-sequenced.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-14.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Self-ordering modules: discovered, Kahn-ordered, and extractable","description":"Modules declare their dependencies and load in topological order, so registration is never hand-sequenced.","url":"https://ivanball.github.io/articles/self-ordering-modules.html","mainEntityOfPage":"https://ivanball.github.io/articles/self-ordering-modules.html","image":"https://ivanball.github.io/assets/img/articles/article-14.png","datePublished":"2026-07-12T16:36:58Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":14,"sameAs":"https://medium.com/@ivanball76/self-ordering-modules-discovered-kahn-ordered-and-extractable-2ce7283a26b5"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"14 · Self-ordering modules","item":"https://ivanball.github.io/articles/self-ordering-modules.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">14 · Self-ordering modules</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html" aria-current="page">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Data &amp; persistence · No. 14</p>
+          <h1 id="self-ordering-modules-discovered-kahn-ordered-and-extractable">Self-ordering modules: discovered, Kahn-ordered, and extractable</h1>
+          <p class="article-meta"><time datetime="2026-07-12T16:36:58Z">July 12, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/self-ordering-modules-discovered-kahn-ordered-and-extractable-2ce7283a26b5" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-14.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A module declares its name and its dependencies. The framework discovers every module,
+          sorts them with Kahn&#39;s algorithm, and registers them in an order where a dependency always exists
+          before the code that wraps it. The same code boots as a monolith or as a fleet of services.</p>
+          <hr>
+          <p>Most &quot;modular&quot; .NET codebases have a <code>Program.cs</code> that looks like this:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">services.AddIdentityModule();
+services.AddConferenceModule();   <span class="hljs-comment">// no dependencies</span>
+services.AddEngagementModule();   <span class="hljs-comment">// needs Conference</span>
+services.AddNotificationModule(); <span class="hljs-comment">// needs Identity</span></code></pre>
+          <p>It works until someone reorders two lines, or adds a module that depends on a module registered
+          later, or disables one module in one environment and forgets that three other registrations assumed it
+          was there. The dependency order between modules is real, it matters for correctness, and it is encoded
+          nowhere except the sequence of lines a human typed. That is a fragile place to keep an invariant.</p>
+          <h2 id="why-ordering-is-a-correctness-concern-not-a-style-one">Why ordering is a correctness concern, not a style one</h2>
+          <p>In MMCA.Common the registration order is not cosmetic. The CQRS pipeline wraps command and query
+          handlers with decorators (logging, caching, validation, transactions) using Scrutor&#39;s <code>TryDecorate</code>,
+          which wraps registrations that <strong>already exist</strong> in the container. If a module&#39;s concrete handlers are
+          not registered before the decorators run, there is nothing to wrap and the cross-cutting behavior
+          silently does not apply. So &quot;register A before B&quot; is not a preference. It is the difference between a
+          handler that gets a transaction and one that does not.</p>
+          <p>The honest problem with the hand-ordered list is that it makes a human responsible for a graph
+          property. Humans are bad at topological sorts done in their head, especially as the module count grows
+          and dependencies become transitive. The fix is to let each module declare what it needs and let the
+          framework compute the order.</p>
+          <h2 id="a-module-declares-intent-not-position">A module declares intent, not position</h2>
+          <p>A module in MMCA.Common is an <code>IModule</code>. The contract is deliberately small:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title">IModule</span>
+{
+    <span class="hljs-built_in">string</span> Name { <span class="hljs-keyword">get</span>; }
+    IReadOnlyList&lt;<span class="hljs-built_in">string</span>&gt; Dependencies =&gt; [];     <span class="hljs-comment">// default-implemented</span>
+    <span class="hljs-built_in">bool</span> RequiresDependencies =&gt; <span class="hljs-literal">false</span>;           <span class="hljs-comment">// default-implemented</span>
+    <span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">Register</span>(<span class="hljs-params">IServiceCollection services, IConfigurationBuilder configuration,
+                  ApplicationSettings applicationSettings</span>)</span>;
+    <span class="hljs-function"><span class="hljs-keyword">void</span> <span class="hljs-title">RegisterDisabledStubs</span>(<span class="hljs-params">IServiceCollection services</span>)</span> { } <span class="hljs-comment">// default empty body</span>
+}</code></pre>
+          <p>Three of the five members ship with default implementations, so a minimal module implements only
+          <code>Name</code> and <code>Register</code>. A real one is barely more than a dozen lines: ADC&#39;s <code>ConferenceModule</code> declares
+          its name, forwards <code>Register</code> to an <code>AddConferenceModule(applicationSettings)</code> extension method,
+          declares no dependencies (it is a foundational module the others build on), and (optionally) implements
+          <code>RegisterDisabledStubs</code>. A module that <em>does</em> depend on another, like <code>EngagementModule</code>, simply adds
+          <code>Dependencies =&gt; [&quot;Conference&quot;]</code> with <code>RequiresDependencies =&gt; true</code>. The module never says &quot;register me
+          third.&quot; It says &quot;my name is Engagement and I depend on Conference.&quot; Position is derived, not declared.</p>
+          <h2 id="the-engine-moduleloader-and-kahns-algorithm">The engine: ModuleLoader and Kahn&#39;s algorithm</h2>
+          <p><code>ModuleLoader</code> is the piece that turns those declarations into an order. Its <code>DiscoverAndRegister</code>
+          method scans the assemblies the host names in a required <code>moduleAssemblies</code> parameter, instantiates
+          every concrete <code>IModule</code> (and every <code>IModuleSeeder</code>) it finds there, and then runs <strong>Kahn&#39;s topological
+          sort</strong> over the declared <code>Dependencies</code>. The host names those assemblies explicitly on purpose: an
+          <code>AppDomain</code> scan only sees assemblies that are already loaded, so a module assembly that is referenced
+          but never touched by a code path would be silently absent from discovery.</p>
+          <p>Kahn&#39;s algorithm is breadth-first search over a dependency graph:</p>
+          <ol>
+          <li>Compute each module&#39;s in-degree: the count of dependencies it is still waiting on.</li>
+          <li>Seed a queue with every zero-in-degree module (the ones that depend on nothing).</li>
+          <li>Emit a module from the queue, then decrement the in-degree of each module that depended on it.
+          Any dependent that reaches zero gets enqueued.</li>
+          <li>Repeat until the queue is empty.</li>
+          </ol>
+          <p>The output is an ordering where every module appears after all of its dependencies. Because the loader
+          registers modules in that order, a dependency&#39;s DI registrations always exist before any dependent
+          registers, which is exactly the precondition the decorator pipeline needs.</p>
+          <p>There is a built-in correctness check that the hand-ordered list could never give you: if fewer modules
+          come out of the sort than went in, the leftovers form a <strong>dependency cycle</strong>, and the loader throws with
+          the offending module names. A circular dependency between modules becomes a loud, named startup failure
+          instead of a subtle runtime surprise.</p>
+          <p>The scan is also defensive. Each <code>GetTypes()</code> call sits inside a try/catch (a
+          <code>ReflectionTypeLoadException</code> raised by a missing transitive reference is the case it exists for), so a
+          broken assembly contributes no types and logs why instead of aborting discovery of the rest. And every
+          step emits a structured <code>[LoggerMessage]</code>-generated log line, so the startup log tells you precisely
+          which modules loaded, in what order, and how long each took. When something is wrong, you read it, you
+          do not guess it.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// In each host&#x27;s Program.cs. AddModuleHost binds and validates ApplicationSettings and</span>
+<span class="hljs-comment">// ModulesSettings, builds the ModuleLoader and registers it as a singleton. It deliberately does</span>
+<span class="hljs-comment">// not run discovery itself.</span>
+<span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> loggerFactory = SerilogHostExtensions.CreateBootstrapLoggerFactory();
+<span class="hljs-keyword">var</span> moduleHost = builder.AddModuleHost(
+    [<span class="hljs-meta">typeof(ConferenceModule).Assembly</span>],      <span class="hljs-comment">// the module assemblies, named explicitly</span>
+    loggerFactory.CreateLogger&lt;ModuleLoader&gt;());
+
+<span class="hljs-comment">// Discovery is a step of the application pipeline, so every module handler lands in the container</span>
+<span class="hljs-comment">// before the decorators close over it.</span>
+services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
+    .Register(moduleHost.RegisterModules));</code></pre>
+          <p>A subtlety worth stating because it is easy to assume otherwise: discovery is <strong>not</strong> something
+          <code>AddApplication()</code> does for you, and the host does not call <code>DiscoverAndRegister</code> by hand either.
+          <code>AddModuleHost</code> captures the configuration, the bound settings, the environment name and the module
+          assemblies, and hands back a <code>ModuleHostContext</code> whose <code>RegisterModules</code> method is the delegate that
+          calls <code>DiscoverAndRegister</code> with all six of them. Registering that delegate as a pipeline step is what
+          puts the modules in the right place in the sequence. The loader stays a singleton, which is how it also
+          drives startup seeding through <code>SeedAllAsync</code> (which invokes each enabled module&#39;s
+          <code>IModuleSeeder.SeedAsync</code> once a real <code>IServiceProvider</code> exists, for example to seed a default admin
+          user).</p>
+          <h2 id="disabling-a-module-without-breaking-its-consumers">Disabling a module without breaking its consumers</h2>
+          <p>Here is the part that turns this from a tidy registration trick into an extraction mechanism. A host can
+          disable a module through configuration. <code>ModulesSettings</code> binds the <code>&quot;Modules&quot;</code> config section (it is a
+          <code>Dictionary&lt;string, ModuleSettings&gt;</code>), and <code>ModuleSettings</code> carries a per-module <code>Enabled</code> flag
+          (default <code>true</code>) plus a <code>RemoteDependencies</code> list.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;Modules&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;Conference&quot;</span><span class="hljs-punctuation">:</span>   <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;Engagement&quot;</span><span class="hljs-punctuation">:</span>   <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">false</span></span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;RemoteDependencies&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-punctuation">]</span> <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span></code></pre>
+          <p>When the loader reaches a disabled module it does not skip it. It calls that module&#39;s
+          <code>RegisterDisabledStubs(services)</code> and records the name in <code>DisabledModuleNames</code>. This is the crux. A
+          disabled Engagement module still contributes stub registrations for the cross-module interfaces other
+          modules depend on. So when Conference&#39;s <code>GetSessionBookmarkCountHandler</code> asks the container for
+          Engagement&#39;s <code>IBookmarkCountService</code>, resolution still succeeds, because the disabled module left a
+          <code>Disabled*</code> stub behind.</p>
+          <p>That is a clean strategy plus null-object pairing (real service, disabled stub, or remote client) rather
+          than <code>if (moduleEnabled)</code> checks scattered through the call sites. The handler does not know or care
+          which of the three it got.</p>
+          <p>Dependency validation is microservice-aware to match. A dependency that is disabled in-process but
+          listed in this host&#39;s <code>ModuleSettings.RemoteDependencies</code> is treated as satisfied remotely (the host
+          will wire a typed gRPC client to the extracted peer), and only a module with <code>RequiresDependencies = true</code> and a genuinely unsatisfied dependency throws at startup. The loader also loads per-module
+          configuration by convention: before calling <code>module.Register(...)</code> it adds <code>modules.{name}.json</code> (and
+          the environment-specific variant) to the configuration builder, so a module can ship its own config
+          file.</p>
+          <h2 id="convention-scanning-what-a-modules-register-actually-wires">Convention scanning: what a module&#39;s Register actually wires</h2>
+          <p>Modules do not hand-register every handler. <code>ScanModuleApplicationServices&lt;TAssemblyMarker&gt;()</code> is the
+          Scrutor-based convention scan that a module&#39;s <code>Add{X}Module</code> calls to register, by assembly, every kind
+          of application service a slice ships:</p>
+          <ul>
+          <li><strong>Domain event handlers and integration event handlers</strong> as <strong>singletons</strong>.</li>
+          <li><strong>Command and query handlers</strong> as <strong>scoped</strong> services (one per request).</li>
+          <li><strong>DTO mappers, DTO projectors, and request mappers</strong> as <strong>scoped</strong> services (three separate scans,
+          not one). The projector scan is optional and opt-in: an entity that ships an <code>IEntityDTOProjector</code>
+          gets server-side projection on its list reads, one that does not keeps materialize-then-map.</li>
+          <li><strong>Update appliers</strong> as <strong>scoped</strong> services, in two flavors scanned side by side: the request-shaped
+          <code>IEntityUpdateApplier&lt;,,&gt;</code> and the command-aware <code>IEntityUpdateCommandApplier&lt;,,,&gt;</code> for an update that
+          also depends on state the request body does not carry. They are the write-side twin of the request
+          mappers, so the generic update handler never has to know a field name.</li>
+          <li><strong>FluentValidation validators</strong> discovered from the same assembly, plus an auto-registered validator
+          for any command that embeds a request via <code>ICommandWithRequest&lt;T&gt;</code>.</li>
+          </ul>
+          <p>The full registration sequence the framework documents is a hard contract because of the decorator rule
+          described earlier, and <code>AddMmcaApplicationPipeline</code> is the call that composes it: it runs
+          <code>AddApplication()</code>, then your callback, then <code>AddApplicationDecorators()</code>, and then <strong>seals</strong> the
+          collection.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">services.AddInfrastructure(configuration);    <span class="hljs-comment">// repos, UoW, DbContexts, caching, outbox</span>
+services.AddAPI(moduleHost.ModulesSettings);  <span class="hljs-comment">// controllers, idempotency, error mapping</span>
+
+<span class="hljs-comment">// AddApplication() runs first, inside this call; AddApplicationDecorators() runs last, inside it.</span>
+services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
+    .Register(moduleHost.RegisterModules)     <span class="hljs-comment">// every discovered module, in Kahn order</span>
+    .ScanModule&lt;ModuleBClassRef&gt;());          <span class="hljs-comment">// or a single module named by its marker type</span></code></pre>
+          <p><code>AddApplicationDecorators()</code> is last on purpose. The concrete handlers from every module must already be
+          in the container, or <code>TryDecorate</code> has nothing to wrap. Sealing is what makes that checkable instead of
+          hopeful: a <code>ScanModuleApplicationServices</code> (or <code>AddEntityCrud</code>, or <code>AddEntityUpdate</code>) call that arrives
+          after the decorators throws an <code>InvalidOperationException</code> naming the caller, rather than quietly
+          registering a handler nothing wraps, and <code>VerifyDecoratorPipeline()</code> hands a fitness test the same
+          assertion over a fully composed collection. Registrations that are not handlers, such as infrastructure,
+          API, telemetry and options, sit outside the call because their order relative to the decorators does not
+          matter. The Kahn ordering inside <code>DiscoverAndRegister</code> guarantees the modules themselves go in
+          dependency order; the pipeline guarantees the decorators go on top of all of them.</p>
+          <h2 id="each-module-is-the-unit-of-extraction">Each module is the unit of extraction</h2>
+          <p>The reason all of this is worth the machinery is that the module is also the deploy and scale boundary,
+          and the same self-ordering <code>ModuleLoader</code> registration runs at both ends of it. As a monolith, one host
+          enables every module and cross-module calls are in-process method calls: MMCA.Helpdesk is the framework&#39;s
+          monolith-first reference app, a single <code>Tickets</code> module exercised end to end through all five layers to
+          demonstrate the &quot;build the monolith now, extract a service later&quot; path. As a fleet, each service host
+          runs the same <code>ModuleLoader</code> with only its own module enabled (<code>Modules:{Module}:Enabled=true</code>); the
+          disabled peers contribute their stubs, and the host then replaces a stub with a typed gRPC client pointed
+          at the real, extracted peer process. MMCA.ADC runs this way today: four single-module service hosts
+          (Identity, Conference, Engagement, Notification) behind a YARP gateway, with no combined monolith host at
+          all. The Domain, Application, and Shared code is identical in both topologies. The transport choice lives
+          entirely at the composition edge (ADR-008).</p>
+          <p>That is the payoff of declaring intent instead of position: the same self-ordering registration that
+          makes the monolith correct is what makes the split reversible. Nothing in Helpdesk&#39;s <code>TicketsModule</code> or
+          ADC&#39;s <code>ConferenceModule</code> changes when it moves from one host to its own process.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>Reflection at startup.</strong> Discovery calls <code>GetTypes()</code> on every assembly the host named. This is a
+          startup cost, paid once, and the per-<code>GetTypes()</code> guard means a load-time exception in one assembly is
+          tolerated rather than fatal. Naming the assemblies keeps the bill proportional to the module count
+          instead of to everything the process happens to have loaded, but it is a list the host has to maintain:
+          forget an assembly and its module is simply not there.</li>
+          <li><strong>Implicit order can surprise.</strong> The convenience of &quot;the framework figures out the order&quot; is also a
+          cost: the order is not visible as a list of lines. The structured startup log is the mitigation, but a
+          developer used to reading the order off <code>Program.cs</code> has to learn to read it off the log instead.</li>
+          <li><strong>Stubs must be maintained.</strong> <code>RegisterDisabledStubs</code> is a real obligation. Add a cross-module
+          interface and forget to register a stub for it, and a host that disables that module fails to resolve.
+          This is caught at startup rather than in production, but it is a discipline the contract assumes.</li>
+          <li><strong>Cycles are rejected, not resolved.</strong> A dependency cycle is a hard startup failure by design. That is
+          the correct behavior, but it means you cannot lean on lazy resolution to paper over a genuine circular
+          design between modules.</li>
+          </ul>
+          <p>None of these are reasons to keep the hand-ordered list. They are the cost of moving the invariant from
+          a human&#39;s memory into the framework.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports cleanly to any DI container:</p>
+          <ol>
+          <li>Give each module a <strong>name and a declared dependency list</strong>, not a hard-coded registration position.</li>
+          <li><strong>Topologically sort</strong> before you register. Kahn&#39;s algorithm is about fifteen lines; the payoff is
+          that a cycle becomes a named exception instead of a subtle bug.</li>
+          <li>Register decorators or pipeline behaviors <strong>after</strong> the things they wrap, and make that ordering a
+          consequence of the sort rather than a comment. Better still, make the sequence one call that closes
+          itself, so a late registration throws instead of running unwrapped.</li>
+          <li>For anything you might disable per-environment, register a <strong>null-object or stub</strong> for its public
+          interfaces, so consumers resolve regardless. The branch lives at composition, not at every call site.</li>
+          </ol>
+          <p>The takeaway: if the order between your modules matters for correctness, derive it from declared
+          dependencies and verify it at startup. An ordering a human types by hand is an invariant with no check.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why module registration order is a correctness concern (the decorator pipeline
+          wraps existing registrations), how <code>IModule</code> lets a module declare its name and dependencies instead of
+          its position, how <code>ModuleLoader</code> discovers modules in the assemblies the host names and Kahn-sorts them
+          (rejecting cycles by name), how disabled modules register stubs so cross-module interfaces stay
+          resolvable, what <code>ScanModuleApplicationServices&lt;T&gt;()</code> wires by convention, and why the module is also
+          the unit of service extraction.</p>
+          <p><strong>Next in the series:</strong> event-schema versioning, so an independently deployed consumer never breaks
+          on an event that was silently reshaped.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read ADR-008 for the extraction topology,
+          or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📚 Full series index: <a href="https://ivanball.github.io/writing.html" target="_blank" rel="noopener">https://ivanball.github.io/writing.html</a></li>
+          <li>📄 ADR-008 (service-extraction topology) and ADR-006 (database-per-service) in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Modular Monolith, Microservices</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="optimistic-concurrency-rowversion.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">13 · Optimistic concurrency: RowVersion round-trips</span></a>
+          <a class="article-pager-link article-pager-link--next" href="event-schema-versioning.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">15 · Event-schema versioning</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-ordering-is-a-correctness-concern-not-a-style-one">Why ordering is a correctness concern, not a style one</a></li>
+            <li><a href="#a-module-declares-intent-not-position">A module declares intent, not position</a></li>
+            <li><a href="#the-engine-moduleloader-and-kahns-algorithm">The engine: ModuleLoader and Kahn&#39;s algorithm</a></li>
+            <li><a href="#disabling-a-module-without-breaking-its-consumers">Disabling a module without breaking its consumers</a></li>
+            <li><a href="#convention-scanning-what-a-modules-register-actually-wires">Convention scanning: what a module&#39;s Register actually wires</a></li>
+            <li><a href="#each-module-is-the-unit-of-extraction">Each module is the unit of extraction</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

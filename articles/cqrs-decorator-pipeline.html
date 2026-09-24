@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>The CQRS decorator pipeline: logging, caching, and transactions without touching a handler · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Thin command and query handlers wrapped by a Scrutor decorator chain whose order is load-bearing.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/cqrs-decorator-pipeline.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="The CQRS decorator pipeline: logging, caching, and transactions without touching a handler">
+  <meta property="og:description" content="Thin command and query handlers wrapped by a Scrutor decorator chain whose order is load-bearing.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/cqrs-decorator-pipeline.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-07.png">
+  <meta property="og:image:alt" content="The CQRS decorator pipeline: logging, caching, and transactions without touching a handler">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The CQRS decorator pipeline: logging, caching, and transactions without touching a handler">
+  <meta name="twitter:description" content="Thin command and query handlers wrapped by a Scrutor decorator chain whose order is load-bearing.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-07.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"The CQRS decorator pipeline: logging, caching, and transactions without touching a handler","description":"Thin command and query handlers wrapped by a Scrutor decorator chain whose order is load-bearing.","url":"https://ivanball.github.io/articles/cqrs-decorator-pipeline.html","mainEntityOfPage":"https://ivanball.github.io/articles/cqrs-decorator-pipeline.html","image":"https://ivanball.github.io/assets/img/articles/article-07.png","datePublished":"2026-07-01T21:31:01Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":7,"sameAs":"https://medium.com/@ivanball76/the-cqrs-decorator-pipeline-logging-caching-and-transactions-without-touching-a-handler-fb7679b8bde8"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"07 · The CQRS decorator pipeline","item":"https://ivanball.github.io/articles/cqrs-decorator-pipeline.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">07 · The CQRS decorator pipeline</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html" aria-current="page">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Core patterns · No. 7</p>
+          <h1 id="the-cqrs-decorator-pipeline-logging-caching-and-transactions-without-touching-a-handler">The CQRS decorator pipeline: logging, caching, and transactions without touching a handler</h1>
+          <p class="article-meta"><time datetime="2026-07-01T21:31:01Z">July 1, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/the-cqrs-decorator-pipeline-logging-caching-and-transactions-without-touching-a-handler-fb7679b8bde8" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-07.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Cross-cutting concerns belong around a handler, not inside it. Here is a Scrutor-composed
+          decorator pipeline where logging, caching, and transactions wrap every command and query, and a handler
+          stays a single method of business logic.</p>
+          <hr>
+          <p>Open a command handler in a typical .NET service and count how much of it is the actual use case.</p>
+          <p>You will find a transaction scope. A log line at the start and a stopwatch at the end. A cache eviction
+          call after the save. Maybe a feature-flag check up top. Somewhere in the middle, four lines that are the
+          thing the handler is actually for. The cross-cutting concerns outnumber the business logic, they are
+          copy-pasted into every handler with subtle drift, and the order they run in is whatever order someone
+          typed them.</p>
+          <p>That is the problem the CQRS decorator pipeline solves. A handler holds only its use-case logic. Logging,
+          caching, validation, and transactions live in decorators that wrap the handler uniformly, in a known
+          order, and the handler never knows they are there.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>The scattered approach fails in two specific ways.</p>
+          <p>First, <strong>drift</strong>. When the transaction boilerplate lives in every handler, one handler eventually forgets
+          it, or wraps the wrong span, or commits before it should. There is no single place to read &quot;how do we do
+          transactions here,&quot; so the answer is &quot;differently in each file.&quot;</p>
+          <p>Second, <strong>implicit ordering</strong>. The order in which cross-cutting concerns run is load-bearing, and when it
+          is emergent from hand-written code nobody can see it. Should validation run before or after the
+          transaction opens? Should cache invalidation happen inside the transaction or after the commit? These are
+          correctness questions, and scattered code answers them by accident.</p>
+          <p>The decorator pipeline makes both problems go away: each concern is written once, and the order is
+          declared in one place on purpose.</p>
+          <h2 id="the-shape-thin-handlers-fat-pipeline">The shape: thin handlers, fat pipeline</h2>
+          <p>Every write and every read in MMCA.Common is a use case behind one of two interfaces:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title">ICommandHandler</span>&lt;<span class="hljs-keyword">in</span> <span class="hljs-title">TCommand</span>, <span class="hljs-title">TResult</span>&gt;
+{
+    <span class="hljs-function">Task&lt;TResult&gt; <span class="hljs-title">HandleAsync</span>(<span class="hljs-params">TCommand command, CancellationToken cancellationToken = <span class="hljs-literal">default</span></span>)</span>;
+}
+
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title">IQueryHandler</span>&lt;<span class="hljs-keyword">in</span> <span class="hljs-title">TQuery</span>, <span class="hljs-title">TResult</span>&gt;
+{
+    <span class="hljs-function">Task&lt;TResult&gt; <span class="hljs-title">HandleAsync</span>(<span class="hljs-params">TQuery query, CancellationToken cancellationToken = <span class="hljs-literal">default</span></span>)</span>;
+}</code></pre>
+          <p>One method each. <code>TResult</code> is almost always a <code>Result</code> or <code>Result&lt;T&gt;</code> (the railway error type from
+          ADR-013): a handler returns a failure value, it does not throw for expected error paths. Commands mutate
+          state, queries are side-effect-free reads, and splitting them into two interfaces is what lets the
+          container apply a <em>different</em> set of concerns to each. Writes get transactions and validation, reads get
+          result caching.</p>
+          <p>A decorator implements the <em>same</em> interface, takes the next handler in via its constructor, does its one
+          cross-cutting job, and delegates. Because each decorator is itself an <code>ICommandHandler</code> or
+          <code>IQueryHandler</code>, they nest arbitrarily, and the concrete handler at the bottom never knows it is wrapped.
+          That is the textbook Decorator pattern applied to the application boundary.</p>
+          <h2 id="how-the-pipeline-is-assembled-and-why-order-is-the-whole-game">How the pipeline is assembled, and why order is the whole game</h2>
+          <p>The wiring uses <a href="https://github.com/khellang/Scrutor" target="_blank" rel="noopener">Scrutor</a>&#39;s <code>TryDecorate</code>, and there is one rule you
+          have to internalize: <strong><code>TryDecorate</code> applies decorators in reverse registration order. The last one
+          registered becomes the outermost wrapper.</strong></p>
+          <p>So reading the registrations top to bottom lists innermost first. The resulting execution order for
+          commands, outermost to innermost, is seven decorators deep:</p>
+          <pre class="doc-pre" tabindex="0"><code class="">FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt;
+Validating -&gt; Timeout -&gt; Transactional -&gt; Concrete Handler</code></pre>
+          <p>And for queries, one decorator shorter: everything the command chain carries except the transaction.</p>
+          <pre class="doc-pre" tabindex="0"><code class="">FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt;
+Validating -&gt; Timeout -&gt; Concrete Handler</code></pre>
+          <p>(The framework also has an optional <code>Profiling</code> decorator layered on top when profiling is enabled, via a
+          separate <code>AddApplicationProfiling()</code> call.)</p>
+          <p>Each position is a deliberate cost-and-correctness argument:</p>
+          <ul>
+          <li><strong>Feature-gating is outermost</strong> so a disabled feature is rejected with zero downstream work: no
+          permission lookup, no log scope, no cache touch, no validation, no transaction. It short-circuits with
+          a <code>NotFound</code> failure when the flag is off. It also sits outside the permission check on purpose: a
+          feature that is off must answer the same way for every caller rather than leaking which permission
+          guards it.</li>
+          <li><strong>Authorization sits directly inside the gate</strong> and outside caching. Both decorators delegate to one
+          shared <code>AuthorizationGate.Evaluate(...)</code> helper that answers with a denial <code>Error</code> or with <code>null</code>, and
+          it applies two checks in order. First the capability check: a request declaring <code>IRequiresPermission</code>
+          is granted when the permission registry grants one of the caller&#39;s roles, or when the principal
+          carries a matching permission claim, and is otherwise denied with
+          <code>Error.Forbidden(&quot;Authorization.PermissionDenied&quot;, ...)</code> without invoking the handler. Second the
+          step-up check: a request marked <code>IRequiresMfa</code> is denied with
+          <code>Error.Forbidden(&quot;Authorization.MultiFactorRequired&quot;, ...)</code> unless the principal presented a second
+          factor, and absence denies, because there is no &quot;this account has no second factor, let it through&quot;
+          branch. Capability first is deliberate, so a caller who does not hold the capability at all is
+          answered by the capability gate and never learns which use cases additionally demand a step-up. The
+          placement in the chain is the whole point: a cache lookup ahead of the permission check would serve
+          another caller&#39;s rows to a principal not allowed to run the query, and a denied command never starts
+          a transaction or runs validation either.</li>
+          <li><strong>Logging sits inside the gate and the permission check</strong> so it measures only <em>enabled, authorized</em>
+          executions. It opens a structured log scope carrying the correlation id, times the whole inner pipeline
+          with <code>Stopwatch.GetTimestamp()</code> (a timestamp rather than a <code>Stopwatch</code> instance, one fewer allocation
+          per command), distinguishes success from business-failure from exception, and records the duration to
+          an OpenTelemetry histogram on every path: <code>completed</code>, <code>failed</code>, and <code>exception</code>.</li>
+          <li><strong>Caching sits outside validation</strong> so the cache is only touched after a valid, committed mutation. A
+          validation failure or a rollback leaves the cache intact.</li>
+          <li><strong>Validation sits outside the transaction</strong> so a malformed command never opens a database transaction.
+          The validating decorator resolves the registered <code>IValidator&lt;TCommand&gt;</code> and, on failure, returns a
+          <code>Result</code> failure tagged <code>ErrorType.Validation</code> (which the API edge maps to HTTP 400) <em>without ever
+          calling the handler</em>. Those validators are composed from reusable rule fragments rather than copy-pasted
+          per command, a validation kit that gets its own deep-dive later in the series. On the query side the
+          same concern sits one layer deeper, <em>inside</em> caching, for a deliberate reason: a cached entry can only
+          exist because the same query already passed validation when that entry was produced, so re-validating
+          on a cache hit spends work to reach a conclusion already reached.</li>
+          <li><strong>The timeout budget sits inside validation and outside the transaction</strong>, so it covers the database
+          work that actually hangs, never charges the caller for validation time, and cancels the transaction
+          instead of leaving it open. On the query side it is innermost, so a cache hit is served without
+          starting a budget at all.</li>
+          <li><strong>Transaction is innermost</strong>, closest to the handler, so the unit-of-work boundary is as tight as
+          possible.</li>
+          </ul>
+          <p>Place a decorator at the wrong depth and you silently change semantics: validate <em>inside</em> the transaction
+          and you open a database transaction for a request you were going to reject anyway. Cache <em>outside</em> the
+          permission check and you hand one caller&#39;s rows to another. That is exactly why the order is hard-coded
+          and documented inline at the registration site, not config-driven, and why the registration method
+          carries an ASCII nesting diagram of both chains in its own doc comment.</p>
+          <h2 id="transactional-behavior-in-detail">Transactional behavior, in detail</h2>
+          <p>The transactional decorator wraps the handler in <code>IUnitOfWork.ExecuteInTransactionAsync</code> <strong>only when the
+          command implements <code>ITransactional</code></strong>. Three outcomes, three behaviors:</p>
+          <ul>
+          <li><strong>An exception rolls back.</strong> The transaction unwinds, nothing is persisted.</li>
+          <li><strong>A business failure (<code>Result.IsFailure</code>, no exception) also rolls back.</strong> This is the subtle one. A
+          failed <code>Result</code> means the handler decided &quot;no&quot; through a value rather than an exception, and the unit of
+          work treats that decision exactly like a thrown fault:
+          <code>if (result is Result { IsFailure: true }) { RollbackTransaction(); return (result, null); }</code>. Atomicity wins
+          over partial persistence, so any writes the handler made before returning the failure are discarded, and
+          the deferred domain events roll back with them. Cache invalidation is skipped as well, because nothing
+          committed and there is nothing stale to evict.</li>
+          <li><strong>A success commits and then invalidates the cache.</strong> Only a success reaches <code>CommitTransaction()</code>.
+          In-process domain events are flushed <em>after</em> the commit, so a handler never acts on state that could
+          still roll back, and cache eviction runs <em>outside</em> the transaction boundary against committed state.</li>
+          </ul>
+          <p>That &quot;a business failure rolls back like an exception&quot; rule is the kind of decision that, in scattered
+          code, would be implemented three different ways in three handlers. Here it is one place, one behavior,
+          every command.</p>
+          <h2 id="opt-in-by-marker-interface-pay-only-for-what-you-use">Opt in by marker interface: pay only for what you use</h2>
+          <p>The pipeline is registered for <em>every</em> handler, but most decorators are dormant unless the use case asks
+          for them, through a set of tiny marker interfaces:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Open a DB transaction around this command.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">PlaceOrderCommand</span>(<span class="hljs-params">...</span>) : ITransactional</span>;
+
+<span class="hljs-comment">// Evict cached reads under &quot;Catalog:Products&quot; after this command succeeds.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">UpdateProductCommand</span>(<span class="hljs-params">...</span>) : ICacheInvalidating</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CachePrefix =&gt; <span class="hljs-string">&quot;Catalog:Products&quot;</span>;
+}
+
+<span class="hljs-comment">// Read-through cache this query under a stable key.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">GetProductQuery</span>(<span class="hljs-params">...</span>) : IQueryCacheable</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CacheKey =&gt; <span class="hljs-string">$&quot;Catalog:Products:<span class="hljs-subst">{ProductId}</span>&quot;</span>;
+    <span class="hljs-keyword">public</span> TimeSpan CacheDuration =&gt; TimeSpan.FromMinutes(<span class="hljs-number">5</span>);
+}
+
+<span class="hljs-comment">// Deny this command with a Forbidden failure unless the caller holds the permission.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">DeleteProductCommand</span>(<span class="hljs-params">...</span>) : IRequiresPermission</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Permission =&gt; <span class="hljs-string">&quot;catalog.products.delete&quot;</span>;
+}
+
+<span class="hljs-comment">// Give this query its own execution budget.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">GetSalesReportQuery</span>(<span class="hljs-params">...</span>) : IHasTimeout</span>
+{
+    <span class="hljs-keyword">public</span> TimeSpan Timeout =&gt; TimeSpan.FromSeconds(<span class="hljs-number">10</span>);
+}</code></pre>
+          <p>Each decorator does an <code>is</code>-check (<code>command is ITransactional</code>, <code>command is IRequiresPermission</code>, and so
+          on) and passes straight through when the interface is absent. A read-only command pays nothing for
+          transactions. An un-cached query pays nothing for caching. A request that declares no permission is not
+          silently public, it just stays behind the endpoint&#39;s <code>[Authorize]</code> policy: the decorator is a defense in
+          depth layer that moves the capability check next to the use case, so a command reached through gRPC, a
+          scheduled job, or another module is checked the same way it is over HTTP. A timeout of <code>TimeSpan.Zero</code> or
+          less means &quot;no budget&quot; and passes the caller&#39;s token through untouched, because a misconfigured value must
+          not fail every request instantly. The <em>capability</em> is uniformly present for
+          every handler, but the <em>cost</em> is opt-in per handler. Leaving a marker off is a genuine decision too, not
+          just an oversight: a command whose writes already flush through a single atomic <code>SaveChangesAsync</code> gains
+          nothing from <code>ITransactional</code> except a wider lock window across whatever the handler runs first (a
+          cross-service price fetch, say), so it deliberately stays unmarked and lets optimistic concurrency guard
+          the read-then-write gap.</p>
+          <p>This is the Open/Closed Principle made literal. A new handler turns a concern on by implementing an
+          interface. There is no decorator to write, no registration to add, no pipeline to touch. The pipeline is
+          closed for modification and open for extension, and &quot;extension&quot; is one interface on a record.</p>
+          <h2 id="the-di-sequence-that-makes-it-work">The DI sequence that makes it work</h2>
+          <p>Because <code>TryDecorate</code> can only wrap registrations that already exist, the decorators must be registered
+          <em>after</em> every module&#39;s concrete handlers. One step of this sequence is load-bearing, and only one:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">services.AddApplication()                              <span class="hljs-comment">// core services, event dispatcher</span>
+    .AddInfrastructure(configuration)
+    .AddAPI(modulesSettings)
+    .ScanModuleApplicationServices&lt;ModuleAClassRef&gt;()  <span class="hljs-comment">// Module A handlers, validators, mappers</span>
+    .ScanModuleApplicationServices&lt;ModuleBClassRef&gt;()  <span class="hljs-comment">// Module B handlers, validators, mappers</span>
+    .AddApplicationDecorators();                       <span class="hljs-comment">// MUST be last: TryDecorate wraps existing handlers</span></code></pre>
+          <p>ADR-014 is precise about the scope of the constraint: only the decorators-last ordering is
+          load-bearing, and the relative position of <code>AddInfrastructure</code> and <code>AddAPI</code> is not. Hosts are free to
+          arrange those two however they like.</p>
+          <p><code>AddApplicationDecorators()</code> <strong>must be last</strong> among the application registrations. Call it before a
+          module&#39;s handler scan and <code>TryDecorate</code> finds nothing to wrap, so that module&#39;s handlers would run with
+          no logging, no caching, and no transactions.</p>
+          <p>Which is why the framework does not leave that to the host&#39;s memory. <code>AddApplicationDecorators()</code> seals
+          the pipeline on the service collection as its final act, and every registration method that could add
+          handlers afterwards (the module scan, the entity CRUD helpers) checks the seal first and throws an
+          <code>InvalidOperationException</code> naming the caller: <em>&quot;anything registered now would run completely
+          undecorated. Move this call before AddApplicationDecorators(), or compose the whole sequence with
+          AddMmcaApplicationPipeline(...)&quot;</em>. The constraint is real either way; the difference is that violating
+          it stops the host at startup with the fix in the message, instead of booting a service that quietly
+          does less.</p>
+          <p>The suggestion in that message is the shorter road. <code>AddMmcaApplicationPipeline(configure)</code> composes the
+          whole sequence itself: it registers the application services, hands a builder to the delegate for the
+          module scans and anything else the host wants registered, and finishes with
+          <code>AddApplicationDecorators()</code>, so the ordering rule is executed by the framework rather than remembered
+          by the host:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
+    .ScanModule&lt;TicketsClassReference&gt;()
+    .Register(s =&gt; moduleLoader.DiscoverAndRegister(
+        s, configuration, appSettings, moduleSettings, environmentName, moduleAssemblies)));</code></pre>
+          <h2 id="the-same-argument-one-layer-out-the-http-pipeline">The same argument, one layer out: the HTTP pipeline</h2>
+          <p>The decorator chain covers everything that happens once a command or query reaches a handler. But the
+          request had to cross an edge to get there, and that edge is an ordered chain too: ASP.NET Core
+          middleware. It has exactly the same failure mode. Put the rate limiter before authentication and it
+          partitions every request as anonymous. Put a tenant resolver before authentication and it reads an
+          empty principal. Redirect a gRPC call to HTTPS and the call breaks. Each of those compiles, passes
+          every analyzer, and reads as correct.</p>
+          <p>So the framework treats the edge the way it treats the decorators: one fixed order, written down
+          once, called by every host. <code>UseCommonMiddlewarePipeline()</code> is a single extension method over
+          <code>WebApplication</code> that registers the whole edge and finishes by mapping controllers:</p>
+          <pre class="doc-pre" tabindex="0"><code class="">exception handler -&gt; correlation id -&gt; request localization -&gt; pre-forwarded capture -&gt;
+forwarded headers -&gt; HTTPS redirect (skipped for cleartext HTTP/2) -&gt; response compression -&gt;
+routing -&gt; CORS -&gt; authentication -&gt; tenant resolution -&gt; rate limiter -&gt;
+soft-deleted-user check -&gt; authorization -&gt; output cache -&gt; JWKS + OIDC discovery -&gt; controllers</code></pre>
+          <p>Four of those adjacencies are load-bearing, and the builder re-validates every one of them while it
+          builds the step list, each with its reason carried in the exception it would throw:</p>
+          <ul>
+          <li><strong>The pre-forwarded capture immediately before forwarded headers.</strong> The capture step stashes the real
+          transport scheme and host before <code>UseForwardedHeaders</code> rewrites them from the <code>X-Forwarded-*</code> headers,
+          which is what keeps the OIDC discovery document&#39;s <code>jwks_uri</code> pointing at an address the caller can
+          actually reach. Those captured values are only faithful if nothing rewrites the request in between, so
+          the two steps have to be adjacent, not merely ordered.</li>
+          <li><strong>Forwarded headers before the HTTPS redirect.</strong> The redirect decision has to see the proxy-reported
+          scheme from <code>X-Forwarded-Proto</code> rather than the internal transport scheme.</li>
+          <li><strong>Authentication immediately before tenant resolution.</strong> The claim-first tenant strategy reads the
+          request principal, which carries the token&#39;s claims only once authentication has run.</li>
+          <li><strong>Authentication before the rate limiter.</strong> The global partition keys on the authenticated
+          principal and routes anonymous traffic down a no-limiter branch, so an unpopulated user makes every
+          request look anonymous and the per-user cap never engages.</li>
+          </ul>
+          <p>The gRPC exemption on the HTTPS redirect is a step predicate rather than an adjacency, and it is keyed
+          on the protocol Kestrel negotiated, not on the request&#39;s content type. The step runs ahead of routing,
+          so no endpoint metadata exists yet; what does exist is the negotiated protocol, which no header can
+          fake. Cleartext HTTP/2 is exactly the gRPC-over-plaintext case that a 307 would break, and every
+          browser-reachable request is HTTP/1.1 or HTTP/2 over TLS, so it keeps being redirected instead of being
+          served plaintext on the strength of a forged header.</p>
+          <p>The conditional pieces are registered unconditionally and made inert by configuration: tenant
+          resolution and the soft-deleted-user check (which sits between the limiter and authorization so a
+          revoked account is rejected before any endpoint gets to authorize it) are always in the chain, each
+          gated by its own settings. That keeps the edge literally one shape on every host rather than a per-host permutation, so a diff
+          between two hosts&#39; pipelines is empty by construction. Every REST and gRPC service host in both
+          production applications calls the method, and so does the reference app.</p>
+          <p>The edge carries the same two defenses as the decorator chain it mirrors. First, <strong>the order is
+          frozen by a test, not by review</strong>. Every step is named and the defaults are seeded by a builder, so
+          the order is data: a conformance test base mirroring the decorator one asserts the step sequence in
+          the fast unit tier, and a reorder goes red before the semantics go quiet. Swapping two steps still
+          compiles and still passes every analyzer, but it no longer passes the test pass. Second, <strong>the
+          extension point is scoped</strong>. The method takes an optional configure delegate: a host can insert,
+          replace, or remove steps by name, and the builder re-validates the load-bearing adjacencies at
+          startup, so a customized edge fails while the host is starting instead of misordering silently. A
+          host whose edge is genuinely different still composes its own, which is what the Blazor UI hosts and
+          the YARP gateways do; the escape hatch comes in two sizes, not one.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>The pipeline is not free, and ADR-014 names the rough edges:</p>
+          <ul>
+          <li><strong>Registration order is the reverse of execution order.</strong> This is a genuine Scrutor foot-gun. The
+          framework mitigates it with inline ordering comments at the registration site, but you do have to keep
+          &quot;last registered is outermost&quot; in your head when reading the code.</li>
+          <li><strong>Decorators must come after handlers.</strong> That one step of the DI sequence is a constraint, not a
+          suggestion, and the guard that turns violating it into a startup exception is itself extra machinery:
+          a seal on the service collection that every later registration method has to check.</li>
+          <li><strong>A new concern means a new decorator at the correct depth.</strong> Inserting it at the wrong position can
+          silently change semantics, as with validating inside the transaction. Adding to the pipeline requires
+          understanding the ordering argument, not just appending a class. That warning stopped being
+          hypothetical the day authorization and timeout went in: both were inserted <em>between</em> existing
+          neighbours, and getting either one wrong would have been a correctness bug rather than a style choice.</li>
+          <li><strong>The chain is deep.</strong> Every command walks seven decorators and every query six, even when it declares
+          none of the markers, because each one is registered unconditionally and decides at runtime whether it
+          has work to do. The pass-through cost of an <code>is</code>-check is small, but it is not zero, and it grows every
+          time a concern is added.</li>
+          </ul>
+          <p>The response to the third one is the interesting part, because the order is defended by more than
+          comments and review. A reusable conformance test base resolves the
+          handlers from a real service collection, unwraps the constructed object graph by reflection, and asserts
+          both sequences outermost-first, including that the innermost element is not itself a decorator. Both
+          expected sequences are <code>protected virtual</code>, so a consumer whose chain differs can override them.
+          MMCA.Common subclasses it against its own registration sequence without overriding either list, so the
+          default order is pinned in the framework&#39;s own test pass. Move a <code>TryDecorate</code> line and the test goes
+          red before the semantics go quiet.</p>
+          <p>None of these are reasons to scatter the concerns back into the handlers. They are the reasons to keep
+          the ordering documented in one place, pinned by a test, and to treat the DI sequence as load-bearing.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The idea ports to any DI container that supports decoration (Scrutor for Microsoft.Extensions.DI,
+          or the equivalent in your stack):</p>
+          <ol>
+          <li>Define a <strong>single handler interface</strong> per category (command, query) returning a result type, and keep
+          handlers to one use case each.</li>
+          <li>Write each cross-cutting concern as a <strong>decorator</strong> over that interface, not as code inside handlers.</li>
+          <li><strong>Declare the order explicitly</strong> in one place, and write down <em>why</em> each concern is at its depth
+          (validation before the transaction, cache eviction after the commit).</li>
+          <li>Make decoration <strong>opt-in by marker interface</strong> so handlers pay only for the concerns they declare.</li>
+          </ol>
+          <p>The takeaway is the line ADR-014 is built around: <strong>if a concern is cross-cutting, it should wrap the
+          handler, not live inside it. The order it wraps in is a design decision you write down once, not an
+          accident you rediscover per file.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why cross-cutting concerns scattered into handlers drift and hide their ordering, how
+          the MMCA.Common pipeline wraps every command with <code>FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt; Transactional</code> decorators in a deliberate order (and every query with the same
+          chain minus the transaction), how <code>ITransactional</code> / <code>ICacheInvalidating</code> / <code>IQueryCacheable</code> /
+          <code>IRequiresPermission</code> / <code>IRequiresMfa</code> / <code>IHasTimeout</code> make each concern opt-in, why
+          <code>AddApplicationDecorators()</code> must be registered last and how sealing the pipeline turns forgetting that
+          into a startup exception, how a conformance test pins the order instead of leaving it to comments, and
+          how the same fixed-order argument runs one layer out at the HTTP edge through a single shared
+          middleware pipeline.</p>
+          <p><strong>Next in the series:</strong> the reusable validation kit that plugs into this pipeline&#39;s Validating
+          decorator, composed from shared rule fragments instead of copy-pasted per command.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-014 behind this
+          pattern, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>ADR-014 (CQRS decorator pipeline): <a href="../docs/adr/014-cqrs-decorator-pipeline.html">ADR-014: CQRS Handlers with a Decorator Pipeline</a> in the docs site.</li>
+          <li>ADR-079 (shared HTTP middleware pipeline): <a href="../docs/adr/079-shared-http-middleware-pipeline.html">ADR-079: One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, CQRS, Design Patterns</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="specification-pattern.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">06 · Specifications over LINQ spaghetti</span></a>
+          <a class="article-pager-link article-pager-link--next" href="validation-kit.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">08 · Compose validators, don&#39;t copy them</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-shape-thin-handlers-fat-pipeline">The shape: thin handlers, fat pipeline</a></li>
+            <li><a href="#how-the-pipeline-is-assembled-and-why-order-is-the-whole-game">How the pipeline is assembled, and why order is the whole game</a></li>
+            <li><a href="#transactional-behavior-in-detail">Transactional behavior, in detail</a></li>
+            <li><a href="#opt-in-by-marker-interface-pay-only-for-what-you-use">Opt in by marker interface: pay only for what you use</a></li>
+            <li><a href="#the-di-sequence-that-makes-it-work">The DI sequence that makes it work</a></li>
+            <li><a href="#the-same-argument-one-layer-out-the-http-pipeline">The same argument, one layer out: the HTTP pipeline</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

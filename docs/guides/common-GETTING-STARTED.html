@@ -134,7 +134,7 @@
           <p>Standing that up by hand means 12 projects and roughly 9,000 lines of C# and Razor before a line
           of your own business logic, several of them load-bearing in ways nothing tells you about until much later. So
           you do not type it. One command writes the whole thing, green:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
 dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order</code></pre>
           <p>The six steps below take that from nothing to a running, migrated, browsable app. Everything after
           them is optional depth.</p>
@@ -173,11 +173,11 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           </blockquote>
           <hr>
           <h2 id="1-install-the-template-pack">1. Install the template pack</h2>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates</code></pre>
           <p>Four templates arrive: <code>mmca-app</code> (a whole solution), <code>mmca-module</code> (a business module across all
           five layers), and <code>mmca-command</code> / <code>mmca-query</code> (a single vertical slice).</p>
           <h2 id="2-generate-the-solution">2. Generate the solution</h2>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order
 <span class="hljs-built_in">cd</span> Contoso.Support</code></pre>
           <p>Three names, and they are independent: the <strong>solution</strong> (also your root namespace), the first
           <strong>module</strong> in plural PascalCase, and that module&#39;s <strong>aggregate root</strong> in singular PascalCase.
@@ -196,7 +196,7 @@ dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal"
           </ul>
           <p>The full parameter table is in the <a href="common-TEMPLATES.html">templates guide</a>.</p>
           <h2 id="3-build-and-test-before-you-change-anything">3. Build and test before you change anything</h2>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build Contoso.Support.slnx
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build Contoso.Support.slnx
 dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</code></pre>
           <p>That is a warning-free build with <code>TreatWarningsAsErrors</code> and all five analyzers at error severity,
           and a passing test run including the architecture-fitness rules, with <strong>no database needed</strong>. If it
@@ -218,14 +218,14 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           <code>--no-owner</code>) or <code>--database sqlite</code>, and the sample migrations were dropped because they would
           describe a schema you did not ask for. Create your own before the first run:</li>
           </ul>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
   <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
   <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
   <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
           <p>The design-time factory opens no connection for <code>migrations add</code>, so neither case needs a database.
           Either way, every later migration is added the same way, and this is where to confirm the model and
           the migrations agree before you change the aggregate:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations has<span class="hljs-literal">-pending-model-changes</span> `
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations has<span class="hljs-literal">-pending-model-changes</span> `
   <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
   <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
   <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
@@ -235,7 +235,7 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           service database</strong> even while you are a monolith, which is what makes extraction later cost no
           migration rework.</p>
           <h2 id="5-run-it">5. Run it</h2>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.AppHost</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.AppHost</code></pre>
           <blockquote>
           <p><strong>Run this from a real, interactive terminal.</strong> Launched from a headless or background shell the
           Aspire AppHost stalls at control-plane init and no dashboard appears.</p>
@@ -267,7 +267,7 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           (which is there for the shape flags: turning several axes off can leave the aggregate&#39;s private
           constructor with a single statement). Sort them, then delete the whole block once you have stopped
           scaffolding:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers Contoso.Support.slnx <span class="hljs-literal">--diagnostics</span> SA1210 SA1211 <span class="hljs-literal">--severity</span> info</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers Contoso.Support.slnx <span class="hljs-literal">--diagnostics</span> SA1210 SA1211 <span class="hljs-literal">--severity</span> info</code></pre>
           <p><strong>Your integration-event wire contract ships frozen.</strong> Integration events cross service boundaries,
           so a renamed or retyped property breaks consumers elsewhere, and <code>IntegrationEventContractTestsBase</code>
           fails the build on a silent reshape. The subclass is emitted by the template holding <strong>your</strong> event
@@ -275,11 +275,11 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           nothing about the order of your properties has to be fixed up first. Evolve an event on purpose,
           version it (<a href="../adr/010-integration-event-schema-versioning.html">ADR-010</a>), and update the literal in
           the same commit. The failure prints the live value to paste:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
   <span class="hljs-literal">--</span> <span class="hljs-literal">--filter-class</span> <span class="hljs-string">&quot;*IntegrationEventContract*&quot;</span></code></pre>
           <hr>
           <h2 id="what-you-were-handed">What you were handed</h2>
-          <pre class="doc-pre"><code class="">Contoso.Support.slnx
+          <pre class="doc-pre" tabindex="0"><code class="">Contoso.Support.slnx
 .editorconfig                 the five analyzers at error severity
 Directory.Build.props         language settings, analyzers, the identifier-alias links
 Directory.Build.targets       the local-source PackageReference -&gt; ProjectReference swap
@@ -352,7 +352,7 @@ Tests/
           <h2 id="add-your-next-feature">Add your next feature</h2>
           <p><strong>A vertical slice</strong> (the path every feature follows) is one command, run from the module&#39;s
           <code>UseCases</code> folder:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">cd</span> Source/Modules/Orders/Contoso.Support.Orders.Application/Orders/UseCases
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">cd</span> Source/Modules/Orders/Contoso.Support.Orders.Application/Orders/UseCases
 
 dotnet new mmca<span class="hljs-literal">-command</span> <span class="hljs-literal">-n</span> TransferOrder <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order <span class="hljs-literal">--domain-method</span> TransferToRequester
 
@@ -370,7 +370,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <p>The rule goes in the invariants class, not in the method, so it can be composed with
           <code>Result.Combine</code> and asserted directly in a domain test. It reuses a rule the scaffold already
           enforces for comments: <code>Closed</code> is terminal:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/OrderInvariants.cs</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/OrderInvariants.cs</span>
 <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result <span class="hljs-title">EnsureStatusAllowsTransfer</span>(<span class="hljs-params">OrderStatus status, <span class="hljs-built_in">string</span> source</span>)</span>
     =&gt; status == OrderStatus.Closed
         ? Result.Failure(Error.Invariant(
@@ -380,7 +380,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
             target: <span class="hljs-keyword">nameof</span>(status)))
         : Result.Success();</code></pre>
           <p>And the method itself:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/Order.cs</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/Order.cs</span>
 <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">TransferToRequester</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> requesterUserId</span>)</span>
 {
     <span class="hljs-keyword">if</span> (RequesterUserId == requesterUserId)
@@ -412,8 +412,8 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           arguments. Two one-line edits finish the slice: add the field to the command record, and pass it at
           the call site (rewrite the scaffolded summary comments while you are in there; they describe the
           delete slice the template is staged from):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">TransferOrderCommand</span>(<span class="hljs-params">OrderIdentifierType OrderId, <span class="hljs-built_in">int</span> RequesterUserId</span>) : ICacheInvalidating</span></code></pre>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> result = order.TransferToRequester(command.RequesterUserId);</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">TransferOrderCommand</span>(<span class="hljs-params">OrderIdentifierType OrderId, <span class="hljs-built_in">int</span> RequesterUserId</span>) : ICacheInvalidating</span></code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> result = order.TransferToRequester(command.RequesterUserId);</code></pre>
           <p><strong>Name a child collection when the handler needs one eager-loaded.</strong> Both slices load through
           <code>GetByIdAsync</code>, whose <code>includes:</code> argument is required, so there is always a list. The
           <code>--child-collection Comments</code> above names the one collection a scaffolded <code>Order</code> owns; pass whichever
@@ -423,7 +423,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <p><strong>Keep the query&#39;s <code>CacheKey</code> inside your module&#39;s <code>*CacheKeys.Prefix</code>,</strong> because a key that drifts
           out of the prefix goes stale silently.</p>
           <p><strong>A second module</strong> across all five layers plus its test and migrations projects:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Billing <span class="hljs-literal">-Aggregate</span> Invoice</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Billing <span class="hljs-literal">-Aggregate</span> Invoice</code></pre>
           <p>That script ships inside every solution <code>mmca-app</code> generates. It runs <code>dotnet new mmca-module</code> (the
           same shape options, as PowerShell switches) and then applies every wire-up the template can only
           print, because <code>dotnet new</code> cannot patch files that already exist: the solution entries, the host and
@@ -440,12 +440,12 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           points, with <code>ChangeStatus</code> as the worked example to mirror in each one.</p>
           <p><strong>A request record in Shared</strong>, carrying only the payload; the order id comes from the route, the
           same split <code>ChangeOrderStatusRequest</code> uses:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Shared/Orders/TransferOrderRequest.cs</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Shared/Orders/TransferOrderRequest.cs</span>
 <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">TransferOrderRequest</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> RequesterUserId</span>)</span>;</code></pre>
           <p><strong>A controller endpoint.</strong> Reads come from <code>EntityControllerBase</code>; writes inject their handler
           directly. Add <code>ICommandHandler&lt;TransferOrderCommand, Result&gt; transferHandler</code> to the controller&#39;s
           primary constructor and map it:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment"><span class="hljs-doctag">///</span> <span class="hljs-doctag">&lt;summary&gt;</span>Transfers an order to another requester.<span class="hljs-doctag">&lt;/summary&gt;</span></span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment"><span class="hljs-doctag">///</span> <span class="hljs-doctag">&lt;summary&gt;</span>Transfers an order to another requester.<span class="hljs-doctag">&lt;/summary&gt;</span></span>
 [<span class="hljs-meta">HttpPut(<span class="hljs-string">&quot;{id}/transfer&quot;</span>)</span>]
 [<span class="hljs-meta">ProducesResponseType(StatusCodes.Status204NoContent)</span>]
 [<span class="hljs-meta">ProducesResponseType(StatusCodes.Status400BadRequest)</span>]
@@ -468,7 +468,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           reaches the API through Aspire service discovery, so there is no CORS and no token. The client
           <strong>returns a <code>Result</code> and throws nothing for a server answer</strong>, so the method signature says it can
           fail:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> Task&lt;Result&gt; <span class="hljs-title">TransferOrderAsync</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> id, <span class="hljs-built_in">int</span> requesterUserId, CancellationToken cancellationToken = <span class="hljs-literal">default</span></span>)</span> =&gt;
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> Task&lt;Result&gt; <span class="hljs-title">TransferOrderAsync</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> id, <span class="hljs-built_in">int</span> requesterUserId, CancellationToken cancellationToken = <span class="hljs-literal">default</span></span>)</span> =&gt;
     HttpResultExecutor.ExecuteAsync(
         <span class="hljs-keyword">async</span> () =&gt;
         {
@@ -488,7 +488,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           exception. Your own cancellation still propagates, so a disposed component is never reported back
           as an error to render.</p>
           <p>A method that returns a value reads the same way, with the generic overload:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> Task&lt;Result&lt;OrderDTO&gt;&gt; GetOrderAsync(<span class="hljs-built_in">int</span> id, CancellationToken cancellationToken = <span class="hljs-literal">default</span>) =&gt;
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> Task&lt;Result&lt;OrderDTO&gt;&gt; GetOrderAsync(<span class="hljs-built_in">int</span> id, CancellationToken cancellationToken = <span class="hljs-literal">default</span>) =&gt;
     HttpResultExecutor.ExecuteAsync(
         <span class="hljs-keyword">async</span> () =&gt;
         {
@@ -507,7 +507,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <code>MudNumericField</code> for the new requester id and a button), with a <code>@code</code> handler shaped like
           <code>ChangeStatusAsync</code>. Feedback goes through the <code>IToastService Toast</code> the page already injects.
           Because the client returns a <code>Result</code>, the handler <strong>branches instead of catching</strong>:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> Api.TransferOrderAsync(Id, _transferRequesterUserId);
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> Api.TransferOrderAsync(Id, _transferRequesterUserId);
 <span class="hljs-keyword">if</span> (result.IsSuccess)
 {
     Toast.Success(L[<span class="hljs-string">&quot;Snackbar.Transferred&quot;</span>]);

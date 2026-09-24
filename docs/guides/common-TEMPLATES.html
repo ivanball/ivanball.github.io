@@ -136,7 +136,7 @@
           <a href="common-GETTING-STARTED.html">Getting Started</a> for the six-step path from nothing to a running app,
           <a href="common-SMALL-APPS.html">Small Apps</a> for the <code>--database sqlite --no-aspire</code> floor, and
           <a href="common-BUILD-BY-HAND.html">Building by Hand</a> for what the generated code actually does, phase by phase.</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
 dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order
 <span class="hljs-built_in">cd</span> Contoso.Support
 dotnet build Contoso.Support.slnx
@@ -301,7 +301,7 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           pack can generate, and it still arrives with the full five-layer wiring and a green test run.</p>
           <p><strong>The two renames</strong> are plain substring replacements rather than shape decisions. <code>--child</code> renames
           the child concept everywhere; the generated type is <code>&lt;aggregate&gt;&lt;child&gt;</code>, so:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Shipping <span class="hljs-literal">--module</span> Shipments <span class="hljs-literal">--aggregate</span> Shipment <span class="hljs-literal">--child</span> Line</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Shipping <span class="hljs-literal">--module</span> Shipments <span class="hljs-literal">--aggregate</span> Shipment <span class="hljs-literal">--child</span> Line</code></pre>
           <p>gives you a <code>ShipmentLine</code> entity and DTO, <code>AddLine</code> / <code>EditLine</code> / <code>RemoveLine</code> use-case slices,
           <code>/lines</code> routes on the controller, an <code>AddLineRequest</code> / <code>EditLineRequest</code> pair, and a
           <code>ShipmentLineIdentifierType</code> alias. The plural comes from an English pluralizer (<code>Line</code> to <code>Lines</code>,
@@ -326,7 +326,7 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           arrival. Generate your own <code>InitialCreate</code> against the shape you asked for;
           <code>Migrations/.editorconfig</code> still ships, since <code>dotnet ef</code> never recreates it.</p>
           <p><strong>What you get</strong> (names shown for <code>-n Contoso.Support --module Orders --aggregate Order</code>):</p>
-          <pre class="doc-pre"><code class="">Contoso.Support.slnx
+          <pre class="doc-pre" tabindex="0"><code class="">Contoso.Support.slnx
 .editorconfig                 the five analyzers at error severity
 Directory.Build.props         language settings, analyzers, the identifier-alias links
 Directory.Build.targets       the local-source PackageReference -&gt; ProjectReference swap
@@ -371,7 +371,7 @@ Tests/
           <td>No orchestration project: no AppHost, no <code>Aspire.Hosting.*</code> pins, and the UI host reaches the API at the fixed dev address <code>https://localhost:60801</code> instead of through service discovery. Both hosts keep <code>AddServiceDefaults()</code> and <code>MapDefaultEndpoints()</code>, so telemetry, <code>/health</code> + <code>/alive</code> and the resilience pipeline are all still there and adding an AppHost later is additive.</td>
           </tr>
           </tbody></table></div>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Notes <span class="hljs-literal">--module</span> Notes <span class="hljs-literal">--aggregate</span> Note <span class="hljs-literal">--database</span> sqlite <span class="hljs-literal">--no-aspire</span></code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Notes <span class="hljs-literal">--module</span> Notes <span class="hljs-literal">--aggregate</span> Note <span class="hljs-literal">--database</span> sqlite <span class="hljs-literal">--no-aspire</span></code></pre>
           <p>Three properties are worth knowing before you pick:</p>
           <ul>
           <li><strong><code>--database</code> is a swap, not a removal.</strong> Unlike the four module-shape flags, which take an axis
@@ -420,7 +420,7 @@ Tests/
           the identifier-alias file, whose aliases sort differently depending on the aggregate and child names
           you asked for. Both ship as suggestions, via a clearly marked <code>SCAFFOLD DELTA</code> block at the bottom of
           the generated <code>.editorconfig</code>. Sort them with:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers Contoso.Support.slnx <span class="hljs-literal">--diagnostics</span> SA1210 SA1211 <span class="hljs-literal">--severity</span> info</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers Contoso.Support.slnx <span class="hljs-literal">--diagnostics</span> SA1210 SA1211 <span class="hljs-literal">--severity</span> info</code></pre>
           <p>That block relaxes a <strong>third</strong> rule, <code>IDE0021</code>, and it is there for the shape flags rather than the
           renames: the aggregate&#39;s private constructor assigns one property per optional axis, so turning
           several of them off can leave it with a single statement, which the baseline would then require you
@@ -447,11 +447,11 @@ Tests/
           its wire-ups, so adding a second module does not turn your next test run red either. When you evolve
           an event on purpose, version it (<a href="../adr/010-integration-event-schema-versioning.html">ADR-010</a>) and
           update the literal in the same commit; the failure prints the live value to paste:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
   <span class="hljs-literal">--</span> <span class="hljs-literal">--filter-class</span> <span class="hljs-string">&quot;*IntegrationEventContract*&quot;</span></code></pre>
           <hr>
           <h2 id="mmca-module"><code>mmca-module</code></h2>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">cd</span> Contoso.Support
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">cd</span> Contoso.Support
 dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-literal">-n</span> Billing <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--aggregate</span> Invoice</code></pre>
           <div class="table-wrap"><table>
           <thead>
@@ -531,7 +531,7 @@ dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-liter
           <code>build/add-module.ps1</code> detects the solution&#39;s engine and passes this flag for you.</p>
           <p><strong>If your solution came from <code>mmca-app</code>, use <code>build/add-module.ps1</code> instead</strong> (below): it runs this
           template and then applies every wire-up the template can only print.</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-literal">-n</span> Orders <span class="hljs-literal">--app</span> Contoso.Shop <span class="hljs-literal">--aggregate</span> Order <span class="hljs-literal">--child</span> Item</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-literal">-n</span> Orders <span class="hljs-literal">--app</span> Contoso.Shop <span class="hljs-literal">--aggregate</span> Order <span class="hljs-literal">--child</span> Item</code></pre>
           <p>That produces an <code>OrderItem</code> entity and DTO, <code>AddItem</code> / <code>EditItem</code> / <code>RemoveItem</code> slices, <code>/items</code>
           routes, and an <code>OrderItemIdentifierType</code> alias, with no post-generation renaming.</p>
           <p>Generates eight projects into the right places: the five layer projects under
@@ -565,7 +565,7 @@ dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-liter
           <a href="common-ECOMMERCE-SAMPLE.html">ecommerce sample guide</a> walks each edit.</li>
           </ol>
           <p>Then create the first migration:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
   <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing `
   <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing `
   <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
@@ -581,7 +581,7 @@ dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-liter
           <code>ExpectedContract</code> in your architecture tests, so the frozen wire contract stays green. The
           orchestration step is skipped rather than failed when the solution has no AppHost (a <code>--no-aspire</code>
           app), where a <code>DataSources</code> entry is the whole database wire-up.</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Orders <span class="hljs-literal">-Aggregate</span> Order <span class="hljs-literal">-Child</span> Item <span class="hljs-literal">-EventVerb</span> Placed</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Orders <span class="hljs-literal">-Aggregate</span> Order <span class="hljs-literal">-Child</span> Item <span class="hljs-literal">-EventVerb</span> Placed</code></pre>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -688,7 +688,7 @@ dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-liter
           <h2 id="mmca-command-and-mmca-query"><code>mmca-command</code> and <code>mmca-query</code></h2>
           <p>Run these from the module&#39;s <code>UseCases</code> folder. Each creates a folder named after the slice holding
           its two files.</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">cd</span> Source/Modules/Billing/Contoso.Support.Billing.Application/Billing/UseCases
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">cd</span> Source/Modules/Billing/Contoso.Support.Billing.Application/Billing/UseCases
 
 dotnet new mmca<span class="hljs-literal">-command</span> <span class="hljs-literal">-n</span> ArchiveInvoice <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--module</span> Billing `
   <span class="hljs-literal">--aggregate</span> Invoice <span class="hljs-literal">--domain-method</span> Archive
@@ -781,7 +781,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           deliberately thin (no slices, no child rename, no rerun check) to keep the third case&#39;s wall clock
           down, and only the first case scaffolds slices.</p>
           <p>To work on the templates:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">git clone https://github.com/ivanball/MMCA.Helpdesk
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">git clone https://github.com/ivanball/MMCA.Helpdesk
 <span class="hljs-built_in">cd</span> MMCA.Helpdesk
 pwsh build/templates/smoke.ps1        <span class="hljs-comment"># stage, pack, install, generate, build, test</span></code></pre>
           

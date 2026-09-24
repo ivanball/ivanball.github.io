@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>I open-sourced the enterprise .NET plumbing I never want to rewrite, and graded it against 34 categories · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Why I open-sourced a production .NET framework and scored it against a 34-category architecture rubric, gaps and all.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/open-sourced-enterprise-dotnet-34-categories.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="I open-sourced the enterprise .NET plumbing I never want to rewrite, and graded it against 34 categories">
+  <meta property="og:description" content="Why I open-sourced a production .NET framework and scored it against a 34-category architecture rubric, gaps and all.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/open-sourced-enterprise-dotnet-34-categories.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-01.png">
+  <meta property="og:image:alt" content="I open-sourced the enterprise .NET plumbing I never want to rewrite, and graded it against 34 categories">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="I open-sourced the enterprise .NET plumbing I never want to rewrite, and graded it against 34 categories">
+  <meta name="twitter:description" content="Why I open-sourced a production .NET framework and scored it against a 34-category architecture rubric, gaps and all.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-01.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"I open-sourced the enterprise .NET plumbing I never want to rewrite, and graded it against 34 categories","description":"Why I open-sourced a production .NET framework and scored it against a 34-category architecture rubric, gaps and all.","url":"https://ivanball.github.io/articles/open-sourced-enterprise-dotnet-34-categories.html","mainEntityOfPage":"https://ivanball.github.io/articles/open-sourced-enterprise-dotnet-34-categories.html","image":"https://ivanball.github.io/assets/img/articles/article-01.png","datePublished":"2026-06-22T22:41:45Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":1,"sameAs":"https://medium.com/@ivanball76/i-open-sourced-the-enterprise-net-77f9200f3728"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"01 · Open-sourced and graded against 34 categories","item":"https://ivanball.github.io/articles/open-sourced-enterprise-dotnet-34-categories.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">01 · Open-sourced and graded against 34 categories</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html" aria-current="page">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Orientation · No. 1</p>
+          <h1 id="i-open-sourced-the-enterprise-net-plumbing-i-never-want-to-rewrite-and-graded-it-against-34-categories">I open-sourced the enterprise .NET plumbing I never want to rewrite, and graded it against 34 categories</h1>
+          <p class="article-meta"><time datetime="2026-06-22T22:41:45Z">June 22, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/i-open-sourced-the-enterprise-net-77f9200f3728" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-01.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A .NET 10 framework for DDD, Clean Architecture, and CQRS, built as a modular monolith
+          that extracts to microservices without a rewrite, and scored in the open against a 34-category rubric.</p>
+          <hr>
+          <p>I have lost count of how many times I have rebuilt the same plumbing.</p>
+          <p>Error handling. The CQRS wiring. A transactional outbox. JWT and JWKS auth. Multi-database routing.
+          Audit fields. The test harness. On every new enterprise .NET project, the same set of cross-cutting
+          concerns gets rebuilt, usually from scratch, usually a little worse than last time because the
+          deadline was closer.</p>
+          <p>So I did the obvious thing and extracted it once, properly, into a framework I could reuse. Then I did
+          the less obvious thing: I open-sourced it under the Apache 2.0 license, and I graded it against a 34-category
+          architecture rubric in public, gaps and all.</p>
+          <p>It is called <strong>MMCA.Common</strong> (Modular Monolith Clean Architecture), it targets .NET 10, and this
+          article is the front door to a series that teaches it one pattern at a time.</p>
+          <h2 id="what-it-is">What it is</h2>
+          <p>MMCA.Common is a set of <strong>nineteen NuGet packages</strong> that give you a DDD + Clean Architecture + CQRS
+          foundation as a <strong>modular monolith</strong>, plus the extraction boundaries to pull a module out into its own microservice
+          later without rewriting application code.</p>
+          <p>The packages layer strictly, each one only depending on the layers below it:</p>
+          <pre class="doc-pre" tabindex="0"><code class="">API              (presentation / controllers)
+     ↓
+Infrastructure   (EF Core, caching, JWT, JWKS, outbox, message bus, SignalR)
+     ↓
+Application      (CQRS handlers, decorators, module system, IMessageBus)
+     ↓
+Domain           (entities, aggregates, domain events, specifications)
+     ↓
+Shared           (Result pattern, errors, DTOs, value objects)</code></pre>
+          <p>A few packages sit off to the side of that stack rather than on top of it. <code>UI</code> and <code>Grpc</code> depend on
+          <code>Shared</code> only: the Blazor <code>UI</code> stays WebAssembly-friendly, and <code>Grpc</code> is pure transport that must not
+          couple to Domain, Application, or Infrastructure. The rest of the UI family builds on <code>UI</code> rather than
+          the layer stack: <code>UI.Web</code> is the web-host UI package, and <code>UI.Maui</code> (the one MAUI-target package)
+          depends on <code>UI</code> plus <code>Shared</code> only (ADR-042).</p>
+          <p>Two more packages sit outside the stack entirely. <code>Gateway</code> is the YARP edge that fronts the service
+          hosts once modules are extracted (ADR-008), and <code>AI</code> is a governed boundary for language-model calls,
+          isolated, versioned, evaluated, observed, and bounded in one package so a second AI feature inherits
+          the rules instead of copying them (ADR-120). The nineteenth package is <code>MMCA.Common</code> itself: a
+          metapackage that ships no assembly, one <code>PackageReference</code> in place of the six a standard application
+          host always takes (ADR-101).</p>
+          <p>Adding it to a solution you already have is one line, and each package transitively pulls the layers
+          beneath it:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet add package MMCA.Common.API</code></pre>
+          <p><code>API</code> brings <code>Infrastructure</code>, which brings <code>Application</code>, <code>Domain</code>, and <code>Shared</code>. The other packages
+          (<code>Grpc</code>, <code>UI</code>, <code>UI.Web</code>, <code>UI.Maui</code>, <code>Aspire</code>, <code>Aspire.Hosting</code>, <code>Gateway</code>, <code>AI</code>, and five <code>Testing.*</code>
+          packages) are opt-in for the surface you need.</p>
+          <p>Starting from nothing is a different command, because a package reference is not an application. A
+          solution on this framework is twelve projects and roughly 6,600 lines of plumbing before any business
+          logic, so the framework ships a <code>dotnet new</code> pack that writes all of it:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
+dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order</code></pre>
+          <p>That generates a warning-free build under five analyzers and a passing test run including the
+          architecture-fitness rules, with no database needed. The template content <strong>is</strong> the framework&#39;s
+          runnable reference app, staged at pack time rather than copied, so what you generate is the app whose
+          CI keeps it green, under your own names.</p>
+          <h2 id="the-one-thing-that-makes-it-different">The one thing that makes it different</h2>
+          <p>Plenty of repositories will sell you Clean Architecture. The difference here is that the rules are not
+          prose in a README. They are <strong>executable, and they fail the build.</strong></p>
+          <p>The inward-pointing dependency rule (Domain must never reference EF Core or ASP.NET) is enforced
+          <strong>twice</strong>, on purpose:</p>
+          <ol>
+          <li><strong>At compile time</strong>, by an MSBuild target (<code>MMCA.Common.LayerEnforcement.targets</code>) that inspects
+          project references and fails the build with a descriptive error if a layer reaches into a layer it
+          should not.</li>
+          <li><strong>At runtime</strong>, by NetArchTest fitness functions that assert the same rules against the compiled
+          assemblies.</li>
+          </ol>
+          <p>Those fitness functions do not live as copy-pasted test code in three repos. They live once, in a
+          shipped package, <code>MMCA.Common.Testing.Architecture</code>, which exposes a reusable rule library and abstract
+          test bases (<strong>136 test methods across 53 base classes</strong>). MMCA.Common&#39;s own build runs
+          267 of them; the two consumer apps subclass the same bases and supply their own architecture map,
+          so the rules are literally identical across all three codebases.</p>
+          <p>This is the line I care about most: <strong>if a rule matters, it should be a check, not a comment.</strong></p>
+          <h2 id="modular-monolith-now-microservices-later-no-rewrite">Modular monolith now, microservices later, no rewrite</h2>
+          <p>The other thesis baked into the framework is that &quot;monolith vs microservices&quot; is a false binary. You
+          build the extraction point now and cut the service when (if) you actually need to.</p>
+          <p>The extraction boundaries are real and tested, not slideware:</p>
+          <ul>
+          <li><strong>Database-per-service</strong>, even inside the monolith. Every entity resolves to a physical data source;
+          a host with no extra configuration behaves exactly like a single-database monolith, and the same code
+          runs against per-service databases once you split them (ADR-006).</li>
+          <li>A transport-agnostic <strong><code>IMessageBus</code></strong>. The same code dispatches events <strong>in-process</strong> today
+          (<code>InProcessMessageBus</code>) and over a <strong>broker</strong> the day a module becomes its own service
+          (<code>BrokerMessageBus</code>). Application, Domain, and Shared are forbidden from referencing the broker
+          library directly, and a fitness test enforces it.</li>
+          <li>A transactional <strong>outbox</strong> so that split never loses an event (its own deep-dive later in the series).</li>
+          <li><strong>gRPC contracts</strong>, <strong>JWKS cross-service auth</strong>, and <strong>Aspire hosting</strong> extensions for the extracted
+          topology (ADRs 004, 007, 008, 012).</li>
+          </ul>
+          <p>The point is reversibility. Transport choices live at the edges; your business logic does not know or
+          care whether the module next door is a method call or a network hop.</p>
+          <h2 id="i-scored-it-on-two-axes-then-published-every-gap">I scored it on two axes, then published every gap</h2>
+          <p>Here is the part that usually gets left out of &quot;look at my framework&quot; posts.</p>
+          <p>I graded MMCA.Common against a 34-category architecture rubric (backend, front-end, and
+          operational/governance categories), scoring each category on two axes: <strong>Maturity</strong> (how well-governed
+          the process is) and <strong>Implementation</strong> (how much substance is actually executed). It sits at a
+          <strong>maturity index of 97.0% and an implementation index of 86.0%</strong> across all 34 categories
+          (internationalization ships in the framework as en-US plus Spanish under ADR-027, which supersedes the
+          single-locale ADR-011, so it scores on both axes like every other category; nothing is excluded as
+          N/A). Then I committed the full evaluation to the repo, with every category&#39;s two scores, the evidence,
+          and the honest gaps.</p>
+          <p>The rubric itself is versioned. Version 2 (ADR-110) keeps all 34 categories and scores category 10 as
+          <strong>Messaging &amp; Integration Architecture</strong> (Maturity 4 / Implementation 9) and category 16 as <strong>AI-Native
+          Application Architecture</strong> (Maturity 3 / Implementation 6), which is where the governed language-model
+          boundary is graded.</p>
+          <p>The pattern in the scores is the same line from earlier: <strong>every category that earned top marks was
+          backed by a fitness function or a compile-time guard. Every category capped lower either left the
+          design to code review, or has its real proof living downstream in a consumer app.</strong> Clean Architecture,
+          SOLID, microservices readiness, CQRS, and testability all sit at Maturity 4 / Implementation 9, and all
+          of them are enforced automatically.</p>
+          <p>Implementation is the weaker axis on purpose. A framework ships mature, well-governed mechanisms whose
+          full execution often completes in the apps that consume it. Deployment, resilience recovery, and
+          data-migration gating all score higher on maturity than on implementation precisely because the
+          substance they reward (infrastructure-as-code, a drilled restore, a CI migration step) lives in
+          MMCA.ADC and MMCA.Store, not in a library.</p>
+          <p>The headline gap the rubric named was <strong>Compliance and Privacy</strong>: soft-delete everywhere and no
+          right-to-erasure path, which is the exact GDPR conflict the rubric names. I wrote that down rather than
+          hiding it, and it became ADR-005, a real anonymization extension point, and a PII fitness function that fails the
+          build. That is the whole point of scoring yourself in public: the gaps turn into the roadmap.</p>
+          <h2 id="it-runs-in-production-on-two-real-apps">It runs in production, on two real apps</h2>
+          <p>MMCA.Common is not a toy. Two deployed apps consume the same nineteen packages:</p>
+          <ul>
+          <li><strong>MMCA.ADC</strong>, the Atlanta Developers Conference app, deployed to Azure and used to run a live event.</li>
+          <li><strong>MMCA.Store</strong>, an e-commerce app with Catalog, Sales, and Identity modules and Stripe integration.</li>
+          </ul>
+          <p>Both run on the same framework version, swept in lockstep when the framework releases. The test suite
+          is roughly <strong>2,254 fast tests</strong> in a correct pyramid with no Docker or database dependency, held above
+          a 2,000-test zero-discovery floor by CI, so the inner loop stays quick and a filter regression that
+          silently drops tests fails the build.</p>
+          <h2 id="what-this-series-will-cover">What this series will cover</h2>
+          <p>Over the coming weeks I will take one pattern per article and go deep:</p>
+          <ul>
+          <li>The <code>Result&lt;T&gt;</code> railway that retired exceptions-as-control-flow.</li>
+          <li>The transactional outbox, in full.</li>
+          <li>Database-per-service inside a monolith.</li>
+          <li>The CQRS decorator pipeline (logging, caching, transactions, without touching a handler).</li>
+          <li>Navigation populators that replace EF <code>Include</code> chains.</li>
+          <li>JWKS cross-service auth without a shared secret.</li>
+          <li>Architecture fitness functions you can add to your own codebase this week.</li>
+          </ul>
+          <p>Each article stands alone if you land on it from a search, and links into the rest if you want the
+          whole curriculum.</p>
+          <h2 id="try-it-or-come-argue-with-me">Try it, or come argue with me</h2>
+          <p>MMCA.Common is Apache-2.0 licensed and open source. The fastest way to form an opinion is to read the
+          scorecard (the gaps are the honest part) and skim the ADRs (the &quot;why&quot; behind each decision).</p>
+          <ul>
+          <li>⭐ Star the repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>Read the full 34-category scorecard in the repo, gaps included.</li>
+          <li><code>dotnet new install MMCA.Templates</code> then <code>dotnet new mmca-app -n Your.App</code>, and tell me what breaks.</li>
+          </ul>
+          <p>Next up: how a modular monolith becomes microservices without a rewrite, and
+          why that extraction point is something you build now, not a migration you survive later.</p>
+          <hr>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Microservices, Open Source</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--next" href="modular-monolith-to-microservices.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">02 · Modular monolith to microservices</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#what-it-is">What it is</a></li>
+            <li><a href="#the-one-thing-that-makes-it-different">The one thing that makes it different</a></li>
+            <li><a href="#modular-monolith-now-microservices-later-no-rewrite">Modular monolith now, microservices later, no rewrite</a></li>
+            <li><a href="#i-scored-it-on-two-axes-then-published-every-gap">I scored it on two axes, then published every gap</a></li>
+            <li><a href="#it-runs-in-production-on-two-real-apps">It runs in production, on two real apps</a></li>
+            <li><a href="#what-this-series-will-cover">What this series will cover</a></li>
+            <li><a href="#try-it-or-come-argue-with-me">Try it, or come argue with me</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

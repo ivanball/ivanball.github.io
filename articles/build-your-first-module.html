@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Scaffold a .NET modular monolith in one command, then build your first module · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A hands-on walkthrough of building a new module across all five layers.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/build-your-first-module.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Scaffold a .NET modular monolith in one command, then build your first module">
+  <meta property="og:description" content="A hands-on walkthrough of building a new module across all five layers.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/build-your-first-module.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-39.png">
+  <meta property="og:image:alt" content="Scaffold a .NET modular monolith in one command, then build your first module">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Scaffold a .NET modular monolith in one command, then build your first module">
+  <meta name="twitter:description" content="A hands-on walkthrough of building a new module across all five layers.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-39.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Scaffold a .NET modular monolith in one command, then build your first module","description":"A hands-on walkthrough of building a new module across all five layers.","url":"https://ivanball.github.io/articles/build-your-first-module.html","mainEntityOfPage":"https://ivanball.github.io/articles/build-your-first-module.html","image":"https://ivanball.github.io/assets/img/articles/article-39.png","datePublished":"2026-08-08T12:04:28Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":39,"sameAs":"https://medium.com/@ivanball76/scaffold-a-net-modular-monolith-in-one-command-then-build-your-first-module-b10aacd16d33"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"39 · Build your first module","item":"https://ivanball.github.io/articles/build-your-first-module.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">39 · Build your first module</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html" aria-current="page">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 39</p>
+          <h1 id="scaffold-a-net-modular-monolith-in-one-command-then-build-your-first-module">Scaffold a .NET modular monolith in one command, then build your first module</h1>
+          <p class="article-meta"><time datetime="2026-08-08T12:04:28Z">August 8, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/scaffold-a-net-modular-monolith-in-one-command-then-build-your-first-module-b10aacd16d33" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-39.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">One command writes the solution. The seven steps after it are the ones worth
+          understanding, because they are what makes the generated code safe to change.</p>
+          <hr>
+          <p>Most &quot;add a feature&quot; guides skip the parts that actually keep a codebase honest a year later. They show
+          you a controller and a service class and call it a vertical slice. Then the aggregate has a public
+          setter, the handler opens its own transaction by hand, validation lives in three places, and nobody can
+          say which module owns which table.</p>
+          <p>MMCA.Common has opinions about all of that, and they are enforced opinions: a domain aggregate with no
+          public constructor, a use case that is a thin handler wrapped by a fat decorator pipeline, and a module
+          that declares its own dependencies so the host can assemble everything in the right order.</p>
+          <p>The framework ships a <code>dotnet new</code> pack, so you type none of that plumbing (ADR-065). Hand-rolling it
+          costs a day before you write a line of business logic, and ADR-065 measures that starting cost against
+          the framework&#39;s reference app: 12 projects, 133 files, and 10,662 lines of plumbing, an 827-line
+          <code>.editorconfig</code> among them, plus the 100-line <code>Directory.Packages.props</code> that carries every package pin
+          (58 of them in the seed today), several of those lines load-bearing in ways nothing tells you about
+          until much later.</p>
+          <p>That changes what a tutorial like this is for. Step 0 gets you a green solution in about a minute.
+          Steps 1 through 7 are the reasoning behind code you already have, which is what you need before you
+          change it. The example is a <code>Coupon</code> aggregate in a <code>Promotions</code> module, but every step maps directly
+          onto the real Conference, Sales, and Catalog modules in the consumer apps.</p>
+          <h2 id="prerequisites">Prerequisites</h2>
+          <ul>
+          <li><strong>.NET 10 SDK.</strong> The framework targets <code>net10.0</code> with <code>LangVersion: preview</code> for C# extension types.</li>
+          <li>Familiarity with the layer flow: API/Grpc -&gt; Infrastructure -&gt; Application -&gt; Domain -&gt; Shared. Your
+          module&#39;s code lives in those layers, and the framework forbids inward layers from referencing
+          outward ones (a topic for the fitness-test tutorial).</li>
+          <li>The conventions in your head: factory methods return <code>Result&lt;T&gt;</code> instead of throwing; commands and
+          queries are separate; private fields are <code>_camelCase</code>; <code>TreatWarningsAsErrors</code> is on.</li>
+          </ul>
+          <p>No credentials and no private feed: the packages are on nuget.org.</p>
+          <p>The example types below are <strong>representative</strong> of the module shape, not copied verbatim from a specific
+          file. They follow the documented base classes and conventions exactly.</p>
+          <h2 id="step-0-scaffold-the-solution">Step 0: scaffold the solution</h2>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
+dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order
+<span class="hljs-built_in">cd</span> Contoso.Support
+
+dotnet build Contoso.Support.slnx          <span class="hljs-comment"># warning-free under all five analyzers</span>
+dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx   <span class="hljs-comment"># passing, fitness rules included, no database</span></code></pre>
+          <p>Three names, all independent: the solution (also your root namespace), the first module in plural
+          PascalCase, and its aggregate root in singular PascalCase. Everything derived from them follows, from
+          the routes and the identifier alias to the cache-key prefix and the Blazor pages.</p>
+          <p>You get twelve projects: five module layers, a REST API host, a Blazor Server and MudBlazor UI host, an
+          Aspire AppHost, a per-database migrations project, and three test projects. The aggregate arrives fully
+          worked, in the same shape the rest of this article explains.</p>
+          <p>Get that green <strong>before</strong> you change anything. It is the line you bisect against later, and if it is
+          not green that is a template bug rather than yours: the pack is generated from the framework&#39;s runnable
+          reference app, and a smoke job builds two generated solutions in package mode on every change.</p>
+          <p>Two things the scaffold deliberately refuses to hand over, because a rename or a shape flag
+          invalidates them and no fixed value is right for every name you could pick.</p>
+          <p>The first is <strong>declaration order, plus one constructor shape</strong>. Three analyzer rules, and only three,
+          ship dropped to <code>suggestion</code> in a marked block appended to the <em>staged</em> <code>.editorconfig</code>; every other
+          analyzer stays at error. <code>SA1210</code> cannot sort your namespace against <code>MMCA.Common.*</code> without knowing
+          your name: an app namespace sorts above it for <code>Contoso.Support</code> and below it for <code>Zeta.App</code>, so no
+          checked-in order survives both. <code>SA1211</code> is the same story one level down, on the identifier-alias
+          file whose aliases re-sort when a shape flag renames them. <code>IDE0021</code> is the flags rather than the
+          renames: the aggregate&#39;s private constructor assigns one property per optional axis, so
+          <code>--no-status --no-description --no-owner</code> together leave it with a single statement, which the
+          baseline then wants as an expression body.</p>
+          <p>The second is <strong>your integration-event wire contract</strong>: a freeze inherited from someone else&#39;s sample
+          module guarantees nothing. All of it is one-time, and the generated README carries the exact commands
+          (one <code>dotnet format analyzers</code> run restores the two ordering rules; <code>IDE0021</code> is not fixable that way,
+          so you fold the constructor by hand and delete the line).</p>
+          <p>Now the part worth reading.</p>
+          <h2 id="step-1-define-the-aggregate-with-a-private-constructor-and-a-result-factory">Step 1: define the aggregate with a private constructor and a <code>Result</code> factory</h2>
+          <p>Open the Domain layer of the module you just generated (<code>Source/Modules/Orders/...Orders.Domain/</code>), or
+          start a fresh one there. An aggregate root inherits from <code>AuditableAggregateRootEntity&lt;TId&gt;</code>, the top
+          rung of the framework&#39;s three-rung entity chain:</p>
+          <pre class="doc-pre" tabindex="0"><code class="">BaseEntity&lt;TId&gt;  -&gt;  AuditableBaseEntity&lt;TId&gt;  -&gt;  AuditableAggregateRootEntity&lt;TId&gt;</code></pre>
+          <p><code>BaseEntity&lt;TId&gt;</code> gives you a <code>required init</code> identifier (set once at construction, immutable after,
+          while EF still materializes through the parameterless constructor). <code>AuditableBaseEntity&lt;TId&gt;</code> adds the
+          audit fields (<code>CreatedOn/By</code>, <code>LastModifiedOn/By</code>) and the soft-delete <code>IsDeleted</code> flag, all stamped
+          automatically. <code>AuditableAggregateRootEntity&lt;TId&gt;</code> adds the domain-event collection and aggregate
+          helpers.</p>
+          <p>The load-bearing idiom is the <strong>private constructor plus static <code>Create</code> factory returning
+          <code>Result&lt;T&gt;</code></strong>. You cannot <code>new</code> an invalid aggregate into existence; the factory is the only door, and
+          it enforces the invariants:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Domain layer (representative)</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">Coupon</span> : <span class="hljs-title">AuditableAggregateRootEntity</span>&lt;<span class="hljs-title">CouponIdentifierType</span>&gt;
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Code { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">decimal</span> PercentOff { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">bool</span> IsActive { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+
+    <span class="hljs-function"><span class="hljs-keyword">private</span> <span class="hljs-title">Coupon</span>()</span> { }   <span class="hljs-comment">// EF materializes through this; callers cannot use it</span>
+
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-title">Result</span>&lt;<span class="hljs-title">Coupon</span>&gt; <span class="hljs-title">Create</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> code, <span class="hljs-built_in">decimal</span> percentOff</span>)</span>
+    {
+        <span class="hljs-keyword">if</span> (<span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(code))
+        {
+            <span class="hljs-keyword">return</span> Result.Failure&lt;Coupon&gt;(CouponErrors.CodeRequired);
+        }
+
+        <span class="hljs-keyword">if</span> (percentOff <span class="hljs-keyword">is</span> &lt;= <span class="hljs-number">0</span> <span class="hljs-keyword">or</span> &gt; <span class="hljs-number">100</span>)
+        {
+            <span class="hljs-keyword">return</span> Result.Failure&lt;Coupon&gt;(CouponErrors.PercentOutOfRange);
+        }
+
+        <span class="hljs-keyword">var</span> coupon = <span class="hljs-keyword">new</span> Coupon
+        {
+            Id = <span class="hljs-literal">default</span>,            <span class="hljs-comment">// DB-generated identity; the factory leaves it</span>
+            Code = code.Trim(),
+            PercentOff = percentOff,
+            IsActive = <span class="hljs-literal">true</span>,
+        };
+
+        <span class="hljs-keyword">return</span> Result.Success(coupon);
+    }
+}</code></pre>
+          <p>Two things to notice. The setters are <code>private</code> so state changes only through methods on the aggregate.
+          And the factory returns <code>Result&lt;Coupon&gt;</code>, never throws, so a caller handles an invalid coupon as a value,
+          not an exception. This is the SOLID-and-DDD story in miniature: the factory is the single place
+          invariants live.</p>
+          <h2 id="step-2-raise-a-domain-event-with-adddomainevent">Step 2: raise a domain event with <code>AddDomainEvent</code></h2>
+          <p>State changes that other parts of the system care about are announced as <strong>domain events</strong>. You do not
+          publish them directly; you record them on the aggregate, and the framework turns them into durable
+          outbox rows in the same transaction that saves the data.</p>
+          <p>Add a business method that mutates state and records the event:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// On the Coupon aggregate (representative)</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">Deactivate</span>()</span>
+{
+    <span class="hljs-keyword">if</span> (!IsActive)
+    {
+        <span class="hljs-keyword">return</span> Result.Failure(CouponErrors.AlreadyInactive);
+    }
+
+    IsActive = <span class="hljs-literal">false</span>;
+    AddDomainEvent(<span class="hljs-keyword">new</span> CouponDeactivated(Id, Code));
+    <span class="hljs-keyword">return</span> Result.Success();
+}</code></pre>
+          <p>The sequence is always: the aggregate mutates its own state, then calls <code>AddDomainEvent(...)</code>, and the
+          event sits in the aggregate&#39;s collection until <code>SaveChanges</code> runs. At save time the framework stamps the
+          audit fields, captures the domain events, serializes them to <code>OutboxMessage</code> rows, commits data and
+          outbox in one transaction, then dispatches in-process and marks the rows processed. You write one line;
+          the durability and the eventual broker delivery come for free (the transactional-outbox article covers
+          that machine in full).</p>
+          <p><code>AddDomainEvent</code> lives on <code>AuditableAggregateRootEntity&lt;TId&gt;</code>, so any aggregate can raise events, and
+          nothing in the Domain layer knows or cares how they will eventually be delivered.</p>
+          <h2 id="step-3-write-the-command-and-its-handler">Step 3: write the command and its handler</h2>
+          <p>A write is a <em>use case</em>: a small command object handed to a handler that does exactly one thing. The
+          handler implements <code>ICommandHandler&lt;TCommand, TResult&gt;</code>, which is a single method,
+          <code>Task&lt;TResult&gt; HandleAsync(TCommand, CancellationToken)</code>, returning <code>Result</code> or <code>Result&lt;T&gt;</code>.</p>
+          <p>Keep the handler thin. It loads the aggregate, calls a business method, and saves. Everything
+          cross-cutting (logging, caching, transactions) is added by the pipeline, not by the handler.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Application layer (representative)</span>
+<span class="hljs-comment">// The command is a plain record; the result type is declared on the handler below.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">CreateCouponCommand</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> Code, <span class="hljs-built_in">decimal</span> PercentOff</span>)
+    : ITransactional</span>;   <span class="hljs-comment">// ITransactional opts into a DB transaction</span>
+
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">CreateCouponHandler</span>(<span class="hljs-params">ICouponRepository repository</span>)
+    : ICommandHandler&lt;CreateCouponCommand, Result&lt;CouponIdentifierType&gt;&gt;</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task&lt;Result&lt;CouponIdentifierType&gt;&gt; HandleAsync(
+        CreateCouponCommand command, CancellationToken cancellationToken)
+    {
+        <span class="hljs-keyword">var</span> couponResult = Coupon.Create(command.Code, command.PercentOff);
+        <span class="hljs-keyword">if</span> (couponResult.IsFailure)
+        {
+            <span class="hljs-keyword">return</span> Result.Failure&lt;CouponIdentifierType&gt;(couponResult.Errors);
+        }
+
+        <span class="hljs-keyword">await</span> repository.AddAsync(couponResult.Value, cancellationToken);
+        <span class="hljs-keyword">return</span> Result.Success(couponResult.Value.Id);
+    }
+}</code></pre>
+          <p>The marker interface <code>ITransactional</code> is the whole transaction opt-in. It is an empty interface; the
+          type <em>is</em> the message. When the command implements it, the <code>TransactionalCommandDecorator</code> wraps the
+          handler in <code>IUnitOfWork.ExecuteInTransactionAsync</code> and rolls back on an exception. A handler that does
+          not need a transaction (a single <code>SaveChanges</code> whose atomicity the outbox already guarantees) simply
+          does not implement the marker. There is a sibling marker, <code>ICacheInvalidating</code>, that exposes a
+          <code>CachePrefix</code> to evict on success the same way.</p>
+          <h2 id="step-4-add-a-fluentvalidation-validator">Step 4: add a FluentValidation validator</h2>
+          <p>Input validation does not belong in the handler. Write a <code>FluentValidation</code> validator for the command,
+          and the pipeline runs it automatically before the handler ever executes:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Application layer (representative)</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">CreateCouponCommandValidator</span> : <span class="hljs-title">AbstractValidator</span>&lt;<span class="hljs-title">CreateCouponCommand</span>&gt;
+{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">CreateCouponCommandValidator</span>()</span>
+    {
+        RuleFor(c =&gt; c.Code).NotEmpty().MaximumLength(<span class="hljs-number">32</span>);
+        RuleFor(c =&gt; c.PercentOff).InclusiveBetween(<span class="hljs-number">0.01</span>m, <span class="hljs-number">100</span>m);
+    }
+}</code></pre>
+          <p>This is structural validation (shape, length, range). It complements the domain factory&#39;s invariant
+          checks rather than replacing them: the validator rejects obviously malformed input cheaply at the edge,
+          and <code>Coupon.Create</code> still enforces the business rules that must hold no matter how the call arrived. The
+          validator is auto-discovered by convention scanning in the next step, so you do not register it by hand.</p>
+          <h2 id="step-5-implement-imodule">Step 5: implement <code>IModule</code></h2>
+          <p>A <strong>module</strong> is the unit of cohesion above a feature slice. It implements <code>IModule</code>: a display <code>Name</code>,
+          an optional <code>Dependencies</code> list of other module names, a <code>RequiresDependencies</code> flag, and a single
+          <code>Register(services, configuration, applicationSettings)</code> method that wires all of the module&#39;s services.
+          The interface ships default-implemented members (<code>Dependencies =&gt; []</code>, <code>RequiresDependencies =&gt; false</code>,
+          an empty <code>RegisterDisabledStubs</code>), so a minimal module implements only <code>Name</code> and <code>Register</code>:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Application layer (representative)</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">PromotionsModule</span> : <span class="hljs-title">IModule</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Name =&gt; <span class="hljs-string">&quot;Promotions&quot;</span>;
+
+    <span class="hljs-comment">// This module reads coupon usage from Sales, so declare the dependency.</span>
+    <span class="hljs-keyword">public</span> IReadOnlyList&lt;<span class="hljs-built_in">string</span>&gt; Dependencies =&gt; [<span class="hljs-string">&quot;Sales&quot;</span>];
+
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">Register</span>(<span class="hljs-params">
+        IServiceCollection services,
+        IConfigurationBuilder configuration,
+        ApplicationSettings applicationSettings</span>)</span>
+    {
+        services.AddScoped&lt;ICouponRepository, CouponRepository&gt;();
+        <span class="hljs-comment">// handlers, validators, and mappers are picked up by convention scanning (next step)</span>
+    }
+}</code></pre>
+          <p><code>Dependencies</code> is what lets the framework do something genuinely useful: <code>ModuleLoader</code> discovers every
+          <code>IModule</code> and registers them in <strong>topological order</strong> (Kahn&#39;s algorithm) based on declared dependencies,
+          so a module is always wired after the modules it depends on. <code>ModulesSettings</code> (the <code>&quot;Modules&quot;</code> config
+          section) can disable a module; disabled modules receive stub registrations so cross-module interfaces
+          stay resolvable. That last detail is the extraction boundary: a module that depends on a now-remote module
+          keeps compiling and resolving because the stub stands in until a gRPC client takes over.</p>
+          <h2 id="step-6-register-in-the-exact-di-sequence">Step 6: register in the exact DI sequence</h2>
+          <p>This is the step the most experienced developers still get wrong, because one ordering rule is
+          load-bearing. <code>AddApplicationDecorators()</code> must run after every module&#39;s handler scan, because Scrutor&#39;s
+          <code>TryDecorate</code> can only wrap handlers that are already registered. That is the only constraint that
+          matters here. The relative position of <code>AddInfrastructure</code> and <code>AddAPI</code> is not load-bearing: DI
+          dependencies resolve at runtime, not at registration time, so the infrastructure that backs the
+          decorated handlers can be registered before or after them. The framework documents the sequence this
+          way:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Host composition root</span>
+services.AddApplication()                              <span class="hljs-comment">// core services, event dispatcher</span>
+    .AddInfrastructure(configuration)                     <span class="hljs-comment">// repos, UoW, DbContexts, caching, outbox</span>
+    .AddAPI(modulesSettings)                              <span class="hljs-comment">// controllers, idempotency, exception handlers</span>
+    .ScanModuleApplicationServices&lt;PromotionsClassRef&gt;()  <span class="hljs-comment">// this module&#x27;s handlers, validators, mappers</span>
+    .ScanModuleApplicationServices&lt;SalesClassRef&gt;()       <span class="hljs-comment">// another module</span>
+    .AddApplicationDecorators();                          <span class="hljs-comment">// MUST be last: Scrutor wraps existing handlers</span></code></pre>
+          <p>The rules embedded in that order:</p>
+          <ul>
+          <li><strong><code>ScanModuleApplicationServices&lt;TMarker&gt;()</code></strong> runs once per module. It auto-registers that module&#39;s
+          domain-event handlers (singleton), DTO and request mappers (scoped), command and query handlers
+          (scoped), and FluentValidation validators. This is why you did not register the validator from Step 4
+          or the handler from Step 3 by hand: convention scanning found them by the marker type&#39;s assembly.</li>
+          <li><strong><code>AddApplicationDecorators()</code> must be last</strong> of the Application registrations. It uses Scrutor&#39;s
+          <code>TryDecorate</code> to wrap every already-registered handler. If you call it before a module&#39;s
+          <code>ScanModuleApplicationServices</code>, that module&#39;s handlers are registered too late to be wrapped, and
+          they silently run undecorated. No transactions, no caching, no logging, and no error to tell you.</li>
+          </ul>
+          <h2 id="step-7-watch-the-decorator-pipeline-kick-in-for-free">Step 7: watch the decorator pipeline kick in, for free</h2>
+          <p>With the sequence correct, every command and query handler is now wrapped, in this execution order:</p>
+          <pre class="doc-pre" tabindex="0"><code class="">Commands: FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt; Transactional -&gt; Handler
+Queries:  FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Timeout -&gt; Handler</code></pre>
+          <p>You wrote a thin handler. The pipeline added the rest, driven by the marker interfaces:</p>
+          <ul>
+          <li><strong>FeatureGate</strong> is outermost and short-circuits the call when the feature flag for that command or
+          query is turned off.</li>
+          <li><strong>Authorization</strong> comes next, and sits outside caching on purpose. Commands and queries that
+          implement <code>IRequiresPermission</code> are checked against the permission registry for the current user&#39;s
+          roles, and a denial short-circuits with a <code>Forbidden</code> error, so a denied query never reads from or
+          populates the cache.</li>
+          <li><strong>Logging</strong> records the full pipeline duration via <code>ICorrelationContext</code>, for every handler, with no
+          per-handler code.</li>
+          <li><strong>Caching</strong> runs for queries that implement <code>IQueryCacheable</code> (supplying <code>CacheKey</code> + <code>CacheDuration</code>),
+          and invalidates for commands that implement <code>ICacheInvalidating</code> (on success, outside the transaction
+          boundary).</li>
+          <li><strong>Validating</strong> runs FluentValidation on both sides. On a command it runs before the transaction
+          opens. On a query it sits inside Caching by design, because a cached entry was already validated
+          when it was produced, so a cache hit skips the validator along with the handler.</li>
+          <li><strong>Timeout</strong> gives commands and queries that implement <code>IHasTimeout</code> their own execution budget: the
+          handler runs under a linked token cancelled when the budget expires, and expiry comes back as a
+          <code>Request.TimedOut</code> failure rather than an exception, while caller cancellation still propagates as
+          one. A budget of zero or less passes straight through.</li>
+          <li><strong>Transactional</strong> opens a DB transaction only when the command implements <code>ITransactional</code>, and rolls
+          back on an exception. A business failure (<code>Result.Failure</code>) also rolls the transaction back:
+          <code>ExecuteInTransactionAsync</code> inspects the returned value and, on <code>Result { IsFailure: true }</code>, calls
+          <code>RollbackTransaction()</code> and skips the commit, choosing atomicity over partial persistence. Cache
+          invalidation runs only on success, so a failed command evicts nothing either way.</li>
+          </ul>
+          <p>Your <code>CreateCouponCommand</code> from Step 3 implemented <code>ITransactional</code>, so it now runs inside a transaction
+          automatically. You never wrote <code>BeginTransaction</code>. That is the payoff of the shape: the handler stays
+          about the use case, and the cross-cutting concerns are written once, in the framework, and reused by
+          every handler in every module.</p>
+          <h2 id="the-next-slice-and-the-next-module">The next slice, and the next module</h2>
+          <p>You will repeat that shape for every feature you add, so the pack scaffolds it too, which keeps it from
+          drifting one hand-typed slice at a time. A single vertical slice is one command, run from the module&#39;s
+          <code>UseCases</code> folder:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-command</span> <span class="hljs-literal">-n</span> CancelOrder <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--module</span> Orders `
+  <span class="hljs-literal">--aggregate</span> Order <span class="hljs-literal">--domain-method</span> Cancel
+
+dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-literal">-n</span> GetOrderByNumber <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--module</span> Orders `
+  <span class="hljs-literal">--aggregate</span> Order</code></pre>
+          <p>Handlers are convention-scanned, so there is nothing to register. Two things still need you: add the
+          <code>--domain-method</code> guarded method to your aggregate before the command slice compiles, and keep the
+          query&#39;s <code>CacheKey</code> inside your module&#39;s <code>*CacheKeys.Prefix</code>. The caching decorator matches cacheable
+          reads to invalidating commands <strong>by string prefix</strong>, so a key that drifts out of it goes stale silently.</p>
+          <p>A whole second module, across all five layers plus its test and migrations projects:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-literal">-n</span> Billing <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--aggregate</span> Invoice</code></pre>
+          <p>Here is the boundary where generated code stops and you start. <code>dotnet new</code> cannot patch files that
+          already exist, so <code>mmca-module</code> <strong>prints seven numbered wire-ups it cannot perform</strong>, and until they
+          are done the module is invisible to the host and to the fitness rules. If your solution came from
+          <code>mmca-app</code>, you do not type any of them: that solution ships its own <code>build/add-module.ps1</code>, and the
+          printed text opens by telling you to run it instead, because it invokes the template and then performs
+          all seven itself. The list is the fallback for a hand-built solution, and the best description of what
+          the script is doing on your behalf:</p>
+          <ol>
+          <li><strong>Solution.</strong> Add the eight new projects (five layer projects, both test projects, and the
+          migrations project) to the <code>.slnx</code>.</li>
+          <li><strong>Project references.</strong> The Web host needs the module&#39;s API project and its migrations project. The
+          architecture-test project needs <strong>all five</strong> layer projects, because the map in step 4 names a type
+          from each.</li>
+          <li><strong>Identifier alias.</strong> Copy the existing <code>&lt;Compile Include ... Link&gt;</code> block in
+          <code>Directory.Build.props</code> and point it at the new module&#39;s <code>*.GlobalUsings.IdentifierType.cs</code>. Without
+          it the alias is invisible outside its own project.</li>
+          <li><strong>Architecture map.</strong> Five lines in your <code>*ArchitectureMap.cs</code>, one per layer. <strong>A module missing
+          from the map is silently not covered by the layering and isolation rules.</strong> No error, no warning:
+          the rules simply stop watching the code you just added.</li>
+          <li><strong>Host.</strong> One <code>services.AddErrorResources&lt;BillingErrorResources&gt;();</code> next to the existing ones.
+          <code>ModuleLoader</code> discovers the <code>IModule</code> from Step 5 itself, so nothing else needs registering.</li>
+          <li><strong>Database.</strong> The module gets its own: an <code>AddDatabase</code> / <code>WithSQLServerDataSource</code> pair in the
+          AppHost, <code>Modules</code> / <code>DataSources</code> / <code>Outbox</code> entries in the Web host&#39;s <code>appsettings.json</code>, and the
+          deletion of the now-conflicting top-level <code>SQLServerMigrationsAssembly</code>. Every module database
+          carries its own outbox and inbox tables, so two modules migrated into one database collide on them,
+          and naming the outbox source explicitly is what stops it from moving the day you reorder those
+          calls.</li>
+          <li><strong>First migration.</strong> <code>dotnet ef migrations add InitialCreate</code> against the new migrations project.</li>
+          </ol>
+          <p>The first two are what make it compile, so they fail loudly. Numbers three and four do not, which is
+          why they are worth reading twice. And the honest reading of the script is not that the wire-ups
+          stopped mattering: it is that the one code path CI exercises now applies them for you, on a solution
+          the template generated.</p>
+          <h2 id="trade-offs-and-gotchas-honestly">Trade-offs and gotchas, honestly</h2>
+          <p>The shape buys consistency, and it asks for discipline in return:</p>
+          <ul>
+          <li><strong>The DI order is unforgiving.</strong> Call <code>AddApplicationDecorators()</code> too early and handlers run
+          undecorated with no warning. Treat the documented sequence as a hard rule, and consider an
+          architecture fitness test that asserts handlers are decorated (the next article covers fitness tests).</li>
+          <li><strong>Markers are easy to forget.</strong> <code>ITransactional</code> and <code>ICacheInvalidating</code> are opt-in by presence.
+          Forget the marker and you lose the behavior silently. The upside (no behavior you did not ask for) is
+          also the trap (no behavior you forgot to ask for).</li>
+          <li><strong>Validation lives in two places by design.</strong> Cheap structural checks in the FluentValidation
+          validator, business invariants in the domain factory. That is intentional layering, not duplication,
+          but it does mean a rule can be enforced at the wrong altitude if you are not deliberate.</li>
+          <li><strong>Topological ordering depends on accurate <code>Dependencies</code>.</strong> If a module reads from another but does
+          not declare it, the loader may wire it too early. Declare every cross-module dependency you actually
+          take.</li>
+          <li><strong>Soft-delete is the default.</strong> Your aggregate is never hard-deleted; <code>IsDeleted</code> is set and global
+          query filters hide it. Plan for the data to persist, which matters for both storage and privacy.</li>
+          <li><strong>A scaffold is a starting point, not an understanding.</strong> The generated solution is green on day one,
+          which is exactly what makes it easy to change something load-bearing without noticing. The DI order,
+          the marker interfaces, and the architecture map are the three places where a wrong edit fails
+          silently rather than loudly, and none of them is protected by the template.</li>
+          </ul>
+          <p>None of these are reasons to fight the shape. They are the reasons to learn it once and let it carry
+          every module after.</p>
+          <hr>
+          <p><strong>What we covered:</strong> scaffolding the whole solution with <code>dotnet new mmca-app</code> and the two fixups it
+          deliberately leaves you, the aggregate with a private constructor and a <code>Result</code> factory, raising a
+          domain event with <code>AddDomainEvent</code>, a thin command handler marked <code>ITransactional</code>, a FluentValidation
+          validator, the <code>IModule</code> contract with <code>Name</code> and <code>Dependencies</code>, the exact DI sequence
+          (<code>AddApplication().AddInfrastructure(config).AddAPI(modulesSettings) .ScanModuleApplicationServices&lt;T&gt;()...AddApplicationDecorators()</code>), the decorator pipeline that wraps
+          every handler automatically, and the seven wire-ups <code>mmca-module</code> prints because <code>dotnet new</code> cannot
+          patch files that already exist (a solution generated by <code>mmca-app</code> applies all seven for you through
+          its own <code>build/add-module.ps1</code>).</p>
+          <p><strong>Next in the series:</strong> write your first architecture fitness test, so the conventions in this article
+          become a red build instead of a code-review comment.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read ADR-065 on why the template is
+          generated from the reference app rather than maintained beside it, or scaffold a solution and tell me
+          what breaks.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>Templates guide: <a href="https://ivanball.github.io/docs/guides/common-TEMPLATES.html" target="_blank" rel="noopener">https://ivanball.github.io/docs/guides/common-TEMPLATES.html</a></li>
+          <li>Getting started: <a href="https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html" target="_blank" rel="noopener">https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html</a></li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Domain Driven Design, CQRS, Software Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="i18n-and-theming.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">38 · i18n and theming on one preference pipeline</span></a>
+          <a class="article-pager-link article-pager-link--next" href="write-your-first-fitness-test.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">40 · Write your first fitness test</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#prerequisites">Prerequisites</a></li>
+            <li><a href="#step-0-scaffold-the-solution">Step 0: scaffold the solution</a></li>
+            <li><a href="#step-1-define-the-aggregate-with-a-private-constructor-and-a-result-factory">Step 1: define the aggregate with a private constructor and a Result factory</a></li>
+            <li><a href="#step-2-raise-a-domain-event-with-adddomainevent">Step 2: raise a domain event with AddDomainEvent</a></li>
+            <li><a href="#step-3-write-the-command-and-its-handler">Step 3: write the command and its handler</a></li>
+            <li><a href="#step-4-add-a-fluentvalidation-validator">Step 4: add a FluentValidation validator</a></li>
+            <li><a href="#step-5-implement-imodule">Step 5: implement IModule</a></li>
+            <li><a href="#step-6-register-in-the-exact-di-sequence">Step 6: register in the exact DI sequence</a></li>
+            <li><a href="#step-7-watch-the-decorator-pipeline-kick-in-for-free">Step 7: watch the decorator pipeline kick in, for free</a></li>
+            <li><a href="#the-next-slice-and-the-next-module">The next slice, and the next module</a></li>
+            <li><a href="#trade-offs-and-gotchas-honestly">Trade-offs and gotchas, honestly</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

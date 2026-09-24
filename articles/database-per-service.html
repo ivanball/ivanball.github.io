@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Database-per-service inside a monolith (and why) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Give each module its own database and outbox before you extract it, so extraction changes hosting, not data.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/database-per-service.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Database-per-service inside a monolith (and why)">
+  <meta property="og:description" content="Give each module its own database and outbox before you extract it, so extraction changes hosting, not data.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/database-per-service.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-10.png">
+  <meta property="og:image:alt" content="Database-per-service inside a monolith (and why)">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Database-per-service inside a monolith (and why)">
+  <meta name="twitter:description" content="Give each module its own database and outbox before you extract it, so extraction changes hosting, not data.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-10.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Database-per-service inside a monolith (and why)","description":"Give each module its own database and outbox before you extract it, so extraction changes hosting, not data.","url":"https://ivanball.github.io/articles/database-per-service.html","mainEntityOfPage":"https://ivanball.github.io/articles/database-per-service.html","image":"https://ivanball.github.io/assets/img/articles/article-10.png","datePublished":"2026-07-08T12:16:31Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":10,"sameAs":"https://medium.com/@ivanball76/database-per-service-inside-a-monolith-and-why-265092eb03f1"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"10 · Database-per-service inside a monolith","item":"https://ivanball.github.io/articles/database-per-service.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">10 · Database-per-service inside a monolith</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html" aria-current="page">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Data &amp; persistence · No. 10</p>
+          <h1 id="database-per-service-inside-a-monolith-and-why">Database-per-service inside a monolith (and why)</h1>
+          <p class="article-meta"><time datetime="2026-07-08T12:16:31Z">July 8, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/database-per-service-inside-a-monolith-and-why-265092eb03f1" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-10.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">One <code>DbContext</code> class. Many databases. A host with no extra configuration behaves
+          exactly like a single-database monolith, and the same code runs against per-service databases the day
+          you split. Here is how, and the one consistency guarantee you give up.</p>
+          <hr>
+          <p>Most &quot;database per microservice&quot; advice assumes you already have microservices. You do not, on day
+          one. You have a monolith, one connection string, and a reasonable wish to not paint yourself into a
+          corner. The usual answer is to either share one database forever (and inherit a coupling you can
+          never unwind) or to split the databases prematurely (and inherit distributed-systems pain before you
+          have a single user). Neither is good.</p>
+          <p>MMCA.Common does something quieter. It runs <strong>database-per-service semantics inside the monolith</strong>,
+          in a way that collapses to a plain single-database monolith when you have not configured anything,
+          and expands to physically separate databases when you have, with no change to your entity or handler
+          code. The swap point is present from the first commit and free until you use it.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>Two failures hide in the shared-database monolith, and both surface at the worst possible time.</p>
+          <p>The first is the coupling itself. Once a foreign key spans two modules, those modules can never be
+          deployed or scaled independently. You can call them &quot;modules,&quot; but at the schema level they are one
+          thing. The eventual extraction is a data migration, which is to say a rewrite with a maintenance
+          window.</p>
+          <p>The second was a concrete bug in this codebase. When the modules were first extracted into separate
+          service processes, they still pointed at one shared SQL database with one <code>OutboxMessages</code> table.
+          Every service&#39;s <code>OutboxProcessor</code> polled that same table with no origin filter, so the services
+          <strong>raced</strong> to claim each other&#39;s outbox rows. That race is the proximate reason ADR-006 was written.
+          Physical isolation is simpler and stronger than bolting an <code>OriginService</code> filter onto a shared
+          table, so the decision was: each service owns its own database, with its own <code>OutboxMessages</code>.</p>
+          <h2 id="the-mmca-answer-one-context-class-one-instance-per-database">The MMCA answer: one context class, one instance per database</h2>
+          <p>The single most counter-intuitive fact, and the one every other choice flows from: there is exactly
+          <strong>one concrete context class per engine</strong> (<code>SQLServerDbContext</code>, <code>PostgreSQLDbContext</code>,
+          <code>SqliteDbContext</code>, <code>CosmosDbContext</code>), each a sealed subclass of the abstract base
+          <code>ApplicationDbContext</code>. The framework deliberately does <strong>not</strong> split per module into
+          <code>ConferenceDbContext</code>, <code>EngagementDbContext</code>, and so on. Yet a real deployment runs four separate
+          SQL databases, one per module, all served by the single <code>SQLServerDbContext</code> class.</p>
+          <p>How does one class serve four databases? It is <strong>instantiated once per physical database.</strong> Each
+          instance carries a different connection string and builds a different EF model that contains only its
+          own database&#39;s entities. The piece that stops EF from reusing the first model for all four is
+          <code>DataSourceModelCacheKeyFactory</code>, which keys EF&#39;s internal model cache by (context type, physical
+          source name) rather than by context type alone. Without it, the first model built would silently be
+          reused for every database, which is a quiet and catastrophic bug.</p>
+          <h3 id="routing-where-does-an-entity-live">Routing: where does an entity live?</h3>
+          <p>An entity&#39;s home database is never declared on the entity. It is derived at startup from its EF
+          configuration class. Three cooperating pieces do this:</p>
+          <ul>
+          <li>Every entity resolves to a <code>DataSourceKey(Engine, Name)</code>: the engine from the configuration base
+          class (<code>EntityTypeConfigurationSQLServer</code>/<code>PostgreSQL</code>/<code>Cosmos</code>/<code>Sqlite</code>), and the name from a
+          <code>[UseDatabase(&quot;X&quot;)]</code> attribute, falling back to the module name derived from the entity&#39;s
+          namespace, falling back to <code>&quot;Default&quot;</code>.</li>
+          <li><code>DataSourceResolver</code> (singleton) is the logical-to-physical mapper. It reads the <code>DataSources</code>
+          appsettings section and builds a logical-name-to-physical-key map.</li>
+          <li><code>EntityDataSourceRegistry</code> (singleton) reflects over the configuration assemblies and maps every
+          entity to its physical source, so routing never depends on a model having already been built. The
+          scan is built lazily on first access (and rescans once on a lookup miss to pick up module
+          assemblies loaded later), yet it is always one complete pass over every configuration, independent
+          of any model build. It fails fast if two configurations claim one entity for different databases.
+          An entity lives in exactly one database.</li>
+          </ul>
+          <h3 id="the-collapse-property-monolith-and-distributed-are-the-same-code">The collapse property: monolith and distributed are the same code</h3>
+          <p>Here is the feature that makes the whole thing work. <code>DataSourceResolver</code> <strong>collapses</strong> logical
+          sources. A logical name with no connection string, or whose connection string equals the top-level
+          default, collapses onto the shared <code>Default</code> source. Two logical names sharing a connection string
+          collapse to one canonical physical source.</p>
+          <p>The consequence: <strong>a host with no <code>DataSources</code> configuration behaves exactly like a single-database
+          monolith.</strong> One context, one change tracker, foreign keys intact, transactions intact. Add one config
+          entry pointing a module at a separate database, and that module&#39;s data is now physically isolated,
+          with no change to entity or handler code. This collapse is the single property that makes the
+          monolith and the distributed deployment run the same code path.</p>
+          <h3 id="building-the-contexts-the-factory-pair">Building the contexts: the factory pair</h3>
+          <p>Two factories turn a <code>DataSourceKey</code> into a live context. <code>PhysicalDbContextFactory</code> (singleton,
+          <strong>never pooled</strong> because each instance carries per-source state) creates the raw context for a given
+          key. Above it, <code>DbContextFactory</code> (scoped) is the per-request coordinator: it caches one context per
+          <code>DataSourceKey</code> within a scope, so every repository targeting the same database shares one change
+          tracker, and it owns the cross-source save, transaction, and disposal coordination.</p>
+          <h3 id="cross-source-relationships-degrade-automatically">Cross-source relationships degrade automatically</h3>
+          <p>EF cannot enforce a foreign key into another database. So <code>CrossDataSourceDegradeConvention</code>, a
+          model-finalizing convention, reshapes any relationship whose two ends resolve to different physical
+          sources. It removes the cross-source FK constraint but <strong>keeps the scalar FK column plus a
+          compensating index</strong>, so the value is still stored and queryable. It ignores the CLR navigation
+          members that point at the foreign entity, and removes the foreign entity types from this model
+          entirely. Runtime navigation across the boundary then flows through the <code>INavigationPopulator</code>
+          batch-loader (its own pattern, in another article), and cross-source consistency becomes the outbox&#39;s
+          job, not a transaction&#39;s.</p>
+          <p>The elegant part: when every entity collapses onto one database (the monolith case), nothing is
+          foreign, and the convention is a <strong>structural no-op.</strong> The model it produces is byte-for-byte the
+          single-database model. The swap point exists, is tested, and costs nothing when unused.</p>
+          <h2 id="what-it-looks-like-in-configuration">What it looks like in configuration</h2>
+          <p>You do not write routing code. You write configuration, and the same compiled binary becomes a
+          monolith or a set of isolated services depending on what is in <code>appsettings.json</code>.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="JSON"><code class="language-jsonc hljs"><span class="hljs-comment">// MONOLITH: no DataSources section. Every logical source collapses onto Default.</span>
+<span class="hljs-comment">// One database, one change tracker, FKs intact. Identical to a plain single-DB app.</span>
+<span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;ConnectionStrings&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Default&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Server=...;Database=App;...&quot;</span> <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span>
+
+<span class="hljs-comment">// DATABASE-PER-SERVICE: each module points at its own physical database.</span>
+<span class="hljs-comment">// CrossDataSourceDegradeConvention now degrades any cross-module relationship to a scalar FK,</span>
+<span class="hljs-comment">// and the per-source OutboxProcessor only ever drains its own OutboxMessages table.</span>
+<span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;ConnectionStrings&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Default&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Server=...;Database=App;...&quot;</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;DataSources&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;Conference&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;SQLServerConnectionString&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Server=...;Database=App_Conference;...&quot;</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;Engagement&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;SQLServerConnectionString&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Server=...;Database=App_Engagement;...&quot;</span> <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span></code></pre>
+          <p>The entity classes, the <code>[UseDatabase]</code> attributes, the repositories, and the handlers are identical
+          across both. The only thing that changed is the config.</p>
+          <h2 id="the-third-axis-which-customer-owns-the-row">The third axis: which customer owns the row</h2>
+          <p>Source name is one axis of partitioning, and the engine is another (that is the next article).
+          Neither of them is a tenant. ADR-073 adds the third axis, &quot;which customer does this row belong to,&quot;
+          and the reason it belongs in this article is that it lands as one more filter plus one more override
+          on the routing you have already seen, rather than as a parallel mechanism.</p>
+          <p>Shared-schema tenancy is a <strong>second named query filter.</strong> An entity that implements <code>ITenantEntity</code>
+          gets a required 64-character <code>TenantId</code> column, an index on it that widens to
+          (<code>TenantId</code>, <code>IsDeleted</code>) when the entity is soft-deletable too, so it matches the composed
+          predicate instead of handing deleted rows back for the server to discard, and the predicate
+          <code>e =&gt; CurrentTenantId == null || e.TenantId == CurrentTenantId</code>, applied to every matching entity
+          type by <code>ApplyTenantFilters</code> beside the soft-delete pass in <code>OnModelCreating</code>. EF10 lets a global
+          filter carry a name, so <code>Tenant</code> composes with <code>SoftDelete</code> by AND and neither one knows the other
+          exists. The predicate embeds the context itself as a typed constant rather than closing over the
+          tenant string, and that detail is load-bearing: EF rewrites a context-typed constant to the executing
+          context at query-compile time, so <strong>one cached model per source serves every tenant</strong> and the tenant
+          value travels as a SQL parameter instead of baking a compiled model per customer. A null tenant is
+          the system context and sees everything, which is what keeps the outbox loop, the migration runner,
+          and the seeders working: they have no request, so they have no claim.</p>
+          <p>Resolution is claim first, then header, and it fails closed. <code>TenantResolutionMiddleware</code> runs
+          immediately after <code>UseAuthentication</code> (a claim-first order needs <code>HttpContext.User</code> already
+          populated), is registered unconditionally, and passes every request straight through until
+          <code>Tenancy:Enabled</code> is on. With <code>RequireTenant</code> (true by default) a request that resolves no tenant on
+          a non-excluded path is answered with a 400 ProblemDetails rather than allowed through unscoped,
+          because an unscoped request reads across every tenant, which is the exact outcome tenancy exists to
+          prevent.</p>
+          <p>Writes sit on an invariant rather than on discipline. A dedicated <code>TenantSaveChangesInterceptor</code>,
+          separate from the audit and domain-event interceptors and registered between them, stamps <code>TenantId</code>
+          on inserts and throws <code>CrossTenantWriteException</code> on any added, modified, or deleted entry belonging
+          to a different tenant. With no tenant resolved it lets an already-tenanted row through as-is (that is
+          how a background worker drains one tenant&#39;s work) and refuses only the insert that has no tenant to
+          supply. Reads are just as narrow: the repository&#39;s <code>ignoreQueryFilters: true</code> drops the named
+          <code>SoftDelete</code> filter only, through one shared array used at all eight call sites, so a
+          soft-delete-inclusive read still carries the tenant filter and cannot cross tenants by accident.</p>
+          <p>Database-per-tenant is then the smallest possible extension of everything above. A per-tenant entry
+          overrides the connection string for one source and keeps the <strong>same <code>DataSourceKey</code></strong>, so the scoped
+          <code>DbContextFactory</code> clones the resolver&#39;s <code>PhysicalDataSource</code> with the override, EF&#39;s model cache key
+          is unchanged, and one compiled model still serves every tenant&#39;s database:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="JSON"><code class="language-jsonc hljs"><span class="hljs-comment">// DATABASE-PER-TENANT: &quot;acme&quot; shares the pooled database and is separated by the query filter alone.</span>
+<span class="hljs-comment">// &quot;globex&quot; re-points one source at its own database. Same key, different connection string.</span>
+<span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;Tenancy&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;Enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;Tenants&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+      <span class="hljs-attr">&quot;acme&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;globex&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+        <span class="hljs-attr">&quot;DataSources&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+          <span class="hljs-attr">&quot;Default&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;SQLServerConnectionString&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Server=...;Database=Helpdesk_Globex;...&quot;</span> <span class="hljs-punctuation">}</span>
+        <span class="hljs-punctuation">}</span>
+      <span class="hljs-punctuation">}</span>
+    <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span></code></pre>
+          <p>Because an override changes where a source points rather than what a source is, the pieces around it
+          keep working unchanged. The entity registry, the migrations assembly, and the per-source outbox all
+          survive: the outbox simply enumerates <code>(source, tenant)</code> pairs and drains one extra unit per tenant
+          that keeps its own copy of a source, with <strong>no <code>OutboxMessage</code> schema change</strong> at all (no <code>TenantId</code>
+          column, so no forced migration for every consumer on upgrade). The per-scope context cache gains a
+          guard that throws if the scope&#39;s tenant changes after a routed context exists, which restates
+          one-scope-one-tenant where it would otherwise break silently. Cache entries get their isolation one
+          layer up, in the caching decorators, since a singleton cache cannot observe scoped state; that
+          belongs with the caching pattern rather than here.</p>
+          <p>The whole thing is opt-in and inert until a host asks for it: <code>AddMultiTenancy(configuration)</code> on top
+          of <code>AddInfrastructure</code>, and nothing else. MMCA.Helpdesk is the reference adopter and configures two
+          tenants on purpose, one per isolation mode: <code>acme</code> shares the pooled database behind the filter,
+          <code>globex</code> gets its own. ADC and Store, both single-tenant products, do not adopt it and pay nothing.
+          The honest costs are the mirror image of the design: shared-schema means a forgotten <code>ITenantEntity</code>
+          marker fails no build and silently includes that entity&#39;s rows in every tenant&#39;s queries, and
+          fail-closed means an identity provider that stops emitting the claim returns 400 on every non-excluded
+          route rather than degrading to a reduced view.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>ADR-006 lists the bill in plain terms, and it is a real bill.</p>
+          <ul>
+          <li><strong>No distributed transactions.</strong> When a save spans sources, <code>DbContextFactory.ExecuteInTransactionAsync</code>
+          opens a transaction <strong>per source</strong> and commits them sequentially, best-effort. There is no
+          two-phase commit. If the second commit fails after the first succeeded, you have a partially applied
+          change, and the outbox is what eventually reconciles the downstream effects. What the framework does
+          buy you is that the partial state is <strong>observable rather than inferred</strong>: the commit loop records the
+          partition at the failure point, so the thrown <code>TransactionCommitAmbiguousException</code> names each
+          source&#39;s outcome (<code>CommittedSources</code>, <code>AmbiguousSource</code>, <code>RolledBackSources</code>) and appends that
+          per-source verdict to its message, and the operator or the replaying caller can see exactly which
+          half of the commit landed. On the single-source host every deployment runs today, that one source is
+          the ambiguous outcome and the other two lists are empty. This is the central trade: you give up
+          atomicity across sources to get autonomy.</li>
+          <li><strong>Eventual consistency across sources.</strong> Once data is split, consistency between services flows
+          through the outbox and broker, not a shared transaction. Reads can observe a window where one
+          service is ahead of another. That is correct for the architecture, but it is a behavior your
+          product logic has to expect.</li>
+          <li><strong>Referential integrity across services is the application&#39;s responsibility.</strong> The compensating
+          index survives; the FK enforcement does not. A dangling cross-service reference will not be caught
+          by the database. You catch it, or you tolerate it.</li>
+          <li><strong>More to operate.</strong> Each service gets its own migrations project and its own backup and restore
+          concern. Four databases is four times the provisioning, migration, and disaster-recovery surface of
+          one.</li>
+          </ul>
+          <p>None of these argue against the design. They argue for choosing <strong>when</strong> to split deliberately,
+          source by source, rather than all at once or never. The collapse property is exactly what lets you
+          delay the split until a specific source actually needs it.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The mechanism is EF-specific, but the discipline ports to any stack.</p>
+          <ol>
+          <li><strong>Decide an entity&#39;s home logically, not physically.</strong> Route by module or bounded context, with a
+          default that lands everything in one database until you say otherwise. Then &quot;split a service&quot; is a
+          config change, not a code change.</li>
+          <li><strong>Make the single-database case a true no-op.</strong> If your multi-database machinery changes behavior
+          when there is only one database, you will be too afraid to ship it. It must be byte-for-byte
+          identical to the simple case until configured.</li>
+          <li><strong>Never let a foreign key cross a service boundary.</strong> Keep the scalar id and an index for queries,
+          drop the constraint, and load the other side explicitly. The constraint you keep across a boundary
+          is the constraint that blocks your eventual split.</li>
+          <li><strong>Make the outbox your cross-source consistency story before you split,</strong> because the day you have
+          two databases you no longer have a transaction that spans them.</li>
+          </ol>
+          <p>The rule of thumb: design so that &quot;one database&quot; and &quot;many databases&quot; are the same code on two
+          configs. If they are two different code paths, you have not built a swap point, you have built two
+          systems and a migration between them.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why a shared database quietly forecloses extraction (and the literal shared-outbox
+          race that prompted ADR-006), how one <code>SQLServerDbContext</code> class becomes one model per database via
+          <code>DataSourceModelCacheKeyFactory</code>, how <code>DataSourceResolver</code> and <code>EntityDataSourceRegistry</code> route
+          entities, the collapse property that makes monolith and distributed the same code,
+          <code>CrossDataSourceDegradeConvention</code> reshaping cross-source relationships, how the same routing extends to
+          a third axis (a second named query filter for the tenant, and database-per-tenant as a connection-string
+          override behind the same key), and the one guarantee you give up: no two-phase commit, eventual
+          consistency across sources, with the outbox as the reconciler.</p>
+          <p><strong>Next in the series:</strong> polyglot persistence, the Engine axis that re-points an entity between SQL
+          Server, PostgreSQL, Cosmos, and SQLite without touching the domain.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-006 behind this
+          design, or install it and watch the single-database case behave like a plain monolith.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 ADR-006 (database per service): <a href="../docs/adr/006-database-per-service.html">ADR-006: Database per Service</a> in the docs site.</li>
+          <li><code>dotnet add package MMCA.Common.API</code></li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Data Engineering, EF Core</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="transactional-outbox-dotnet.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">09 · The transactional outbox</span></a>
+          <a class="article-pager-link article-pager-link--next" href="polyglot-persistence.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">11 · Polyglot persistence: one model, three engines</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-one-context-class-one-instance-per-database">The MMCA answer: one context class, one instance per database</a></li>
+            <li><a href="#what-it-looks-like-in-configuration">What it looks like in configuration</a></li>
+            <li><a href="#the-third-axis-which-customer-owns-the-row">The third axis: which customer owns the row</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

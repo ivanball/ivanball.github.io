@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Event-schema versioning: never silently reshape an event · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Every integration event carries a schema version; breaking changes get a new event type and an upcaster, never a silent reshape.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/event-schema-versioning.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Event-schema versioning: never silently reshape an event">
+  <meta property="og:description" content="Every integration event carries a schema version; breaking changes get a new event type and an upcaster, never a silent reshape.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/event-schema-versioning.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-15.png">
+  <meta property="og:image:alt" content="Event-schema versioning: never silently reshape an event">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Event-schema versioning: never silently reshape an event">
+  <meta name="twitter:description" content="Every integration event carries a schema version; breaking changes get a new event type and an upcaster, never a silent reshape.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-15.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Event-schema versioning: never silently reshape an event","description":"Every integration event carries a schema version; breaking changes get a new event type and an upcaster, never a silent reshape.","url":"https://ivanball.github.io/articles/event-schema-versioning.html","mainEntityOfPage":"https://ivanball.github.io/articles/event-schema-versioning.html","image":"https://ivanball.github.io/assets/img/articles/article-15.png","datePublished":"2026-07-13T11:24:59Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":15,"sameAs":"https://medium.com/@ivanball76/event-schema-versioning-never-silently-reshape-an-event-93cd5d4a156d"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"15 · Event-schema versioning","item":"https://ivanball.github.io/articles/event-schema-versioning.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">15 · Event-schema versioning</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html" aria-current="page">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Data &amp; persistence · No. 15</p>
+          <h1 id="event-schema-versioning-never-silently-reshape-an-event">Event-schema versioning: never silently reshape an event</h1>
+          <p class="article-meta"><time datetime="2026-07-13T11:24:59Z">July 13, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/event-schema-versioning-never-silently-reshape-an-event-93cd5d4a156d" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-15.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">An integration event is a wire contract the moment it crosses a service boundary.
+          Reshape it in place and you break consumers that are already deployed. Here is the policy that prevents it.</p>
+          <hr>
+          <p>You shipped this event a year ago, and three services consume it:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">UserRegistered</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> UserId, <span class="hljs-built_in">string</span> FullName</span>) : BaseIntegrationEvent</span>;</code></pre>
+          <p>Today a product requirement says you need first and last name separately. The obvious edit:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Looks harmless. It is not.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">UserRegistered</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> UserId, <span class="hljs-built_in">string</span> FirstName, <span class="hljs-built_in">string</span> LastName</span>)
+    : BaseIntegrationEvent</span>;</code></pre>
+          <p>You deploy the producer. The event serializes with the new shape. Every consumer that still expects
+          <code>FullName</code> deserializes it, finds no <code>FullName</code>, and either gets a null where it never expected one or
+          throws on a missing required member. Nothing on the wire told them the shape changed. They were already
+          deployed and running, and you reshaped the contract under them.</p>
+          <p>This is not a hypothetical. With database-per-service and async integration over the outbox, consumers
+          resolve an event <em>solely by its type string</em>: the outbox serializes the event to JSON keyed by
+          <code>EventType</code>, and the broker path binds by .NET message type. There is no schema registry in the middle
+          saying &quot;this is a different shape than you expect.&quot; A producer that reshapes a payload silently breaks
+          every consumer, and it does it in production, asynchronously, where it is hardest to trace.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>In a monolith, an event handler and the code that raises the event compile together. Reshape the event
+          and the consumer fails to compile; you fix it in the same commit. The type system is your schema
+          check.</p>
+          <p>The moment a module is extracted into its own service, that safety net is gone. Producer and consumer
+          are independently deployed. They are different processes, possibly different repos, definitely
+          different deploy cadences. There is now a window where the producer speaks the new shape and the
+          consumer still expects the old one, and no compiler spans that window. The events that were &quot;just an
+          internal contract&quot; inside the monolith are now a <em>wire contract</em>, and wire contracts have exactly one
+          rule: you do not break them out from under a deployed reader.</p>
+          <p>An event that carries only <code>MessageId</code> (idempotency) and <code>DateOccurred</code> (when the business action
+          happened) has no version signal at all, and a consumer meeting an unfamiliar payload has nothing to
+          branch on: it cannot tell a producer that has moved ahead of it from a shape it should refuse, and it
+          certainly cannot upcast. That is the one substantive CQRS and event-driven gap the scorecard names
+          under §6, and ADR-010 is the answer.</p>
+          <h2 id="the-mmca-answer-a-version-on-every-event-and-a-rule-for-changing-it">The MMCA answer: a version on every event, and a rule for changing it</h2>
+          <p>The decision has two halves: a signal that is enforced, and a discipline for breaking changes.</p>
+          <p><strong>Half one: every integration event carries an explicit <code>SchemaVersion</code>.</strong> The base record exposes it
+          as a virtual default:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Common.Domain - BaseIntegrationEvent</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">virtual</span> <span class="hljs-built_in">int</span> SchemaVersion =&gt; <span class="hljs-number">1</span>;
+
+<span class="hljs-comment">// A concrete event overrides only when it bumps:</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">UserRegisteredV2</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> UserId, <span class="hljs-built_in">string</span> FirstName, <span class="hljs-built_in">string</span> LastName</span>)
+    : BaseIntegrationEvent</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> <span class="hljs-built_in">int</span> SchemaVersion =&gt; <span class="hljs-number">2</span>;
+}</code></pre>
+          <p>It is serialized with the payload (System.Text.Json on the outbox path, MassTransit on the broker
+          path), so a consumer always sees the producer&#39;s declared version and has an explicit value to branch or
+          upcast on. And it is not just a convention you have to remember: a fitness function,
+          <code>EventVersioningConventionTests</code>, asserts that every concrete integration event declares an <code>int SchemaVersion</code>, so a new event cannot ship without one. The same invariant-over-discipline approach as
+          the layer rules and the MassTransit-v8 pin: a thing that matters is a check, not a comment.</p>
+          <p><strong>Half two: the rule for changing a shape.</strong></p>
+          <ul>
+          <li><strong>Additive, optional changes keep the same version.</strong> Adding a nullable or optional field, or one
+          with a safe default, is backward-compatible. Consumers ignore unknown fields (System.Text.Json&#39;s
+          default), and old payloads deserialize with the default. No version bump.</li>
+          <li><strong>Breaking changes require a NEW type plus an upcaster, never a silent reshape.</strong> Renaming, removing,
+          or retyping a field is breaking. The producer introduces a new event type (<code>UserRegisteredV2</code>,
+          <code>SchemaVersion =&gt; 2</code>) and publishes it. Consumers register an <em>upcaster</em> that maps the old
+          type/version to the new shape before their handler runs. The old type is retired only after every
+          consumer has drained it.</li>
+          </ul>
+          <p>That last point is forced by the transport, not chosen for taste. The broker binds by type, so a rename
+          is a parallel-publish-and-drain migration with a real compatibility window, not an in-place edit. An
+          in-place reshape has <em>no</em> compatibility window: the instant the producer deploys, the old shape is
+          gone, and any consumer mid-deploy or slow to upgrade is reading a contract that no longer exists.
+          New-type-for-breaking-change is the only safe option when transport binds by type and consumers deploy
+          independently.</p>
+          <p>Since 2026-08-21 the framework ships the wiring for that migration, not only the rule (ADR-090). An
+          upcaster is one typed class, <code>IEventUpcaster&lt;TOld, TNew&gt;</code>, registered by the module that owns the
+          contract:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Module DI: one line per retired contract.</span>
+services.AddEventUpcaster&lt;ProductVariantChanged, ProductVariantChangedV2, ProductVariantChangedUpcaster&gt;();
+
+<span class="hljs-comment">// Broker hosts also bind the retired queue, inside AddBrokerMessaging&#x27;s consumer callback:</span>
+x.RegisterIntegrationEventConsumer&lt;ProductVariantChangedV2&gt;();       <span class="hljs-comment">// the current contract</span>
+x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span class="hljs-comment">// the old one, draining</span></code></pre>
+          <p>The registry chains registrations to the terminal contract (register V1 to V2 and V2 to V3, and a V1
+          message reaches the V3 handler), and after every hop it stamps <code>MessageId</code> and <code>DateOccurred</code> from the
+          pre-hop instance, so inbox deduplication keys survive the transform and an upcaster author maps payload
+          fields only. Both delivery paths honor it, the in-process dispatcher and the broker consumer, so
+          handlers are written once against the newest contract. A duplicate source contract, a type mapped onto
+          itself, or a cycle fails host startup with the offenders named, rather than the first message. Retiring
+          the old type is deleting these lines.</p>
+          <p><code>SchemaVersion</code> is non-breaking by construction. A virtual get-only default (<code>=&gt; 1</code>) means no existing
+          event has to change and no outbox row has to be migrated: System.Text.Json tolerates the missing field
+          on old payloads and the type supplies the default; new rows simply gain <code>&quot;schemaVersion&quot;:1</code>. It lives in
+          the framework, and a framework change reaches every consumer in one pass: the lockstep policy (ADR-016)
+          bumps every <code>MMCA.Common.*</code> pin in every consumer together, with no phased rollout, so no consumer sits
+          on a base record its producers have moved past.</p>
+          <h2 id="how-it-complements-the-outbox">How it complements the outbox</h2>
+          <p>This sits directly on top of the transactional outbox (ADR-003). The outbox guarantees an event is
+          <em>delivered</em> at least once: persisted atomically with the state change, then drained to consumers with
+          retries. Schema versioning guarantees that when the event arrives, the consumer can <em>understand</em> it.</p>
+          <p>The two failure modes are different and both have to be covered. The outbox addresses &quot;the event was
+          lost.&quot; Versioning addresses &quot;the event arrived but means something different than the reader thinks.&quot;
+          At-least-once delivery already requires consumers to be idempotent (a duplicate can arrive); add to that
+          contract that a consumer should also be tolerant of versions it knows and explicit about versions it
+          does not. The version field is what lets a consumer make that decision instead of guessing from a
+          shape that silently changed.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>ADR-010 is candid that the field is a signal, not a complete mechanism.</p>
+          <ul>
+          <li><strong><code>SchemaVersion</code> by itself does not stop a consumer breaking on a real reshape.</strong> It is a value on
+          the wire, and the load-bearing half is still the discipline: new type plus upcaster. That half is no
+          longer only a discipline. The framework now ships the registration extension point (2026-08-21,
+          ADR-090): a typed <code>IEventUpcaster&lt;TSource, TTarget&gt;</code>, <code>AddEventUpcaster&lt;...&gt;()</code>, a chaining registry
+          that preserves the envelope, a draining broker consumer for the retired queue, and two fitness
+          functions that reject two upcasters claiming one source contract or a target that does not raise
+          <code>SchemaVersion</code>. Two gaps stay open and are worth naming: the framework itself still ships no V2 event
+          of its own (its one concrete integration event stays at version 1, so the first real consumer
+          migration will be the pipeline&#39;s first production use), and outbox type-name aliasing for a type
+          deleted ahead of policy is deliberately out of scope, because the policy keeps the old type alive
+          until every consumer has drained it.</li>
+          <li><strong>The convention test covers a real event in MMCA.Common, but the framework&#39;s own coverage is one
+          event wide.</strong> Common ships exactly one concrete integration event, the sealed record
+          <code>OutputCacheEvictionRequested</code>, and <code>CommonArchitectureMap</code> registers the Domain assembly it lives
+          in, so <code>EventVersioningConventionTests</code> runs against a real event in Common&#39;s own build. Enforcement
+          runs at five points: the framework itself plus four consumer trees (ADC, Store, Helpdesk, and a
+          local-only two-module sample), each subclassing the same base and running the identical rules
+          against its own event assemblies. One caveat rides along: Common&#39;s map declares no modules, so the
+          Shared-layer half of the namespace rule is relaxed for the framework&#39;s own event, while every
+          module-bearing consumer is still held to it. The framework supplies the rule; the consumers still
+          supply the bulk of the events that exercise it.</li>
+          <li><strong><code>SchemaVersion</code> is informational on the wire (it round-trips out, not back in).</strong> A get-only virtual
+          property means you read the version off the concrete type or the JSON, you do not mutate it per
+          instance. That is intentional (a version is a property of the type, not of an individual message), but
+          it means the upcaster reads the declared type, not a settable field. That is literally how the shipped
+          registry works: it indexes upcasters and walks chains by the declared .NET type, which is what both
+          transport bindings already key on.</li>
+          </ul>
+          <p>None of these are reasons to skip the field. They are the reasons the field is necessary but not
+          sufficient, and the discipline is the rest of the answer.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The policy ports to any event-driven system with independently deployed consumers:</p>
+          <ol>
+          <li><strong>Put an explicit version on every event,</strong> and make it un-skippable. A test that fails the build
+          when a new event omits a version is worth more than a wiki page that says to add one.</li>
+          <li><strong>Treat additive-and-optional as the only in-place change you are allowed to make.</strong> New nullable
+          field with a default: fine. Anything else is breaking.</li>
+          <li><strong>For breaking changes, publish a new type and upcast, then drain and retire the old one.</strong> Never
+          edit a shape that a deployed reader still expects. The broker binds by type; use that to get a
+          compatibility window instead of a cliff.</li>
+          <li><strong>Pair it with at-least-once delivery and idempotent consumers.</strong> Versioning answers &quot;can I
+          understand this?&quot;; the outbox and idempotency answer &quot;did I get it, exactly once in effect?&quot; You need
+          both.</li>
+          </ol>
+          <p>The rule of thumb: the instant an event crosses a service boundary it is a published contract. You can
+          add to it, you can supersede it, but you can never quietly change it.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why silently reshaping an integration event breaks already-deployed consumers
+          (especially after extraction, when the compiler no longer spans producer and consumer), how
+          MMCA.Common puts an enforced <code>SchemaVersion</code> on every event and answers a breaking change with a new
+          type plus a registered upcaster that the framework chains and applies on both delivery paths, and how
+          that complements the outbox&#39;s at-least-once delivery.</p>
+          <p><strong>Next in the series:</strong> cross-service auth without a shared secret, JWKS dual-fetch and RS256 so an
+          extracted service validates tokens with no shared key.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-010 behind this
+          policy, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>ADR-010 (event-schema versioning and upcaster policy): <a href="../docs/adr/010-integration-event-schema-versioning.html">ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy</a> in the docs site.</li>
+          <li>ADR-090 (the upcaster registration extension point): <a href="../docs/adr/090-event-upcaster-registration.html">ADR-090: Event Upcaster Registration Extension Point</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Event-Driven Architecture, Microservices</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="self-ordering-modules.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">14 · Self-ordering modules</span></a>
+          <a class="article-pager-link article-pager-link--next" href="jwks-cross-service-auth.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">16 · JWKS cross-service auth</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-a-version-on-every-event-and-a-rule-for-changing-it">The MMCA answer: a version on every event, and a rule for changing it</a></li>
+            <li><a href="#how-it-complements-the-outbox">How it complements the outbox</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

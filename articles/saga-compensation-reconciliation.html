@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Undo Is a Feature: Saga Compensation and the Reconciliation Backstop · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Undo as a first-class event handler: give back stock a committed transaction already took, with a periodic sweep as the saga-timeout backstop.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/saga-compensation-reconciliation.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Undo Is a Feature: Saga Compensation and the Reconciliation Backstop">
+  <meta property="og:description" content="Undo as a first-class event handler: give back stock a committed transaction already took, with a periodic sweep as the saga-timeout backstop.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/saga-compensation-reconciliation.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-49.png">
+  <meta property="og:image:alt" content="Undo Is a Feature: Saga Compensation and the Reconciliation Backstop">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Undo Is a Feature: Saga Compensation and the Reconciliation Backstop">
+  <meta name="twitter:description" content="Undo as a first-class event handler: give back stock a committed transaction already took, with a periodic sweep as the saga-timeout backstop.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-49.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Undo Is a Feature: Saga Compensation and the Reconciliation Backstop","description":"Undo as a first-class event handler: give back stock a committed transaction already took, with a periodic sweep as the saga-timeout backstop.","url":"https://ivanball.github.io/articles/saga-compensation-reconciliation.html","mainEntityOfPage":"https://ivanball.github.io/articles/saga-compensation-reconciliation.html","image":"https://ivanball.github.io/assets/img/articles/article-49.png","datePublished":"2026-08-19T12:56:23Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":49,"sameAs":"https://medium.com/@ivanball76/undo-is-a-feature-saga-compensation-and-the-reconciliation-backstop-fa017f9591b8"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"49 · Saga compensation and the reconciliation backstop","item":"https://ivanball.github.io/articles/saga-compensation-reconciliation.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">49 · Saga compensation and the reconciliation backstop</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html" aria-current="page">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Core patterns · No. 49</p>
+          <h1 id="undo-is-a-feature-saga-compensation-and-the-reconciliation-backstop">Undo Is a Feature: Saga Compensation and the Reconciliation Backstop</h1>
+          <p class="article-meta"><time datetime="2026-08-19T12:56:23Z">August 19, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/undo-is-a-feature-saga-compensation-and-the-reconciliation-backstop-fa017f9591b8" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-49.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A cancelled order has to give back stock that a transaction closed minutes ago already took,
+          and a payment confirmation that never arrives strands the order forever. Here is compensation as its own
+          event handler, idempotency as a persisted marker committed by the same <code>SaveChanges</code> as the writes it
+          guards, and a periodic sweep as the saga-timeout backstop.</p>
+          <hr>
+          <p>Checkout is the easy part. In MMCA.Store&#39;s Sales module it is genuinely atomic: the order insert, the cart
+          transition, and the conditional stock decrements all commit inside one explicit local transaction
+          (<code>CheckOutHandler.cs:135-188</code>, insert <code>:165</code>, save <code>:176</code>), and a failed decrement returns a failed <code>Result</code>
+          that rolls the whole thing back. One database, one transaction, no drama. Checkout then arms the order&#39;s
+          own unpaid-payment deadline as a scheduled row and saves that separately (<code>:226</code>, second save <code>:240</code>,
+          because the transaction helper commits without flushing what comes after it, <code>:238-239</code>).</p>
+          <p>Then the money moves at Stripe, and the confirmation comes back later, as a webhook, from outside your
+          database entirely. And two things go wrong that no transaction can fix:</p>
+          <ol>
+          <li><strong>A later step invalidates an earlier one.</strong> The customer cancels. The stock that checkout committed is
+          still decremented, and you cannot roll that decrement back, because its transaction closed minutes ago.</li>
+          <li><strong>The external confirmation never arrives.</strong> An endpoint outage that outlasts Stripe&#39;s retry window, a
+          misconfigured webhook secret, and the order sits in <code>PaymentInitiated</code> forever with its stock held.</li>
+          </ol>
+          <p>The instinct is to reach for a transaction that spans both, and there isn&#39;t one. There is no two-phase
+          commit across a database and a payment provider, and there would not be one worth having even if the
+          provider could enlist. So the question is not &quot;how do I roll this back.&quot; It is &quot;what do I do instead, and
+          how do I make it disciplined enough to trust.&quot; That is the decision recorded in <strong>ADR-054</strong>.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>The rubric has two categories aimed straight at this. §6 (CQRS and Event-Driven Design, heading at
+          <code>ArchitectureEvaluationCriteria.md:229</code>) asks for idempotent consumers (<code>:238</code>) and for eventual-consistency
+          boundaries that are <strong>explicit and documented in an ADR</strong> (<code>:239</code>), with &quot;consumers that aren&#39;t idempotent
+          and break on redelivery&quot; listed as a red flag (<code>:245</code>). §29 (Resilience, Reliability and Business
+          Continuity, <code>:775</code>) is a weight-3 category (<code>:795</code>) that asks for failure isolation (<code>:780</code>) and graceful
+          degradation (<code>:781</code>), and names &quot;retries without backoff/idempotency (retry storms, duplicate side
+          effects)&quot; as its own red flag (<code>:791</code>).</p>
+          <p>Note what those two demand together: not just that you retry, but that retrying is <strong>safe</strong>. That is the
+          hard half. Delivering an event at least once is a solved problem (the transactional outbox, ADR-003).
+          Making the handler survive being run twice is where systems quietly rot.</p>
+          <p>And it is the question the neighbouring records leave open on purpose. ADR-003 gets an event out of the
+          process at least once. ADR-021 stops a broker redelivery from being applied twice at the consume edge.
+          ADR-006 decides database-per-service and records &quot;no cross-database transactions, no two-phase commit&quot; only
+          as a <strong>cost it accepts</strong>, without saying how that cost gets paid (<code>ADR-054:41-46</code>). None of them says what a
+          multi-step workflow does when step two fails or step three never reports back.</p>
+          <h2 id="the-mmca-answer-compensation-is-a-handler-not-a-branch-in-the-command">The MMCA answer: compensation is a handler, not a branch in the command</h2>
+          <p>The command handler does one thing, and it does not even own the plumbing for that.
+          <code>CancelOrderHandler</code> derives from <code>MutateEntityHandlerBase&lt;CancelOrderCommand, Order, OrderIdentifierType&gt;</code>
+          (<code>CancelOrderHandler.cs:27-31</code>), so the load, the rowversion stamp and the save belong to the base class. The
+          handler contributes three overrides: the id to load (<code>:39</code>), the client&#39;s last-seen rowversion so a
+          stale-view cancellation fails with a conflict (ADR-035, <code>:46</code>), and the mutation itself (<code>:55-67</code>). It does
+          not touch inventory, and its own remarks say so (<code>:49-54</code>).</p>
+          <p>The mutation is two steps: retire the payment provider&#39;s live checkout session, then call the guarded
+          transition <code>entity.MarkAsCancelled()</code> (<code>:60-66</code>). That first step is the one compensating action that is
+          deliberately inline rather than in a saga handler, and the class documentation argues the case (<code>:17-25</code>):
+          an order can only be cancelled out of <code>PaymentInitiated</code> while the provider still serves a payable hosted
+          page, so the cancel has to answer &quot;has this already been paid?&quot; <strong>before</strong> it commits. A saga step runs
+          after the commit and could only ever discover the money afterwards, with the order already <code>Cancelled</code> and a
+          manual refund the only remedy left. So <code>RetirePaymentSessionAsync</code> (<code>:90-124</code>) asks the provider for the
+          session status and, when it reports paid, <strong>refuses the cancellation</strong> with
+          <code>OrderCancellationErrorCodes.PaymentAlreadyCompleted</code> (<code>:101-109</code>). Every other outcome (already expired,
+          session gone, provider unreachable) is non-fatal: it is logged and the cancellation proceeds (<code>:111-121</code>).</p>
+          <p><code>Order.MarkAsCancelled()</code> (<code>Order.cs:548</code>) asks the current state object whether the transition is legal
+          and, on success, records a domain event (<code>Order.cs:556</code>). <code>OrderCancelled</code> is a plain <code>BaseDomainEvent</code>
+          (<code>OrderCancelled.cs:6-9</code>), not an integration event, so it dispatches in-process after the save.</p>
+          <p>Restoring the stock is a separate class: <code>OrderCancelledSagaHandler : IDomainEventHandler&lt;OrderCancelled&gt;</code>
+          (<code>OrderCancelledSagaHandler.cs:30-33</code>). Notifying the customer of a failed payment is another one,
+          <code>OrderPaymentFailedSagaHandler</code> (<code>OrderPaymentFailedSagaHandler.cs:22-24</code>). This is the choreographed
+          shape: each step raises an event, and each follow-up or compensating action lives in its own handler. A new
+          compensating action that can run after the commit (a refund, another notification) is a new handler, not an
+          edit to the command.</p>
+          <p><strong>Each handler runs in its own DI scope.</strong> Domain-event handlers are registered as singletons by the
+          framework&#39;s convention scan (<code>MMCA.Common.Application/DependencyInjection.cs:187-197</code>, with the comment
+          &quot;Domain event handlers are singletons, they create their own DI scopes internally&quot; at <code>:192</code> and
+          <code>WithSingletonLifetime()</code> closing the scan at <code>:197</code>), so every handler opens a scope through
+          <code>IServiceScopeFactory</code> and resolves what it needs from that scope (<code>OrderCancelledSagaHandler.cs:40-41</code>,
+          <code>OrderPaymentFailedSagaHandler.cs:31-32</code>). The consequence is the important part: compensation commits <strong>on
+          its own, after</strong> the originating save, rather than joining the transaction it is compensating for. That is
+          what makes it compensation rather than a rollback.</p>
+          <h2 id="the-marker-idempotency-as-a-database-invariant">The marker: idempotency as a database invariant</h2>
+          <p>Here is the part worth stealing even if you never touch this framework.</p>
+          <p>At-least-once delivery means the compensating handler will eventually run twice. If restoring stock is not
+          idempotent, the second run inflates inventory, and you have turned a reliability mechanism into a data-corruption
+          mechanism.</p>
+          <p>MMCA.Store makes it idempotent with a persisted marker on the aggregate. <code>Order.InventoryRestored</code>
+          (<code>Order.cs:122</code>, documented <code>:116-121</code>) is a boolean with a private setter, and <code>MarkInventoryRestored()</code>
+          (<code>Order.cs:568-591</code>) is a guarded transition like any other: it refuses on a non-cancelled order
+          (<code>:570-577</code>) and refuses a second call (<code>:579-586</code>), both as <code>Result.Failure</code> with named invariant codes.</p>
+          <p>The handler then does four things in order (<code>OrderCancelledSagaHandler.cs:36-103</code>):</p>
+          <ol>
+          <li>Loads the order with its lines, tracked, in its own scope (<code>:44-48</code>).</li>
+          <li>Checks the marker first and returns without saving if it is already set (<code>:57-61</code>).</li>
+          <li>Loads the matching inventory rows <strong>with the soft-delete filter deliberately turned off</strong>
+          (<code>ignoreQueryFilters: true</code>, <code>:74</code>), then applies the increases through a pure domain service with no
+          infrastructure dependencies, <code>InventoryRestorationDomainService.RestoreInventory</code> (<code>:79</code>, service at
+          <code>InventoryRestorationDomainService.cs:13-33</code>, &quot;pure domain service&quot; comment <code>:8</code>), which hands back the
+          variant ids it could not match (<code>:21-27</code>, returned at <code>:32</code>) so the handler can log them by name
+          (<code>:80-86</code>).</li>
+          <li>Sets the marker (<code>:93</code>) and calls <strong>one</strong> <code>SaveChangesAsync</code> (<code>:101</code>).</li>
+          </ol>
+          <p>That last step is the whole design. The inventory increases and the marker are written by the same
+          <code>SaveChanges</code> against the same database, in one transaction. So the marker cannot exist without the writes
+          it guards, and the writes cannot land unmarked. Idempotency stops being handler discipline and becomes a
+          database invariant.</p>
+          <p>Step 3&#39;s filter override is a smaller decision with a real consequence. A retired variant is
+          soft-deleted, not removed, and the stock a cancelled order is returning still belongs to that row: without
+          <code>ignoreQueryFilters</code>, the row is invisible to the handler and the returned quantity is silently dropped
+          (the comment saying so is at <code>:70-73</code>).</p>
+          <p>This is why ADR-054 says the marker is <strong>strictly stronger than the ADR-021 inbox</strong> (<code>ADR-054:186-189</code>).
+          The inbox records a message id after the handlers have succeeded, which leaves a narrow crash window
+          between the handler&#39;s commit and the inbox write. A marker committed <em>with</em> the writes has no such window.
+          The two are complementary rather than competing: the inbox dedups broker redeliveries between services, the
+          aggregate marker dedups in-process handler re-runs.</p>
+          <p><strong>Concurrent redeliveries are handled by a different mechanism.</strong> The marker check is a read, so two
+          deliveries can both pass it. Every auditable entity carries a <code>RowVersion</code> concurrency token
+          (<code>AuditableBaseEntity.cs:53</code>), configured automatically on every non-owned auditable type by
+          <code>ConfigureConcurrencyTokens</code> (<code>ApplicationDbContext.cs:582-602</code>, called from <code>OnModelCreating</code> at <code>:415</code>,
+          ADR-035). Both deliveries carry the same original token into their update: one commits, the other gets
+          <code>DbUpdateConcurrencyException</code>, and its outbox retry then finds the committed marker and skips. Sequential
+          redelivery is handled by the marker, concurrent redelivery by the token.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Condensed from OrderCancelledSagaHandler.HandleAsync (most logging trimmed).</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task <span class="hljs-title">HandleAsync</span>(<span class="hljs-params">OrderCancelled domainEvent, CancellationToken cancellationToken = <span class="hljs-literal">default</span></span>)</span>
+{
+    <span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> scope = serviceScopeFactory.CreateScope();
+    <span class="hljs-keyword">var</span> unitOfWork = scope.ServiceProvider.GetRequiredService&lt;IUnitOfWork&gt;();
+
+    <span class="hljs-keyword">var</span> orderRepository = unitOfWork.GetRepository&lt;Order, OrderIdentifierType&gt;();
+    <span class="hljs-keyword">var</span> order = <span class="hljs-keyword">await</span> orderRepository.GetByIdAsync(
+        domainEvent.OrderId, includes: [<span class="hljs-keyword">nameof</span>(Order.OrderLines)], asTracking: <span class="hljs-literal">true</span>,
+        cancellationToken: cancellationToken);
+    <span class="hljs-keyword">if</span> (order <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>)
+        <span class="hljs-keyword">return</span>;
+
+    <span class="hljs-comment">// Idempotency guard: a redelivered OrderCancelled event (outbox is at-least-once)</span>
+    <span class="hljs-comment">// must not restore the same stock twice.</span>
+    <span class="hljs-keyword">if</span> (order.InventoryRestored)
+        <span class="hljs-keyword">return</span>;
+
+    <span class="hljs-keyword">var</span> inventoryRepo = unitOfWork.GetRepository&lt;InventoryItem, ProductVariantIdentifierType&gt;();
+    <span class="hljs-keyword">var</span> variantIds = order.OrderLines.Select(ol =&gt; ol.ProductVariantId).Distinct().ToArray();
+    <span class="hljs-keyword">var</span> allItems = <span class="hljs-keyword">await</span> inventoryRepo.GetAllAsync(
+        includes: [], <span class="hljs-keyword">where</span>: i =&gt; variantIds.Contains(i.Id), asTracking: <span class="hljs-literal">true</span>,
+        <span class="hljs-comment">// A soft-deleted inventory row is still the row this stock belongs to.</span>
+        ignoreQueryFilters: <span class="hljs-literal">true</span>,
+        cancellationToken: cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
+
+    <span class="hljs-keyword">var</span> restoreResult = inventoryRestorationDomainService.RestoreInventory(
+        order.OrderLines, allItems.ToDictionary(i =&gt; i.Id));
+    <span class="hljs-keyword">if</span> (restoreResult.Value <span class="hljs-keyword">is</span> { Count: &gt; <span class="hljs-number">0</span> } unmatchedVariantIds)
+        LogInventoryItemsNotFound(logger, domainEvent.OrderId, <span class="hljs-built_in">string</span>.Join(<span class="hljs-string">&quot;, &quot;</span>, unmatchedVariantIds));
+
+    <span class="hljs-comment">// The marker is set even when some variants had no inventory record: withholding it would</span>
+    <span class="hljs-comment">// re-apply every MATCHED increase on the next redelivery. The warning is the record.</span>
+    <span class="hljs-keyword">var</span> markResult = order.MarkInventoryRestored();
+    <span class="hljs-keyword">if</span> (markResult.IsFailure)
+        <span class="hljs-keyword">return</span>;
+
+    <span class="hljs-comment">// ONE save: the restoration and the idempotency marker commit atomically (same DB).</span>
+    <span class="hljs-keyword">await</span> unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
+}</code></pre>
+          <h2 id="redelivery-is-the-retry-mechanism-so-throwing-is-correct">Redelivery is the retry mechanism, so throwing is correct</h2>
+          <p>A compensating handler needs no retry loop of its own, because it already sits on one.</p>
+          <p>When in-process dispatch fails, the domain-event interceptor logs the failure and signals the outbox rather
+          than swallowing the work. <code>FlushStateAsync</code> (<code>DomainEventSaveChangesInterceptor.cs:332</code>) dispatches the
+          save&#39;s local events (<code>:336-337</code>) and only then marks their outbox entries processed (<code>:341</code>), so a throwing
+          handler never reaches the mark, and the catch below it logs and signals the processor (<code>:346-354</code>). The
+          <code>OutboxProcessor</code> re-dispatches the pure domain event on a later cycle
+          (<code>OutboxProcessor.DispatchMessagesAsync</code>, <code>OutboxProcessor.cs:585</code>, the dispatcher call at <code>:639</code>) with the
+          bounded retries, backoff, and dead-lettering ADR-003 already defines. So a handler that cannot complete its
+          work should fail loudly and let redelivery re-run it. Inventing local retries would just duplicate a policy
+          that already exists one layer down.</p>
+          <p>The framework takes that same position in its own base class.
+          <code>SafeDomainEventHandler&lt;TDomainEvent&gt;</code> (<code>SafeDomainEventHandler.cs:32</code>) runs your <code>HandleSafelyAsync</code>
+          inside an exception filter, <code>LogAndRethrow</code> (<code>:61-70</code>), which writes one error line naming the handler and
+          the event type and then returns <code>false</code>, so the exception keeps travelling with its original stack intact
+          (<code>:42-46</code>). A cancellation during host shutdown passes straight through unlogged, because that is not a
+          delivery failure (<code>:42</code>). The class documentation records why rethrowing is required (<code>:13-20</code>): a
+          handler that reports success has its outbox row marked processed, so nothing retries and the side
+          effect is lost with only a log line to show for it. The base class is not a way to absorb a failure. It is
+          a way to fail with context, and its tests assert exactly that, including that the log lands before the
+          caller sees the exception (<code>SafeDomainEventHandlerTests.cs:33,51,73</code>).</p>
+          <p>The documentation also names the consequence to design for (<code>:21-29</code>). The interceptor dispatches every
+          local event of one save in a single call, so one rethrowing handler skips the mark-processed step for the
+          <strong>whole</strong> local batch: every event that save raised comes back, not only the one whose handler failed. A
+          subclass has to be idempotent about its own event and about its siblings.</p>
+          <p>The mirror case is the handler whose work is a pure side effect, where a redelivery would be worse than a
+          loss. <code>OrderPaymentFailedSagaHandler</code> refuses one without catching anything: it makes the side effect
+          durable instead. In its own scope (<code>:31-32</code>) it schedules a <code>SendOrderPaymentFailedEmailInternalCommand</code>
+          through <code>IInternalCommandScheduler</code> (<code>:34-36</code>), branches on the returned <code>Result</code> (an <code>Error</code>-level line
+          naming the order and customer when scheduling fails, an <code>Information</code> line when it succeeds, <code>:38-45</code>), and
+          then re-arms the order&#39;s payment deadline so a failed attempt hands the customer the whole retry window
+          again (<code>:47</code>, <code>RearmExpiryDeadlineAsync</code> <code>:67-93</code>, itself logging rather than throwing on failure,
+          <code>:86-90</code>). The class documentation states the rule that makes both branches correct (<code>:11-21</code>): the order is
+          already persisted as <code>PaymentFailed</code> before this handler runs, so a scheduling failure is logged rather than
+          thrown, and an SMTP outage retries the message off the queue instead of dragging the whole local batch back
+          through the pipeline. It implements <code>IDomainEventHandler&lt;OrderPaymentFailed&gt;</code> directly (<code>:22-24</code>), and no
+          production handler in the four repos derives from <code>SafeDomainEventHandler</code>, its only subclass being the test
+          double in that base class&#39;s own unit tests (<code>SafeDomainEventHandlerTests.cs:124</code>). The durable queue that
+          carries that scheduled row, its retries and its dead-letter path are the subject of Article 51, &quot;Four ways
+          to do work later: channels, cron and durable internal commands&quot;, so they are not re-taught here.</p>
+          <p>The choice is therefore explicit per handler: <strong>throw to get a redelivery, or take the work somewhere that
+          survives on its own.</strong> What you cannot do is neither.</p>
+          <h2 id="the-inbound-edge-a-webhook-is-a-delivery-contract-not-an-api-call">The inbound edge: a webhook is a delivery contract, not an API call</h2>
+          <p>Everything so far is about a message leaving the process (ADR-003, at-least-once out) or a broker
+          redelivery arriving at a consumer (ADR-021, dedup on the way in). The Stripe webhook is the third leg of
+          that family and it matches neither: an inbound call from a third party you do not control, which cannot
+          authenticate as an application user, does not send an <code>Idempotency-Key</code>, and never touches your broker.
+          <strong>ADR-084</strong> records that contract, and it is worth reading before the backstop, because the backstop
+          exists for the deliveries this contract loses.</p>
+          <p>The endpoint is one anonymous POST that reads the body raw, because signature verification needs the
+          unmodified payload and model binding would destroy it (<code>PaymentsController.cs:57,66</code>, raw read <code>:81-87</code>),
+          with the <code>Stripe-Signature</code> header read alongside it (<code>:86</code>). That signature is the only authentication
+          there is, which is also why the action carries <code>[RequestSizeLimit(1_000_000)]</code> (<code>:76</code>): verification happens
+          <em>after</em> the body is read, so without a cap every anonymous caller can make the endpoint allocate up to
+          Kestrel&#39;s default before a single byte is authenticated, on a service that runs at 0.5 GiB. The comment
+          above it picks 1 MB rather than a few hundred KB on purpose (<code>:67-75</code>): Stripe events occasionally exceed
+          that, and rejecting a genuine event costs a retry storm toward endpoint disablement.</p>
+          <p>The load-bearing decision is what the status code <em>means</em>. <strong>It encodes ACCEPTED, not PROCESSED.</strong>
+          Five failure codes return 400, held in a <code>FrozenSet</code> named <code>RejectionCodes</code> (<code>:39-46</code>): signature
+          verification failed, the signed payload could not be parsed, no signing secret is configured, and the two
+          shape rejections that <code>ProcessPaymentWebhookCommandValidator</code> raises in the Validating decorator before the
+          handler ever runs, a body-less delivery and a signature-less one. The remarks above the set explain why the
+          last two belong there (<code>:31-38</code>): nothing was verified, so a 200 would report as accepted a delivery that
+          never was, and would suppress the retry a genuinely broken caller still needs. Everything past acceptance
+          returns 200, <strong>including an event for an order that cannot be found</strong> (<code>:48-56,100-118</code>). That reads as
+          wrong until you read the status code the way the caller does: Stripe treats a non-2xx as &quot;retry me&quot;, and
+          sustained failures make it <strong>disable the endpoint</strong>, which silently stops every payment status update for
+          the whole store. Mapping an application failure to 400 would be locally honest and globally catastrophic.
+          So a post-acceptance failure logs at <code>Warning</code> and still returns 200 (<code>:115,118</code>), while a rejection logs at
+          <code>Critical</code> with the consequence spelled out in the message text (<code>:111,122-126</code>). <code>Critical</code> is deliberate,
+          not drama: this ran at <code>Warning</code> for weeks while the configured signing secret did not match the live
+          endpoint, so 100% of deliveries were rejected and nothing surfaced it (<code>:105-110</code>).</p>
+          <p>The provider-side half is that the endpoint registers itself. <code>StripeWebhookRegistrationService</code> is a
+          <code>BackgroundService</code> (<code>:35-40</code>) registered by the Sales module in the same method that registers the
+          reconciliation sweep below (<code>Sales.Infrastructure/DependencyInjection.cs:39</code>, sweep at <code>:42</code>). It skips
+          entirely when no <code>WebhookBaseUrl</code> is set, which is the local path where the Stripe CLI forwards instead, and
+          warns and skips with no <code>SecretKey</code> (<code>:63-73</code>); it subscribes exactly three event types (<code>:51-56</code>); and it
+          stamps every endpoint it creates with the description prefix <code>Auto-registered by MMCA</code> (<code>:49</code>). That prefix
+          is the whole reason an automated delete is acceptable: <code>IsStaleAutoRegistered</code> returns <code>false</code> for any
+          endpoint lacking it, so an operator-created endpoint is never touched, and <code>true</code> only for one of its own
+          whose URL has moved or whose status is no longer <code>enabled</code> (<code>:210-220</code>). The disabled-but-still-present
+          duplicate that predicate
+          collapses is a real incident, not a hypothetical: a second endpoint got created at the same URL with a
+          brand-new signing secret, invalidating the configured one (<code>ADR-084:30-33</code>).</p>
+          <p>The secret is the honest ugly part. Stripe reveals a signing secret only at creation time (<code>:180</code>), so the
+          minted value goes two places at once. It is written to a shared <code>IStripeWebhookSecretStore</code> the moment it
+          exists (<code>:186</code>), and that store is read first, before the Stripe client is even built (<code>:100-105</code>), which is
+          what makes every replica converge on one secret instead of each minting its own. It is also held in a
+          volatile-backed singleton (<code>StripeWebhookSecretProvider.cs:17-27</code>) that the payment service prefers over
+          configuration on every incoming event (<code>StripePaymentService.cs:362</code>), announced at <code>Critical</code>
+          (<code>StripeWebhookRegistrationService.cs:189,292-293</code>), and written to stderr for an operator to copy into
+          <code>Stripe:WebhookSecret</code> (<code>:190-192</code>). That is live credential material in the log pipeline, on purpose: the
+          alternative is a first boot where the endpoint exists and every single delivery is rejected. ADR-084 files
+          it as a trade-off, not a feature, along with the fact that a configured secret is trusted and never
+          validated, because the provider will not re-reveal it (<code>ADR-084:174-177</code>).</p>
+          <h2 id="the-backstop-a-periodic-sweep-against-the-provider">The backstop: a periodic sweep against the provider</h2>
+          <p>Compensation answers &quot;step two failed.&quot; It does not answer &quot;step three never reported back.&quot; A webhook
+          that is never delivered, or that arrives and is rejected because the signing secret is stale, produces no
+          event to compensate, so no handler ever runs.</p>
+          <p><code>PaymentReconciliationService</code> (<code>PaymentReconciliationService.cs:68-74</code>) is that backstop, registered as a
+          hosted service by the Sales module&#39;s infrastructure (<code>DependencyInjection.cs:42</code>). Backstop is the exact
+          word the class documentation uses, and it is careful about it (<code>:50-60</code>): every order arms its own
+          <code>Sales.ExpireUnpaidOrder</code> deadline at checkout and re-arms it whenever a payment attempt fails, so the
+          scheduled row is the primary path for an unpaid order and the sweep covers what a scheduled row cannot, a
+          deadline that was never written, one dead-lettered by the internal-command processor, and every order
+          created before the deadline existed. Both paths converge on the same transition and the same
+          <code>OrderCancelled</code> compensation, so whichever arrives first wins and the other finds nothing to do.</p>
+          <p>Its loop shape is deliberate, and it is deliberately not its own. The sweep derives from the framework&#39;s
+          <code>PeriodicBackgroundService</code> (<code>PaymentReconciliationService.cs:74</code>), whose <code>ExecuteAsync</code> owns the
+          enablement gate, the 15-second startup delay that lets the host finish initializing, the per-cycle
+          <code>try</code>/<code>catch</code> that logs and never kills the loop, and every wait through <code>TimeProvider</code> so the cycle is
+          testable without real time (<code>PeriodicBackgroundService.cs:45-87</code>: gate <code>:47-51</code>, delay <code>:31</code>, per-cycle
+          catch <code>:64-76</code>, waits <code>:55,80</code>).</p>
+          <p>The sweep overrides exactly three members: <code>Interval</code>, read from configuration
+          (<code>PaymentReconciliationService.cs:81</code>); <code>IsEnabled</code>, which refuses to run when the toggle is off
+          (<code>:93-97</code>) or when no Stripe key is configured (<code>:99-103</code>), logging which of the two it was because those
+          are very different situations to find in a log; and <code>ExecuteCycleAsync</code> (<code>:110-111</code>), which delegates to an
+          internally visible <code>ReconcileOnceAsync</code> so one cycle is testable without the timer. That is also the base
+          class&#39;s only subclass in any of the four repos, apart from the test double in <code>PeriodicBackgroundService</code>&#39;s
+          own unit tests (<code>PeriodicBackgroundServiceTests.cs:104</code>): one adopter, not yet a convention.</p>
+          <p>One cycle (<code>ReconcileOnceAsync</code>, <code>PaymentReconciliationService.cs:119</code>) computes a single cutoff (<code>:122</code>)
+          and runs two passes against it, expiry first (<code>:128</code>) and Stripe reconciliation second (<code>:129</code>). The
+          ordering is load-bearing, and the comment says why (<code>:124-127</code>): reconciliation can move an order into
+          <code>PaymentFailed</code>, and an expiry pass running afterwards would find that brand-new row against the same cutoff
+          and cancel it in the same cycle, collapsing the retry window to nothing.</p>
+          <p><strong>Pass one expires the orders that never reached the provider at all.</strong>
+          <code>ExpireStrandedUnpaidOrdersAsync</code> (<code>:178-201</code>) takes <code>PendingPayment</code> or <code>PaymentFailed</code> orders older than
+          the cutoff (<code>:184-185</code>) and makes no provider call, because there is nothing to call about: a
+          <code>PendingPayment</code> order has no session id (remarks <code>:173-177</code>). Checkout has already committed that stock, so
+          an order nobody ever pays holds inventory nothing else can release. Each one is driven to <code>Cancelled</code>
+          through the same <code>MarkAsCancelled()</code> guarded transition (<code>:251</code>), which is the point: <code>Cancelled</code> is the one
+          terminal state the <code>OrderCancelled</code> compensation already listens on, so the release runs exactly once per
+          order however many times a sweep, a webhook or an outbox redelivery revisit it. <code>PaymentFailed</code> is
+          deliberately <strong>not</strong> the release state, because it is explicitly retryable (<code>:41-49</code>): releasing stock the
+          moment an order enters it would hand back quantities the very next checkout-session request expects to still
+          be committed, and a later payment would oversell.</p>
+          <p><strong>Pass two asks Stripe about the orders that are waiting on a confirmation.</strong>
+          <code>ReconcileStripeSessionsAsync</code> (<code>:136-166</code>) takes <code>PaymentInitiated</code> orders that have a session id and last
+          changed before the cutoff (<code>:147-152</code>).</p>
+          <p><strong>Both passes bound the work in SQL, not in memory.</strong> One shared helper, <code>QueryStrandedOrderIdsAsync</code>
+          (<code>:207-223</code>), takes each pass&#39;s predicate, orders oldest-first, takes the batch size and projects to ids,
+          all server-side (<code>:217-220</code>), over a dedicated filtered index <code>IX_Order_Status_Modified</code> on <code>(Status, LastModifiedOn, CreatedOn)</code> (<code>OrderConfiguration.cs:74-76</code>). The comment above the reconciliation predicate
+          explains the rule (<code>:141-146</code>): materializing every stuck order and taking the batch in memory would make
+          the batch size a Stripe-call budget rather than a query bound, and the exact failure this sweep exists to
+          handle (a prolonged webhook outage) is the one that strands a large backlog.</p>
+          <p><strong>It reloads each order in its own scope and re-checks.</strong> <code>ReconcileOrderAsync</code> (<code>:275</code>) opens a scope per
+          order (<code>:277</code>) so one order&#39;s failure never poisons the batch, reloads the order tracked (<code>:282-286</code>), and
+          returns immediately if it is no longer <code>PaymentInitiated</code> (<code>:288-292</code>), because a webhook may have arrived
+          between the id query and now.</p>
+          <p><strong>It applies the same guarded transitions the webhook would have.</strong> The session status maps to exactly
+          three outcomes (<code>TryApplyTransition</code>, <code>:325-347</code>): paid to <code>MarkAsPaid</code>, expired to <code>MarkAsPaymentFailed</code>,
+          still open to nothing at all, left for a later cycle. Those are the identical <code>Result</code>-returning methods
+          called by the webhook handler (<code>ProcessPaymentWebhookHandler.cs:97,128</code>) and by the client-initiated check
+          (<code>VerifyPaymentHandler.cs:64</code>). The sweep gets no private path into the aggregate, so it cannot reach a
+          state the webhook could not.</p>
+          <p><strong>And it loses races on purpose.</strong> If a webhook transitions the order between the sweep&#39;s load and its save,
+          the save throws <code>DbUpdateConcurrencyException</code>, which is logged and skipped, not retried (<code>:307-317</code>, the
+          concurrency branch <code>:312-317</code>). The concurrent writer is authoritative; the next cycle sees the final state.</p>
+          <p>The whole thing is configuration-gated by <code>PaymentReconciliationSettings</code>
+          (<code>PaymentReconciliationSettings.cs:24-53</code>): <code>Enabled</code> defaults true (<code>:30</code>), a 10-minute poll interval
+          (<code>:34</code>), a 30-minute stuck age (<code>:48</code>), and a 50-order batch (<code>:52</code>), carried as those exact values in the
+          Sales service&#39;s <code>appsettings.json:90-95</code>, directly below the <code>UnpaidOrderExpiry</code> section that sets the
+          per-order deadline (<code>:86</code>). The settings documentation asks for the stuck age to stay above normal webhook
+          latency and equal to <code>UnpaidOrderExpiry:Minutes</code> (<code>:12-22</code>), so the two mechanisms agree on one window and
+          the sweep never races a healthy delivery.</p>
+          <p>Both mechanisms are covered by tests that assert the behavior, not the wiring: seven cases on the saga
+          handler including a redelivered event that must not restore stock twice (<code>:44</code>), the lookup that has to
+          ignore the soft-delete filter (<code>:122</code>), and the missing-inventory case that must warn and still mark the
+          order restored (<code>:149</code>), all in <code>OrderCancelledSagaHandlerTests.cs:21,44,65,81,102,122,149</code>; and thirteen on
+          the sweep, seven on the Stripe pass including the lost race and the bound-the-query-not-the-list case and
+          six on the expiry pass including the stale <code>PendingPayment</code> order that is expired into <code>Cancelled</code> without
+          Stripe ever being called (<code>PaymentReconciliationServiceTests.cs:31,47,62,77,93,105,122,149,167,186,202,219,237</code>).
+          The ingress contract has its own pair: five methods pinning the controller&#39;s accept-versus-reject mapping,
+          one of them a <code>[Theory]</code> over both shape-rejection codes (<code>:59</code>) and one pinning the request-size bound
+          (<code>:83</code>), in <code>PaymentsControllerTests.cs:34,43,59,68,83</code>; and five on the deletion predicate, including the
+          operator-created endpoint that must never be judged stale
+          (<code>StripeWebhookRegistrationServiceTests.cs:181,189,203,213,226</code>).</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>Adoption is one module, and the record says so.</strong> This pattern lives in MMCA.Store&#39;s Sales module only:
+          the two saga handlers and the one reconciliation sweep above. MMCA.ADC and MMCA.Helpdesk have no
+          compensating saga handler and no reconciliation sweep today (<code>ADR-054:172-176</code>). The record exists because
+          the mechanism is the framework&#39;s stated answer to cross-boundary consistency, not because it is broadly
+          adopted. Read this article as one worked implementation, not a fleet-wide convention.</li>
+          <li><strong>There is no orchestrator, and that is a written deferral rather than a silence.</strong> Choreography is
+          correct for this workflow because <code>Order.Status</code> plus <code>Order.InventoryRestored</code> already <em>are</em> the saga
+          state, and <strong>ADR-086</strong> records what would replace it when that stops being true: a MassTransit v8 saga
+          state machine, durable per-instance correlation state in the owning service&#39;s own database, and
+          per-instance deadlines instead of a fixed-interval sweep (<code>ADR-086:59-85</code>). The technology is already
+          pinned, because MassTransit is held at v8 (v9 requires a commercial license, <code>:87-90</code>). The trigger is
+          specific: a workflow with three or more steps across two or more services, state that does not fit one
+          aggregate, and at least one per-instance deadline (<code>:97-102</code>). Its own Revision records that the first of
+          those three properties is already satisfied without a coordinator: the per-instance unpaid-order deadline
+          exists as a scheduled internal-command row rather than as state-machine state (<code>:8-10</code>, <code>:143-180</code>). The
+          deferral stands, it ships no coordinator, and even after one exists the sweep stays underneath it for the
+          external system that never replies (<code>:79-85</code>, <code>:138-141</code>).</li>
+          <li><strong>Inconsistency is bounded, not eliminated.</strong> Between the cancellation commit and the compensation
+          commit, stock is held against a cancelled order. An unpaid order loses its stock at its own scheduled
+          deadline; when that row is missing, the bound is the sweep&#39;s stuck age plus one poll interval instead, 30
+          plus 10 minutes at the shipped defaults, and that is also the window an order waiting on a dropped webhook
+          sits in <code>PaymentInitiated</code> with its stock held. That window is the price of not having a distributed
+          transaction, and it should be a number you choose, not one you discover.</li>
+          <li><strong>Compensation is best-effort per line, and names what it could not restore.</strong>
+          <code>RestoreInventory</code> cannot restore an order line whose <code>InventoryItem</code> row is missing, so it collects
+          those variant ids and returns them instead of skipping quietly
+          (<code>InventoryRestorationDomainService.cs:21-27</code>), and the handler logs them as a warning naming the order
+          and the variants (<code>OrderCancelledSagaHandler.cs:80-86</code>). The marker still commits, that quantity is never
+          restored, and nothing retries it. The comment above the marker says why (<code>:88-92</code>): the increases and the
+          marker land in the same save, so withholding the marker would re-apply every <strong>matched</strong> increase on the
+          next redelivery, and because the lookup already ignores the soft-delete filter, an unmatched variant means
+          the row never existed at all. The warning is the record, not a repair, and ADR-054&#39;s own trade-off bullet
+          states it the same way (<code>ADR-054:214-225</code>).</li>
+          <li><strong>Redelivery re-runs every handler of the event, not the failed one.</strong> The dispatcher iterates handlers
+          sequentially with no per-handler isolation (<code>DomainEventDispatcher.cs:76-85</code>), so one throwing handler also
+          skips the handlers after it, and a redelivery re-runs the ones that already succeeded. The mark-processed
+          step covers the save&#39;s whole local batch (<code>DomainEventSaveChangesInterceptor.cs:332-354</code>), so what comes
+          back is every event that save raised, not just the failed one. Every handler on a shared event must be
+          idempotent or must keep its failure to itself.</li>
+          <li><strong>The sweep is not replica-leased.</strong> The outbox processor claims rows with a lease before working them
+          (ADR-003); the sweep takes no such claim, so at the configured <code>maxReplicas: 2</code> (<code>main.bicep:1810</code>) two
+          replicas can pick the same stuck order and each spend a Stripe status call. Correctness holds through the
+          concurrency token; the duplicated external call does not deduplicate.</li>
+          <li><strong>The webhook ingress trades visibility for endpoint survival.</strong> A post-acceptance failure returns 200,
+          so it is invisible in Stripe&#39;s delivery view and has to surface through our own <code>Warning</code> log
+          (<code>PaymentsController.cs:115</code>) or through the sweep above. The endpoint is also anonymous,
+          internet-reachable and exempt from both gateway rate limiters, with signature verification as its only
+          authentication, so a hostile caller can generate <code>Critical</code> log volume one rejected request at a time
+          (<code>ADR-084:181-193</code>).</li>
+          <li><strong>Every compensating action needs its own marker.</strong> There is no generic mechanism here. A second
+          compensating action means a second persisted marker or a naturally idempotent operation, decided by the
+          author of that handler.</li>
+          </ul>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The mechanism ports to any stack that has events, a database, and an external dependency:</p>
+          <ol>
+          <li><strong>Put the compensating action in its own handler</strong>, triggered by the event the first step raised, not in
+          an <code>else</code> branch of the command. It commits after the originating transaction, in its own scope, which is
+          what makes it compensation instead of an impossible rollback. The exception is worth naming: a check that
+          must happen <em>before</em> the commit, like asking whether the money already moved, cannot be a post-commit
+          handler at all, and belongs in the command where it can still refuse.</li>
+          <li><strong>Make idempotency a persisted marker that commits with the writes it guards.</strong> One <code>SaveChanges</code>, one
+          database, one transaction. A flag written after the work is a narrower version of the same bug; a flag
+          written with the work is an invariant. Guard the marker in the aggregate so a second call is a typed
+          failure, not a silent overwrite.</li>
+          <li><strong>Add an optimistic-concurrency token</strong> so two simultaneous deliveries cannot both pass the marker check
+          and both commit. The marker handles sequential re-runs, the token handles concurrent ones. You need both.</li>
+          <li><strong>Let your delivery layer own retry.</strong> If your event transport already retries with backoff and
+          dead-letters, throw and let it re-run you. Decide explicitly, per handler, whether failure should force a
+          redelivery (throw) or be kept local, and if it is kept local, give that work its own durable home rather
+          than a <code>catch</code> that logs. A shared base class that logs the handler and event context and then rethrows
+          makes the honest option the default one. Then check what your delivery layer actually redelivers: if
+          it acknowledges a batch in one step, one thrown exception brings the whole batch back, not just your
+          event.</li>
+          <li><strong>Decide what your inbound webhook&#39;s status code means, and write it down.</strong> A third-party caller reads
+          it as a delivery instruction (&quot;retry me&quot; or &quot;stop&quot;), not as an application result, and providers
+          disable endpoints that keep failing. Return the error code only for the failures where nothing was
+          verified and a retry could still fix it (bad signature, missing signature, empty body, unparseable body,
+          missing secret), accept everything else and surface the failure through your own telemetry, and log a
+          rejection at a level your production log floor actually emits. Cap the body you read before you have
+          authenticated it.</li>
+          <li><strong>Back every externally-confirmed step with a periodic reconciliation sweep</strong>, because a confirmation
+          that never arrives produces no event to compensate. Bound the query in the database, reload and re-check
+          each item in its own scope, drive the <strong>same</strong> guarded transitions the primary path uses, and let it lose
+          races to the primary path rather than fighting them. Keep it even once per-instance deadlines exist: it
+          is what catches the deadline that was never written.</li>
+          </ol>
+          <p>The rule of thumb: <strong>any step you cannot roll back needs an explicit undo, and any step you cannot confirm
+          needs an explicit timeout. Write both down as code, or your consistency story is hope with extra steps.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why a cross-boundary workflow has no transaction to roll it back, how MMCA.Store puts
+          compensation in its own domain-event handler running in its own DI scope (and which single check has to stay
+          in the command instead), how the <code>Order.InventoryRestored</code> marker committed by the same <code>SaveChanges</code> as the
+          inventory increases turns idempotency into a database invariant (and why that is stronger than a
+          record-after-success inbox), how the <code>RowVersion</code> token serializes concurrent redeliveries, why throwing is
+          the correct failure mode when the outbox already owns retry and what the alternative costs, why the inbound
+          webhook&#39;s status code encodes acceptance rather than success and registers its own endpoint (ADR-084), and
+          how <code>PaymentReconciliationService</code> backs both halves with a two-pass sweep that expires stranded unpaid
+          orders and asks Stripe for authoritative status on the rest.</p>
+          <p><strong>Next in the series:</strong> Article 50, &quot;The LLM is a dependency: a bounded, guarded, metered boundary for chat
+          completions.&quot;</p>
+          <p><em>MMCA.Common is open source. Star the repo, read the 2-minute ADR-054 behind this pattern, or
+          <code>dotnet add package MMCA.Common.API</code> and build the monolith you can extract later.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>This pattern&#39;s decision records: <a href="../docs/adr/054-saga-compensation-and-reconciliation.html">ADR-054: Choreographed Saga Compensation with a Reconciliation Backstop</a> and
+          <a href="../docs/adr/084-stripe-webhook-ingress.html">ADR-084: Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+          <li>The full 34-category scorecard, §6 and §29 included, lives in
+          <a href="../docs/governance/common-ArchitectureScorecard.html">MMCA.Common: Architecture Scorecard</a> in the docs site.</li>
+          </ul>
+          <p><em>Previous: Article 48, &quot;Observability by Default: OpenTelemetry and Azure Monitor in MMCA.&quot; Next: Article 50,
+          &quot;The LLM is a dependency: a bounded, guarded, metered boundary for chat completions.&quot;</em></p>
+          <p><em>Tags: .NET, C Sharp, Distributed Systems, Microservices, Software Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="observability-opentelemetry.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">48 · Observability by default</span></a>
+          <a class="article-pager-link article-pager-link--next" href="governed-llm-boundary.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">50 · The governed LLM boundary</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-compensation-is-a-handler-not-a-branch-in-the-command">The MMCA answer: compensation is a handler, not a branch in the command</a></li>
+            <li><a href="#the-marker-idempotency-as-a-database-invariant">The marker: idempotency as a database invariant</a></li>
+            <li><a href="#redelivery-is-the-retry-mechanism-so-throwing-is-correct">Redelivery is the retry mechanism, so throwing is correct</a></li>
+            <li><a href="#the-inbound-edge-a-webhook-is-a-delivery-contract-not-an-api-call">The inbound edge: a webhook is a delivery contract, not an API call</a></li>
+            <li><a href="#the-backstop-a-periodic-sweep-against-the-provider">The backstop: a periodic sweep against the provider</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

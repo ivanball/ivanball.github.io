@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Optimistic concurrency you cannot opt out of: RowVersion from the database to a required If-Match · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Carry the RowVersion from database to DTO and back, so a concurrent edit fails fast as a conflict instead of silently overwriting.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/optimistic-concurrency-rowversion.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Optimistic concurrency you cannot opt out of: RowVersion from the database to a required If-Match">
+  <meta property="og:description" content="Carry the RowVersion from database to DTO and back, so a concurrent edit fails fast as a conflict instead of silently overwriting.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/optimistic-concurrency-rowversion.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-13.png">
+  <meta property="og:image:alt" content="Optimistic concurrency you cannot opt out of: RowVersion from the database to a required If-Match">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Optimistic concurrency you cannot opt out of: RowVersion from the database to a required If-Match">
+  <meta name="twitter:description" content="Carry the RowVersion from database to DTO and back, so a concurrent edit fails fast as a conflict instead of silently overwriting.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-13.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Optimistic concurrency you cannot opt out of: RowVersion from the database to a required If-Match","description":"Carry the RowVersion from database to DTO and back, so a concurrent edit fails fast as a conflict instead of silently overwriting.","url":"https://ivanball.github.io/articles/optimistic-concurrency-rowversion.html","mainEntityOfPage":"https://ivanball.github.io/articles/optimistic-concurrency-rowversion.html","image":"https://ivanball.github.io/assets/img/articles/article-13.png","datePublished":"2026-07-11T10:42:46Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":13,"sameAs":"https://medium.com/@ivanball76/optimistic-concurrency-that-survives-the-round-trip-rowversion-from-database-to-dto-and-back-93d4a794716f"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"13 · Optimistic concurrency: RowVersion round-trips","item":"https://ivanball.github.io/articles/optimistic-concurrency-rowversion.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">13 · Optimistic concurrency: RowVersion round-trips</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html" aria-current="page">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Data &amp; persistence · No. 13</p>
+          <h1 id="optimistic-concurrency-you-cannot-opt-out-of-rowversion-from-the-database-to-a-required-if-match">Optimistic concurrency you cannot opt out of: RowVersion from the database to a required If-Match</h1>
+          <p class="article-meta"><time datetime="2026-07-11T10:42:46Z">July 11, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/optimistic-concurrency-that-survives-the-round-trip-rowversion-from-database-to-dto-and-back-93d4a794716f" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-13.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Two admins open the same session, both edit it, both hit Save. Without a precondition the
+          second write silently wins and the first admin&#39;s change is gone, with no error, no log, no trace. Here is
+          the concurrency token that travels from the database out as a weak <code>ETag</code>, back in a required <code>If-Match</code>
+          header, and into EF&#39;s WHERE clause, so a stale edit is a <code>412 Precondition Failed</code> and a write that states
+          no precondition at all is a <code>428 Precondition Required</code>, formalized in ADR-035.</p>
+          <hr>
+          <p>An organizer opens a conference session to fix the room. A speaker opens the same session, at the same
+          time, to fix the abstract. Both read the row. The organizer saves first. Then the speaker saves, over the
+          top, and the room change vanishes. Nobody typed anything wrong. Nobody saw an error. The system did
+          exactly what a load-modify-save handler does by default: it loaded the freshest row, applied the request,
+          and wrote it back. Last write wins.</p>
+          <p>That default is fine for a single-user admin tool and quietly wrong for a multi-actor system. Every
+          mutable aggregate in the framework is edited through the same shape: the update handler fetches the
+          tracked entity, applies the request, and calls <code>SaveChangesAsync</code>. With one shared context per engine
+          (ADR-006) and no concurrency token, two editors who both read a row and save in turn overwrite each other
+          and nothing surfaces the collision.</p>
+          <h2 id="why-it-matters-and-why-it-is-not-idempotency">Why it matters, and why it is not idempotency</h2>
+          <p>The lost update is a data-integrity bug that never announces itself. It does not throw. It does not log.
+          It leaves a perfectly valid-looking row. You find out when the organizer reopens the session a day later
+          and their room assignment is simply not there, and by then the winning write is indistinguishable from a
+          correct one.</p>
+          <p>It is worth being precise about what this is, because the framework already carries two things that sound
+          adjacent. Request idempotency (ADR-017) dedups a client that retries the <em>same</em> request. The consumer
+          inbox (ADR-021) dedups a broker that redelivers the <em>same</em> event. Both answer &quot;I saw this one action more
+          than once.&quot; Optimistic concurrency answers the opposite question: &quot;two <em>distinct</em> actions targeted the
+          same row, which one is stale?&quot; Same neighborhood, different problem. Idempotency collapses duplicates into
+          one effect; concurrency control keeps two genuine edits from silently clobbering each other.</p>
+          <h2 id="the-mmca-answer-a-database-token-handed-out-as-an-etag-demanded-back-as-a-precondition">The MMCA answer: a database token, handed out as an ETag, demanded back as a precondition</h2>
+          <p>The mechanism is a concurrency token that the database manages, the read model exposes, the client states
+          back in the <code>If-Match</code> header, and the persistence layer plants as EF&#39;s <em>original</em> value so a stale update
+          fails inside the UPDATE statement itself. There is exactly one transport for it, and no way past it: a
+          conditional write that states no precondition never reaches the action.</p>
+          <p>It rests on four members.</p>
+          <p><code>AuditableBaseEntity&lt;TId&gt;</code> carries a <code>byte[] RowVersion</code> property with a private setter, so every
+          aggregate root and every child entity inherits it and no domain code ever sets it. On SQL Server it maps
+          to a server-generated <code>rowversion</code> that auto-increments on every write; the value is populated by EF, and
+          the aggregate&#39;s behavior never sees it. Concurrency stays a persistence concern, not a domain one.</p>
+          <p><code>IConcurrencyAware</code> is the read contract, a single non-nullable <code>byte[] RowVersion { get; init; }</code>. Read
+          DTOs implement it so the API can render the current token as the response <code>ETag</code>. Update requests do not
+          implement it: the precondition travels in the header alone, and the token is the header&#39;s whole content,
+          so it is never optional.</p>
+          <p><code>IWriteRepository.SetOriginalRowVersion</code> is the persistence extension point. <code>MutateEntityHandlerBase</code>
+          calls it right after loading the entity and before applying the request, with the token the concrete
+          handler reports through its <code>RowVersion(command)</code> override. The EF implementation writes that token to
+          <code>Entry(entity).Property(nameof(RowVersion)).OriginalValue</code>, and it rejects null: there is no value that
+          means skip the check. A second overload takes any tracked <code>IRowVersioned</code> child, because the
+          aggregate-typed one can only reach the root.</p>
+          <p><code>IWriteRepository.TouchConcurrencyToken</code> closes the hole that stamping alone leaves. Setting the original
+          value does not make the entry dirty, so an applier that changed only child rows would leave the root
+          <code>Unchanged</code>, EF would emit no root UPDATE, and there would be nothing for the database to compare the
+          token against. Under a conditional write the handler base marks the root as modified, so the save always
+          emits a root UPDATE carrying the caller&#39;s token.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The read DTO exposes the token; the API renders it as the response ETag.</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">SessionDTO</span> : <span class="hljs-title">IBaseDTO</span>&lt;<span class="hljs-title">SessionIdentifierType</span>&gt;, <span class="hljs-title">IConcurrencyAware</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">byte</span>[] RowVersion { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; } = [];   <span class="hljs-comment">// the version the client last read</span>
+}
+
+<span class="hljs-comment">// The update request carries no token: the precondition travels in If-Match.</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">SessionUpdateRequest</span> : <span class="hljs-title">ISessionFieldsRequest</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Title { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
+}
+
+<span class="hljs-comment">// The action reads the decoded header token and puts it on the command.</span>
+<span class="hljs-keyword">var</span> rowVersion = SupportsIfMatchAttribute.RequiredToken(HttpContext);
+<span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> UpdateHandler.HandleAsync(
+    <span class="hljs-keyword">new</span> UpdateSessionCommand(id, request, rowVersion), cancellationToken);
+
+<span class="hljs-comment">// The handler reports the token; the shared base does the stamping.</span>
+<span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> <span class="hljs-built_in">byte</span>[]? RowVersion(UpdateSessionCommand command) =&gt; command.RowVersion;
+<span class="hljs-comment">// MutateEntityHandlerBase: SetOriginalRowVersion(entity, rowVersion), then</span>
+<span class="hljs-comment">// TouchConcurrencyToken(entity) so the save always emits a root UPDATE.</span>
+<span class="hljs-comment">// A stale token matches no row -&gt; DbUpdateConcurrencyException -&gt; 412 Precondition Failed.</span></code></pre>
+          <p>That is the client contract: the read hands you an entity tag, and the edit is refused unless you state
+          that tag back.</p>
+          <h2 id="the-detail-that-actually-makes-it-a-conflict">The detail that actually makes it a conflict</h2>
+          <p>The interesting part is not &quot;store a version number.&quot; It is <em>where</em> the comparison happens. A hand-rolled
+          &quot;read the current token, compare it to the client&#39;s, then save if they match&quot; reintroduces the exact race
+          it is meant to close: another writer can slip in between the compare and the save.</p>
+          <p><code>SetOriginalRowVersion</code> sidesteps that entirely. Once the client&#39;s token is EF&#39;s original value for the
+          row, EF includes it in the UPDATE&#39;s <code>WHERE</code> clause. The comparison runs <em>in the database</em>, atomically,
+          as part of the write. If the row&#39;s current token no longer matches (someone else wrote since the client
+          read), the UPDATE affects zero rows and EF raises <code>DbUpdateConcurrencyException</code>. There is no window. The
+          check and the write are the same statement.</p>
+          <p><code>ConfigureConcurrencyTokens</code> wires this for every non-owned <code>IAuditableEntity</code> in the model, uniformly.
+          On SQL Server the property is configured with <code>IsRowVersion</code> (server-generated). On other relational
+          providers it falls back to <code>IsConcurrencyToken</code> over the same <code>byte[]</code>, application-managed. One
+          configuration, every table, no per-entity boilerplate.</p>
+          <h2 id="from-exception-to-a-status-at-the-edge">From exception to a status at the edge</h2>
+          <p><code>DbUpdateConcurrencyException</code> is a <code>DbUpdateException</code>, and the framework already has one handler for
+          that whole family. <code>DbUpdateExceptionHandler</code> translates any <code>DbUpdateException</code> into an RFC 9457
+          <code>409 Conflict</code> ProblemDetails, logs the full exception, and returns a deliberately generic detail message
+          (&quot;A data conflict occurred. Please retry or contact support.&quot;) so the database schema never leaks to the
+          client. This is the same edge that already returns 409 for unique-constraint and foreign-key violations,
+          so a concurrency conflict inherits its translation, logging, and schema-safe message with no new
+          middleware. On a guarded action the conflict never reaches the client as a 409: the filter rewrites the
+          outcome to 412 after the action, keeping the problem-details body exactly as it was built. Either way the
+          caller gets a status it can act on: reload, show the fresh values, let the human decide.</p>
+          <h2 id="the-transport-a-weak-etag-out-a-required-if-match-back">The transport: a weak ETag out, a required If-Match back</h2>
+          <p>The same <code>RowVersion</code>, the same <code>SetOriginalRowVersion</code> extension point, the same comparison inside the
+          UPDATE. The header is where the token lives on the wire, which means anything that speaks HTTP can
+          participate: a generic REST tool, a mobile stack, curl.</p>
+          <p>The read emits it. <code>EntityControllerBase</code> calls <code>SetConcurrencyETag</code> on the DTO it is about to return,
+          which writes a weak <code>ETag</code> (<code>W/&quot;&lt;base64 of the token&gt;&quot;</code>). Weak is the honest strength: the tag
+          identifies the row&#39;s version, not a byte-exact representation, and the same row serializes differently
+          under a <code>fields=</code> projection (the emitter reads the token out of the shaped dictionary in that case). A
+          DTO with no <code>RowVersion</code> property, or an empty token, gets no header at all.</p>
+          <p>The write consumes it. <code>[SupportsIfMatch]</code> is a sealed attribute that implements <code>IAsyncActionFilter</code>
+          directly, so unlike the DI-resolved <code>[Idempotent]</code> filter it needs no host registration. Before the action
+          runs it decodes <code>If-Match</code> and places the token in <code>HttpContext.Items</code> under <code>TokenItemKey</code>, where the
+          action reads it back with <code>SupportsIfMatchAttribute.RequiredToken</code>. No bound argument is written to, so no
+          request model has to loosen its immutability to receive a token. Three decisions matter: a request that
+          states <strong>no precondition</strong> is refused with <code>428 Precondition Required</code> and the action never runs (a blank
+          header and <code>*</code> both count, because the wildcard names no particular version), a <strong>malformed</strong> tag is a
+          <code>400</code> short-circuit because the server cannot tell what the caller meant, and only a decodable tag lets
+          the action run.</p>
+          <p>Then the status changes. After the action, <code>RewriteConflictToPreconditionFailed</code> turns the conflict
+          outcome, both a <code>DbUpdateConcurrencyException</code> and an already-built 409 result, into
+          <code>412 Precondition Failed</code>. It does so unconditionally, because every request that reached the action
+          stated a precondition. RFC 9110 reserves 412 for a precondition the client stated in a conditional request
+          header, which is exactly what <code>If-Match</code> is; 409 stays the answer on the unconditional endpoints, for a
+          conflict the client never conditioned on.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="HTTP"><code class="language-http hljs">PUT /orders/42/pay
+(no If-Match header)
+428 Precondition Required
+
+GET /orders/42
+200 OK
+<span class="hljs-attribute">ETag</span><span class="hljs-punctuation">: </span>W/&quot;AAAAAAAAB9E=&quot;
+
+PUT /orders/42/pay
+<span class="hljs-attribute">If-Match</span><span class="hljs-punctuation">: </span>W/&quot;AAAAAAAAB9E=&quot;
+412 Precondition Failed</code></pre>
+          <p>The generic <code>UpdateAsync</code> on <code>CrudEntityControllerBase</code> carries the attribute, so every CRUD <code>PUT</code>
+          inherits the precondition without anyone remembering it. Beyond that it is applied by hand, on 40 actions
+          across 18 controllers today: 24 across seven controllers in Store (five in Sales&#39; <code>OrdersController</code>,
+          five in <code>ProductsController</code>, four in <code>ProductVariantsController</code>, three each in <code>CustomersController</code>
+          and <code>ReviewsController</code>, two each in <code>CategoriesController</code> and <code>InventoryItemsController</code>) and 16 across
+          eleven in ADC (three in Conference&#39;s <code>EventsController</code>, three in Engagement&#39;s <code>SessionQuestionsController</code>,
+          two in its <code>LivePollsController</code>, and one each in eight more Conference controllers). Nothing here decides
+          conditional GET. The tag exists to be stated back on the next write, and there is no <code>If-None-Match</code>
+          handling and no 304 path.</p>
+          <h2 id="the-invariant-one-source-for-the-precondition">The invariant: one source for the precondition</h2>
+          <p>A convention that lives only in a code-review checklist rots. So the one-transport rule is enforced
+          mechanically. <code>ArchitectureRules.UpdateRequestsAreNotConcurrencyAware</code> scans each module&#39;s Application
+          assemblies for every type whose simple name ends in <code>UpdateRequest</code> and flags any that <em>does</em> implement
+          <code>IConcurrencyAware</code>, because a token in the body would give the same check a second, competing source.
+          <code>ConcurrencyConventionTestsBase</code> exposes it as a single <code>[Fact]</code>,
+          <code>UpdateRequests_ShouldNotImplement_IConcurrencyAware</code>, and both consumers subclass it: ADC and Store each
+          supply their own <code>IArchitectureMap</code>. A module with no mutable aggregate is legitimately vacuous. This is
+          invariant-over-discipline (ADR-015), and it is the type-level half of the rule; the 428 is the caller-level
+          half, so neither a request model nor a client can quietly reintroduce last-write-wins.</p>
+          <p>Both apps have adopted the pattern end to end. In ADC, <code>UpdateSessionHandler</code> overrides <code>RowVersion</code> to
+          report the token that arrived on <code>UpdateSessionCommand</code>, <code>SessionDTO</code> implements <code>IConcurrencyAware</code>, and
+          <code>SessionUpdateRequest</code> implements only its field contract. In Store, the same shape runs across all three
+          modules: Catalog and Identity edits are appliers over the shared handler base (changing a customer&#39;s
+          email, changing a product&#39;s brand), and the Sales order transitions (<code>PayOrderHandler</code>,
+          <code>DeliverOrderHandler</code>, <code>CancelOrderHandler</code>, <code>ShipOrderHandler</code>, <code>UpdateShipmentHandler</code>) each report the
+          command&#39;s token the same way. Both apps run one database per service (ADR-006), so each per-service
+          database is created with the <code>RowVersion</code> column on every table by its own module&#39;s <code>InitialCreate</code>
+          migration, and the token is present from the first row.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>The precondition is mandatory, and that is a real constraint.</strong> A caller that has not read the
+          resource cannot write it. There is no null token, no wildcard escape, no legacy-client path: a write
+          with no <code>If-Match</code> is a 428 and stops there. Scripts and generic REST tools have to do a GET first, and
+          a client that drops the header sees an immediate error instead of a silent overwrite. That is the
+          trade the framework makes, deliberately.</li>
+          <li><strong>The 409 is coarse, and the 412 inherits it.</strong> All <code>DbUpdateException</code>s map to one 409 with a generic
+          message, so from the status and body alone a client cannot tell a concurrency conflict from a
+          unique-constraint or foreign-key violation. That is deliberate (no schema leak), but it means retry logic
+          treats the three the same. The rewrite keys on the conflict <em>outcome</em>, not its cause, so on a guarded
+          action all three come back as 412, and one of them then wears a status naming a precondition the client
+          did not actually violate.</li>
+          <li><strong>It does not merge.</strong> Optimistic concurrency detects the collision and refuses the stale write. It does
+          not reconcile the two edits for you. What to do on a 412 (reload and retry, or surface a diff to the
+          human) is the caller&#39;s decision, not the framework&#39;s.</li>
+          <li><strong>Cross-engine asymmetry.</strong> SQL Server gets a server-generated <code>rowversion</code>; SQLite and other relational
+          providers get an application-managed <code>IsConcurrencyToken</code> over the same <code>byte[]</code>. Cosmos has its own
+          ETag mechanism that is not routed through this property.</li>
+          <li><strong>A child-level precondition costs a second field.</strong> <code>If-Match</code> names exactly one version, and that slot
+          belongs to the aggregate root, so a write that needs to condition on a child row states that second
+          precondition in the body: Store&#39;s <code>ProductVariantChangePriceRequest</code> carries a required
+          <code>VariantRowVersion</code> (and no product token at all), which the child-typed <code>SetOriginalRowVersion</code> overload
+          stamps on the tracked variant. A conflicting edit to the <em>same</em> variant then fails the precondition even
+          when the product row was untouched. Two preconditions on one write is the price of keeping the aggregate
+          boundary intact.</li>
+          <li><strong>Every conditional write touches the root.</strong> <code>TouchConcurrencyToken</code> marks the aggregate root modified
+          so the precondition is actually evaluated, which means a conditional write always emits a root UPDATE and
+          always advances the root&#39;s token, even when only a child row changed. Correctness over a spared
+          statement: the cost is that every other editor holding that aggregate&#39;s tag now has a stale one.</li>
+          <li><strong>Adoption is a per-database migration.</strong> A new database, or a table added later, must carry the
+          <code>RowVersion</code> column for the token to exist there.</li>
+          </ul>
+          <p>None of these are reasons to keep last-write-wins. They are the reasons to state the precondition
+          explicitly and to decide, per endpoint, what a conflict means to your user.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any load-modify-save stack:</p>
+          <ol>
+          <li>Put a <strong>database-managed concurrency token</strong> on your rows (SQL Server <code>rowversion</code>, a Postgres <code>xmin</code>,
+          or an application-managed version column). Do not hand-maintain it in domain code.</li>
+          <li><strong>Hand it out on the read, demand it back on the write.</strong> Expose the token as a weak <code>ETag</code> on the
+          read and require the client to state it in <code>If-Match</code> on the update. Pick one transport and keep it:
+          a second copy in the payload gives the same check a competing source, and nothing at runtime tells you
+          which one was honored.</li>
+          <li><strong>Do the comparison in the write, not before it.</strong> Set the client&#39;s token as the row&#39;s <em>expected</em>
+          value so it lands in the UPDATE&#39;s <code>WHERE</code> clause. A read-then-compare-then-save reopens the race. Make
+          sure the write actually happens: if only child rows changed, the parent row needs touching or the
+          comparison never runs.</li>
+          <li><strong>Answer with a status the caller can act on:</strong> <code>428 Precondition Required</code> when no precondition was
+          stated, <code>400 Bad Request</code> when it cannot be decoded, <code>412 Precondition Failed</code> when it is stale. Then
+          let the caller decide how to recover.</li>
+          <li><strong>Make the rule a build failure, not a review comment.</strong> A naming-convention fitness test (here: no
+          <code>*UpdateRequest</code> type carries the token) keeps a new mutable endpoint from growing a second source of
+          the same precondition.</li>
+          </ol>
+          <p>The takeaway: <strong>a lost update is the write you never see fail. Give the row a database-managed token, hand
+          it out as an <code>ETag</code>, require it back as an <code>If-Match</code> precondition, and compare it inside the UPDATE, so a
+          stale save is a <code>412</code> the caller can handle and a save that states no precondition is a <code>428</code>, instead of
+          an overwrite nobody notices.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why a load-modify-save handler silently loses the first of two concurrent edits, how
+          MMCA.Common gives every auditable entity a database-managed <code>RowVersion</code>, renders it on the read as a weak
+          <code>ETag</code> through <code>IConcurrencyAware</code>, requires it back in <code>If-Match</code> so a write with no precondition is a
+          <code>428 Precondition Required</code>, plants it as EF&#39;s original value via <code>SetOriginalRowVersion</code> (and touches the
+          root so the comparison always runs) to detect the conflict atomically inside the UPDATE, rewrites that
+          conflict to <code>412 Precondition Failed</code> at the edge, and keeps the token out of every request body with a
+          build-wide fitness function.</p>
+          <p><strong>Next in the series:</strong> self-ordering modules, discovered and Kahn-sorted so a dependency is always
+          registered before the modules that need it.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read ADR-035 for the decision record, or
+          <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📚 Full series index: <a href="https://ivanball.github.io/writing.html" target="_blank" rel="noopener">https://ivanball.github.io/writing.html</a></li>
+          <li>📄 ADR-035 (optimistic concurrency) in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Entity Framework, Concurrency</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="navigation-populators.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">12 · Navigation populators</span></a>
+          <a class="article-pager-link article-pager-link--next" href="self-ordering-modules.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">14 · Self-ordering modules</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters-and-why-it-is-not-idempotency">Why it matters, and why it is not idempotency</a></li>
+            <li><a href="#the-mmca-answer-a-database-token-handed-out-as-an-etag-demanded-back-as-a-precondition">The MMCA answer: a database token, handed out as an ETag, demanded back as a precondition</a></li>
+            <li><a href="#the-detail-that-actually-makes-it-a-conflict">The detail that actually makes it a conflict</a></li>
+            <li><a href="#from-exception-to-a-status-at-the-edge">From exception to a status at the edge</a></li>
+            <li><a href="#the-transport-a-weak-etag-out-a-required-if-match-back">The transport: a weak ETag out, a required If-Match back</a></li>
+            <li><a href="#the-invariant-one-source-for-the-precondition">The invariant: one source for the precondition</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

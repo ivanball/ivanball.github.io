@@ -157,9 +157,9 @@
           from nuget.org (<a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>).</p>
           <hr>
           <h2 id="1-install-the-template-pack">1. Install the template pack</h2>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates</code></pre>
           <h2 id="2-generate-the-solution-with-the-products-module">2. Generate the solution with the Products module</h2>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> MMCA.ECommerce <span class="hljs-literal">--module</span> Products <span class="hljs-literal">--aggregate</span> Product `
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> MMCA.ECommerce <span class="hljs-literal">--module</span> Products <span class="hljs-literal">--aggregate</span> Product `
   <span class="hljs-literal">--flat</span> <span class="hljs-literal">--no-status</span> <span class="hljs-literal">--no-owner</span> <span class="hljs-literal">--title</span> Name <span class="hljs-literal">--event-verb</span> Created
 <span class="hljs-built_in">cd</span> MMCA.ECommerce</code></pre>
           <p>Five options do most of this guide&#39;s old work. Three remove an axis a catalog product does not have,
@@ -176,13 +176,13 @@
           host, the Blazor UI host, the Aspire AppHost, a migrations project, three test projects including the
           architecture fitness rules, and <code>build/add-module.ps1</code>.</p>
           <p>Get your green baseline before changing anything:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
 dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</code></pre>
           <p>That is a warning-free build under five analyzers at error severity and <strong>81 passing tests</strong>, with no
           database needed. (The unflagged scaffold ships more, because each axis carries tests of its own; 81
           is the flat, status-less, owner-less baseline.) This is the line you bisect against later.</p>
           <h2 id="3-add-the-orders-module">3. Add the Orders module</h2>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Orders <span class="hljs-literal">-Aggregate</span> Order <span class="hljs-literal">-Child</span> Item `
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Orders <span class="hljs-literal">-Aggregate</span> Order <span class="hljs-literal">-Child</span> Item `
   <span class="hljs-literal">-NoOwner</span> <span class="hljs-literal">-NoDescription</span> <span class="hljs-literal">-Title</span> CustomerName <span class="hljs-literal">-EventVerb</span> Placed <span class="hljs-literal">-SkipMigration</span></code></pre>
           <p><code>build/add-module.ps1</code> ships inside the solution you just generated. It runs <code>dotnet new mmca-module</code>
           with the shape options passed through, then performs every wire-up the template can only print. Run
@@ -307,7 +307,7 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           distinct empty vs too-long error code. The price is the only app-specific rule, and the one part of
           <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/ProductInvariants.cs" target="_blank" rel="noopener">ProductInvariants.cs</a>
           worth reading rather than pasting:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result <span class="hljs-title">EnsurePriceIsValid</span>(<span class="hljs-params"><span class="hljs-built_in">decimal</span> price, <span class="hljs-built_in">string</span> source</span>)</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result <span class="hljs-title">EnsurePriceIsValid</span>(<span class="hljs-params"><span class="hljs-built_in">decimal</span> price, <span class="hljs-built_in">string</span> source</span>)</span>
         =&gt; price &lt;= <span class="hljs-number">0</span>
             ? Result.Failure(Error.Invariant(
                 code: <span class="hljs-string">&quot;Product.InvalidPrice&quot;</span>,
@@ -322,7 +322,7 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           <code>ProductChanged(DomainEntityState.Updated, Id)</code> only once they passed, and <code>Delete()</code> calls
           <code>base.Delete()</code> then raises the Deleted event. The signature and the one comment that explains an
           absence:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Product&gt; <span class="hljs-title">Create</span>(<span class="hljs-params">
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Product&gt; <span class="hljs-title">Create</span>(<span class="hljs-params">
         ProductIdentifierType? id,
         <span class="hljs-built_in">string</span> name,
         <span class="hljs-built_in">string</span> description,
@@ -388,7 +388,7 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           </tr>
           </tbody></table></div>
           <p>The <code>ProductCreateRequestMapper</code> fragment:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">        <span class="hljs-keyword">return</span> Task.FromResult(Product.Create(
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">        <span class="hljs-keyword">return</span> Task.FromResult(Product.Create(
             id: <span class="hljs-literal">null</span>,
             name: request.Name,
             description: request.Description,
@@ -417,7 +417,7 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           (<a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.API/Controllers/ProductsController.cs" target="_blank" rel="noopener">finished file</a>).
           The routes, the injected handlers, and the inherited list/paged reads are all unchanged. One line of
           real code changes, the command construction in <code>UpdateAsync</code>:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">            <span class="hljs-keyword">new</span> UpdateProductCommand(id, request.Name, request.Description, request.Price) { RowVersion = request.RowVersion },</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">            <span class="hljs-keyword">new</span> UpdateProductCommand(id, request.Name, request.Description, request.Price) { RowVersion = request.RowVersion },</code></pre>
           <p>The rest is wording: the class summary says &quot;support products&quot; and the three action summaries still
           mention children and a generic &quot;editable details&quot;.</p>
           <p><strong>Edit</strong> the two error-resource files,
@@ -472,7 +472,7 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           <p><strong>Edit</strong> <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/MMCA.ECommerce.Products.Application.Tests.csproj" target="_blank" rel="noopener">MMCA.ECommerce.Products.Application.Tests.csproj</a>.
           The handler tests need the framework&#39;s test base and a mocking library, neither of which the
           application-test scaffold references. Add two lines at the top of the package <code>ItemGroup</code> so it reads:</p>
-          <pre class="doc-pre" data-lang="XML"><code class="language-xml hljs">  <span class="hljs-tag">&lt;<span class="hljs-name">ItemGroup</span>&gt;</span>
+          <pre class="doc-pre" tabindex="0" data-lang="XML"><code class="language-xml hljs">  <span class="hljs-tag">&lt;<span class="hljs-name">ItemGroup</span>&gt;</span>
     <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing&quot;</span> /&gt;</span>
     <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;Moq&quot;</span> /&gt;</span>
     <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;xunit.v3&quot;</span> /&gt;</span></code></pre>
@@ -522,7 +522,7 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           <code>RegisterRepository</code> wires a mocked repository into a mocked unit of work, so the handler resolves it
           exactly the way it does at run time.</p>
           <h3 id="47-verify-the-products-reshape">4.7 Verify the Products reshape</h3>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
 dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/MMCA.ECommerce.Products.Domain.Tests/MMCA.ECommerce.Products.Domain.Tests.csproj
 dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/MMCA.ECommerce.Products.Application.Tests.csproj</code></pre>
           <p>Expect a warning-free build (five analyzers at error severity, <code>TreatWarningsAsErrors</code>), then
@@ -531,7 +531,7 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <p>To run a single class or method, pass a Microsoft Testing Platform filter <strong>after a bare <code>--</code></strong>;
           these projects are MTP, not VSTest, so a VSTest-style <code>--filter</code> before the separator silently runs
           zero tests and still exits non-zero:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/MMCA.ECommerce.Products.Domain.Tests/MMCA.ECommerce.Products.Domain.Tests.csproj <span class="hljs-literal">--</span> <span class="hljs-literal">--filter-class</span> <span class="hljs-string">&quot;*ProductTests*&quot;</span></code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/MMCA.ECommerce.Products.Domain.Tests/MMCA.ECommerce.Products.Domain.Tests.csproj <span class="hljs-literal">--</span> <span class="hljs-literal">--filter-class</span> <span class="hljs-string">&quot;*ProductTests*&quot;</span></code></pre>
           <p>The full solution run is still red at this point: the Orders module is untouched, and its scaffolded
           suites are about to be replaced in step 5.</p>
           <h2 id="5-reshape-orders-into-an-order-with-line-items">5. Reshape Orders into an order with line items</h2>
@@ -613,7 +613,7 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <p><code>ChangeOrderStatusRequest.cs</code> stays exactly as generated:
           <code>record ChangeOrderStatusRequest(OrderStatus Status)</code> is already the right shape, and the enum it
           names is the one you just rewrote.</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">Remove-Item</span> `
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">Remove-Item</span> `
   Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\AddItemRequest.cs, `
   Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\EditItemRequest.cs</code></pre>
           <h3 id="52-domain">5.2 Domain</h3>
@@ -660,7 +660,7 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <code>ProductId</code> is a plain <code>int</code>, deliberately not a <code>ProductIdentifierType</code> and deliberately not a
           foreign key: the Orders module must not name a Products type at all. The four snapshot properties and
           the comment above them are the point of the file:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">    <span class="hljs-comment">// Product snapshot, not a live reference: the name and the price are copied in at the moment</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">    <span class="hljs-comment">// Product snapshot, not a live reference: the name and the price are copied in at the moment</span>
     <span class="hljs-comment">// the item is added, so a later catalog rename or repricing cannot rewrite what was ordered.</span>
     <span class="hljs-comment">// It is also what keeps this module free of any reference to the Products module: the caller</span>
     <span class="hljs-comment">// hands over the four scalars and the order owns them from then on.</span>
@@ -773,13 +773,13 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <td>the consumer arrives generated and wired; it logs the new <code>CustomerName</code> too</td>
           </tr>
           </tbody></table></div>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">        <span class="hljs-keyword">var</span> result = order.AddItem(
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">        <span class="hljs-keyword">var</span> result = order.AddItem(
             id: <span class="hljs-literal">null</span>,
             command.ProductId,
             command.ProductName,
             command.UnitPrice,
             command.Quantity);</code></pre>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">Remove-Item</span> <span class="hljs-literal">-Recurse</span> `
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">Remove-Item</span> <span class="hljs-literal">-Recurse</span> `
   Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\UseCases\EditItem</code></pre>
           <p>Nothing else in the Application layer moves. The Delete, GetById, RemoveItem and ChangeStatus slices,
           the create validator, both DTO mappers, <code>OrderCacheKeys</code>, the audit domain-event handler, and
@@ -860,7 +860,7 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           <p><strong>Edit</strong> <a href="https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/MMCA.ECommerce.Orders.Application.Tests.csproj" target="_blank" rel="noopener">MMCA.ECommerce.Orders.Application.Tests.csproj</a>.
           The handler tests mock the unit of work directly, so this project needs Moq (and nothing else new).
           Add one entry to the package <code>ItemGroup</code> so it reads:</p>
-          <pre class="doc-pre" data-lang="XML"><code class="language-xml hljs">  <span class="hljs-tag">&lt;<span class="hljs-name">ItemGroup</span>&gt;</span>
+          <pre class="doc-pre" tabindex="0" data-lang="XML"><code class="language-xml hljs">  <span class="hljs-tag">&lt;<span class="hljs-name">ItemGroup</span>&gt;</span>
     <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;xunit.v3&quot;</span> /&gt;</span>
     <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;AwesomeAssertions&quot;</span> /&gt;</span>
     <span class="hljs-comment">&lt;!-- Moq for the handler tier: the repository / unit-of-work / event-bus boundaries are faked so
@@ -893,7 +893,7 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Products/M
           </tr>
           </tbody></table></div>
           <h3 id="57-verify-both-reshapes">5.7 Verify both reshapes</h3>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
 dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Orders/MMCA.ECommerce.Orders.Domain.Tests/MMCA.ECommerce.Orders.Domain.Tests.csproj
 dotnet test <span class="hljs-literal">--project</span> Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/MMCA.ECommerce.Orders.Application.Tests.csproj
 dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MMCA.ECommerce.Architecture.Tests/MMCA.ECommerce.Architecture.Tests.csproj</code></pre>
@@ -951,7 +951,7 @@ dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/MMCA.
           <code>Migrations</code> folder does carry an <code>.editorconfig</code> that keeps analyzer enforcement off generated
           migration code, and <code>dotnet ef</code> never recreates it, so leave it alone. Generate both fresh
           (<code>migrations add</code> never opens a database connection):</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
   <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
   <span class="hljs-literal">--startup-project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
   <span class="hljs-literal">--context</span> SQLServerDbContext
@@ -965,7 +965,7 @@ dotnet ef migrations add InitialCreate `
           <h2 id="8-the-two-one-time-fixups-then-run-it">8. The two one-time fixups, then run it</h2>
           <p>Apply the two fixups the scaffold deliberately leaves to you (they are name-dependent, so no
           generated value could be right). First, sort the using directives and the identifier aliases:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers MMCA.ECommerce.slnx <span class="hljs-literal">--diagnostics</span> SA1210 SA1211 <span class="hljs-literal">--severity</span> info</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers MMCA.ECommerce.slnx <span class="hljs-literal">--diagnostics</span> SA1210 SA1211 <span class="hljs-literal">--severity</span> info</code></pre>
           <p>Then delete the <code>SCAFFOLD DELTA</code> block at the bottom of <code>.editorconfig</code>, which restores the full
           analyzer baseline. It relaxes three rules, not two: <code>SA1210</code> and <code>SA1211</code> for the sort order the
           command above just fixed, and <code>IDE0021</code> because a heavily flagged aggregate can end up with a private
@@ -987,7 +987,7 @@ dotnet ef migrations add InitialCreate `
           </blockquote>
           <p>Then, from a <strong>real, interactive terminal</strong> (headless, the AppHost stalls at control-plane init and
           looks like a hang):</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.AppHost</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.AppHost</code></pre>
           <p>The dashboard shows <code>sql</code>, <code>web</code>, and <code>ui</code>. Open <strong><code>ui</code></strong>: create a couple of products with prices,
           place an order, add items from the product picker, watch the total, mark it Paid then Shipped, and
           try to add an item afterwards to see the domain say no, in your browser&#39;s language. The app runs

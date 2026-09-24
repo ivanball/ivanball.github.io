@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>One preference, two switches: shipping i18n and dark mode on a single cookie-and-profile pipeline · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A culture choice and a theme choice ride the same cookie, profile column, and login reconciliation: one persistence path, two switches.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/i18n-and-theming.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="One preference, two switches: shipping i18n and dark mode on a single cookie-and-profile pipeline">
+  <meta property="og:description" content="A culture choice and a theme choice ride the same cookie, profile column, and login reconciliation: one persistence path, two switches.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/i18n-and-theming.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-38.png">
+  <meta property="og:image:alt" content="One preference, two switches: shipping i18n and dark mode on a single cookie-and-profile pipeline">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="One preference, two switches: shipping i18n and dark mode on a single cookie-and-profile pipeline">
+  <meta name="twitter:description" content="A culture choice and a theme choice ride the same cookie, profile column, and login reconciliation: one persistence path, two switches.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-38.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"One preference, two switches: shipping i18n and dark mode on a single cookie-and-profile pipeline","description":"A culture choice and a theme choice ride the same cookie, profile column, and login reconciliation: one persistence path, two switches.","url":"https://ivanball.github.io/articles/i18n-and-theming.html","mainEntityOfPage":"https://ivanball.github.io/articles/i18n-and-theming.html","image":"https://ivanball.github.io/assets/img/articles/article-38.png","datePublished":"2026-08-07T12:18:10Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":38,"sameAs":"https://medium.com/@ivanball76/one-preference-two-switches-shipping-i18n-and-dark-mode-on-a-single-cookie-and-profile-pipeline-f97186038909"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"38 · i18n and theming on one preference pipeline","item":"https://ivanball.github.io/articles/i18n-and-theming.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">38 · i18n and theming on one preference pipeline</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html" aria-current="page">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 38</p>
+          <h1 id="one-preference-two-switches-shipping-i18n-and-dark-mode-on-a-single-cookie-and-profile-pipeline">One preference, two switches: shipping i18n and dark mode on a single cookie-and-profile pipeline</h1>
+          <p class="article-meta"><time datetime="2026-08-07T12:18:10Z">August 7, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/one-preference-two-switches-shipping-i18n-and-dark-mode-on-a-single-cookie-and-profile-pipeline-f97186038909" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-38.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A user picking Spanish and a user picking dark mode are doing the same thing: stating a per-user preference that has to survive a page refresh, three render modes, and a trip across the Gateway. So they should share one persistence path, not two. Here is how a culture choice and a theme choice ride the same cookie, the same profile column, and the same login reconciliation.</p>
+          <hr>
+          <p>Most teams bolt i18n and dark mode onto a Blazor app late, and both go badly the same way. The strings turn out to be hardcoded in a hundred views, so &quot;add Spanish&quot; becomes a hundred edits. The error messages are worse, because they come back from the API already rendered in English, so even a fully translated front end shows &quot;Phone number is required&quot; in the wrong language the moment a form fails. And the theme, the supposedly easy one, flips per browser tab and forgets the choice on refresh, because the toggle wrote to a field in memory that did not outlive the circuit.</p>
+          <p>Three symptoms, one missing idea. A locale and a theme are not two features. They are two instances of the same feature: a small per-user preference that has to be readable before the first paint, consistent across the static-server render, the interactive Server circuit, and the WebAssembly client, and durable across a refresh and across devices. The hard part was never the translation files or the second color palette. The hard part is making one decision flow through everything without a flash of the wrong state.</p>
+          <p>MMCA.Common ships these two as exactly that: one preference pipeline, used twice. ADR-027 added multi-locale internationalization (it supersedes ADR-011, which records single-locale as a deliberate, revisitable non-goal), and ADR-028 added the day/dark theme toggle on top of the same machinery. The theme ADR does not invent its own persistence. It reuses the cookie, the profile column, and the login reconciliation that i18n built.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>Count the places a preference has to be true at once. The static prerender pass renders HTML on the server before any JavaScript runs. The interactive Server circuit takes over. Then in an <code>InteractiveAuto</code> app, WebAssembly downloads and takes over again. If the preference lives only in the WASM runtime, the first two passes render in the wrong language or the wrong theme and then snap. If it lives only on the server, the WASM client cannot read it before it paints. The only state every one of those runtimes can read before first paint is a non-HttpOnly cookie, which is why the cookie, not a service field, is the source of truth.</p>
+          <p>Then there is the Gateway. The UI talks to cross-origin REST services behind a YARP gateway that does not forward the culture cookie to the services. So a backend validation failure would localize against the service&#39;s default culture, not the user&#39;s, unless the UI deliberately carries the culture forward on every call. A preference that stops at the browser is not actually a preference; it has to reach the edge that produces the error text.</p>
+          <p>Theme has the identical shape. Different runtimes, same need to agree before first paint, same need to persist past a refresh and follow the user to another device. Building a second, subtly different mechanism for it would be two places to get the prerender handoff wrong instead of one.</p>
+          <h2 id="the-mmca-answer-one-preference-pipeline-used-twice">The MMCA answer: one preference pipeline, used twice</h2>
+          <h3 id="internationalization-keyed-on-a-code-you-already-have">Internationalization, keyed on a code you already have</h3>
+          <p>Supported cultures are an explicit allowlist, not an open-ended capability. <code>SupportedCultures</code> (<code>MMCA.Common.Shared/Globalization/SupportedCultures.cs:9</code>) holds <code>Default = &quot;en-US&quot;</code> (<code>:12</code>) and <code>All = [Default, &quot;es&quot;]</code> (<code>:18</code>), with an <code>IsSupported</code> guard (<code>:35</code>) that matches case-insensitively. That one list is the single allowlist the request-localization options, the culture switcher, and the profile guard all read, so they cannot drift apart. Adding a locale is adding one entry here plus the translated resource files, not new infrastructure.</p>
+          <p>Strings are externalized to <code>.resx</code> co-located with the type that uses them and looked up through <code>IStringLocalizer&lt;T&gt;</code>, so a view asks for <code>L[&quot;Common.Button.Save&quot;]</code> rather than carrying English inline. That is the ordinary part. The interesting part is the errors, because errors are produced on the server and a translated client cannot fix them.</p>
+          <p>The Result pattern (ADR-013) already gives every <code>Error</code> a stable machine <code>Code</code>. That turns server-side error localization into a keyed lookup instead of a rewrite. <code>IErrorLocalizer</code> (<code>MMCA.Common.API/Localization/IErrorLocalizer.cs:9</code>) declares a single method, <code>Localize(string code, string fallbackMessage)</code> (<code>:17</code>). The default implementation, <code>ErrorLocalizer</code> (<code>MMCA.Common.API/Localization/ErrorLocalizer.cs:11</code>), walks an ordered set of registered <code>ErrorResourceSource</code>s (<code>ErrorResourceSource.cs:12</code>), Common first then modules, looks the code up against the current UI culture, and returns the original English message untouched when no source has the key (<code>ErrorLocalizer.cs:32</code>). An untranslated code degrades gracefully to English; it never throws.</p>
+          <p>This happens at one place, the single Result-to-ProblemDetails projection point. <code>ErrorHttpMapping.BuildErrorsExtension</code> (<code>MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61</code>) projects each error, and only the human-readable <code>Message</code> is run through the localizer, keyed by <code>Code</code> (<code>:65</code>); the machine fields (<code>Code</code>, <code>Type</code>, <code>Source</code>, <code>Target</code>) stay verbatim so clients can still branch on them. A <code>null</code> localizer leaves the English message unchanged. Domain code, handlers, and <code>Result</code> signatures never change. They stay culture-agnostic. Only the edge speaks a culture.</p>
+          <p>One cookie ties the runtimes together. The UI hosts run <code>UseRequestLocalization</code> over the <code>SupportedCultures</code> list with a cookie provider, so the static prerender already renders in the right culture. The WASM client reads the same cookie on startup through <code>MmcaCultureBootstrap.SetBrowserCultureAsync</code> (<code>MMCA.Common.UI/Services/Culture/MmcaCultureBootstrap.cs:22</code>) and sets the thread culture before the app runs, so prerender and hydration agree. And <code>CultureDelegatingHandler</code> (<code>MMCA.Common.UI/Services/Culture/CultureDelegatingHandler.cs:13</code>) stamps the active culture onto every outgoing API call as an <code>Accept-Language</code> header (<code>:24</code>), which is the channel that makes the cross-origin services return their errors in the chosen language. The <code>CultureSwitcher</code> component (<code>MMCA.Common.UI/Globalization/CultureSwitcher.razor:9</code>) iterates <code>OfferedCultures</code> (<code>:13</code>) to render the menu: <code>SupportedCultures.All</code> plus a Development-only pseudo-localization locale (<code>:24-27</code>, ADR-027 §8) that surfaces hard-coded strings and truncation and never ships to production.</p>
+          <p>The runtime channel is the cookie; the cross-device source of truth is the profile. A user&#39;s chosen culture persists to the Identity <code>User</code> aggregate as <code>PreferredCulture</code> (in the consumer apps&#39; Identity module, for example <code>MMCA.ADC.Identity.Domain/Users/User.cs:108</code>, validated by <code>UserInvariants.EnsurePreferredCultureIsValid</code>, invoked inside <code>UpdatePreferences</code> at <code>:333</code>). On login the cookie is set from the profile; an authenticated switch writes both; an anonymous user gets only the cookie.</p>
+          <h3 id="theme-riding-the-same-rails">Theme, riding the same rails</h3>
+          <p>Now the payoff. The theme toggle does not build any of that again.</p>
+          <p><code>MMCATheme</code> (<code>MMCA.Common.UI/Theme/MMCATheme.cs:9</code>) defines a complete <code>PaletteDark</code> (<code>:56</code>) next to <code>PaletteLight</code> (<code>:13</code>), and ADR-028 is what wires those dark surfaces to a live toggle. <code>MainLayout</code> renders one dedicated <code>MmcaThemeProviders</code> component (<code>MMCA.Common.UI/Layout/MainLayout.razor:14</code>), and that component is where the provider binds two-way against that complete theme: <code>&lt;MudThemeProvider Theme=&quot;@Theme&quot; @bind-IsDarkMode=&quot;_isDarkMode&quot; /&gt;</code> (<code>MMCA.Common.UI/Theme/MmcaThemeProviders.razor:12</code>). <code>Theme</code> is an optional component parameter that defaults to <code>MMCATheme.Instance</code> (<code>:34</code>), so the framework palette is what every host gets by default and an app that wants its own brand passes a derived <code>MudTheme</code> instead of duplicating the whole provider block. No new palette work.</p>
+          <p><code>ThemeService</code> (<code>MMCA.Common.UI/Theme/ThemeService.cs:17</code>) owns the preference, and it persists to the exact same kind of store i18n uses: a non-HttpOnly cookie plus localStorage, written through <code>theme.js</code>. <code>InitializeAsync</code> (<code>:35</code>) reads the stored value and, only when nothing is stored, falls back to the OS preference (<code>:46</code>). <code>SetDarkModeAsync</code> (<code>:54</code>) sets the field, persists, and raises <code>OnChange</code> (<code>:29</code>) so the app-bar toggle and the layout stay in sync; <code>ToggleAsync</code> (<code>:63</code>) just flips it. The JavaScript module is tiny: <code>get()</code> reads the cookie then localStorage (<code>theme.js:5</code>), <code>set()</code> writes a year-long <code>samesite=lax</code> cookie plus localStorage (<code>:23</code>), and <code>systemPrefersDark()</code> is one <code>matchMedia(&#39;(prefers-color-scheme: dark)&#39;)</code> call (<code>:33</code>).</p>
+          <p>The toggle ships in the shared <code>MainLayout</code> right next to the culture switcher, both in the app-bar <code>appbar-icon-actions</code> slot (<code>MainLayout.razor:33-36</code>), so every consuming host gets both controls with no per-host wiring. <code>ThemeToggle</code> (<code>MMCA.Common.UI/Theme/ThemeToggle.razor:7</code>) calls <code>ThemeService.ToggleAsync()</code> and then best-effort writes the choice to the signed-in user&#39;s profile through an optional <code>IUserPreferenceWriter</code> (<code>:23</code>), which is a no-op when anonymous. The profile column is <code>User.PreferredTheme</code> (<code>MMCA.ADC.Identity.Domain/Users/User.cs:111</code>), folded into the <em>same</em> migration and governed by the <em>same</em> login-reconciliation rule as <code>PreferredCulture</code>. One migration, one persistence model, two preferences.</p>
+          <h2 id="the-pipeline-in-one-sketch">The pipeline, in one sketch</h2>
+          <p>This is illustrative-of-shape, condensed from the files above to put the shared pipeline in one view, not a verbatim paste:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// i18n: localize the error at the single edge projection, keyed by the stable Code,</span>
+<span class="hljs-comment">// falling back to the original English message when no resource key matches.</span>
+Message = localizer <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span> ? e.Message : localizer.Localize(e.Code, e.Message);
+
+<span class="hljs-comment">// theme: same idea of a per-user preference, persisted to the same kind of cookie.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ThemeService</span>(<span class="hljs-params">IJSRuntime jsRuntime</span>)</span>
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">bool</span> IsDarkMode { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task <span class="hljs-title">InitializeAsync</span>()                    <span class="hljs-comment">// OnAfterRenderAsync(firstRender), never SSR</span></span>
+    {
+        <span class="hljs-keyword">var</span> stored = <span class="hljs-keyword">await</span> module.InvokeAsync&lt;<span class="hljs-built_in">string</span>?&gt;(<span class="hljs-string">&quot;get&quot;</span>);           <span class="hljs-comment">// cookie, then localStorage</span>
+        IsDarkMode = stored <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span>
+            ? <span class="hljs-built_in">string</span>.Equals(stored, <span class="hljs-string">&quot;dark&quot;</span>, StringComparison.OrdinalIgnoreCase)
+            : <span class="hljs-keyword">await</span> module.InvokeAsync&lt;<span class="hljs-built_in">bool</span>&gt;(<span class="hljs-string">&quot;systemPrefersDark&quot;</span>);        <span class="hljs-comment">// OS default on first visit</span>
+    }
+}</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Razor"><code class="language-razor">@* MainLayout.razor: it renders the provider block once via MmcaThemeProviders,
+   and both controls sit in one app-bar slot. *@
+&lt;MmcaThemeProviders /&gt;
+...
+&lt;span class=&quot;appbar-icon-actions&quot;&gt;
+    &lt;CultureSwitcher /&gt;
+    &lt;ThemeToggle /&gt;
+&lt;/span&gt;
+
+@* MmcaThemeProviders.razor: the two-way theme binding lives here now, not in MainLayout.
+   Theme is an optional parameter defaulting to MMCATheme.Instance. *@
+&lt;MudThemeProvider Theme=&quot;@Theme&quot; @bind-IsDarkMode=&quot;_isDarkMode&quot; /&gt;</code></pre>
+          <p>A culture choice and a theme choice enter the same way (a control in the same slot), persist the same way (a non-HttpOnly cookie plus a <code>User</code> profile column), and reconcile the same way on login. That is the whole thesis.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>Coverage is two locales, en-US and Spanish, full stop.</strong> Spanish (<code>es</code>) is the one added locale (<code>SupportedCultures.cs:18</code>). The mechanism is built to scale (adding a locale is one allowlist entry plus the translated <code>.resx</code>), but the shipped coverage today is exactly two. This article does not claim more, and you should not either.</li>
+          <li><strong>The translation gap is gated, not hoped for.</strong> A new English string cannot ship without its Spanish sibling: <code>ResourceTranslationsAreComplete</code> (<code>MMCA.Common.Testing.Architecture/Rules/Ui/ArchitectureRules.Localization.cs:23</code>, run as <code>LocalizationResourceTests</code>) fails the build when any base <code>.resx</code> under <code>Source/</code> lacks a complete, non-empty translation for a required culture. The rule takes the required-culture list, so it is repo-agnostic and vacuous for a single-locale repo.</li>
+          <li><strong>Culture-less formatting is a build gate, not advice.</strong> Accidentally calling <code>ToString()</code> on a date or number without a format provider is caught at compile time: <code>MA0076</code> is set to <code>error</code> severity in <code>.editorconfig</code> (<code>:592</code>), so a culture-less interpolation fails the build and must declare an explicit <code>IFormatProvider</code>. The posture is blocking: the gate fails, it does not warn.</li>
+          <li><strong>The no-flash SSR bootstrap is wired for locale but not yet for theme.</strong> This is the one honest asymmetry. Locale is flash-free because the server reads the cookie at prerender through <code>UseRequestLocalization</code>. Theme is not: <code>ThemeService.InitializeAsync</code> runs from <code>OnAfterRenderAsync(firstRender)</code> and deliberately does not run during SSR prerender (<code>ThemeService.cs:35</code>, and the doc-comment at <code>:11-14</code>), so the bound <code>IsDarkMode</code> is corrected just after hydration. The cookie is non-HttpOnly precisely so a server prerender could read it, but the server-side emit (a <code>data-theme</code> attribute or inline head script written from the cookie before Blazor hydrates) is not yet wired for theme (ADR-028, Decision 3). A brief wrong-theme flash on first paint is therefore currently possible, and closing it is tracked as follow-up.</li>
+          <li><strong>Superseding ADR-011 changes the scorecard, not the scope of the world.</strong> ADR-027 supersedes ADR-011, so multi-locale is in scope and §27 Internationalization is a scored category rather than N/A. That is a real status, and it is still two locales. Do not read &quot;in scope&quot; as &quot;fully internationalized.&quot;</li>
+          <li><strong>MudBlazor&#39;s own built-in component chrome is localized too.</strong> <code>ResxMudLocalizer</code> (<code>MMCA.Common.UI/Globalization/ResxMudLocalizer.cs:17</code>), a <code>MudLocalizer</code> over the <code>MudTranslations</code> resource pair (<code>MMCA.Common.UI/Resources/MudTranslations.resx</code> + <code>MudTranslations.es.resx</code>, en and es entries for the MudBlazor built-in keys), is DI-registered in <code>AddUIShared</code> (<code>MMCA.Common.UI/DependencyInjection.cs:79</code>), so the pager, filter menus, pickers, and close buttons follow the active culture. Unknown keys fall back to MudBlazor&#39;s built-in English and <code>en-US</code> deliberately keeps the built-ins. ADR-027 records this wiring as part of the shipped i18n surface (Decision 9).</li>
+          <li><strong>Per-user persistence adds a column to the consumer&#39;s Identity <code>User</code>.</strong> The framework supplies the cookie, the localizer, the theme service, the <code>IUserPreferences</code> contract (<code>MMCA.Common.Domain/Auth/IUserPreferences.cs:13,16</code>) and the shared <code>CommonInvariants.EnsurePreferredCultureIsValid</code>/<code>EnsurePreferredThemeIsValid</code> guards (<code>MMCA.Common.Domain/Invariants/CommonInvariants.cs:142,158</code>); the <code>PreferredCulture</code>/<code>PreferredTheme</code> columns live on each app&#39;s <code>User</code> aggregate (<code>MMCA.ADC.Identity.Domain/Users/User.cs:108,111</code>), with a profile-edit surface to set them. It is one folded migration, but it is a column the consumer owns, not free.</li>
+          </ul>
+          <p>None of these argue against the design. They argue for finishing it: wire the theme prerender read, keep the translation gate green, and be clear-eyed that &quot;internationalized&quot; here means en-US and Spanish, persisted correctly, not every locale on earth.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The moves port to any component framework with a server-prerender-then-client lifecycle:</p>
+          <ol>
+          <li><strong>Treat locale and theme as the same kind of thing.</strong> Both are small per-user preferences. Give them one persistence model: a non-HttpOnly cookie as the cross-runtime source of truth (the only state every render pass can read before first paint), and a profile column as the cross-device source of truth. Do not build two.</li>
+          <li><strong>Localize backend errors at the edge, keyed by a stable machine code.</strong> Keep domain and handlers culture-agnostic; translate only the human-readable message at the single response-projection point, and fall back to the original message when a code has no translation so an untranslated string degrades instead of throwing.</li>
+          <li><strong>Carry the active culture to cross-origin services explicitly.</strong> If a gateway drops your culture cookie, stamp <code>Accept-Language</code> on every outbound call, or your translated UI still shows English errors.</li>
+          <li><strong>Default theme to the OS <code>prefers-color-scheme</code></strong> on first visit, then let an explicit choice win and follow the user.</li>
+          <li><strong>Guard the gaps with build gates, not vigilance.</strong> An analyzer at error severity for culture-less formatting, and a fitness test for translation completeness, turn &quot;we should remember to translate that&quot; into &quot;the build will not let us forget.&quot;</li>
+          <li><strong>Be honest about the prerender flash.</strong> An <code>InteractiveAuto</code>-style app is only truly flash-free when the server emits the preference at prerender. If you read it after first render instead, say so, because a brief flash is the cost until you wire the server-side read.</li>
+          </ol>
+          <p>The takeaway: <strong>a culture switch and a theme switch are the same problem wearing different icons. Persist them on one cookie-and-profile pipeline, localize errors at the one edge that produces them, and gate the gaps with the build. You get two user-facing features for not much more than one mechanism, and the one place the flash is not yet solved is the one place you can point at honestly.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why late i18n and late dark mode fail the same way, how <code>SupportedCultures</code> (en-US + Spanish) anchors an allowlist that the request-localization options, the culture switcher, and the profile guard all share, how <code>IErrorLocalizer</code> / <code>ErrorLocalizer</code> localize backend errors at the single <code>ErrorHttpMapping.BuildErrorsExtension</code> edge keyed by the stable <code>Error.Code</code>, how one non-HttpOnly cookie plus <code>CultureDelegatingHandler</code>&#39;s <code>Accept-Language</code> plus <code>MmcaCultureBootstrap</code> keep SSR, Server, and WASM in agreement, how <code>ThemeService</code> and a bound <code>MudThemeProvider</code> against <code>MMCATheme.Instance</code> reuse that exact cookie-and-profile machinery for dark mode, and where the design is honestly unfinished (the theme no-flash SSR read).</p>
+          <p><strong>Next in the series:</strong> build your first module the MMCA way, end to end.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the ADRs behind this pattern, or <code>dotnet add package MMCA.Common.UI</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 ADR-027 (multi-locale i18n) and ADR-028 (day/dark theme): <code>Website/docs-src/adr/</code> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, Blazor, C Sharp, Software Architecture, Programming</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="reusable-blazor-ui-framework.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">37 · A reusable Blazor UI framework</span></a>
+          <a class="article-pager-link article-pager-link--next" href="build-your-first-module.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">39 · Build your first module</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-one-preference-pipeline-used-twice">The MMCA answer: one preference pipeline, used twice</a></li>
+            <li><a href="#the-pipeline-in-one-sketch">The pipeline, in one sketch</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

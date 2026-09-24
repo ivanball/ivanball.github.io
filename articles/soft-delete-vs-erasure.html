@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Soft-delete vs the right to erasure: the GDPR conflict and the erasure pathway · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Soft-delete for lifecycle, anonymization plus outbox purge for GDPR/CCPA erasure, and why both exist.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/soft-delete-vs-erasure.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Soft-delete vs the right to erasure: the GDPR conflict and the erasure pathway">
+  <meta property="og:description" content="Soft-delete for lifecycle, anonymization plus outbox purge for GDPR/CCPA erasure, and why both exist.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/soft-delete-vs-erasure.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-36.png">
+  <meta property="og:image:alt" content="Soft-delete vs the right to erasure: the GDPR conflict and the erasure pathway">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Soft-delete vs the right to erasure: the GDPR conflict and the erasure pathway">
+  <meta name="twitter:description" content="Soft-delete for lifecycle, anonymization plus outbox purge for GDPR/CCPA erasure, and why both exist.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-36.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Soft-delete vs the right to erasure: the GDPR conflict and the erasure pathway","description":"Soft-delete for lifecycle, anonymization plus outbox purge for GDPR/CCPA erasure, and why both exist.","url":"https://ivanball.github.io/articles/soft-delete-vs-erasure.html","mainEntityOfPage":"https://ivanball.github.io/articles/soft-delete-vs-erasure.html","image":"https://ivanball.github.io/assets/img/articles/article-36.png","datePublished":"2026-08-05T10:22:23Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":36,"sameAs":"https://medium.com/@ivanball76/soft-delete-vs-the-right-to-erasure-the-gdpr-conflict-and-the-erasure-pathway-e1d350007509"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"36 · Soft-delete vs the right to erasure","item":"https://ivanball.github.io/articles/soft-delete-vs-erasure.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">36 · Soft-delete vs the right to erasure</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html" aria-current="page">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 36</p>
+          <h1 id="soft-delete-vs-the-right-to-erasure-the-gdpr-conflict-and-the-erasure-pathway">Soft-delete vs the right to erasure: the GDPR conflict and the erasure pathway</h1>
+          <p class="article-meta"><time datetime="2026-08-05T10:22:23Z">August 5, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/soft-delete-vs-the-right-to-erasure-the-gdpr-conflict-and-the-erasure-pathway-e1d350007509" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-36.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Soft-delete is the right default for lifecycle and audit. It is also, by itself, illegal
+          for personal data under GDPR. This is the story of scoring that conflict 1 out of 4 in public, then
+          fixing it.</p>
+          <hr>
+          <p>Here is a deletion model almost every serious .NET app converges on, and it is correct:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">Delete</span>()</span> =&gt; IsDeleted = <span class="hljs-literal">true</span>;   <span class="hljs-comment">// never actually remove the row</span></code></pre>
+          <p>Nothing is hard-deleted. A global query filter excludes <code>IsDeleted = true</code> rows from normal queries, so
+          deleted records vanish from the app, but the data stays in the table. This is exactly what you want for
+          audit (you can prove what existed and when), referential integrity (a deleted parent does not orphan
+          its children), and undelete (a fat-fingered delete is recoverable). MMCA.Common does the same, with one
+          refinement: <code>AuditableBaseEntity.Delete()</code> flips <code>IsDeleted</code> and returns a <code>Result</code> (idempotent, so a
+          double delete fails cleanly instead of silently), EF Core global query filters exclude the row, and the
+          documented invariant is &quot;entities are never hard-deleted.&quot;</p>
+          <p>Now read that same model through a privacy lawyer&#39;s eyes. A user invokes their <strong>right to erasure</strong>
+          (GDPR Article 17, the right to be forgotten; CCPA deletion). They want their personal data <em>gone</em>. You
+          run your delete. The row, including their name, their email, every personal field, stays in the
+          database indefinitely, merely hidden from the application. You have not erased anything. You have hidden
+          it.</p>
+          <p><strong>Soft-delete and right-to-erasure are in direct conflict.</strong> The mechanism that makes lifecycle correct
+          is the same mechanism that makes privacy non-compliant. And if your published privacy policy promises
+          &quot;we delete your data within 30 days,&quot; soft-delete cannot honor it.</p>
+          <h2 id="why-it-matters-and-why-i-am-telling-on-myself">Why it matters, and why I am telling on myself</h2>
+          <p>When I first graded MMCA.Common against an architecture rubric and committed the scorecard to the
+          repo, <strong>the original single-axis snapshot scored Compliance, Privacy &amp; Data Governance at the bottom:
+          a 1 out of 4, the lowest category on that early scorecard.</strong> The evidence was blunt: soft-delete
+          everywhere with no erasure or anonymization mechanism, processed outbox payloads retained forever, no PII
+          classification or data-subject-request scaffolding. The exact GDPR/CCPA conflict the rubric names,
+          sitting unaddressed in the framework&#39;s defaults.</p>
+          <p>I could have quietly designed around it before publishing. I did the opposite: I scored it low, wrote
+          the gap down with its evidence, and shipped the scorecard with the red flag intact. The reason is the
+          whole thesis of scoring yourself in public. <strong>The gaps are the roadmap.</strong> A category that scores 1 with
+          honest evidence is worth more than a category that scores 3 because nobody looked hard. This article is
+          the &quot;then I fixed it&quot; half of that story, and the fix is ADR-005. On today&#39;s two-axis rubric, with
+          ADR-005 shipped, the same category now scores Maturity 3 / Implementation 8.</p>
+          <h2 id="the-mmca-answer-separate-the-two-concerns-give-each-a-mechanism">The MMCA answer: separate the two concerns, give each a mechanism</h2>
+          <p>The wrong fix is to overload <code>Delete()</code> so it hard-deletes personal data. That would break audit,
+          undelete, and referential integrity all at once, trading one defect for three. ADR-005 instead
+          separates the two concerns, because they answer different questions:</p>
+          <ul>
+          <li><strong>Soft-delete answers &quot;is this record active?&quot;</strong> It stays the default for lifecycle and state
+          management: hide, retain, undelete. It is explicitly <em>not</em> a privacy mechanism.</li>
+          <li><strong>Erasure answers &quot;has this person&#39;s data been removed?&quot;</strong> It is an explicit, additive capability,
+          built on a new extension point rather than bolted onto delete.</li>
+          </ul>
+          <p>That erasure pathway is the <code>IAnonymizable</code> interface (in <code>MMCA.Common.Domain.Interfaces</code>). An aggregate
+          that holds personal data implements it. An application-layer erasure handler loads the aggregate, calls
+          <code>Anonymize()</code>, and saves. <code>Anonymize()</code> overwrites the personal fields <strong>in place</strong>, so the row, its
+          foreign keys, and its audit trail all survive. The record still exists for integrity and accountability;
+          the person is no longer in it. The operation is idempotent and returns a <code>Result</code>, matching the
+          framework&#39;s domain conventions, so a retried erasure request is a safe no-op success.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The hook: aggregates that store personal data implement this.</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">interface</span> <span class="hljs-title">IAnonymizable</span>
+{
+    <span class="hljs-function">Result <span class="hljs-title">Anonymize</span>()</span>;   <span class="hljs-comment">// idempotent: a second call is a no-op success</span>
+}
+
+<span class="hljs-comment">// ADC&#x27;s User aggregate (an IAnonymizable AuditableAggregateRootEntity) implements it.</span>
+<span class="hljs-comment">// Anonymize() overwrites every [Pii] field in place, including a crafted</span>
+<span class="hljs-comment">// deleted-{Id}@anonymized.invalid email that KEEPS the unique-email invariant</span>
+<span class="hljs-comment">// holding across many erased accounts. Audit fields and foreign keys survive.</span></code></pre>
+          <p>This is the entity-level half of the split. In a consumer app (ADC&#39;s <code>User</code>), <code>Delete()</code> flips
+          <code>IsDeleted</code> for lifecycle <em>and</em> <code>Anonymize()</code> scrubs the data for a right-to-be-forgotten request, and
+          they are deliberately separate operations. The delete handler calls both in one transaction to honor
+          the &quot;erase within 30 days&quot; promise, and <code>Delete()</code> raises a <code>UserDeleted</code> domain event rather than
+          touching credentials. Outstanding refresh sessions need no separate revocation: the refresh flow
+          re-fetches the account through the same soft-delete query filter, so the moment the erasure commits
+          there is no account left to mint a fresh access token for. (The access token the user is already
+          holding is cut off separately, at runtime, which is its own section below.) For the fields a service chooses to keep retrievable after
+          anonymization rather than overwrite, ADR-005 offers an AES-256-GCM <code>EncryptedStringConverter</code>, so
+          &quot;keep this usable&quot; and &quot;protect it at rest&quot; need not be in tension. ADC&#39;s <code>User</code> takes the simpler
+          route: <code>Anonymize()</code> overwrites every <code>[Pii]</code> field (<code>Email</code>, <code>FirstName</code>, <code>LastName</code>, and the
+          <code>AvatarUrl</code> added with the avatar feature) in place and keeps none, so it does not wire the converter
+          at all. The converter is a framework capability for the
+          service that needs it, not a default.</p>
+          <p>There is one more piece that turns this from a convention into a guarantee: an <strong>architecture fitness
+          test</strong> asserts that any entity declaring a <code>[Pii]</code> property also implements <code>IAnonymizable</code>. You cannot
+          tag a field as personal data and then forget to give it an erasure path, because the build fails if you
+          do. The classification (<code>[Pii]</code>) and the obligation (an anonymize path) are wired together and enforced
+          by an executable rule, not left to a code review to remember. That is the §34 &quot;executable governance&quot;
+          idea applied to privacy: the rule that protects data subjects is a test, not a paragraph in a wiki.</p>
+          <p>The <code>[Pii]</code> marker carries a second duty: log and telemetry redaction. <code>PiiRedactor</code> masks every
+          <code>[Pii]</code>-marked member with a <code>[REDACTED]</code> token before an entity that holds personal data is written to
+          a structured log, and a <code>PiiErasureContractFitnessTests</code> build gate runs a <code>[Pii]</code>-bearing sample
+          through both the redactor and <code>Anonymize()</code> end to end, so neither half of the <code>[Pii]</code> contract can be
+          advertised without being exercised. The framework now wires the redactor into one production path of
+          its own: the opt-in field-level audit trail, whose save-changes interceptor asks the redactor whether a
+          type carries personal data and, for the properties that do, writes the redaction token in place of both
+          the old and the new value of the recorded change. One honest caveat for logging: <code>PiiRedactor</code> is still
+          an opt-in utility you call at the log site, not an auto-wired Serilog/ILogger destructuring policy. It
+          protects the call sites that adopt it, not every log line by default, so wiring it in is still the
+          consumer&#39;s job.</p>
+          <h2 id="the-delete-that-really-removes-rows-restrict-by-default">The delete that really removes rows: restrict by default</h2>
+          <p>Soft-delete keeps the row. Anonymization keeps the row and destroys the person inside it. Physical
+          erasure, a real <code>DELETE</code> that takes rows out of the table, is a third thing, and the database will do
+          it on your behalf unless you say otherwise. EF Core picks a delete behavior for any relationship
+          nobody configured: a required one cascades, so removing a parent removes its children in the
+          database, below the aggregate&#39;s invariants, below the soft-delete filter, and below the domain events
+          the rest of the system reacts to. That is a destructive default nobody wrote down, and it sits
+          underneath every privacy story above.</p>
+          <p>ADR-119 inverts it. <code>RestrictDeleteByDefaultConvention</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/RestrictDeleteByDefaultConvention.cs:41</code>)
+          is an <code>IModelFinalizingConvention</code> that makes <code>DeleteBehavior.Restrict</code> the default for every
+          relationship nobody configured, registered per engine by the shared <code>ApplicationDbContext</code> at model
+          finalization (<code>Persistence/DbContexts/ApplicationDbContext.cs:394</code>). A delete that would orphan rows
+          fails loudly instead of quietly taking the children with it, and a genuine cascade becomes a decision
+          somebody recorded with <code>.OnDelete(DeleteBehavior.Cascade)</code> in an entity configuration. Two things are
+          deliberately left alone: an ownership foreign key keeps the cascade EF requires, and any behavior a
+          configuration already chose is kept exactly as chosen.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Registered per engine, applied when the model is finalized.</span>
+configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</span> RestrictDeleteByDefaultConvention(DataSourceKey.Engine));
+
+<span class="hljs-comment">// Every foreign key leaves the finalized model stamped with where its behavior came from:</span>
+<span class="hljs-comment">//   &quot;Explicit&quot;  = an entity configuration chose it</span>
+<span class="hljs-comment">//   &quot;Convention&quot; = this convention restricted it</span>
+<span class="hljs-comment">//   &quot;Ownership&quot;  = an owned type&#x27;s cascade, which EF owns</span></code></pre>
+          <p>That stamp is the point as much as the restrict is. Each foreign key carries a
+          <code>MMCA:DeleteBehaviorSource</code> annotation (<code>:47</code>) holding <code>Explicit</code> (<code>:50</code>), <code>Convention</code> (<code>:53</code>) or
+          <code>Ownership</code> (<code>:56</code>), and <code>DeleteBehaviorConventionTestsBase</code>
+          (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/DeleteBehaviorConventionTestsBase.cs:21</code>)
+          reads exactly that annotation to assert every cascading relationship was opted into on purpose. The
+          convention is a no-op on Cosmos, which has no foreign key constraints to restrict.</p>
+          <p>For a privacy story the payoff is direct: with restrict as the default, physically removing personal
+          data is always an explicit decision with a name attached, never something that happens as a side
+          effect of a required foreign key. Erasure stays a deliberate operation (<code>Anonymize()</code>), lifecycle
+          stays a deliberate operation (<code>Delete()</code>), and row removal is the third deliberate operation rather
+          than the one the ORM chose for you.</p>
+          <h2 id="the-second-hiding-place-the-outbox">The second hiding place: the outbox</h2>
+          <p>There was a second source of retained personal data, and it is the kind of thing you only find when you
+          go looking honestly. The <strong>transactional outbox</strong> (ADR-003) writes an event row in the same transaction
+          as the state change, and those serialized event payloads can contain personal data. The outbox
+          processor only set <code>ProcessedOn</code>; nothing ever purged processed rows. ADR-003 itself admitted the table
+          &quot;grows until cleaned up.&quot; So even after you anonymized a user&#39;s aggregate, their personal data could
+          still be sitting in old, processed outbox payloads forever.</p>
+          <p>ADR-005 closes that too: <code>OutboxCleanupService</code> purges processed outbox rows older than
+          <code>Outbox:RetentionDays</code> (default 7, set 0 to disable) across every relational data source. Bounded
+          retention without changing delivery semantics. It is worth flagging as a deliberate <strong>behavior change</strong>:
+          consumers upgrading the framework start purging processed outbox rows older than seven days unless they
+          opt out, which is the kind of thing that belongs in a CHANGELOG and an ADR rather than a surprise in
+          production.</p>
+          <h2 id="the-live-session-cutting-off-a-token-mid-flight">The live session: cutting off a token mid-flight</h2>
+          <p>Anonymizing the aggregate and committing the soft-delete shuts two doors: no future logins, and no
+          silent re-mint of a fresh access token, because the refresh flow re-fetches the account through the
+          same soft-delete query filter
+          (<code>Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:103-107</code>).
+          There is a third door, though, and stateless auth
+          holds it open by design. Authentication is stateless JWT (ADR-004): every service validates an access
+          token by signature and expiry, with no per-request lookup against the account store. That is exactly
+          what makes it scale, and it is also why soft-deleting a user does not, on its own, stop a token that was
+          already issued. A bearer credential keeps passing validation until it expires on its own clock, which
+          can be minutes after the account was deactivated.</p>
+          <p>ADR-047 bounds that window. <code>SoftDeletedUserMiddleware</code>
+          (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:31</code>, business rule
+          BR-133 named in its class doc at <code>:11</code>) runs in the shared pipeline <strong>after authentication and before authorization</strong>.
+          That ordering is a declarative step list (ADR-079):
+          <code>Startup/Pipeline/MiddlewarePipelineBuilder.cs</code> registers <code>UseAuthentication()</code> at <code>:117</code>, the
+          <code>SoftDeletedUserFilter</code> step that adds the middleware at <code>:137</code>, and <code>UseAuthorization()</code> at <code>:141</code>.
+          So <code>HttpContext.User</code> is already populated and the check
+          gates every downstream endpoint. For an authenticated caller whose account has been soft-deleted, it
+          returns HTTP 401 mid-flight, before the endpoint runs. The account-status lookup goes through
+          <code>ISoftDeletedUserValidator</code>
+          (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ISoftDeletedUserValidator.cs:7</code>,
+          one <code>IsUserSoftDeletedAsync</code> method at <code>:15</code>), which each Identity module implements with a single
+          filter-bypassing existence query, and the boolean result is cached for roughly 30 seconds
+          (<code>SoftDeletedUserCache.MarkerDuration</code>, <code>Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:29</code>,
+          consumed by the middleware at <code>SoftDeletedUserMiddleware.cs:132</code>). So a given user costs at most one status query per cache window per
+          cache scope, not one per request. The effect is a <strong>bounded revocation window</strong>, not instant
+          revocation: a deactivated user&#39;s still-valid access token stops working within about the cache duration
+          instead of at the token&#39;s own expiry.</p>
+          <p>Two honest edges. Anonymous requests pass straight through with no lookup
+          (<code>SoftDeletedUserMiddleware.cs:65-73</code>), so unauthenticated traffic pays nothing. And the validator is
+          resolved lazily (<code>SoftDeletedUserMiddleware.cs:75</code>) rather than injected as a parameter, so a host that
+          does not register one (a non-Identity extracted service, or MMCA.Helpdesk&#39;s single Tickets host) simply
+          no-ops on that check: Identity is the source of truth and already validated the token upstream. Lazy
+          resolution is what keeps one pipeline correct in both Identity-hosting and non-Identity hosts without a
+          per-host variant.</p>
+          <h2 id="the-other-right-portability-and-why-it-degrades-instead-of-failing">The other right: portability, and why it degrades instead of failing</h2>
+          <p>Erasure has a sibling that lands in the same regulation and is usually built badly. The right to data
+          portability means a user can ask for everything you hold about them, and once your modules own
+          separate databases, that request is a fan-out across services rather than one query.</p>
+          <p>The shape MMCA.ADC uses starts where you would expect, with the fan-out itself living in the
+          framework. <code>ExportUserDataHandlerBase</code> assembles a shared <code>UserDataExportDTO</code> envelope; the
+          app fills in the two genuinely app-specific parts. ADC projects its own account fields into a
+          <code>UserDataExportSubjectDTO</code>, deliberately excluding credentials (password hash and salt, refresh token,
+          external-provider key), since a data export that ships a password hash has turned a privacy feature
+          into a breach. The cross-service personal data arrives beside it as sections: ADC registers one
+          <code>IUserDataExportSection</code> per peer, Engagement and Notification, and over a process boundary those
+          contracts are the same gRPC adapters everything else uses.</p>
+          <p>The interesting decision is what happens when a peer is down:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">catch</span> (Exception ex) <span class="hljs-keyword">when</span> (ex <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> OperationCanceledException)
+{
+    <span class="hljs-comment">// Best-effort: the contributor failed after whatever resilience pipeline it uses.</span>
+    <span class="hljs-comment">// Degrade the section instead of failing the whole export. The reason handed back is</span>
+    <span class="hljs-comment">// deliberately generic; the exception detail goes to the log, never to the subject.</span>
+    UserUseCaseLog.ExportSectionUnavailable(logger, ex, sectionName, userId);
+
+    <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> UserDataExportSectionDTO
+    {
+        SectionName = sectionName,
+        Available = <span class="hljs-literal">false</span>,
+        UnavailableReason = UserDataExportSectionDefaults.UnavailableReason,
+    };
+}</code></pre>
+          <p>A section degrades to <code>Available = false</code> and the export completes. One peer outage never fails the
+          whole export. That catch now lives once, in the base, wrapping every registered section, so a section a
+          consumer adds tomorrow inherits the behavior instead of re-implementing it (and the section
+          contributors deliberately catch nothing themselves).</p>
+          <p>That is worth sitting with, because the instinct runs the other way. A partial export feels wrong,
+          and the tidy engineering answer is to fail the request so the user retries and gets everything. In
+          practice that is the worse outcome: a user exercising a legal right against a four-service system
+          would be blocked by any one service having a bad afternoon, and you have converted a routine
+          availability blip into a compliance failure. Marking the section explicitly unavailable is more
+          honest than both alternatives, because it neither pretends the data is absent nor blocks the parts
+          that are ready.</p>
+          <p>Two details keep it honest rather than sloppy. <code>OperationCanceledException</code> is deliberately excluded
+          from the catch, so a genuine cancellation propagates instead of being silently recorded as a missing
+          section. And the degradation is logged at warning with the section name and user id, so &quot;this export
+          was incomplete&quot; is an operational event someone can find later, not a silent gap in a file the user
+          already downloaded.</p>
+          <p>The transferable rule: in a distributed system, &quot;all or nothing&quot; is a choice with a cost, and for a
+          read-only aggregation the cost is usually higher than partial success. Make the partiality explicit
+          in the payload and loud in the logs, and it stops being a lie.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>The framework provides the <strong>mechanisms</strong> (<code>IAnonymizable</code>, <code>OutboxCleanupService</code>); the consumer owns the
+          <strong>policy</strong>. That division is the most important caveat, and ADR-005 states it plainly.</p>
+          <ul>
+          <li><strong>Erasure is opt-in per entity.</strong> An aggregate that holds personal data but does not implement
+          <code>IAnonymizable</code> will not be erased. Consumers must audit their own personal-data inventory and
+          implement the interface where it applies. The framework cannot find your PII for you.</li>
+          <li><strong>The framework cannot make you compliant on its own.</strong> It ships the mechanism, not the obligation.
+          The consumer is the data controller: it still has to wire the erasure handler, the data-subject
+          request flow, and the access/export endpoint, because the personal-data model lives in the consumer
+          (ADC&#39;s <code>User</code>, with <code>[Pii]</code>-tagged fields, and its own <code>UserDataExportSubjectDTO</code> inside the shared
+          export envelope, deliberately omitting secrets). This ADR provides the mechanisms, not the policy.</li>
+          <li><strong>Anonymization is irreversible by design, and it is not undelete.</strong> Soft-delete is recoverable;
+          erasure is not. Conflating them would be a bug. They are separate operations precisely because they
+          must behave differently.</li>
+          <li><strong>The default 7-day outbox retention is a behavior change</strong> on upgrade, as noted above.</li>
+          </ul>
+          <p>None of these are reasons to skip the mechanism. They are the boundary between what a framework can give you
+          (a correct, audit-preserving mechanism) and what only you can decide (which data is personal, and what
+          your privacy policy promised).</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern is independent of the framework:</p>
+          <ol>
+          <li><strong>Keep soft-delete for lifecycle.</strong> It is the right tool for &quot;is this active?&quot;, and audit / undelete
+          / referential integrity all depend on it. Do not throw it out.</li>
+          <li><strong>Do not overload delete to satisfy erasure.</strong> Hard-deleting personal data inside your soft-delete
+          path breaks audit and integrity. Add a <em>separate</em> erasure operation.</li>
+          <li><strong>Anonymize in place.</strong> Overwrite personal fields with placeholders, keeping the row and its foreign
+          keys. Craft replacement values that preserve invariants (a unique-email constraint needs a unique
+          anonymized email per record). Make it idempotent so retried requests are safe.</li>
+          <li><strong>Hunt the second hiding place.</strong> Personal data leaks into event logs, outbox tables, message
+          payloads, and caches. Give every store that can hold PII a bounded retention policy.</li>
+          <li><strong>Write down where the framework stops and your obligation starts.</strong> A library gives you the
+          mechanism; classifying your PII and honoring your privacy policy is your job as the data controller.</li>
+          </ol>
+          <p>The takeaway: <strong>soft-delete and erasure answer different questions, so give them different mechanisms.</strong>
+          And if you are going to grade your own architecture, grade it honestly. The category I scored a 1 became
+          the most useful entry on the scorecard, because it turned straight into ADR-005 and a real erasure pathway.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why soft-delete (the right default for lifecycle and audit) directly conflicts
+          with the GDPR/CCPA right to erasure, why the original single-axis snapshot scored it at the bottom (1
+          out of 4, now Maturity 3 / Implementation 8 on the two-axis rubric), and how ADR-005 resolves it by
+          separating the concerns: an <code>IAnonymizable</code> anonymize-in-place hook
+          that preserves the audit trail, plus an <code>OutboxCleanupService</code> that bounds retention of PII-bearing
+          outbox payloads, with the consumer owning the policy. And how ADR-047&#39;s <code>SoftDeletedUserMiddleware</code>
+          closes the third door, cutting off an already-issued access token mid-flight within roughly a 30-second
+          cache window instead of letting it live to its own expiry.</p>
+          <p><strong>Next in the series:</strong> the reusable Blazor UI framework that brings the same backend discipline to
+          the front end, a server-paged list page in a few lines.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-005 behind this
+          decision, or read the §30 scorecard entry, the most honest one on the board.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 ADR-005 (soft-delete vs right-to-erasure): <a href="../docs/adr/005-soft-delete-vs-erasure.html">ADR-005: Soft-Delete vs. Right-to-Erasure</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, GDPR, Data Privacy</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="test-pyramid.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">35 · The test pyramid</span></a>
+          <a class="article-pager-link article-pager-link--next" href="reusable-blazor-ui-framework.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">37 · A reusable Blazor UI framework</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters-and-why-i-am-telling-on-myself">Why it matters, and why I am telling on myself</a></li>
+            <li><a href="#the-mmca-answer-separate-the-two-concerns-give-each-a-mechanism">The MMCA answer: separate the two concerns, give each a mechanism</a></li>
+            <li><a href="#the-delete-that-really-removes-rows-restrict-by-default">The delete that really removes rows: restrict by default</a></li>
+            <li><a href="#the-second-hiding-place-the-outbox">The second hiding place: the outbox</a></li>
+            <li><a href="#the-live-session-cutting-off-a-token-mid-flight">The live session: cutting off a token mid-flight</a></li>
+            <li><a href="#the-other-right-portability-and-why-it-degrades-instead-of-failing">The other right: portability, and why it degrades instead of failing</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

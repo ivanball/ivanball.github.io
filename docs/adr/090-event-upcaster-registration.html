@@ -306,7 +306,7 @@
           zero upcasters.</li>
           </ol>
           <p>The migration recipe the mechanism supports, end to end:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// DI (module registration):</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// DI (module registration):</span>
 services.AddEventUpcaster&lt;ProductVariantChanged, ProductVariantChangedV2, ProductVariantChangedUpcaster&gt;();
 <span class="hljs-comment">// Broker hosts (Program.cs, inside AddBrokerMessaging&#x27;s consumer callback):</span>
 x.RegisterIntegrationEventConsumer&lt;ProductVariantChangedV2&gt;();       <span class="hljs-comment">// the new contract</span>

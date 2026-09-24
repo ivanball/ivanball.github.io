@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>One Blazor UI, two hosts: a device-capability layer that stays resolvable everywhere · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="The same Blazor components run in a browser and inside a MAUI hybrid app; small per-capability contracts reach native hardware without ever asking &#39;am I on mobile?&#39;.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/device-capability-abstraction.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="One Blazor UI, two hosts: a device-capability layer that stays resolvable everywhere">
+  <meta property="og:description" content="The same Blazor components run in a browser and inside a MAUI hybrid app; small per-capability contracts reach native hardware without ever asking &#39;am I on mobile?&#39;.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/device-capability-abstraction.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-42.png">
+  <meta property="og:image:alt" content="One Blazor UI, two hosts: a device-capability layer that stays resolvable everywhere">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="One Blazor UI, two hosts: a device-capability layer that stays resolvable everywhere">
+  <meta name="twitter:description" content="The same Blazor components run in a browser and inside a MAUI hybrid app; small per-capability contracts reach native hardware without ever asking &#39;am I on mobile?&#39;.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-42.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"One Blazor UI, two hosts: a device-capability layer that stays resolvable everywhere","description":"The same Blazor components run in a browser and inside a MAUI hybrid app; small per-capability contracts reach native hardware without ever asking 'am I on mobile?'.","url":"https://ivanball.github.io/articles/device-capability-abstraction.html","mainEntityOfPage":"https://ivanball.github.io/articles/device-capability-abstraction.html","image":"https://ivanball.github.io/assets/img/articles/article-42.png","datePublished":"2026-08-11T11:54:26Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":42,"sameAs":"https://medium.com/@ivanball76/one-blazor-ui-two-hosts-a-device-capability-layer-that-stays-resolvable-everywhere-b85444693161"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"42 · One Blazor UI, two hosts","item":"https://ivanball.github.io/articles/device-capability-abstraction.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">42 · One Blazor UI, two hosts</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html" aria-current="page">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Proof &amp; getting started · No. 42</p>
+          <h1 id="one-blazor-ui-two-hosts-a-device-capability-layer-that-stays-resolvable-everywhere">One Blazor UI, two hosts: a device-capability layer that stays resolvable everywhere</h1>
+          <p class="article-meta"><time datetime="2026-08-11T11:54:26Z">August 11, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/one-blazor-ui-two-hosts-a-device-capability-layer-that-stays-resolvable-everywhere-b85444693161" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-42.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">The same Blazor component set runs in a browser and inside a MAUI Blazor Hybrid app. But a share sheet, a fingerprint prompt, and a haptic tap only exist on the phone. Here is how one UI talks to native hardware through small per-capability contracts, and never has to ask &quot;am I on mobile?&quot;</p>
+          <hr>
+          <p>Ship the same Blazor components through a browser and through a .NET MAUI Blazor Hybrid app and you hit a wall the first time a component wants to do something physical. Open the native share sheet. Copy to the clipboard. Buzz on a bookmark. Prompt for Face ID. Read a GPS fix. Speak a screen-reader announcement. None of those APIs exist in a browser, and half of them have a partial browser equivalent (<code>navigator.share</code>, <code>navigator.clipboard</code>, <code>navigator.onLine</code>) that behaves nothing like the native one.</p>
+          <p>The naive fix is a platform check. A component asks &quot;am I running on MAUI?&quot; and branches. That question metastasizes: it shows up in the share button, the offline banner, the avatar picker, the login page, and every one of them now has two code paths, one of which never runs in the environment you are testing in. The component library stops being portable the moment it knows what a phone is.</p>
+          <p><code>MMCA.Common.UI</code> is a single-target <code>net10.0</code> Razor class library that has to compile into a Blazor WebAssembly bundle, so it <em>cannot</em> reference a MAUI type without breaking the web heads at compile time. That hard constraint is the whole reason the design is clean: the shared UI is structurally forbidden from knowing about the phone, so it has to talk to native hardware through an abstraction, and the implementation gets chosen somewhere the shared library never sees. This is ADR-042, the Device Capability Abstraction, and it is a whole shipped functional group (G26 in the onboarding guide, roughly a hundred types once you count contracts, native adapters, browser adapters, and fallbacks).</p>
+          <h2 id="the-mmca-answer-one-small-contract-per-capability-chosen-per-host">The MMCA answer: one small contract per capability, chosen per host</h2>
+          <p>There is no god <code>IDeviceCapabilities</code> interface. That was a deliberate rejection: an aggregate device service forces every head to implement everything, and every new capability becomes a breaking change to a type everyone depends on. Instead the framework defines one small interface per capability, all living under <code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/</code> (<code>Website/docs-src/adr/042-device-capability-abstraction.md:33</code>), 24 capability contracts in all.</p>
+          <p>Each contract is a few methods, shaped so failure is a value, not an exception:</p>
+          <ul>
+          <li><code>IShareService</code> (<code>IShareService.cs:8</code>): <code>ShareLinkAsync</code> / <code>ShareFileAsync</code>, both returning <code>Task&lt;bool&gt;</code> so a caller learns &quot;no share UI was presented&quot; and falls back to copy-link rather than catching.</li>
+          <li><code>IHapticFeedbackService</code> (<code>IHapticFeedbackService.cs:8</code>): <code>Click</code>, <code>LongPress</code>, <code>Vibrate</code>, plus an <code>IsSupported</code> flag; the doc comment is blunt that &quot;haptics are decoration, never behavior,&quot; so failures are swallowed.</li>
+          <li><code>IBiometricAuthenticator</code> (<code>IBiometricAuthenticator.cs:9</code>): <code>IsAvailableAsync</code> and <code>AuthenticateAsync(reason)</code>, where cancellation, lockout, and error all return <code>false</code> so the caller falls back to the normal credential login, never to a weaker path.</li>
+          <li><code>IGeolocationService</code> (<code>IGeolocationService.cs:8</code>): <code>GetCurrentOrLastKnownAsync</code> returns a nullable <code>GeoPoint</code>, and denial or timeout yields <code>null</code> so a proximity hint is simply omitted.</li>
+          <li><code>ISpeechToTextService</code> (<code>ISpeechToTextService.cs:10</code>), <code>IConnectivityStatusService</code> (<code>IConnectivityStatusService.cs:10</code>), <code>IExternalLinkService</code> (<code>IExternalLinkService.cs:9</code>), <code>IMediaPickerService</code> (<code>IMediaPickerService.cs:9</code>), <code>IPushRegistrationService</code> (<code>IPushRegistrationService.cs:10</code>), and the rest follow the same rule: a boolean or a nullable that means &quot;unavailable,&quot; never a throw a component has to guard.</li>
+          </ul>
+          <p>That last point is the load-bearing design choice. Because unavailability is a return value, a component written against the contract already handles the browser case for free. It calls <code>ShareLinkAsync</code>, gets <code>false</code>, and shows the copy-link path. It never asks what platform it is on.</p>
+          <h2 id="three-flavors-of-unavailable-all-registered-by-default">Three flavors of &quot;unavailable,&quot; all registered by default</h2>
+          <p>Small contracts only help if every one of them always resolves. A component that injects <code>IShareService</code> must get <em>something</em> on every head, or the browser build throws at runtime the first time someone taps share. So <code>AddUIShared</code> (the shared UI registration every host already calls) TryAdd-registers a safe default for every contract, in <code>AddDeviceCapabilityDefaults</code> (<code>Services/Capabilities/DependencyInjection.cs:37</code>). The <code>TryAdd</code> matters: it seeds a default only if nothing else claimed the slot, which keeps repeated host calls idempotent and lets a later registration win.</p>
+          <p>There are three flavors of default for absent hardware, and picking the right one per capability is the subtle part:</p>
+          <ol>
+          <li><strong>Null object.</strong> <code>NullShareService</code> (<code>Interop/NullShareService.cs:4</code>) returns <code>Task.FromResult(false)</code> from both methods. <code>NullHapticFeedbackService</code> (<code>DeviceStatus/NullHapticFeedbackService.cs:4</code>) and <code>NullSpeechToTextService</code> (<code>Media/NullSpeechToTextService.cs:6</code>) do the same and report <code>IsSupported =&gt; false</code> so components hide the affordance entirely. Each null default signals unavailability the way its own contract does: <code>IBiometricAuthenticator</code> has no <code>IsSupported</code> flag at all, so <code>NullBiometricAuthenticator</code> (<code>Auth/NullBiometricAuthenticator.cs:4</code>) returns <code>false</code> from <code>IsAvailableAsync</code> instead.</li>
+          <li><strong>Constant stub.</strong> <code>AlwaysOnlineConnectivityStatusService</code> (<code>DeviceStatus/AlwaysOnlineConnectivityStatusService.cs:7</code>) hard-codes <code>IsOnline =&gt; true</code> and never raises its event. That is not laziness: it is <em>correct</em> for Blazor Server, where a lost connection tears down the circuit itself, so the reconnect overlay already covers the offline case and a connectivity service would be redundant.</li>
+          <li><strong>Neutral local state.</strong> <code>InMemoryDevicePreferences</code> (<code>DeviceStorage/InMemoryDevicePreferences.cs:10</code>) is registered scoped, not singleton, so the Blazor Server fallback holds per-circuit (per-user) state and never leaks one user&#39;s preferences into another&#39;s.</li>
+          </ol>
+          <p>A fourth kind is not a fallback at all. For two contracts the shared default <em>is</em> the real implementation, so no head replaces it: <code>DeepLinkDispatcher</code> (registered at <code>Services/Capabilities/DependencyInjection.cs:78</code>) and <code>AppLifecycleNotifier</code> (at <code>:82</code>), which the MAUI package feeds from the native window rather than overriding. That is why <code>AddMauiDeviceCapabilities</code> natively overrides 20 of the 24 contracts rather than all of them (<code>Website/docs-src/adr/042-device-capability-abstraction.md:47-52</code>).</p>
+          <p>The payoff: a head that knows nothing about capabilities keeps working. It gets share-returns-false, haptics-do-nothing, always-online, and every component degrades gracefully with zero host changes. That is the same inert-by-default posture the framework&#39;s notification layer takes.</p>
+          <h2 id="heads-override-after-the-defaults-last-registration-wins">Heads override after the defaults, last registration wins</h2>
+          <p>A default that is always inert would be useless on the platforms that <em>can</em> do the real thing. So heads override, and the mechanism is deliberately boring: plain <code>Add</code> registrations, called <em>after</em> <code>AddUIShared</code>, exploiting the rule that the last registration wins for single-service resolution.</p>
+          <p>The browser heads (Blazor Server and WebAssembly) call <code>AddBrowserDeviceCapabilities</code> (<code>Services/Capabilities/DependencyInjection.cs:95</code>), which swaps in eight browser adapters over one shared JS module, <code>CapabilitiesJsModule</code>. <code>BrowserShareService</code> (<code>Interop/BrowserShareService.cs:8</code>) calls <code>navigator.share</code> and returns whether a share UI actually appeared; on desktop Firefox or an insecure context it reports <code>false</code>, and the copy-link fallback kicks in exactly as on the null default. Every browser adapter is prerender-safe: a JS-unavailable call degrades to the null behavior instead of throwing during the static SSR pass.</p>
+          <p>The MAUI head calls <code>UseMauiDeviceCapabilities</code> (<code>MMCA.Common.UI.Maui/HostingDependencyInjection.cs:30</code>), which wires the native <code>Plugin.LocalNotification</code> lifecycle, registers the notification-tap bridge, and calls <code>AddMauiDeviceCapabilities</code> (<code>MMCA.Common.UI.Maui/DependencyInjection.cs:42</code>) to replace the defaults with <code>MauiShareService</code>, <code>MauiClipboardService</code>, <code>MauiHapticFeedbackService</code>, <code>MauiGeolocationService</code>, and the rest. Permission flows live <em>inside</em> each MAUI adapter (check, show rationale, request, degrade, never throw); components never see permission state.</p>
+          <p>Here is the whole composition, illustrative of the documented shape:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Every host, browser or native, calls the shared UI registration first.</span>
+<span class="hljs-comment">// It TryAdd-seeds a safe default for every capability contract.</span>
+builder.Services.AddUIShared(builder.Configuration);   <span class="hljs-comment">// -&gt; AddDeviceCapabilityDefaults() inside</span>
+
+<span class="hljs-comment">// Blazor Server / WebAssembly host: override with browser adapters AFTER AddUIShared.</span>
+builder.Services.AddBrowserDeviceCapabilities();       <span class="hljs-comment">// navigator.share, clipboard, aria-live, onLine</span>
+
+<span class="hljs-comment">// MAUI Blazor Hybrid host (in MauiProgram): override with native adapters AFTER AddUIShared.</span>
+builder.UseMauiDeviceCapabilities();                   <span class="hljs-comment">// native share sheet, haptics, geolocation, biometrics</span></code></pre>
+          <p>Three hosts, one shared component set, and the only difference is which one line ran after <code>AddUIShared</code>. A component that injects <code>IShareService</code> gets <code>NullShareService</code> on a forgetful host, <code>BrowserShareService</code> on the web, and <code>MauiShareService</code> on the phone, and it wrote none of that branching.</p>
+          <h2 id="the-ninth-package-and-why-it-lives-outside-the-solution">The ninth package, and why it lives outside the solution</h2>
+          <p>The native adapters cannot ship in <code>MMCA.Common.UI</code>, because that package must stay WebAssembly-compatible. They ship in <code>MMCA.Common.UI.Maui</code>, the ninth of the framework&#39;s nineteen NuGet packages and its one MAUI-target exception. It multi-targets <code>net10.0-android/ios/maccatalyst/windows</code>, references <code>MMCA.Common.UI</code> plus <code>Microsoft.Maui.Controls</code> and <code>Plugin.LocalNotification</code>, and stays <em>out</em> of <code>MMCA.Common.slnx</code> (<code>Website/docs-src/adr/042-device-capability-abstraction.md:81</code>).</p>
+          <p>That exclusion is not cosmetic. MMCA.Common&#39;s CI and release pipelines run on ubuntu, which cannot build MAUI target frameworks at all, and the nineteen packages release in lockstep. So the MAUI package is built and packed by dedicated windows CI jobs (<code>build-maui</code>, a required gate, and <code>publish-maui</code>, under the same tag and SBOM discipline), the same mechanism that keeps the UI gallery and E2E projects out of the fast ubuntu unit run. Its layer rule is &quot;UI plus Shared only,&quot; enforced at compile time; it is deliberately absent from the ubuntu runtime architecture map because its assemblies cannot even load there.</p>
+          <h2 id="deep-links-one-funnel-no-translation-table">Deep links: one funnel, no translation table</h2>
+          <p>The most elegant part is navigation. A notification tap, a home-screen app action, an app link, a scanned QR code: all four are native events that need to land on a Blazor route. They funnel through one singleton, <code>IDeepLinkDispatcher</code> (<code>Services/Capabilities/Navigation/IDeepLinkDispatcher.cs:10</code>), whose default <code>DeepLinkDispatcher</code> (<code>Services/Capabilities/Navigation/DeepLinkDispatcher.cs:9</code>) either raises <code>RouteRequested</code> live when a listener is attached, or buffers the most recent route (capacity one, guarded by a <code>Lock</code>) so a cold-start tap survives until the router renders. The <code>DeepLinkListener.razor</code> component in the shared layout drains that buffer after first render and navigates.</p>
+          <p>Why capacity one, and why a buffer at all? Because a tap can <em>launch</em> the app: native code publishes the route into the singleton before Blazor has rendered anything, so there is no listener yet. The single-entry buffer holds that route until first render, then the listener consumes it. Live taps, once the app is running, skip the buffer entirely.</p>
+          <p>The payoff of Blazor Hybrid is that web URLs and app routes are <em>identical</em>. All heads share one Blazor route table, so an incoming deep link is reduced to its path and query and published as-is. No translation table exists anywhere. This is also where ADR-043 (mobile deep links and app association) plugs in: incoming app-link and OAuth-callback URIs reuse this exact dispatcher, and each app&#39;s <code>UI.Web</code> host serves the platform association files (<code>assetlinks.json</code>, <code>apple-app-site-association</code>) that tell the OS to open shared https URLs in the installed app. The OAuth-callback angle is its own story; here the point is only that ADR-043 adds native entry points and reuses this one funnel rather than building a second.</p>
+          <p>One more component earns its place: <code>ExternalLink.razor</code>. A raw <code>target=&quot;_blank&quot;</code> anchor silently dead-ends inside a BlazorWebView (WKWebView drops it), so shared components route external links through <code>IExternalLinkService</code> (<code>Services/Capabilities/Interop/IExternalLinkService.cs:9</code>). It renders a real new-tab anchor on web heads, and where <code>InterceptsLinks</code> is <code>true</code> it intercepts the click into the system browser. <code>OfflineBanner.razor</code> renders only when <code>IConnectivityStatusService</code> reports offline. The components adapt; they never branch on platform.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>Null-object defaults can mask a missing registration.</strong> A MAUI head that forgets <code>UseMauiDeviceCapabilities</code> does not fail fast: it silently resolves the null defaults and loses haptics, share, and biometrics with no error. That is accepted for decoration-grade capabilities, but a feature that genuinely depends on a capability has to assert availability in its own UI and surface the gap (<code>IsSupported</code> where the contract exposes one, <code>IsAvailableAsync</code> for biometrics, the returned <code>false</code> for share), rather than trusting the registration happened.</li>
+          <li><strong>The pattern relies on registration order.</strong> The whole &quot;last registration wins&quot; mechanism only works if <code>AddUIShared</code> (and its <code>TryAdd</code> defaults) runs <em>before</em> the head&#39;s plain <code>Add</code> overrides. Both extension methods document the ordering, and the class doc comment above <code>AddMauiDeviceCapabilities</code> (<code>MMCA.Common.UI.Maui/DependencyInjection.cs:28-30</code>) restates it, but it is an ordering contract a host can still get wrong.</li>
+          <li><strong>A separate MAUI package raises release surface.</strong> Two CI runners, ubuntu and windows, must both succeed for a whole release, because the MAUI package cannot build on ubuntu and the packages ship in lockstep. Accepted, and gated by the same tag and SBOM checks as the rest.</li>
+          <li><strong>Some contracts ship ahead of their native depth.</strong> The external-auth broker registers <code>MauiExternalAuthBroker</code> scoped but inert (<code>IsAvailable == false</code>) until the head configures its OAuth redirect scheme and platform callback (<code>MMCA.Common.UI.Maui/DependencyInjection.cs:73-76</code>); until then the shared login page stays on its anchor flow. Native push likewise stays wired-but-tokenless until real FCM/APNs credentials exist (<code>MMCA.Common.UI.Maui/DependencyInjection.cs:64-67</code>). Registered is not the same as fully live, and the article does not claim otherwise.</li>
+          </ul>
+          <p>None of these argue for a platform check back in the components. They argue for asserting <code>IsSupported</code> where a feature truly needs the hardware, and for keeping the registration order honest.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any UI that runs on more than one host:</p>
+          <ol>
+          <li>Define <strong>one small interface per capability</strong>, not an aggregate device service. Each new capability is then additive, not a breaking change to a type everyone depends on.</li>
+          <li>Shape each contract so <strong>unavailability is a return value</strong> (a <code>bool</code> or a nullable), never an exception. A component written against it handles the missing-hardware case without a single guard.</li>
+          <li><strong>Register a safe default for every contract</strong> at the composition root, with a conditional-add so it only seeds when nothing else claimed the slot. Then a host that knows nothing about capabilities still resolves everything and degrades gracefully.</li>
+          <li>Let <strong>hosts override after the defaults</strong>, relying on last-registration-wins, so the per-host adapter is one line and the shared code never sees it.</li>
+          <li>Keep the <strong>platform-specific package physically separate</strong> if its target frameworks cannot build where the rest of your CI runs, and gate it on its own runner under the same release tag.</li>
+          </ol>
+          <p>The takeaway: <strong>a portable UI is one that is structurally forbidden from knowing where it runs. Put each device capability behind a small contract, give every contract an inert default so it always resolves, and choose the real implementation per host at the composition root. The component asks for a capability; it never asks for a platform.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why a platform check inside a shared component set is a portability leak, how ADR-042 replaces it with one small contract per capability under <code>MMCA.Common.UI/Services/Capabilities/</code>, how <code>AddDeviceCapabilityDefaults</code> TryAdd-seeds a null-object, constant-stub, or neutral-state default for every contract so it always resolves, how browser and MAUI heads override those defaults after <code>AddUIShared</code> with last-registration-wins, why the native adapters live in the ninth package <code>MMCA.Common.UI.Maui</code> built by a windows CI job, and how <code>IDeepLinkDispatcher</code> funnels every native navigation source onto the one shared Blazor route table.</p>
+          <p><strong>Previously in the series:</strong> Two real apps on one framework, a conference platform and a store, both running on MMCA.Common without a fork.</p>
+          <p><strong>Next in the series:</strong> managed file storage, uploads you don&#39;t have to trust, with untrusted-image re-encoding and a storage abstraction that swaps an Azure Blob backend for a safe Null fallback.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the device-capability chapter of the onboarding guide, or <code>dotnet add package MMCA.Common.UI.Maui</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          </ul>
+          <p><em>Tags: .NET, Blazor, MAUI, C Sharp, Software Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="two-real-apps-case-study.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">41 · Two real apps on one framework</span></a>
+          <a class="article-pager-link article-pager-link--next" href="managed-file-storage-avatars.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">43 · Managed file storage: uploads you don&#39;t have to trust</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-mmca-answer-one-small-contract-per-capability-chosen-per-host">The MMCA answer: one small contract per capability, chosen per host</a></li>
+            <li><a href="#three-flavors-of-unavailable-all-registered-by-default">Three flavors of &quot;unavailable,&quot; all registered by default</a></li>
+            <li><a href="#heads-override-after-the-defaults-last-registration-wins">Heads override after the defaults, last registration wins</a></li>
+            <li><a href="#the-ninth-package-and-why-it-lives-outside-the-solution">The ninth package, and why it lives outside the solution</a></li>
+            <li><a href="#deep-links-one-funnel-no-translation-table">Deep links: one funnel, no translation table</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

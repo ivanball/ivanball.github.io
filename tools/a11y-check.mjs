@@ -26,7 +26,8 @@ const PORT = process.env.PORT || "8080";
 const BASE = `http://127.0.0.1:${PORT}`;
 
 /* One of each page type. The seven root pages are hand-authored; the two docs
-   pages cover the generated shell and the sidebar layout. */
+   pages cover the generated shell and the sidebar layout; the article page adds
+   the byline, hero, standfirst and series pager. */
 const PATHS = [
   "/index.html",
   "/resume.html",
@@ -37,6 +38,7 @@ const PATHS = [
   "/404.html",
   "/docs/index.html",
   "/docs/adr/001-manual-dto-mapping.html",
+  "/articles/transactional-outbox-dotnet.html",
 ];
 
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];

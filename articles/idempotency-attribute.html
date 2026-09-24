@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Idempotency in one attribute: safe retries for HTTP APIs · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Dedup client retries with an Idempotency-Key header and cached replay, plus a consumer-side inbox for brokers.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/idempotency-attribute.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Idempotency in one attribute: safe retries for HTTP APIs">
+  <meta property="og:description" content="Dedup client retries with an Idempotency-Key header and cached replay, plus a consumer-side inbox for brokers.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/idempotency-attribute.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-18.png">
+  <meta property="og:image:alt" content="Idempotency in one attribute: safe retries for HTTP APIs">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Idempotency in one attribute: safe retries for HTTP APIs">
+  <meta name="twitter:description" content="Dedup client retries with an Idempotency-Key header and cached replay, plus a consumer-side inbox for brokers.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-18.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Idempotency in one attribute: safe retries for HTTP APIs","description":"Dedup client retries with an Idempotency-Key header and cached replay, plus a consumer-side inbox for brokers.","url":"https://ivanball.github.io/articles/idempotency-attribute.html","mainEntityOfPage":"https://ivanball.github.io/articles/idempotency-attribute.html","image":"https://ivanball.github.io/assets/img/articles/article-18.png","datePublished":"2026-07-16T13:46:11Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":18,"sameAs":"https://medium.com/@ivanball76/idempotency-in-one-attribute-safe-retries-for-http-apis-065848fd03f4"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"18 · Idempotency in one attribute","item":"https://ivanball.github.io/articles/idempotency-attribute.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">18 · Idempotency in one attribute</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html" aria-current="page">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 18</p>
+          <h1 id="idempotency-in-one-attribute-safe-retries-for-http-apis">Idempotency in one attribute: safe retries for HTTP APIs</h1>
+          <p class="article-meta"><time datetime="2026-07-16T13:46:11Z">July 16, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/idempotency-in-one-attribute-safe-retries-for-http-apis-065848fd03f4" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-18.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Clients retry. Resilient HTTP handlers retry harder. A <code>POST</code> that creates a resource must
+          survive being sent twice. Here is the whole thing in one <code>[Idempotent]</code> attribute, formalized in ADR-017,
+          plus the matching consumer-side inbox that handles the same problem on the broker.</p>
+          <hr>
+          <p>A user taps &quot;Place order.&quot; The request goes out. The phone&#39;s connection hiccups for two seconds, the
+          client sees no response, and it retries. Your server received both requests. It just created two orders.</p>
+          <p>This is not an exotic failure. It is the <em>default</em> behavior of every retrying client and every resilient
+          HTTP handler in your stack. The whole point of a Polly retry policy (ADR-009 wires one onto every
+          outbound client) is to resend a request that did not visibly succeed. The policy cannot tell &quot;the server
+          never got it&quot; from &quot;the server got it and the response got lost.&quot; So it resends, and if your <code>POST</code> is
+          not idempotent, the retry that was supposed to save you just double-charged a customer.</p>
+          <p>The fix is a contract: the client attaches a key that says &quot;this is the same logical request,&quot; and the
+          server promises that the same key produces the same single effect. In MMCA.Common that contract is one
+          attribute.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>The non-idempotent <code>POST</code> is a quiet, expensive bug. It does not throw. It does not log an error. It
+          produces a second perfectly valid-looking row. You find out when finance reconciles, or when a customer
+          complains about a duplicate charge, and by then the originating request is long gone from the logs.</p>
+          <p>And the pressure toward retries only increases as you harden the system. Add a resilience handler to your
+          HTTP clients and you have <em>more</em> automatic retries, not fewer. Resilience and idempotency are two halves
+          of the same coin: retries make the system robust to transient failure <em>only if</em> the operations being
+          retried are safe to repeat. Idempotency is what makes &quot;just retry it&quot; a safe instruction.</p>
+          <h2 id="the-mechanism-one-attribute-one-header">The mechanism: one attribute, one header</h2>
+          <p>You mark an action <code>[Idempotent]</code>:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">[<span class="hljs-meta">Idempotent</span>]
+[<span class="hljs-meta">HttpPost</span>]
+<span class="hljs-function"><span class="hljs-keyword">public</span> Task&lt;IActionResult&gt; <span class="hljs-title">CreateAsync</span>(<span class="hljs-params">[FromBody] CreateOrderRequest request</span>)</span> =&gt; ...</code></pre>
+          <p>The generic create action in the framework&#39;s controller bases carries <code>[Idempotent]</code> by default, so most
+          write endpoints get it for free. The attribute is a <code>ServiceFilterAttribute</code>, which means the real work
+          happens in a filter resolved from DI (so it can depend on scoped services like the cache). The attribute
+          itself is a one-line marker.</p>
+          <p>The runtime contract is:</p>
+          <ol>
+          <li>The client supplies an <code>Idempotency-Key</code> header (a value it generates per logical request, the same
+          value across its own retries).</li>
+          <li>On the <strong>first</strong> request with a given key, the action runs, and its response (status code plus JSON
+          body) is serialized into an <code>IdempotencyRecord</code>, together with a SHA-256 hash of the request body
+          that produced it, and cached.</li>
+          <li>On a subsequent request with the same key <strong>and the same body</strong>, within the retention window, the
+          cached response is replayed verbatim, with an extra header <code>X-Idempotent-Replay: true</code>, and <strong>the
+          action does not run again</strong>.</li>
+          <li>On a request that reuses the key with a <strong>different</strong> body, nothing is replayed and nothing runs:
+          the caller gets a <code>422 Unprocessable Entity</code> <code>ProblemDetails</code> saying the key was already used with a
+          different request body.</li>
+          <li>No <code>Idempotency-Key</code> header means the action just runs normally. Idempotency is opt-in per request.</li>
+          </ol>
+          <p>The cache window defaults to <strong>24 hours</strong> (bound from an <code>IdempotencySettings</code> section, range-guarded to a
+          one-week maximum, validated at startup). A first-call <code>201 Created</code> replays as a <code>201</code>, not a generic
+          <code>200</code>, because the record captures the original status code as well as the body.</p>
+          <p>Binding the body to the key is why the filter runs at two pipeline stages rather than one. It is an
+          <code>IAsyncResourceFilter</code> as well as an <code>IAsyncActionFilter</code>: the resource stage runs before model binding,
+          which is the last point at which the request body can still be made re-readable, so that is where it calls
+          <code>EnableBuffering</code>, and only for requests that actually carry the key header, so ordinary traffic pays
+          nothing. The action stage then hashes the buffered body and binds the hash to the cached record. Replaying
+          a stored response to a request carrying a different payload would tell the client its new write succeeded
+          when nothing ran, which is the failure the hash exists to prevent. The answer is a <code>422</code> rather than a
+          <code>409</code> because the filter already spends 409 on &quot;the original is still in flight&quot;, which is a
+          retry-with-the-same-key situation, while key reuse with a different body is not retryable at all until the
+          client picks a new key. Two details keep this honest: a body stream that cannot be rewound hashes as empty
+          rather than throwing (such a request stays exactly as idempotent as it was before), and every stored record
+          carries the hash of the body that produced it, so the compare on replay is ordinal and total: there is no
+          hash-less record and therefore no path that replays without checking the payload.</p>
+          <p>One thing that contract does not say out loud: the client&#39;s key is not the cache key. The filter derives
+          <code>idempotency:{SHA-256(subject | method | route template | client key)}</code>, where the subject is the caller&#39;s
+          <code>user_id</code> claim or, for an unauthenticated call, <code>anon:{remote address}</code>. That is a security property before
+          it is anything else. Keying on the bare client value makes the key space global: two callers who happen to
+          pick the same value share an entry, so one user&#39;s serialized response body gets replayed to another, and
+          because services can share a single cache instance the collision reaches across endpoints and across
+          services too. Hashing also keeps the stored key bounded no matter what the client sends.</p>
+          <h2 id="the-concurrency-detail-that-actually-matters">The concurrency detail that actually matters</h2>
+          <p>The interesting part is not &quot;cache the response.&quot; It is what happens when two duplicates arrive <em>at the
+          same time</em>, before the first has finished. A naive cache check would let both pass the empty-cache test
+          and both execute, which defeats the entire purpose precisely in the burst case that retries produce.</p>
+          <p>So the filter takes a lock, and the lock spans the whole execute-and-store window rather than just the
+          cache check. That span is the part people get wrong: if you release after the cache miss, a duplicate slips
+          in between the action finishing and its response reaching the cache, and you are back to two executions.
+          The lock it takes is an <code>IDistributedLock</code> resolved from DI:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="Text"><code class="language-text hljs">1. Hash the request body, then read the cache without a lock (fast path). A hit whose stored hash
+   matches replays; a hit whose stored hash differs answers 422. Either way, done.
+2. Miss -&gt; try to acquire the distributed lock on the cache key (30s time-to-live, 5s wait).
+3. Acquired -&gt; re-check the cache (the previous holder may have finished while we waited).
+4. Still a miss -&gt; run the action, store the response plus the body hash, release on dispose.
+5. Not acquired within the wait -&gt; re-check once. A hit replays; a miss returns 409 Conflict.</code></pre>
+          <p>The fast-path read is lock-free, so the common case (a unique key, no contention) pays almost nothing. A
+          burst of concurrent duplicates collapses into a single execution rather than a race.</p>
+          <p>Why a <em>distributed</em> lock and not a semaphore: a per-process lock only serializes duplicates that land on
+          the same replica. Both deployed apps run more than one, so two duplicates arriving at different replicas
+          both miss the cache, both execute, and the second overwrites the first&#39;s stored response. That is exactly
+          the double write the filter exists to prevent, and no amount of in-memory cleverness fixes it.</p>
+          <p><code>AddCaching()</code> (called by <code>AddInfrastructure</code>) registers the lock unconditionally, right next to the cache,
+          because the two are a pair: the lock guards the window that the cache entry closes. With an
+          <code>IConnectionMultiplexer</code> registered you get <code>RedisDistributedLock</code>, the standard <code>SET key token NX PX ttl</code>
+          acquire with a compare-and-delete Lua release so a handle can only ever release its own acquisition. With
+          no multiplexer you get <code>InProcessDistributedLock</code>, which warns once that locking is process-local and
+          therefore degraded. The contract itself is honest about what it is: best-effort, not reentrant, and not a
+          consensus protocol, so a section that outruns its time-to-live is no longer exclusive.</p>
+          <p>Step 5 is the interesting one. When the lock is held elsewhere, the 5 second wait expires and nothing is
+          cached, the original is still running somewhere (or its replica died mid-action). The only two options left
+          are to execute concurrently, which is the defect, or to tell the caller the request is in flight. It gets a
+          <code>409 Conflict</code> <code>ProblemDetails</code> saying to retry with the same key: retryable, honest, and not a duplicate
+          write. The wait is sized so the common case never reaches this, because a duplicate that arrives while the
+          original is still running usually waits it out and replays the stored response instead.</p>
+          <h3 id="when-the-cache-or-the-lock-is-down">When the cache or the lock is down</h3>
+          <p>A lock that is <em>held</em> and a lock that <em>faults</em> are different cases, and the filter answers them
+          differently. A cache read that throws, a cache write that throws, and a lock acquisition that throws are
+          all caught, logged, counted on an <code>idempotency.degraded</code> metric, and swallowed: the action runs without the
+          idempotency guarantee instead of failing. The rationale is in the filter&#39;s own class docs. Deduplication is
+          an optimization over a client retry that was going to happen anyway, so a cache outage must not become an
+          outage of every write endpoint carrying the attribute. When the lock is held elsewhere there is a holder
+          executing this same key right now, so waiting and then answering 409 is meaningful; when the backend
+          faults there is no holder to wait for and no stored answer to replay, so refusing would turn a Redis blip
+          into a write outage. A store that faults is swallowed for the same reason from the other end: the action
+          already ran, and failing after it would hand the client an error it would retry, producing the exact
+          duplicate the filter exists to prevent. The honest cost is that duplicates can execute twice for the
+          duration of the outage, which is what the metric is for: alert on it, do not assume the guarantee held.</p>
+          <p>The striped lock table is the right shape for its job: it is
+          the fallback for a host that registers no <code>IDistributedLock</code> at all, which in practice means a
+          single-replica host or a test. There, duplicates of the same key hash to the same stripe and serialize
+          correctly. The striping is the deliberate part. The obvious shape, one <code>SemaphoreSlim</code> per key in a
+          <code>ConcurrentDictionary</code>, forces a choice between two defects, and the framework&#39;s own class docs say so:
+          remove the entry when the last holder releases and you open a window where one caller waits on a
+          semaphore that is no longer in the table while a second caller creates a fresh one (both then run
+          concurrently, which is exactly what the lock exists to prevent); never remove it and a caller-supplied
+          idempotency key grows the table without bound. A fixed 256 stripes has neither problem. The cost is that
+          two unrelated keys can share a stripe and briefly serialize against each other, which is harmless here
+          because every caller re-checks its own key&#39;s cache entry after acquiring.</p>
+          <p>(One detail worth knowing: what gets cached is a <strong>2xx</strong> result that a status code plus an optional JSON
+          body can represent. That is an <code>ObjectResult</code> (200/201/202 with a payload) or a body-less <code>StatusCodeResult</code>
+          such as the 204 from <code>NoContent()</code>, which stores an empty body and replays as a bare status code rather
+          than as JSON with no content. Non-2xx results are deliberately not stored, because replaying a transient
+          500 for the whole retention window is worse than letting the retry actually execute. Redirects and file
+          results are skipped: the record carries a status code, a JSON body, and the hash of the request that
+          produced them, and nothing else.)</p>
+          <h2 id="the-same-problem-shows-up-on-the-broker-and-the-inbox-is-the-matching-mechanism">The same problem shows up on the broker, and the inbox is the matching mechanism</h2>
+          <p>HTTP retries are one source of duplicates. The other is the message broker.</p>
+          <p>MMCA.Common&#39;s outbox gives <strong>at-least-once</strong> delivery: an event may be published twice (the publish
+          succeeded but the &quot;mark processed&quot; step did not), never zero times. At-least-once is the correct,
+          durable guarantee. But it has a direct consequence: <strong>any consumer of a broker event can receive the same
+          event twice, and must be idempotent to be correct.</strong></p>
+          <p>The <code>[Idempotent]</code> attribute solves this <em>for the HTTP edge</em>: a retried <code>POST</code> is deduplicated by its
+          idempotency key. The broker side has its own answer, a durable <strong>inbox</strong>: the consumer-side
+          counterpart to the HTTP filter, documented in ADR-021 and credited on the scorecard&#39;s §6 row as a
+          genuinely idempotent inbox consumer (dedup by <code>MessageId</code> via <code>IInboxStore</code>):</p>
+          <ul>
+          <li><code>IInboxStore</code> (<code>EfInboxStore</code> for the real EF implementation, <code>NoOpInboxStore</code> when it is turned off)
+          records each handled message by its <code>MessageId</code> in an <code>InboxMessage</code> table with a unique index.</li>
+          <li><code>IntegrationEventConsumer</code> calls <code>TryBeginAsync(MessageId, eventType)</code> before invoking handlers: a
+          message the inbox already holds is skipped and acked, never reapplied. <code>TryBegin</code> also <em>stages</em> the
+          inbox row, unsaved, in the scope&#39;s unit of work, so a handler that calls <code>SaveChangesAsync</code> on that
+          same scope commits the row in the same transaction as its own mutations. A handler that throws has the
+          staged row abandoned before the rethrow, so the redelivery is not mistaken for a duplicate; a consume
+          that reaches the end calls <code>CompleteAsync(...)</code> to persist whatever is still unsaved.</li>
+          <li>The posture is resolved from the transport. <code>MessageBusSettings.EnableInbox</code> is a nullable bool left
+          unset by default, and <code>IsInboxEnabled</code> reads that as on for a broker and off for the in-process
+          provider, which has no redelivery to dedup. An explicit value wins in both directions: a host that sets
+          <code>MessageBus:EnableInbox=false</code> gets the no-op store plus one startup warning recording the opt-out.</li>
+          </ul>
+          <p>The retry half is wired too: every receive endpoint gets an exponential-backoff <code>UseMessageRetry</code> policy
+          (<code>MessageBusSettings.RetryLimit</code>), and the consumer rethrows on handler failure so MassTransit applies it
+          before dead-lettering. So the honest framing is: the HTTP write path is idempotent-by-attribute (the
+          scorecard credits the filter under §9 and §10, where §10 scores Implementation 9 on the strength of the
+          filter taking a distributed lock with the stripe as fallback, while §29 covers the Polly handlers and the
+          outbox&#39;s graceful degradation), and the broker consumer path dedups by <code>MessageId</code> by default on
+          any broker transport. The remaining discipline is treating the explicit opt-out as a decision with a cost,
+          and keeping handlers safe to repeat wherever the inbox resolves off.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>Clients must send a stable key, from a stable identity.</strong> Idempotency is a contract, not magic. If a
+          client generates a fresh key per retry, every retry is a &quot;new&quot; request and the dedup never fires. And
+          because the cache key includes the caller, a retry that arrives under a different identity (a token
+          exchange between the attempts, a rotated anonymous address) misses and re-executes. That is the correct
+          trade against replaying one caller&#39;s response to another.</li>
+          <li><strong>A key reused with a different body is refused, not replayed.</strong> The record stores a hash of the request
+          that produced it, so the same key arriving with a changed payload gets a <code>422</code> instead of the earlier
+          response. That is the safe answer (replaying would report success for a write that never ran), but it
+          means a client that mutates its payload between attempts, adding a client-side timestamp to the body,
+          say, has to mint a new key too.</li>
+          <li><strong>The window is bounded.</strong> Replay works for the retention window (default 24h, max one week). A retry
+          after the window expires re-executes. Size the window to your realistic retry horizon.</li>
+          <li><strong>Only successful, JSON-shaped responses replay.</strong> A 2xx <code>ObjectResult</code> or a body-less 2xx
+          <code>StatusCodeResult</code> is cached. Failures are not, and neither are redirects or file results. Response
+          headers are not part of the record either, so a replayed <code>201</code> does not carry the original <code>Location</code>.</li>
+          <li><strong>Cross-replica exclusivity is a deployment property, not a guarantee.</strong> You get it where a Redis
+          multiplexer is registered. A host without one falls back to the process-local lock or the stripe, and
+          there two duplicates on different instances can both miss the cache and execute. Even with Redis the
+          lock is best-effort by design (one instance, not Redlock), so a write worth protecting should still be
+          naturally idempotent or guarded by a unique constraint.</li>
+          <li><strong>A mid-flight duplicate can get a 409 instead of a replay.</strong> If the original is still running after the
+          5 second wait and nothing is cached yet, the duplicate is told to retry with the same key. A client that
+          treats every non-2xx as fatal will read that as an error; it is the honest alternative to a double write.</li>
+          <li><strong>The guard fails open, so the guarantee is best-effort by design.</strong> A faulting cache or lock backend is
+          counted on <code>idempotency.degraded</code> and the action runs unguarded rather than erroring. Availability wins
+          deliberately, and the price is that duplicates can execute twice while the backend is down. Treat that
+          metric as an alert, not a dashboard decoration.</li>
+          <li><strong>Consumer-side idempotency follows the transport.</strong> The inbox above resolves on for a broker and off
+          for the in-process provider, and a host can override either way with <code>MessageBus:EnableInbox</code>. Wherever
+          it resolves off, every consumer&#39;s idempotency is code you own and test.</li>
+          </ul>
+          <p>None of these are reasons to skip idempotent writes. They are the reasons to make the key contract
+          explicit and to write your broker consumers defensively.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any HTTP stack:</p>
+          <ol>
+          <li>Accept an <strong><code>Idempotency-Key</code> header</strong> on write endpoints and require clients to keep it stable across
+          retries.</li>
+          <li><strong>Cache the first response</strong> (status and body) for a bounded window and replay it verbatim for
+          duplicates. Key the entry on a hash of caller identity plus method plus route plus the client&#39;s key,
+          never on the bare client value: otherwise two callers who pick the same string read each other&#39;s
+          responses. <strong>Store a hash of the request body with the record</strong> and compare it before replaying, so a
+          key reused with a different payload is refused rather than answered with a success that never happened.</li>
+          <li><strong>Hold a lock across execute-and-store</strong>, not just across the cache check, and re-check after
+          acquiring. Use a lock every replica can see (<code>SET NX PX</code> with a compare-and-delete release is enough),
+          because a per-process lock only serializes duplicates that land on the same instance. Answer a
+          duplicate you cannot serialize with a retryable <code>409</code> rather than executing it. If you do fall back to
+          an in-process lock, prefer a fixed set of striped locks over a per-key dictionary: a client-supplied
+          key is unbounded, and evicting entries races.</li>
+          <li><strong>Decide, in advance, what happens when the cache or lock is down.</strong> Failing open (run the action
+          unguarded, count the degradation on a metric) keeps writes available and accepts duplicates during the
+          outage; failing closed keeps the guarantee and takes the endpoint down with the cache. Either is
+          defensible; having no answer means you get whichever one your exception handling stumbles into.</li>
+          <li>Remember that <strong>the broker has the same problem</strong>: at-least-once delivery means consumers will see
+          duplicates, so make them idempotent (an inbox keyed on message id is the durable form).</li>
+          </ol>
+          <p>The takeaway: <strong>a retry is only safe if the operation it retries is idempotent. Make your writes safe to
+          repeat at the edge with a key, and make your event consumers safe to repeat with an inbox, because
+          at-least-once delivery will eventually hand you a duplicate.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why retrying clients and resilient handlers turn a <code>POST</code> into a double-write, how
+          the <code>[Idempotent]</code> attribute plus an <code>Idempotency-Key</code> header caches and replays the first response under a
+          distributed lock that spans execute-and-store, why the record is bound to a hash of the request body so a
+          reused key with a changed payload is refused instead of replayed, what the filter does when the cache or
+          lock itself is down, how this ties to the outbox&#39;s at-least-once delivery, and the consumer-side inbox
+          that handles the same duplicate problem on the broker, on by default for any broker transport.</p>
+          <p><strong>Next in the series:</strong> the self-invalidating cache that lives in the same pipeline, where a write
+          evicts the reads it staled instead of leaving them stale.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the API-hosting chapter of the
+          onboarding guide, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Web API, Distributed Systems, Resilience</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="password-hashing.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">17 · Password hashing done right</span></a>
+          <a class="article-pager-link article-pager-link--next" href="self-invalidating-cache.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">19 · The self-invalidating cache</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mechanism-one-attribute-one-header">The mechanism: one attribute, one header</a></li>
+            <li><a href="#the-concurrency-detail-that-actually-matters">The concurrency detail that actually matters</a></li>
+            <li><a href="#the-same-problem-shows-up-on-the-broker-and-the-inbox-is-the-matching-mechanism">The same problem shows up on the broker, and the inbox is the matching mechanism</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

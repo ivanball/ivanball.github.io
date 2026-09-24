@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/jwt-refresh-token-rotation.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting">
+  <meta property="og:description" content="A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/jwt-refresh-token-rotation.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-27.png">
+  <meta property="og:image:alt" content="Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting">
+  <meta name="twitter:description" content="A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-27.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting","description":"A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.","url":"https://ivanball.github.io/articles/jwt-refresh-token-rotation.html","mainEntityOfPage":"https://ivanball.github.io/articles/jwt-refresh-token-rotation.html","image":"https://ivanball.github.io/assets/img/articles/article-27.png","datePublished":"2026-07-27T10:27:05Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":27,"sameAs":"https://medium.com/@ivanball76/one-rotating-refresh-token-and-reuse-detection-that-makes-theft-self-limiting-fab42234a04a"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"27 · One rotating refresh token","item":"https://ivanball.github.io/articles/jwt-refresh-token-rotation.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">27 · One rotating refresh token</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html" aria-current="page">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 27</p>
+          <h1 id="refresh-tokens-that-rotate-per-device-and-reuse-detection-that-makes-theft-self-limiting">Refresh tokens that rotate per device, and reuse detection that makes theft self-limiting</h1>
+          <p class="article-meta"><time datetime="2026-07-27T10:27:05Z">July 27, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/one-rotating-refresh-token-and-reuse-detection-that-makes-theft-self-limiting-fab42234a04a" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-27.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A stateless JWT you cannot revoke has to be short-lived, which forces a refresh token,
+          which is a long-lived bearer credential that can be stolen and replayed. Here is the hashed, per-device,
+          rotate-on-every-use model that turns a captured refresh token into a session that ends itself.</p>
+          <hr>
+          <p>You sign in and the server hands you a JWT access token. Every service validates it by signature and
+          expiry with no database lookup, which is exactly why it is fast, and exactly why you cannot revoke it. A
+          stateless token is valid until its <code>exp</code> passes, full stop. So you keep the lifetime short to bound the
+          damage of a leak.</p>
+          <p>Short-lived access tokens are unusable on their own: nobody wants to re-enter a password every fifteen
+          minutes. The standard answer is a refresh token, a second credential the client presents to mint a fresh
+          access token without a password. And there is the catch. A refresh token is long-lived by definition, it is
+          a bearer credential (whoever holds it can use it), and if it is captured it can be replayed for its whole
+          lifetime. You have traded a fifteen-minute exposure window for a seven-day one.</p>
+          <p>The naive fixes make it worse. A refresh token that never changes is a static long-lived secret sitting in
+          client storage. A refresh token that is checked but not rotated lets a thief and the legitimate user both
+          refresh from the same secret indefinitely, and nothing ever notices. A refresh token kept in plaintext hands
+          every signed-in account to anything that can read the database. What you actually want is a refresh token
+          that changes on every use, is stored as a digest you cannot present, and a server that treats a spent one as
+          evidence.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>The two credentials pull in opposite directions, and you cannot collapse them. The access token wants to be
+          stateless (no lookup on the hot path) which means it cannot be revoked before it expires, which means it
+          must be short. The refresh token wants to be long-lived (a usable session) which means it is exactly the
+          kind of durable secret an attacker wants to steal.</p>
+          <p>So the design question is not &quot;how do I avoid a refresh token&quot; (you cannot) but &quot;how do I make a stolen
+          refresh token fail fast.&quot; The property to aim for is detectability: if a captured token is ever used
+          alongside the real client, the server should be able to tell that two parties are refreshing from the same
+          lineage, and end the session for both rather than let the theft run quietly to the token&#39;s natural expiry.</p>
+          <p>That is what rotation plus reuse detection buys, and MMCA.Common decides it once so every consuming Identity
+          module inherits the same answer instead of re-litigating it per app.</p>
+          <h2 id="the-mmca-answer-one-hashed-session-per-device-rotated-on-every-use">The MMCA answer: one hashed session per device, rotated on every use</h2>
+          <p>The whole workflow lives in one place: <code>AuthenticationServiceBase&lt;TUser&gt;</code>
+          (<code>AuthenticationServiceBase.cs:74</code>). Both apps&#39; Identity modules subclass it and change nothing about the
+          token logic. Here is the model, piece by piece.</p>
+          <p><strong>The access token is stateless; the refresh side is one row per signed-in device.</strong> The access token is a
+          signed JWT whose <code>exp</code> comes from <code>JwtSettings.AccessTokenExpirationMinutes</code> (default 15 minutes,
+          <code>JwtSettings.cs:61</code>), written by <code>TokenService.GenerateAccessToken</code> (<code>TokenService.cs:91</code>, expiry stamped at
+          <code>:138</code>). The refresh side is <code>RefreshSession</code>, a flat framework record with one row per signed-in device
+          (<code>RefreshSession.cs:31</code>): the user id, a token hash, an issue instant, an expiry, and revocation
+          bookkeeping (<code>:61,64,67,70,73,79,82</code>). Refresh tokens are deliberately absent from the credential contract
+          the user aggregate exposes to the workflow: <code>IAuthUser</code> carries password material only
+          (<code>IAuthUser.cs:9-14,20,23</code>). A user holds as many live sessions as they have signed-in devices, bounded by a
+          per-user cap (<code>AuthenticationServiceBase.cs:41-51</code>).</p>
+          <p><strong>The stored value is a digest, not the token.</strong> <code>TokenService.GenerateRefreshToken</code> draws 64 bytes from
+          <code>RandomNumberGenerator.GetBytes</code> and base64-encodes them (<code>TokenService.cs:145,147,148</code>). That plaintext
+          lives only in the response that hands it to the client. What the store keeps is <code>RefreshSession.TokenHash</code>,
+          an unsalted hex SHA-256 digest of the token&#39;s UTF-8 bytes (<code>RefreshSession.cs:63,160-163</code>), exactly 64
+          characters wide (<code>:33,34</code>). The digest is deterministic on purpose, because lookup is by hash: a presented
+          token finds its row through <code>FindByTokenHashAsync(RefreshSession.HashToken(token))</code>
+          (<code>AuthenticationServiceBase.cs:734-736</code>). A database read therefore yields digests, and a digest is not
+          something you can present.</p>
+          <p><strong>Issuing opens a session; refreshing rotates one.</strong> Login (<code>AuthenticationServiceBase.cs:245</code>) and
+          registration (<code>:330</code>) both route through <code>IssueTokensAsync</code> (<code>:554</code>), which opens a fresh session (<code>:566</code>,
+          body <code>OpenSessionAsync</code> at <code>:762</code>), saves it (<code>:572</code>), and returns the token pair (<code>:574-577</code>). Refresh runs
+          its own path. <code>RefreshTokenAsync</code> (<code>:334</code>) resolves the presented token to its session
+          (<code>ResolveRotatableSessionAsync</code>, called at <code>:379</code>, body <code>:723</code>) and then rotates it (<code>RotateAsync</code>, called
+          at <code>:387</code>, body <code>:801</code>). Rotation mints a successor session (<code>:809-816</code>) and claims the presented row
+          through <code>IRefreshSessionStore.TryRotateAsync</code> (<code>:824-826</code>), which revokes it and links it to that successor
+          via <code>ReplacedByTokenHash</code> (<code>RefreshSession.cs:46,79,174-186</code>). The consequence is the important part: the
+          instant a successor is issued, the token that bought it is spent, and the revoked row it leaves behind is
+          precisely what makes a replay visible. There is no grace period.</p>
+          <p><strong>Refresh binds to the same principal through the expired access token.</strong> <code>RefreshTokenAsync</code> requires the
+          client to present the just-expired access token alongside the refresh token, and runs it through
+          <code>TokenService.GetPrincipalFromExpiredToken</code> (<code>AuthenticationServiceBase.cs:348</code>). That method validates
+          issuer, audience, signing key, and the pinned algorithm, and skips only the lifetime check
+          (<code>TokenService.cs:164,168,169,170,172,177</code>, with the algorithm re-checked against the header at <code>:187</code>). An
+          unsigned, wrong-audience, or algorithm-swapped token yields no principal and the refresh fails
+          (<code>AuthenticationServiceBase.cs:349-353</code>). The user id rides the standard <code>sub</code> claim
+          (<code>TokenService.cs:100-106</code>), read at <code>AuthenticationServiceBase.cs:358</code> and used to load the account at
+          <code>:365</code>.</p>
+          <p><strong>Three rejections, deliberately different behind one error.</strong> <code>ResolveRotatableSessionAsync</code> (<code>:723</code>) is
+          the reuse-detection step, and it separates three cases the caller cannot tell apart. An unknown hash, or one
+          belonging to another account, says nothing about a live session and fails alone (<code>:738-741</code>): revoking the
+          family on it would let anyone holding one of this user&#39;s expired access tokens sign them out everywhere by
+          posting a random string. A <strong>revoked</strong> row means this exact token was already rotated away or signed out and
+          has come back, which is the BR-206 reuse signal, so every live session the user holds is revoked with reason
+          <code>ReuseDetected</code> (<code>:743-750</code>, <code>RefreshSession.cs:52</code>). An <strong>expired</strong> row is an ordinary end of life, so that
+          device re-authenticates and the user&#39;s other devices keep working (<code>:752-754</code>). All three answer with the
+          same <code>Auth.InvalidRefreshToken</code> error (<code>:883,884</code>), so the distinction lives in what happens behind it, not
+          in what the caller learns.</p>
+          <p><strong>A simultaneous replay gets the replay answer.</strong> Two requests presenting the same still-live token both
+          read an un-revoked row, so the store arbitrates rather than memory: <code>TryRotateAsync</code> decides which request
+          owns the rotation, and the one that loses the claim is treated exactly as a replay, whole live family
+          revoked (<code>:824-838</code>). A caller cannot distinguish the two situations, and neither does the workflow.</p>
+          <p><strong>The expiry slides on every rotation.</strong> Every session is stamped with its issue instant plus
+          <code>RefreshTokenLifetime</code>, both when one is opened (<code>:774</code>) and when a successor is minted (<code>:814</code>). That
+          property reads <code>TokenService.RefreshTokenLifetime</code> (<code>TokenService.cs:155</code>), derived from
+          <code>JwtSettings.RefreshTokenExpirationDays</code> (<code>JwtSettings.cs:64</code>, default 7 days). A device that refreshes at
+          least once inside each window stays signed in indefinitely; re-authentication is required only after a full
+          lifetime passes with no successful refresh, or after a revocation. If the configured value is non-positive,
+          the base falls back to the seven-day BR-205 default rather than failing startup
+          (<code>AuthenticationServiceBase.cs:145,146</code>; interface default <code>ITokenService.cs:40</code>).</p>
+          <p><strong>A per-user cap bounds the family.</strong> <code>MaxActiveSessionsPerUser</code> reads
+          <code>RefreshSessions:MaxActiveSessionsPerUser</code>, default 10, validated to the range 1-1000 at startup
+          (<code>:148-153</code>). Opening one session past the cap revokes the user&#39;s oldest live session with reason
+          <code>SessionCapExceeded</code> rather than refusing the sign-in (<code>EnforceSessionCapAsync</code> at <code>:864</code>, eviction loop
+          <code>:873-876</code>, reason constant <code>RefreshSession.cs:55</code>). Expired-but-unrevoked rows authenticate nobody and do
+          not count against the cap; they age out with the framework&#39;s retention sweep,
+          <code>RefreshSessionCleanupService</code> over the <code>RefreshSessions:RetentionDays</code> window (<code>:857-862</code>).</p>
+          <p><strong>Explicit revocation names one device or takes them all.</strong> <code>RevokeTokenAsync</code> (<code>:416</code>) accepts an optional
+          refresh token. A live session belonging to that user is revoked alone with reason <code>SignedOut</code>, which is the
+          sign-out-this-device path (<code>:431-447</code>). Anything else (an unknown token, another account&#39;s token, an
+          already-revoked row) leaves the caller unidentifiable, so the request degrades to revoking every live
+          session the user holds rather than reporting success for a revocation that reached nothing (<code>:450</code>).</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// ResolveRotatableSessionAsync: three rejections, one error (shape, not byte-for-byte).</span>
+<span class="hljs-keyword">var</span> session = <span class="hljs-keyword">await</span> refreshSessions.FindByTokenHashAsync(RefreshSession.HashToken(refreshToken), ct);
+
+<span class="hljs-keyword">if</span> (session <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span> || !session.UserId.Equals(userId))
+{
+    <span class="hljs-keyword">return</span> Failure(InvalidRefreshTokenError());   <span class="hljs-comment">// says nothing about a live session: fail alone</span>
+}
+
+<span class="hljs-keyword">if</span> (session.IsRevoked)                            <span class="hljs-comment">// this exact token was already spent, and came back</span>
+{
+    <span class="hljs-keyword">await</span> RevokeLiveSessionsAsync(userId, RefreshSession.ReasonReuseDetected, now, ct);
+    <span class="hljs-keyword">await</span> refreshSessions.SaveChangesAsync(ct);   <span class="hljs-comment">// BR-206: the whole live family goes</span>
+    <span class="hljs-keyword">return</span> Failure(InvalidRefreshTokenError());
+}
+
+<span class="hljs-keyword">return</span> session.ExpiresAt &lt;= now                   <span class="hljs-comment">// an ordinary end of life: this device alone</span>
+    ? Failure(InvalidRefreshTokenError())
+    : Success(session);
+
+<span class="hljs-comment">// RotateAsync: the store, not memory, decides which request owns the rotation.</span>
+<span class="hljs-keyword">var</span> successor = RefreshSession.Create(userId, tokenService.GenerateRefreshToken(), now, now.Add(RefreshTokenLifetime));
+<span class="hljs-keyword">if</span> (!<span class="hljs-keyword">await</span> refreshSessions.TryRotateAsync(session, successor.Value!, now, ct))
+{
+    <span class="hljs-keyword">await</span> RevokeLiveSessionsAsync(userId, RefreshSession.ReasonReuseDetected, now, ct);
+    <span class="hljs-keyword">return</span> Failure(InvalidRefreshTokenError());   <span class="hljs-comment">// lost the claim: answered exactly like a replay</span>
+}</code></pre>
+          <h2 id="both-apps-inherit-it-the-oauth-path-opens-the-same-session">Both apps inherit it; the OAuth path opens the same session</h2>
+          <p>The rotation, reuse detection, session cap, and lifetime logic are identical in ADC and Store because
+          neither one owns a copy. ADC&#39;s <code>AuthenticationService</code> (<code>AuthenticationService.cs:46</code>) and Store&#39;s
+          (<code>AuthenticationService.cs:22</code>) each take <code>ITokenService</code> and <code>IRefreshSessionStore</code> (ADC <code>:54</code>, Store
+          <code>:29</code>) and forward them into the base constructor (ADC <code>:56-64</code>, Store <code>:31-39</code>) along with the
+          refresh-session options carried on an app settings object. What the subclasses supply is app-specific hooks:
+          the claim set (ADC&#39;s <code>speaker_id</code>, Store&#39;s <code>customer_id</code>), the deactivated-account gates, the registration
+          side effect. The security-relevant token workflow is not in either subclass.</p>
+          <p>That single-source property is what makes ADC&#39;s external OAuth login (ADR-036) fall in line for free. The
+          external-login body (<code>AuthenticationService.cs:205</code>) ends by calling the shared <code>IssueTokensAsync</code> (<code>:304</code>),
+          so a federated sign-in opens a refresh session through exactly the path a password sign-in takes: hashed at
+          rest, counted against the same per-user cap, rotated through the same chain. A user who signed in with
+          Google gets the same guarantees as one who typed a password, because both go through the same base method.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>This model is a deliberate set of choices, and ADR-097 names the edges rather than hiding them.</p>
+          <ul>
+          <li><strong>Every device is its own row, so sign-ins grow a table.</strong> A session is a device fact rather than an
+          account fact, which is the point: signing in on a phone leaves the laptop signed in
+          (<code>AuthenticationServiceBase.cs:41-43</code>). The cost is unbounded growth without two guards, and both are
+          there: a per-user cap that evicts the oldest live session (<code>:864,873-876</code>) and a retention sweep that ages
+          the table out (<code>:857-862</code>). A revoked row is kept rather than deleted, because it is the evidence the
+          reuse check reads.</li>
+          <li><strong>Reuse detection is aggressive by design.</strong> Two browser tabs refreshing at the same instant present the
+          same still-live token, one of them loses the <code>TryRotateAsync</code> claim, and the loser is answered as a replay
+          with the family revoked (<code>:824-838</code>). A benign race is indistinguishable from theft, so failing closed is
+          chosen over a convenient short reuse-grace window.</li>
+          <li><strong>The refresh path is server-side write state.</strong> Unlike the fully stateless access token, every issue
+          inserts a row and every refresh revokes one and inserts its successor (<code>:762-787</code>, <code>:801-841</code>), so refresh
+          always costs a write to the Identity database. That is the price of being able to revoke.</li>
+          <li><strong>No absolute cap anchored to the opening login.</strong> Because the expiry is re-stamped on every rotation
+          (<code>:814</code>), the seven-day window bounds inactivity, not total session age, and a continuously active client
+          stays signed in indefinitely. The per-user cap bounds how many devices, and the retention sweep bounds how
+          long a dead row lingers, but neither ends a chain that keeps refreshing. An absolute cap on session age is
+          deliberately not imposed.</li>
+          <li><strong>A non-positive configured lifetime falls back silently.</strong> A zero or negative <code>RefreshTokenExpirationDays</code>
+          (or a test double reporting <code>TimeSpan.Zero</code> via the interface default, <code>ITokenService.cs:40</code>) is treated as
+          absent and reverts to the seven-day baseline rather than failing startup
+          (<code>AuthenticationServiceBase.cs:145,146</code>). A misconfiguration quietly reverts to the default instead of
+          surfacing an error.</li>
+          </ul>
+          <p>None of these are reasons to skip rotation. They are the reasons to wire it knowing what it does and does not
+          promise.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any stack with a JWT story:</p>
+          <ol>
+          <li><strong>Keep the access token short and stateless.</strong> Validate it by signature and expiry with no lookup, and set
+          a lifetime measured in minutes so the un-revocable window stays small.</li>
+          <li><strong>Give each device its own server-side session row, and rotate it on every refresh.</strong> One row per
+          sign-in, revoked and replaced the moment it is used, with the successor&#39;s identity recorded on the row it
+          replaced. The revoked row is not garbage: it is the detector.</li>
+          <li><strong>Store a digest, never the token.</strong> Make the refresh token opaque random bytes (sixty-four is plenty),
+          hand the plaintext to the client once, and keep only an unsalted hash so the lookup stays a single indexed
+          read and a database dump mints nothing.</li>
+          <li><strong>Bind refresh to the presented (expired) access token, and pin the algorithm.</strong> Read the principal from
+          the expired token while skipping only the lifetime check, and re-verify issuer, audience, key, and
+          algorithm so the token cannot tell you how to trust it.</li>
+          <li><strong>Split your rejections behind one error message.</strong> An unknown token fails alone, an expired session fails
+          alone, and a revoked session revokes the user&#39;s whole live family. Returning one indistinguishable error
+          for all three keeps the detector from doubling as an oracle.</li>
+          </ol>
+          <p>The takeaway: <strong>a refresh token you rotate on every use, store only as a hash, and answer with a family-wide
+          revoke the instant a spent one reappears, turns a long-lived stealable secret into a session that ends
+          itself.</strong> The stateless access token stays fast; the write on refresh is what buys you the ability to revoke
+          one device or all of them.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why a stateless access token forces a refresh token and a refresh token forces a theft
+          story, how MMCA.Common keeps one hashed <code>RefreshSession</code> row per signed-in device and rotates it through a
+          store-arbitrated claim, how a revoked row is the reuse signal that revokes a user&#39;s whole live family while
+          an expired one fails alone, and the honest trade-offs (a growing table, aggressive reuse detection, a
+          server-side write per refresh, no absolute session-age cap, a silent lifetime fallback) that come with
+          choosing to fail closed.</p>
+          <p><strong>Next in the series:</strong> the write-once REST surface every entity inherits: generic entity controllers that
+          give a new aggregate its full CRUD API without a hand-written controller per type.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-097 behind this
+          pattern, or <code>dotnet add package MMCA.Common.Application</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 ADR-097 (multi-device refresh sessions): <a href="../docs/adr/097-multi-device-refresh-sessions.html">ADR-097: Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Authentication, Security</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="external-oauth-login.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">26 · External OAuth login behind your own JWTs</span></a>
+          <a class="article-pager-link article-pager-link--next" href="generic-entity-controllers.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">28 · Generic entity controllers</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-one-hashed-session-per-device-rotated-on-every-use">The MMCA answer: one hashed session per device, rotated on every use</a></li>
+            <li><a href="#both-apps-inherit-it-the-oauth-path-opens-the-same-session">Both apps inherit it; the OAuth path opens the same session</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

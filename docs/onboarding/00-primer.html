@@ -174,7 +174,7 @@
           within every group, the per-type sections run in ascending dependency <strong>Level</strong>.</p>
           <h3 id="the-layered-dependency-flow-clean-architecture">The layered dependency flow (Clean Architecture)</h3>
           <p><code>MMCA.Common</code>&#39;s own layering, enforced top-to-bottom (<code>MMCA.Common/CLAUDE.md</code>, &quot;Architecture&quot;):</p>
-          <pre class="doc-pre"><code class="">API / Grpc        (presentation / transport)
+          <pre class="doc-pre" tabindex="0"><code class="">API / Grpc        (presentation / transport)
      ↓
 Infrastructure    (EF Core, caching, JWT, JWKS, outbox, message bus, SignalR)
      ↓
@@ -1123,7 +1123,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <p><a id="c-extensiont-types--read-this-once"></a></p>
           <p>C# 14 (preview) <strong>extension members</strong> let a static class add members to a type via an <code>extension</code>
           block:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DomainHelper</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DomainHelper</span>
 {
     extension(<span class="hljs-built_in">string</span>? id)                 <span class="hljs-comment">// receiver: the &quot;this&quot; value</span>
     {
@@ -1161,7 +1161,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <li><strong><code>*.slnx</code></strong>: the human solution (XML format). <code>*.slnf</code>, a <strong>solution filter</strong> used in CI to build
           a subset fast (<code>MMCA.Store.CI.slnf</code>, <code>MMCA.ADC.CI.slnf</code>).</li>
           <li><strong>Microsoft Testing Platform</strong>, not VSTest. To run one test class/method you target the test
-          project and pass an MTP filter after <code>--</code>:<pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --project Tests/&lt;path&gt;/&lt;Name&gt;.Tests.csproj -- --filter-method <span class="hljs-string">&quot;*Pattern*&quot;</span>
+          project and pass an MTP filter after <code>--</code>:<pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --project Tests/&lt;path&gt;/&lt;Name&gt;.Tests.csproj -- --filter-method <span class="hljs-string">&quot;*Pattern*&quot;</span>
 <span class="hljs-comment">#                                                      -- --filter-class  &quot;*FooTests*&quot;</span></code></pre>
           Always <code>--project &lt;csproj&gt;</code>, never a bare path, and get the flag right: a wrong filter flag exits
           5 having run zero tests instead of erroring out loudly. Every test project must contain at least

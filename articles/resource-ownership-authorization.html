@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Resource-ownership authorization: which rows you may touch, not just which actions · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Beyond roles and permissions: which rows you may touch, enforced per resource.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/resource-ownership-authorization.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Resource-ownership authorization: which rows you may touch, not just which actions">
+  <meta property="og:description" content="Beyond roles and permissions: which rows you may touch, enforced per resource.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/resource-ownership-authorization.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-29.png">
+  <meta property="og:image:alt" content="Resource-ownership authorization: which rows you may touch, not just which actions">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Resource-ownership authorization: which rows you may touch, not just which actions">
+  <meta name="twitter:description" content="Beyond roles and permissions: which rows you may touch, enforced per resource.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-29.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Resource-ownership authorization: which rows you may touch, not just which actions","description":"Beyond roles and permissions: which rows you may touch, enforced per resource.","url":"https://ivanball.github.io/articles/resource-ownership-authorization.html","mainEntityOfPage":"https://ivanball.github.io/articles/resource-ownership-authorization.html","image":"https://ivanball.github.io/assets/img/articles/article-29.png","datePublished":"2026-07-29T13:02:35Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":29,"sameAs":"https://medium.com/@ivanball76/resource-ownership-authorization-which-rows-you-may-touch-not-just-which-actions-cb8e78867bae"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"29 · Resource-ownership authorization","item":"https://ivanball.github.io/articles/resource-ownership-authorization.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">29 · Resource-ownership authorization</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html" aria-current="page">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 29</p>
+          <h1 id="resource-ownership-authorization-which-rows-you-may-touch-not-just-which-actions">Resource-ownership authorization: which rows you may touch, not just which actions</h1>
+          <p class="article-meta"><time datetime="2026-07-29T13:02:35Z">July 29, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/resource-ownership-authorization-which-rows-you-may-touch-not-just-which-actions-cb8e78867bae" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-29.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Article 24 covered what a role or permission lets you <em>do</em>. It said, explicitly, that
+          &quot;a customer may read only their own order&quot; is a different concern. This is that concern. RBAC answers
+          which action; ownership answers which rows, and the two are not the same check.</p>
+          <hr>
+          <p>Picture the role check passing. A request arrives with a valid token, the principal carries the
+          <code>Customer</code> role, and your policy says a customer may call <code>GET /orders/{id}</code>. Authorization succeeds.
+          Nothing is wrong with the role check. It answered the question it was built to answer: is this caller
+          allowed to read orders. It is allowed.</p>
+          <p>Now substitute the id. Customer A, fully authenticated, requests <code>GET /orders/9817</code>, an order that
+          belongs to customer B. The role check passes again, because the role check never looked at the id. It
+          cannot. A role is a property of the principal: &quot;this person may read orders.&quot; It says nothing about
+          <em>which</em> orders, because &quot;which&quot; is not a fact about the principal at all. It is a relation between the
+          principal and a specific row.</p>
+          <p>That is the axis RBAC structurally cannot express, and Article 24 said so out loud. Its trade-offs
+          section named the gap directly: &quot;A customer may read only their own order is a different concern (an
+          <code>OwnerOrAdminFilter</code>), and a route that needs both composes the two.&quot; The permission layer decoupled
+          endpoints from role names and then stopped, on purpose. This article is the mechanism it pointed at.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>The failure mode here has a name, and it is not obscure. The OWASP API Security Top 10 lists Broken
+          Object Level Authorization (the modern label for the classic Insecure Direct Object Reference, IDOR) as
+          API1, the number-one risk to web APIs. The shape is always the same: the endpoint authenticates the
+          caller, authorizes the <em>action</em>, and then trusts an id from the URL without checking that the row behind
+          that id belongs to the caller. Increment the integer, read someone else&#39;s invoice.</p>
+          <p>What makes it so common is that it hides behind a green light. Every role check passes. Every test that
+          asserts &quot;a customer can read an order&quot; passes. The hole only appears when the order in the URL is not the
+          caller&#39;s, and that is exactly the case a who-can-do-what test rarely sets up. You do not get a stack
+          trace. You get a 200 with the wrong customer&#39;s data in it.</p>
+          <p>So the missing axis is not a nicety layered on top of RBAC. It is the half of authorization that the
+          role model was never designed to carry, and leaving it implicit is how a perfectly &quot;authorized&quot; endpoint
+          leaks across tenants.</p>
+          <h2 id="the-mmca-answer-two-enforcement-points-one-bypass">The MMCA answer: two enforcement points, one bypass</h2>
+          <p>The first instinct is to look for a single ownership abstraction. There is not one, and ADR-033 is
+          explicit about why: there are two genuinely different problems wearing one name.</p>
+          <p>A single-resource route (<code>GET /orders/{id}</code>, <code>GET /customers/{id}</code>) has an id in the URL. The job is to
+          reject one request when that id is not the caller&#39;s. A collection route (<code>GET /orders</code>,
+          <code>GET /shoppingcarts</code>) has no id to check. The job is to narrow the result set to the caller&#39;s own rows
+          before it is ever returned. Reject-one and filter-many cannot be the same mechanism: a filter cannot
+          narrow a list without re-running the query, and a query predicate cannot 403 a single bad id. MMCA.Common
+          ships one piece for each, keyed on the same claim, sharing the same bypass role, and a third piece that
+          exists only because the filter refuses to guess: an attribute an action uses to declare that it has no
+          owner parameter to compare.</p>
+          <p><strong>Single-resource routes get an action filter.</strong> <code>OwnerOrAdminFilter</code>
+          (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:31</code>) is a sealed
+          <code>IAsyncActionFilter</code> whose primary constructor takes <code>ICurrentUserService</code> and an
+          <code>IOptions&lt;OwnerOrAdminFilterOptions&gt;</code> (<code>OwnerOrAdminFilter.cs:32-33</code>), so the vocabulary it enforces is
+          host-configurable. It short-circuits to the action for a caller in the bypass role
+          (<code>OwnerOrAdminFilter.cs:43</code>, passing the configured <code>settings.BypassRole</code>); otherwise it reads the
+          caller&#39;s owner claim via <code>GetClaimValue&lt;int&gt;(settings.OwnerClaimType)</code> (<code>OwnerOrAdminFilter.cs:49</code>;
+          <code>OwnerClaimType</code> defaults to <code>customer_id</code>, <code>OwnerOrAdminFilterOptions.cs:16</code>) and returns a
+          <code>ForbidResult</code> (HTTP 403) if that claim is missing (<code>OwnerOrAdminFilter.cs:51</code>,
+          <code>OwnerOrAdminFilter.cs:53</code>) or if the requested owner parameter resolves to an int that does not equal
+          the claim (<code>OwnerOrAdminFilter.cs:73</code>, <code>OwnerOrAdminFilter.cs:75</code>). That parameter
+          (<code>OwnerParameterName</code>, default <code>id</code>, <code>OwnerOrAdminFilterOptions.cs:31</code>) is read from either a route
+          value (<code>OwnerOrAdminFilter.cs:95-97</code>) or, when absent from the route, a model-bound query or body
+          argument (<code>OwnerOrAdminFilter.cs:102-104</code>), by <code>TryGetOwnerParameter</code> (<code>OwnerOrAdminFilter.cs:93</code>,
+          called at <code>OwnerOrAdminFilter.cs:57</code>), both parses invariant-culture. Only a matching owner value falls
+          through to the action (<code>OwnerOrAdminFilter.cs:79</code>). It is registered as a scoped service by <code>AddAPI</code>
+          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:85</code>, <code>AddAPI</code> declared at <code>:45</code>) and
+          applied per controller as <code>[ServiceFilter(typeof(OwnerOrAdminFilter))]</code>.</p>
+          <p><strong>The framework names no roles, so the host must.</strong> <code>BypassRole</code> is <code>[Required]</code> with no default
+          (<code>OwnerOrAdminFilterOptions.cs:23-24</code>), and <code>AddAPI</code> registers the options with
+          <code>ValidateDataAnnotations()</code> and deliberately not <code>ValidateOnStart()</code> (<code>DependencyInjection.cs:91-92</code>,
+          the rationale at <code>:87-90</code>): validating at startup would fail every host that never applies the filter,
+          so the data-annotation message lands on first resolve, in front of the host that actually uses it. A
+          host that applies the filter without naming a role gets that failure rather than a silent bypass for
+          nobody.</p>
+          <p><strong>And when there is nothing to compare, the filter denies.</strong> That is the interesting default, because the
+          obvious one is wrong. If <code>TryGetOwnerParameter</code> cannot resolve the parameter (absent, not an int, or
+          carried inside a bound model), the request gets a <code>ForbidResult</code> (<code>OwnerOrAdminFilter.cs:57</code>,
+          <code>OwnerOrAdminFilter.cs:63</code>). Falling through to the action instead would read &quot;nothing to compare&quot; as
+          &quot;nothing to enforce&quot;, which silently stops guarding any action whose parameter is optional or not an
+          integer: the guard disappears with no error, no exception and nothing for a who-can-do-what test to
+          catch. ADR-033 records deny-by-default as the deliberate choice
+          (<code>033-resource-ownership-authorization.md:71-82</code>). An action that genuinely has no owner parameter says
+          so out loud with <code>[AllowMissingOwner]</code>
+          (<code>Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:21</code>, an
+          <code>AttributeTargets.Class | AttributeTargets.Method</code> attribute with <code>Inherited = true</code>,
+          <code>AllowMissingOwnerAttribute.cs:20</code>), which the filter honors on the action or its declaring controller
+          through the endpoint metadata (<code>HasAllowMissingOwner</code>, <code>OwnerOrAdminFilter.cs:61</code>,
+          <code>OwnerOrAdminFilter.cs:84</code>). The opt-out excuses a <em>missing</em> parameter only: an action carrying a foreign
+          owner id is still denied, and a missing owner claim is still denied regardless.</p>
+          <p><strong>Collection routes get an ownership Specification.</strong> <code>OwnershipHelper</code>
+          (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10</code>) is a static helper. Its
+          <code>GetOwnershipSpecification&lt;TSpec, TId&gt;</code> (<code>OwnershipHelper.cs:34</code>) takes the bypass role as a required
+          argument (<code>OwnershipHelper.cs:38</code>) and returns <code>null</code> for a caller who holds it
+          (<code>OwnershipHelper.cs:45</code>, <code>OwnershipHelper.cs:47</code>), and otherwise reads the caller&#39;s id claim
+          (<code>GetClaimValue&lt;TId&gt;(claimType)</code>, <code>OwnershipHelper.cs:50</code>) and builds a specification through a supplied
+          factory (<code>OwnershipHelper.cs:51</code>); a convenience overload defaults the claim name to <code>&quot;customer_id&quot;</code>
+          (<code>OwnershipHelper.cs:64-69</code>, the literal at <code>:69</code>) and still requires the role (<code>:67</code>). The object it
+          hands back is a <code>Specification&lt;TEntity, TIdentifierType&gt;</code>
+          (<code>Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:15</code>) whose <code>Criteria</code> is an
+          EF-translatable expression tree (<code>Specification.cs:23</code>). That is the same specification type from Article
+          6: it slots straight into the existing query pipeline, which translates the predicate to SQL, so a scoped
+          list query returns only the caller&#39;s rows. A <code>null</code> specification (the bypass case) applies no filter,
+          and because these are real specifications they compose, an <code>AndSpecification</code> (<code>Specification.cs:81</code>)
+          ties the ownership scope to any other criteria a query already carries.</p>
+          <p><strong>One bypass role, on both.</strong> Both points call <code>OwnershipHelper.IsAdmin</code> (<code>OwnershipHelper.cs:17</code>), which
+          compares <code>ICurrentUserService.Role</code>
+          (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:22</code>) to the
+          <code>bypassRole</code> its caller supplies, case-insensitively (<code>OwnershipHelper.cs:20</code>). That parameter has no
+          default value, and the XML doc says why: the framework declares no role names
+          (<code>OwnershipHelper.cs:13-15</code>). MMCA.Store passes its own <code>RoleNames.Admin</code> at both points
+          (<code>OrdersController.cs:67</code>, <code>OrdersController.cs:69-71</code>). One predicate, consulted by the filter and by
+          the helper, so a privileged caller sees and touches any resource through either path and you do not
+          maintain two definitions of &quot;may see everything.&quot;</p>
+          <p>Notice the two deliberately different failure shapes. The single-resource filter denies with a 403
+          <code>ForbidResult</code>. The collection path never 403s: it returns a filtered, possibly empty, result set. Both
+          flow through the caller&#39;s normal <code>Result</code>/HTTP edge, not exceptions.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Illustrative of shape: the two enforcement points, assembled from the real members.</span>
+
+<span class="hljs-comment">// (1) Single-resource: the filter&#x27;s core check (OwnerOrAdminFilter.cs:43-79), options-driven.</span>
+<span class="hljs-keyword">var</span> settings = options.Value;   <span class="hljs-comment">// OwnerOrAdminFilterOptions: OwnerClaimType, BypassRole, OwnerParameterName</span>
+
+<span class="hljs-keyword">if</span> (OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole))
+{
+    <span class="hljs-keyword">await</span> next().ConfigureAwait(<span class="hljs-literal">false</span>);   <span class="hljs-comment">// bypass-role short-circuit, both points share this predicate</span>
+    <span class="hljs-keyword">return</span>;
+}
+
+<span class="hljs-keyword">var</span> ownerId = currentUserService.GetClaimValue&lt;<span class="hljs-built_in">int</span>&gt;(settings.OwnerClaimType);   <span class="hljs-comment">// default claim: customer_id</span>
+<span class="hljs-keyword">if</span> (ownerId <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>) { context.Result = <span class="hljs-keyword">new</span> ForbidResult(); <span class="hljs-keyword">return</span>; }   <span class="hljs-comment">// 403: no claim</span>
+
+<span class="hljs-comment">// OwnerParameterName (default &quot;id&quot;) is read from a route value OR a model-bound query/body argument.</span>
+<span class="hljs-keyword">if</span> (!TryGetOwnerParameter(context, settings.OwnerParameterName, <span class="hljs-keyword">out</span> <span class="hljs-keyword">var</span> requestedId))
+{
+    <span class="hljs-comment">// Deny by default: nothing to compare is not nothing to enforce. An action with no owner</span>
+    <span class="hljs-comment">// parameter opts out explicitly with [AllowMissingOwner] and names the guard that replaces this.</span>
+    <span class="hljs-keyword">if</span> (!HasAllowMissingOwner(context))
+    {
+        context.Result = <span class="hljs-keyword">new</span> ForbidResult();   <span class="hljs-comment">// 403: unresolvable owner parameter</span>
+    }
+    <span class="hljs-keyword">else</span>
+    {
+        <span class="hljs-keyword">await</span> next().ConfigureAwait(<span class="hljs-literal">false</span>);
+    }
+
+    <span class="hljs-keyword">return</span>;
+}
+
+<span class="hljs-keyword">if</span> (requestedId != ownerId.Value)
+{
+    context.Result = <span class="hljs-keyword">new</span> ForbidResult();   <span class="hljs-comment">// 403: requested owner is not the caller&#x27;s</span>
+    <span class="hljs-keyword">return</span>;
+}
+
+<span class="hljs-keyword">await</span> next().ConfigureAwait(<span class="hljs-literal">false</span>);   <span class="hljs-comment">// only a matching owner value gets here</span>
+
+<span class="hljs-comment">// (2) Collection: row-scope the list query with an ownership Specification (a controller).</span>
+<span class="hljs-comment">//     The bypass role gets null (no filter); everyone else gets a spec the query translates to SQL.</span>
+<span class="hljs-comment">//     BypassRole is required and has no default, so the host names it (Store: RoleNames.Admin).</span>
+<span class="hljs-keyword">private</span> OrdersByCustomerSpecification? GetOwnershipSpecification() =&gt;
+    OwnershipHelper.GetOwnershipSpecification(
+        currentUserService, id =&gt; <span class="hljs-keyword">new</span> OrdersByCustomerSpecification(id), RoleNames.Admin);</code></pre>
+          <h2 id="how-mmcastore-wires-it">How MMCA.Store wires it</h2>
+          <p>This is not framework-only theory. MMCA.Store turns both points on in production. The filter guards the
+          shopping-cart and customer-profile controllers as a class-level
+          <code>[ServiceFilter(typeof(OwnerOrAdminFilter))]</code>
+          (<code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:50</code>,
+          <code>MMCA.Store/.../Identity.API/Controllers/CustomersController.cs:35</code>). The ownership specification scopes
+          the list and read queries: <code>ShoppingCartsController</code> builds a <code>ShoppingCartByCustomerSpecification</code>
+          through a private <code>GetOwnershipSpecification()</code> method (<code>ShoppingCartsController.cs:67-69</code>) that filters
+          by <code>Id</code>, because a cart is keyed by its customer
+          (<code>ShoppingCartByCustomerSpecification.cs:24</code>, <code>cart =&gt; cart.Id.Equals(customerId)</code>), and <code>OrdersController</code>
+          builds an <code>OrdersByCustomerSpecification</code> the same way
+          (<code>OrdersController.cs:69-71</code>) that filters by <code>CustomerId</code>
+          (<code>OrdersByCustomerSpecification.cs:18</code>, <code>order =&gt; order.CustomerId.Equals(customerId)</code>), passing it into
+          each of its three query call sites (<code>OrdersController.cs:110</code>, <code>:148</code>, <code>:182</code>). Both hand the helper
+          Store&#39;s own <code>RoleNames.Admin</code>, because the framework offers no role name to fall back on.</p>
+          <p>Because both filtered controllers apply the filter at class level, deny-by-default forced an audit of
+          every action on them, and the ones with no owner parameter carry <code>[AllowMissingOwner]</code>: nine
+          application sites across the two, each with a comment naming the guard that replaces the parameter check.
+          Four are on <code>ShoppingCartsController</code> (<code>ShoppingCartsController.cs:99</code>, <code>:114</code>, <code>:143</code>, <code>:179</code>): the two
+          cart list overloads are narrowed to the caller by the controller&#39;s <code>GetReadSpecificationAsync</code> override,
+          so ownership is enforced in the query rather than on a route value, the lookup endpoint is gated by
+          <code>[HasPermission(SalesPermissions.ShoppingCartsManage)]</code> (<code>:145</code>), and the CSV export is row-scoped the
+          same way the lists are (more on that below). Five are on <code>CustomersController</code>
+          (<code>CustomersController.cs:50</code>, <code>:62</code>, <code>:79</code>, <code>:111</code>, <code>:132</code>), all of them gated by
+          <code>[HasPermission(IdentityPermissions.CustomersManage)]</code> (<code>:52</code>, <code>:64</code>, <code>:81</code>, <code>:113</code>, <code>:131</code>), a capability
+          rather than a role name (ADR-020). The last of those, <code>CreateAsync</code>, is the telling one: its remarks say
+          that a guard which holds by accident is one a later signature change can remove without anyone noticing
+          (<code>CustomersController.cs:124-129</code>).</p>
+          <p><code>OrdersController</code> is the instructive one. It does <em>not</em> wear the class-level filter, because an order has
+          its own id and a separate foreign-key owner, so comparing the route <code>id</code> directly to <code>customer_id</code> would
+          be wrong. Instead it runs an explicit per-mutation ownership check, <code>ValidateOwnershipAsync</code>
+          (<code>OrdersController.cs:507</code>), which reuses the same <code>OwnershipHelper.IsAdmin</code> bypass through its <code>IsAdmin</code>
+          property (<code>OrdersController.cs:67</code>) and then splits into two denial shapes on purpose. A caller carrying no
+          <code>customer_id</code> claim at all gets <code>Error.Forbidden</code>, a 403 (<code>OrdersController.cs:515</code>,
+          <code>OrdersController.cs:517-521</code>): nothing was looked up, so there is no resource whose existence a 403 could
+          leak, and this matches the filter&#39;s own missing-claim <code>ForbidResult</code>. Only an owner <em>mismatch</em>, where the
+          claim is present but the order is someone else&#39;s, returns <code>Error.NotFound</code>, a <strong>404 rather than a 403</strong>
+          (<code>OrdersController.cs:530-532</code>), so the response does not reveal that another
+          customer&#39;s order exists (the rationale is in the method&#39;s own summary, <code>OrdersController.cs:502-506</code>).
+          That is the same axis, hand-fit to a resource whose owning id is not its route id.</p>
+          <p>The query endpoints carry a third guard the mutating check does not need, and both filtered controllers
+          carry it. <code>RequireResolvableOwner</code> (<code>OrdersController.cs:83-93</code>) runs before the query on both
+          <code>GetAllAsync</code> overloads and <code>GetByIdAsync</code> (call sites at <code>OrdersController.cs:103</code>, <code>:137</code>, <code>:174</code>). It
+          exists because <code>GetOwnershipSpecification()</code> returns <code>null</code> for two different reasons, a bypass-role
+          caller (scoping deliberately skipped) or a caller whose <code>customer_id</code> claim cannot be resolved, and only
+          the first may run unscoped. <code>RequireResolvableOwner</code> rejects the second with the same <code>Error.Forbidden</code>,
+          a 403, before the query ever runs, mirroring the missing-claim branch of <code>ValidateOwnershipAsync</code> for
+          reads and lists too. <code>ShoppingCartsController</code> carries an identically named gate
+          (<code>ShoppingCartsController.cs:81-91</code>, called at <code>:107</code>, <code>:127</code> and <code>:189</code>), even though its class-level
+          filter already refuses a claim-less caller through the missing-claim branch: a guard that holds by
+          accident is one a later change can remove without anyone noticing, so the collection reads state it
+          themselves. Both controllers&#39; class-level doc comments name the pair that fail closed
+          (<code>OrdersController.cs:38-45</code>, <code>ShoppingCartsController.cs:35-44</code>).</p>
+          <p>The CSV export is where the two mechanisms meet, and the hook that joins them scopes every read. Without
+          a scoping hook the framework export would query with <code>specification: null</code>, and a Customer-role token
+          would read every customer&#39;s rows, so the gate is an extension point rather than a blanket role lock:
+          <code>EntityControllerBase.GetReadSpecificationAsync()</code>
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:597-599</code>) is virtual and
+          supplies the specification for every read action, both <code>GetAllAsync</code> overloads, <code>GetAllForLookupAsync</code>,
+          <code>GetByIdAsync</code> and <code>ExportAsync</code> (summary at <code>EntityControllerBase.cs:562-567</code>). It defaults to
+          <code>GetExportSpecification()</code> (<code>EntityControllerBase.cs:626</code>), itself virtual and <code>null</code>, so a controller
+          that overrides neither queries unscoped. The export resolves the hook once per request, so the same
+          instance filters every page it streams (<code>EntityControllerBase.cs:263-264</code>), and a scoped <code>GetByIdAsync</code>
+          that filters a row out answers 404 rather than 403, because a &quot;forbidden&quot; would confirm the id exists
+          (<code>EntityControllerBase.cs:588-590</code>). <code>ShoppingCartsController</code> overrides the read hook
+          (<code>ShoppingCartsController.cs:207-209</code>, summary <code>:194-198</code>) and <code>OrdersController</code> overrides the export
+          hook (<code>OrdersController.cs:249-250</code>, summary <code>:242-247</code>), both returning the same
+          <code>GetOwnershipSpecification()</code> their list endpoints use, so it is the query and not the role that keeps one
+          customer out of another&#39;s rows, and each export still runs the <code>RequireResolvableOwner</code> gate
+          (<code>OrdersController.cs:237</code>, <code>ShoppingCartsController.cs:189</code>) that rejects the other caller a <code>null</code> can
+          stand for. <code>CustomersController</code> deliberately does not follow. Its collection reads are not row-scoped,
+          they are gated by the customer-management capability, so there is no ownership specification to reproduce,
+          and relaxing the export would make it more permissive than the list it mirrors
+          (<code>CustomersController.cs:87-102</code>, the gate at <code>:113</code>). The hook exists to make an export match its list
+          endpoints: where the list is scoped by a query, so is the export, and where the list is gated by a
+          capability, so is the export.</p>
+          <p>The options are what make the filter portable, and MMCA.ADC proves it on both halves. ADC applies the same
+          <code>OwnerOrAdminFilter</code> to its two bookmarks GET endpoints as a <code>[ServiceFilter(typeof(OwnerOrAdminFilter))]</code>
+          (<code>MMCA.ADC/.../Engagement.API/Controllers/BookmarksController.cs:85</code> for the <code>[HttpGet]</code> at <code>:84</code>, and
+          <code>BookmarksController.cs:106</code> for the <code>[HttpGet(&quot;session-ids&quot;)]</code> at <code>:105</code>), and configures
+          <code>OwnerOrAdminFilterOptions</code> with its own vocabulary in <code>AddModuleEngagementAPI</code>
+          (<code>Engagement.API/DependencyInjection.cs:43</code>, the <code>Configure</code> call at <code>:45</code>): the
+          <code>ClaimTypes.NameIdentifier</code> claim that the JWT bearer handler maps the token&#39;s <code>sub</code> onto (<code>:53</code>, with
+          the reasoning at <code>:47-52</code>), an <code>Organizer</code> bypass role (<code>:54</code>), and a <code>userId</code> query argument instead of a
+          route <code>id</code> (<code>:55</code>). The row-level half travels too: two Conference controllers override
+          <code>GetExportSpecification()</code> through the same <code>OwnershipHelper.GetOwnershipSpecification</code>, yielding an
+          <code>OwnedByUserSpecification</code> for an attendee and <code>null</code> for an Organizer
+          (<code>MMCA.ADC/.../Conference.API/Controllers/Events/EventQuestionAnswersController.cs:85-90</code>,
+          <code>MMCA.ADC/.../Conference.API/Controllers/Sessions/SessionQuestionAnswersController.cs:107-112</code>). Same
+          filter, same helper, different words, because the words are options rather than literals.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>The §11 review is blunt about the edges of this, and they are real.</p>
+          <ul>
+          <li><strong>It is claim-trusting, not ABAC.</strong> Both points key entirely on the configured owner claim
+          (<code>customer_id</code> by default, <code>ClaimTypes.NameIdentifier</code> in ADC) being present and correct. They do not
+          evaluate arbitrary resource attributes, ownership hierarchies, or delegated access. The question they
+          answer is the narrow &quot;is this row mine,&quot; with one bypass role, and nothing richer. If your rules need
+          resource attributes or shared ownership, this is not that mechanism, and a parameter would not make it
+          that mechanism.</li>
+          <li><strong>Its correctness rests on the token.</strong> Because the check trusts the owner claim, it is exactly as
+          trustworthy as the upstream token validation that put the claim there (ADR-004). A missing claim 403s in
+          the filter and yields a <code>null</code> specification in the helper, and that <code>null</code> means &quot;no scoping,&quot; so a
+          caller must never read a missing claim as the bypass role. The validated principal is load-bearing.</li>
+          <li><strong>It is opt-in, so the risk moved rather than vanished.</strong> Neither point is automatic. A controller that
+          omits the <code>[ServiceFilter]</code>, or a query that forgets to pass the ownership specification, leaks across
+          customers silently. The two-point split sharpens the risk: one route can guard its mutations and forget
+          to scope its list, or the reverse. Inside a controller that <em>does</em> wear the filter, deny-by-default
+          makes a forgotten guard fail closed and visible: an unresolvable owner parameter 403s rather than
+          slipping through, so every exemption is a declared <code>[AllowMissingOwner]</code> you have to justify in review.
+          That is a better failure mode, not a solved problem, because the attribute is an assertion the compiler
+          cannot check. This is the same audit-the-inventory caveat the permission layer and the idempotency
+          filter carry, and it is honest to name it.</li>
+          <li><strong>The filter compares an owner parameter, not the resource&#39;s own key.</strong> It checks its configured
+          <code>OwnerParameterName</code> (default <code>id</code>), resolved from a route value or a model-bound query or body argument,
+          against the configured owner claim. That works when the parameter <em>is</em> the owning id, as for a cart or a
+          customer profile keyed by the customer. It does not hold for an order, whose own id differs from its
+          foreign-key owner, which is why Store&#39;s <code>OrdersController</code> reaches for the specification and an explicit
+          check instead of the class filter. The comparison is still claim-trusting and not ABAC: it matches an id
+          against a claim, it does not evaluate resource attributes. Pick the tool that matches how the resource is
+          keyed.</li>
+          </ul>
+          <p>None of these argue for leaving ownership implicit. They are the boundary of what a claim-trusting
+          ownership axis is for, and the boundary is the point.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern carries to any web API, framework or not:</p>
+          <ol>
+          <li><strong>Treat ownership as a second axis, not a corollary of the role check.</strong> &quot;May read orders&quot; and &quot;may
+          read <em>this</em> order&quot; are different questions. Answer both, explicitly, at every route that takes an id.</li>
+          <li><strong>Split reject-one from filter-many.</strong> Single-resource routes 403 on a mismatch. Collection routes
+          push an ownership predicate into the query so the list comes back already scoped. Do not try to make
+          one mechanism do both: post-filtering a fetched list leaks and breaks paging counts.</li>
+          <li><strong>Express the row-scope as a composable predicate.</strong> A specification (or any reusable, query-translatable
+          predicate) lets the ownership filter ride the same query path as sorting and paging, and <code>And</code>-compose
+          with whatever else the query already filters on.</li>
+          <li><strong>Give the two points one shared bypass, and let the host name it.</strong> Define &quot;may see everything&quot; once,
+          have both the filter and the query-scoper consult it, and keep the role name in configuration so the
+          library never ships a role your application did not declare.</li>
+          <li><strong>Trust the claim only as far as you trust the token.</strong> Ownership keyed on a claim is only as sound as
+          the validation that issued it, and a missing claim must fail closed, never default to the bypass role.</li>
+          </ol>
+          <p>The takeaway: <strong>a passing role check is half an answer. RBAC tells you the caller may perform the action;
+          ownership tells you which rows the action may touch, and a route that handles user data needs both, kept
+          as separate, composable checks.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why a role check that passes can still leak another customer&#39;s data (the Broken
+          Object Level Authorization / IDOR risk RBAC structurally cannot see), the axis Article 24 explicitly
+          scoped out, how MMCA.Common fills it with two enforcement points (<code>OwnerOrAdminFilter</code> that 403s a
+          single-resource route whose <code>id</code> mismatches the caller&#39;s owner claim, and <code>OwnershipHelper</code> that
+          builds an ownership <code>Specification</code> to row-scope collection queries) sharing one <code>IsAdmin</code> bypass whose
+          role name the host supplies, why the
+          filter denies when it cannot resolve an owner parameter and how <code>[AllowMissingOwner]</code> makes each exemption
+          explicit, how MMCA.Store wires all of it (why <code>OrdersController</code> splits its denials, 403 for a missing
+          claim and 404 for someone else&#39;s order, instead of using the class filter, and how both Sales controllers
+          row-scope their CSV export through the <code>GetReadSpecificationAsync</code> and <code>GetExportSpecification</code> hooks
+          rather than gating it to a role), and the honest limits: it is
+          claim-trusting not ABAC, it trusts the token (ADR-004), and it is opt-in so a controller that never
+          applies it still leaks.</p>
+          <p><strong>Next in the series:</strong> defending the API edge, rate limiting for authenticated callers and brute-force
+          protection for the anonymous auth surface.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-033 behind this
+          pattern, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 ADR-033 (resource-ownership authorization): <a href="../docs/adr/033-resource-ownership-authorization.html">ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Security, Software Architecture, Web API</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="generic-entity-controllers.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">28 · Generic entity controllers</span></a>
+          <a class="article-pager-link article-pager-link--next" href="rate-limiting-brute-force-protection.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">30 · Rate limiting and brute-force protection</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-two-enforcement-points-one-bypass">The MMCA answer: two enforcement points, one bypass</a></li>
+            <li><a href="#how-mmcastore-wires-it">How MMCA.Store wires it</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

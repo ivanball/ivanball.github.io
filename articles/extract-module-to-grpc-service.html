@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Extracting a module to a gRPC service, live · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A step-by-step extraction of an in-process module into its own gRPC service, database, and auth.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/extract-module-to-grpc-service.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Extracting a module to a gRPC service, live">
+  <meta property="og:description" content="A step-by-step extraction of an in-process module into its own gRPC service, database, and auth.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/extract-module-to-grpc-service.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-32.png">
+  <meta property="og:image:alt" content="Extracting a module to a gRPC service, live">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Extracting a module to a gRPC service, live">
+  <meta name="twitter:description" content="A step-by-step extraction of an in-process module into its own gRPC service, database, and auth.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-32.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Extracting a module to a gRPC service, live","description":"A step-by-step extraction of an in-process module into its own gRPC service, database, and auth.","url":"https://ivanball.github.io/articles/extract-module-to-grpc-service.html","mainEntityOfPage":"https://ivanball.github.io/articles/extract-module-to-grpc-service.html","image":"https://ivanball.github.io/assets/img/articles/article-32.png","datePublished":"2026-08-01T13:30:35Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":32,"sameAs":"https://medium.com/@ivanball76/extracting-a-module-to-a-grpc-service-live-799926cf8a32"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"32 · Extracting a module to a gRPC service","item":"https://ivanball.github.io/articles/extract-module-to-grpc-service.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">32 · Extracting a module to a gRPC service</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html" aria-current="page">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Run &amp; extract · No. 32</p>
+          <h1 id="extracting-a-module-to-a-grpc-service-live">Extracting a module to a gRPC service, live</h1>
+          <p class="article-meta"><time datetime="2026-08-01T13:30:35Z">August 1, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/extracting-a-module-to-a-grpc-service-live-799926cf8a32" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-32.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A step-by-step walkthrough of lifting a module out of the monolith into its own gRPC
+          service without rewriting application code. Define a contract, wire a typed client, flip the message bus
+          to a broker, federate auth with JWKS, orchestrate with Aspire, route through a gateway. And it stays
+          reversible.</p>
+          <hr>
+          <p>&quot;We will start as a monolith and split into services later&quot; is one of the most common architecture
+          promises, and one of the most commonly broken. The split gets deferred because, when the day comes,
+          &quot;later&quot; turns out to mean a rewrite: the application code is tangled with the transport, the calls
+          between modules are direct method calls that assume a shared process, and pulling one module out means
+          touching everything.</p>
+          <p>MMCA.Common&#39;s thesis is that the split should be a wiring change, not a rewrite, and the way you earn
+          that is by holding one invariant from day one. This article walks through extracting a module live,
+          step by step, and the whole walkthrough only works because of step zero.</p>
+          <h2 id="step-0-the-starting-invariant">Step 0: the starting invariant</h2>
+          <p>The precondition that makes everything else possible: <strong>application and domain code already talk to
+          abstractions, and transport choices live at the edges.</strong></p>
+          <p>Concretely, that means two things were true while the code still ran as a monolith:</p>
+          <ul>
+          <li>Asynchronous, fire-and-forget flows go through <code>IMessageBus</code>, defined in
+          <code>MMCA.Common.Application</code>. The application never references the broker library.</li>
+          <li>Synchronous cross-module calls go through a plain C# interface (for example
+          <code>IBookmarkCountService</code>), resolved from DI. The caller does not know whether the implementation is an
+          in-process object or something else.</li>
+          </ul>
+          <p>This invariant is not a hope. It is enforced. <code>MicroserviceExtractionTests</code> in the architecture suite
+          fail the build if <code>MassTransit</code>, gRPC, or Protobuf types appear in any Domain, Application, or Shared
+          assembly. So you cannot accidentally couple the core to a transport during normal development, which
+          means when extraction day arrives the core is genuinely host-agnostic. If your codebase does not have
+          this property, stop here and fix that first. Everything below assumes it.</p>
+          <p>We will extract a module (call it Engagement) whose interface <code>IBookmarkCountService</code> a peer module
+          (Conference) calls synchronously.</p>
+          <h2 id="step-1-define-the-contracts-project">Step 1: define the .Contracts project</h2>
+          <p>The wire surface lives in its own project whose name ends in <code>.Contracts</code>. That suffix is load-bearing.
+          <code>Directory.Build.props</code> gives any <code>*.Contracts</code> project special treatment: it auto-pulls <code>Grpc.Tools</code>
+          and <code>Google.Protobuf</code> and compiles every <code>Protos/**/*.proto</code> with <code>GrpcServices=&quot;Both&quot;</code>, generating
+          <strong>both</strong> the server base class and the client stub. One shared package serves the producer and the
+          consumer.</p>
+          <pre class="doc-pre" tabindex="0"><code class="">MMCA.App.Engagement.Contracts/
+├── MMCA.App.Engagement.Contracts.csproj   # name ends in .Contracts -&gt; proto auto-compile
+└── Protos/
+    └── bookmark_count.proto                # GrpcServices=&quot;Both&quot; applied by Directory.Build.props</code></pre>
+          <pre class="doc-pre" tabindex="0" data-lang="Protobuf"><code class="language-protobuf hljs"><span class="hljs-comment">// Protos/bookmark_count.proto</span>
+syntax = <span class="hljs-string">&quot;proto3&quot;</span>;
+<span class="hljs-keyword">service </span><span class="hljs-title class_">BookmarkCountService</span> {
+  <span class="hljs-function"><span class="hljs-keyword">rpc</span> GetCount (GetCountRequest) <span class="hljs-keyword">returns</span> (GetCountResponse)</span>;
+}
+<span class="hljs-keyword">message </span><span class="hljs-title class_">GetCountRequest</span>  { <span class="hljs-type">int32</span> session_id = <span class="hljs-number">1</span>; }
+<span class="hljs-keyword">message </span><span class="hljs-title class_">GetCountResponse</span> { <span class="hljs-type">int32</span> count = <span class="hljs-number">1</span>; }</code></pre>
+          <p>The contract project also ships a hand-written <strong>gRPC adapter</strong> that implements the same C# interface
+          the modules already used in-process. The adapter holds the generated client and translates an interface
+          call into a gRPC call and the proto response back into the C# return type. Because both the in-process
+          implementation and the adapter satisfy the identical <code>IBookmarkCountService</code>, swapping monolith for
+          microservice is a registration change. The application code that calls <code>IBookmarkCountService</code> never
+          changes.</p>
+          <h2 id="step-2-server-side-addgrpcservicedefaults">Step 2: server side, AddGrpcServiceDefaults()</h2>
+          <p>In the extracted Engagement service&#39;s host, register the gRPC server defaults and map the service:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Engagement.Service Program.cs</span>
+builder.Services.AddGrpcServiceDefaults();   <span class="hljs-comment">// from MMCA.Common.Grpc</span>
+...
+app.MapGrpcService&lt;BookmarkCountGrpcService&gt;();</code></pre>
+          <p><code>AddGrpcServiceDefaults()</code> registers <code>GrpcResultExceptionInterceptor</code> plus gRPC reflection.
+          The interceptor is the piece that keeps your error model intact across the wire. Your gRPC service
+          implementation calls the inner C# service, gets back a <code>Result</code>, and calls <code>result.ThrowIfFailure()</code>.
+          That throws a <code>ResultFailureException</code> carrying the <code>Error</code> list; the interceptor catches it for all four
+          server call shapes, logs it, and rethrows <code>errors.ToRpcException()</code>, an <code>RpcException</code> whose
+          <code>StatusCode</code> comes from a <code>FrozenDictionary&lt;ErrorType, StatusCode&gt;</code> mapping that mirrors the HTTP
+          <code>ErrorType</code>-to-status table in <code>ErrorHttpMapping</code>, the internal type <code>ApiControllerBase</code> reads on the
+          REST side (the unhandled-failure filter reads the same one). The trailers carry every error as
+          structured metadata. The client adapter reads those trailers back and reconstructs
+          <code>Result.Failure(errors)</code>. One error model, two transports, written once in the interceptor.</p>
+          <h2 id="step-3-client-side-addtypedgrpcclienttclientservicename">Step 3: client side, AddTypedGrpcClient&lt;TClient&gt;(serviceName)</h2>
+          <p>On the calling side (Conference&#39;s host), wire the typed gRPC client and replace the local interface
+          registration with the adapter:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Conference.Service Program.cs, AFTER ModuleLoader has run</span>
+services.AddEngagementBookmarkCountClient();   <span class="hljs-comment">// ships in the .Contracts project; this:</span>
+<span class="hljs-comment">//   1. calls AddTypedGrpcClient&lt;BookmarkCountServiceClient&gt;(&quot;engagement&quot;)</span>
+<span class="hljs-comment">//   2. services.Replace(IBookmarkCountService -&gt; BookmarkCountServiceGrpcAdapter)</span></code></pre>
+          <p><code>AddTypedGrpcClient&lt;TClient&gt;(serviceName)</code> wires the generated client to Aspire service discovery,
+          addressing <a href="http://{serviceName}" target="_blank" rel="noopener">http://{serviceName}</a> over <strong>HTTP/2 cleartext (h2c) with prior knowledge</strong>. Two interceptor
+          and resilience details ride along automatically:</p>
+          <ul>
+          <li>A <code>JwtForwardingClientInterceptor</code> copies the inbound <code>Authorization</code> header off the current
+          <code>HttpContext</code> onto the outgoing call&#39;s metadata, so the caller&#39;s JWT rides along downstream and
+          distributed authorization works without each handler threading a token (it is a no-op outside an HTTP
+          request, for example in a background processor).</li>
+          <li><code>AddStandardResilienceHandler()</code> gives every gRPC client the same Polly retry, timeout, and
+          circuit-breaker pipeline as the HTTP clients. A deliberate <code>SocketsHttpHandler</code> override forces
+          explicit HTTP/2 so the resilience handler cannot defeat the h2c negotiation.</li>
+          </ul>
+          <p>The <code>services.Replace(...)</code> is deliberate and uses <code>Replace</code>, not <code>TryAdd</code>. By the time this runs (after
+          <code>ModuleLoader</code>), the container already holds either the real in-process <code>IBookmarkCountService</code> (if
+          Engagement is enabled in this host) or a <code>Disabled*</code> stub (registered by the module&#39;s
+          <code>RegisterDisabledStubs()</code> when the peer is disabled). <code>Replace</code> wins over both, so after the call the
+          resolved interface is always the gRPC adapter pointing at the extracted peer. That is why the call comes
+          after module discovery.</p>
+          <h2 id="step-4-flip-the-message-bus-from-in-process-to-broker">Step 4: flip the message bus from in-process to broker</h2>
+          <p>Synchronous calls now cross the wire. The asynchronous, fire-and-forget flows (domain and integration
+          events) need the same treatment, and the framework makes it a configuration switch rather than a code
+          change.</p>
+          <p><code>IMessageBus</code> has two implementations in Infrastructure: <code>InProcessMessageBus</code> (in-monolith, delivery is
+          a method call) and <code>BrokerMessageBus</code> (a MassTransit broker, RabbitMQ locally and Azure Service Bus in
+          production, with an <code>IntegrationEventConsumer</code>).
+          <code>MessageBusSettings</code> selects the mode. In the monolith you ran in-process; in the extracted service you
+          flip the setting to the broker.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Program.cs: the broker registration is conditional on settings, not hard-coded.</span>
+builder.Services.AddBrokerMessaging(builder.Configuration);
+<span class="hljs-comment">// MessageBus__Provider=RabbitMq (injected by the AppHost&#x27;s WithBroker) selects BrokerMessageBus.</span></code></pre>
+          <p>Your aggregate code, which does <code>AddDomainEvent(new BookmarkAdded(...))</code>, does not change. The
+          transactional outbox is what makes the switch safe: the same durable outbox row is drained to an
+          in-process handler today and published to the broker tomorrow. The reliability pattern and the
+          extraction boundary are the same mechanism (ADR-003).</p>
+          <h2 id="step-5-jwks-so-the-new-service-validates-tokens">Step 5: JWKS so the new service validates tokens</h2>
+          <p>The extracted Engagement service now receives forwarded JWTs from Conference and must validate them. It
+          does so against the issuer&#39;s <strong>JWKS</strong>, the public signing keys, not a shared secret. <code>IJwksProvider</code>
+          (implemented by <code>RsaJwksProvider</code> in Infrastructure) exposes the signing keys, and
+          <code>JwksEndpointExtensions</code> in the API layer serves <code>/.well-known/jwks.json</code> so any extracted service can
+          fetch the issuer&#39;s public keys and validate independently. JWKS discovery is routed through the gateway
+          (ADR-004). No service ever needs to share a symmetric secret with another, which is what makes the fleet
+          safe to grow.</p>
+          <h2 id="step-6-wire-it-in-the-apphost-with-mmcacommonaspirehosting">Step 6: wire it in the AppHost with MMCA.Common.Aspire.Hosting</h2>
+          <p>Local orchestration is where the topology becomes runnable. <code>MMCA.Common.Aspire.Hosting</code> provides
+          AppHost extension methods for the cross-cutting infrastructure of an extracted deployment: the RabbitMQ
+          broker, JWKS service discovery, and the per-service data sources. The gRPC edge is not one of them, as
+          the snippet below shows: peers are wired with stock Aspire <code>WithReference</code>.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// AppHost Program.cs</span>
+<span class="hljs-keyword">var</span> broker = builder.AddRabbitMQ(<span class="hljs-string">&quot;broker&quot;</span>);
+
+<span class="hljs-keyword">var</span> engagementService = builder.AddProject&lt;Projects.MMCA_App_Engagement_Service&gt;(<span class="hljs-string">&quot;engagement&quot;</span>)
+    .WithBroker(broker);      <span class="hljs-comment">// .WithReference(broker).WaitFor(broker) + MessageBus__Provider=RabbitMq</span>
+
+<span class="hljs-keyword">var</span> conferenceService = builder.AddProject&lt;Projects.MMCA_App_Conference_Service&gt;(<span class="hljs-string">&quot;conference&quot;</span>)
+    .WithBroker(broker);
+
+<span class="hljs-comment">// gRPC edge: Conference calls Engagement. WithReference injects services__engagement__http__0</span>
+<span class="hljs-comment">// so AddTypedGrpcClient&lt;...&gt;(&quot;engagement&quot;) can resolve http://engagement at runtime.</span>
+conferenceService.WithReference(engagementService);
+engagementService.WithReference(conferenceService).WaitFor(conferenceService);</code></pre>
+          <p><code>WithBroker</code> chains <code>.WithReference(broker).WaitFor(broker).WithEnvironment(&quot;MessageBus__Provider&quot;, &quot;RabbitMq&quot;)</code>, so each service waits for RabbitMQ to be healthy and gets the env var that makes
+          <code>AddBrokerMessaging()</code> select the broker transport. <code>WithReference</code> on a project resource injects the
+          <code>services__{name}__http__0</code> discovery variables the typed gRPC client uses to resolve <a href="http://{name}" target="_blank" rel="noopener">http://{name}</a>.</p>
+          <p>One sharp edge worth internalizing: a <strong>bidirectional</strong> gRPC pair (Conference calls Engagement and
+          Engagement calls Conference) must not have reciprocal <code>WaitFor</code> calls, or startup deadlocks (each waits
+          for the other to be healthy). Declare <code>WaitFor</code> in one direction only; the transient &quot;peer not ready&quot;
+          errors on the other edge self-heal through the resilience pipeline you got for free in step 3 (ADR-007).</p>
+          <h2 id="step-7-route-through-the-yarp-gateway">Step 7: route through the YARP gateway</h2>
+          <p>Clients never address a service directly. A single YARP reverse-proxy gateway owns the
+          route-to-service map and is the only entry point. It has no DbContext and no controllers; it is CORS,
+          static files, the route table, and the edge concerns in step 8. You add the service&#39;s routes to the
+          gateway&#39;s table and reference it for discovery, and you wire JWKS discovery so the new service
+          resolves keys through that same gateway:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> gateway = builder.AddProject&lt;Projects.MMCA_App_Gateway&gt;(<span class="hljs-string">&quot;gateway&quot;</span>)
+    .WithReference(engagementService)
+    .WithReference(conferenceService)
+    .WaitFor(engagementService)
+    .WaitFor(conferenceService);
+
+engagementService.WithJwksDiscovery(identityService, gateway);  <span class="hljs-comment">// Profile A form (see below)</span></code></pre>
+          <p>Centralizing the entry point keeps client config trivial (one URL), centralizes CORS and
+          auth-forwarding, and lets the internal services run cleartext h2c without exposing that to clients
+          (ADR-008).</p>
+          <h2 id="step-8-what-the-edge-process-itself-owns">Step 8: what the edge process itself owns</h2>
+          <p>Step 7 gets a request to the right service. The edge process also has jobs of its own, and they are
+          jobs no service behind it can do, because only the gateway sees every request exactly once. Three of
+          them ship in the <code>Gateway</code> namespace of <code>MMCA.Common.Aspire</code>. A fourth, the forwarded-headers step
+          that makes the client IP the caller&#39;s rather than the ingress&#39;s, ships in <code>MMCA.Common.Gateway</code>
+          alongside <code>AddMmcaGateway</code>, the shared YARP forwarder profile both gateways chain onto
+          <code>AddReverseProxy</code>. The package placement is a constraint, not a preference: a YARP host has no
+          controllers, so it references those two framework packages and nothing else from the framework, and
+          it cannot reach the service-tier <code>CorrelationIdMiddleware</code> or <code>AddCommonRateLimiting</code> that live in
+          <code>MMCA.Common.API</code>.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Gateway Program.cs</span>
+builder.Services.AddGatewayRateLimiting(builder.Configuration);
+builder.Services.AddGatewayDownstreamHealthChecks(<span class="hljs-string">&quot;identity&quot;</span>, <span class="hljs-string">&quot;conference&quot;</span>, <span class="hljs-string">&quot;engagement&quot;</span>, <span class="hljs-string">&quot;notification&quot;</span>);
+builder.Services.AddReverseProxy()
+    .LoadFromConfig(builder.Configuration.GetSection(<span class="hljs-string">&quot;ReverseProxy&quot;</span>))
+    .AddMmcaGateway(builder.Configuration)      <span class="hljs-comment">// the shared forwarder profile and per-route policies</span>
+    .AddServiceDiscoveryDestinationResolver();
+...
+app.UseCommonForwardedHeaders();  <span class="hljs-comment">// so the client IP is the caller&#x27;s, not the ingress&#x27;s</span>
+app.UseGatewayCorrelation();      <span class="hljs-comment">// before anything, including a 429, can short-circuit</span>
+app.UseCors();
+app.UseGatewayRateLimiting();     <span class="hljs-comment">// after CORS, before the proxy is mapped</span>
+app.MapReverseProxy();</code></pre>
+          <ul>
+          <li><strong>One correlation id for the whole hop, not one per service.</strong> <code>GatewayCorrelationMiddleware</code>
+          declares the <code>X-Correlation-ID</code> constant and, when the caller sent none, mints one from
+          <code>Activity.Current?.TraceId</code> with <code>HttpContext.TraceIdentifier</code> as the fallback. The part that makes
+          it <em>one</em> id is that the value is written back onto the <strong>request</strong> headers before forwarding, so the
+          downstream service&#39;s own middleware finds a header already present and adopts it instead of minting
+          a second one. The response echo runs from <code>Response.OnStarting</code>, so it survives a proxied response
+          whose headers the forwarder writes. The middleware&#39;s only constructor dependency is the
+          <code>RequestDelegate</code>: no scoped service, no <code>HttpContext.Items</code>, which is what lets it drop into a host
+          with no application container.</li>
+          <li><strong>An edge limiter that counts anonymous callers.</strong> <code>AddGatewayRateLimiting</code> installs a per-client-IP
+          fixed window (120 requests per 60 seconds by default) chained with a process-wide concurrency cap
+          (200 in flight), both rejecting with 429. The anonymous posture is the deliberate inverse of the
+          service-tier limiter&#39;s: ADR-019 exempts anonymous traffic partly because public reads are served
+          from the output cache, and that cache lives <em>behind</em> the proxy, so a flood is paid for in full at the
+          edge before anything can be served cheaply. The two limiters answer different failures: the window
+          answers one noisy source, the concurrency cap answers total in-flight work no matter how many sources
+          produced it. Four kinds of request take the no-limiter partition on both limiters. <code>/health</code>,
+          <code>/alive</code> and <code>/.well-known</code> are always bypassed, because throttling them takes out the probes and
+          JWKS discovery as collateral. A host adds its own prefixes through <code>BypassPathPrefixes</code>, which is
+          how Store exempts its Stripe webhook route and ADC its SignalR hub route. The other two are
+          secret-proving headers, each off until its secret is configured: <code>SyntheticTrafficSecret</code>, so a
+          load run measures the system rather than the limiter, and <code>TrustedCallerSecret</code>, for a
+          server-rendered UI host whose every back-end call leaves from one address that the per-IP window
+          would otherwise collapse into a single partition. ADC&#39;s gateway names the trusted-caller header in
+          configuration and takes the secret itself from Key Vault. A request with no attributable client IP
+          is not limited at all: that is
+          fail-open, chosen over collapsing every unattributable caller into one shared bucket. The settings
+          validate on both construction paths, the options pipeline (<code>ValidateOnStart</code>) and a
+          <code>Validator.ValidateObject</code> call at registration, because the limiter closes over an eagerly bound
+          copy and a caller can hand it settings without passing through options at all.</li>
+          <li><strong>Readiness that reflects the downstreams, liveness that does not.</strong>
+          <code>AddGatewayDownstreamHealthChecks(&quot;identity&quot;, &quot;conference&quot;, ...)</code> registers one check per named
+          service, each GETting <code>/alive</code> through a service-discovery-resolved client under a 2 second budget,
+          and tags them <code>Ready</code>. The tag is the design: a <code>Ready</code> check reaches <code>/health/ready</code> and never
+          reaches <code>/alive</code>, so a downstream outage pulls the gateway out of the load balancer without
+          restarting a gateway process that is perfectly healthy.</li>
+          </ul>
+          <p>There is a fourth thing the edge deliberately does <strong>not</strong> do, and the refusal is the decision:
+          <strong>no JWT pre-validation at the gateway.</strong> ADR-004 puts validation authority in the services, and a
+          second validator does not add a check, it adds a second truth: two processes reading two JWKS caches
+          can disagree across a key rotation, and the one that rejects is the one the caller sees. The saving
+          would be one forward of a request the service was going to reject in microseconds anyway. The trigger
+          to revisit is measured, not felt: when invalid-token traffic is a material share of forwarded volume,
+          it becomes a cost argument, and the services keep validating either way (ADR-088).</p>
+          <p>The route table itself is configuration, not code. What step 7 calls &quot;the gateway&#39;s table&quot; is YARP
+          <code>ReverseProxy</code> configuration as the single source, 33 routes in ADC and 15 in Store, pinned in both
+          repositories by a <code>RouteMapTests</code> drift gate that drives each route through the real proxy pipeline
+          and compares the loaded <code>IProxyConfig</code> back against the pinned list in both directions. The
+          alternative shape, hand-written <code>MapForwarder</code> calls, states the same table three times inside one
+          repository (the registrations, the comment above them, and the list the test pins) with nothing
+          forcing the three to agree, which is how a live route ends up ungated. The per-destination HTTP
+          version policy from the next section lives in cluster configuration rather than in positional
+          arguments at a call site, so a host&#39;s transport profile is readable one line under the service it
+          describes (ADR-089).</p>
+          <h2 id="a-note-you-cannot-skip-adr-012s-two-kestrel-transport-profiles">A note you cannot skip: ADR-012&#39;s two Kestrel transport profiles</h2>
+          <p>On a cleartext endpoint there is no TLS, so there is no ALPN to negotiate the protocol. Kestrel must be
+          told up front which protocols the cleartext port speaks, and the choice forces matching gateway-forward
+          and JWKS-discovery wiring. There are two coherent profiles, and picking the wrong one fails with
+          <code>HTTP_1_1_REQUIRED</code> on gRPC or a JWKS backchannel that cannot reach the auth endpoint.</p>
+          <ul>
+          <li><strong>Profile A (serves inbound cleartext gRPC, including any bidirectional pair).</strong> Kestrel is
+          <code>Http2</code>-only on cleartext (h2c prior knowledge), so peer gRPC clients negotiate without TLS. The
+          gateway must forward HTTP/2 (<code>ForwardHttp2=true</code>, and <code>transport: http2</code> on the container ingress).
+          JWKS uses the two-argument <code>WithJwksDiscovery(identity, gateway)</code>, because the HTTP/1.1 JwtBearer
+          backchannel cannot reach an Http2-only endpoint directly, so it goes through the gateway, which
+          terminates TLS and routes <code>/.well-known/*</code> on. Any service that <strong>serves</strong> gRPC over cleartext needs
+          Profile A. ADC uses it.</li>
+          <li><strong>Profile B (consumer-only, one-directional gRPC, gRPC rides the HTTPS/ALPN endpoint).</strong> Kestrel is
+          <code>Http1AndHttp2</code>; gRPC clients use the HTTPS endpoint where ALPN negotiates HTTP/2. The gateway forwards
+          HTTP/1.1 (<code>ForwardHttp2=false</code>), and JWKS uses the single-argument <code>WithJwksDiscovery(identity)</code>.</li>
+          </ul>
+          <p>A 2026 update is the cautionary tale here: Store originally chose Profile B because its gRPC edges looked
+          &quot;consumer-only,&quot; but a one-directional topology still has services that <strong>serve</strong> inbound cleartext
+          gRPC, and Azure Container Apps cleartext ingress cannot deliver HTTP/2 to them under Profile B. The
+          result was <code>HTTP_1_1_REQUIRED</code> 500s in production. Store converged to Profile A. The lesson: if any
+          service in your fleet hosts an inbound gRPC server over cleartext, you are on Profile A, and you must
+          flip Kestrel, <code>ForwardHttp2</code>, the ingress transport, and the JWKS form together.</p>
+          <p>There is a sharper case the two-profile framing does not cover on its own: a host that needs both.
+          ADC&#39;s Notification service serves a SignalR hub (whose WebSocket transport needs the HTTP/1.1 Upgrade
+          handshake) AND an inbound live-channel gRPC ingress, and Store&#39;s Sales service runs the same
+          mixed-endpoint profile. Neither whole-host profile fits,
+          because the constraint was only ever per endpoint, not per host. The resolution is a mixed-endpoint
+          profile that applies both profiles inside one process: the default cleartext endpoint (port 8080) stays
+          <code>Http1AndHttp2</code> (Profile B) so the WebSocket Upgrade still works, and a dedicated <code>Http2</code>-only <code>grpc</code>
+          endpoint (port 8081) serves the cleartext h2c gRPC (Profile A) for
+          <code>LiveChannelPushService.PushToChannel</code>, mapped as <code>LiveChannelGrpcService</code>. Peers resolve that ingress
+          through its named endpoint scheme <a href="http://_grpc.notification" target="_blank" rel="noopener">http://_grpc.notification</a>, not the default port, and in Azure
+          Container Apps it rides a dedicated internal TCP port mapping so one app can serve HTTP/1.1 WebSockets
+          and end-to-end HTTP/2 without hitting envoy&#39;s single-transport limit. The takeaway generalizes: when one
+          host must speak WebSockets and serve inbound cleartext gRPC, split the two protocols across two Kestrel
+          endpoints instead of forcing one whole-host profile (ADR-012&#39;s mixed-endpoint amendment).</p>
+          <h2 id="the-whole-point-it-stays-reversible">The whole point: it stays reversible</h2>
+          <p>Walk the steps back and you see why this is not a one-way door. Because transport lives at the edge and
+          the core talks to abstractions, a service can be re-collapsed into a combined host by changing
+          configuration, not code. Enable the peer module in the same host, drop the <code>services.Replace(...)</code> that
+          swapped in the gRPC adapter, and the in-process implementation resolves again. Flip <code>MessageBusSettings</code>
+          back to <code>InProcessMessageBus</code> and events dispatch in-process. The <code>ModuleLoader</code> boots the same module
+          code either way. That reversibility is insurance: a small team can adopt microservices without betting
+          that the split was correct on the first try.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>Operational complexity multiplies.</strong> You now run multiple deployables plus a gateway, service
+          discovery, a broker, and per-service databases instead of one process. Aspire hides a lot of this
+          locally; production needs the matching Bicep and ingress configuration.</li>
+          <li><strong>Distributed-systems semantics are now yours.</strong> Cross-service consistency is eventual (outbox plus
+          integration events). There are no cross-service transactions and no cross-database foreign keys.
+          Consumers must be idempotent because broker delivery is at-least-once.</li>
+          <li><strong>The transport profile leaks into hosting.</strong> ADR-012 is not optional reading. The Kestrel protocol
+          choice, the gateway-forward mode, the ingress transport, and the JWKS form are a coupled set, and a
+          half-configured set fails in ways that only show up in the cloud, not locally.</li>
+          <li><strong>Bidirectional pairs need deliberate startup handling.</strong> The no-<code>WaitFor</code>-on-the-reverse-edge trick
+          is necessary, and it relies on the resilience pipeline to absorb the transient startup errors. It
+          works, but it is a thing you must know rather than discover.</li>
+          <li><strong>The edge limiter&#39;s number is per replica, and changing it is a restart.</strong> Both edge limiters count
+          in one process&#39;s memory, so the fleet ceiling is the configured value multiplied by the replica
+          count, which rises exactly when the load that motivated the limit arrives. And because the limiter
+          closes over an eagerly bound copy of its settings rather than resolving options per request, no
+          reload reaches it: calling the limit &quot;a configuration section&quot; invites the assumption that it can be
+          changed live, and it cannot (ADR-088).</li>
+          </ul>
+          <p>None of these are reasons to keep everything in one process forever. They are the reasons to keep the
+          split reversible, so you only pay the complexity for the modules that actually need it.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The recipe ports to any stack:</p>
+          <ol>
+          <li><strong>Make the core talk to abstractions and put a fitness test on it.</strong> A message-bus interface and
+          plain service interfaces, with an architecture test that forbids transport types in your domain and
+          application layers, so the property cannot rot.</li>
+          <li><strong>Keep the wire contract in a shared package</strong> that generates both server and client stubs, and ship
+          an adapter that implements the same interface the in-process code already used. Extraction becomes a
+          registration swap.</li>
+          <li><strong>Federate auth with JWKS,</strong> not a shared secret, so adding a service does not mean distributing a
+          symmetric key.</li>
+          <li><strong>Front the services with a single gateway</strong> so clients see one URL and internal transport choices
+          stay internal.</li>
+          <li><strong>Treat the Kestrel/gateway/ingress/JWKS transport choice as one coupled decision,</strong> and write down
+          which profile you are on. The half-configured states fail in production, not in development.</li>
+          </ol>
+          <p>The takeaway: the monolith-to-microservices split is a rewrite only if you let transport leak into your
+          business logic. Hold the abstraction boundary from day one, enforce it with a test, and the split
+          becomes a wiring change you can undo.</p>
+          <hr>
+          <p><strong>What we covered:</strong> the starting invariant (core talks to abstractions, enforced by
+          <code>MicroserviceExtractionTests</code>), defining a <code>.Contracts</code> project with auto-compiled protos and a
+          same-interface gRPC adapter, server-side <code>AddGrpcServiceDefaults()</code> with <code>Result</code>-over-the-wire,
+          client-side <code>AddTypedGrpcClient&lt;T&gt;(serviceName)</code> with JWT forwarding and Polly over h2c, flipping
+          <code>IMessageBus</code> to <code>BrokerMessageBus</code> via settings, JWKS so the new service validates tokens, AppHost
+          wiring through <code>MMCA.Common.Aspire.Hosting</code>, routing through the YARP gateway, the edge
+          responsibilities the gateway process owns (forwarded headers, ensured correlation, an
+          anonymous-counting rate limiter, downstream-aware readiness) plus the JWT pre-validation it declines
+          and the route table it keeps in configuration, ADR-012&#39;s two Kestrel transport profiles, and why the
+          whole thing stays reversible.</p>
+          <p><strong>Next in the series:</strong> resilience handlers and recovery objectives, the retry pipeline behind these
+          calls plus the RTO/RPO targets and the drilled restore behind them.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read ADRs 007, 008, 012, 088, and 089
+          behind this walkthrough, or <code>dotnet add package MMCA.Common.Grpc</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📚 Full series index: <a href="https://ivanball.github.io/writing.html" target="_blank" rel="noopener">https://ivanball.github.io/writing.html</a></li>
+          <li>📄 ADR-007 (gRPC extraction), ADR-008 (service-extraction topology), ADR-012 (gRPC-host transport),
+          ADR-088 (gateway edge responsibilities), ADR-089 (gateway topology owned by configuration) in
+          the repo.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Microservices, gRPC, Software Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="aspire-one-command.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">31 · Aspire: one command</span></a>
+          <a class="article-pager-link article-pager-link--next" href="resilience-recovery-objectives.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">33 · Resilience and recovery objectives</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#step-0-the-starting-invariant">Step 0: the starting invariant</a></li>
+            <li><a href="#step-1-define-the-contracts-project">Step 1: define the .Contracts project</a></li>
+            <li><a href="#step-2-server-side-addgrpcservicedefaults">Step 2: server side, AddGrpcServiceDefaults()</a></li>
+            <li><a href="#step-3-client-side-addtypedgrpcclienttclientservicename">Step 3: client side, AddTypedGrpcClient&lt;TClient&gt;(serviceName)</a></li>
+            <li><a href="#step-4-flip-the-message-bus-from-in-process-to-broker">Step 4: flip the message bus from in-process to broker</a></li>
+            <li><a href="#step-5-jwks-so-the-new-service-validates-tokens">Step 5: JWKS so the new service validates tokens</a></li>
+            <li><a href="#step-6-wire-it-in-the-apphost-with-mmcacommonaspirehosting">Step 6: wire it in the AppHost with MMCA.Common.Aspire.Hosting</a></li>
+            <li><a href="#step-7-route-through-the-yarp-gateway">Step 7: route through the YARP gateway</a></li>
+            <li><a href="#step-8-what-the-edge-process-itself-owns">Step 8: what the edge process itself owns</a></li>
+            <li><a href="#a-note-you-cannot-skip-adr-012s-two-kestrel-transport-profiles">A note you cannot skip: ADR-012&#39;s two Kestrel transport profiles</a></li>
+            <li><a href="#the-whole-point-it-stays-reversible">The whole point: it stays reversible</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

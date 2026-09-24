@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Managed file storage: uploads you don&#39;t have to trust · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Attacker-controlled bytes become safe avatars: content sniffing, metadata stripping, re-encoding, and pluggable blob storage.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/managed-file-storage-avatars.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Managed file storage: uploads you don&#39;t have to trust">
+  <meta property="og:description" content="Attacker-controlled bytes become safe avatars: content sniffing, metadata stripping, re-encoding, and pluggable blob storage.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/managed-file-storage-avatars.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-43.png">
+  <meta property="og:image:alt" content="Managed file storage: uploads you don&#39;t have to trust">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Managed file storage: uploads you don&#39;t have to trust">
+  <meta name="twitter:description" content="Attacker-controlled bytes become safe avatars: content sniffing, metadata stripping, re-encoding, and pluggable blob storage.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-43.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Managed file storage: uploads you don't have to trust","description":"Attacker-controlled bytes become safe avatars: content sniffing, metadata stripping, re-encoding, and pluggable blob storage.","url":"https://ivanball.github.io/articles/managed-file-storage-avatars.html","mainEntityOfPage":"https://ivanball.github.io/articles/managed-file-storage-avatars.html","image":"https://ivanball.github.io/assets/img/articles/article-43.png","datePublished":"2026-08-12T14:02:48Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":43,"sameAs":"https://medium.com/@ivanball76/managed-file-storage-uploads-you-dont-have-to-trust-8dfe8bf016bc"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"43 · Managed file storage: uploads you don't have to trust","item":"https://ivanball.github.io/articles/managed-file-storage-avatars.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">43 · Managed file storage: uploads you don&#39;t have to trust</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html" aria-current="page">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Data &amp; persistence · No. 43</p>
+          <h1 id="managed-file-storage-uploads-you-dont-have-to-trust">Managed file storage: uploads you don&#39;t have to trust</h1>
+          <p class="article-meta"><time datetime="2026-08-12T14:02:48Z">August 12, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/managed-file-storage-uploads-you-dont-have-to-trust-8dfe8bf016bc" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-43.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">A user uploads a profile photo. It is attacker-controlled bytes with GPS coordinates
+          baked into the metadata and, if you are unlucky, a payload hiding behind a valid image header. Here
+          is how MMCA.Common turns that upload into something you never have to trust.</p>
+          <hr>
+          <p>An avatar upload looks like the most harmless feature in the app. A user picks a photo, you store it,
+          you render it back in an <code>&lt;img&gt;</code> tag. What could go wrong?</p>
+          <p>Three things, and all of them are quiet.</p>
+          <p>The file is attacker-controlled bytes. The client says it is a JPEG; the client says a lot of things.
+          The EXIF block on a phone photo carries the exact GPS coordinates where it was taken, which is PII you
+          did not ask for and are now storing and re-serving to anyone who loads the profile. And a &quot;valid&quot; image
+          can be a polyglot: bytes that a browser renders as a picture and something else on your box treats as a
+          script or an archive. You did not write a photo-sharing site. You wrote a place for a 256-pixel avatar,
+          and you inherited an untrusted-file-handling problem you never signed up for.</p>
+          <p>The reflex is to reach for the Azure SDK, write the blob straight from the controller, and move on. That
+          solves storage and nothing else: the metadata still ships, the bytes are still trusted, and the next
+          consumer who needs blob storage copies your controller code and inherits the same holes.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>An avatar is user-generated content on an anonymous-visible surface. That combination is exactly where
+          file-upload bugs turn into incidents. The two that bite hardest are not exotic:</p>
+          <ul>
+          <li><strong>Metadata leakage.</strong> EXIF GPS coordinates are personal data. If you store the original file, you are
+          storing where your users live and work, and re-serving it on every profile view. Under GDPR that is
+          data you are now the controller of, silently.</li>
+          <li><strong>Content-type confusion.</strong> A <code>Content-Type: image/jpeg</code> header is a claim, not a fact. Accepting
+          files by their declared type (or worse, their file extension) is how a &quot;JPEG&quot; that is really an HTML
+          or SVG payload ends up served from your domain.</li>
+          </ul>
+          <p>The threat model for an uploaded image is the same shape as the threat model for a password hash:
+          <strong>assume the input is hostile, and make the stored form incapable of hurting you.</strong> You are not trying to
+          keep the file secret. You are trying to guarantee that what you persist is only pixels.</p>
+          <h2 id="the-mmca-answer-a-storage-boundary-and-a-re-encode-that-keeps-only-pixels">The MMCA answer: a storage boundary, and a re-encode that keeps only pixels</h2>
+          <p>The framework had no blob abstraction before this. Anything file-shaped would have been written directly
+          against the Azure SDK inside a module, unusable by the next consumer and untestable. ADR-045 adds two
+          Application-layer ports, split the Clean-Architecture way, plus a dependency-free validator. The ports
+          carry more than avatars: ADR-045&#39;s avatar-only scope statement is superseded by ADR-123
+          (<code>045-managed-file-storage-and-avatars.md:9-11</code>, <code>:73-76</code>), which publishes speaker session materials
+          through the same <code>IFileStorageService</code>.</p>
+          <p><strong><code>IFileStorageService</code></strong> (<code>IFileStorageService.cs:11</code>) is the storage boundary: <code>UploadAsync</code> takes a
+          blob name, a stream, and a content type and returns the public <code>Uri</code> as a <code>Result&lt;Uri&gt;</code> (<code>:22</code>). A second
+          overload adds a <code>FileUploadOptions</code> carrying the <code>Content-Disposition</code> and <code>Cache-Control</code> headers to
+          store with the blob, and it is a default interface member that forwards to the three-argument one
+          (<code>:42-43</code>), so an implementation written against the original contract keeps compiling. <code>DeleteAsync</code> is
+          idempotent (<code>:49</code>), and unknown blob names succeed rather than throw. Callers pass only a blob
+          name scoped within a container; the implementation owns the container, and the container itself is
+          provisioned by infrastructure, never created by the app.</p>
+          <p>The default implementation is deliberately inert. <code>NullFileStorageService</code>
+          (<code>NullFileStorageService.cs:11</code>) reports <code>IsConfigured =&gt; false</code>, fails both upload overloads with a clear
+          <code>FileStorage.NotConfigured</code> error, and lets deletes succeed (there is nothing to delete). A host that
+          never wires storage does not crash mysteriously; its upload endpoints degrade with an honest message. A
+          host that wants real storage calls <code>AddAzureBlobFileStorage(configuration)</code>
+          (<code>DependencyInjection.cs:893</code>), which swaps in <code>AzureBlobFileStorageService</code>
+          (<code>AzureBlobFileStorageService.cs:15</code>) when the <code>FileStorage</code> section is complete.</p>
+          <p>That registration is defensive on purpose. An incomplete section is a no-op that leaves the Null default
+          in place (<code>DependencyInjection.cs:899</code>), so hosts register it unconditionally. Production sets
+          <code>ServiceUri</code> and authenticates with <code>DefaultAzureCredential</code> (<code>DependencyInjection.cs:914</code>); local
+          development can use a <code>ConnectionString</code> against Azurite instead (<code>FileStorageSettings.cs:16-19</code>). One
+          detail earns its comment in the source: an empty-string <code>ServiceUri</code> binds to a <em>relative</em> <code>Uri</code>, so the
+          guard only accepts an absolute one (<code>DependencyInjection.cs:904-905</code>).</p>
+          <p>But storage is the boring half. The security boundary is the image processor.</p>
+          <h3 id="the-re-encode-is-the-boundary">The re-encode is the boundary</h3>
+          <p><code>IImageProcessor</code> (<code>IImageProcessor.cs:11</code>) has one method,
+          <code>NormalizeToSquareJpegAsync</code>, and its implementation <code>ImageSharpImageProcessor</code>
+          (<code>ImageSharpImageProcessor.cs:15</code>) does something that looks like image resizing and is actually a
+          security control. It reads the header and refuses anything too big to decode, then decodes the upload,
+          bakes EXIF orientation into the pixels, center-crops to an exact square, strips every metadata profile,
+          and re-encodes as a fresh JPEG:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// ImageSharpImageProcessor.NormalizeToSquareJpegAsync (illustrative of shape)</span>
+<span class="hljs-comment">// Header only: Identify reads the declared dimensions without allocating a frame.</span>
+<span class="hljs-keyword">var</span> info = <span class="hljs-keyword">await</span> Image.IdentifyAsync(content, cancellationToken);
+<span class="hljs-keyword">if</span> (TooLargeToDecode(info.Width, info.Height))
+{
+    <span class="hljs-keyword">return</span> Result.Failure&lt;<span class="hljs-built_in">byte</span>[]&gt;(Error.Validation(<span class="hljs-string">&quot;Image.TooLarge&quot;</span>, ...));
+}
+
+<span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> image = <span class="hljs-keyword">await</span> Image.LoadAsync(content, cancellationToken);
+
+<span class="hljs-comment">// AutoOrient BEFORE stripping metadata, or portrait phone photos come out rotated.</span>
+image.Mutate(ctx =&gt; ctx
+    .AutoOrient()
+    .Resize(<span class="hljs-keyword">new</span> ResizeOptions { Size = <span class="hljs-keyword">new</span> Size(size, size), Mode = ResizeMode.Crop }));
+
+image.Metadata.ExifProfile = <span class="hljs-literal">null</span>;   <span class="hljs-comment">// EXIF GPS coordinates are PII</span>
+image.Metadata.XmpProfile  = <span class="hljs-literal">null</span>;
+image.Metadata.IptcProfile = <span class="hljs-literal">null</span>;
+
+<span class="hljs-keyword">await</span> image.SaveAsync(output, <span class="hljs-keyword">new</span> JpegEncoder { Quality = <span class="hljs-number">85</span> }, cancellationToken);</code></pre>
+          <p>The point is what does <em>not</em> survive. A full decode-then-re-encode means only the pixel grid crosses the
+          boundary. EXIF GPS is gone because the metadata profiles are nulled (<code>ImageSharpImageProcessor.cs:84-86</code>).
+          The polyglot payload is gone because the bytes that carried it were never re-emitted: the output is a new
+          JPEG the encoder wrote from a decoded bitmap. One operation kills both classes of problem, and it does so
+          by construction rather than by a blocklist you have to keep updating.</p>
+          <p>The header check in front of the decode is not a size nicety. The avatar contract&#39;s 2 MB cap bounds the
+          <em>compressed</em> bytes, which a decompression bomb satisfies happily: a 2 MB PNG can declare 40000x40000 and
+          cost roughly 6 GB of frame buffer the moment it is decoded. So the processor bounds the decoded frame
+          instead, with <code>MaxDecodedPixels</code> at 50,000,000 (<code>ImageSharpImageProcessor.cs:26</code>) and
+          <code>MaxDecodedDimension</code> at 20,000 (<code>:33</code>); the edge ceiling sits beside the area one because a 1 x 200000
+          strip is inside the area limit and still pathological for the resampler. <code>Image.IdentifyAsync</code> applies
+          both to the declared header before a single frame is allocated (<code>:47</code>), and the same predicate
+          (<code>:111-114</code>) re-applies them to the decoded frame (<code>:66-72</code>), so a header that under-reports its real
+          size does not get through. Past either ceiling the upload is
+          <code>Error.Validation(&quot;Image.TooLarge&quot;, ...)</code> (<code>:51-55</code>): a clean 400 rather than the OutOfMemoryException the
+          upload was built to provoke.</p>
+          <p>Undecodable content is a validation failure too, not an exception. The processor catches
+          <code>UnknownImageFormatException</code> and <code>InvalidImageContentException</code> and returns
+          <code>Error.Validation(&quot;Image.Undecodable&quot;, ...)</code> (<code>ImageSharpImageProcessor.cs:95-101</code>), so a garbage upload
+          is a clean 400, not a 500. And because the processor has no external configuration, it is <em>always</em>
+          registered as the real implementation (<code>DependencyInjection.cs:746</code>), unlike storage: there is no Null
+          image processor, because there is no safe way to skip the re-encode.</p>
+          <p>Ahead of the processor sits <code>ImageContentSniffer</code> (<code>ImageContentSniffer.cs:10</code>), a static, dependency-free
+          magic-byte check. <code>IsAllowedImage</code> accepts a payload only when its leading bytes match a JPEG, PNG, or
+          WebP signature (<code>ImageContentSniffer.cs:15</code>): the JPEG SOI prefix <code>FF D8 FF</code>, the 8-byte PNG signature,
+          or a RIFF container declaring the <code>WEBP</code> form type. The accepted formats are decided by the actual bytes,
+          never the client-declared content type or the file extension. It narrows the input; the re-encode
+          neutralizes what gets through. Defense in depth, cheaply.</p>
+          <h3 id="the-avatar-contract">The avatar contract</h3>
+          <p>Storage and re-encode are framework legs. The avatar itself is a contract (BR-116a) each consumer applies:
+          one avatar per user; accept jpeg/png/webp up to 2 MB; the server re-encodes to a 256x256 JPEG via
+          <code>IImageProcessor</code>, treating client-declared content types as advisory only. The blob name is
+          <code>{userId}-{random8}.jpg</code> in the public-read <code>avatars</code> container, so the URL path reads
+          <code>avatars/{userId}-{random8}.jpg</code>. Uploading a new avatar deletes the previous blob. The URL lives on the
+          user entity as <code>[Pii]</code>: nulled on anonymize with the blob deleted, and included in the GDPR data export.
+          That last part is why this article carries a §30 (data privacy) tie alongside the §8 (data access) and
+          §11 (security) ones: the avatar is treated as personal data from the moment it lands to the moment it is
+          erased.</p>
+          <h3 id="one-capability-two-client-affordances">One capability, two client affordances</h3>
+          <p>On the client, the pick-a-photo gesture differs by host, and ADR-045 reuses the capability pattern from
+          ADR-042. <code>IMediaPickerService</code> (<code>IMediaPickerService.cs:9</code>) exposes native photo pick and camera capture
+          with the permission flow encapsulated; a cancelled or denied picker returns <code>null</code> rather than throwing.
+          Web heads keep the Null default (<code>NullMediaPickerService.cs:7</code>, <code>IsSupported =&gt; false</code>) and render a plain
+          <code>InputFile</code> instead. The comment in the port says it plainly: this is an affordance switch, not a degraded
+          path (<code>IMediaPickerService.cs:6-7</code>). The same upload endpoint serves a phone&#39;s native picker and a
+          browser&#39;s file input; only the gesture in front of it changes.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>ADR-045 owns its rough edges in its Consequences section, and they are real design choices rather than
+          oversights.</p>
+          <ul>
+          <li><strong>The avatars container is public-read by design.</strong> Avatar URLs render in <code>&lt;img&gt;</code> tags on
+          anonymous-visible surfaces without SAS-token plumbing on every request. The cost is that anyone with the
+          URL can fetch the image. The random 8-character blob suffix prevents enumeration (you cannot walk from
+          one avatar to the next), and the trade-off is accepted and documented in the consumer&#39;s privacy policy.
+          This is a deliberate acceptance, not a gap.</li>
+          <li><strong>CDN and browser caches can serve a stale avatar briefly.</strong> A replaced or deleted avatar deletes its
+          blob, but a cache may hold the old URL for a moment. Because the random suffix means a new upload never
+          reuses the old URL, staleness is bounded by cache TTLs and self-heals; there is no cache-busting dance to
+          get right.</li>
+          <li><strong><code>DefaultAzureCredential</code> needs a data-plane role, not a secret.</strong> In production the storage account
+          requires a <code>Storage Blob Data Contributor</code> grant for the app identity. That is a bicep-level infrastructure
+          grant, which is the correct place for it, but it does mean the app will not authenticate until the role
+          assignment exists. It is not a connection string you can paste in.</li>
+          <li><strong>ImageSharp joins the dependency set under the Six Labors Split License.</strong> It ships under Apache-2.0
+          terms for open-source and small-revenue use, which covers this project, and it is vuln-audited like every
+          other dependency. The ADR is explicit that the license note must be revisited if the project&#39;s revenue
+          posture changes.</li>
+          </ul>
+          <p>Be precise about status: the framework legs are implemented and shipped in MMCA.Common, and two MMCA.ADC
+          services wire them end to end. The Identity service calls <code>AddAzureBlobFileStorage(builder.Configuration)</code>
+          at startup for avatars (<code>MMCA.ADC.Identity.Service/Program.cs:243</code>) and the Conference service calls it for
+          speaker session assets (<code>MMCA.ADC.Conference.Service/Program.cs:338</code>). On the Identity side,
+          <code>SetUserAvatarHandler</code> is the only handler that touches <code>IFileStorageService</code> inline; replacing an avatar,
+          removing one and deleting a user all schedule a durable <code>DeleteAvatarBlobInternalCommand</code> through
+          <code>IInternalCommandScheduler</code> (<code>SetUserAvatarHandler.cs:127-128</code>, <code>RemoveUserAvatarHandler.cs:20,74-75</code>,
+          <code>DeleteUserHandler.cs:31,79</code>), and the blob deletion itself runs in
+          <code>DeleteAvatarBlobInternalCommandHandler</code> (<code>:21-24</code>). The <code>Profile</code> page uploads through
+          <code>IMediaPickerService</code> (<code>Profile.razor.cs:22</code>). Each consumer still provisions its own storage account and
+          wires its own upload endpoints against these ports, so this is a capability the framework provides rather
+          than one that is live in every downstream app by default: MMCA.Store has not adopted it.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any stack and any blob store. The rules are short:</p>
+          <ol>
+          <li><strong>Never trust the declared content type or the file extension.</strong> Sniff the leading magic bytes and accept
+          only the formats you actually support.</li>
+          <li><strong>Re-encode every uploaded image; do not store the original.</strong> A full decode-then-re-encode is the single
+          move that strips EXIF GPS (PII) and defeats polyglot payloads, because only pixels survive. Resize to the
+          size you will actually serve while you are at it.</li>
+          <li><strong>Auto-orient before you strip metadata</strong>, or portrait phone photos come out sideways once the EXIF
+          orientation flag is gone.</li>
+          <li><strong>Bound the decoded frame, not just the uploaded bytes.</strong> Read the header, refuse the declared
+          dimensions that would not fit in memory, and re-check after the decode.</li>
+          <li><strong>Put storage behind a port with an inert default.</strong> An unconfigured implementation that fails uploads
+          with a clear message beats a host that half-works or crashes at first use.</li>
+          <li><strong>Treat the stored URL as PII.</strong> If it points at a user&#39;s face, it belongs in your erasure path and your
+          data export, not just your database.</li>
+          <li><strong>Prefer managed identity over secrets</strong> for the store, and let infrastructure provision the container and
+          its access level. The app should never create the bucket it writes to.</li>
+          </ol>
+          <p>The takeaway: <strong>an upload is hostile bytes until you have re-encoded it into something that can only be a
+          picture.</strong> Storage is the easy half; the re-encode is the boundary that matters.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why an avatar upload is an untrusted-file problem in disguise (EXIF GPS as PII,
+          content-type confusion, polyglot payloads); how <code>IFileStorageService</code> gives an upload-by-blob-name boundary
+          with an inert <code>NullFileStorageService</code> default that fails clearly and an <code>AddAzureBlobFileStorage</code> swap to the
+          real Azure implementation; how the real security boundary is the full re-encode in <code>ImageSharpImageProcessor</code>
+          (header size check, decode, auto-orient, center-crop, strip all metadata, re-encode JPEG) fronted by
+          <code>ImageContentSniffer</code>&#39;s magic-byte check; the avatar contract (256x256 JPEG, 2 MB, random-suffixed public-read
+          blob, URL as <code>[Pii]</code>); and the honest trade-offs (public-read container, cache staleness, a data-plane role
+          grant, the Six Labors Split License).</p>
+          <p><strong>Next in the series:</strong> HTTP API versioning, proven not just claimed, one header-based policy adopted by every service and kept honest by a shared fitness contract that runs two live versions.</p>
+          <p><em>MMCA.Common is open source. Star the repo, read the 2-minute ADR behind this pattern, or
+          <code>dotnet add package MMCA.Common.Infrastructure</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 The decision record is <a href="../docs/adr/045-managed-file-storage-and-avatars.html">ADR-045: Managed File Storage and User Avatars</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Security, Cloud</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="device-capability-abstraction.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">42 · One Blazor UI, two hosts</span></a>
+          <a class="article-pager-link article-pager-link--next" href="http-api-versioning.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">44 · HTTP API versioning, proven not just claimed</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-a-storage-boundary-and-a-re-encode-that-keeps-only-pixels">The MMCA answer: a storage boundary, and a re-encode that keeps only pixels</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

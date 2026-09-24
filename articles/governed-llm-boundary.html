@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>The LLM Is a Dependency: A Bounded, Guarded, Metered Boundary for Chat Completions · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A chat completion as a governed dependency: a pipeline of delegating clients that caps, guards, and meters every call to the model.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/governed-llm-boundary.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="The LLM Is a Dependency: A Bounded, Guarded, Metered Boundary for Chat Completions">
+  <meta property="og:description" content="A chat completion as a governed dependency: a pipeline of delegating clients that caps, guards, and meters every call to the model.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/governed-llm-boundary.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The LLM Is a Dependency: A Bounded, Guarded, Metered Boundary for Chat Completions">
+  <meta name="twitter:description" content="A chat completion as a governed dependency: a pipeline of delegating clients that caps, guards, and meters every call to the model.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"The LLM Is a Dependency: A Bounded, Guarded, Metered Boundary for Chat Completions","description":"A chat completion as a governed dependency: a pipeline of delegating clients that caps, guards, and meters every call to the model.","url":"https://ivanball.github.io/articles/governed-llm-boundary.html","mainEntityOfPage":"https://ivanball.github.io/articles/governed-llm-boundary.html","datePublished":"2026-09-24T12:00:00Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":50}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"50 · The governed LLM boundary","item":"https://ivanball.github.io/articles/governed-llm-boundary.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">50 · The governed LLM boundary</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html" aria-current="page">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Run &amp; extract · No. 50</p>
+          <h1 id="the-llm-is-a-dependency-a-bounded-guarded-metered-boundary-for-chat-completions">The LLM Is a Dependency: A Bounded, Guarded, Metered Boundary for Chat Completions</h1>
+          <p class="article-meta"><time datetime="2026-09-24T12:00:00Z">September 24, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera</p>
+          <p class="article-subtitle">A chat completion is an unbounded, metered, non-deterministic call to somebody else&#39;s
+          server, and most codebases make it by newing up a vendor client in the middle of a feature. Here is the
+          same call as a governed dependency: a pipeline of delegating clients that caps what it may do, lets the
+          application refuse it, counts what it cost, and a fitness function that keeps all of it out of your
+          domain.</p>
+          <hr>
+          <p>You add one AI feature. It is a single method, and the vendor SDK makes it three lines: construct the
+          client, hand it the prompt, read the text back. It ships on a Friday and it works.</p>
+          <p>Then ask the questions a production dependency has to answer. What is the most this call can spend in one
+          request? How long can it hold a request thread if the provider stops answering? Can somebody hand it a
+          tool and let it act? Which version of the prompt produced the answer sitting in your database? What did
+          last Tuesday cost, and which prompt spent it? Every one of those is a property of <em>calling a model</em>, and
+          none of them is a property of <em>your feature</em>. Written per feature, each is a fresh chance to forget one,
+          and the forgetting is invisible until a bill or an incident.</p>
+          <p>That is the argument <strong>ADR-120</strong> makes, and its conclusion is unglamorous: the language model is a
+          dependency, so govern it like one. The provider half is the vendor SDK&#39;s own adapter. The governance half
+          is a pipeline you compose once and every future feature inherits.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>Rubric §16, AI-Native Application Architecture, asks exactly one question of a product feature that calls
+          a model: is that dependency governed like any other external system, meaning isolated, versioned,
+          evaluated, observed and bounded in what it may do
+          (<code>ArchitectureEvaluationCriteria.md:469</code>, intent at <code>:471</code>). Its seven criteria are model calls behind a
+          port, prompt and model versioning, an evaluation suite gating CI, guardrails at the boundary,
+          least-privilege tool calling, retrieval as data architecture, and LLM observability with cost
+          attribution (<code>:476-482</code>). Its red flags are just as concrete: provider SDK types or prompt strings inside
+          domain or application code, an agent that can call any tool with the caller&#39;s full permissions, and &quot;no
+          idea what a feature costs per call&quot; (<code>:485-489</code>).</p>
+          <p>The category is deliberately N/A until a product feature calls a model, and scored the moment one does
+          (<code>:473</code>). That applicability rule is the honest part: most systems get to skip §16, right up until the
+          afternoon they do not.</p>
+          <p>MMCA.Common scores it. The §16 row sits at Maturity 3 / Implementation 6, moved there on the
+          thirty-fifth-wave re-score of 2026-09-15 on the strength of the guardrail extension point, the latency
+          histogram and host-side telemetry export (<code>common-ArchitectureScorecard.md:75</code>), with §16 back in both
+          denominators at weight 2 (<code>:124</code>). Implementation 6 is the Adequate band and the row says why: two of the
+          seven criteria are wholly absent from the framework by design, which is a sentence you will see again in
+          the trade-offs.</p>
+          <h2 id="the-mmca-answer-one-optional-package-and-the-call-is-a-pipeline">The MMCA answer: one optional package, and the call is a pipeline</h2>
+          <p><code>MMCA.Common.AI</code> is one of the nineteen published framework packages (<code>MMCA.Common/FACTS.md:19</code>, listed
+          at <code>:22</code>, framework v1.205.0 at <code>:14</code>) and it is optional: nothing in the metapackage drags it in, and a
+          host that never calls a model never installs it. In the onboarding taxonomy it is group <strong>G28, Common AI
+          Integration</strong>, twelve types across levels L0 to L3
+          (<code>Website/docs-src/onboarding/00-group-taxonomy.md:82</code>). Twelve types is the whole surface. That smallness
+          is the design.</p>
+          <p>The composition entry point is <code>AddMmcaChatClient</code> (<code>DependencyInjection.cs:67</code>), and what it registers is
+          one <code>IChatClient</code> built as a pipeline, outermost first (registration at <code>:108-143</code>, the same order
+          documented as a diagram in the type remarks at <code>:22-30</code>):</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The shape AddMmcaChatClient composes, outermost first.</span>
+BoundedChatClient            <span class="hljs-comment">// what the call is ALLOWED to do: tokens, timeout, tools, input size</span>
+  GuardrailChatClient        <span class="hljs-comment">// optional: present only when an IChatGuardrail is registered</span>
+    UsageRecordingChatClient <span class="hljs-comment">// what the call cost, and how long it took</span>
+      DistributedCaching     <span class="hljs-comment">// optional: Ai:EnableCache AND a registered IDistributedCache</span>
+        OpenTelemetry        <span class="hljs-comment">// traces under the MMCA.Common.AI source</span>
+          Logging
+            provider client  <span class="hljs-comment">// Anthropic, via the SDK&#x27;s own AsIChatClient adapter</span></code></pre>
+          <p>The ordering is not decoration. Bounds are outermost, so a call the configuration forbids is refused
+          before anything downstream logs it, caches it or counts it. Guardrails sit inside the bounds and outside
+          usage recording, so a blocked request never reaches the provider and therefore has no cost to record. The
+          comment in the source says all of that in place (<code>DependencyInjection.cs:31-39</code>).</p>
+          <p>Two smaller decisions in the same method are worth naming. <strong>The provider adapter is the vendor&#39;s, not
+          ours</strong>: <code>CreateProviderChatClient</code> constructs an <code>AnthropicClient</code> and calls the SDK&#39;s own
+          <code>AsIChatClient</code> extension with the configured model and ceiling (<code>:158</code>, adapter call at <code>:169-173</code>), so
+          nothing here hand-rolls a Messages API request over <code>HttpClient</code>. A provider the package does not know
+          goes through the factory overload (<code>:82</code>) rather than by adding a second vendor dependency, and an
+          unrecognized provider throws with that instruction in the message (<code>:174-176</code>). And <strong>prompt and
+          completion text reach traces only on a host positively identified as Development</strong> (<code>:137</code>, gate at
+          <code>:192-196</code>), a check that fails closed: an environment the package cannot see reads as not-Development.</p>
+          <h2 id="off-by-absence-not-off-by-flag">Off by absence, not off by flag</h2>
+          <p><code>AiSettings</code> (<code>AiSettings.cs:31</code>) binds one configuration section, <code>Ai</code> (<code>:34</code>), and carries the whole
+          surface: <code>Enabled</code> (<code>:48</code>), <code>Provider</code> (<code>:51</code>), <code>Model</code> (<code>:59</code>), <code>ApiKey</code> (<code>:70</code>), <code>MaxOutputTokens</code>
+          (<code>:77</code>, defaulting to 1024 at <code>:37</code>), <code>Timeout</code> (<code>:83</code>, defaulting to 30 seconds at <code>:40</code>), <code>AllowTools</code>
+          (<code>:90</code>), <code>EnableCache</code> (<code>:96</code>) and <code>PerCallInputTokenBudget</code> (<code>:104</code>). <code>Model</code> and <code>ApiKey</code> are required
+          only once <code>Enabled</code> is true (<code>Validate</code>, <code>:113-141</code>), which is what lets the section ship in every
+          appsettings file rather than only in the ones that use it.</p>
+          <p>The load-bearing line is four lines long. When <code>Ai:Enabled</code> is false, <strong>nothing is registered</strong>
+          (<code>DependencyInjection.cs:97-101</code>): the settings still bind and validate, and no <code>IChatClient</code> enters the
+          container at all.</p>
+          <p>That pushes a null onto the consumer on purpose. A feature resolves the client with
+          <code>GetService&lt;IChatClient&gt;()</code> and holds a nullable dependency, so the disabled path is a branch the feature
+          writes rather than a flag the framework reads on its behalf. The payoff is that a feature with no key in
+          a given environment is off <em>by construction</em>: there is no half-running state where the flag says on and
+          the credential is missing. A boolean everybody has to remember to check is the version of this that
+          fails.</p>
+          <h2 id="bounds-four-of-them-on-both-paths">Bounds: four of them, on both paths</h2>
+          <p><code>BoundedChatClient</code> (<code>BoundedChatClient.cs:51</code>) is a <code>DelegatingChatClient</code> and enforces four bounds, each
+          applied to the buffered and the streaming path (the list is documented on the type at <code>:15-36</code>):</p>
+          <ol>
+          <li><strong>Output tokens.</strong> <code>MaxOutputTokens</code> is clamped down to the configured ceiling, while a caller asking
+          for less keeps its own smaller number (<code>:151-153</code>). Output tokens are the expensive half of a chat
+          call, so this is a cost bound.</li>
+          <li><strong>Wall clock.</strong> Every call runs under a token linked to the caller&#39;s own and cancelled after
+          <code>Ai:Timeout</code> (<code>:164-169</code>). On the streaming path the timeout covers the whole stream rather than its
+          first update (<code>:99-112</code>, with the reasoning at <code>:106-107</code>): a provider that opens a response and then
+          stalls is exactly the failure a per-call budget exists to bound.</li>
+          <li><strong>Tool use.</strong> While <code>Ai:AllowTools</code> is false, tools and the tool mode are stripped from the request
+          (<code>:155-159</code>). That is the difference between telling a model not to act and being unable to hand it
+          the means.</li>
+          <li><strong>Input size.</strong> When <code>Ai:PerCallInputTokenBudget</code> is set, an estimated input above the budget fails
+          the call locally instead of paying for it remotely (<code>:171-186</code>).</li>
+          </ol>
+          <p>The estimate asks the pipeline for an <code>IAiTokenEstimator</code> (<code>IAiTokenEstimator.cs:14</code>) and otherwise
+          counts four characters to the token (<code>BoundedChatClient.cs:144</code>), the usual rough rule for English prose.
+          The type documentation is blunt about what that cannot see: it reads message text plus instructions only,
+          so images, tool schemas, provider-side additions and non-Latin scripts are all under-counted (<code>:37-44</code>).
+          It is a runaway guardrail with headroom, never a billing figure. The estimator interface is declared in
+          the package rather than taken as a dependency on a tokenizer library, and the reason is stated in place
+          (<code>IAiTokenEstimator.cs:9-12</code>): a package whose whole point is keeping the model dependency small should
+          not acquire a second one to count characters.</p>
+          <p>One detail that costs nothing and prevents a real bug: the options a caller passes are never mutated.
+          Each call works on a clone (<code>:149</code>), so a caller reusing one <code>ChatOptions</code> instance across requests does
+          not silently inherit this client&#39;s clamping.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Illustrative of the documented shape: the bounds BoundedChatClient applies.</span>
+<span class="hljs-function"><span class="hljs-keyword">private</span> ChatOptions <span class="hljs-title">Bound</span>(<span class="hljs-params">ChatOptions? options</span>)</span>
+{
+    <span class="hljs-keyword">var</span> bounded = options?.Clone() ?? <span class="hljs-keyword">new</span> ChatOptions();
+
+    <span class="hljs-comment">// A caller asking for more gets the ceiling; a caller asking for less keeps its number.</span>
+    bounded.MaxOutputTokens = bounded.MaxOutputTokens <span class="hljs-keyword">is</span> { } requested
+        ? Math.Min(requested, _settings.MaxOutputTokens)
+        : _settings.MaxOutputTokens;
+
+    <span class="hljs-keyword">if</span> (!_settings.AllowTools)
+    {
+        bounded.Tools = <span class="hljs-literal">null</span>;
+        bounded.ToolMode = <span class="hljs-literal">null</span>;
+    }
+
+    <span class="hljs-keyword">return</span> bounded;
+}
+
+<span class="hljs-function"><span class="hljs-keyword">private</span> CancellationTokenSource <span class="hljs-title">CreateLinkedTimeout</span>(<span class="hljs-params">CancellationToken cancellationToken</span>)</span>
+{
+    <span class="hljs-comment">// Linked, so a caller cancelling early still wins and neither source masks the other.</span>
+    <span class="hljs-keyword">var</span> linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+    linked.CancelAfter(_settings.Timeout);
+    <span class="hljs-keyword">return</span> linked;
+}
+
+<span class="hljs-function"><span class="hljs-keyword">private</span> <span class="hljs-keyword">void</span> <span class="hljs-title">EnforceInputBudget</span>(<span class="hljs-params">IReadOnlyList&lt;ChatMessage&gt; messages, ChatOptions options</span>)</span>
+{
+    <span class="hljs-keyword">if</span> (_settings.PerCallInputTokenBudget <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> { } budget)
+    {
+        <span class="hljs-keyword">return</span>;
+    }
+
+    <span class="hljs-comment">// The estimator is optional; the fallback is four characters to the token.</span>
+    <span class="hljs-keyword">var</span> estimated = EstimateInputTokens(messages, options, <span class="hljs-keyword">this</span>.GetService&lt;IAiTokenEstimator&gt;());
+    <span class="hljs-keyword">if</span> (estimated &lt;= budget)
+    {
+        <span class="hljs-keyword">return</span>;
+    }
+
+    <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> InvalidOperationException(
+        <span class="hljs-string">$&quot;The request&#x27;s estimated input size (<span class="hljs-subst">{estimated}</span> tokens) exceeds Ai:PerCallInputTokenBudget &quot;</span>
+        + <span class="hljs-string">$&quot;(<span class="hljs-subst">{budget}</span> tokens). The estimate is approximate: shorten the prompt or raise the budget.&quot;</span>);
+}</code></pre>
+          <p>On the streaming path, the bound and the budget check run eagerly, outside the iterator
+          (<code>BoundedChatClient.cs:90-94</code>): a request the configuration forbids is refused when it is made, not when
+          somebody gets around to reading the stream.</p>
+          <h2 id="guardrails-the-framework-ships-the-extension-point-not-the-policy">Guardrails: the framework ships the extension point, not the policy</h2>
+          <p><code>IChatGuardrail</code> (<code>IChatGuardrail.cs:20</code>) has two methods: <code>InspectRequestAsync</code> (<code>:27-30</code>) and
+          <code>InspectResponseAsync</code> (<code>:37-40</code>), each answering with a <code>GuardrailVerdict</code>. An application registers one
+          implementation per concern, <code>GuardrailChatClient</code> (<code>GuardrailChatClient.cs:21</code>) runs every one of them in
+          registration order, and the first block throws <code>ChatGuardrailException</code>
+          (<code>ChatGuardrailException.cs:12</code>, thrown at <code>GuardrailChatClient.cs:57</code> and <code>:100</code>).</p>
+          <p>The framework ships no policy, and the interface documentation says why (<code>IChatGuardrail.cs:9-13</code>): what
+          counts as a prompt injection, a leaked secret, an off-topic answer or a disallowed topic depends on the
+          data the application holds and the jurisdiction it operates in, so a content rule baked into a shared
+          package would be wrong somewhere by construction. The package offers the place to plug policy in. The
+          policy stays with the feature that knows what its input is.</p>
+          <p>Three details in that layer repay attention:</p>
+          <ul>
+          <li><strong>The verdict fails closed.</strong> <code>GuardrailVerdict</code> is a <code>readonly record struct</code> (<code>GuardrailVerdict.cs:13</code>)
+          whose <code>default</code> value reads as a block carrying <code>UnspecifiedReason</code> (<code>:16</code>), because <code>Allow</code> is an
+          explicit static (<code>:25</code>) and <code>Block(reason)</code> refuses a blank reason (<code>:39-44</code>). A half-built verdict
+          stops the call rather than silently admitting it.</li>
+          <li><strong>The layer is absent when it is unused.</strong> <code>AddMmcaChatClient</code> checks the service <em>descriptors</em>, not a
+          resolved service, and adds <code>GuardrailChatClient</code> only when at least one <code>IChatGuardrail</code> is registered
+          (<code>DependencyInjection.cs:117-121</code>). An empty-loop client would otherwise change the type the container
+          hands back for every application that adopts none of this (the comment is at <code>:114-116</code>).</li>
+          <li><strong>The streaming path inspects the request only</strong> (<code>GuardrailChatClient.cs:65-78</code>, remark at <code>:16-20</code>).
+          Inspecting a streamed answer means buffering it to the end, which defeats the reason a caller chose
+          streaming, so an application that needs response inspection on streamed output buffers at its own call
+          site and owns that decision.</li>
+          </ul>
+          <p>A refusal is an exception rather than an empty response, and the reason is recorded on the exception type
+          (<code>ChatGuardrailException.cs:7-11</code>): an empty response is indistinguishable from the model having nothing
+          to say, and a caller that wants a graceful fallback catches this type specifically.</p>
+          <h2 id="prompts-a-versioned-contract-the-framework-hashes">Prompts: a versioned contract the framework hashes</h2>
+          <p><code>PromptContract</code> (<code>PromptContract.cs:23</code>) is a record of four things: name, version, model and system
+          prompt. Its <code>Hash</code> (<code>:46</code>) is the lowercase hex SHA-256 of those four joined with a pipe, each with its
+          line endings normalized to LF first (<code>:90-103</code>), so the same prompt hashes identically on Windows and
+          Linux and <code>core.autocrlf</code> cannot trip a CI gate.</p>
+          <p>Deriving the identity from all four components is the point. Recorded golden answers are valid for one
+          exact combination of name, version, model and text, so an edit without a version bump still moves the
+          hash and the evaluation cannot be skipped by forgetting. The hash is computed on each read rather than
+          cached, and the remark explains the trap (<code>:40-45</code>): a record&#39;s generated copy constructor copies fields
+          verbatim, so a cached hash would survive a <code>with</code> expression and describe the prompt the copy was made
+          <em>from</em>, which is exactly the drift this type exists to prevent.</p>
+          <p><code>ToChatOptions</code> (<code>:53</code>) and <code>Apply</code> (<code>:62</code>) stamp three properties onto the request: <code>mmca.prompt.name</code>
+          (<code>:26</code>), <code>mmca.prompt.version</code> (<code>:29</code>) and <code>mmca.prompt.hash</code> (<code>:32</code>). That is how the prompt&#39;s identity
+          reaches telemetry, and <code>PromptContract.ReadName</code> (<code>:77</code>) and <code>ReadVersion</code> (<code>:82</code>) are how the metering
+          layer reads it back off the options a call carried.</p>
+          <h2 id="metering-two-counters-one-histogram-one-name">Metering: two counters, one histogram, one name</h2>
+          <p><code>AiUsageMeter</code> (<code>AiUsageMeter.cs:20</code>) publishes <code>mmca.ai.input_tokens</code> (<code>:29</code>) and
+          <code>mmca.ai.output_tokens</code> (<code>:32</code>) on the meter <code>MMCA.Common.AI</code> (<code>:26</code>), plus a
+          <code>mmca.ai.call.duration</code> histogram in seconds (<code>:45</code>). Every instrument shares four attribution
+          dimensions, <code>model</code>, <code>prompt_name</code>, <code>prompt_version</code> and <code>provider</code> (<code>AttributionTags</code>, <code>:155-165</code>), and
+          the histogram adds an <code>outcome</code> of <code>success</code>, <code>error</code> or <code>canceled</code> (<code>:48</code>, <code>:51</code>, <code>:54</code>, applied at
+          <code>:137-149</code>).</p>
+          <p>Those dimensions are chosen to answer the question an unexplained spend jump actually asks. A model swap
+          moves the per-token price; a prompt revision moves the token count. Tagging by model and by prompt version
+          resolves the jump to one or the other without opening a log.</p>
+          <p>One meter name across every application is what makes a dashboard portable: a per-feature meter means a
+          per-feature query, and the spend question is asked across services, not within one. The histogram is
+          deliberately not a replacement for <code>Microsoft.Extensions.AI</code>&#39;s own
+          <code>gen_ai.client.operation.duration</code>, which the OpenTelemetry layer already publishes on the same meter.
+          The standard instrument carries the GenAI semantic-convention dimensions; this one carries the prompt
+          identity and the outcome, so a latency regression is attributable to the prompt that caused it and a
+          failure rate reads off the same series as the latency (<code>:36-43</code>).</p>
+          <p><code>UsageRecordingChatClient</code> (<code>UsageRecordingChatClient.cs:30</code>) is what feeds it, and it records the
+          provider&#39;s own reported numbers rather than an estimate. The type documentation says why it sits here
+          rather than beside the input-budget check (<code>:11-15</code>): a bound has to be decided <em>before</em> the call, and a
+          cost has to be measured <em>after</em> it. The buffered path records duration on all three outcomes and then the
+          usage (<code>:48-81</code>); the streaming path drives the enumerator by hand rather than with <code>await foreach</code>,
+          because the duration has to be attributed to an outcome and C# forbids a <code>yield return</code> inside a <code>try</code>
+          with a <code>catch</code> (<code>:93-95</code>), and it harvests usage from the <code>UsageContent</code> item the provider delivers on
+          the stream (<code>:143-154</code>).</p>
+          <p>Two absences are deliberate. A usage the provider did not report records nothing (<code>AiUsageMeter.cs:108-123</code>):
+          an absent number must not read as a zero on a spend dashboard. And the <code>Meter</code> itself is created through
+          <code>IMeterFactory</code> and neither retained nor disposed (<code>:62-67</code>), because disposing a factory-owned meter
+          kills the instrument for every other holder of the same name.</p>
+          <h2 id="the-layering-rule-that-keeps-all-of-this-at-one-place">The layering rule that keeps all of this at one place</h2>
+          <p>A governed boundary that leaks is not a boundary. There are exactly two ways this one leaks, and
+          <code>AiDependencyIsolationTestsBase</code> (<code>AiDependencyIsolationTestsBase.cs:19</code>) is the shared fitness function
+          that closes both, one <code>[Fact]</code> each:</p>
+          <ul>
+          <li><code>LanguageModelSdks_ShouldStayAt_TheModelBoundary</code> (<code>:24-25</code>) asserts that no layer outside an
+          Infrastructure assembly or the package itself names a vendor SDK: <code>Anthropic</code>, <code>OpenAI</code>, <code>Azure.AI</code> or
+          <code>Microsoft.Extensions.AI</code> itself.</li>
+          <li><code>GovernedAiPackage_ShouldStayBehind_Infrastructure</code> (<code>:28-29</code>) asserts that nothing outside
+          Infrastructure references <code>MMCA.Common.AI</code> at all.</li>
+          </ul>
+          <p>The second rule is the interesting one, and the class documentation explains the failure it prevents
+          (<code>:6-13</code>): a module can take the framework&#39;s governed package as a convenience and start passing a
+          <code>PromptContract</code> around as a domain type. Either leak turns &quot;the app calls a model at one place&quot; into
+          &quot;the model is spread through the app&quot;, and a dependency that is everywhere cannot be versioned,
+          evaluated, capped or swapped.</p>
+          <p>It ships the way every shared rule in this framework ships: as an abstract base subclassed in each repo&#39;s
+          architecture tests with that repo&#39;s architecture map (<code>:14-17</code>), one of 136 fitness test methods across 53
+          abstract <code>*TestsBase</code> classes, of which MMCA.Common&#39;s own build executes 267 (<code>MMCA.Common/FACTS.md:48</code>,
+          <code>:51</code>). A prompt or a bound must not become a type your domain depends on, and that sentence is a failing
+          test rather than a code review comment.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <ul>
+          <li><strong>Two of the seven §16 criteria are absent from the framework on purpose.</strong> An evaluation gate in CI
+          and retrieval as data architecture are feature-side, and ADR-120 records both as scope-outs rather than
+          as gaps to be closed later (<code>ADR-120:226</code>, <code>:236-237</code>). The §16 row&#39;s Implementation 6 is the Adequate
+          band precisely because of that split (<code>common-ArchitectureScorecard.md:75</code>). The package governs the
+          call. It does not make your feature evaluable for you.</li>
+          <li><strong>The package governs the call, not the prompt&#39;s content.</strong> Delimiting untrusted input, escaping it,
+          redacting PII and constraining the response schema stay in the feature that knows what its input is
+          (<code>ADR-120:209-213</code>). <code>IChatGuardrail</code> is where that policy plugs in, and a second feature still has to
+          make those decisions for itself.</li>
+          <li><strong>Tool governance is a blanket switch, not per-caller authorization.</strong> <code>Ai:AllowTools</code> is one boolean
+          for the whole host, and stripping tools (<code>BoundedChatClient.cs:155-159</code>) is the cheap half of least
+          privilege. The rubric asks for tools that are explicit, authorized per caller, and idempotent or
+          confirmable (<code>ArchitectureEvaluationCriteria.md:480</code>). Until a feature needs any, the honest answer is
+          that none exist.</li>
+          <li><strong>Off by absence puts a null on the consumer.</strong> Nothing is registered when <code>Ai:Enabled</code> is false
+          (<code>DependencyInjection.cs:97-101</code>), so a feature resolves with <code>GetService</code> and holds a nullable
+          dependency. That is a branch in your code, written once per feature, that the framework will not write
+          for you (<code>ADR-120:189-195</code>).</li>
+          <li><strong>A cache hit still records usage.</strong> <code>UsageRecordingChatClient</code> sits inside the optional response cache
+          (<code>DependencyInjection.cs:22-30</code>), so a hit counts what the call would have cost rather than what was
+          billed. The provider span is absent on a hit, so the two are distinguishable, but a spend graph read
+          without that context over-reports (<code>ADR-120:205-209</code>).</li>
+          <li><strong>The input budget is an estimate and says so.</strong> Message text plus instructions only, four characters
+          to the token, everything else under-counted (<code>BoundedChatClient.cs:37-44</code>). Treat it as a runaway
+          guardrail with headroom. The authoritative numbers arrive after the call.</li>
+          <li><strong>The streaming guardrail sees the request only</strong> (<code>GuardrailChatClient.cs:65-78</code>). Response inspection
+          on a streamed answer means buffering it, which defeats streaming, so that trade is pushed to the call
+          site rather than made for you.</li>
+          <li><strong>One provider is built in.</strong> Anything other than Anthropic goes through the factory overload
+          (<code>DependencyInjection.cs:82</code>) and an unrecognized provider throws with that instruction (<code>:174-176</code>).
+          The pipeline is provider-agnostic; the convenience is not.</li>
+          <li><strong>An optional package nobody installs governs nothing, and adoption here is one feature.</strong> MMCA.ADC&#39;s
+          Conference module takes the package in Infrastructure and in its service host
+          (<code>MMCA.ADC.Conference.Infrastructure.csproj:19</code>, <code>MMCA.ADC.Conference.Service.csproj:27</code>), and its
+          organizer-facing session scoring is the one product feature in these repos that calls a model
+          (<code>AnthropicScoringService.cs:9</code>), with the host subscribing the meter and trace source by name
+          (<code>MMCA.ADC.Conference.Service/Program.cs:154-155</code>). MMCA.Store adopts none of it: §16 is N/A there
+          because no product feature calls a model (<code>store-ArchitectureScorecard.md:61</code>). The rules are proven by
+          exactly one consumer.</li>
+          </ul>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The shape ports to any stack with a DI container and a vendor SDK. <code>Microsoft.Extensions.AI</code> makes it
+          cheap in .NET because <code>IChatClient</code> and <code>DelegatingChatClient</code> already exist, but the pattern is older
+          than the abstraction.</p>
+          <ol>
+          <li><strong>Wrap the vendor client; do not subclass your feature around it.</strong> A delegating decorator per concern
+          composes, and a decorator you did not register is a concern you deliberately skipped. Use the vendor
+          SDK&#39;s own adapter onto whatever common interface your ecosystem has, and write no transport code of
+          your own: the day you hand-roll the HTTP request is the day the boundary is in the wrong place.</li>
+          <li><strong>Put the bounds outermost, and make them configuration.</strong> An output-token ceiling, a wall-clock
+          budget, a tool switch and an optional input ceiling, read from one validated settings section. Clamp
+          rather than default: a governance layer a caller can talk out of its limits with an argument is
+          documentation. Link your timeout token to the caller&#39;s own so early cancellation still wins.</li>
+          <li><strong>Turn the feature off by absence, not by flag.</strong> Register nothing when the dependency is disabled, so
+          the code path cannot half-exist against a missing key. A nullable dependency is a branch somebody
+          writes once; a boolean is a check everybody has to remember.</li>
+          <li><strong>Make the prompt a versioned artifact with a computed identity.</strong> Name, version, model and text, and
+          a hash over all four with line endings normalized first. Compute it on read, never cache it in a
+          field. Stamp the name, version and hash onto the request so telemetry carries them. Without that hash,
+          an evaluation suite has nothing stable to key its recorded answers on, and &quot;did anybody re-evaluate
+          this prompt&quot; becomes a question about somebody&#39;s memory.</li>
+          <li><strong>Count the provider&#39;s numbers, not your own, and count them once.</strong> One meter name and one set of
+          counter names across every service, with the model, provider, prompt name and prompt version as
+          dimensions. Record nothing when the provider reported nothing: an absent number that reads as zero is
+          worse than a gap, because a gap is visible.</li>
+          <li><strong>Ship the guardrail extension point without the guardrail policy.</strong> Let the application register
+          inspectors for requests and responses, run all of them, fail closed on a default verdict, and stop on
+          the first refusal. Content policy belongs to the feature that knows what its input is and which
+          jurisdiction it answers to.</li>
+          <li><strong>Write the layering rule as a test.</strong> Assert that no vendor SDK name appears outside your
+          infrastructure layer, and that your own governed wrapper does not either. The second assertion is the
+          one people skip, and it is the one that stops a prompt type from becoming a domain type.</li>
+          </ol>
+          <p>The rule of thumb: <strong>anything you would demand of a database, a payment provider or a message broker, you
+          have to demand of a model call too, and a model call needs two more things on top: a versioned prompt and
+          a per-call ceiling. If you cannot say what one call can spend, you do not have a dependency. You have a
+          subscription with a code path attached.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why the properties of a model call belong to the call rather than to the feature
+          that makes it, how <code>MMCA.Common.AI</code> composes <code>BoundedChatClient</code>, an optional <code>GuardrailChatClient</code> and
+          <code>UsageRecordingChatClient</code> into one governed <code>IChatClient</code>, why registering nothing when the dependency is
+          disabled beats a flag, the four bounds and the honest limits of the estimated input budget, <code>IChatGuardrail</code>
+          as an extension point that ships no policy and fails closed, <code>PromptContract</code>&#39;s SHA-256 identity over name,
+          version, model and text, the <code>AiUsageMeter</code> counters and latency histogram that make spend attributable to
+          a prompt version, and the <code>AiDependencyIsolationTestsBase</code> fitness function that keeps both the vendor SDK
+          and the governed package behind Infrastructure.</p>
+          <p><strong>Next in the series:</strong> Article 51, &quot;Four ways to do work later: channels, cron, the outbox and durable internal
+          commands.&quot;</p>
+          <p><em>MMCA.Common is open source. Star the repo, read the 2-minute ADR-120 behind this pattern, or
+          <code>dotnet add package MMCA.Common.API</code> and build the monolith you can extract later.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>This pattern&#39;s decision records: <a href="../docs/adr/120-governed-chat-client-boundary.html">ADR-120: Governed Language-Model Boundary (MMCA.Common.AI)</a> and
+          <a href="../docs/adr/111-ai-session-scoring-governance.html">ADR-111: AI Session Scoring Governance</a></li>
+          <li>The full 34-category scorecard, §16 included, lives in
+          <a href="../docs/governance/common-ArchitectureScorecard.html">MMCA.Common: Architecture Scorecard</a> in the docs site.</li>
+          </ul>
+          <p><em>Previous: Article 49, &quot;Undo is a feature: saga compensation and the reconciliation backstop.&quot; Next:
+          Article 51, &quot;Four ways to do work later: channels, cron, the outbox and durable internal commands.&quot;</em></p>
+          <p><em>Tags: .NET, C Sharp, AI, LLM, Software Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="saga-compensation-reconciliation.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">49 · Saga compensation and the reconciliation backstop</span></a>
+          <a class="article-pager-link article-pager-link--next" href="durable-internal-commands.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">51 · Four ways to do work later</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-one-optional-package-and-the-call-is-a-pipeline">The MMCA answer: one optional package, and the call is a pipeline</a></li>
+            <li><a href="#off-by-absence-not-off-by-flag">Off by absence, not off by flag</a></li>
+            <li><a href="#bounds-four-of-them-on-both-paths">Bounds: four of them, on both paths</a></li>
+            <li><a href="#guardrails-the-framework-ships-the-extension-point-not-the-policy">Guardrails: the framework ships the extension point, not the policy</a></li>
+            <li><a href="#prompts-a-versioned-contract-the-framework-hashes">Prompts: a versioned contract the framework hashes</a></li>
+            <li><a href="#metering-two-counters-one-histogram-one-name">Metering: two counters, one histogram, one name</a></li>
+            <li><a href="#the-layering-rule-that-keeps-all-of-this-at-one-place">The layering rule that keeps all of this at one place</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

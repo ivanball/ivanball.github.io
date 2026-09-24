@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>The transactional outbox in .NET 10: never lose an event again · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Events that survive a crash: persist them atomically with your data, then dispatch at least once.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/transactional-outbox-dotnet.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="The transactional outbox in .NET 10: never lose an event again">
+  <meta property="og:description" content="Events that survive a crash: persist them atomically with your data, then dispatch at least once.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/transactional-outbox-dotnet.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-09.png">
+  <meta property="og:image:alt" content="The transactional outbox in .NET 10: never lose an event again">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The transactional outbox in .NET 10: never lose an event again">
+  <meta name="twitter:description" content="Events that survive a crash: persist them atomically with your data, then dispatch at least once.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-09.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"The transactional outbox in .NET 10: never lose an event again","description":"Events that survive a crash: persist them atomically with your data, then dispatch at least once.","url":"https://ivanball.github.io/articles/transactional-outbox-dotnet.html","mainEntityOfPage":"https://ivanball.github.io/articles/transactional-outbox-dotnet.html","image":"https://ivanball.github.io/assets/img/articles/article-09.png","datePublished":"2026-07-07T12:17:41Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":9,"sameAs":"https://medium.com/@ivanball76/the-transactional-outbox-in-net-10-never-lose-an-event-again-f5a9b7a89e51"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"09 · The transactional outbox","item":"https://ivanball.github.io/articles/transactional-outbox-dotnet.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">09 · The transactional outbox</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html" aria-current="page">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Core patterns · No. 9</p>
+          <h1 id="the-transactional-outbox-in-net-10-never-lose-an-event-again">The transactional outbox in .NET 10: never lose an event again</h1>
+          <p class="article-meta"><time datetime="2026-07-07T12:17:41Z">July 7, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/the-transactional-outbox-in-net-10-never-lose-an-event-again-f5a9b7a89e51" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-09.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">&quot;Save to the database, then publish to the broker&quot; is a dual write with no atomicity.
+          Here is the at-least-once pattern that fixes it, in one SaveChanges call.</p>
+          <hr>
+          <p>There is a two-line bug hiding in a huge number of .NET services, and it looks completely reasonable:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">await</span> _db.SaveChangesAsync();        <span class="hljs-comment">// 1. persist the order</span>
+<span class="hljs-keyword">await</span> _bus.Publish(orderPlaced);     <span class="hljs-comment">// 2. tell everyone else</span></code></pre>
+          <p>Step 1 succeeds. Step 2 fails: a network blip, a broker restart, a redeploy mid-request. Now your
+          database says the order exists, and the rest of your system never heard about it. Inventory is not
+          decremented, the confirmation email never sends, the analytics pipeline is blind to it.</p>
+          <p>This is a <strong>dual write</strong>: two systems updated in two steps with no shared transaction. It cannot be
+          made reliable by reordering the lines or adding a try/catch. Publish-then-save has the mirror problem
+          (you announce an order that was never saved). There is no ordering of two independent commits that is
+          safe.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>The failure is rare per request and catastrophic in aggregate. It does not show up in tests, because
+          tests do not kill the broker between two awaits. It shows up in production as &quot;the data says X but the
+          downstream system thinks Y,&quot; weeks later, as a reconciliation ticket nobody can reproduce.</p>
+          <p>The moment you have <strong>more than one thing that needs to know</strong> when something happens (and in any
+          non-trivial system you do), you need the persist and the publish to be atomic. That is what the
+          transactional outbox gives you.</p>
+          <h2 id="the-pattern-one-transaction-then-a-separate-delivery">The pattern: one transaction, then a separate delivery</h2>
+          <p>The transactional outbox splits the problem into two phases that are each individually safe:</p>
+          <ol>
+          <li><strong>Record intent atomically.</strong> When you save the order, you also write the event to an
+          <code>OutboxMessages</code> table <strong>in the same database transaction</strong>. Either both commit or neither does.
+          There is no window where the order exists and the event does not.</li>
+          <li><strong>Deliver separately, with retries.</strong> A background processor reads unprocessed rows from the outbox
+          and publishes them. If publishing fails, the row stays unprocessed and is retried. Delivery is
+          <strong>at-least-once</strong>: it may publish twice, never zero times.</li>
+          </ol>
+          <p>The durable record (the committed outbox row) decouples &quot;it happened&quot; from &quot;everyone has been told.&quot;
+          The broker can be down for an hour; when it comes back, the backlog drains.</p>
+          <h2 id="how-mmcacommon-does-it-you-just-record-intent">How MMCA.Common does it: you just record intent</h2>
+          <p>The reason this pattern is often skipped is that wiring it by hand is tedious. In MMCA.Common it is
+          automatic. Your aggregate records a domain event, and the framework does the rest.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Inside your aggregate. You only declare that something happened:</span>
+AddDomainEvent(<span class="hljs-keyword">new</span> ProductVariantChanged(Id, newPrice));
+<span class="hljs-comment">// SaveChanges does the rest: your data row and the OutboxMessage row,</span>
+<span class="hljs-comment">// one transaction, same database as the aggregate.</span></code></pre>
+          <p><code>AddDomainEvent</code> lives on the aggregate base (<code>AuditableAggregateRootEntity</code>), so any aggregate can
+          raise events. The interesting work happens in <code>SaveChangesAsync</code>, which runs a fixed sequence:</p>
+          <blockquote>
+          <p>stamp audit fields -&gt; capture domain events from the aggregates -&gt; serialize them to <code>OutboxMessage</code>
+          rows -&gt; <code>base.SaveChangesAsync()</code> commits <strong>data + outbox in the same transaction</strong> -&gt; dispatch the
+          local domain events in-process -&gt; mark their outbox rows processed.</p>
+          </blockquote>
+          <p>That commit is the whole guarantee. The data and the outbox rows are written under one commit, so they
+          cannot diverge. The in-process dispatch is a fast path for <strong>pure domain events</strong> only: an
+          <code>IIntegrationEvent</code> still gets its outbox row, but it is deliberately not dispatched in-process, so its
+          row stays unprocessed and only <code>OutboxProcessor</code> publishes it through <code>IMessageBus</code> (the registered
+          transport decides delivery). That is what keeps an integration event broker-correct once the module is
+          extracted. (Source: the SaveChanges flow in <code>MMCA.Common/CLAUDE.md</code> and
+          <a href="../docs/onboarding/group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a>.)</p>
+          <h2 id="the-third-participant-in-that-sequence-the-change-trail">The third participant in that sequence: the change trail</h2>
+          <p>The first step of that sequence, &quot;stamp audit fields&quot;, answers who touched a row last. It cannot
+          answer what changed, because the stamp is a single overwrite: a row edited nine times carries the
+          ninth editor and nothing else. <strong>ADR-075</strong> adds the missing half, and it belongs in this article
+          because it does not invent a mechanic, it reuses this one.</p>
+          <p><code>AuditTrailSaveChangesInterceptor</code> is a third <code>SaveChangesInterceptor</code>, registered after the
+          audit-stamp interceptor and after the domain-event interceptor that writes the outbox rows. The
+          order is load-bearing: running last is what makes the diff it captures see the final stamped values
+          rather than a half-populated entity. It walks the change tracker, compares each modified property&#39;s
+          original value against its current one, and adds one <code>AuditTrailEntry</code> row per changed property into
+          the same <code>SaveChanges</code> call. The history therefore commits or rolls back with the data it describes,
+          same transaction, same database. That is the outbox guarantee applied to a different payload: a
+          trail that can be committed without its data, or lost to a crash in the window after the commit, is
+          a hint rather than a record.</p>
+          <p>It is opt-in twice over, which is what keeps the cost proportional to the value. A host has to call
+          <code>AddAuditTrail(configuration)</code>, and an entity has to carry the <code>IAuditedEntity</code> marker. A host that
+          never calls it resolves the interceptor as null (<code>GetService</code>, not <code>GetRequiredService</code>), so nothing
+          joins the pipeline and the feature costs nothing. Seven service hosts across the reference apps opt
+          in today, among them Store&#39;s Sales service, ADC&#39;s Identity service, and Helpdesk&#39;s web host.</p>
+          <p>Two details follow from what a change history is. A property marked <code>[Pii]</code> records
+          <code>PiiRedactor.RedactedToken</code> on both sides of the change rather than the values, redacted at capture
+          and never at read, since a store that by construction outlives the row it describes would otherwise
+          become a second copy of personal data that erasure has to chase. And <code>AuditTrailEntry</code> is
+          deliberately not an <code>IAuditableEntity</code>, exactly like <code>OutboxMessage</code>: no audit stamps of its own
+          (stamping is itself a change, so it would recurse) and no soft-delete flag (a soft-deleted audit row
+          is rewritten history that a query filter quietly hides). Rows are append-only and leave only through
+          a scheduled retention purge.</p>
+          <p>The honest cost is that this one sits on the caller&#39;s latency path. An audited entity with twenty
+          changed properties writes twenty extra rows inside your transaction, which is exactly not the
+          beside-the-request work that the outbox drain is.</p>
+          <h2 id="when-the-commit-itself-is-ambiguous">When the commit itself is ambiguous</h2>
+          <p>Everything above rests on one commit, which makes it fair to ask what happens when the commit is the
+          thing that fails. A commit can fail after the database has applied it but before the acknowledgement
+          reaches the client, so the outcome is genuinely unknown: the transaction may be durable, or it may
+          not.</p>
+          <p>That ambiguity is dangerous here specifically because of the outbox. SQL Server&#39;s
+          <code>EnableRetryOnFailure</code> execution strategy classifies most commit-phase errors (timeouts, dropped
+          connections) as transient and re-runs the whole operation, and against a commit that may already be
+          durable, that duplicates every write the operation performed, including its outbox rows. The
+          mechanism that guarantees you never lose an event is what makes a blind retry expensive.</p>
+          <p>So the framework takes that failure out of the retry path. <code>DbContextFactory.ExecuteInTransactionAsync</code>
+          captures the commit failure, returns out of the execution strategy normally, and throws
+          <code>TransactionCommitAmbiguousException</code> only once the strategy is done with it. The placement is
+          deliberate: the strategy decides retriability by walking an exception&#39;s whole inner chain, so a
+          wrapper thrown inside it would be unwrapped and retried anyway. Failures that are not the commit are
+          still retried, and each retry starts from a cleared change tracker so the previous attempt&#39;s entities
+          (and one duplicate outbox row per event) are not written twice.</p>
+          <p>Not being retried is only half of it; the other half is being able to see what happened. The
+          exception carries a per-source outcome map: <code>CommittedSources</code> (their commits already succeeded, so
+          those writes are durable), <code>AmbiguousSource</code> (the one commit that threw, and the only outcome nobody
+          can vouch for), and <code>RolledBackSources</code> (never reached, rolled back best-effort, so they wrote
+          nothing that survives). Its message appends the same thing in words, <code>Per-source outcome: committed [...]; ambiguous [...]; rolled back [...]</code>, leaving out any group that is empty. This matters
+          because commits are sequential and independent, with no two-phase commit: a failure on the second of
+          two sources leaves the first durable, and that partial state is now readable straight off the
+          exception or the log line instead of being reconstructed by database archaeology afterwards. With a
+          single transactional source, which is what every production host runs today, that one source is the
+          ambiguous outcome and the other two groups are empty.</p>
+          <p>Recovery then belongs to the caller, and both halves of it are already in this series. A request
+          marked <code>[Idempotent]</code> replays safely (Article 18), and if the commit did land, whatever it wrote to
+          the outbox is delivered by the processor anyway. The in-process dispatch deferred by the transaction
+          is dropped rather than flushed, so no handler acts on state that may not exist. This is an edge case
+          the framework ships a named exception for, not a headline feature, but it is the honest footnote to
+          &quot;that commit is the whole guarantee.&quot;</p>
+          <p>That contract has a name and a record of its own. Every transactional write in the framework funnels
+          through one method: <code>IUnitOfWork.ExecuteInTransactionAsync</code> is the Application-layer name for it,
+          <code>UnitOfWork</code> forwards straight to <code>DbContextFactory.ExecuteInTransactionAsync</code>, and the CQRS
+          pipeline&#39;s <code>TransactionalCommandDecorator</code> calls it for any command carrying <code>ITransactional</code>.
+          Running the delegate inside SQL Server&#39;s retrying execution strategy (<code>EnableRetryOnFailure</code>, five
+          attempts, a ten-second maximum delay) decides four things. The whole delegate is the retriable unit,
+          so anything computed outside it but committed inside it is silently wrong on a second attempt. Every
+          attempt after the first starts from <code>ResetForRetry</code>, which calls <code>ChangeTracker.Clear()</code> on every
+          context, because the failed attempt&#39;s entities are still <code>Added</code> and would otherwise be inserted a
+          second time with a duplicate outbox row per event. A returned failed <code>Result</code> rolls back exactly like
+          a thrown exception, which is what a framework that mandates <code>Result</code> over exceptions owes itself. And
+          the deferred in-process dispatch is flushed only after the commit succeeds (<code>FlushDeferredAsync</code>) and
+          dropped on every other path (<code>DropDeferred</code>), so an in-process handler only ever sees durable state
+          while the outbox carries everything that crosses a process boundary. A re-entrant call joins the
+          ambient transaction instead of nesting, and a Cosmos context is never enlisted at all, since
+          <code>SupportsTransactions</code> is false for it. <strong>ADR-107</strong> records that contract.</p>
+          <h2 id="the-delivery-side-outboxprocessor">The delivery side: OutboxProcessor</h2>
+          <p>A background service, <code>OutboxProcessor</code>, drains the outbox. The details that make it production-grade:</p>
+          <ul>
+          <li><strong>It only touches its own outbox.</strong> Under database-per-service, every relational source has its own
+          <code>OutboxMessages</code> table, and the processor drains the sources its host owns. A host never races for
+          another service&#39;s outbox rows. (That race was a real defect, fixed by going database-per-service;
+          see ADR-006.)</li>
+          <li><strong>Smart waiting, not a hot loop.</strong> It wakes on a signal when new rows are written. When it sees rows
+          that are pending but not yet eligible (messages become eligible a few seconds after creation, default
+          5s, so an in-process handler can run first), it sleeps only until the earliest becomes eligible.
+          Otherwise it sleeps the full fallback interval (default 2s locally; deployed environments set it high,
+          for example 300s, to cut idle polling without adding latency).</li>
+          <li><strong>Batches and retries.</strong> It processes in batches of 50 and retries a failed message up to 5 times,
+          with at-least-once delivery and OpenTelemetry metrics for dead-letter tracking. Retries back off
+          exponentially: attempt <code>n</code> waits <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> (default base 10s),
+          multiplied by a random jitter factor between 0.8 and 1.2 and then capped at the lease duration.
+          The jitter is what keeps a batch that failed together (one dependency outage fails all 50 rows in
+          the same instant) from retrying in lockstep and re-hammering that dependency on one shared
+          schedule. The explicit backoff is also what makes the retry cadence a decision: without it, a failed
+          message&#39;s claim would simply never clear, and the cadence would be an accident of the 300-second
+          lease.</li>
+          <li><strong>Lease-based claiming for scale-out.</strong> Before dispatching, a replica claims its batch with an atomic
+          lease (<code>OutboxMessage.LockedUntil</code>/<code>LockToken</code>, <code>Outbox:LeaseSeconds</code> default 300s); other replicas
+          skip leased rows, and a replica that dies mid-batch releases its rows when the lease expires. Two
+          replicas can run without double-dispatching, so correctness does not depend on <code>minReplicas: 1</code> and
+          the replica count is a capacity decision (ADR-003).</li>
+          </ul>
+          <p>The idle poll spans are deliberately suppressed from telemetry export (an <code>OutboxPollFilterProcessor</code>
+          in the Aspire package drops the recurring <code>OutboxPoll</code> activity), so polling does not dominate your
+          observability bill.</p>
+          <h2 id="the-same-code-dispatches-in-process-and-over-a-broker">The same code dispatches in-process and over a broker</h2>
+          <p>Here is where the outbox earns its place in a framework whose whole thesis is &quot;monolith now,
+          microservices later.&quot; The event you raised does not know how it will be delivered.</p>
+          <p>There is one abstraction, <code>IMessageBus</code>, with two implementations:</p>
+          <ul>
+          <li><code>InProcessMessageBus</code>, used while the module lives inside the monolith. Delivery is a method call.</li>
+          <li><code>BrokerMessageBus</code>, used once the module is its own service. Delivery is over a MassTransit-backed
+          broker (RabbitMQ in development, Azure Service Bus in production), selected by config.</li>
+          </ul>
+          <p><code>MessageBusSettings</code> selects the mode. Your aggregate code, your handler code, none of it changes when
+          you extract the module. The outbox is what makes that switch safe: the same durable record is drained
+          to an in-process handler today and to a broker tomorrow. This is the dual-dispatch design recorded in
+          <strong>ADR-003</strong>.</p>
+          <p>Which transport you get is a separate decision, and <strong>ADR-066</strong> records it: <code>MessageBusProvider</code>
+          has exactly three values (<code>InProcess</code>, <code>RabbitMq</code>, <code>AzureServiceBus</code>), chosen at the deployment edge
+          (the Aspire AppHost locally, Bicep environment variables in production) rather than anywhere in
+          application code, and both broker branches are configured from one settings object with the same
+          exponential retry, so the two products stay substitutable. It also records the honest gap: the
+          production-only Azure Service Bus binding is exercised by a dedicated emulator test tier that runs
+          nightly and non-gating, so it is evidence that the binding works, not a check that blocks a
+          regression.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// One abstraction, two transports. Application code depends only on IMessageBus.</span>
+<span class="hljs-comment">// InProcessMessageBus  -&gt; in-monolith, method-call delivery</span>
+<span class="hljs-comment">// BrokerMessageBus     -&gt; extracted service, MassTransit broker (RabbitMQ dev / Azure Service Bus prod)</span></code></pre>
+          <p>Whether there is an outbox at all is resolved from that same mode. <code>MessageBus:EnableOutbox</code> is a
+          <code>bool?</code> that defaults to unset, and <code>MessageBusSettings.IsOutboxEnabled</code> reads
+          <code>EnableOutbox ?? Provider != MessageBusProvider.InProcess</code>, character for character the rule
+          <code>IsInboxEnabled</code> uses one property above it. <code>AddInfrastructure</code> resolves that posture once, at
+          registration: on the enabled path it registers <code>OutboxProcessor</code> and <code>OutboxCleanupService</code>, and on
+          the disabled path it registers neither and adds <code>OutboxDisabledNoticeService</code>, which logs one startup
+          line naming exactly what is not running. The one combination that cannot work is refused rather than
+          documented: <code>EnsureOutboxAvailableForProvider</code> throws when a broker transport is paired with an
+          explicit <code>false</code>, because <code>BrokerEventBus</code> writes the rows and <code>OutboxProcessor</code> is the only thing
+          that publishes them. The <code>OutboxMessages</code> table stays mapped either way, so flipping the flag is a
+          restart and never a migration (<strong>ADR-100</strong>). The direction that costs something is the in-process
+          default: a monolith that wants at-least-once delivery across a crash, and an in-process test host
+          that asserts on outbox rows or on a retried handler, both have to say so explicitly.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="JSON"><code class="language-jsonc hljs"><span class="hljs-comment">// Unset is the default, and the transport decides:</span>
+<span class="hljs-comment">//   InProcess                  -&gt; outbox OFF, events dispatch synchronously, no rows, no services</span>
+<span class="hljs-comment">//   RabbitMq / AzureServiceBus -&gt; outbox ON, and an explicit false throws at registration</span>
+<span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;MessageBus&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;Provider&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;InProcess&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;EnableOutbox&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span></code></pre>
+          <p>Application, Domain, and Shared are forbidden from referencing MassTransit directly; a fitness test
+          (<code>MicroserviceExtractionTests</code>) fails the build if the transport leaks upward. The reliability pattern
+          and the extraction boundary are the same mechanism.</p>
+          <h2 id="when-the-consumer-runs-out-of-retries">When the consumer runs out of retries</h2>
+          <p>The outbox makes the publish durable. It says nothing about what happens after the broker accepts the
+          message, and that is the other half of delivery. MassTransit applies its own retry policy on the
+          consume side, and when those retries are spent it moves the message to the transport&#39;s error queue and
+          the consumer moves on. That is correct behavior, and until <strong>ADR-087</strong> it was also silent: the outbox&#39;s
+          own dead-letter path is loud (a metric, an Error log, a retention window), but it covers the publish leg
+          only. An event that left the outbox successfully and then failed every consume attempt produced no
+          counter and no log line in any of our meters.</p>
+          <p><code>FaultIntegrationEventConsumer&lt;TEvent&gt;</code> closes that. It consumes <code>Fault&lt;TEvent&gt;</code>, the message
+          MassTransit publishes when a consumer&#39;s retries are exhausted, and it does exactly two things: it writes
+          one Error log line naming the event type and the faulted message id (the broker&#39;s own message id when
+          MassTransit captured one, the fault id otherwise, since one of the two is always what an operator pastes
+          into a queue browser), and it increments <code>broker.fault.count</code>, tagged by event type, on a meter named
+          <code>MMCA.Common.Broker</code>. It never throws and never replays the failed message, deliberately: a fault
+          consumer that tried to recover would be a third retry policy hiding behind the two that already exist.
+          Registration is automatic, because <code>RegisterIntegrationEventConsumer&lt;TEvent&gt;</code> adds it by default, so
+          opting out is a visible <code>false</code> at one call site rather than a setting that silently disarms every
+          consumer in a service.</p>
+          <p>The other half of ADR-087 is not symmetric across transports. Second-level redelivery (reschedule the
+          message minutes or hours later instead of retrying it immediately) is the right tool for a dependency
+          that will come back, but not within seconds, and <code>MessageBus:EnableDelayedRedelivery</code> defaults to off.
+          RabbitMQ consults that flag, because the feature needs the <code>rabbitmq_delayed_message_exchange</code> plugin
+          that the Aspire development container does not ship, and a default-on setting would fail every
+          developer&#39;s first run at bus start. Azure Service Bus ignores the flag and always applies the intervals
+          (default one minute, ten minutes, one hour), because it schedules natively and has no plugin to be
+          missing. Two honest costs ride along. The RabbitMQ deployment is the shape most likely to be running
+          without second-level redelivery, and nothing warns it. And an event redelivered an hour later runs its
+          handlers an hour after the original attempt, so the consumer-side inbox and every idempotent handler
+          have to stay correct across that span rather than across a retry burst. The counter itself only
+          observes: a fault means a message is sitting in the error queue until a human acts on it, with no alert
+          wired to it and no automated replay path.</p>
+          <h2 id="the-write-that-skips-the-whole-pipeline">The write that skips the whole pipeline</h2>
+          <p>Everything above depends on one assumption: that writes go through <code>SaveChangesAsync</code>. There is a
+          write that does not, and it is worth knowing before you reach for it, because the pipeline failing
+          silently is the whole problem.</p>
+          <p><code>ExecuteUpdate</code> issues set-based SQL directly. It never materializes entities, never populates the
+          change tracker, and therefore never runs the interceptor that stamps audit fields. A bulk update
+          written the obvious way updates the rows and quietly leaves <code>LastModifiedOn</code> and <code>LastModifiedBy</code>
+          holding whoever touched the row last, possibly years ago. Nothing throws. The rows are correct and the
+          audit trail is wrong, which is the worst combination, since the failure is invisible until an auditor
+          asks.</p>
+          <p>The framework&#39;s <code>IWriteRepository.ExecuteUpdateAsync</code> closes that hole by stamping the fields by hand:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// ExecuteUpdate bypasses the save pipeline&#x27;s audit interceptor, so stamp the</span>
+<span class="hljs-comment">// modification audit fields here unless the caller assigned them explicitly.</span>
+<span class="hljs-keyword">if</span> (!builder.SetsProperty(<span class="hljs-keyword">nameof</span>(IAuditableEntity.LastModifiedOn)))
+{
+    <span class="hljs-keyword">var</span> now = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+    builder.Set(e =&gt; e.LastModifiedOn, (DateTime?)now);
+}</code></pre>
+          <p>The mechanism that makes this possible is small and reusable: rather than handing EF&#39;s setter builder
+          straight to the caller, the repository collects the assignments into an <code>UpdatePropertySetterBuilder</code>
+          first. Because the assignments are captured rather than applied immediately, the repository can ask
+          <code>SetsProperty(...)</code> what the caller already set, add what is missing, and only then replay everything
+          onto EF via <code>Apply</code>. Intercepting a fluent API is usually awkward; buffering it makes it easy.</p>
+          <p>The <code>unless the caller assigned them explicitly</code> clause matters, since a reconciliation sweep that
+          wants to attribute the change to a system actor rather than the current user can set the fields
+          itself and the repository will not overwrite them.</p>
+          <p>Two limits are worth stating plainly. This is a <strong>set-based</strong> write, so it raises no domain events and
+          writes no outbox rows, which means everything this article describes does not apply to it. That is
+          the correct trade for a maintenance sweep over thousands of rows and the wrong one for a business
+          operation, so reach for it when you are reconciling state, not when you are expressing intent. And
+          <code>ExecuteUpdate</code> will not be caught by the same review reflex as <code>SaveChanges</code>, so the safe default is
+          to route it through the repository rather than calling it on a <code>DbSet</code>.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>The outbox is not free, and the rubric review of this framework names the rough edges:</p>
+          <ul>
+          <li><strong>At-least-once means duplicates are possible.</strong> A consumer can receive the same event twice (publish
+          succeeded, the &quot;mark processed&quot; step did not). The framework does not just
+          document this, it ships an opt-in consumer-side inbox: <code>IInboxStore</code> (<code>EfInboxStore</code> records processed
+          messages in an <code>InboxMessages</code> table, <code>NoOpInboxStore</code> is the default no-op) dedups by <code>MessageId</code>,
+          switched on with <code>MessageBus:EnableInbox</code>, and the generic <code>IntegrationEventConsumer</code> checks before
+          handling and records only after every handler succeeds (<strong>ADR-021</strong>, enabled in production on five
+          service hosts). The honest residual is narrower: the inbox is opt-in per service, and it narrows the
+          duplicate window rather than closing it, so a crash between a handler committing and the inbox write
+          reprocesses the event once more. Handlers must still be idempotent for that window.</li>
+          <li><strong>The table grows, but it self-purges.</strong> Processed outbox rows accumulate, and the serialized
+          payloads can contain PII, so the framework ships an automatic <code>OutboxCleanupService</code> that sweeps every
+          relational source and deletes processed rows whose <code>ProcessedOn</code> is older than <code>Outbox:RetentionDays</code>
+          (default 7 days; set <code>0</code> to disable) on an <code>Outbox:CleanupIntervalHours</code> cadence (default 6 hours). The
+          same sweep also purges dead-lettered rows (retries exhausted, never delivered) on their own
+          <code>Outbox:DeadLetterRetentionDays</code> window (falling back to <code>RetentionDays</code>), so failed payloads do not
+          linger in the pending index forever. The
+          residual decision is yours: pick a retention window that satisfies your compliance and replay needs,
+          since that setting is what decides how long PII-bearing payloads linger. This is where it intersects
+          the compliance category.</li>
+          <li><strong>Latency.</strong> Eligibility delay plus poll interval means delivery is near-real-time, not instant. That
+          is the correct trade for durability, but size the intervals for your workload.</li>
+          <li><strong>It is per-source and best-effort sequential.</strong> There is no two-phase commit across sources; the
+          outbox is the cross-source consistency mechanism, not distributed transactions.</li>
+          </ul>
+          <p>None of these are reasons to skip it. They are the reasons to configure it deliberately.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The idea ports to any stack:</p>
+          <ol>
+          <li>Write the event row in the <strong>same transaction</strong> as the state change. If your ORM cannot do that,
+          you do not have an outbox, you have a hopeful second write.</li>
+          <li>Drain it with a <strong>separate</strong> worker that retries on failure and marks rows processed only after a
+          confirmed publish.</li>
+          <li>Make consumers <strong>idempotent</strong>, because at-least-once will eventually deliver a duplicate.</li>
+          <li>Give the table a <strong>retention policy</strong> before it becomes a compliance problem.</li>
+          </ol>
+          <p>The rule of thumb is the takeaway: <strong>if you ever persist and publish in two steps, you have a
+          consistency bug. Make it one step.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why &quot;save then publish&quot; loses messages, how the transactional outbox makes the
+          persist and the publish atomic, how MMCA.Common automates it through <code>SaveChanges</code> + <code>OutboxProcessor</code>,
+          and why the same mechanism powers both in-process dispatch and broker delivery.</p>
+          <p><strong>Next in the series:</strong> Database-per-service inside a monolith, the design the outbox quietly depends on.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-003 behind this
+          pattern, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>📄 ADR-003 (outbox dual-dispatch): <a href="../docs/adr/003-outbox-dual-dispatch.html">ADR-003: Outbox Pattern with Dual Dispatch</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Microservices, Distributed Systems, Software Architecture</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="validation-kit.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">08 · Compose validators, don&#39;t copy them</span></a>
+          <a class="article-pager-link article-pager-link--next" href="database-per-service.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">10 · Database-per-service inside a monolith</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-pattern-one-transaction-then-a-separate-delivery">The pattern: one transaction, then a separate delivery</a></li>
+            <li><a href="#how-mmcacommon-does-it-you-just-record-intent">How MMCA.Common does it: you just record intent</a></li>
+            <li><a href="#the-third-participant-in-that-sequence-the-change-trail">The third participant in that sequence: the change trail</a></li>
+            <li><a href="#when-the-commit-itself-is-ambiguous">When the commit itself is ambiguous</a></li>
+            <li><a href="#the-delivery-side-outboxprocessor">The delivery side: OutboxProcessor</a></li>
+            <li><a href="#the-same-code-dispatches-in-process-and-over-a-broker">The same code dispatches in-process and over a broker</a></li>
+            <li><a href="#when-the-consumer-runs-out-of-retries">When the consumer runs out of retries</a></li>
+            <li><a href="#the-write-that-skips-the-whole-pipeline">The write that skips the whole pipeline</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

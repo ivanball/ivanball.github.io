@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>EF Core Include chains are a trap: navigation populators decouple eager loading · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Eager-load relationships that cross containers and data sources without N+1 or a leaky abstraction.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/navigation-populators.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="EF Core Include chains are a trap: navigation populators decouple eager loading">
+  <meta property="og:description" content="Eager-load relationships that cross containers and data sources without N+1 or a leaky abstraction.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/navigation-populators.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-12.png">
+  <meta property="og:image:alt" content="EF Core Include chains are a trap: navigation populators decouple eager loading">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="EF Core Include chains are a trap: navigation populators decouple eager loading">
+  <meta name="twitter:description" content="Eager-load relationships that cross containers and data sources without N+1 or a leaky abstraction.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-12.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"EF Core Include chains are a trap: navigation populators decouple eager loading","description":"Eager-load relationships that cross containers and data sources without N+1 or a leaky abstraction.","url":"https://ivanball.github.io/articles/navigation-populators.html","mainEntityOfPage":"https://ivanball.github.io/articles/navigation-populators.html","image":"https://ivanball.github.io/assets/img/articles/article-12.png","datePublished":"2026-07-11T00:13:54Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":12,"sameAs":"https://medium.com/@ivanball76/ef-core-include-chains-are-a-trap-navigation-populators-decouple-eager-loading-c378fa4497ac"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"12 · Navigation populators","item":"https://ivanball.github.io/articles/navigation-populators.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">12 · Navigation populators</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html" aria-current="page">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Data &amp; persistence · No. 12</p>
+          <h1 id="ef-core-include-chains-are-a-trap-navigation-populators-decouple-eager-loading">EF Core Include chains are a trap: navigation populators decouple eager loading</h1>
+          <p class="article-meta"><time datetime="2026-07-11T00:13:54Z">July 11, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/ef-core-include-chains-are-a-trap-navigation-populators-decouple-eager-loading-c378fa4497ac" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-12.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle"><code>Include(x).Include(y).ThenInclude(z)</code> couples your read model to one physical database.
+          Here is the eager-loading boundary that batch-loads related data and survives service extraction.</p>
+          <hr>
+          <p>You write a query handler, you need the related rows, and EF Core hands you the obvious tool:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> events = <span class="hljs-keyword">await</span> _db.Events
+    .Include(e =&gt; e.Rooms)
+    .Include(e =&gt; e.EventSpeakers).ThenInclude(es =&gt; es.Speaker)
+    .Include(e =&gt; e.EventQuestionAnswers)
+    .ToListAsync();</code></pre>
+          <p>It compiles. It works on your laptop against one SQL Server. And it has quietly made three decisions
+          you did not mean to make.</p>
+          <p>First, you asked the database to JOIN every one of those relationships into a single result set. For a
+          parent with several child collections, that is a cartesian product: rows multiply, the wire payload
+          balloons, and a list query that should return a page of events drags back a cross-product of rooms,
+          speakers, and answers. Second, you coupled the read model directly to the EF model. The shape of the
+          query now depends on the navigation properties EF knows about, so the day the physical storage changes,
+          the query changes with it. Third, and this is the one that bites later, you assumed every navigation
+          can be satisfied by a JOIN. The moment two related entities live in different physical data sources,
+          that assumption is false and <code>Include</code> simply cannot produce a JOIN.</p>
+          <h2 id="why-it-matters">Why it matters</h2>
+          <p>The cartesian explosion is the famous failure, and EF Core has a fix for it (<code>AsSplitQuery</code>), but
+          split query is a band-aid on the deeper problem: <code>Include</code> is a JOIN, and a JOIN only exists inside one
+          database.</p>
+          <p>A modular monolith that intends to extract modules into services later (the whole thesis of this
+          framework) is built database-per-service from day one (ADR-006). Two entities that are related in the
+          domain model can sit in different SQL databases, or one can live in a Cosmos container that has no
+          JOINs at all. The relationship is real. The physical storage cannot satisfy it in one query. An
+          <code>Include</code> chain that assumed otherwise does not degrade gracefully here. It breaks.</p>
+          <p>There is also a quieter coupling cost even when everything lives in one database. Every <code>Include</code> chain
+          is application code reaching down to name EF navigation properties. The read pipeline now knows the
+          persistence topology. When you split a module out, you have to hunt down and rewrite every one of those
+          chains. That is exactly the rewrite the framework exists to avoid.</p>
+          <h2 id="the-mmca-answer-classify-then-batch-load-through-a-populator">The MMCA answer: classify, then batch-load through a populator</h2>
+          <p>MMCA.Common splits the question into three responsibilities that live in three different layers, and
+          no EF knowledge leaks upward.</p>
+          <p>The Domain layer declares only <em>what relationships an entity has</em>. A navigation property is tagged with
+          a plain <code>[Navigation]</code> attribute (<code>NavigationAttribute</code>) carrying one <code>IsCollection</code> flag (child
+          collection versus FK reference). The domain entity stays persistence-ignorant: zero EF dependency.</p>
+          <p>The Application layer decides <em>which navigations EF can actually load</em>. <code>NavigationMetadataProvider</code>
+          reflects over the entity&#39;s <code>[Navigation]</code>-tagged properties and, for each, asks the Infrastructure
+          boundary <code>IDataSourceService.HaveIncludeSupport(declaringType, targetType)</code> whether both ends share one
+          physical source. The result is a split: <code>SupportedIncludes</code> (EF can JOIN these, both ends co-located)
+          and <code>UnsupportedIncludes</code> (these need manual loading, the ends are split). Crucially, the Application
+          layer never references <code>Microsoft.EntityFrameworkCore</code> to make that call. The only component that knows
+          the physical topology is the data-source service at the Infrastructure edge.</p>
+          <p>The Application layer does the actual <em>batch loading</em>, through the populator (<code>INavigationPopulator&lt;T&gt;</code>
+          and <code>NavigationLoader</code> both live in <code>MMCA.Common.Application</code>; the EF execution they call is injected
+          from Infrastructure, so the populator itself never touches <code>Microsoft.EntityFrameworkCore</code>). Each entity with
+          cross-source navigations implements <code>INavigationPopulator&lt;TEntity&gt;</code>. Entities with none get
+          <code>NullNavigationPopulator&lt;TEntity&gt;</code>, a textbook Null Object whose <code>PopulateAsync</code> is one
+          <code>Task.CompletedTask</code>, so the pipeline always has something to call and never branches on null.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The query pipeline runs a two-path strategy (EntityQueryPipeline):</span>
+<span class="hljs-comment">//</span>
+<span class="hljs-comment">// Path 1 - SupportedIncludes exist:</span>
+<span class="hljs-comment">//   each becomes an EF .Include(); if any is a child collection, switch to AsSplitQuery()</span>
+<span class="hljs-comment">//   (a single-query collection-Include + pagination truncates child rows - real bug, fixed here)</span>
+<span class="hljs-comment">//</span>
+<span class="hljs-comment">// Path 2 - UnsupportedIncludes exist:</span>
+<span class="hljs-comment">//   sort + paginate the BASE query server-side (load only the requested page),</span>
+<span class="hljs-comment">//   materialize it, THEN invoke the navigation populator on that one page.</span>
+<span class="hljs-comment">//</span>
+<span class="hljs-comment">// The populator never runs as an N+1: it pays the manual-load cost on one page of</span>
+<span class="hljs-comment">// parents, not the whole table.</span></code></pre>
+          <p>The batch loading itself is the part that kills N+1. <code>NavigationLoader</code> collects the distinct keys
+          across all parents on the page, builds a <code>WHERE childFK IN (...)</code> predicate as an expression tree at
+          runtime (so it translates to one SQL statement), runs it once through a read repository, groups the
+          results into a lookup, and assigns each parent its slice. That is one query per cross-source
+          navigation for the whole batch, then O(1) assignment per parent. The compiled grouping selectors are
+          cached, so repeated calls skip <code>Expression.Compile()</code>.</p>
+          <p>Writing that classify-and-load boilerplate by hand for every entity would be roughly 30 to 40 lines of
+          repeated if-checks per entity. The declarative layer removes it. A navigation is described once as an
+          <code>INavigationDescriptor&lt;TEntity&gt;</code> (a <code>ChildNavigationDescriptor</code> for collections, an
+          <code>FKNavigationDescriptor</code> for references), and <code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code> drives a list of
+          them. A real consumer in ADC&#39;s Conference module, <code>EventNavigationPopulator</code>, is just a subclass
+          constructed with three <code>ChildNavigationDescriptor</code>s for <code>Rooms</code>, <code>EventSpeakers</code>, and
+          <code>EventQuestionAnswers</code>. No imperative loading code at all. Adding a new cross-source navigation is &quot;add
+          one descriptor,&quot; not &quot;write a new class.&quot;</p>
+          <h2 id="the-boundary-that-survives-extraction">The boundary that survives extraction</h2>
+          <p>Here is why this is not over-engineering. When you split a module out and a relationship&#39;s two ends move
+          to different physical sources, the EF model&#39;s <code>CrossDataSourceDegradeConvention</code> drops the FK constraint
+          and the navigations from the model (the scalar FK columns and a compensating index survive; the foreign
+          entity type is removed). From that point, <code>NavigationMetadataProvider</code> starts reporting that navigation
+          as <code>Unsupported</code>, and the populator path picks it up automatically.</p>
+          <p>The application code that issued the query never changes. The read handler still asks for events with
+          their rooms and speakers. Before extraction, EF JOINs them. After extraction, the populator batch-loads
+          them across the source boundary. Cross-source consistency is the outbox&#39;s job; cross-source eager
+          loading is the populator&#39;s job. Neither is a JOIN, and neither requires you to rewrite the query.</p>
+          <p>This is the same line that runs through the whole framework: the transport choice (one database or two)
+          lives at the edge, and your business logic does not know which it got.</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>ADR-002 names the rough edges rather than hiding them.</p>
+          <ul>
+          <li><strong>Extra abstraction for the single-database case.</strong> For a pure single-SQL-Server host where <code>Include</code>
+          always works, the populator is a layer you do not strictly need. It is mitigated by being free at
+          runtime there: the populator is only invoked when the metadata actually reports an unsupported
+          include, and otherwise the <code>NullNavigationPopulator</code> no-ops. You pay in concepts, not in cycles.</li>
+          <li><strong>Every entity needs a populator, even a no-op one.</strong> Entities that need no manual loading still
+          require <code>NullNavigationPopulator&lt;TEntity&gt;</code> (or an empty declarative one) so the pipeline has something
+          to call. That is a registration line per entity.</li>
+          <li><strong>The classification is runtime reflection (cached).</strong> The supported/unsupported split is computed by
+          reflecting over properties, then cached per <code>(entity type, navigation kind)</code>. The first query for a
+          shape pays the reflection cost once.</li>
+          <li><strong>It is eager loading, not a general ORM.</strong> This is a deliberate, narrow boundary for cross-source eager
+          loading on a paged read. It is not trying to replace EF for the co-located case, and it does not give
+          you cross-source JOINs (those do not exist); it gives you batch loads.</li>
+          </ul>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>The pattern ports to any stack that might outgrow one database:</p>
+          <ol>
+          <li><strong>Stop assuming a relationship is a JOIN.</strong> Treat &quot;can these two be loaded together in one query?&quot;
+          as a runtime capability question, not a static fact baked into your read code.</li>
+          <li><strong>Batch-load, never N+1.</strong> When you cannot JOIN, collect the parent keys and issue one
+          <code>WHERE fk IN (...)</code> per relationship, then assign in memory. One query per relationship for the whole
+          page beats one query per parent.</li>
+          <li><strong>Keep the topology knowledge at one edge.</strong> The component that knows which entity lives where should
+          be the only one that knows. Everything above it asks &quot;what should be loaded,&quot; not &quot;where does it
+          live.&quot;</li>
+          <li><strong>Make the extension point declarative.</strong> Describe each loadable relationship once as data (name, key selectors,
+          assign callback) and drive a list of them, so adding a relationship is a one-liner, not a new class.</li>
+          </ol>
+          <p>The rule of thumb: an <code>Include</code> chain is a promise that two things share a database. If you might ever
+          break that promise, do not encode it in your query code.</p>
+          <hr>
+          <p><strong>What we covered:</strong> why <code>Include</code> chains couple your read model to one physical database and break
+          across data sources, how MMCA.Common classifies navigations as supported or unsupported and routes the
+          unsupported ones through <code>INavigationPopulator</code> batch loading, and why that same boundary lets a
+          cross-source relationship degrade automatically when a module is extracted, with no query rewrite.</p>
+          <p><strong>Next in the series:</strong> optimistic concurrency, where a database-managed RowVersion round-trips from the
+          row into the DTO and back through the client so two concurrent edits surface as a 409 instead of a silent
+          lost update.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-002 behind this
+          pattern, or <code>dotnet add package MMCA.Common.API</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          <li>ADR-002 (navigation populators): <a href="../docs/adr/002-navigation-populators.html">ADR-002: NavigationPopulators for Cross-Container Loading</a> in the docs site.</li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, Entity Framework Core, Microservices</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="polyglot-persistence.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">11 · Polyglot persistence: one model, three engines</span></a>
+          <a class="article-pager-link article-pager-link--next" href="optimistic-concurrency-rowversion.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">13 · Optimistic concurrency: RowVersion round-trips</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#why-it-matters">Why it matters</a></li>
+            <li><a href="#the-mmca-answer-classify-then-batch-load-through-a-populator">The MMCA answer: classify, then batch-load through a populator</a></li>
+            <li><a href="#the-boundary-that-survives-extraction">The boundary that survives extraction</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -299,7 +299,7 @@
           the primary test loop.</p>
           <h3 id="microsoft-testing-platform-mtp-not-vstest">Microsoft Testing Platform (MTP), not VSTest</h3>
           <p>All four repos share one <code>global.json</code> structure:</p>
-          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+          <pre class="doc-pre" tabindex="0" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">&quot;test&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">&quot;runner&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Microsoft.Testing.Platform&quot;</span>
   <span class="hljs-punctuation">}</span>
@@ -324,7 +324,7 @@
           deploy on a repo whose secret is absent (<code>deploy.yml:536-538</code>).</p>
           </li>
           <li><p><strong>Filter syntax differs.</strong> You pass a <code>--</code> separator and then MTP&#39;s own filter flags:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># Run a single test class</span>
+          <pre class="doc-pre" tabindex="0" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># Run a single test class</span>
 dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/MMCA.ADC.Identity.Domain.Tests/MMCA.ADC.Identity.Domain.Tests.csproj \
   -- --filter-class <span class="hljs-string">&quot;*UserTests*&quot;</span>
 
@@ -1402,7 +1402,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <code>AdcArchitectureMap</code> (adds the per-module Identity/Conference/Engagement/Notification layers),
           <code>StoreArchitectureMap</code> and <code>HelpdeskArchitectureMap</code>. A concrete test class is then a short sealed
           subclass, e.g.:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">LayerDependencyTests</span> : <span class="hljs-title">LayerDependencyTestsBase</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">LayerDependencyTests</span> : <span class="hljs-title">LayerDependencyTestsBase</span>
 {
     <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> CommonArchitectureMap();
 }</code></pre>
@@ -2046,7 +2046,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <h3 id="example-a-architecture-fitness-function-dependencyversiontests">Example A, Architecture fitness function (<code>DependencyVersionTests</code>)</h3>
           <p>The per-repo class is a bare subclass; the facts, the package lists and the parsing live once in the
           shared base:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DependencyVersionTests</span> : <span class="hljs-title">DependencyVersionTestsBase</span>;
 
 <span class="hljs-comment">// the lists + parsing live in the shipped package:</span>
@@ -2088,7 +2088,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           [Rubric §32, Dependency &amp; Supply-Chain]: this is the highest-signal embodiment
           of §32 in the codebase, a deliberate, documented pin with an automated gate.</p>
           <h3 id="example-b-integration-test-base-usage-identityintegrationtestbase">Example B, Integration test base usage (<code>IdentityIntegrationTestBase</code>)</h3>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.ADC/Tests/Integration/MMCA.ADC.Identity.IntegrationTests/Infrastructure/IdentityIntegrationTestBase.cs:12-19</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.ADC/Tests/Integration/MMCA.ADC.Identity.IntegrationTests/Infrastructure/IdentityIntegrationTestBase.cs:12-19</span>
 [<span class="hljs-meta">Collection(IdentityIntegrationTestCollection.Name)</span>]
 <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">abstract</span> <span class="hljs-keyword">class</span> <span class="hljs-title">IdentityIntegrationTestBase</span>(<span class="hljs-params">IdentityIntegrationTestFixture fixture</span>)
     : <span class="hljs-title">IntegrationTestBase</span>&lt;<span class="hljs-title">IdentityIntegrationTestFixture</span>&gt;(<span class="hljs-params">fixture</span>)</span>
@@ -2116,7 +2116,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           [Rubric §14, Testability]: the fixture isolation + shared infrastructure is a direct measure
           of the §14 &quot;integration test isolation&quot; criterion.</p>
           <h3 id="example-c-bunit-component-test-profiletests">Example C, bUnit component test (<code>ProfileTests</code>)</h3>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.UI.Tests/Pages/Users/Profile/ProfileTests.cs:18-70</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.UI.Tests/Pages/Users/Profile/ProfileTests.cs:18-70</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ProfileTests</span> : <span class="hljs-title">BunitTestBase</span>
 {
     <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">ProfileTests</span>()</span>

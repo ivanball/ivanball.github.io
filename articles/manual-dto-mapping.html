@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Delete AutoMapper: explicit, compile-time DTO mapping that you can actually test · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Why source-generated, per-entity mappers beat reflection-based mapping for clarity and speed.">
+  <link rel="canonical" href="https://ivanball.github.io/articles/manual-dto-mapping.html">
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Delete AutoMapper: explicit, compile-time DTO mapping that you can actually test">
+  <meta property="og:description" content="Why source-generated, per-entity mappers beat reflection-based mapping for clarity and speed.">
+  <meta property="og:url" content="https://ivanball.github.io/articles/manual-dto-mapping.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/articles/article-23.png">
+  <meta property="og:image:alt" content="Delete AutoMapper: explicit, compile-time DTO mapping that you can actually test">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Delete AutoMapper: explicit, compile-time DTO mapping that you can actually test">
+  <meta name="twitter:description" content="Why source-generated, per-entity mappers beat reflection-based mapping for clarity and speed.">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/articles/article-23.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Delete AutoMapper: explicit, compile-time DTO mapping that you can actually test","description":"Why source-generated, per-entity mappers beat reflection-based mapping for clarity and speed.","url":"https://ivanball.github.io/articles/manual-dto-mapping.html","mainEntityOfPage":"https://ivanball.github.io/articles/manual-dto-mapping.html","image":"https://ivanball.github.io/assets/img/articles/article-23.png","datePublished":"2026-07-23T11:52:24Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"},"isPartOf":{"@type":"CreativeWorkSeries","name":"The MMCA.Common series","url":"https://ivanball.github.io/articles/index.html"},"position":23,"sameAs":"https://medium.com/@ivanball76/delete-automapper-explicit-compile-time-dto-mapping-that-you-can-actually-test-9c7013cc5d3f"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Writing","item":"https://ivanball.github.io/writing.html"},{"@type":"ListItem","position":2,"name":"The MMCA.Common series","item":"https://ivanball.github.io/articles/index.html"},{"@type":"ListItem","position":3,"name":"23 · Delete AutoMapper: manual DTO mapping","item":"https://ivanball.github.io/articles/manual-dto-mapping.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../assets/css/styles.css">
+  <link rel="stylesheet" href="../assets/css/docs.css">
+  <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
+  <script defer src="../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../index.html">Home</a></li>
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html" aria-current="page">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../writing.html">Writing</a>
+        <span aria-hidden="true">/</span>
+        <a href="../articles/index.html">The MMCA.Common series</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">23 · Delete AutoMapper: manual DTO mapping</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 53 articles</summary>
+        <nav class="doc-nav" aria-label="The MMCA.Common series">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="open-sourced-enterprise-dotnet-34-categories.html">01 · Open-sourced and graded against 34 categories</a></li>
+        <li><a href="modular-monolith-to-microservices.html">02 · Modular monolith to microservices</a></li>
+        <li><a href="34-category-architecture-rubric.html">03 · The 34-category architecture rubric</a></li>
+        <li><a href="result-railway-csharp.html">04 · The Result railway in C#</a></li>
+        <li><a href="kill-anemic-domain-model.html">05 · Kill the anemic domain model</a></li>
+        <li><a href="specification-pattern.html">06 · Specifications over LINQ spaghetti</a></li>
+        <li><a href="cqrs-decorator-pipeline.html">07 · The CQRS decorator pipeline</a></li>
+        <li><a href="validation-kit.html">08 · Compose validators, don&#39;t copy them</a></li>
+        <li><a href="transactional-outbox-dotnet.html">09 · The transactional outbox</a></li>
+        <li><a href="database-per-service.html">10 · Database-per-service inside a monolith</a></li>
+        <li><a href="polyglot-persistence.html">11 · Polyglot persistence: one model, three engines</a></li>
+        <li><a href="navigation-populators.html">12 · Navigation populators</a></li>
+        <li><a href="optimistic-concurrency-rowversion.html">13 · Optimistic concurrency: RowVersion round-trips</a></li>
+        <li><a href="self-ordering-modules.html">14 · Self-ordering modules</a></li>
+        <li><a href="event-schema-versioning.html">15 · Event-schema versioning</a></li>
+        <li><a href="jwks-cross-service-auth.html">16 · JWKS cross-service auth</a></li>
+        <li><a href="password-hashing.html">17 · Password hashing done right</a></li>
+        <li><a href="idempotency-attribute.html">18 · Idempotency in one attribute</a></li>
+        <li><a href="self-invalidating-cache.html">19 · The self-invalidating cache</a></li>
+        <li><a href="problem-details-http-grpc.html">20 · Problem Details across HTTP and gRPC</a></li>
+        <li><a href="notifications-vertical-slice.html">21 · Notifications as a vertical slice</a></li>
+        <li><a href="live-channel-push.html">22 · Live channels over one SignalR hub</a></li>
+        <li><a href="manual-dto-mapping.html" aria-current="page">23 · Delete AutoMapper: manual DTO mapping</a></li>
+        <li><a href="permission-based-authorization.html">24 · Permission-based authorization over roles</a></li>
+        <li><a href="session-cookie-auth-blazor-ssr.html">25 · Browser session-cookie auth for Blazor SSR</a></li>
+        <li><a href="external-oauth-login.html">26 · External OAuth login behind your own JWTs</a></li>
+        <li><a href="jwt-refresh-token-rotation.html">27 · One rotating refresh token</a></li>
+        <li><a href="generic-entity-controllers.html">28 · Generic entity controllers</a></li>
+        <li><a href="resource-ownership-authorization.html">29 · Resource-ownership authorization</a></li>
+        <li><a href="rate-limiting-brute-force-protection.html">30 · Rate limiting and brute-force protection</a></li>
+        <li><a href="aspire-one-command.html">31 · Aspire: one command</a></li>
+        <li><a href="extract-module-to-grpc-service.html">32 · Extracting a module to a gRPC service</a></li>
+        <li><a href="resilience-recovery-objectives.html">33 · Resilience and recovery objectives</a></li>
+        <li><a href="architecture-fitness-functions.html">34 · Architecture fitness functions</a></li>
+        <li><a href="test-pyramid.html">35 · The test pyramid</a></li>
+        <li><a href="soft-delete-vs-erasure.html">36 · Soft-delete vs the right to erasure</a></li>
+        <li><a href="reusable-blazor-ui-framework.html">37 · A reusable Blazor UI framework</a></li>
+        <li><a href="i18n-and-theming.html">38 · i18n and theming on one preference pipeline</a></li>
+        <li><a href="build-your-first-module.html">39 · Build your first module</a></li>
+        <li><a href="write-your-first-fitness-test.html">40 · Write your first fitness test</a></li>
+        <li><a href="two-real-apps-case-study.html">41 · Two real apps on one framework</a></li>
+        <li><a href="device-capability-abstraction.html">42 · One Blazor UI, two hosts</a></li>
+        <li><a href="managed-file-storage-avatars.html">43 · Managed file storage: uploads you don&#39;t have to trust</a></li>
+        <li><a href="http-api-versioning.html">44 · HTTP API versioning, proven not just claimed</a></li>
+        <li><a href="feature-flags-cqrs-pipeline.html">45 · Feature flags in the CQRS pipeline</a></li>
+        <li><a href="field-level-encryption-ef-core.html">46 · Field-level encryption in EF Core</a></li>
+        <li><a href="security-headers-csp-blazor.html">47 · Security headers and CSP for Blazor</a></li>
+        <li><a href="observability-opentelemetry.html">48 · Observability by default</a></li>
+        <li><a href="saga-compensation-reconciliation.html">49 · Saga compensation and the reconciliation backstop</a></li>
+        <li><a href="governed-llm-boundary.html">50 · The governed LLM boundary</a></li>
+        <li><a href="durable-internal-commands.html">51 · Four ways to do work later</a></li>
+        <li><a href="identity-completions.html">52 · Finishing identity</a></li>
+        <li><a href="series-index.html">53 · The series index</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Auth &amp; the edge · No. 23</p>
+          <h1 id="delete-automapper-explicit-compile-time-dto-mapping-that-you-can-actually-test">Delete AutoMapper: explicit, compile-time DTO mapping that you can actually test</h1>
+          <p class="article-meta"><time datetime="2026-07-23T11:52:24Z">July 23, 2026</time> <span aria-hidden="true">·</span> Ivan Ball-llovera <span aria-hidden="true">·</span> <a href="https://medium.com/@ivanball76/delete-automapper-explicit-compile-time-dto-mapping-that-you-can-actually-test-9c7013cc5d3f" target="_blank" rel="noopener">Also on Medium ↗</a></p>
+          <figure class="article-hero"><img src="../assets/img/articles/article-23.webp" alt="" width="800" height="420" decoding="async"></figure>
+          <p class="article-subtitle">Reflection-based mappers feel like they save you work until the day a renamed property silently maps to null in production. Here is the alternative: named mapper classes, generated at compile time, where a missing map is a build error and a bad request is a Result failure, not an exception.</p>
+          <hr>
+          <p>Almost every .NET service has the same boring chore. A domain entity comes out of the database, and a Data Transfer Object has to go over the wire. They are <em>almost</em> the same shape, so reaching for AutoMapper feels obvious: register a profile, call <code>Map&lt;ProductDto&gt;(product)</code>, and the property-name convention wires it up for you. Zero boilerplate. What is not to like?</p>
+          <p>Here is what is not to like. Six months later somebody renames <code>Product.Title</code> to <code>Product.Name</code>, the DTO still has <code>Title</code>, and the convention quietly stops mapping it. No compiler error. No test failure unless you happened to assert that exact field. The API just starts returning <code>title: null</code>, and you find out from a support ticket. The mapping that &quot;saved you work&quot; was invisible coupling held together by string-matched property names, and it broke in the one place a type system normally protects you: a rename.</p>
+          <p>That failure mode is the reason MMCA.Common bans reflection-based AutoMapper outright. The decision is <strong>ADR-001</strong>: mapping is explicit, lives in named mapper classes, and is checked by the compiler, not discovered at runtime. This article walks through how that works, why the two mapper roles are split, and why &quot;write the mapper yourself&quot; is cheaper than it sounds once a source generator writes the body for you.</p>
+          <h2 id="the-case-against-convention-based-mapping">The case against convention-based mapping</h2>
+          <p>Be precise about what goes wrong with a reflection mapper, because &quot;I prefer explicit code&quot; is not an argument. Here are four concrete failure modes, all things a type system is supposed to catch:</p>
+          <ul>
+          <li><strong>Silent mis-maps.</strong> Property-name conventions map what matches and ignore what does not. A rename, a typo, or a deliberately different DTO field name produces a <code>null</code> or a default, not an error. The map degrades silently.</li>
+          <li><strong>Runtime profile errors.</strong> When the convention cannot figure something out, you find out at the first request that exercises that path, in production, as a 500. Configuration that &quot;compiles&quot; but is wrong is the worst kind of configuration.</li>
+          <li><strong>Invisible coupling.</strong> The fact that <code>Product.Name</code> feeds <code>ProductDto.Name</code> exists nowhere you can read it. It is an emergent property of two class shapes and a runtime engine. Rename either side and the coupling breaks without telling you.</li>
+          <li><strong>Hard to test and debug.</strong> A stack trace from a failed convention map points into the mapping framework&#39;s expression-tree machinery, not at a line of your code. Conditional mapping (redact this field for this role) fits awkwardly into a declarative profile, so it tends to leak back out into handlers anyway.</li>
+          </ul>
+          <p>None of these are exotic. They are the ordinary tax of trading compile-time checking for runtime convenience. ADR-001 argues the same conclusion from the positive side: its rationale is five reasons to choose explicit mapping over a reflection convention, namely compile-time safety, testability, conditional logic, debuggability, and performance. Its verdict is that for the one operation you do on <em>every single read and write path</em>, that trade is backwards.</p>
+          <h2 id="two-roles-two-interfaces">Two roles, two interfaces</h2>
+          <p>The first design move is to notice that &quot;mapping&quot; is actually two different jobs that deserve two different contracts. Reading data out and accepting data in are not symmetric, and the framework refuses to pretend they are.</p>
+          <p><strong>Outbound: <code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></strong> is the read side. It maps a domain entity to the DTO that crosses the wire. It lives in <code>MMCA.Common.Application</code> (<code>Interfaces/Mapping/IEntityDTOMapper.cs</code>) and is triple-generic, constrained so the entity is an <code>AuditableBaseEntity&lt;TIdentifierType&gt;</code>, the DTO implements <code>IBaseDTO&lt;TIdentifierType&gt;</code>, and the identifier type is <code>notnull</code>. Those constraints force the entity and its DTO to agree on the identifier type at compile time, so you cannot accidentally pair a <code>Guid</code>-keyed entity with an <code>int</code>-keyed DTO.</p>
+          <p>It has exactly one required member, <code>MapToDTO(entity)</code>. The batch version, <code>MapToDTOs(collection)</code>, is a C# <strong>default interface method</strong> that just projects each item through <code>MapToDTO</code> with a collection expression. The default exists so that no mapper has to write the loop, and the honest reality is that none of them lean on it: all 35 concrete DTO mappers across the two consuming apps re-declare that identical one-line projection instead of inheriting it, which ADR-001 records outright in its own trade-offs. The contract still guarantees the batch shape is there for free; the part you actually have to think about is the single-item map.</p>
+          <p><strong>Inbound: <code>IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;</code></strong> is the write side, and this is where the design earns its keep. It maps an incoming create request to a domain entity, but its signature is the interesting part:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs">Task&lt;Result&lt;TEntity&gt;&gt; CreateEntityAsync(
+    TCreateRequest request,
+    CancellationToken cancellationToken = <span class="hljs-literal">default</span>);</code></pre>
+          <p>It returns <code>Task&lt;Result&lt;TEntity&gt;&gt;</code>, not <code>TEntity</code>. That is deliberate, and it is the whole point of separating the request mapper from the DTO mapper. The two interfaces are declared in the same file (which also declares <code>IEntityUpdateApplier&lt;,,&gt;</code>, the update-path twin that applies a request to an already-loaded aggregate and sits outside this article&#39;s create-and-read scope) but they are not mirror images of each other, because going <em>in</em> is fundamentally riskier than going <em>out</em>.</p>
+          <h2 id="why-the-request-mapper-returns-a-result">Why the request mapper returns a Result</h2>
+          <p>When you read an entity out, mapping cannot really fail. The data already passed validation when it was written; you are just reshaping a valid object. So the read mapper returns the DTO directly.</p>
+          <p>When you accept a request in, mapping <em>is</em> validation. The request might be malformed. It might violate a domain invariant. It might need a database round-trip to check, for example, that the name is unique before the entity can be created at all. A convention mapper has no good answer here. It either throws (turning an expected, ordinary &quot;that name is taken&quot; into an exception you have to catch somewhere) or it maps anyway and pushes the problem downstream.</p>
+          <p>The request mapper&#39;s answer is to make the failure a <em>value</em>. Its job is to call the entity&#39;s <code>Create(...)</code> factory method, which itself returns a <code>Result&lt;TEntity&gt;</code>, and propagate that Result. A malformed request becomes a <code>Result.Failure</code>, never a thrown exception. A uniqueness check can run as an <code>await</code> before the factory is even called, and a conflict comes back as a failure value too. The <code>Task</code> in the signature exists precisely so that database-touching validation can happen inside the mapper, before the entity exists, and report its verdict as a Result.</p>
+          <p>This is the same Result-pattern discipline the rest of the framework runs on, applied at the exact boundary where untrusted input first becomes a domain object. The edge maps that Result to a <code>400</code> or <code>409</code> later; the mapper&#39;s job is just to produce the value, not to know about HTTP. A request mapper that returned a bare <code>TEntity</code> would have nowhere to put &quot;this request was bad&quot; except an exception, and exceptions are the thing the Result pattern exists to avoid for expected failures.</p>
+          <h2 id="mapperly-explicit-and-fast-because-a-generator-writes-the-body">Mapperly: explicit and fast, because a generator writes the body</h2>
+          <p>The AutoMapper crowd will raise one objection immediately: if you write every mapper by hand, you are back to typing <code>dto.Name = entity.Name;</code> forty times per entity, and that is its own kind of bug farm.</p>
+          <p>True, if you actually hand-type the assignments. MMCA.Common does not. It uses <strong>Riok.Mapperly</strong> (version 4.3.1), a <em>source-generated</em>, compile-time object mapper. You declare a partial mapper method; Mapperly generates the straight-line assignment code at build time. No runtime reflection, no expression-tree compilation, no per-call allocation of a mapping plan. The generated code is the same boring <code>dto.Name = entity.Name;</code> you would have written, except the compiler wrote it and will refuse to compile if the shapes do not line up.</p>
+          <p>This is the move that dissolves the usual &quot;explicit versus convenient&quot; dichotomy. Mapperly gives you both:</p>
+          <ul>
+          <li>It is <strong>explicit</strong>, because the mapper is a named class you can open, read, and set a breakpoint in. The mapping exists as code, not as an emergent property of two type shapes.</li>
+          <li>It is <strong>compile-time checked</strong>, because an unmapped property or a type mismatch is a build error or a generator diagnostic, surfaced in the implementing class, not a runtime surprise.</li>
+          <li>It is <strong>fast and allocation-free</strong>, because there is no reflection at mapping time, just the generated assignments.</li>
+          </ul>
+          <p>So the framework&#39;s mapper interfaces define the <em>contract</em> (entity to DTO, request to Result-of-entity), and Mapperly fills in the <em>body</em> for the common straight-shape cases. When a mapper needs genuine business logic (the canonical ADR-001 example is a speaker mapper that redacts PII for non-organizer roles), you just write that logic in the same class. Conditional mapping that is awkward in a declarative profile is ordinary C# here.</p>
+          <h2 id="auto-discovery-you-write-the-mapper-you-do-not-wire-it">Auto-discovery: you write the mapper, you do not wire it</h2>
+          <p>The last piece is registration, and the framework keeps it convention-driven without making it reflection-at-runtime. Mappers are plain classes that implement one of the two interfaces. When a module is scanned at startup via <code>ScanModuleApplicationServices&lt;TAssemblyMarker&gt;()</code>, Scrutor finds every DTO mapper and request mapper in that module&#39;s Application assembly and registers each one <strong>scoped</strong>, alongside the module&#39;s handlers, validators, and event handlers. Five mapping-related scans sit side by side in that method, in this order: DTO mappers, then an opt-in scan for <code>IEntityDTOProjector&lt;,,&gt;</code> (an entity that has a projector gets server-side projection on its list reads, one that has none keeps materialize-then-map), then request mappers, then the two update-applier contracts that do the same job on the update path. All five register the class as itself and by its interfaces, with a scoped lifetime.</p>
+          <p>The distinction from AutoMapper is worth stating plainly: this scanning happens once, at composition time, to populate the DI container. It is not a per-request reflection engine deciding how to map fields. The mapping logic itself is compiled code. Discovery is a startup convenience; the map is static.</p>
+          <p>So the developer experience is: create a class, implement <code>MapToDTO</code> (and <code>CreateEntityAsync</code> for the create side), let Mapperly generate the assignments, and the module scan registers it. You never touch a profile registry, and you never wonder at runtime whether a map exists, because if it did not, the build would have failed.</p>
+          <h2 id="a-concrete-pair">A concrete pair</h2>
+          <p>Putting it together, a module holds both directions. The pair below is trimmed from the Store Catalog module&#39;s real <code>Product</code> mappers (the delegating sub-mappers, the two <code>[MapProperty]</code> attributes that flatten the owned rating summary, and a shallow-category helper are elided): entity to DTO on the read side, request to <code>Result&lt;TEntity&gt;</code> on the write side, with a Mapperly <code>[Mapper]</code> partial supplying the straight-shape body.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Read side: entity -&gt; response DTO. Cannot fail; returns the DTO directly.</span>
+[<span class="hljs-meta">Mapper</span>]
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">partial</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ProductDTOMapper</span>
+    : <span class="hljs-title">IEntityDTOMapper</span>&lt;<span class="hljs-title">Product</span>, <span class="hljs-title">ProductDTO</span>, <span class="hljs-title">ProductIdentifierType</span>&gt;
+{
+    <span class="hljs-comment">// Mapperly generates this body at build time.</span>
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">partial</span> ProductDTO <span class="hljs-title">MapToDTO</span>(<span class="hljs-params">Product entity</span>)</span>;
+
+    <span class="hljs-comment">// Re-declared, not inherited, exactly as every concrete mapper does.</span>
+    <span class="hljs-function"><span class="hljs-keyword">public</span> IReadOnlyCollection&lt;ProductDTO&gt; <span class="hljs-title">MapToDTOs</span>(<span class="hljs-params">
+        IReadOnlyCollection&lt;Product&gt; entityCollection</span>)</span>
+    {
+        ArgumentNullException.ThrowIfNull(entityCollection);
+        <span class="hljs-keyword">return</span> [.. entityCollection.Select(MapToDTO)];
+    }
+}
+
+<span class="hljs-comment">// Write side: request -&gt; entity, via the factory, as a Result.</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ProductCreateRequestMapper</span>
+    : <span class="hljs-title">IEntityRequestMapper</span>&lt;<span class="hljs-title">Product</span>, <span class="hljs-title">ProductCreateRequest</span>, <span class="hljs-title">ProductIdentifierType</span>&gt;
+{
+    <span class="hljs-keyword">public</span> Task&lt;Result&lt;Product&gt;&gt; CreateEntityAsync(
+        ProductCreateRequest request,
+        CancellationToken cancellationToken = <span class="hljs-literal">default</span>)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        <span class="hljs-comment">// Product.Create is the factory, and it returns Result&lt;Product&gt;.</span>
+        <span class="hljs-comment">// A mapper that needs a uniqueness check awaits it here and returns</span>
+        <span class="hljs-comment">// Result.Failure, not an exception.</span>
+        <span class="hljs-keyword">return</span> Task.FromResult(Product.Create(
+            request.Id,
+            request.Name,
+            request.Description,
+            request.Brand,
+            request.CategoryId));
+    }
+}</code></pre>
+          <p>Two classes, two directions, both explicit, both compiler-checked. The read mapper returns a DTO because reading valid data cannot fail. The request mapper returns a <code>Result&lt;Product&gt;</code> because accepting input can fail, and a failure is a value the edge will turn into the right status code. (For how these slot into a full module, see the build-your-first-module walkthrough later in the series; this article zooms in on the mapping boundary.)</p>
+          <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
+          <p>This is not a free win, and pretending otherwise would be exactly the kind of hand-waving the framework is built to avoid.</p>
+          <ul>
+          <li><strong>It is more boilerplate than AutoMapper&#39;s zero-config start.</strong> AutoMapper&#39;s pitch is real: for a brand-new project with simple shapes, <code>AddAutoMapper(...)</code> and a convention is genuinely less typing on day one. ADR-001 accepts this cost explicitly: there are dozens of mapper classes across the consuming apps. The bet is that day-one typing is the cheap part and year-two silent breakage is the expensive part.</li>
+          <li><strong>There is a Mapperly learning curve.</strong> A source-generated mapper is not free of its own concepts. You have to understand its <code>[Mapper]</code> partial conventions, its diagnostics, and when to drop to hand-written code for a non-trivial map. It is less to learn than AutoMapper&#39;s full profile and projection surface, but it is not nothing.</li>
+          <li><strong>You have to write the mapper, every time.</strong> Adding an entity means adding a mapper class. There is no convention that &quot;just works&quot; for a new type. That is the philosophy stated as a constraint: explicit over implicit, with no escape hatch back into runtime magic.</li>
+          <li><strong>The upside does not show up in a demo.</strong> Explicit, testable, compile-time-checked, allocation-free mapping does not make the first commit faster. It makes the rename safe, the stack trace readable, the conditional map ordinary, and the unit test trivial (a mapper is a plain class with no framework around it). Those payoffs land in month six, not minute one.</li>
+          </ul>
+          <p>The honest summary: you trade a small, constant, up-front cost for the removal of a class of silent runtime bugs. If your mapping is trivial and stable forever, AutoMapper is fine. If it will be renamed, conditionally shaped, and load-bearing for years, the explicit mapper pays for itself.</p>
+          <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
+          <p>You do not need this framework to adopt the pattern. The ideas port to any stack:</p>
+          <ol>
+          <li><strong>Split read mapping from write mapping.</strong> They are not symmetric. Reading reshapes valid data; writing validates untrusted input. Give them different contracts.</li>
+          <li><strong>Make the write mapper return a result type, not throw.</strong> A malformed request is an expected outcome, not an exceptional one. Return a <code>Result</code>/<code>Either</code>/discriminated union so a bad request is a value the edge maps to a status code.</li>
+          <li><strong>Use a source generator, not a reflection engine.</strong> Mapperly (or an equivalent compile-time mapper) gives you explicit, readable, fast mapping with the boilerplate generated. You get the safety of hand-written code without typing the assignments.</li>
+          <li><strong>Let the compiler catch missing maps.</strong> The single most valuable property is that a renamed field breaks the build, not production. Anything that defers that check to runtime is the thing to avoid.</li>
+          <li><strong>Scan to register, but keep the map static.</strong> Auto-discovery at startup is a convenience. Per-request reflection to decide the map is the failure mode. Those are different things; keep the first, drop the second.</li>
+          </ol>
+          <p>The takeaway: <strong>convention-based mapping trades a compile-time guarantee for a runtime convenience on the one operation you do everywhere. Put mapping in named classes, let a source generator write the bodies, return a Result from the write side, and the rename that used to ship a null in production becomes a red build instead.</strong></p>
+          <hr>
+          <p><strong>What we covered:</strong> why reflection-based AutoMapper fails silently on renames and pushes validation into exceptions, how ADR-001 splits mapping into two explicit roles (<code>IEntityDTOMapper</code> for entity-to-DTO reads and <code>IEntityRequestMapper</code> for request-to-entity writes), why the request mapper returns <code>Result&lt;TEntity&gt;</code> so a malformed request is a value and not an exception, how Riok.Mapperly source-generates the boilerplate at compile time so the mapping stays explicit and fast, and how convention scanning auto-registers each mapper scoped without a runtime mapping engine.</p>
+          <p><strong>Next in the series:</strong> permission-based authorization, the capability layer over roles that turns the
+          role you did not foresee into a one-line grant instead of an attribute sweep.</p>
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the API-and-mapping chapter of the onboarding guide, or <code>dotnet add package MMCA.Common.Application</code> and try it.</em></p>
+          <ul>
+          <li>Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
+          </ul>
+          <p><em>Tags: .NET, C Sharp, Software Architecture, API Design, AutoMapper</em></p>
+          
+        <nav class="article-pager" aria-label="Series navigation">
+          <a class="article-pager-link article-pager-link--prev" href="live-channel-push.html" rel="prev"><span class="article-pager-dir">← Previous</span><span class="article-pager-title">22 · Live channels over one SignalR hub</span></a>
+          <a class="article-pager-link article-pager-link--next" href="permission-based-authorization.html" rel="next"><span class="article-pager-dir">Next →</span><span class="article-pager-title">24 · Permission-based authorization over roles</span></a>
+        </nav>
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../articles/index.html">← Back to The MMCA.Common series</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-case-against-convention-based-mapping">The case against convention-based mapping</a></li>
+            <li><a href="#two-roles-two-interfaces">Two roles, two interfaces</a></li>
+            <li><a href="#why-the-request-mapper-returns-a-result">Why the request mapper returns a Result</a></li>
+            <li><a href="#mapperly-explicit-and-fast-because-a-generator-writes-the-body">Mapperly: explicit and fast, because a generator writes the body</a></li>
+            <li><a href="#auto-discovery-you-write-the-mapper-you-do-not-wire-it">Auto-discovery: you write the mapper, you do not wire it</a></li>
+            <li><a href="#a-concrete-pair">A concrete pair</a></li>
+            <li><a href="#trade-offs-honestly">Trade-offs, honestly</a></li>
+            <li><a href="#apply-this-even-without-mmca">Apply this even without MMCA</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../resume.html">Résumé</a></li>
+          <li><a href="../platform.html">Platform</a></li>
+          <li><a href="../docs/index.html">Reference</a></li>
+          <li><a href="../writing.html">Writing</a></li>
+          <li><a href="../speaking.html">Speaking</a></li>
+          <li><a href="../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

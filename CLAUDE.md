@@ -28,7 +28,7 @@ CI (`ci.yml`) runs three jobs on push and PR:
 `index.html`, `resume.html`, `platform.html`, `writing.html`, `speaking.html`, `contact.html`, `404.html`. There is no templating: header/footer/nav markup is **duplicated across every page** and separately inside `tools/build-docs.mjs` as `headerHtml`/`footerHtml`. A nav or footer change is one edit to `NAV_ITEMS` / `FOOTER_LINKS` in the generator plus a rebuild; every page follows.
 
 Single edit points:
-- **Writing page cards**: `assets/data/articles.js` (`window.ARTICLES` + `ARTICLE_CATEGORIES`). An empty `url` renders "Coming soon"; paste the Medium URL **and** the publication instant into `date` to publish. **The cards are static markup generated at build time**, so editing the data file is not enough: rebuild and commit the regenerated `writing.html`, `feed.xml` and `sitemap.xml` with it. `assets/js/writing.js` only filters generated nodes; it renders nothing.
+- **Writing page cards**: `assets/data/articles.js` (`window.ARTICLES` + `ARTICLE_CATEGORIES`), one entry per article in `docs-src/articles/` (see section 2). `page` is the article's slug and permanent URL, `url` the optional Medium copy (a secondary link; the site page is canonical). **The cards are static markup generated at build time**, so editing the data file is not enough: rebuild and commit the regenerated `writing.html`, `feed.xml` and `sitemap.xml` with it. `assets/js/writing.js` only filters generated nodes; it renders nothing.
 - **Platform ADR card copy**: `assets/data/adr-cards.js`, keyed by ADR number. The list itself is enumerated from `docs-src/adr/`, so a new ADR appears with no edit here; an entry only replaces the generated fallback with better copy.
 - **Analytics and email capture**: `assets/js/analytics.js` (GA4 id + newsletter form action). Both are placeholders and no-op until replaced. Search-console verification is a meta tag, commented in `index.html`'s head, because a crawler will not accept a JS-injected tag.
 - **Published email**: `EMAIL_USER` / `EMAIL_DOMAIN` at the top of `assets/js/main.js` (assembled in JS to deter scraping; deliberately absent from the `ContactPage` JSON-LD for the same reason).
@@ -75,8 +75,12 @@ The index is a real inverted index, built with **MiniSearch** at build time by `
 - `docs-src/governance/`: the rubric plus repo-prefixed scorecards and backlogs.
 - `docs-src/guides/`: public-safe narrative docs.
 - `docs-src/onboarding/`: the onboarding chapters, their ONLY home; the workspace `Tools/invtool` pipeline writes here directly. Underscore-prefixed files are working files and are skipped by the build.
+- `docs-src/articles/`: the article series, its ONLY home (`/update-medium` maintains it). Rendered to `articles/` at the site root, under Writing rather than the Reference library. Three rules:
+  - **The file name is the permanent URL**, so it carries no number. The number lives in the header blockquote (`Article #N`) and in `articles.js` `n`; the build throws when they disagree, or when a source has no `articles.js` entry (or an entry has no source).
+  - **The header blockquote and the trailing `*Notes:` ledger stay in the source and are stripped at render**, before indexing too. A backticked `Website/docs-src/...md` path in the prose becomes a link to that page under its title, and a backticked URL becomes a link.
+  - `README.md` is the series index page and the article-to-source mapping table.
 
-`tools/build-docs.mjs` renders each file into a full page in the site shell under `docs/`. **The generated HTML in `docs/` is committed: never hand-edit it.** A docs-src edit is not done until the rebuild ran and both source and regenerated output are committed together. The build also **prunes**: any `.html` under `docs/` with no surviving markdown source is deleted.
+`tools/build-docs.mjs` renders each file into a full page in the site shell under `docs/` (articles under `articles/`). **The generated HTML in `docs/` and `articles/` is committed: never hand-edit it.** A docs-src edit is not done until the rebuild ran and both source and regenerated output are committed together. The build also **prunes**: any `.html` under `docs/` or `articles/` with no surviving markdown source is deleted.
 
 The generator writes into **marked regions of the hand-authored root pages** (`<!-- BEGIN name -->` / `<!-- END name -->`), and a missing marker fails the build rather than silently no-oping. **Never hand-edit inside a region.**
 
