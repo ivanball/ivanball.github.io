@@ -78,7 +78,7 @@ The index is a real inverted index, built with **MiniSearch** at build time by `
 - `docs-src/articles/`: the article series, its ONLY home (`/update-medium` maintains it). Rendered to `articles/` at the site root, under Writing rather than the Reference library. Three rules:
   - **The file name is the permanent URL**, so it carries no number. The number lives in the header blockquote (`Article #N`) and in `articles.js` `n`; the build throws when they disagree, or when a source has no `articles.js` entry (or an entry has no source).
   - **The header blockquote and the trailing `*Notes:` ledger stay in the source and are stripped at render**, before indexing too. A backticked `Website/docs-src/...md` path in the prose becomes a link to that page under its title, and a backticked URL becomes a link.
-  - `README.md` is the series index page and the article-to-source mapping table.
+  - `README.md` is the series index page and the article-to-source mapping table; `_ledger.md` (skipped by the build) holds the maintenance notes: conventions, anchor facts, scorecard and ADR notes, coverage history.
 
 `tools/build-docs.mjs` renders each file into a full page in the site shell under `docs/` (articles under `articles/`). **The generated HTML in `docs/` and `articles/` is committed: never hand-edit it.** A docs-src edit is not done until the rebuild ran and both source and regenerated output are committed together. The build also **prunes**: any `.html` under `docs/` or `articles/` with no surviving markdown source is deleted.
 
