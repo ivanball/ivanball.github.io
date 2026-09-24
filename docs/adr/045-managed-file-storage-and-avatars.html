@@ -324,9 +324,10 @@
           random suffix.</li>
           <li><strong><code>FileUploadOptions</code></strong> (<code>.../Storage/FileUploadOptions.cs:13</code>) with <code>Attachment</code> (<code>:48</code>) and
           <code>Inline</code> (<code>:59</code>), carrying the <code>Content-Disposition</code> and <code>Cache-Control</code> headers stored on the
-          blob. The options-carrying <code>UploadAsync</code> overload is a <strong>default interface member</strong>
-          (<code>.../Storage/IFileStorageService.cs:42-43</code>), so adding it broke no existing implementation;
-          <code>AzureBlobFileStorageService</code> overrides it and writes both headers
+          blob. The options-carrying <code>UploadAsync</code> overload shipped as a default interface member so
+          adding it broke no existing implementation, and became <strong>abstract</strong> in v1.210.0
+          (<code>.../Storage/IFileStorageService.cs:36</code>) once no implementation relied on the fallback;
+          <code>AzureBlobFileStorageService</code> implements it and writes both headers
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs:27</code>,
           <code>:38-43</code>).</li>
           </ul>
