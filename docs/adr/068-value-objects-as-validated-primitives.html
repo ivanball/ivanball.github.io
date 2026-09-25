@@ -240,7 +240,10 @@
           anchors refreshed). Revised 2026-09-03: <code>Event.OrganizerContactEmail</code> became <code>Email?</code>, the third ADC
           adoption site, so ADC&#39;s Domain now holds no primitive email property and matches Store on that count;
           the record also notes why the validator, the length invariant and the column shape were all left
-          alone, following the Speaker precedent.</p>
+          alone, following the Speaker precedent.
+          Revised 2026-09-25 (the shipped <code>OwnsAddress</code> helper named beside <code>OwnsMoney</code>: Store&#39;s <code>Customer.Address</code>
+          maps through it, so no consumer hand-copies an <code>Address</code> owned-type block; the Store, ADC and
+          <code>EntityTypeBuilderExtensions</code> anchors refreshed).</p>
           <h2 id="context">Context</h2>
           <p>A domain model has two kinds of small type: the <strong>identity</strong> of a thing, and a <strong>value</strong> the thing
           carries. ADR-048 recorded the identity half: identifiers stay primitives named through a global-using
@@ -299,9 +302,14 @@
           factory (<code>Money.cs:71-72</code>, <code>Currency.cs:43-49</code>, <code>DateRange.cs:31-35</code>, <code>DateTimeRange.cs:32-36</code>).</li>
           <li><strong>Two EF mapping shapes, chosen by whether adoption is a schema change.</strong> A multi-field value maps as
           an <strong>owned type</strong>: the shipped <code>OwnsMoney</code> helper
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:51</code>)
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:58</code>)
           flattens <code>Money</code> into a decimal amount column plus a three-character non-unicode ISO 4217 code column
-          (<code>:64-75</code>) and sets the navigation&#39;s requiredness from one parameter (<code>:78</code>). A single-string value
+          (<code>:69-83</code>) and sets the navigation&#39;s requiredness from one parameter (<code>:85</code>). Its sibling
+          <code>OwnsAddress</code> (<code>:125</code>, shipped in v1.192.0, <code>MMCA.Common/CHANGELOG.md:894</code>) flattens <code>Address</code> into
+          six non-unicode columns whose lengths come from <code>AddressInvariants</code> and of which only <code>AddressLine1</code>
+          is required (<code>:134-166</code>), names them from an optional prefix (<code>AddressLine1</code>, <code>AddressCity</code>, and so on
+          by default, <code>:127</code>, joined at <code>:185-188</code>) and defaults the navigation to optional (<code>:128</code>, applied at
+          <code>:168</code>). A single-string value
           maps through <code>HasConversion</code> instead, so the backing column stays a plain string column and adopting
           the value object on a property that used to be a <code>string</code> is not a migration: <code>EmailValueConverter</code>
           and <code>NullableEmailValueConverter</code>
@@ -314,7 +322,7 @@
           currency (<code>Money.cs:71-72</code>), and addition treats it as the identity element so a zero seed can
           accumulate into any currency (<code>Money.cs:131-137</code>). Because the write leg can therefore persist an
           empty code, <code>OwnsMoney</code>&#39;s read leg falls back to the sentinel rather than a null-forgiving <code>.Value!</code>
-          (<code>EntityTypeBuilderExtensions.cs:19,71</code>, contract documented at <code>:30-38</code>), and the fallback is
+          (<code>EntityTypeBuilderExtensions.cs:26,78</code>, contract documented at <code>:38-45</code>), and the fallback is
           regression-covered (<code>Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/OwnsMoneyTests.cs:106</code>).</li>
           <li><strong>Every serialization boundary is declared explicitly.</strong> <code>Money</code>, <code>Email</code>, <code>PhoneNumber</code> and
           <code>Address</code> are <code>[DataContract]</code> with ordered <code>[DataMember]</code> members (<code>Money.cs:20,30,34</code>,
@@ -337,20 +345,21 @@
           returns null for a malformed entry, which the calling loop skips rather than failing the whole batch
           (<code>:121-126</code>).</li>
           <li><strong>Adoption is real but partial.</strong> Store maps <code>ProductVariant.Price</code>
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:21</code>) with
-          <code>OwnsMoney</code> (<code>.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:31</code>),
-          and <code>Order.Total</code> (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:37</code>) is
-          seeded with <code>Money.Zero()</code> in the private constructor (<code>:90</code>) and accumulated through <code>Money.Add</code>
-          (<code>:122</code>, assigned back at <code>:126</code>), mapped <code>required: false</code> (<code>OrderConfiguration.cs:26</code>) alongside
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:26</code>) with
+          <code>OwnsMoney</code> (<code>.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:39</code>),
+          and <code>Order.Total</code> (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:58</code>) is
+          seeded with <code>Money.Zero()</code> in the private constructor (<code>:171</code>) and accumulated through <code>Money.Add</code>
+          (<code>:220</code>, assigned back at <code>:224</code>), mapped <code>required: false</code> (<code>OrderConfiguration.cs:39</code>) alongside
           <code>OrderLine.UnitPrice</code> (<code>OrderLineConfiguration.cs:28</code>). Store Identity types <code>Customer.Address</code> as the
           framework <code>Address</code>
-          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:39</code>) and maps
-          <code>Customer.Email</code> through <code>EmailValueConverter</code> with <code>Customer.Address</code> through a hand-rolled <code>OwnsOne</code>
-          block (<code>CustomerConfiguration.cs:36,43</code>), and <code>User.Email</code> the same way (<code>UserConfiguration.cs:24</code>).
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:40</code>) and maps
+          <code>Customer.Email</code> through <code>EmailValueConverter</code> (<code>CustomerConfiguration.cs:35</code>) with <code>Customer.Address</code>
+          through the shipped <code>OwnsAddress</code> helper under its default prefix (<code>CustomerConfiguration.cs:44</code>), and
+          <code>User.Email</code> the same way as <code>Customer.Email</code> (<code>UserConfiguration.cs:24</code>).
           ADC types <code>User.Email</code> as <code>Email</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:39</code>, validated through
-          <code>Email.Create</code> at <code>:166</code> and passed to the constructor at <code>:180</code>, with the same pair repeated on the
-          social-login path at <code>:207,218</code>) with
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:52</code>, validated through
+          <code>Email.Create</code> at <code>:207</code> and passed to the constructor at <code>:221</code>, with the same pair repeated on the
+          social-login path at <code>:255,266</code>) with
           the same converter (<code>.../Identity.Infrastructure/.../UserConfiguration.cs:21</code>) and two optional
           Conference emails through <code>NullableEmailValueConverter</code>: a speaker&#39;s
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:31</code>, mapped at
@@ -396,18 +405,18 @@
           <li><strong>A sentinel beats null for an absent currency.</strong> <code>Currency.None</code> keeps <code>Money.Zero()</code> usable as an
           accumulator seed and keeps every read path non-nullable; a null currency inside a materialized
           <code>Money</code> is a <code>NullReferenceException</code> waiting for the first read, which is precisely the failure
-          <code>OwnsMoney</code>&#39;s fallback exists to prevent (<code>EntityTypeBuilderExtensions.cs:30-38</code>).</li>
-          <li><strong>Ship the mapping, do not repeat it.</strong> <code>OwnsMoney</code> and the four converters put the round-trip
-          contract in one reviewed place, so a new entity configuration is one call rather than a copied lambda
-          pair that may or may not carry the sentinel fallback.</li>
+          <code>OwnsMoney</code>&#39;s fallback exists to prevent (<code>EntityTypeBuilderExtensions.cs:38-45</code>).</li>
+          <li><strong>Ship the mapping, do not repeat it.</strong> <code>OwnsMoney</code>, <code>OwnsAddress</code> and the four converters put the
+          round-trip contract in one reviewed place, so a new entity configuration is one call rather than a
+          copied lambda pair that may or may not carry the sentinel fallback, or a copied six-property block
+          whose lengths may or may not match <code>AddressInvariants</code>.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The pattern is not uniformly applied.</strong> Only three of the seven types have a companion <code>*Invariants</code>
-          class; the rest inline their checks. Only <code>Money</code> has a shipped owned-type helper, so every <code>Address</code>
-          mapping is a hand-copied <code>OwnsOne</code> block of six properties
-          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:43-75</code>).
-          Five of the seven carry a serialization attribute, and not the same one: four are
+          class; the rest inline their checks. Only the two multi-field values have a shipped owned-type helper
+          (<code>OwnsMoney</code>, <code>OwnsAddress</code>); the single-string ones map through converters, and <code>DateRange</code> and
+          <code>DateTimeRange</code> have neither. Five of the seven carry a serialization attribute, and not the same one: four are
           <code>[DataContract]</code>/<code>[DataMember]</code> (<code>Money</code>, <code>Email</code>, <code>PhoneNumber</code>, <code>Address</code>) while <code>Currency</code> carries
           <code>[JsonConverter(typeof(CurrencyJsonConverter))]</code> (<code>Currency.cs:13</code>); only <code>DateRange</code> and
           <code>DateTimeRange</code> are annotation-free.</li>

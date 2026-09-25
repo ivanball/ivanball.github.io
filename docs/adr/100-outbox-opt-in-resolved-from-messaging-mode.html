@@ -239,7 +239,9 @@
           runs when the transport needs it, rather than in every host unconditionally) and follows the
           three-valued resolution precedent <a href="021-consumer-inbox-idempotency.html">ADR-021</a> set for the inbox. The
           EF model is unchanged: the <code>OutboxMessages</code> table stays mapped on every relational source either way,
-          so this is a configuration decision and never a migration.</p>
+          so this is a configuration decision and never a migration. Revised 2026-09-25 (re-anchored the
+          <code>MessageBusSettings</code>, registration, startup-guard and model-configuration citations, which have
+          moved; the guard now lives in the <code>DependencyInjection.Messaging.cs</code> partial).</p>
           <h2 id="context">Context</h2>
           <p>ADR-003 gives every host a transactional outbox: domain and integration events are written to
           <code>OutboxMessages</code> in the same transaction as the aggregate changes, <code>OutboxProcessor</code> publishes them,
@@ -254,7 +256,8 @@
           <p>ADR-021 had already answered the same question on the consumer side. <code>MessageBus:EnableInbox</code> became
           <code>bool?</code> and <code>IsInboxEnabled</code> resolves an unset value from the transport, ON for a broker and OFF for
           in-process, which has no redelivery to dedup
-          (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:102</code>). The outbox had no such
+          (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:141</code>, documented at
+          <code>:115-118</code>). The outbox had no such
           resolution: it ran in every host, including the one that had nothing to forward to.</p>
           <p>The reverse posture is a real hazard rather than a symmetrical option. A broker deployment publishes
           integration events <strong>exclusively</strong> through the outbox: <code>BrokerEventBus</code> writes the rows and
@@ -265,18 +268,18 @@
           something, keep the schema, and refuse the one combination that cannot work.</p>
           <ol>
           <li><p><strong><code>MessageBus:EnableOutbox</code> is <code>bool?</code> and defaults to unset.</strong>
-          <code>MessageBusSettings.EnableOutbox</code> (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:151</code>)
-          carries the explicit override; <code>IsOutboxEnabled</code> (<code>:159</code>) is the resolved posture every framework
+          <code>MessageBusSettings.EnableOutbox</code> (<code>Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:167</code>)
+          carries the explicit override; <code>IsOutboxEnabled</code> (<code>:175</code>) is the resolved posture every framework
           component reads: <code>EnableOutbox ?? Provider != MessageBusProvider.InProcess</code>. That is character for
-          character the inbox rule two properties above it (<code>:125</code>). An explicit value wins in both
+          character the inbox rule two properties above it (<code>:141</code>). An explicit value wins in both
           directions, so a monolith that wants at-least-once delivery across a crash sets
-          <code>MessageBus:EnableOutbox=true</code> and gets the full outbox back (<code>:143-148</code>).</p>
+          <code>MessageBus:EnableOutbox=true</code> and gets the full outbox back (<code>:159-161</code>).</p>
           </li>
           <li><p><strong>Resolution happens once, at registration.</strong> <code>AddInfrastructure</code> binds the section, and on the
           enabled path registers <code>OutboxProcessor</code> and <code>OutboxCleanupService</code>; on the disabled path it
           registers neither and adds <code>OutboxDisabledNoticeService</code> instead
-          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:200-212</code>, reasoning at
-          <code>:194-199</code>).</p>
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:203-215</code>, reasoning at
+          <code>:197-202</code>).</p>
           </li>
           <li><p><strong>The row writes are gated at both write points</strong>, not only the background services:
           <code>InProcessEventBus</code> takes its direct-dispatch branch when the outbox is off, with no rows, no save
@@ -290,8 +293,9 @@
           </li>
           <li><p><strong>A broker with the outbox explicitly disabled fails at startup.</strong>
           <code>EnsureOutboxAvailableForProvider</code> throws when the provider is anything other than <code>InProcess</code> and
-          <code>EnableOutbox</code> is explicitly <code>false</code> (<code>DependencyInjection.cs:871</code>, guard at <code>:873</code>, throw at
-          <code>:875-876</code>). The message names the
+          <code>EnableOutbox</code> is explicitly <code>false</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:179</code>, guard at <code>:181</code>,
+          throw at <code>:183-184</code>; called from <code>DependencyInjection.cs:205</code>). The message names the
           mechanism (<code>BrokerEventBus</code> writes the rows, <code>OutboxProcessor</code> publishes them), the consequence
           (every cross-service event dropped silently) and the fix. Leaving the setting unset under a broker
           resolves to enabled, so only a deliberate <code>false</code> reaches the throw.</p>
@@ -306,7 +310,8 @@
           </li>
           <li><p><strong>The EF model does not change.</strong> <code>OutboxMessage</code> is configured in <code>OnModelCreating</code> for every
           relational provider
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:528-531</code>),
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:418</code>,
+          configuration at <code>:658-664</code>),
           independent of the setting. Flipping the flag in either direction is a configuration change and a
           restart, with no migration in any consumer.</p>
           </li>

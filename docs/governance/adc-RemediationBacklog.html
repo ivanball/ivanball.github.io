@@ -229,7 +229,7 @@
           <td>Navigation &amp; Information Arch</td>
           <td>4 / 8</td>
           <td>Implementation</td>
-          <td>Document <code>/confirm-email</code> and <code>/users/{Id:int}</code>; add an ADC navigation-contract test</td>
+          <td>Add an ADC navigation-contract test</td>
           </tr>
           <tr>
           <td>2</td>
@@ -279,12 +279,12 @@
           <li><input disabled="" type="checkbox"> <strong>Record a dated manual screen-reader pass</strong> in <code>adc-ACCESSIBILITY-SCREENREADER-PASS.md</code> (Website <code>docs-src/guides/</code>), whose results table holds only the empty placeholder row (<code>:64</code>). Needs a human with NVDA or VoiceOver against the running Aspire app; it cannot be done headless. This is the cheapest maturity 3→4 win.</li>
           </ul>
           <h3 id="12--performance--scalability--m3--i9-weight-2-maturity-priority-2">[~] #12 · Performance &amp; Scalability · M3 / I9 (weight 2; maturity priority 2)</h3>
-          <p>The implementation half is at target: a green k6 proof on the deployed 0.25 vCPU topology (run 35013811738; thresholds <code>conference-read-load.js:56-57</code>; topology <code>infra/main.bicep:1566</code>), verified two-replica hub fan-out (<code>TwoReplicaHubFanOutTests.cs:49</code>), and backpressure configured on all four services (<code>Conference.Service/appsettings.json:50</code>, applied by <code>MMCA.Common.Infrastructure/DependencyInjection.cs:1296</code>).</p>
+          <p>The implementation half is at target: a green k6 proof on the deployed 0.25 vCPU topology (run 35013811738; thresholds <code>conference-read-load.js:56-57</code>; topology <code>infra/main.bicep:1647</code>), verified two-replica hub fan-out (<code>TwoReplicaHubFanOutTests.cs:49</code>), and backpressure configured on all four services (<code>Conference.Service/appsettings.json:51-52</code>, applied by <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:337</code>).</p>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>In-band capacity proof (maturity 3→4).</strong> The k6 tier executes on a monthly cron plus dispatch (<code>load-test.yml:23</code>) and <code>load-freshness</code> gates on recency, not execution (<code>deploy.yml:904</code>, 35-day window <code>:876</code>, break-glass <code>:887-900</code>, in <code>deploy.needs</code> <code>:1305</code>). Run the k6 tier, or a scaled-down smoke of it, inside the deploy chain.</li>
+          <li><input disabled="" type="checkbox"> <strong>In-band capacity proof (maturity 3→4).</strong> The k6 tier executes on a monthly cron plus dispatch (<code>load-test.yml:23</code>) and <code>load-freshness</code> gates on recency, not execution (<code>deploy.yml:873</code>, 35-day window <code>:881</code>, break-glass <code>:892-906</code>, in <code>deploy.needs</code> <code>:1310</code>). Run the k6 tier, or a scaled-down smoke of it, inside the deploy chain.</li>
           </ul>
           <h3 id="22--responsive--cross-browser--m4--i7-weight-2-implpriority-4-the-top-of-the-implementation-band">[ ] #22 · Responsive &amp; Cross-Browser · M4 / I7 (weight 2; implPriority 4, the top of the implementation band)</h3>
-          <p>Maturity is gated by <code>cross-browser-freshness</code> (<code>deploy.yml:1034</code>, <code>:1305</code>, <code>:1347</code>); that gate is the maturity lever and does not count toward implementation.</p>
+          <p>Maturity is gated by <code>cross-browser-freshness</code> (<code>deploy.yml:1039</code>, <code>:1310</code>, <code>:1352</code>); that gate is the maturity lever and does not count toward implementation.</p>
           <ul>
           <li><input disabled="" type="checkbox"> <strong>Density options.</strong> The framework ships the capability (<code>DataGridListPageBase.cs:78</code> <code>DenseGrid</code>, <code>:898</code> <code>ToggleDensity()</code>) and ADC adopts none of it; <code>EventList.razor:73</code> hardcodes <code>Dense=&quot;true&quot;</code>.</li>
           <li><input disabled="" type="checkbox"> <strong>Content reflow on the 19 non-DataGrid table pages</strong>, starting with the data-dense conference-day surfaces (<code>OrganizerPointsOverview.razor:61,:98</code>, <code>OrganizerAttendance.razor:50</code>); the DataGrid pages already degrade to card lists. Effort <strong>M</strong> for both items together.</li>
@@ -300,7 +300,6 @@
           <h3 id="15--best-practices--code-quality--m4--i8-weight-2-implpriority-2">[ ] #15 · Best Practices &amp; Code Quality · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
           <li><input disabled="" type="checkbox"> <strong>TD-18 (effort L) · the MAUI app is outside every CI build.</strong> <code>MMCA.ADC.CI.slnf</code> lists only <code>UI.Web</code> (<code>:25</code>) and <code>UI.Web.Client</code> (<code>:26</code>); no workflow installs the <code>maui-android</code> workload, so <code>MMCA.ADC.UI</code> is never compiled in CI and its analyzers, <code>TreatWarningsAsErrors</code> and its own <code>NoWarn CA5392</code> (<code>Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:151</code>) are review-enforced only. The gating vulnerable-package audit is the shared MMCA.Common composite action at <code>deploy.yml:581-592</code> (<code>uses</code> at <code>:589</code>), scoped to <code>MMCA.ADC.CI.slnf</code> at <code>:591</code>. <code>.github/workflows/maui-audit.yml</code> audits the MAUI graph weekly (android-only, in no <code>deploy.needs</code>), so the detector half exists and the gating half does not. <strong>Blocker:</strong> a MAUI leg installs the <code>maui-android</code> workload on every run, against the deliberate Actions-minute budget. <strong>Resolution path:</strong> a scheduled (not per-PR) MAUI build leg, or wiring the audit result somewhere that can fail, verified by a full-solution package-mode restore rather than <code>CI.slnf</code>; Store carries the identical gap and should be swept in the same pass. Maturity 4 on §15 is <code>CI.slnf</code>-wide, not repo-wide, while this is open.</li>
-          <li>Minor residual: the four-code NoWarn list <code>CA2234;CA1054;S3459;S1144</code> is duplicated across five test csproj files against the centralization intent at <code>Directory.Build.props:40-48</code>.</li>
           </ul>
           <h3 id="23--front-end-performance--m4--i8-weight-2-implpriority-2">[ ] #23 · Front-End Performance · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
@@ -312,7 +311,6 @@
           </ul>
           <h3 id="25--navigation--information-architecture--m4--i8-weight-2-implpriority-2">[ ] #25 · Navigation &amp; Information Architecture · M4 / I8 (weight 2; implPriority 2)</h3>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>Document <code>/confirm-email</code> and <code>/users/{Id:int}</code> (effort S).</strong> <code>/confirm-email</code> (<code>Identity.UI/Pages/Users/ConfirmEmail/ConfirmEmail.razor:1</code>) has zero mentions in <code>adc-NavigationFlow.md</code> (655 lines), and <code>/users/{Id:int}</code> (<code>UserDetail.razor:1</code>) is covered only by the generic CRUD paragraph.</li>
           <li><input disabled="" type="checkbox"> <strong>ADC-side navigation-contract test (optional, effort M)</strong> modeled on Common&#39;s <code>NavigationContractTests</code>, so a new route cannot land undocumented (zero NavigationFlow/NavigationContract references in ADC <code>.cs</code>).</li>
           </ul>
           <h3 id="31--cost-efficiency--finops--m4--i8-weight-2-implpriority-2">[ ] #31 · Cost Efficiency / FinOps · M4 / I8 (weight 2; implPriority 2)</h3>
@@ -324,11 +322,11 @@
           <h3 id="outside-both-bands-the-910-rung-not-ranked">Outside both bands (the 9→10 rung, not ranked)</h3>
           <h3 id="26--front-end-security--m4--i9">[~] #26 · Front-End Security · M4 / I9</h3>
           <ul>
-          <li>[~] <strong>TD-08 (effort L) · same-origin data-call proxy.</strong> The auth-path BFF is live: the refresh token lives only in the HttpOnly cookie and is exchanged server-side (<code>/auth/session/token</code>, <code>UseCookieSessionRefresh</code>, <code>ICookieSessionRefresher</code> in MMCA.Common.API), and the access token is held in memory, hydrated through <code>SameOriginProxyTokenRefresher</code>. Open: a full same-origin data-call proxy (the access token also out of JS) and proxying the login/register/OAuth flows, which closes the window in which the refresh token transits JS during the login round-trip. <strong>Blocker:</strong> needs interactive verification on the Aspire stack, then a release. See <code>TokenStorageDesignNote.md</code>.</li>
+          <li>[~] <strong>TD-08 (effort L) · same-origin data-call proxy.</strong> MMCA.Common owns the lever (the cookie session refresher and the same-origin token refresher both ship there); the item, its open half and its blocker are tracked once in the <a href="common-RemediationBacklog.html">Common backlog</a>, under #26. ADC consumes it unchanged (<code>Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:100-103</code>).</li>
           </ul>
           <h3 id="28--front-end-testing--quality--m4--i9">[ ] #28 · Front-End Testing &amp; Quality · M4 / I9</h3>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>TD-20 (effort S-M) · the browser half of the deploy gate is conditional.</strong> <code>e2e-gate</code> (<code>deploy.yml:793</code>) runs only when the diff is UI-affecting (<code>if</code> at <code>:804</code>) and the <code>deploy</code> job accepts a skipped gate (<code>:1355</code>; <code>deploy.needs</code> at <code>:1310</code>), so a backend-only, infra-only or script-only merge reaches production with no chromium E2E, axe scan or Core Web Vitals assertion. The zero-test-execution half is closed by <code>backend-test-gate</code> (<code>deploy.yml:394-396</code>), whose condition is the exact complement. <strong>Blocker (deliberate):</strong> Actions-minute budget; the post-deploy smoke gate is the named backstop. <strong>Resolution path:</strong> a cheap UI-independent browser smoke leg that always runs, or record the conditionality as permanent.</li>
+          <li><input disabled="" type="checkbox"> <strong>TD-20 (effort S-M) · the browser half of the deploy gate is conditional.</strong> <code>e2e-gate</code> (<code>deploy.yml:793</code>) runs only when the diff is UI-affecting (<code>if</code> at <code>:804</code>) and the <code>deploy</code> job accepts a skipped gate (<code>:1355</code>; <code>deploy.needs</code> at <code>:1310</code>), so a backend-only, infra-only or script-only merge reaches production with no chromium E2E, axe scan or Core Web Vitals assertion. The zero-test-execution half is closed by <code>backend-test-gate</code> (<code>deploy.yml:448-450</code>), whose condition is the exact complement. <strong>Blocker (deliberate):</strong> Actions-minute budget; the post-deploy smoke gate is the named backstop. <strong>Resolution path:</strong> a cheap UI-independent browser smoke leg that always runs, or record the conditionality as permanent.</li>
           <li>[~] <strong>Pixel-level visual regression.</strong> The markup-snapshot half exists (<code>ComponentsSnapshotTests.cs:27</code>, 12 <code>[Fact]</code>s over 12 committed <code>.html</code> baselines, missing baseline = non-match, in <code>MMCA.ADC.CI.slnf:43,:49,:55</code>); pixel-level Playwright visual regression is open, and 12 components is a small slice of the surface.</li>
           </ul>
           <h2 id="implementation-band">Implementation band</h2>
@@ -414,7 +412,7 @@
           <td>Best Practices &amp; Code Quality</td>
           <td>2</td>
           <td>8</td>
-          <td><strong>TD-18</strong>: the MAUI head is in no CI build (<code>MMCA.ADC.CI.slnf:25</code>); <code>maui-audit.yml</code> runs weekly, android-only, in no <code>deploy.needs</code>, so the detector exists and the gate does not. Minor: the NoWarn list duplicated across five test csproj files (<code>Directory.Build.props:40-48</code>)</td>
+          <td><strong>TD-18</strong>: the MAUI head is in no CI build (<code>MMCA.ADC.CI.slnf:25</code>); <code>maui-audit.yml</code> runs weekly, android-only, in no <code>deploy.needs</code>, so the detector exists and the gate does not.</td>
           </tr>
           <tr>
           <td>2</td>
@@ -438,7 +436,7 @@
           <td>Navigation &amp; Information Arch</td>
           <td>2</td>
           <td>8</td>
-          <td>Document <code>/confirm-email</code> (<code>ConfirmEmail.razor:1</code>) and <code>/users/{Id:int}</code> (<code>UserDetail.razor:1</code>) in <code>adc-NavigationFlow.md</code> (effort S); an ADC-side navigation-contract test modeled on Common&#39;s <code>NavigationContractTests</code> (optional, effort M)</td>
+          <td>An ADC-side navigation-contract test modeled on Common&#39;s <code>NavigationContractTests</code> (optional, effort M); <code>/confirm-email</code> and <code>/users/{Id:int}</code> are documented in the Framework-Owned Routes section of <code>adc-NavigationFlow.md</code></td>
           </tr>
           <tr>
           <td>2</td>
@@ -492,7 +490,7 @@
           <td>Performance &amp; Scalability</td>
           <td>2</td>
           <td>3</td>
-          <td>An in-band capacity proof: the k6 tier inside the deploy chain rather than behind the recency-only <code>load-freshness</code> gate (<code>load-test.yml:23</code>, <code>deploy.yml:904</code>)</td>
+          <td>An in-band capacity proof: the k6 tier inside the deploy chain rather than behind the recency-only <code>load-freshness</code> gate (<code>load-test.yml:23</code>, <code>deploy.yml:873</code>)</td>
           </tr>
           </tbody></table></div>
           <p>Σ maturity priority = 8 across the 3 rows (3+3+2).</p>
@@ -504,10 +502,10 @@
           <li><strong>No interactive OpenAPI UI (Scalar/Swagger):</strong> the h2c-only REST services are not browser-reachable directly; a Gateway-routed UI is a small follow-up if wanted.</li>
           <li><strong>Legacy pre-cutover database retained</strong>, untouched at Basic tier, as the rollback and archive source; never written to after the per-service cutover.</li>
           <li><strong>Integration events published post-commit carrying DB-generated IDs:</strong> intentional, since the event must carry the persisted identity.</li>
-          <li><strong>Constructor-dependency ceilings (§1):</strong> <code>AuthenticationService</code> is a cohesive auth facade and is accepted as-is. The service ceiling is 10 (set for <code>AuthenticationService</code>, alongside <code>HandlerConventionTests</code>), the controller ceiling 10 (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/ConstructorDependencyCountTests.cs:52</code>) and the handler ceiling 7 (<code>:61</code>), the last set at the widest handler (<code>ResetPasswordHandler</code>, <code>SubmitQuestionHandler</code>). <code>SessionsController</code> sits at 10 on a dispensation documented in the test&#39;s XML doc (<code>ConstructorDependencyCountTests.cs:39-50</code>): its tenth dependency, <code>IEntityQueryService&lt;Event, ...&gt;</code>, exists only for the BR-86 advisory <code>X-Warning</code> header on create, which the framework&#39;s fixed create-handler signature cannot set. Lower it the moment a framework change makes 9 true.</li>
+          <li><strong>Constructor-dependency ceilings (§1):</strong> <code>AuthenticationService</code> is a cohesive auth facade and is accepted as-is. The service ceiling is 10 (<code>:28</code>, set for <code>AuthenticationService</code>), the controller ceiling 10 (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/ConstructorDependencyCountTests.cs:56</code>) and the handler ceiling 7 (<code>:65</code>), the last set at the widest handler (<code>ResetPasswordHandler</code>, <code>SubmitQuestionHandler</code>). <code>SessionsController</code> sits at 10 on a dispensation documented in the test&#39;s XML doc (<code>ConstructorDependencyCountTests.cs:44-53</code>): its tenth dependency, <code>IEntityQueryService&lt;Event, ...&gt;</code>, exists only for the BR-86 advisory <code>X-Warning</code> header on create, which the framework&#39;s fixed create-handler signature cannot set. Lower it the moment a framework change makes 9 true.</li>
           <li><strong>Vertical slice, deliberate layered-by-project hybrid (§5):</strong> cross-cutting concerns run in the decorator pipeline, slice cohesion is held by the CI-gated <code>SliceCohesionTests</code>, and the hybrid is the accepted choice that caps implementation at 8. It does not absorb enforcement-coverage gaps, which stay schedulable.</li>
-          <li>[~] <strong>Design-system residuals (§20), Common-side and watch item:</strong> eight <code>!important</code> overrides live in MMCA.Common&#39;s shared <code>app.css</code> (<code>:189</code>, <code>:209-210</code>, <code>:297</code>, <code>:302</code>, <code>:307-308</code>, <code>:314</code>, each with a mobile or a11y rationale; a generalized selector at <code>:206</code>); these are MMCA.Common changes, not ADC-local. §20 is held at implementation 9 by decision over a proposed 8 on inline styles: the two Selection dashboards carry zero inline styles, their values riding semantic classes in the module stylesheet (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/wwwroot/adc-ui.css:71</code> <code>.text-center-cell</code> through <code>:99</code> <code>.flex-fill-1</code>, global because they land on markup MudBlazor renders), and the repo-wide count is 42 across 26 <code>.razor</code> files (largest holders <code>SessionSelectionSpeakerOverlap.razor</code> and <code>PublicSpeakerDetail.razor</code> at 4 each). <strong>Re-open trigger:</strong> the count growing past 42 across 26 files, or a further shared-class extraction the next re-score can credit.</li>
-          <li><strong>Deploy E2E gate is chromium-only, ui-scoped and cross-engine by recency:</strong> <code>e2e-gate</code> invokes one browser (<code>deploy.yml:788</code>, <code>browsers: &#39;[&quot;chromium&quot;]&#39;</code> at <code>:802</code>) and runs only on UI-affecting diffs (paired with <strong>TD-20</strong>); firefox and webkit run on alternating weekly single-engine nightly legs (Monday firefox, Thursday webkit) with <code>continue-on-error</code> on the schedule (<code>e2e.yml:147</code>). <code>cross-browser-freshness</code> (<code>deploy.yml:1034</code>, <code>:1305</code>, <code>:1347</code>) requires an in-window green proof per engine, so cross-engine coverage is enforced by recency rather than per-deploy execution: a UI deploy can ship code never run on firefox or webkit until the next weekly leg goes red and stale. <code>backend-test-gate</code> (<code>deploy.yml:394-396</code>) runs the CI.slnf unit, architecture and bUnit tier on the deploys <code>e2e-gate</code> skips. A deliberate Actions-minute trade-off.</li>
+          <li>[~] <strong>Design-system residuals (§20), Common-side and watch item:</strong> eight <code>!important</code> overrides live in MMCA.Common&#39;s shared <code>app.css</code> (<code>:189</code>, <code>:209-210</code>, <code>:297</code>, <code>:302</code>, <code>:307-308</code>, <code>:314</code>, each with a mobile or a11y rationale; a generalized selector at <code>:206</code>); these are MMCA.Common changes, not ADC-local. ADC&#39;s own markup carries zero inline styles: layout and sizing values ride semantic classes in the module stylesheet (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/wwwroot/adc-ui.css:75</code> <code>.text-center-cell</code> through <code>:308</code> <code>.presenter-main</code>, global because they land on markup MudBlazor renders), and <code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Ui/InlineStyleTests.cs:22</code> pins the count at zero with no allow-list (<code>:13</code>), so a reintroduced <code>style=</code>, <code>Style=</code> or <code>CellStyle=</code> fails the CI architecture tier.</li>
+          <li><strong>Deploy E2E gate is chromium-only, ui-scoped and cross-engine by recency:</strong> <code>e2e-gate</code> invokes one browser (<code>deploy.yml:788</code>, <code>browsers: &#39;[&quot;chromium&quot;]&#39;</code> at <code>:802</code>) and runs only on UI-affecting diffs (paired with <strong>TD-20</strong>); firefox and webkit run on alternating weekly single-engine nightly legs (Monday firefox, Thursday webkit) with <code>continue-on-error</code> on the schedule (<code>e2e.yml:147</code>). <code>cross-browser-freshness</code> (<code>deploy.yml:1039</code>, <code>:1310</code>, <code>:1352</code>) requires an in-window green proof per engine, so cross-engine coverage is enforced by recency rather than per-deploy execution: a UI deploy can ship code never run on firefox or webkit until the next weekly leg goes red and stale. <code>backend-test-gate</code> (<code>deploy.yml:448-450</code>) runs the CI.slnf unit, architecture and bUnit tier on the deploys <code>e2e-gate</code> skips. A deliberate Actions-minute trade-off.</li>
           <li><strong>E2E runs Blazor Server mode in CI:</strong> <code>e2e.yml</code> pins <code>E2E_FORCE_SERVER=true</code>; forcing WebAssembly in CI fails wholesale on the 2-core hosted runner (every fresh browser context pays a cold WASM boot and the readiness probe is satisfied during prerender). <code>E2E_FORCE_WASM</code> stays supported for local runs. Retrying WASM in CI needs all three of: a WASM-aware readiness signal, amortized per-context WASM boot, and a raised job cap. A faster self-hosted runner makes the suite fail more (Blazor Server circuits drop under sustained fast-suite load), so do not repeat the rejected test-side and circuit-config tweaks; the only paths that work are a slower pace or dedicated UI-host CPU.</li>
           <li><strong>Freshness-gate break-glass:</strong> the recency gates (<code>dr-freshness</code>, <code>load-freshness</code>, <code>cross-service-freshness</code>) each accept a <code>skip_freshness_gates</code> workflow_dispatch input with a required justification (declared at <code>deploy.yml:13-18</code>, per-gate checks at <code>:562</code>, <code>:619</code>, <code>:678</code>), so each proof is bypassable by an operator. This qualifies the &quot;enforced deploy precondition&quot; language used for §6, §12, §29 and §33.</li>
           <li><strong>Pseudo-localization breadth deferred (§27):</strong> broadening <code>PseudoLocalizationTests</code> beyond its three public pages (<code>PseudoLocalizationTests.cs:51</code>, public by design per <code>:31</code>) across the authenticated authoring surface is worth 1 weighted point and costs authenticated-login plumbing plus text-expansion and overflow assertions across roughly 54 of the 57 routable <code>@page</code> files, the weakest cost-to-benefit ratio on either band. The assertion is a rendered-layout property, so bUnit cannot close it, and every browser case added to the deploy-gating chromium <code>e2e-gate</code> is paid on every future deploy. A citable culture-aware-formatting violation also stands against the lift. §27 keeps its band row at implPriority 1, but the lever is not to be re-proposed without new evidence. <strong>Re-open triggers:</strong> a second locale beyond <code>es</code>, any RTL locale, or a reported layout regression on an authenticated page. Maturity 4 is unaffected (<code>TranslationCompletenessTests</code> + <code>LocalizedTextConventionTests</code>, both in <code>MMCA.ADC.CI.slnf:58</code>, run at <code>deploy.yml:284</code>).</li>
@@ -539,13 +537,13 @@
           <td>§1</td>
           <td>SOLID Principles</td>
           <td>4 / 9</td>
-          <td>Constructor ceilings gate CI (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/ConstructorDependencyCountTests.cs:52,:61</code>); four oversized controllers split by sub-resource with no URL, verb or authorization change (<code>Conference.API/Controllers/Events/EventLifecycleController.cs:32</code>, <code>Speakers/SpeakerLinksController.cs:33</code>, <code>Sessions/SessionCalendarController.cs:26</code>, <code>Engagement.API/Controllers/LivePollVotingController.cs:35</code>)</td>
+          <td>Constructor ceilings gate CI (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/ConstructorDependencyCountTests.cs:28,:56,:65</code>); four oversized controllers split by sub-resource with no URL, verb or authorization change (<code>Conference.API/Controllers/Events/EventLifecycleController.cs:32</code>, <code>Speakers/SpeakerLinksController.cs:33</code>, <code>Sessions/SessionCalendarController.cs:26</code>, <code>Engagement.API/Controllers/LivePollVotingController.cs:35</code>)</td>
           </tr>
           <tr>
           <td>§2</td>
           <td>Design Patterns</td>
           <td>4 / 9</td>
-          <td>Result-returning factories and per-entity sync strategies (<code>Identity.Domain/Users/User.cs:158</code>; five <code>*SyncStrategy.cs</code>)</td>
+          <td>Result-returning factories and per-entity sync strategies (<code>Identity.Domain/Users/User.cs:199</code>; five <code>*SyncStrategy.cs</code>)</td>
           </tr>
           <tr>
           <td>§3</td>
@@ -575,7 +573,7 @@
           <td>§8</td>
           <td>Data Architecture</td>
           <td>4 / 9</td>
-          <td>TD-03 concurrency round-trip (<code>UpdateEventHandler.cs:34</code>, <code>OrganizerConcurrencyTests.cs:44</code>); TD-04 outbox fidelity (<code>OutboxFidelityTests</code>); model-drift gate (<code>deploy.yml:384</code>); <code>SoftDeleteFidelityTests</code></td>
+          <td>TD-03 concurrency round-trip (<code>UpdateEventHandler.cs:34</code>, <code>OrganizerConcurrencyTests.cs:44</code>); TD-04 outbox fidelity (<code>OutboxFidelityTests</code>); model-drift gate (<code>deploy.yml:413</code>); <code>SoftDeleteFidelityTests</code></td>
           </tr>
           <tr>
           <td>§9</td>
@@ -599,7 +597,7 @@
           <td>§12</td>
           <td>Performance &amp; Scalability (implementation)</td>
           <td>3 / 9</td>
-          <td>TD-21: k6 green through the synthetic-traffic bypass; hub fan-out at <code>maxReplicas: 2</code> (<code>TwoReplicaHubFanOutTests.cs:49</code>); backpressure on all four services (<code>Conference.Service/appsettings.json:50</code>); Redis-backed output cache across replicas (<code>Conference.Service/Program.cs:176</code>)</td>
+          <td>TD-21: k6 green through the synthetic-traffic bypass; hub fan-out at <code>maxReplicas: 2</code> (<code>TwoReplicaHubFanOutTests.cs:49</code>); backpressure on all four services (<code>Conference.Service/appsettings.json:51-52</code>); Redis-backed output cache across replicas (<code>Conference.Service/Program.cs:193</code>)</td>
           </tr>
           <tr>
           <td>§12</td>
@@ -617,13 +615,13 @@
           <td>§14</td>
           <td>Testability &amp; Test Strategy</td>
           <td>4 / 9</td>
-          <td>Per-service WebApplicationFactory integration tiers gating every PR; TD-05 coverage floor 55.5% (<code>deploy.yml:319</code>); cross-service handler tests (<code>CrossServiceUserRegisteredTests.cs</code>, <code>CrossServiceSpeakerLinkTests.cs</code>)</td>
+          <td>Per-service WebApplicationFactory integration tiers gating every PR; TD-05 coverage floor 55.5% (<code>deploy.yml:373</code>); cross-service handler tests (<code>CrossServiceUserRegisteredTests.cs</code>, <code>CrossServiceSpeakerLinkTests.cs</code>)</td>
           </tr>
           <tr>
           <td>§15</td>
           <td>Best Practices &amp; Code Quality (hygiene)</td>
           <td>4 / 8</td>
-          <td>Zero <code>NuGetAuditSuppress</code> items; the patched SSH.NET pin (<code>Directory.Packages.props:82</code>); every global NoWarn code dated and justified (<code>Directory.Build.props:16-31</code>)</td>
+          <td>Zero <code>NuGetAuditSuppress</code> items; the patched SSH.NET pin (<code>Directory.Packages.props:83</code>); every global NoWarn code dated and justified (<code>Directory.Build.props:16-31</code>); the test-tier NoWarn sets central in suffix-conditioned PropertyGroups with per-code reasons (<code>Directory.Build.props:66-91</code>), none in any test csproj</td>
           </tr>
           <tr>
           <td>§16</td>
@@ -653,7 +651,7 @@
           <td>§20</td>
           <td>Design System &amp; UI Consistency</td>
           <td>4 / 9</td>
-          <td>Brand-token guard (<code>Ui/BrandColorTokenTests.cs:12</code>); one shared <code>ADCHome.razor.css</code> on <code>var(--mmca-primary)</code> (<code>:249</code>); Secondary family guarded Common-side (<code>MMCA.Common.UI.Tests/Theme/BrandColorTokenTests.cs:38,:60</code>)</td>
+          <td>Brand-token guard (<code>Ui/BrandColorTokenTests.cs:12</code>); zero inline styles, pinned by <code>Ui/InlineStyleTests.cs:22</code>; one shared <code>ADCHome.razor.css</code> on <code>var(--mmca-primary)</code> (<code>:249</code>); Secondary family guarded Common-side (<code>MMCA.Common.UI.Tests/Theme/BrandColorTokenTests.cs:38,:60</code>)</td>
           </tr>
           <tr>
           <td>§21</td>
@@ -665,7 +663,7 @@
           <td>§22</td>
           <td>Responsive &amp; Cross-Browser (maturity)</td>
           <td>4 / 7</td>
-          <td>Per-engine <code>cross-browser-freshness</code> deploy gate (<code>deploy.yml:1034</code>, <code>:1305</code>, <code>:1347</code>); documented support matrix</td>
+          <td>Per-engine <code>cross-browser-freshness</code> deploy gate (<code>deploy.yml:1039</code>, <code>:1310</code>, <code>:1352</code>); documented support matrix</td>
           </tr>
           <tr>
           <td>§23</td>
@@ -689,7 +687,7 @@
           <td>§26</td>
           <td>Front-End Security</td>
           <td>4 / 9</td>
-          <td>Cookie-only refresh and in-memory access token; single-use OAuth code exchange (<code>OAuthController.ExchangeAsync</code>); enforced CSP and hardened headers on UI host and Gateway (<code>Source/Hosts/MMCA.ADC.Gateway/Program.cs:31,61</code>); TD-09 <code>SecurityHeadersTests</code></td>
+          <td>Cookie-only refresh and in-memory access token; single-use OAuth code exchange (<code>OAuthController.ExchangeAsync</code>); enforced CSP and hardened headers on UI host and Gateway (<code>Source/Hosts/MMCA.ADC.Gateway/Program.cs:118,168</code>); TD-09 <code>SecurityHeadersTests</code></td>
           </tr>
           <tr>
           <td>§27</td>
@@ -701,13 +699,13 @@
           <td>§28</td>
           <td>Front-End Testing &amp; Quality</td>
           <td>4 / 9</td>
-          <td>TD-06/TD-07: chromium E2E/axe suite as the deploy gate; markup-snapshot tier (<code>ComponentsSnapshotTests.cs:27</code>); <code>backend-test-gate</code> (<code>deploy.yml:394-396</code>); <code>ManagementRouteAuthorizationTests</code></td>
+          <td>TD-06/TD-07: chromium E2E/axe suite as the deploy gate; markup-snapshot tier (<code>ComponentsSnapshotTests.cs:27</code>); <code>backend-test-gate</code> (<code>deploy.yml:448-450</code>); <code>ManagementRouteAuthorizationTests</code></td>
           </tr>
           <tr>
           <td>§29</td>
           <td>Resilience &amp; Business Continuity</td>
           <td>4 / 9</td>
-          <td>TD-10: drilled PITR restores (<code>DISASTER-RECOVERY.md:153-158</code>); <code>dr-freshness</code> deploy gate (<code>deploy.yml:699</code>); LTR on all four DBs (<code>infra/main.bicep:668</code>); <code>GracefulShutdownTests</code></td>
+          <td>TD-10: drilled PITR restores (<code>infra/DISASTER-RECOVERY.md:212-217</code>) under a 60-minute drill timeout (<code>dr-drill.yml:49</code>); <code>dr-freshness</code> deploy gate (<code>deploy.yml:815</code>); LTR on all four DBs (<code>infra/main.bicep:924</code>); <code>GracefulShutdownTests</code></td>
           </tr>
           <tr>
           <td>§30</td>
@@ -719,7 +717,7 @@
           <td>§31</td>
           <td>Cost Efficiency / FinOps (maturity)</td>
           <td>4 / 8</td>
-          <td><code>cost-guard</code> in <code>deploy.needs</code> (<code>deploy.yml:776</code>); monthly RG budget (<code>infra/main.bicep:732</code>); <code>commonTags</code> on every billable resource</td>
+          <td><code>cost-guard</code> in <code>deploy.needs</code> (<code>deploy.yml:781</code>, <code>:1310</code>); monthly RG budget (<code>infra/main.bicep:732</code>); <code>commonTags</code> on every billable resource (<code>infra/main.bicep:176</code>) plus a per-service <code>service</code> tag on the six container apps and the four databases (<code>:1607</code>, <code>:905</code>), pinned by <code>CostTagConventionTests.cs:20,:39</code></td>
           </tr>
           <tr>
           <td>§32</td>
@@ -737,7 +735,7 @@
           <td>§34</td>
           <td>Architecture Governance &amp; Docs</td>
           <td>4 / 9</td>
-          <td>ADRs 001-125 (<code>../adr/README.md:6</code>); 44 CI-gated architecture-test classes; this ledger carries every <code>TD-NN</code> item</td>
+          <td>The ADR set, range and count owned by <a href="../adr/index.html"><code>../adr/README.md</code></a>; 54 CI-gated architecture-test classes (<code>Tests/Architecture/MMCA.ADC.Architecture.Tests/</code>), framework totals owned by <code>MMCA.Common/FACTS.md:51</code>; this ledger carries every <code>TD-NN</code> item</td>
           </tr>
           <tr>
           <td>A-1..A-7</td>

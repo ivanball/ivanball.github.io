@@ -8,6 +8,8 @@ an entity is audited only when it carries the `IAuditedEntity` marker. Absent re
 is not resolved and the whole feature is a no-op.
 Revised 2026-09-07 (Store pins the reverse `[Pii]` convention with a fitness test, and deployed SQL
 auditing backstops the in-database trail).
+Revised 2026-09-25 (both apps' SQL auditing now records UPDATE and DELETE statements against the trail
+table, by different means, and the code anchors are refreshed).
 ## Context
 The framework already answers "who touched this row last". Every `AuditableBaseEntity` carries
 `CreatedOn/By` and `LastModifiedOn/By`, stamped by `AuditSaveChangesInterceptor` on the way into
@@ -38,10 +40,10 @@ Several questions had no recorded answer:
 ### A fourth `SaveChangesInterceptor`, resolved optionally, running last
 `AuditTrailSaveChangesInterceptor` (Infrastructure `Persistence/AuditTrail/`) joins the interceptors
 `ApplicationDbContext.OnConfiguring` already passes to `optionsBuilder.AddInterceptors`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:256-278`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:292-316`,
 where `AuditSaveChangesInterceptor` and `DomainEventSaveChangesInterceptor` are resolved with
-`GetRequiredService` (`:256-257`) and the tenant and audit-trail interceptors with `GetService`). The new
-one is resolved with `GetService`, not `GetRequiredService` (`:278`): a host that never calls `AddAuditTrail`
+`GetRequiredService` (`:292-293`) and the tenant and audit-trail interceptors with `GetService`). The new
+one is resolved with `GetService`, not `GetRequiredService` (`:314`): a host that never calls `AddAuditTrail`
 resolves null, nothing is added to the pipeline, and the feature costs nothing.
 
 **Registration order is execution order and it is load-bearing.** After the wave the sequence is
@@ -87,8 +89,8 @@ ADR-070 fail-fast chain, and `AddAuditTrail(configuration)` in Infrastructure's 
 registers the interceptor and the settings together.
 
 ### The table lives in every relational source that adopts it
-`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:331`) calls
-`ConfigureAuditTrail(modelBuilder)` (`:353`, the method itself at `:628`), gated on the settings flag
+`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:411`) calls
+`ConfigureAuditTrail(modelBuilder)` (`:430`, the method itself at `:844`), gated on the settings flag
 resolved from the root provider the way the interceptors are, creating an `AuditTrailEntries` table with
 an index on
 `(EntityType, EntityKey, ChangedOn)`. A same-transaction write requires the table in the same database as
@@ -181,10 +183,34 @@ Two additions from the 2026-09-07 security review.
    broken by the record that exists to prove erasure happened.
 2. **The trail is backstopped by database-level auditing** (SEC-Store-21). The application owns its
    own trail table, so an actor with write access to the database can edit the evidence. Both apps
-   now deploy SQL auditing to the Log Analytics workspace (`MMCA.ADC/infra/main.bicep:790`,
-   `MMCA.Store/infra/main.bicep:833`), which records the statements outside the application's reach.
-   That does not make the in-database trail tamper-evident, and this record does not claim it does:
-   it means a tampering event leaves a trace somewhere the same credential cannot reach.
+   deploy SQL auditing to the Log Analytics workspace, and both record `UPDATE` and `DELETE`
+   statements against the trail table there, outside the application's reach, by different means
+   (see the 2026-09-25 revision below). That makes the trail tamper-evident, not tamper-proof: the
+   same credential can still rewrite the table, but a rewrite leaves a trace somewhere that
+   credential cannot reach.
+
+## Revision (2026-09-25): both apps record trail DML, by different means
+Revision item 2 above previously held for Store only: ADC's server-level audit carried no statement
+auditing, so a rewrite of `dbo.AuditTrailEntries` by the shared admin login left no record. Both apps
+now record trail DML, each shaped by its own volume decision.
+
+- **Store: statement auditing at the server.** `sqlAuditingSettings`
+  (`MMCA.Store/infra/main.bicep:866`) lists `BATCH_COMPLETED_GROUP` plus the two authentication groups
+  (`:875-878`), routed through a `SQLSecurityAuditEvents` diagnostic setting on the master database
+  (`:852`). The rationale, including why the batch group is the only way to cover the trail table at
+  server scope, is at `:822-846`. The batch group records every statement, so the workspace daily cap
+  is sized for it (`MMCA.Store/infra/foundation.bicep:57`, `dailyQuotaGb: 3`).
+- **ADC: object-scoped auditing per database.** The server-level policy `sqlServerAuditing`
+  (`MMCA.ADC/infra/main.bicep:827`) stays authentication, principal, role, permission and schema-change
+  groups only (`:833`), with no statement group, for volume (`:818-826`). A database-level policy,
+  `auditTrailDmlAuditing` (`:984`), adds `UPDATE ON dbo.AuditTrailEntries BY public` and
+  `DELETE ON dbo.AuditTrailEntries BY public` (`:992-993`) on the three databases that carry the trail
+  (`auditTrailDatabaseNames`, `:962`), each with its own `SQLSecurityAuditEvents` diagnostic setting
+  (`auditTrailDiagnostics`, `:968`). The rationale is at `:938-961`. Because the trail is append-only in
+  normal operation, these actions fire on tampering and on the retention purge only, and the daily cap
+  is unchanged. `SqlAuditConventionTests`
+  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/SqlAuditConventionTests.cs:12`)
+  pins both actions in `main.bicep` (`:17`) and the database list (`:36`).
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the same-transaction write this copies wholesale, including the

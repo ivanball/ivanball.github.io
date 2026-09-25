@@ -5,7 +5,10 @@ Accepted (2026-09-03). Revised 2026-09-19 (the second consumer moved: ADC's AI s
 as the internal command `ScoreEventSessionsInternalCommandHandler` under
 [ADR-114](114-internal-commands-durable-job-queue.md), taking the lock as a constructor dependency
 rather than resolving it from a service scope; and adoption is now three call sites rather than two,
-the third being ADC's question submit path).
+the third being ADC's question submit path). Revised 2026-09-25 (point 12 now grounds the
+absence of a lock in MMCA.Store and MMCA.Helpdesk on the rule in points 2 and 11 rather than on
+current state alone; the outbox and scheduler claim-lease anchors and the question-submit key
+anchor were re-pinned).
 
 ## Context
 Both deployed apps run more than one replica of every service. ADC's Conference container app is
@@ -19,10 +22,10 @@ The in-process tools do not reach that far. A `SemaphoreSlim`, or the striped `K
 callers inside one process only. The framework already had a second, stronger answer for durable
 queue work: a database claim-lease. `OutboxProcessor` stamps `LockedUntil` and a `LockToken` in a
 conditional `ExecuteUpdateAsync` so exactly one replica wins a row
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:464`,
-claim at `:475-483`), and `ScheduledJobRunner` does the same on `ScheduledJobEntry`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:385`,
+claim at `:401-405`), and `ScheduledJobRunner` does the same on `ScheduledJobEntry`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:423`, claim at
-`:428-436`). That pattern needs a row to claim.
+`:429-437`). That pattern needs a row to claim.
 
 Some critical sections have no such row. The API idempotency filter's window between executing an
 action and storing its response is guarded by a cache entry, not a database row (ADR-017, ADR-026):
@@ -56,7 +59,7 @@ persistence can enforce.**
    consensus protocol": a holder paused past its time-to-live loses the lock without knowing it, so
    the guarded section must stay correct (if slower or duplicated) when exclusion is lost, and the
    lock is to be used "to collapse duplicate work, never as the only guard on a correctness invariant
-   that persistence can enforce" (`IDistributedLock.cs:23-28`).
+   that persistence can enforce" (`IDistributedLock.cs:24-27`).
 
 3. **Non-reentrant, by contract.** A caller that already holds `key` and asks again waits for itself
    and then fails to acquire (`:19-22`). There is no re-entry counter and no owner affinity.
@@ -125,7 +128,7 @@ persistence can enforce.**
 
 11. **The choose-between rule.** Work that already owns a durable row uses the claim-lease: the
     outbox and the scheduler both stamp `LockedUntil` plus a `LockToken` in a conditional update whose
-    predicate is the exclusion (`OutboxProcessor.cs:475-483`, `ScheduledJobRunner.cs:428-436`), which
+    predicate is the exclusion (`OutboxProcessor.cs:401-405`, `ScheduledJobRunner.cs:429-437`), which
     survives a Redis outage and needs no extra dependency. `IDistributedLock` is for a section whose
     state is not a row it can conditionally update: a cache entry, an external paid API call, a pass
     over rows it does not own. Inventing a row purely to hold a lease is not the answer for those, and
@@ -135,12 +138,17 @@ persistence can enforce.**
     `SubmitQuestionHandler` takes the lock as a constructor dependency
     (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34`)
     and serializes the per-(session, user) open-question cap, whose count-then-insert is not one
-    atomic statement, under a claim keyed `session-question:submit:{sessionId}:{userId}` (`:107`,
+    atomic statement, under a claim keyed `session-question:submit:{sessionId}:{userId}` (`:108`,
     taken at `:148`) with a 30 second TTL (`:49`) and a 2 second wait (`:57`); a submit that cannot
     get in within the wait is answered with the same cap failure the count itself would have
     returned, so contention never surfaces as a fault. No other MMCA.Common component, and nothing in
     MMCA.Store or MMCA.Helpdesk, takes a lock today. The primitive is shipped and registered in every
-    host that calls `AddInfrastructure`, and used in three places.
+    host that calls `AddInfrastructure`, and used in three places. That an application takes no lock
+    of its own is the rule applied, not a gap to close: a lock is reached for only when there is
+    duplicate work to collapse that persistence cannot guard (point 2), and work that owns a durable
+    row takes the claim-lease instead (point 11). An adoption difference between the two apps is
+    therefore sanctioned by points 2 and 11, and this point only records where the rule currently
+    lands.
 
 ## Rationale
 - **The degraded mode had to be visible, not silent.** Registering nothing when Redis is absent would

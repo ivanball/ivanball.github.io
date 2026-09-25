@@ -252,9 +252,9 @@
           (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:20</code>). The ADC
           consumer&#39;s deep-link wave has shipped: <code>MMCA.ADC.UI.Web</code> serves the two well-known association
           documents through the shared helper
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:273</code>), the Identity service allow-lists the
-          <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:79-81</code>, the
-          entry at <code>:80</code>), and
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:267</code>), the Identity service allow-lists the
+          <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:83-85</code>, the
+          entry at <code>:84</code>), and
           the native heads register the callback: iOS carries both the custom-scheme URL type
           (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Info.plist:16</code>) and the associated-domains
           entitlement (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Entitlements.plist:11</code>), while
@@ -270,8 +270,8 @@
           activities and their intent filters are attributes in code, which .NET for Android merges into the
           generated manifest at build time. The SERVED fingerprint has landed as well:
           <code>AppAssociation:AndroidCertFingerprints</code> now carries the production Play App Signing SHA-256
-          fingerprint (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:52-54</code>, the single value at
-          <code>:53</code>, inside the <code>AppAssociation</code> section at <code>:50-56</code>) in place of the former
+          fingerprint (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:64-66</code>, the single value at
+          <code>:65</code>, inside the <code>AppAssociation</code> section at <code>:62-68</code>) in place of the former
           <code>REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT</code> placeholder, and the helper copies that array
           verbatim into the document&#39;s <code>sha256_cert_fingerprints</code>
           (<code>Source/Presentation/MMCA.Common.API/Startup/Endpoints/AppAssociationEndpointExtensions.cs:63</code>), so the
@@ -282,7 +282,10 @@
           shape-based and covers an explicit intent that never passed an intent filter). Revised 2026-09-11
           (anchors re-pinned across MMCA.Common and MMCA.ADC after <code>Program.cs</code> and <code>AuthUIService.cs</code> grew,
           and the ADC-side guard is corrected: no <code>DeepLinkRouteGuard</code> type exists, the Android head calls the
-          shared <code>DeepLinkDispatcher.IsAppRelativeRoute</code> directly; see Revision below).</p>
+          shared <code>DeepLinkDispatcher.IsAppRelativeRoute</code> directly; see Revision below). Revised 2026-09-25
+          (MMCA.ADC anchors re-pinned: the <code>Program.cs</code> association block, both <code>appsettings.json</code> config
+          sections, the MAUI head&#39;s <code>PublicSite:BaseUrl</code> line and the two <code>MainActivity</code> publish call sites
+          moved; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>Three mobile flows all need a URL to leave the web world and land inside the MAUI app:</p>
           <ol>
@@ -357,7 +360,7 @@
           currently ride the Azure Container Apps default domain, which changes if the environment is ever
           recreated and would force store resubmissions. Three places in the ADC repo put the host string
           inside the app binary: <code>PublicSite:BaseUrl</code> in the MAUI head&#39;s
-          <code>appsettings.json</code> (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:22</code>, compiled in as an
+          <code>appsettings.json</code> (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:23</code>, compiled in as an
           <code>EmbeddedResource</code> per <code>MMCA.ADC.UI.csproj:130</code>), a raw literal in the iOS associated-domains
           array (<code>Platforms/iOS/Entitlements.plist:11</code>), and the <code>PublicWebHost</code> compile-time constant that
           feeds the Android intent-filter attribute (<code>Platforms/Android/MainActivity.cs:39</code>). Only the first
@@ -393,7 +396,7 @@
           <li><strong>What is outstanding is the served fingerprint, not the platform registration.</strong>
           <code>AppAssociation:AndroidCertFingerprints</code> still holds the literal
           <code>&quot;REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT&quot;</code>
-          (the key now sits at <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:52</code>), and the mapper serializes that
+          (the key now sits at <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:64</code>), and the mapper serializes that
           array straight into <code>sha256_cert_fingerprints</code>
           (<code>Source/Presentation/MMCA.Common.API/Startup/Endpoints/AppAssociationEndpointExtensions.cs:63</code>). No other
           setting of that key exists in the ADC repo; the only other mention is the rotation procedure in
@@ -426,7 +429,7 @@
           <ol>
           <li><strong>The served fingerprint is no longer a placeholder.</strong>
           <code>AppAssociation:AndroidCertFingerprints</code> now holds the production Play App Signing SHA-256
-          fingerprint (now <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:52-54</code>), set by MMCA.ADC
+          fingerprint (now <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:64-66</code>), set by MMCA.ADC
           commit <code>d5fd0e9</code> (PR #80, merged 2026-07-28), which landed after the previous revision was
           written on the same day. The mapper still serializes that array straight into
           <code>sha256_cert_fingerprints</code>
@@ -458,7 +461,7 @@
           <li><strong>The hostname trade-off names its three occurrences.</strong> The bullet said every occurrence &quot;stays
           parameterized&quot;, which reads as if the host were configurable everywhere. It is not: the string
           reaches the binary from three places and only one of them is read through configuration
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:22</code>). The other two are compile-time
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:23</code>). The other two are compile-time
           literals the platforms require: <code>Platforms/iOS/Entitlements.plist:11</code> and the <code>PublicWebHost</code>
           constant at <code>Platforms/Android/MainActivity.cs:39</code>. All three ship inside the binary, so the
           resubmission cost the bullet warns about is unchanged; what changed is the description of the
@@ -495,7 +498,7 @@
           ADR-045 device-capability waves and touch nothing in this decision; only the count was wrong.</li>
           <li><strong>The hostname trade-off separates binary occurrences from documentation.</strong> The bullet said the
           host string occurs &quot;in exactly three places in the ADC repo, and all three ship inside the app
-          binary&quot;. Three places put it in the binary (<code>MMCA.ADC.UI/appsettings.json:22</code>,
+          binary&quot;. Three places put it in the binary (<code>MMCA.ADC.UI/appsettings.json:23</code>,
           <code>Platforms/iOS/Entitlements.plist:11</code>, <code>Platforms/Android/MainActivity.cs:39</code>), which is the
           claim that carries the resubmission cost, but the repo holds two further mentions that ship
           nothing: the <code>curl</code> and Digital Asset Links verification commands in
@@ -504,9 +507,9 @@
           <li><strong>Remaining ADC anchor drift.</strong> The MAUI head&#39;s <code>appsettings.json</code> is compiled in as an
           <code>EmbeddedResource</code> at <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:130</code> (the only
           <code>EmbeddedResource</code> in that file), the Identity service&#39;s OAuth allowlist section is at
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:79-81</code> with the <code>atldevcon</code>
-          entry at <code>:80</code>, the served fingerprint key is at
-          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:52-54</code>, the Android intent filter is
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:83-85</code> with the <code>atldevcon</code>
+          entry at <code>:84</code>, the served fingerprint key is at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:64-66</code>, the Android intent filter is
           at <code>Platforms/Android/MainActivity.cs:26-31</code> with <code>PublishDeepLink</code> at <code>:65-98</code>, and
           <code>BuildSuccessRedirectUrl</code> is defined at
           <code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:154</code> and called at
@@ -529,8 +532,8 @@
           protocol-relative value such as <code>//attacker.example/p</code> is not caught by an origin check at all, since
           the web view resolves it against the app origin&#39;s scheme. Checking the shape at the one point every
           platform funnels through covers both. ADC&#39;s Android head publishes through that path from both
-          entry points (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:46</code> on launch
-          and <code>:59-61</code> on a new intent), and asks the shared rule itself before publishing (<code>:92</code>), so a
+          entry points (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:45</code> on launch
+          and <code>:62</code> on a new intent), and asks the shared rule itself before publishing (<code>:92</code>), so a
           hostile route is dropped silently rather than crossing a platform callback as an exception.</p>
           <h2 id="revision-2026-09-11">Revision (2026-09-11)</h2>
           <p>Anchor and correction pass from an ADR audit. No decision and no behavior changed. One citation
@@ -568,14 +571,39 @@
           <code>:272</code> and <code>app.MapAppAssociationEndpoints(new AppAssociationOptions</code> at <code>:273</code>, under the
           ADR-043 block comment at <code>:266-271</code>; the four-line package-id comment from the 2026-08-01 entry
           is at <code>:275-278</code>, <code>AndroidPackageName</code> at <code>:279</code>, <code>AndroidCertFingerprints</code> at <code>:280</code>, and
-          <code>AppleAppId</code> plus <code>AppleAppLinkComponents</code> at <code>:281-282</code>.</li>
-          <li><strong>Two ADC config anchors moved.</strong> The served fingerprint sits in the <code>AppAssociation</code> section at
+          <code>AppleAppId</code> plus <code>AppleAppLinkComponents</code> at <code>:281-282</code> (values as of this entry; see the
+          2026-09-25 entry).</li>
+          <li><strong>Two ADC config anchors moved</strong> (values as of this entry; see the 2026-09-25 entry). The served fingerprint sits in the <code>AppAssociation</code> section at
           <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:50-56</code>, with
           <code>AndroidCertFingerprints</code> at <code>:52-54</code> and its single SHA-256 value at <code>:53</code>; it is still a real
           Play App Signing fingerprint, not the former placeholder. The Identity service&#39;s <code>OAuth</code> section
           is at <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:79-81</code>, with
           <code>&quot;AllowedReturnUrlSchemes&quot;: [ &quot;atldevcon&quot; ]</code> at <code>:80</code>.</li>
           </ol>
+          <h2 id="revision-2026-09-25">Revision (2026-09-25)</h2>
+          <p>Anchor pass over the MMCA.ADC citations. No decision and no behavior changed.</p>
+          <ol>
+          <li><strong>The ADC association block moved up six lines.</strong> In
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs</code>, the ADR-043 block comment is at
+          <code>:260-265</code>, <code>GetSection(&quot;AppAssociation&quot;)</code> at <code>:266</code>, <code>app.MapAppAssociationEndpoints(new AppAssociationOptions</code> at <code>:267</code>, the four-line package-id comment at <code>:269-272</code>,
+          <code>AndroidPackageName</code> at <code>:273</code>, <code>AndroidCertFingerprints</code> at <code>:274</code>, and <code>AppleAppId</code> plus
+          <code>AppleAppLinkComponents</code> at <code>:275-276</code>.</li>
+          <li><strong>Both config sections moved.</strong> The served fingerprint&#39;s <code>AppAssociation</code> section is at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:62-68</code>, with <code>AndroidCertFingerprints</code>
+          at <code>:64-66</code> and its single SHA-256 value at <code>:65</code>. The Identity service&#39;s <code>OAuth</code> section is at
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:83-85</code>, with
+          <code>&quot;AllowedReturnUrlSchemes&quot;: [ &quot;atldevcon&quot; ]</code> at <code>:84</code>.</li>
+          <li><strong>The MAUI head&#39;s host string moved one line.</strong> <code>PublicSite:BaseUrl</code> is at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:23</code>; its <code>EmbeddedResource</code> line is still
+          <code>MMCA.ADC.UI.csproj:130</code>.</li>
+          <li><strong>The Android publish call sites.</strong> <code>OnCreate</code> publishes at
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:45</code> and <code>OnNewIntent</code> at
+          <code>:62</code>. The intent filter (<code>:26-31</code>), <code>PublicWebHost</code> (<code>:39</code>), <code>PublishDeepLink</code> (<code>:65-98</code>), the
+          route reduction (<code>:78</code>), the shape check (<code>:92-95</code>) and the publish (<code>:97</code>) are unchanged, and the
+          comment at <code>:37-38</code> still calls the cutover a two-spot change.</li>
+          </ol>
+          <p>Every current-state citation of these anchors is updated above; the dated &quot;moved&quot; entries keep the
+          values they recorded.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -597,6 +625,7 @@
             <li><a href="#revision-2026-08-31">Revision (2026-08-31)</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
+            <li><a href="#revision-2026-09-25">Revision (2026-09-25)</a></li>
             </ul>
           </nav>
         </aside>

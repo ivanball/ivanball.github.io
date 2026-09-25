@@ -2,6 +2,10 @@
 
 ## Status
 Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19).
+Revised 2026-09-25 (MMCA.ADC's `ITransactional` count corrected to six, adding
+`BatchAddEventQuestionAnswersCommand`; the direct-caller anchors and the Store package pin refreshed;
+Store's `CheckOutHandler` documentation now cites this record for the commit-once behavior and names
+all three pre-flight reads, so the two trade-offs that described its comments as stale are retired).
 
 ## Context
 Every transactional write in this workspace funnels through one method. `IUnitOfWork.ExecuteInTransactionAsync`
@@ -114,14 +118,16 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
     (`:485-486`), and the exception is part of the frozen public surface
     (`.../MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:220-228`), which is what makes it a contract a caller can
     bind to rather than an internal detail. No framework or consumer code catches it: across the four repos the type
-    is referenced only by the two files that define it and by
+    is referenced in code only by the two files that define it and by
     `.../MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/DbContextFactoryCommitAmbiguityTests.cs`, whose five
     cases pin the no-rerun wrapper, the dropped dispatch, the ordinary commit path, the still-retried pre-commit
-    failure and the per-source report (`:73`, `:108`, `:132`, `:152`, `:171`).
+    failure and the per-source report (`:73`, `:108`, `:132`, `:152`, `:171`). The one consumer mention is prose:
+    Store's `CheckOutHandler` remarks name it and hand recovery to the `[Idempotent]` filter
+    (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:107-112`).
 
-12. **Adoption is deliberately narrow.** MMCA.ADC has five `ITransactional` commands
+12. **Adoption is deliberately narrow.** MMCA.ADC has six `ITransactional` commands, five in Conference
     (`RefreshFromSessionizeCommand.cs:13`, `LinkUserToSpeakerCommand.cs:13`, `UnlinkUserFromSpeakerCommand.cs:12`,
-    `BatchAddSessionQuestionAnswersCommand.cs:24`, and Identity's
+    `BatchAddSessionQuestionAnswersCommand.cs:24`, `BatchAddEventQuestionAnswersCommand.cs:24`) and Identity's
     `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:22`,
     which carries the flag so the erasure lands as one write), MMCA.Store has two (`ReorderProductImagesCommand.cs:22`,
     `UploadProductImageCommand.cs:27`) plus four commands whose XML doc records a deliberate opt-out
@@ -130,9 +136,9 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
     framework's own `EFRefreshSessionStore` rotation
     (`.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:121`), ADC's `AuthenticationService` for both
     registration and external login
-    (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:84`, `:157`), and
+    (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:89`, `:203`), and
     Store's `CheckOutHandler`
-    (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:93`).
+    (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:78`).
 
 ## Rationale
 - **Retrying the operation is safe; retrying the commit is not.** A transient failure before the commit leaves
@@ -162,15 +168,14 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
   single transactional source, which is a property of today's deployments rather than a guarantee of the code.
 - **The retry contract is a trap for handler authors.** Anything computed outside the delegate but committed inside
   it is silently wrong on the second attempt, and the change-tracker reset makes the failure quiet rather than loud.
-  Store's `CheckOutHandler` carries a long comment explaining exactly this, and it now keeps two values outside the
-  delegate: the cross-service gRPC price fetch and a best-effort customer-name lookup whose latency is kept off the
-  database locks the same way (`CheckOutHandler.cs:16-24`, `:80-92`, `:102-117`). That is discipline, not
-  enforcement, and the discipline already drifts: the handler's own class doc still says only the price fetch stays
-  outside (`:34`).
-- **A stale consumer comment still describes the fix as future work.** `CheckOutHandler.cs:90-92` names
-  "MMCA.Common's forthcoming commit-phase fix" as what will remove its residual window, but that fix shipped in
-  v1.135.0 (`MMCA.Common/CHANGELOG.md:2114`) and Store pins v1.205.0
-  (`MMCA.Store/Directory.Packages.props:11`), so the comment describes a state that has not existed for a while.
+  Store's `CheckOutHandler` documents exactly this: its class doc names the pre-flight that stays outside the
+  delegate (the non-tracking cart snapshot plus the two cross-service gRPC reads, Catalog prices and the customer's
+  display name, so their latency never holds database locks, `CheckOutHandler.cs:24-29`), the code does that
+  pre-flight before opening the transaction (`:54-76`), and the write-phase remarks explain why the whole
+  read-execute-write unit runs inside (`:98-105`) and why a commit failure is not retried (`:107-112`, citing this
+  record for the behavior MMCA.Common shipped in v1.135.0, `MMCA.Common/CHANGELOG.md:3463`, and that Store consumes at
+  v1.210.0, `MMCA.Store/Directory.Packages.props:11`). That is discipline, not enforcement: nothing checks that a
+  new handler keeps its commit dependencies inside the delegate.
 - **Cosmos participation is silent.** A Cosmos context in a transactional scope is skipped without a warning
   (`DbContextFactory.cs:754-757`), so a future host mixing engines gets partial atomicity with no signal at the call
   site.

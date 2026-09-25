@@ -283,7 +283,11 @@
           Revised 2026-09-19 (<code>MMCA.Common.AI</code> is now subscribed in the meter chain and added as a trace
           source, so the block carries ten subscribed meters: nine <code>MMCA.Common.*</code> plus <code>Polly</code>. Both
           2026-09-11 entries above are superseded on those two points, the one that records the AI meter as
-          defined but not subscribed and the one that counts nine. See the Revision (2026-09-19) at the end).</p>
+          defined but not subscribed and the one that counts nine. See the Revision (2026-09-19) at the end).
+          Revised 2026-09-25 (<code>MMCA.ADC.UI.Web</code> now calls <code>AddCommonSerilog</code> as well, so nine hosts share the
+          helper and the two Gateways are the only hosts without Serilog; the per-host <code>AddCommonSerilog</code>,
+          bootstrap-factory and call-order citations in the Amended (2026-08-31) section are rebased onto their
+          current lines. The &quot;eight hosts&quot; count in the first 2026-09-03 entry above is superseded).</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -490,7 +494,7 @@
           all, while its metrics, traces and health endpoints stay green, so the gap reads as a quiet service
           rather than as a misconfiguration. Ordering carries the same weight in the other direction: the helper
           runs BEFORE <code>AddServiceDefaults()</code> in every host that uses it (for example
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:100</code>-<code>:101</code>), so the OpenTelemetry
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:104</code>-<code>:105</code>), so the OpenTelemetry
           provider joins the factory Serilog is already in. One fitness test pins the invariant: the built
           container must contain exactly one <code>SerilogLoggerProvider</code>
           (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/Logging/SerilogHostExtensionsTests.cs:156</code>-<code>:158</code>).</p>
@@ -506,17 +510,20 @@
           <p><strong>A bootstrap logger for the pre-DI window.</strong> Module discovery runs before the DI container exists, so
           there is no <code>ILogger&lt;T&gt;</code> to resolve yet. <code>CreateBootstrapLoggerFactory()</code> (<code>:67</code>-<code>:68</code>) returns a
           factory writing to the same global <code>Log.Logger</code>, which each host disposes once startup wiring is done
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:122</code>).</p>
-          <p><strong>Adoption is asymmetric, but there is only one shape of it.</strong> Eight hosts call <code>AddCommonSerilog</code>,
-          each in its own <code>Program.cs</code>: the seven ADC/Store service hosts, ADC Conference (<code>:100</code>), Engagement
-          (<code>:83</code>), Identity (<code>:96</code>), Notification (<code>:86</code>), and Store Catalog (<code>:68</code>), Identity (<code>:73</code>), Sales
-          (<code>:85</code>), plus <code>MMCA.Store.UI.Web</code>
-          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:58</code>). Each of the seven service hosts pairs
-          it with <code>CreateBootstrapLoggerFactory()</code> in the same file (ADC <code>:308</code>, <code>:209</code>, <code>:247</code>, <code>:187</code>; Store
-          <code>:122</code>, <code>:117</code>, <code>:131</code>); <code>MMCA.Store.UI.Web</code> does not, because it discovers no modules and so has no
-          pre-DI window to cover. The asymmetry that remains is the three hosts with no Serilog at all: neither
-          Gateway references it in its <code>Program.cs</code>, and neither does <code>MMCA.ADC.UI.Web</code>. Those three take the
-          plain OpenTelemetry logging <code>AddServiceDefaults</code> gives them.</p>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:126</code>).</p>
+          <p><strong>Adoption is asymmetric, but there is only one shape of it.</strong> Nine hosts call <code>AddCommonSerilog</code>,
+          each in its own <code>Program.cs</code> and each ahead of its <code>AddServiceDefaults()</code> call: the seven ADC/Store
+          service hosts, ADC Conference (<code>:104</code>), Engagement (<code>:83</code>), Identity (<code>:98</code>), Notification (<code>:89</code>), and
+          Store Catalog (<code>:71</code>), Identity (<code>:75</code>), Sales (<code>:86</code>), plus both Blazor UI hosts,
+          <code>MMCA.ADC.UI.Web</code> (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:49</code>, <code>AddServiceDefaults</code> at
+          <code>:51</code>) and <code>MMCA.Store.UI.Web</code> (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:60</code>,
+          <code>AddServiceDefaults</code> at <code>:62</code>). Each of the seven service hosts pairs it with
+          <code>CreateBootstrapLoggerFactory()</code> in the same file (ADC <code>:366</code>, <code>:209</code>, <code>:254</code>, <code>:190</code>; Store <code>:126</code>,
+          <code>:120</code>, <code>:133</code>); the two UI hosts do not, because they discover no modules and so have no pre-DI
+          window to cover. The asymmetry that remains is the two Gateways, the only hosts with no Serilog at all:
+          neither references it in its <code>Program.cs</code>, and both take the plain OpenTelemetry logging
+          <code>AddServiceDefaults</code> gives them (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:58</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:65</code>).</p>
           <p>Two costs come with it. <strong>The invariant is guarded in the framework, not at the consumer</strong>: the one
           test above runs in MMCA.Common, and nothing in a host&#39;s own build stops a new service from reaching for
           <code>UseSerilog()</code>, whose failure mode is silence in a place nobody watches for absence. And

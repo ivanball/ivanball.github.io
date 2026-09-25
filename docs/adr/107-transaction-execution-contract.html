@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-107: Transaction Execution and Commit-Ambiguity Contract · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19).">
+  <meta name="description" content="Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19). Revised 2026-09-25 (MMCA.ADC&#39;s ITransactional count corrected to six,…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/107-transaction-execution-contract.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-107: Transaction Execution and Commit-Ambiguity Contract">
-  <meta property="og:description" content="Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19).">
+  <meta property="og:description" content="Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19). Revised 2026-09-25 (MMCA.ADC&#39;s ITransactional count corrected to six,…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/107-transaction-execution-contract.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-107: Transaction Execution and Commit-Ambiguity Contract">
-  <meta name="twitter:description" content="Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19).">
+  <meta name="twitter:description" content="Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19). Revised 2026-09-25 (MMCA.ADC&#39;s ITransactional count corrected to six,…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"107 · Transaction Execution and Commit-Ambiguity Contract","item":"https://ivanball.github.io/docs/adr/107-transaction-execution-contract.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -235,7 +235,11 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-107-transaction-execution-and-commit-ambiguity-contract">ADR-107: Transaction Execution and Commit-Ambiguity Contract</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19).</p>
+          <p>Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19).
+          Revised 2026-09-25 (MMCA.ADC&#39;s <code>ITransactional</code> count corrected to six, adding
+          <code>BatchAddEventQuestionAnswersCommand</code>; the direct-caller anchors and the Store package pin refreshed;
+          Store&#39;s <code>CheckOutHandler</code> documentation now cites this record for the commit-once behavior and names
+          all three pre-flight reads, so the two trade-offs that described its comments as stale are retired).</p>
           <h2 id="context">Context</h2>
           <p>Every transactional write in this workspace funnels through one method. <code>IUnitOfWork.ExecuteInTransactionAsync</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:70</code>) is the
@@ -344,14 +348,16 @@
           (<code>:485-486</code>), and the exception is part of the frozen public surface
           (<code>.../MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:220-228</code>), which is what makes it a contract a caller can
           bind to rather than an internal detail. No framework or consumer code catches it: across the four repos the type
-          is referenced only by the two files that define it and by
+          is referenced in code only by the two files that define it and by
           <code>.../MMCA.Common.Infrastructure.Tests/Persistence/DbContexts/DbContextFactoryCommitAmbiguityTests.cs</code>, whose five
           cases pin the no-rerun wrapper, the dropped dispatch, the ordinary commit path, the still-retried pre-commit
-          failure and the per-source report (<code>:73</code>, <code>:108</code>, <code>:132</code>, <code>:152</code>, <code>:171</code>).</p>
+          failure and the per-source report (<code>:73</code>, <code>:108</code>, <code>:132</code>, <code>:152</code>, <code>:171</code>). The one consumer mention is prose:
+          Store&#39;s <code>CheckOutHandler</code> remarks name it and hand recovery to the <code>[Idempotent]</code> filter
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:107-112</code>).</p>
           </li>
-          <li><p><strong>Adoption is deliberately narrow.</strong> MMCA.ADC has five <code>ITransactional</code> commands
+          <li><p><strong>Adoption is deliberately narrow.</strong> MMCA.ADC has six <code>ITransactional</code> commands, five in Conference
           (<code>RefreshFromSessionizeCommand.cs:13</code>, <code>LinkUserToSpeakerCommand.cs:13</code>, <code>UnlinkUserFromSpeakerCommand.cs:12</code>,
-          <code>BatchAddSessionQuestionAnswersCommand.cs:24</code>, and Identity&#39;s
+          <code>BatchAddSessionQuestionAnswersCommand.cs:24</code>, <code>BatchAddEventQuestionAnswersCommand.cs:24</code>) and Identity&#39;s
           <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserCommand.cs:22</code>,
           which carries the flag so the erasure lands as one write), MMCA.Store has two (<code>ReorderProductImagesCommand.cs:22</code>,
           <code>UploadProductImageCommand.cs:27</code>) plus four commands whose XML doc records a deliberate opt-out
@@ -360,9 +366,9 @@
           framework&#39;s own <code>EFRefreshSessionStore</code> rotation
           (<code>.../Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:121</code>), ADC&#39;s <code>AuthenticationService</code> for both
           registration and external login
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:84</code>, <code>:157</code>), and
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:89</code>, <code>:203</code>), and
           Store&#39;s <code>CheckOutHandler</code>
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:93</code>).</p>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:78</code>).</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -395,15 +401,14 @@
           single transactional source, which is a property of today&#39;s deployments rather than a guarantee of the code.</li>
           <li><strong>The retry contract is a trap for handler authors.</strong> Anything computed outside the delegate but committed inside
           it is silently wrong on the second attempt, and the change-tracker reset makes the failure quiet rather than loud.
-          Store&#39;s <code>CheckOutHandler</code> carries a long comment explaining exactly this, and it now keeps two values outside the
-          delegate: the cross-service gRPC price fetch and a best-effort customer-name lookup whose latency is kept off the
-          database locks the same way (<code>CheckOutHandler.cs:16-24</code>, <code>:80-92</code>, <code>:102-117</code>). That is discipline, not
-          enforcement, and the discipline already drifts: the handler&#39;s own class doc still says only the price fetch stays
-          outside (<code>:34</code>).</li>
-          <li><strong>A stale consumer comment still describes the fix as future work.</strong> <code>CheckOutHandler.cs:90-92</code> names
-          &quot;MMCA.Common&#39;s forthcoming commit-phase fix&quot; as what will remove its residual window, but that fix shipped in
-          v1.135.0 (<code>MMCA.Common/CHANGELOG.md:2114</code>) and Store pins v1.205.0
-          (<code>MMCA.Store/Directory.Packages.props:11</code>), so the comment describes a state that has not existed for a while.</li>
+          Store&#39;s <code>CheckOutHandler</code> documents exactly this: its class doc names the pre-flight that stays outside the
+          delegate (the non-tracking cart snapshot plus the two cross-service gRPC reads, Catalog prices and the customer&#39;s
+          display name, so their latency never holds database locks, <code>CheckOutHandler.cs:24-29</code>), the code does that
+          pre-flight before opening the transaction (<code>:54-76</code>), and the write-phase remarks explain why the whole
+          read-execute-write unit runs inside (<code>:98-105</code>) and why a commit failure is not retried (<code>:107-112</code>, citing this
+          record for the behavior MMCA.Common shipped in v1.135.0, <code>MMCA.Common/CHANGELOG.md:3463</code>, and that Store consumes at
+          v1.210.0, <code>MMCA.Store/Directory.Packages.props:11</code>). That is discipline, not enforcement: nothing checks that a
+          new handler keeps its commit dependencies inside the delegate.</li>
           <li><strong>Cosmos participation is silent.</strong> A Cosmos context in a transactional scope is skipped without a warning
           (<code>DbContextFactory.cs:754-757</code>), so a future host mixing engines gets partial atomicity with no signal at the call
           site.</li>

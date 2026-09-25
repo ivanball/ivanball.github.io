@@ -14,6 +14,8 @@ which have since moved; corrected the OpenAPI trade-off: `AddCommonOpenApi` plus
 `MapCommonOpenApi().WithDocumentPerVersion()` resolve one document per discovered API version rather
 than a single `v1` document).
 Revised 2026-09-22 (MMCA.ADC commits a build-time OpenAPI document per service host, gated in CI; see the Revision below).
+Revised 2026-09-25 (MMCA.Store adopts the same committed-document gate, so both consumers carry it;
+re-anchored the host call-site citations; see the Revision (2026-09-25) below).
 
 ## Context
 The framework's REST surface is served by controllers hosted in extracted service processes behind a
@@ -108,11 +110,11 @@ proves two live versions coexist.
   current host was affected either way, which is precisely why the failure could ship unnoticed.
 - **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
   in their startup: ADC's Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:196`) and Identity
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:151`) hosts, Store's Catalog host
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:141`), and the same call is made
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:220`) and Identity
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:152`) hosts, Store's Catalog host
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:142`), and the same call is made
   by the other extracted hosts (ADC Engagement `Program.cs:148`, ADC Notification `Program.cs:140`,
-  Store Sales `Program.cs:148`, Store Identity `Program.cs:134`) and by the monolith reference host
+  Store Sales `Program.cs:149`, Store Identity `Program.cs:136`) and by the monolith reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:35`).
 
 Application controllers beyond `ServiceInfo` declare `[ApiVersion("1.0")]` today: the second version
@@ -174,8 +176,34 @@ because it cannot carry the design-time environment, and `dotnet publish` skips 
 container builds do not run it.
 
 The framework side is unchanged: `OpenApiContractTestsBase` still asserts the live document, and the
-committed file is the consumer's artifact, produced by the consumer's build. A consumer that wants the
-same gate copies the target and the CI step; it is not yet a framework primitive.
+committed file is the consumer's artifact, produced by the consumer's build. The gate is not a
+framework primitive: each consumer carries its own copy of the target and the CI step, and both
+consumers now do (see the 2026-09-25 revision).
+
+## Revision (2026-09-25): both consumers commit and gate their OpenAPI documents
+
+MMCA.Store now carries the same gate, so the committed contract is a property of both consumers
+rather than of MMCA.ADC alone. Each repo's `Directory.Build.props` references
+`Microsoft.Extensions.ApiDescription.Server` (`MMCA.ADC/Directory.Build.props:172`,
+`MMCA.Store/Directory.Build.props:176`), switches the package's own build hook off
+(`MMCA.Store/Directory.Build.props:186`), and defines the `MmcaGenerateOpenApiDocument` target
+(`MMCA.ADC/Directory.Build.props:200`, `MMCA.Store/Directory.Build.props:207`), which writes
+`Source/Services/<host>/openapi/<host>.json` after each `*.Service` build under the design-time
+environment. Store's design-time environment also switches off the background work its hosts start
+(payment reconciliation and the two backfills, `MMCA.Store/Directory.Build.props:221`), because
+document generation starts the host. Every service `Program.cs` skips the schema initializer when
+`MmcaOpenApiDesignTime` is set in Development: ADC Conference `:438`, Engagement `:315`, Identity
+`:343`, Notification `:262`; Store Catalog `:313`, Sales `:297`, Identity `:297`.
+
+ADC commits four documents and Store commits three
+(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/openapi/MMCA.Store.Catalog.Service.json`,
+`MMCA.Store.Sales.Service/openapi/MMCA.Store.Sales.Service.json`,
+`MMCA.Store.Identity.Service/openapi/MMCA.Store.Identity.Service.json`). Each repo's `deploy.yml`
+runs an `OpenAPI documents are current` step in `build-and-test` after the Release build
+(`MMCA.ADC/.github/workflows/deploy.yml:297`, `MMCA.Store/.github/workflows/deploy.yml:232`): it fails
+when the committed count differs from the host count (Store `:241-243`) or when
+`git diff --exit-code` finds a regenerated document (ADC `:309`, Store `:245`), and uploads the
+regenerated set on a mismatch (ADC `:314`, Store `:250`).
 
 ## Related
 ADR-010 (integration-event schema versioning: the asynchronous, `SchemaVersion`-carried,

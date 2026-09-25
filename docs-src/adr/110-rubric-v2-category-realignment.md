@@ -5,7 +5,8 @@ Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the
 recorded in [ADR-111](111-ai-session-scoring-governance.md); content refreshed 2026-09-19: MMCA.Common
 now scores section 16, the section 10 carried-score caveat is discharged for MMCA.Common and
 MMCA.Store, and the Part A/B/C dispatch split is attributed to the command document rather than the
-workflow).
+workflow). Revised 2026-09-25 (the section 10 carried-score caveat is discharged for all three repos:
+MMCA.ADC's scorecard now scores section 10 on the v2 criteria as well).
 
 ## Context
 The 34-category Architecture Evaluation Criteria
@@ -81,10 +82,13 @@ two overlap-heavy categories in place and adding criteria to eleven others.**
    note. The rebase itself moves no score: §10 is carried at its prior scores under the merged-prior
    rule, re-weighted to 3, until each repo's first re-score against the new criteria; §16 is N/A at
    the rebase for MMCA.Common and MMCA.Store. For MMCA.ADC §16 is scored rather than scoped out, so
-   its weight-2 row re-enters both denominators and its sum returns to 81. Since the rebase,
-   MMCA.Common and MMCA.Store both re-scored §10 on 2026-09-04 and confirmed it (M4/I9 and M4/I8),
-   discharging the carried-score caveat on their rows; MMCA.ADC's §10 still carries it. MMCA.Common's
-   §16 scope-out ended on 2026-09-11, taking its sum to 82.
+   its weight-2 row re-enters both denominators and its sum returns to 81. Since the rebase, every
+   repo has re-scored section 10 against the v2 criteria, so no row carries a merged-prior figure:
+   MMCA.Common and MMCA.Store re-scored it on 2026-09-04 and confirmed it, and their rows read M4/I9
+   (`Website/docs-src/governance/common-ArchitectureScorecard.md:74`) and M4/I8
+   (`Website/docs-src/governance/store-ArchitectureScorecard.md:51`); MMCA.ADC's row scores it on the
+   v2 criteria at M3/I8 (`Website/docs-src/governance/adc-ArchitectureScorecard.md:74`, evidence as of
+   2026-09-22 per `:5`). MMCA.Common's section 16 scope-out ended on 2026-09-11, taking its sum to 82.
 
 6. **Landing order.** The rubric, the three scorecards, the three backlogs, and this record land in
    one Website PR, because the workflow reads its category list from the scorecard rows and a rubric
@@ -111,9 +115,9 @@ scorecard rows for a decision three lines can record.
 - §10 is scored at carried figures that were earned against different criteria until the first
   re-score, which the row says explicitly. Store's §10 sits at implementation 8, so its
   implementation-band priority rises from 2 to 3 with the weight before any new evidence is read.
-  That carried state has since cleared for two of the three repos: MMCA.Common and MMCA.Store
-  re-scored §10 against the v2 criteria on 2026-09-04 and confirmed it, and only MMCA.ADC's row
-  still reads as carried pending its first re-score.
+  That carried state has since cleared for all three repos: each scorecard's section 10 row is scored
+  against the v2 criteria (Common M4/I9, ADC M3/I8, Store M4/I8), so no row reads as carried and the
+  section 10 figures are comparable across repos again.
 - The former §16 evidence (lockstep pin, evolvability gate, tech-debt ledger) lives on as prose in
   the retired row and in §32/§33/§34, but nothing re-scores it as its own line.
 - The onboarding chapters no longer name either old title. Prose that names them still exists in the

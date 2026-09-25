@@ -19,19 +19,26 @@ Trade-offs is narrowed by [ADR-026](026-caching-strategy.md)'s Revision (2026-08
 another service can now request this host's tag eviction over the outbox, broker and inbox path via
 `OutputCacheEvictionRequested`, best-effort and per tag, and ADC's bookmark counts now pair that
 event with their short TTL rather than relying on the TTL alone (see Trade-offs). Amended
-(2026-08-31): ADC's public-policy set is eleven with `ActivitiesCache`, and ten of the eleven pass
-the bypass audience; `NowNextCache` remains the only policy without it.
+(2026-08-31): ADC's public-policy set gained `ActivitiesCache`, and `NowNextCache` remains the only
+policy without the bypass audience. Revised 2026-09-25: ADC's public-policy set is twelve and
+eleven pass the bypass audience (the site-wide `ConferencePublicCache` and `BookmarkCountsCache`
+among them); Store's `ProductsCache` runs a 60-second TTL because a variant's effective price moves
+on the clock; both hosts register the Redis output-cache store unconditionally through the
+framework wrapper; anchors refreshed (see the Revision (2026-09-25) at the end).
 
 ## Context
 
 The framework's read-scaling design leans on ASP.NET Core output caching: anonymous-readable
 endpoints (`[AllowAnonymous]` GETs like event/session/speaker catalogs) carry named policies with
-tag-based eviction, primed by startup warmup and load-tested by k6. Five minutes is the usual TTL
-and every Store Catalog policy uses it
-(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:150-155`), but it is a default,
-not a rule: ADC runs two 60-second policies whose payload cannot wait five minutes (`NowNextCache`,
-a clock-dependent now-and-next snapshot, and `BookmarkCountsCache`, written by another service;
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:232,244`).
+tag-based eviction, primed by startup warmup and load-tested by k6. Five minutes is the usual TTL,
+but it is a default, not a rule: a payload that cannot wait five minutes takes a shorter one. Three
+of Store Catalog's four policies run five minutes
+(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:154`, `:155`, `:164`), while
+`ProductsCache` runs 60 seconds because each variant's effective price moves on the clock when a
+discount window opens or closes, with no mutation to evict on (`:161`, the reasoning at
+`:156-160`). ADC runs two 60-second policies (`NowNextCache`, a clock-dependent now-and-next
+snapshot, and `BookmarkCountsCache`, written by another service;
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:285,297`).
 
 That design was silently inert for the traffic that matters. The shared UI HttpClient pipeline
 attaches the stored Bearer token to every outgoing API request via `AuthDelegatingHandler`,
@@ -82,18 +89,18 @@ identity-shaped variance.
 
 That audience is declared ONCE and shared, never restated per policy. ADC keeps it in
 `ConferenceReadAudience.PrivilegedRoles`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferenceReadAudience.cs:26-30`)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferenceReadAudience.cs:34-38`)
 and the API-layer visibility check reads the same list
 (`CurrentUserServiceExtensions.IsPrivilegedConferenceReader`,
 `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:25`).
 Two lists naming different roles would put a privileged payload in the shared public entries and
 serve it to everyone, so the single declaration is the guard, not a convention. Nor is the bypass a
-narrow exception in practice: ten of ADC's eleven public policies pass it
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:216-244`), the exception being
-`NowNextCache`, whose published-data payload is identical for every role. Breadth has a second
-driver that role-shaped variance does not cover: the admin surfaces read back right after mutating
-and not every write path evicts tags, so a cached stale row version makes the next save throw
-`DbUpdateConcurrencyException` (`Program.cs:207-208`).
+narrow exception in practice: eleven of ADC's twelve public policies pass it
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:268-297`, the array at `:267`),
+the exception being `NowNextCache` (`:285`), whose published-data payload is identical for every
+role. Breadth has a second driver that role-shaped variance does not cover: the admin surfaces read
+back right after mutating and not every write path evicts tags, so a cached stale row version makes
+the next save throw `DbUpdateConcurrencyException` (`Program.cs:259-260`).
 
 ## Rationale
 
@@ -135,14 +142,18 @@ and not every write path evicts tags, so a cached stale row version makes the ne
   reproduced in the steady state and it arrives when there is least room to diagnose it.
 
   Both apps had Redis provisioned and already wired as `IDistributedCache`, so closing this was a
-  registration (`AddStackExchangeRedisOutputCache`) rather than new infrastructure. Both hosts put
-  that registration in the same Redis-connection-string branch as `AddRedisDistributedCache` rather
-  than next to `AddOutputCache`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:141`,
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:105`), leaning on the framework
-  behavior their comments state (`Program.cs:137` and `:102`): `AddOutputCache` registers
-  its store with `TryAdd`, so an explicit Redis registration wins regardless of call order. Read that as
-  framework behavior per those host comments; nothing in these repos verifies it.
+  registration rather than new infrastructure. Both hosts make it through the framework wrapper
+  `AddRedisOutputCaching()`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:91`), which
+  holds the framework's single `AddStackExchangeRedisOutputCache` call (`:99`) and no-ops when the
+  connection string is blank (`:94`), so each host calls it unconditionally, top-level, before
+  `AddOutputCache`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:193`,
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:98`), leaning on the framework
+  behavior their comments state (ADC `Program.cs:189-190`, Store `Program.cs:95-96`):
+  `AddOutputCache` registers its store with `TryAdd`, so an explicit Redis registration wins
+  regardless of call order. Read that as framework behavior per those host comments; nothing in these
+  repos verifies it.
 
   A single-replica service may still use the in-memory store: with one replica there is no
   propagation problem to solve. The rule is about replica count, not about environment.
@@ -155,11 +166,14 @@ and not every write path evicts tags, so a cached stale row version makes the ne
   exactly that: `UserSessionBookmarkCacheEvictionHandler`
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:43`,
   raising the event at `:77`) with the Conference host consuming it (`AddOutputCacheEvictionHandler()`
-  at `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:253`,
-  `RegisterOutputCacheEvictionConsumer()` at `:357`), keeping the short TTL as the backstop for a lost
-  or late event rather than the only defense (`BookmarkCountsCache`, 60 seconds, `Program.cs:244`).
+  at `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:303`,
+  `RegisterOutputCacheEvictionConsumer()` at `:412`), keeping the short TTL as the backstop for a lost
+  or late event rather than the only defense (`BookmarkCountsCache`, 60 seconds, `Program.cs:297`).
   A payload that changes on the clock still has no mutation to evict on, so a short TTL remains its
-  whole answer (`NowNextCache`, 60 seconds, `Program.cs:232`). When adding a cached endpoint, check
+  whole answer (`NowNextCache`, 60 seconds, ADC `Program.cs:285`; Store's `ProductsCache`, 60
+  seconds, `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:161`, whose discount
+  edits still evict the `catalog:products` tag at once but whose discount windows open and close with
+  no write at all). When adding a cached endpoint, check
   which process owns every write that can change its payload, and whether time alone changes it.
 - Cache hit rate becomes meaningful for authenticated load tests; k6 scripts that log in now
   exercise the same cache path as anonymous ones.
@@ -189,7 +203,7 @@ instead of failing the consume and re-delivering it.
 
 **Both halves are registered, because one alone is silently inert.**
 `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs` calls
-`AddOutputCacheEvictionHandler()` at `:173` and `RegisterOutputCacheEvictionConsumer()` at `:280`.
+`AddOutputCacheEvictionHandler()` at `:179` and `RegisterOutputCacheEvictionConsumer()` at `:286`.
 The first registers the handler that evicts; the second subscribes the host to the message. A host
 with only the handler never receives the event, and a host with only the consumer receives it and
 does nothing, and neither mistake produces an error, only a cache that quietly stops being evicted.
@@ -199,8 +213,36 @@ The mechanism itself is framework code and needed no change
 `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/IntegrationEventConsumerExtensions.cs:108-110`).
 
 **Unchanged and deliberate: Store registers no `bypassRoles` overload.** Its four public policies take
-the no-bypass form (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:150-159`),
+the no-bypass form (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:153-164`),
 which is correct rather than an omission. The bypass exists for a privileged audience that reads the
 same cached endpoint and needs to see more than it caches; Store has no such audience, because its
 anonymous review list serves published rows only and moderator visibility is a separate,
 permission-gated, uncached surface. Adding a bypass would be adding a partition nothing reads.
+
+## Revision (2026-09-25)
+
+**Store's `ProductsCache` TTL is 60 seconds, because its payload moves on the clock.** A product
+payload carries each variant's effective price, and a discount window opening or closing changes
+that price with no write to evict on, so under a five-minute TTL a cached product kept the old
+price for up to five minutes past the window's edge. This record already gives a clock-dependent
+payload a short TTL as its whole answer (Status, and the eviction trade-off above, with ADC's
+`NowNextCache` as the precedent), and Store now applies it: `ProductsCache` expires after 60
+seconds (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:161`, the reasoning at
+`:156-160`). Discount edits still evict `catalog:products` immediately; `CatalogCache`,
+`CategoriesCache` and `ProductImagesCache` keep five minutes (`:154`, `:155`, `:164`). The Context
+now states the TTL mix.
+
+**Both hosts register the shared output-cache store the same way.** ADC Conference and Store
+Catalog each call the framework's `AddRedisOutputCaching()` unconditionally, top-level
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:193`,
+`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:98`), relying on the wrapper's own
+blank-connection-string no-op
+(`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:94`). The
+multi-replica trade-off above now cites the wrapper rather than a per-host branch.
+
+**ADC's public-policy count is twelve, and eleven pass the bypass audience.** The set is
+`ConferencePublicCache` and `EventsCache` (`:268`, `:269`), eight more five-minute policies
+(`:275-282`), `NowNextCache` (`:285`) and `BookmarkCountsCache` (`:297`); only `NowNextCache` omits
+`adminBypassRoles`. The Decision's count and every ADC Conference anchor are refreshed. The
+`bypassRoles` asymmetry between the two apps is unchanged and stays sanctioned, for the reason the
+2026-09-10 revision gives.

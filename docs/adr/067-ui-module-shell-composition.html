@@ -240,7 +240,9 @@
           the vendor out of call sites. Revised 2026-08-31: records that the two facade registrations live in
           their own <code>AddCommonUiFacades()</code> call, shared by <code>AddUIShared</code> and the shipped bUnit base. Revised
           2026-09-19: records the third <code>NavItem</code> visibility gate, <code>RequiredPermission</code>, which the nav menu
-          filters on alongside <code>RequiredRole</code> and <code>RequiredClaim</code>.</p>
+          filters on alongside <code>RequiredRole</code> and <code>RequiredClaim</code>. Revised 2026-09-25 (re-anchored the two
+          Blazor Web hosts&#39; <code>MapRazorComponents</code> citations, which have moved, and named the ADC-only
+          <code>.Distinct()</code> in the double-wiring trade-off).</p>
           <h2 id="context">Context</h2>
           <p>ADR-059 decided how a module plugs into the <strong>server</strong>: an <code>IModule</code> implementation is discovered by
           reflection, registered in topological order, and a host composes an application out of those modules
@@ -330,8 +332,8 @@
           </li>
           <li><p><strong>Blazor Web heads feed the same enumeration to the endpoint side.</strong> <code>MapRazorComponents&lt;App&gt;()</code>
           takes the module assemblies from <code>GetServices&lt;IUIModule&gt;()</code> in addition to the shell assemblies
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:195-209</code>, which also de-duplicates, and
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:185-196</code>), so the router&#39;s view and the
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:287-301</code>, which also de-duplicates at <code>:295</code>, and
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:261-271</code>), so the router&#39;s view and the
           endpoint&#39;s view of the routable assemblies come from one source.</p>
           </li>
           </ul>
@@ -402,8 +404,11 @@
           protection still comes from <code>AuthorizeRouteView</code> and the pages&#39; own attributes (<code>Routes.razor:11-29</code>).</li>
           <li><strong>Blazor Web heads wire the assemblies twice.</strong> The router&#39;s <code>AdditionalAssemblies</code> and the
           endpoint&#39;s <code>AddAdditionalAssemblies</code> are separate calls, so both hosts repeat the enumeration in
-          <code>Program.cs</code> (<code>MMCA.ADC.UI.Web/Program.cs:195-209</code>, <code>MMCA.Store.UI.Web/Program.cs:185-196</code>); they
-          derive it from the same <code>IUIModule</code> registrations, but the duplication is real.</li>
+          <code>Program.cs</code> (<code>MMCA.ADC.UI.Web/Program.cs:287-301</code>, <code>MMCA.Store.UI.Web/Program.cs:261-271</code>); they
+          derive it from the same <code>IUIModule</code> registrations, but the duplication is real. The two hosts also
+          build the list differently: ADC concatenates and applies <code>.Distinct()</code> (<code>:295</code>), because the shell
+          assemblies it lists can overlap a module&#39;s, while Store spreads the module assemblies into a
+          collection expression with no de-duplication (<code>MMCA.Store.UI.Web/Program.cs:266-271</code>).</li>
           <li><strong>The reference seed does not demonstrate the pattern.</strong> Helpdesk&#39;s hand-rolled shell means an
           adopter following it gets the framework&#39;s components but not this composition model.</li>
           <li><strong>One vendor is also one upstream ceiling, and the facades cover two surfaces only.</strong> A MudBlazor

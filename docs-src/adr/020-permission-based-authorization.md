@@ -13,6 +13,10 @@ Revised 2026-09-19: capability counts re-enumerated from source. ADC's Conferenc
 eleven permissions (`ActivitiesManage` and `SessionAssetsManage` added) and its `ContentManagement`
 curation subset now carries seven members; MMCA.Store now defines eleven across its three modules,
 Catalog having grown to six with `PricingManage` and `ReviewsModerate`.
+Revised 2026-09-25: ADC's `IdentityPermissions.All` holds only the capability ADC defines
+(`identity:users:read`) and its grant map names the framework's `ManageUsers` and `ManageRoles` beside
+it, the declaration shape Store already used; the effective grants are unchanged. Grant-site citations
+refreshed (both apps now declare grants in a Shared-project `*PermissionGrants` map).
 ## Context
 The default answer in ASP.NET Core is pure role-based access control (RBAC): an endpoint declares
 `[Authorize(Policy = "RequireOrganizer")]` against a named policy that calls `RequireRole(...)`, and a
@@ -65,25 +69,38 @@ one authorization model. Nothing is pre-registered per role name.
   (`Controllers/Notifications/NotificationsController.cs:29`, the `notifications:manage` constant at
   `MMCA.Common.Shared/Notifications/NotificationPermissions.cs:10`), so which of a host's roles may
   broadcast is a grant that host makes rather than a role name the framework picked. ADC grants it to
-  `Organizer` alone (`MMCA.ADC.Notification.API/DependencyInjection.cs:38`).
+  `Organizer` alone (`MMCA.ADC.Notification.Shared/Authorization/NotificationPermissionGrants.cs:38`,
+  applied from `MMCA.ADC.Notification.API/DependencyInjection.cs:44`).
 
 Adoption is asymmetric and that is intentional: a module declares as many capabilities as its own
 surface needs. ADC's Conference module defines eleven (`ConferencePermissions.cs:12-47`, enumerated in
 `All` at `:50-63`), including a curation subset (`ContentManagement` at `:70-79`: sessions, speakers,
 categories, sponsors, partners, activities, session assets) granted to the app's own `ContentEditor` role constant
-(`MMCA.ADC.Conference.API/DependencyInjection.cs:50`); its Engagement module defines three
+(`MMCA.ADC.Conference.Shared/Authorization/ConferencePermissionGrants.cs:48`, the whole set to `Organizer`
+at `:47`, applied from `MMCA.ADC.Conference.API/DependencyInjection.cs:43`); its Engagement module defines three
 (`engagement:live:manage` gating the conference-day live-poll management endpoints,
 `engagement:checkin:manage` gating QR badge check-in and the attendance rollup, and
 `engagement:points:view-overview` gating the organizer points rollup, at
 `EngagementPermissions.cs:16`, `:23`, `:30`), each granted to `Organizer`; and its
-Identity module defines `identity:users:read`. MMCA.Store defines eleven of its own across three
+Identity module defines `identity:users:read`, the only member of its `IdentityPermissions.All`
+(`MMCA.ADC.Identity.Shared/Authorization/IdentityPermissions.cs:13`, `All` at `:49-52`). The two
+framework administration capabilities the shipped admin controller bases gate on are aliased there
+(`UsersManage` and `RolesManage`, `:26` and `:41`) but stay out of `All`, because `All` lists only
+the capabilities ADC itself defines; the module's grant map hands `Organizer` the module set plus those
+two by name (`IdentityPermissionGrants.cs:36-38`). MMCA.Store defines eleven of its own across three
 modules: six in Catalog (`CatalogPermissions.cs:12-36`), three in Sales
-(`SalesPermissions.cs:12-18`) and two in Identity (`IdentityPermissions.cs:14-17`), each module
-granting its whole set to its own `Admin` role constant from its own `AddPermissions(...)` call
-(`MMCA.Store.Catalog.API/DependencyInjection.cs:41`, `MMCA.Store.Sales.API/DependencyInjection.cs:40`,
-`MMCA.Store.Identity.API/DependencyInjection.cs:42`). The registry, handler and policy provider are
-covered by framework tests, and the ADC grant tables (Conference and Engagement) by dedicated grant
-tests.
+(`SalesPermissions.cs:12-18`) and two in Identity (`IdentityPermissions.cs:14-17`, `All` at
+`:34-38`), each module granting its whole set to its own `Admin` role constant from a grant map in
+its Shared project (`CatalogPermissionGrants.cs:29`, `SalesPermissionGrants.cs:30`,
+`IdentityPermissionGrants.cs:35-37`) that its API registration passes to `AddPermissions(...)`
+(`MMCA.Store.Catalog.API/DependencyInjection.cs:45`, `MMCA.Store.Sales.API/DependencyInjection.cs:52`,
+`MMCA.Store.Identity.API/DependencyInjection.cs:66`). Both Identity grant maps have the same shape:
+the module's own `All` plus the framework's `ManageUsers` and `ManageRoles` named explicitly (ADC
+`IdentityPermissionGrants.cs:38`, Store `IdentityPermissionGrants.cs:37`). The registry, handler and
+policy provider are covered by framework tests, and the ADC grant tables (Conference, Engagement and
+Identity) by dedicated grant tests
+(`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Shared.Tests/Authorization/IdentityPermissionGrantsTests.cs:24`,
+`:46`).
 
 **Role vocabulary is the app's, not the framework's.** MMCA.Common declares no role names at all: the
 only place a role string appears in framework code is as the key a host hands to

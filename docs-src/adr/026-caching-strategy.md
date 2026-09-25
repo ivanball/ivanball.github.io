@@ -25,6 +25,10 @@ a cache-bypassing-roles policy overload. See the Revision (2026-09-03) at the en
 Revised 2026-09-07 (Tier-1 query cache keys carry the caller for a caller-scoped query, the public
 output-cache policy varies by resolved tenant and reads roles through the one shared helper, and the
 cache key prefix is namespaced per application by default).
+Revised 2026-09-25 (all seven services call both Redis wrappers unconditionally and keep only
+`AddCommonHybridCache()` behind the redis-connection-string conditional; ADC Conference's bypass
+overload covers eleven of its twelve policies; the service and substrate anchors are refreshed). See
+the Revision (2026-09-25) at the end.
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
 are memoized and invalidated on mutation (the Caching decorators of ADR-014, keyed by
@@ -51,7 +55,8 @@ Cache in two tiers, each with its own substrate.
   Caching decorators, `LoginProtectionService`) depends only on this interface, never on a concrete
   cache or on Redis.
 - **The backing store is chosen at startup, not in code (amended by ADR-077).** `AddCaching()`
-  (`MMCA.Common.Infrastructure/DependencyInjection.cs:229`, called from `AddInfrastructure` at `:131`)
+  (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:26`, called from `AddInfrastructure` at
+  `MMCA.Common.Infrastructure/DependencyInjection.cs:134`)
   registers `DistributedCacheService` when a real `IDistributedCache` is present (one that is not the
   in-memory `MemoryDistributedCache`, i.e. Aspire registered Redis), and otherwise
   `MemoryCacheService`. The
@@ -60,16 +65,17 @@ Cache in two tiers, each with its own substrate.
   later" extension point as `InProcessMessageBus` vs `BrokerMessageBus` (ADR-003/006/008). Since
   ADR-077 a third implementation exists, `HybridCacheService` (L1 in-process plus L2 distributed), and
   it is the one substrate that is **not** auto-selected: a host opts into it explicitly with
-  `AddCommonHybridCache(...)` (`MMCA.Common.Infrastructure/DependencyInjection.cs:340`), which replaces
-  the registration this call made. Every one of the seven ADC and Store services opts in, each inside
-  its redis-connection-string conditional: ADC Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:151`), Notification
-  (`.../MMCA.ADC.Notification.Service/Program.cs:116`), Engagement
+  `AddCommonHybridCache(...)` (`MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:137`), which
+  replaces the registration this call made. Every one of the seven ADC and Store services opts in, each
+  inside its redis-connection-string conditional, because this call, unlike the Redis wrappers in
+  Trade-offs below, has no guard of its own: ADC Conference
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:203`, the conditional at `:201`),
+  Notification (`.../MMCA.ADC.Notification.Service/Program.cs:119`), Engagement
   (`.../MMCA.ADC.Engagement.Service/Program.cs:113`), Identity
-  (`.../MMCA.ADC.Identity.Service/Program.cs:133`), Store Catalog
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:95`), Sales
-  (`.../MMCA.Store.Sales.Service/Program.cs:112`) and Identity
-  (`.../MMCA.Store.Identity.Service/Program.cs:100`). So `HybridCacheService` is the live
+  (`.../MMCA.ADC.Identity.Service/Program.cs:135`), Store Catalog
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:109`, the conditional at `:107`),
+  Sales (`.../MMCA.Store.Sales.Service/Program.cs:114`) and Identity
+  (`.../MMCA.Store.Identity.Service/Program.cs:103`). So `HybridCacheService` is the live
   `ICacheService` wherever Redis is configured, and the two-way swap above is what runs where it is
   not: local runs, tests, and any host that wires no Redis.
 - **Prefix invalidation, implemented per store.** `IMemoryCache` has no key-enumeration API, so
@@ -120,14 +126,14 @@ Cache in two tiers, each with its own substrate.
   (`MMCA.Common.API/Caching/OutputCacheOptionsExtensions.cs:34`): a caller in one of the named roles
   skips the cache entirely, no lookup and no storage, and always reads fresh. Store Catalog's four
   policies use the plain overload and cache every caller alike
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:150-155`). ADC Conference uses the
-  bypass overload for ten of its eleven policies
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:216-244`), passing an
-  `adminBypassRoles` array projected from `ConferenceReadAudience.PrivilegedRoles` (`:215`), the same
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:154`, `:155`, `:161`, `:164`).
+  ADC Conference uses the bypass overload for eleven of its twelve policies
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:268-297`), passing an
+  `adminBypassRoles` array projected from `ConferenceReadAudience.PrivilegedRoles` (`:267`), the same
   list the API layer's visibility checks read, because those roles receive an elevated payload
   (unpublished rows) that must never be stored under a key the public shares. So "cache authenticated
   requests too" holds for the attendee and anonymous traffic that is the conference-day load, and stops
-  at the privileged reader. The one policy with no bypass list, `NowNextCache` (`:232`), returns the
+  at the privileged reader. The one policy with no bypass list, `NowNextCache` (`:285`), returns the
   same payload to every role.
 - **The output-cache store itself is Redis-backed wherever a service runs more than one replica.**
   `AddOutputCache` defaults to a per-replica in-memory store, so a tag eviction reaches only the replica
@@ -135,10 +141,9 @@ Cache in two tiers, each with its own substrate.
   `builder.AddRedisOutputCaching()`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:91`), which holds
   the framework's single `AddStackExchangeRedisOutputCache(...)` call (`:99`) and no-ops when the named
-  connection string is absent. ADC Conference calls the wrapper unconditionally and leans on that no-op
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:141`); Store Catalog calls it inside
-  the redis-connection-string conditional that also wires Tier 1
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:105`, the conditional at `:80`).
+  connection string is blank (`:94`). Both adopters call the wrapper unconditionally and lean on that
+  no-op: ADC Conference (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:193`) and
+  Store Catalog (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:98`).
   `AddOutputCache` registers its store with `TryAdd`, so the explicit registration wins regardless of
   call order, and with no Redis configured the in-memory store still applies, which is correct at a
   single replica. ADR-040's 2026-07-25 amendment
@@ -212,16 +217,17 @@ switch on, and it is recorded here so a reader is not surprised by it in the UI 
   includes, and against Azure Managed Redis that check issues `CLUSTER INFO`, a command the client
   refuses outside admin mode: every probe threw and every replica reported not ready
   ([ADR-025](025-startup-warmup-readiness.md) owns that decision and the PING-only replacement check).
-  All seven services call the wrapper. The four ADC ones call it unconditionally, since it no-ops on its
-  own (Conference `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:131`, Notification
-  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:106`, Engagement
+  All seven services call the wrapper, and all seven call it unconditionally, since it no-ops on its
+  own (`RedisCachingExtensions.cs:59`): ADC Conference
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:183`, Notification
+  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:109`, Engagement
   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:103`, Identity
-  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:123`); the three Store ones call it
-  inside a redis-connection-string conditional that also scopes their `AddCommonHybridCache()` (Catalog
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:87`, Sales
-  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:104`, Identity
-  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:92`). Those seven are the whole
-  set: a sweep of both repos' `Source/` trees finds no eighth `AddRedisCaching` call and no direct
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:125`; Store Catalog
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:88`, Sales
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:103`, Identity
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:92`. Only the unguarded
+  `AddCommonHybridCache()` sits behind a redis-connection-string conditional (Tier 1 above). Those
+  seven are the whole set: a sweep of both repos' `Source/` trees finds no eighth `AddRedisCaching` call and no direct
   `AddRedisDistributedCache` / `AddRedisClient` call outside the wrapper. So whenever Redis is
   configured, prefix-based invalidation against Redis is live and cached entries are evicted on write;
   the 30s TTL is the backstop only for the no-Redis case (memory mode), where prefix removal self-heals
@@ -723,8 +729,9 @@ changed is where the wiring lives and which substrate the applications actually 
    `AddRedisCaching()` (`:57`, registering the cache at `:64` and the client at `:65`) and
    `AddRedisOutputCaching()` (`:91`, the single `AddStackExchangeRedisOutputCache` call at `:99`).
    Both wrappers disable the Aspire integrations' health checks and no-op when the connection string
-   is absent, which is why the four ADC services now call them unconditionally while the three Store
-   services keep their conditional. The reason is a production incident this ADR had no record of:
+   is absent, which is why a service can call them unconditionally (the four ADC services did from
+   this entry on, and the three Store services followed, see the Revision (2026-09-25)). The reason is
+   a production incident this ADR had no record of:
    the raw integrations register an untagged `StackExchange.Redis` check that readiness includes, it
    issues `CLUSTER INFO`, and Azure Managed Redis is detected as a cluster by StackExchange.Redis 3.x,
    which refuses the command without admin mode. Every probe threw and every replica reported not
@@ -742,8 +749,8 @@ changed is where the wiring lives and which substrate the applications actually 
    `AddPublicEndpointPolicy(name, expiration, bypassRoles, tags)`
    (`MMCA.Common.API/Caching/OutputCacheOptionsExtensions.cs:34`) sits beside the three-argument
    overload the ADR already cited (`:20`), and a caller in a named role skips the cache entirely, no
-   lookup and no storage. ADC Conference uses it for ten of its eleven policies
-   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:216-244`); Store Catalog's four
+   lookup and no storage. ADC Conference uses it for every policy but one
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:216-244` on that date); Store Catalog's four
    policies (`Program.cs:150-155`) use the plain overload. That materially qualifies "public-read
    policies cache authenticated requests too", so a new Decision bullet records it.
 4. **Three cited files moved into sub-folders.** `MiddlewarePipelineBuilder.cs` and
@@ -770,3 +777,39 @@ changed is where the wiring lives and which substrate the applications actually 
    claim stands.
 7. **The 2026-08-31 and 2026-09-01 anchor claims are annotated rather than removed**, consistent with
    how every preceding revision treated its predecessor.
+
+Items 1, 2, 3 and 5 of this entry have since drifted: read their anchors as the state on 2026-09-03,
+and the 2026-09-25 entry below for the current wiring and anchors.
+
+## Revision (2026-09-25)
+One wiring convergence, one count correction, and a line-anchor re-verification of the service call
+sites and the substrate registrations. No decision changed, and the ADC-only bypass list stays the
+sanctioned asymmetry it was.
+
+1. **Store calls both Redis wrappers unconditionally, as ADC does.** `AddRedisCaching()` and
+   `AddRedisOutputCaching()` already no-op on a blank connection string
+   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:59` and `:94`),
+   so an outer connection-string branch around them in a host did nothing. The three Store services
+   now call them top-level (Catalog `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:88`
+   and `:98`, Sales `.../MMCA.Store.Sales.Service/Program.cs:103`, Identity
+   `.../MMCA.Store.Identity.Service/Program.cs:92`), and both repositories wire Redis one way. Only
+   `AddCommonHybridCache()`, which has no guard of its own, stays behind the conditional in all seven
+   services. Tier 1, Tier 2 and the multiplexer trade-off now say so.
+2. **ADC Conference registers twelve public-read policies, and eleven take the bypass list.**
+   `BookmarkCountsCache` passes `adminBypassRoles`
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:297`) beside the ten
+   five-minute policies (`:268-282`); `NowNextCache` (`:285`) remains the one with no bypass list. The
+   Decision bullet now gives the count as eleven of twelve.
+3. **Line anchors.** `AddCaching` is declared in the partial file
+   `MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:26` and called from `AddInfrastructure`
+   at `DependencyInjection.cs:134`; `AddCommonHybridCache` is at `DependencyInjection.Caching.cs:137`.
+   The seven `AddCommonHybridCache()` calls are at ADC Conference `:203`, Notification `:119`,
+   Engagement `:113`, Identity `:135`, Store Catalog `:109`, Sales `:114` and Identity `:103`. The
+   seven `AddRedisCaching()` calls are at ADC Conference `:183`, Notification `:109`, Engagement
+   `:103`, Identity `:125`, Store Catalog `:88`, Sales `:103` and Identity `:92`, and the two
+   `AddRedisOutputCaching()` calls at ADC Conference `:193` and Store Catalog `:98`. Store Catalog's
+   four policies are at `Program.cs:154`, `:155`, `:161` and `:164`, and ADC Conference's
+   `adminBypassRoles` array at `:267`. Re-checked and unchanged: `RedisCachingExtensions.cs:29`,
+   `:57`, `:64`, `:65`, `:91`, `:99` and `OutputCacheOptionsExtensions.cs:20` and `:34`. The exhaustive
+   sweep still holds: both repos' `Source/` trees carry exactly these nine wrapper calls and no direct
+   `AddRedisDistributedCache` / `AddRedisClient` / `AddStackExchangeRedisOutputCache` call.

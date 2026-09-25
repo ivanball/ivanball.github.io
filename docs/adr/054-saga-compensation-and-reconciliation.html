@@ -258,11 +258,19 @@
           corrected. See the Revision below. Revised (2026-09-19): <code>CancelOrderHandler</code> no longer performs the
           guarded transition and nothing else, so the compensation bullet records the one compensating action
           that now runs inside the command (retiring the provider&#39;s checkout session) and the already-paid case
-          that refuses the cancellation outright; the <code>CancelOrderHandler</code> citations are re-anchored with it.</p>
+          that refuses the cancellation outright; the <code>CancelOrderHandler</code> citations are re-anchored with it.
+          Revised (2026-09-25): a new trade-off records that <code>OrderCancelledSagaHandler</code> returns early, saving
+          nothing, when an inventory invariant rejects an increase (a return rather than a throw, so the event is
+          not redelivered); the checkout deadline is armed through a <code>CheckOutDeadlineScheduler</code> collaborator the
+          transaction delegate calls, so the Revision (2026-09-11) cites it; the adoption paragraph points to
+          ADC&#39;s one compensating step (the session-asset orphan-blob delete, ADR-123); every Store citation is
+          re-anchored (<code>CheckOutHandler</code>, <code>OrderCancelledSagaHandler</code>, <code>OrderPaymentFailedSagaHandler</code>,
+          <code>Order</code>, <code>InventoryRestorationDomainService</code>, <code>appsettings.json</code>, <code>maxReplicas</code>).</p>
           <h2 id="context">Context</h2>
           <p>Checkout spans a boundary no transaction covers. <code>CheckOutHandler</code> commits the order insert, the cart
           transition and the atomic conditional stock decrements in one local transaction
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:135-188</code>),
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:120-174</code>,
+          run through <code>ExecuteInTransactionAsync</code> at <code>:78-80</code>),
           but the money moves at Stripe and the confirmation arrives later, as a webhook, from outside the
           database. Two failure shapes follow directly:</p>
           <ul>
@@ -299,16 +307,16 @@
           order was already <code>Cancelled</code> and a manual refund was the only remedy left. Everything that
           compensates after the fact is still its own handler: restoring stock is
           <code>OrderCancelledSagaHandler : IDomainEventHandler&lt;OrderCancelled&gt;</code>
-          (<code>.../Orders/Saga/OrderCancelledSagaHandler.cs:30-34</code>) and notifying the customer of a failed
-          payment is <code>OrderPaymentFailedSagaHandler</code> (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:20-22</code>).
+          (<code>.../Orders/Saga/OrderCancelledSagaHandler.cs:30-32</code>) and notifying the customer of a failed
+          payment is <code>OrderPaymentFailedSagaHandler</code> (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:22-24</code>).
           A new compensating action is a new handler unless it has to decide whether the commit may happen
           at all.</li>
           <li><strong>Each handler runs in its own DI scope.</strong> Domain-event handlers are registered as singletons
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:184-189</code>), so every one
-          opens its own scope through <code>IServiceScopeFactory</code> (<code>OrderCancelledSagaHandler.cs:40</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.ModuleScanning.cs:54-56</code>), so every one
+          opens its own scope through <code>IServiceScopeFactory</code> (<code>OrderCancelledSagaHandler.cs:39</code>,
           <code>OrderPaymentFailedSagaHandler.cs:31</code>,
           <code>.../Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:212,231,277</code>), and the ones that persist
-          resolve their own <code>IUnitOfWork</code> inside it (<code>OrderCancelledSagaHandler.cs:41</code>,
+          resolve their own <code>IUnitOfWork</code> inside it (<code>OrderCancelledSagaHandler.cs:40</code>,
           <code>PaymentReconciliationService.cs:213,232,278</code>). <code>OrderPaymentFailedSagaHandler</code> is the exception that
           shows the rule: it resolves the internal-command scheduler and little else in its scope
           (<code>OrderPaymentFailedSagaHandler.cs:32</code>) and writes no aggregate of its own, because both halves of
@@ -316,13 +324,13 @@
           deadline) are queue rows the scheduler persists. Compensation that does write therefore commits on its own, after the originating
           save, rather than joining the transaction it is compensating for.</li>
           <li><strong>Idempotency is a persisted marker committed by the SAME <code>SaveChanges</code> as the compensating
-          writes.</strong> <code>Order.InventoryRestored</code> (<code>.../Domain/Orders/Order.cs:61-67</code>) is the marker;
+          writes.</strong> <code>Order.InventoryRestored</code> (<code>.../Domain/Orders/Order.cs:116-122</code>) is the marker;
           <code>MarkInventoryRestored</code> refuses a second call and refuses a non-cancelled order
-          (<code>Order.cs:302-325</code>). The handler checks the marker first
-          (<code>OrderCancelledSagaHandler.cs:56-62</code>), applies the increases through a pure domain service
-          (<code>.../Domain/Inventory/InventoryRestorationDomainService.cs:14-34</code>), then one
+          (<code>Order.cs:571-594</code>). The handler checks the marker first
+          (<code>OrderCancelledSagaHandler.cs:56-60</code>), applies the increases through a pure domain service
+          (<code>.../Domain/Inventory/InventoryRestorationDomainService.cs:24-51</code>), then one
           <code>SaveChangesAsync</code> commits the increases and the marker together
-          (<code>OrderCancelledSagaHandler.cs:94-102</code>). Same database, one transaction: the marker cannot exist
+          (<code>OrderCancelledSagaHandler.cs:100-108</code>). Same database, one transaction: the marker cannot exist
           without the writes it guards, and the writes cannot land unmarked.</li>
           <li><strong>Redelivery is the retry mechanism.</strong> A failing in-process handler leaves its outbox row
           unprocessed (<code>MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:301-329</code>) and the
@@ -375,7 +383,7 @@
           (<code>PaymentReconciliationService.cs:124-129</code>). The sweep is configuration-gated
           (<code>.../Payments/Reconciliation/PaymentReconciliationSettings.cs:30</code>, defaults of a 10-minute interval,
           a 30-minute stuck age and a 50-order batch, carried in
-          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:90-95</code>).</li>
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:100-105</code>).</li>
           <li><strong>The sweep gets no private path into the aggregate, and loses races on purpose.</strong> It calls the same
           guarded transitions as the webhook handler
           (<code>.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:97,128</code>) and the
@@ -402,9 +410,16 @@
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Scheduling/PeriodicBackgroundServiceTests.cs:104</code>).</p>
           <p><strong>Adoption is one module.</strong> This pattern lives in MMCA.Store&#39;s Sales module only: the two saga
           handlers and the one reconciliation sweep above. MMCA.ADC and MMCA.Helpdesk have no compensating saga
-          handler and no reconciliation sweep today. The record exists because the mechanism (compensate, mark,
-          reconcile) is the framework&#39;s stated answer to cross-boundary consistency, not because it is broadly
-          adopted.</p>
+          handler and no reconciliation sweep today. The nearest thing in ADC is a single compensating step,
+          not a saga: when a session-asset upload has put its bytes in storage but the row does not follow,
+          <code>UploadSessionAssetHandler</code> schedules the durable <code>Conference.DeleteSessionAssetBlob.v1</code> internal
+          command to remove the orphaned blob
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/UseCases/UploadFile/UploadSessionAssetHandler.cs:110-112</code>
+          and <code>:124-129</code>, the schedule at <code>:164-171</code>, the command at
+          <code>.../SessionAssets/UseCases/DeleteSessionAssetBlob/DeleteSessionAssetBlobInternalCommand.cs:28-29</code>).
+          That behaviour is recorded in <a href="123-speaker-session-assets.html">ADR-123</a> and rides ADR-114&#39;s queue, not
+          this record&#39;s saga machinery. The record exists because the mechanism (compensate, mark, reconcile)
+          is the framework&#39;s stated answer to cross-boundary consistency, not because it is broadly adopted.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>No two-phase commit is available, and none is wanted.</strong> Transactions are per data source and
@@ -445,16 +460,25 @@
           distributed transaction.</li>
           <li><strong>Compensation is best-effort per line, and names what it could not restore.</strong> <code>RestoreInventory</code>
           skips an order line whose <code>InventoryItem</code> row is missing
-          (<code>InventoryRestorationDomainService.cs:22-27</code>), but the skip is not silent: the unmatched variant
-          ids are collected and returned to the caller (<code>InventoryRestorationDomainService.cs:25,32</code>), and
+          (<code>InventoryRestorationDomainService.cs:33-38</code>), but the skip is not silent: the unmatched variant
+          ids are collected and returned to the caller (<code>InventoryRestorationDomainService.cs:28,37,50</code>), and
           the handler logs them at Warning naming each one
-          (<code>OrderCancelledSagaHandler.cs:81-87</code>, message at <code>OrderCancelledSagaHandler.cs:115</code>). The marker
+          (<code>OrderCancelledSagaHandler.cs:87-93</code>, message at <code>OrderCancelledSagaHandler.cs:121</code>). The marker
           still commits anyway, so that quantity is never restored and nothing retries it: withholding the
           marker would re-apply every matched increase on the next redelivery, which is a double restore
-          (<code>OrderCancelledSagaHandler.cs:89-93</code>). The miss is narrow because the handler reads inventory with
-          <code>ignoreQueryFilters: true</code> (<code>OrderCancelledSagaHandler.cs:75</code>), so a soft-deleted row still counts
+          (<code>OrderCancelledSagaHandler.cs:95-99</code>). The miss is narrow because the handler reads inventory with
+          <code>ignoreQueryFilters: true</code> (<code>OrderCancelledSagaHandler.cs:73</code>), so a soft-deleted row still counts
           and a missing row means the row never existed. The stock is still lost; what changed is that the
           loss is recorded rather than invisible.</li>
+          <li><strong>An invariant rejection abandons the compensation instead of retrying it.</strong> When any matched
+          increase is refused by an inventory invariant, <code>RestoreInventory</code> returns a failure carrying every
+          rejected error (<code>InventoryRestorationDomainService.cs:41-49</code>), and the handler returns early with
+          nothing saved: the rejected codes go to a Warning, and neither a partial restoration nor the marker
+          reaches the database (<code>OrderCancelledSagaHandler.cs:79-85</code>, message at
+          <code>OrderCancelledSagaHandler.cs:124</code>). A refused <code>MarkInventoryRestored</code> ends the same way
+          (<code>OrderCancelledSagaHandler.cs:100-105</code>). Both are returns, not throws, so the event counts as
+          handled and its outbox row is marked processed: nothing redelivers it, and that order&#39;s stock stays
+          unrestored until someone acts on the Warning.</li>
           <li><strong>Redelivery re-runs every handler of the event, not the failed one.</strong> The dispatcher iterates
           handlers sequentially with no per-handler isolation
           (<code>MMCA.Common/.../Services/DomainEventDispatcher.cs:76-85</code>), so one throwing handler also skips the
@@ -468,7 +492,7 @@
           swallow its failures itself.</li>
           <li><strong>The sweep is not replica-leased.</strong> The outbox processor claims rows with a lease before working
           them (ADR-003); the sweep takes no such claim, so at the configured <code>maxReplicas: 2</code>
-          (<code>MMCA.Store/infra/main.bicep:1793</code>) two replicas can pick the same stuck order and each spend a
+          (<code>MMCA.Store/infra/main.bicep:1821</code>, the <code>salesApp</code> scale block) two replicas can pick the same stuck order and each spend a
           Stripe status call. Correctness holds through the concurrency token; the duplicated external call
           does not deduplicate.</li>
           <li><strong>Every compensating action needs its own marker.</strong> There is no generic mechanism: the ADR-021
@@ -478,19 +502,22 @@
           <h2 id="revision-2026-09-11-the-unpaid-order-deadline-moves-onto-the-order-and-the-sweep-becomes-its-backstop">Revision (2026-09-11): the unpaid-order deadline moves onto the order, and the sweep becomes its backstop</h2>
           <p>Expiring an unpaid order is no longer something a scan notices. Every order now arms its own
           deadline, and the sweep&#39;s expiry pass stays exactly where it was, underneath.</p>
-          <p><code>CheckOutHandler</code> schedules one <code>ExpireUnpaidOrderInternalCommand(orderId)</code>
+          <p><code>CheckOutHandler</code> arms one <code>ExpireUnpaidOrderInternalCommand(orderId)</code>
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/ExpireUnpaidOrderInternalCommand.cs:23-24</code>)
           to run at <code>now</code> plus <code>UnpaidOrderExpirySettings.Minutes</code>, through <code>IInternalCommandScheduler</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/InternalCommands/IInternalCommandScheduler.cs:16</code>,
-          ADR-114&#39;s queue), from inside the same transaction that inserts the order and commits the stock
-          (<code>.../ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:178-184,226-229</code>). Inside, not after:
-          &quot;there is an order&quot; and &quot;there is a deadline for it&quot; have to be one fact, or a crash between two
-          commits leaves stock held with nothing scheduled to release it. The arming happens after the save
-          within the delegate, because the order id is store-generated, and it is followed by a second
-          <code>SaveChangesAsync</code> (<code>CheckOutHandler.cs:237-240</code>), because <code>ExecuteInTransactionAsync</code> commits
-          without flushing pending changes first: the scheduler only enrolled its row on the enlisted context,
-          so without that save the deadline would be discarded at commit. A scheduling failure is a Warning and
-          nothing further (<code>CheckOutHandler.cs:231-235</code>, message at <code>CheckOutHandler.cs:205-208</code>); it never
+          ADR-114&#39;s queue), from inside the same transaction that inserts the order and commits the stock: the
+          transaction delegate calls its <code>CheckOutDeadlineScheduler</code> collaborator
+          (<code>.../ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:167-171</code>), whose <code>ArmAsync</code> does the
+          scheduling (<code>.../CheckOut/CheckOutDeadlineScheduler.cs:49-72</code>, the schedule at <code>:57-60</code>). Inside, not
+          after: &quot;there is an order&quot; and &quot;there is a deadline for it&quot; have to be one fact, or a crash between
+          two commits leaves stock held with nothing scheduled to release it. The arming happens after the save
+          within the delegate (<code>CheckOutHandler.cs:165</code>), because the order id is store-generated, and it is
+          followed by a second <code>SaveChangesAsync</code> (<code>CheckOutDeadlineScheduler.cs:68-71</code>), because
+          <code>ExecuteInTransactionAsync</code> commits without flushing pending changes first: the scheduler only
+          enrolled its row on the enlisted context, so without that save the deadline would be discarded at
+          commit. A scheduling failure is a Warning and nothing further (<code>CheckOutDeadlineScheduler.cs:62-66</code>,
+          message at <code>CheckOutDeadlineScheduler.cs:33-36</code>); it never
           fails the checkout, because the deadline is an optimization over a sweep that still runs, and losing
           a completed checkout over an unwritten queue row would trade a slow stock release for a lost sale.</p>
           <p><code>OrderPaymentFailedSagaHandler</code> re-arms the same command from now after every failed payment attempt
@@ -516,7 +543,7 @@
           is bound and validated on start beside the sweep&#39;s own settings
           (<code>.../MMCA.Store.Sales.API/SalesModule.cs:59-67</code>), and <code>PaymentReconciliation:StuckAgeMinutes</code> carries
           the same 30 (<code>PaymentReconciliationSettings.cs:48</code>,
-          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:86-95</code>). Turning <code>Enabled</code> off
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:96-105</code>). Turning <code>Enabled</code> off
           falls back to the sweep alone, which is slower and still correct.</p>
           <p><strong>The sweep stays, and its expiry pass is unchanged.</strong> A deadline is a row, and a row can fail to be
           written (a scheduling failure at checkout is logged, never fatal), can be dead-lettered by the

@@ -13,6 +13,9 @@ restores, the two UI images excluded by design), and the Trivy scan is report-on
 consumers, not gating in ADC. See Revision (2026-09-10) at the end.
 Revised 2026-09-19: the body now states the closed runtime postures in the present tense, instead of
 leaving the superseded "open" wording standing beside the revisions that closed it.
+Revised 2026-09-25 (re-anchored every `deploy.yml` citation, which moved with both workflows, the
+Trivy step included; recorded that Store's scan runs only on a leg that rebuilt its image; the
+locked-mode table's Dockerfile citations were re-checked and still hold).
 ## Context
 Eleven Dockerfiles produce every deployable container in the two Azure-hosted applications: six in
 MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Store (three services,
@@ -33,12 +36,12 @@ that a later hardening pass started from a stated position rather than from a di
 ran on 2026-09-07 and closed both.
 
 The images are built in CI, not by hand: a fan-out `build-images` matrix job with one leg per image
-(`MMCA.ADC/.github/workflows/deploy.yml:960,971-988` for the six ADC legs,
-`MMCA.Store/.github/workflows/deploy.yml:902,913-927` for the five Store legs) runs
+(`MMCA.ADC/.github/workflows/deploy.yml:1179,1189-1207` for the six ADC legs,
+`MMCA.Store/.github/workflows/deploy.yml:1091,1101-1116` for the five Store legs) runs
 `docker/build-push-action@v7` over a buildx builder
-(`MMCA.ADC/.github/workflows/deploy.yml:1005-1010`), pushes each image to ACR under both the commit
-sha and `latest` (`:1017-1018`), and caches layers in that same registry with `mode=max`
-(`:1032-1033`). The job runs concurrently with the e2e gate and rolls nothing out; that separation
+(`MMCA.ADC/.github/workflows/deploy.yml:1224-1229`), pushes each image to ACR under both the commit
+sha and `latest` (`:1235-1237`), and caches layers in that same registry with `mode=max`
+(`:1251-1252`). The job runs concurrently with the e2e gate and rolls nothing out; that separation
 is ADR-080's subject, not this one's.
 
 ## Decision
@@ -51,13 +54,13 @@ into a shell-local `GITHUB_TOKEN` that lives only for that command, which is the
 `nuget.config` expands. The Dockerfile states the reason in place: a build-arg promoted to `ENV`
 lands in image layers, the build cache, and `docker history` (`:8-10`). CI passes it as a
 `secrets:` input to the build action, not a `build-args:` input
-(`MMCA.ADC/.github/workflows/deploy.yml:1024-1025`,
-`MMCA.Store/.github/workflows/deploy.yml:966-967`), and the workflow repeats the constraint in its
-own comments (`MMCA.ADC/.github/workflows/deploy.yml:950-953`). Secret *content* is deliberately not
+(`MMCA.ADC/.github/workflows/deploy.yml:1243-1244`,
+`MMCA.Store/.github/workflows/deploy.yml:1158-1159`), and the workflow repeats the constraint in its
+own comments (`MMCA.ADC/.github/workflows/deploy.yml:1169-1172`). Secret *content* is deliberately not
 part of the BuildKit cache key, so rotating the token does not invalidate the restore layer; that is
 safe only because the package set is pinned by committed lock files and any
 `Directory.Packages.props` change lands in a `COPY` layer that busts the cache anyway
-(`MMCA.ADC/.github/workflows/deploy.yml:1019-1023`).
+(`MMCA.ADC/.github/workflows/deploy.yml:1238-1242`).
 
 **2. There is deliberately no separate `dotnet build` stage.** The `build` stage restores and stops;
 `publish` does its own restore and build. This is a measured decision, dated in the file: on
@@ -105,7 +108,7 @@ configured in Bicep.
 the same runtime layer, and Microsoft's monthly runtime patches arrive as a Dependabot bump of the
 digest rather than as a side effect of rebuilding (ADR-038). That restores the symmetry with the
 application layer, which was already pinned: the deployment references each image by commit sha, not
-by `latest` (`MMCA.ADC/.github/workflows/deploy.yml:1017,1166-1171`). See Revision (2026-09-07)
+by `latest` (`MMCA.ADC/.github/workflows/deploy.yml:1236,1403`). See Revision (2026-09-07)
 item 1.
 
 **Every image drops privileges.** `USER $APP_UID` is the last instruction before the entrypoint in
@@ -117,10 +120,12 @@ outside the range a non-root user cannot bind
 (`.../MMCA.ADC.Conference.Service/Dockerfile:59-66`). See Revision (2026-09-07) item 2.
 
 What stays open is the gate, not the image. Each deploy scans the image it pushes with Trivy, but
-report-only in both consumers (`MMCA.ADC/.github/workflows/deploy.yml:1292`,
-`MMCA.Store/.github/workflows/deploy.yml:1154`), so a base-layer CRITICAL or HIGH is printed in the
-step log and does not stop a rollout. The supply-chain job generates its CycloneDX SBOM from the
-solution filter (`MMCA.ADC/.github/workflows/deploy.yml:490-503`), so it describes the NuGet graph
+report-only in both consumers (`MMCA.ADC/.github/workflows/deploy.yml:1297`,
+`MMCA.Store/.github/workflows/deploy.yml:1183`), so a base-layer CRITICAL or HIGH is printed in the
+step log and does not stop a rollout. ADC scans every leg's tag, including a leg that only re-tagged
+an unchanged image; Store scans only a leg that rebuilt (`MMCA.Store/.github/workflows/deploy.yml:1184`),
+since an unchanged image was scanned by the deploy that built it. The supply-chain job generates its
+CycloneDX SBOM from the solution filter (`MMCA.ADC/.github/workflows/deploy.yml:606-616`), so it describes the NuGet graph
 and not the image, which leaves that report-only scan as the only thing in either pipeline that
 looks at the base layer at all. Flipping it to gating is recorded as a follow-up beside each step
 rather than decided here: see Revision (2026-09-07) item 4 and Revision (2026-09-10).
@@ -184,12 +189,12 @@ review.
    file and the CI vulnerability gate actually saw. The publish restore is deliberately left unlocked,
    and one image per repo is unlocked outright: see the 2026-09-10 revision for the current inventory.
 4. **The built image is scanned, report-only in both.** Each deploy scans every image with Trivy
-   (`MMCA.ADC/.github/workflows/deploy.yml:1292`, action pinned by SHA at `:1294`;
-   `MMCA.Store/.github/workflows/deploy.yml:1154`, `:1162`). Neither gates: both steps carry
-   `continue-on-error: true` (ADC `:1293`, Store `:1161`), so ADC's `exit-code: '1'` (`:1300`) marks
-   the step failed without failing the job, and Store's `exit-code: '0'` (`:1168`) does not even do
-   that. The flip to gating is recorded as a follow-up beside each (ADC `:1288-1291`, Store
-   `:1145-1152`), and `ignore-unfixed: true` stays either way.
+   (`MMCA.ADC/.github/workflows/deploy.yml:1297`, action pinned by SHA at `:1299`;
+   `MMCA.Store/.github/workflows/deploy.yml:1183`, `:1191`). Neither gates: both steps carry
+   `continue-on-error: true` (ADC `:1298`, Store `:1190`), so ADC's `exit-code: '1'` (`:1305`) marks
+   the step failed without failing the job, and Store's `exit-code: '0'` (`:1197`) does not even do
+   that. The flip to gating is recorded as a follow-up beside each (ADC `:1289-1296`, Store
+   `:1174-1179`), and `ignore-unfixed: true` stays either way.
 
 ## Related
 [ADR-038](038-supply-chain-provenance.md) (supply-chain provenance: it gates the **package** graph
@@ -229,7 +234,7 @@ case for publishing the service and gateway images ReadyToRun, since the JIT wor
 publish time is work the container no longer has quota to do quickly.
 
 Citations for the two Store `build-images` anchors in Context and decision 1 are re-pointed to the
-job and its `secrets:` input (`MMCA.Store/.github/workflows/deploy.yml:902,913-927` and `:966-967`);
+job and its `secrets:` input (`MMCA.Store/.github/workflows/deploy.yml:1091,1101-1116` and `:1158-1159`);
 the workflow itself is unchanged in substance.
 
 ## Revision (2026-09-10)
@@ -277,9 +282,9 @@ rationale comment has to have: it describes the command beneath it.
 
 **Related correction, same revision.** Revision (2026-09-07) item 4 asserted that ADC's Trivy scan
 fails the job while Store's is report-only for one cycle, and the asymmetry does not exist: ADC's step carries
-`continue-on-error: true` (`MMCA.ADC/.github/workflows/deploy.yml:1293`), so its `exit-code: '1'`
-(`:1300`) marks the step failed and lets the job pass. Both consumers are report-only. ADC's own
-comment (`:1288-1291`) names floating base images as the reason to stay non-gating, and that reason
+`continue-on-error: true` (`MMCA.ADC/.github/workflows/deploy.yml:1298`), so its `exit-code: '1'`
+(`:1305`) marks the step failed and lets the job pass. Both consumers are report-only. ADC's own
+comment (`:1293-1296`) names floating base images as the reason to stay non-gating, and that reason
 is stale: the base images are digest-pinned (Revision (2026-09-07) item 1), so ADC can either flip
 `continue-on-error` to `false` or rewrite the comment to state the real remaining reason. That choice
 is left open here rather than decided.
