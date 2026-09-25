@@ -174,7 +174,7 @@ work, the commit phase is deliberately outside the retry, and a commit whose out
   pre-flight before opening the transaction (`:54-76`), and the write-phase remarks explain why the whole
   read-execute-write unit runs inside (`:98-105`) and why a commit failure is not retried (`:107-112`, citing this
   record for the behavior MMCA.Common shipped in v1.135.0, `MMCA.Common/CHANGELOG.md:3463`, and that Store consumes at
-  v1.210.0, `MMCA.Store/Directory.Packages.props:11`). That is discipline, not enforcement: nothing checks that a
+  v1.211.0, `MMCA.Store/Directory.Packages.props:11`). That is discipline, not enforcement: nothing checks that a
   new handler keeps its commit dependencies inside the delegate.
 - **Cosmos participation is silent.** A Cosmos context in a transactional scope is skipped without a warning
   (`DbContextFactory.cs:754-757`), so a future host mixing engines gets partial atomicity with no signal at the call
