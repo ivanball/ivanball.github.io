@@ -12,12 +12,13 @@ architecture-evaluation lens the guide tags against. Later sections cross-refere
 
 Two codebases are in scope:
 
-- **`MMCA.Common`**: a **framework**, published as **seventeen NuGet packages** (the count and list are owned by [`MMCA.Common/FACTS.md`](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)) to nuget.org (the
+- **`MMCA.Common`**: a **framework**, published as **twenty-two NuGet packages** (the count and list are owned by [`MMCA.Common/FACTS.md`](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)) to nuget.org (the
   documented install path) and mirrored to GitHub Packages
   ([ADR-053](https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html))
   (four core: `.Shared`, `.Domain`, `.Application`, `.Infrastructure`; five presentation: `.API`,
-  `.Grpc`, `.UI`, `.UI.Maui`, `.UI.Web`; three hosting: `.Aspire`, `.Aspire.Hosting`, `.Gateway`; four testing: `.Testing`, `.Testing.E2E`,
-  `.Testing.UI`, `.Testing.Architecture`; plus the `MMCA.Common` metapackage that bundles the six a standard host always takes,
+  `.Grpc`, `.UI`, `.UI.Maui`, `.UI.Web`; three AI: `.AI`, `.AI.Anthropic`, `.AI.OpenAI`; three hosting:
+  `.Aspire`, `.Aspire.Hosting`, `.Gateway`; six testing: `.Testing`, `.Testing.Aspire`, `.Testing.E2E`,
+  `.Testing.UI`, `.Testing.Architecture`, `.AI.Testing`; plus the `MMCA.Common` metapackage that bundles the six a standard host always takes,
   [ADR-101](https://ivanball.github.io/docs/adr/101-common-metapackage.html)). It is *not* a runnable app; it ships the base classes and
   infrastructure for building modular monoliths with DDD + Clean Architecture + CQRS, plus the extension points
   to extract a module into its own microservice later. The packages release **in lockstep**
@@ -54,7 +55,9 @@ layers. The two host-support presentation packages sit above those: **`UI.Maui`*
 `UI` and `Shared` only, and **`UI.Web`** (the Blazor Web host bridge) references `UI`, `API`, and
 `Aspire`, never `Domain`/`Application`/`Infrastructure` directly, which is why it disables transitive
 project references and carries its own boundary check
-(`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:90-123`).
+(`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:117-150`). The optional **AI**
+packages stand apart in both directions: they take no `MMCA.Common` project reference and nothing in
+the framework references them (`EnforceAiLayerBoundary`, same file, line 86).
 
 `MMCA.ADC` repeats the same layering *per module*: each of Conference/Engagement/Identity has
 `.Shared`, `.Domain`, `.Application`, `.Infrastructure`, `.API`, and `.UI` projects following the
@@ -81,11 +84,12 @@ chapter; here is the orientation so the vocabulary is familiar.
 - **CQRS (Command/Query Responsibility Segregation).** Writes (**commands**, which mutate and return
   a `Result`) are separated from reads (**queries**, side-effect-free). Both flow through a
   **decorator pipeline**: commands run
-  `FeatureGate → Logging → Caching → Validating → Transactional → handler`, queries run
-  `FeatureGate → Logging → Caching → handler` (no validation and no transaction on the read side).
+  `FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Transactional -> handler`,
+  queries run `FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> handler`
+  (both sides validate; only the write side opens a transaction).
   The order is set by the registrations in `AddApplicationDecorators`, which Scrutor's `TryDecorate`
   applies in **reverse**, so the last registered is the outermost
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:93-102`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-148`).
   Cross-cutting concerns live in the pipeline, not in each handler. First concrete code: the
   `ICommandHandler`/`IQueryHandler` contracts and their decorators in
   [`group-05`](group-05-cqrs-pipeline.md).
@@ -123,8 +127,9 @@ chapter; here is the orientation so the vocabulary is familiar.
   auth half of the extraction promise in the previous bullet: token validation survives the
   issuer/validator split without a rewrite.
   *Adoption note (verified by source):* the guarantee is scoped to *cross-service* auth. The
-  in-process monolith default stays HS256 with a shared symmetric secret behind the same
-  `JwtSettings.SigningAlgorithm` switch, and MMCA.Helpdesk (the monolith seed) runs issuer-less.
+  `JwtSettings.SigningAlgorithm` switch defaults to RS256, and a single-host monolith opts into HS256
+  with a shared symmetric secret explicitly
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:24-29`); MMCA.Helpdesk (the monolith seed) runs issuer-less.
   ADC's Conference, Engagement, and Notification services all validate through the gateway-routed
   discovery path today. First concrete code: [`group-08`](group-08-auth.md).
 
@@ -134,12 +139,14 @@ chapter; here is the orientation so the vocabulary is familiar.
   (`MMCA.ADC.UI.Web` / `.Web.Client`, Blazor Server + WebAssembly) and the **.NET MAUI** host
   (`MMCA.ADC.UI`) `ProjectReference` the *same* UI libraries, so one page renders across **Web,
   Android, iOS, macOS, and Windows** with no per-platform reimplementation, MAUI hosts the shared
-  components in a `BlazorWebView` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MainPage.xaml:16`, wired by
-  `AddMauiBlazorWebView()` in `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:64`). The only
+  components in a `BlazorWebView` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MainPage.xaml:17`, wired by
+  `AddMauiBlazorWebView()` in `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:94`). The only
   platform-specific code is tiny entry
   points (`App`/`AppDelegate`/`MainApplication`, `MauiProgram`). First concrete code: the MAUI
   bootstraps and host shells in [`group-25`](group-25-adc-host-composition.md); the supported
-  device/browser matrix is in `MMCA.ADC/CLAUDE.md`.
+  platforms are the MAUI host's own `TargetFrameworks`
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:7-8`), and the browser engines the E2E
+  suite covers (chromium, firefox, webkit) are listed in `MMCA.ADC/AGENTS.md`.
 
 - **Event-driven integration + the Outbox pattern.** When an aggregate changes, its domain events are
   serialized into an `OutboxMessage` row **in the same transaction** as the data, then a background
@@ -147,16 +154,17 @@ chapter; here is the orientation so the vocabulary is familiar.
   ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) "outbox dual-dispatch".)
 
 - **Database-per-service.** Each module/service owns its own SQL database and its own outbox table;
-  there is one concrete `SQLServerDbContext` class but **one instance per database**. Cross-source
+  there is one sealed context class per engine (`SQLServerDbContext`, `PostgreSQLDbContext`,
+  `SqliteDbContext`, `CosmosDbContext`) but **one instance per database**. Cross-source
   relationships auto-degrade (the FK is dropped, navigation flows through batch loaders), and the
   outbox is the cross-source consistency mechanism. ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html).)
 
 - **Engine-agnostic entities, the storage provider is a one-token choice ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)).** A
   domain entity carries *no* persistence-engine choice; it is a plain class. What decides whether it
-  is stored in **SQL Server, Cosmos DB, or SQLite** is a single `[UseDataSource(<engine>)]` attribute on
+  is stored in **SQL Server, PostgreSQL, Cosmos DB, or SQLite** is a single `[UseDataSource(<engine>)]` attribute on
   its `Infrastructure/Persistence/EntityConfiguration/{Entity}Configuration` class, carried for you by
-  one of three thin **engine shim** base classes (`EntityTypeConfigurationSQLServer<TEntity, TId>`,
-  `…Cosmos<…>`, `…Sqlite<…>`). All three derive from a single engine-aware
+  one of four thin **engine shim** base classes (`EntityTypeConfigurationSQLServer<TEntity, TId>`,
+  `...PostgreSQL<...>`, `...Cosmos<...>`, `...Sqlite<...>`). All four derive from a single engine-aware
   `EntityTypeConfiguration<TEntity, TId>` base (which reads the attribute and applies the matching
   table/container/schema/key conventions) over `EntityTypeConfigurationBase<TEntity, TId>`,
   [`group-07`](group-07-persistence-ef-core.md). So **swapping just that base (or attribute) re-points the
@@ -166,11 +174,11 @@ chapter; here is the orientation so the vocabulary is familiar.
   filter goes through `CrossSourceSpecification` (so even a "published-event" predicate stays
   translatable). First concrete code: the configuration hierarchy in
   [`group-07`](group-07-persistence-ef-core.md); this is the per-entity half of database-per-service
-  ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) plus the polyglot story ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)).
+  ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) plus the polyglot story ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html), with PostgreSQL as the fourth engine in [ADR-113](https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html)).
   *Adoption note (verified by source):* this is a real, **tested** capability that no entity routes
-  to yet. Today **every entity configuration in ADC derives from the `…SQLServer` base** (ADC runs
+  to yet. Today **every entity configuration in ADC derives from the `...SQLServer` base** (ADC runs
   SQL Server only, four databases: `ADC_Identity`, `ADC_Conference`, `ADC_Engagement`,
-  `ADC_Notification`, `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:32-35`), and the
+  `ADC_Notification`, `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:37-40`), and the
   [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html) work shipped the full polyglot machinery (unified base,
   cross-source spec + fitness rule, Cosmos-index skip, SQLite `EnsureCreated`, Cosmos/SQLite Aspire
   helpers, portability tests). An end-to-end trial moving ADC Conference's `Session` to Cosmos and
@@ -186,8 +194,9 @@ chapter; here is the orientation so the vocabulary is familiar.
   query filters exclude them. `CreatedOn/By` and `LastModifiedOn/By` are stamped centrally in
   `SaveChangesAsync`. For genuine erasure (GDPR/CCPA) there is a separate anonymize path. ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html).)
   Since [ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html) the same idea extends to
-  an opt-in field-level **audit trail**: a third `SaveChangesInterceptor`, registered last so it
-  diffs freshly stamped values, writes per-property `AuditTrailEntries` in the same transaction as
+  an opt-in field-level **audit trail**: its own `SaveChangesInterceptor`, registered after the audit,
+  tenant and domain-event interceptors so it diffs freshly stamped values
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:300-317`), writes per-property `AuditTrailEntries` in the same transaction as
   the data, with `[Pii]` values captured redacted (opt-in twice: `AddAuditTrail` plus an
   `IAuditedEntity` marker per entity; retention is an ADR-074 scheduled purge).
 
@@ -208,8 +217,8 @@ chapter; here is the orientation so the vocabulary is familiar.
 - **Primitive identifier type aliases ([ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)).** Each entity's ID type is a per-module
   `global using XIdentifierType = int;` (or `= System.Guid;`) alias, linked into every project via
   `Directory.Build.props`. Code says `EventIdentifierType`, not bare `int`, so the ID type can change
-  in one place: ADC's `SpeakerIdentifierType` is a `System.Guid` beside fourteen `int` siblings in
-  the same file (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:18`, in
+  in one place: ADC's `SpeakerIdentifierType` and `SessionAssetIdentifierType` are `System.Guid`
+  beside seventeen `int` siblings in the same file (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17,23`, in
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/`).
   These are **aliases, not wrapper structs**: the alias is erased at compile time, so it buys
   readability and one-place change, not compile-time protection against passing the wrong same-typed
@@ -231,7 +240,7 @@ the full set, for orientation:
 | 003 | Outbox + in-process dispatch + background processor (at-least-once); since [ADR-100](https://ivanball.github.io/docs/adr/100-outbox-opt-in-resolved-from-messaging-mode.html) the outbox is resolved from the messaging mode (`MessageBus:EnableOutbox` is `bool?`, unset means enabled iff the provider is not `InProcess`) | [g04](group-04-events-outbox.md) |
 | 004 | JWKS discovery + fallback for cross-service token validation | [g08](group-08-auth.md) |
 | 005 | Soft-delete for lifecycle; `IAnonymizable` + outbox purge for GDPR/CCPA erasure | [g02](group-02-domain-building-blocks.md)/[g24](group-24-identity-module.md) |
-| 006 | Database-per-service: each owns its DB + outbox; one `SQLServerDbContext` class, one instance per DB | [g07](group-07-persistence-ef-core.md) |
+| 006 | Database-per-service: each owns its DB + outbox; one sealed context class per engine (`SQLServerDbContext`, `PostgreSQLDbContext`, `SqliteDbContext`, `CosmosDbContext`), one instance per DB | [g07](group-07-persistence-ef-core.md) |
 | 007 | `*.Contracts` + typed gRPC clients + `Result`-over-the-wire for synchronous inter-service calls | [g13](group-13-grpc-contracts.md) |
 | 008 | One service host per module behind a YARP gateway; transport at the edge keeps extraction reversible | [g16](group-16-aspire-orchestration.md)/[g25](group-25-adc-host-composition.md) |
 | 009 | Standard resilience handler on every outbound client; declared RTO/RPO + drilled restore | [g13](group-13-grpc-contracts.md)/[devops-runbooks](devops-runbooks.md) |
@@ -239,11 +248,11 @@ the full set, for orientation:
 | 011 | ~~en-US-only i18n is a deliberate non-goal~~ **superseded by [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)** (multi-locale en-US + es) | [g15](group-15-common-ui-framework.md) |
 | 012 | gRPC host transport: both consumers now default to `Http2`-only h2c (Profile A); `Http1AndHttp2` survives on the WebSocket hosts only (ADC Notification, which adds a dedicated `Http2` gRPC endpoint beside it, and Store Sales) | [g16](group-16-aspire-orchestration.md)/[g20](group-20-conference-api-grpc.md) |
 | 013 | Expected failures are `Result`/`ErrorType` values; only the edge maps to HTTP/gRPC | [g01](group-01-result-error-handling.md) |
-| 014 | CQRS decorator chain: FeatureGate → Logging → Caching → Validating → Transactional → Handler | [g05](group-05-cqrs-pipeline.md) |
-| 015 | Architecture fitness functions: compile-time layer guard + shared NetArchTest rule library | [g27](group-28-testing-infrastructure.md) |
+| 014 | CQRS decorator chain: FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Transactional -> Handler (queries: the same without Transactional) | [g05](group-05-cqrs-pipeline.md) |
+| 015 | Architecture fitness functions: compile-time layer guard + shared NetArchTest rule library | [g28](group-28-testing-infrastructure.md) |
 | 016 | Lockstep versioning of every package (one tag, one version, no phased rollout); MassTransit pinned to v8 (build-gated) | [devops-cicd](devops-cicd.md) |
 | 017 | `[Idempotent]` action filter dedups client retries via an `Idempotency-Key` header (24h replay) | [g12](group-12-api-hosting-mapping.md) |
-| 018 | Polyglot persistence: three engines (SQL Server / Cosmos / SQLite) behind one entity model, engine via `[UseDataSource]` | [g07](group-07-persistence-ef-core.md)/[g03](group-03-querying-specifications.md) |
+| 018 | Polyglot persistence: four engines (SQL Server / PostgreSQL / Cosmos / SQLite) behind one entity model, engine via `[UseDataSource]` | [g07](group-07-persistence-ef-core.md)/[g03](group-03-querying-specifications.md) |
 | 019 | Layered rate limiting: an always-on global limiter caps only authenticated callers; anonymous/infra traffic is exempted, with output cache + login-protection for the other layers | [g08](group-08-auth.md)/[g12](group-12-api-hosting-mapping.md) |
 | 020 | Permission-based authorization: `[HasPermission(...)]` over an `IPermissionRegistry`, opt-in atop RBAC | [g08](group-08-auth.md) |
 | 021 | Consumer-side inbox idempotency: `EfInboxStore` dedups broker redeliveries by `MessageId` | [g04](group-04-events-outbox.md) |
@@ -260,8 +269,8 @@ the full set, for orientation:
 | 032 | ~~Password hashing: PBKDF2-HMAC-SHA512 (600k iters) with by-salt-length migration of legacy records~~ **superseded by [ADR-102](https://ivanball.github.io/docs/adr/102-pbkdf2-only-password-hashing.html)** (PBKDF2-only, the legacy branch deleted) | [g08](group-08-auth.md) |
 | 033 | Resource-ownership authorization: `OwnerOrAdminFilter`/`OwnershipHelper` row-scope a single resource beside RBAC | [g08](group-08-auth.md) |
 | 034 | Generic entity controllers + dynamic query contract (`EntityControllerBase`; `fields`/filter/sort/paging); the write side (generic create/update/delete, `CrudEntityControllerBase`) is completed by [ADR-099](https://ivanball.github.io/docs/adr/099-generic-write-side-entity-commands.html) | [g12](group-12-api-hosting-mapping.md)/[g03](group-03-querying-specifications.md) |
-| 035 | Optimistic concurrency: a `RowVersion` token round-trips through `IConcurrencyAware` DTOs; a stale write maps to HTTP 409 | [g07](group-07-persistence-ef-core.md)/[g12](group-12-api-hosting-mapping.md) |
-| 036 | External OAuth login (Google/GitHub): `OAuthControllerBase` swaps a single-use 2-minute code for the local JWT pair (tokens never ride the redirect URL) | [g08](group-08-auth.md)/[g12](group-12-api-hosting-mapping.md) |
+| 035 | Optimistic concurrency: a `RowVersion` token round-trips through `IConcurrencyAware` DTOs; a stale write maps to HTTP 412 Precondition Failed | [g07](group-07-persistence-ef-core.md)/[g12](group-12-api-hosting-mapping.md) |
+| 036 | External OAuth login (Google/GitHub/Apple): `OAuthControllerBase` swaps a single-use 2-minute code for the local JWT pair (tokens never ride the redirect URL) | [g08](group-08-auth.md)/[g12](group-12-api-hosting-mapping.md) |
 | 037 | Field-level encryption at rest: `EncryptedStringConverter` (AES-256-GCM), shipped + tested but **unadopted** (no entity config wires it yet) | [g07](group-07-persistence-ef-core.md) |
 | 038 | Supply-chain provenance: SBOM release gate + committed lock files + transitive vuln audit + `packageSourceMapping` | [devops-cicd](devops-cicd.md) |
 | 039 | Live channel push: hub `JoinChannel`/`LeaveChannel` groups + `ILiveChannelPublisher` publish ephemeral events over the one notification WebSocket | [g10](group-10-notifications.md)/[g15](group-15-common-ui-framework.md)/[g23](group-23-engagement-live-layer.md) |
@@ -283,19 +292,19 @@ the full set, for orientation:
 | 055 | Repository + Specification contract: the read side is ISP-split into `IEntityReader` (id lookups) and `IEntityQuerier` (collections, projections, counts), and a fitness rule fails the build on raw `IQueryable` surfaces in Application code | [g03](group-03-querying-specifications.md)/[g07](group-07-persistence-ef-core.md) |
 | 056 | One render mode for the whole routable tree, chosen at the root on the shared `Routes` component: `InteractiveAuto` with prerendering left on, and the resulting SSR-to-interactive double fetch removed in `DataGridListPageBase` through `PersistentComponentState` rather than by weakening the mode | [g15](group-15-common-ui-framework.md) |
 | 057 | Expand/contract schema evolution enforced in CI: adding columns, tables and indexes is safe in any release, while a migration added by a PR whose `Up()` drops one fails the merge check unless it carries an `EXPAND-CONTRACT-OVERRIDE` marker, because production rollback is revision-only and never un-migrates | [devops-cicd](devops-cicd.md)/[g07](group-07-persistence-ef-core.md) |
-| 058 | Runtime conformance suites shipped in `MMCA.Common.Testing`: six abstract behavioral bases (problem details, OpenAPI, `/ServiceInfo` versioning, security headers, graceful shutdown, decorator order) that a host subclasses and that run against a really booted host, picking up where ADR-015's structural fitness tests stop | [g27](group-28-testing-infrastructure.md) |
-| 059 | `IModule` is the one composition contract (five members, three defaulted): reflection discovery over the AppDomain, Kahn topological registration order, and a disabled module represented by null-object stub registrations rather than by absence | [g14](group-14-module-system-composition.md) |
+| 058 | Runtime conformance suites shipped in `MMCA.Common.Testing`: seven abstract behavioral bases (problem details, OpenAPI, `/ServiceInfo` versioning, security headers, graceful shutdown, decorator order, gateway hardening) that a host subclasses and that run against a really booted host, picking up where ADR-015's structural fitness tests stop | [g28](group-28-testing-infrastructure.md) |
+| 059 | `IModule` is the one composition contract (five members, three defaulted): reflection discovery over the assemblies the host names explicitly (never an AppDomain scan), Kahn topological registration order, and a disabled module represented by null-object stub registrations rather than by absence | [g14](group-14-module-system-composition.md) |
 | 060 | Performance-regression gate: a `performance-smoke` job runs the BenchmarkDotNet suite on every code PR and verifies it against a committed `perf-baseline.json` of absolute allocation ceilings plus benchmark-to-benchmark ratio floors; no absolute wall-clock threshold, since a shared runner cannot deliver one | [devops-cicd](devops-cicd.md) |
 | 061 | Runtime secrets live in Azure Key Vault and reach each Container App as a `keyVaultUrl` reference resolved by one shared user-assigned managed identity, consumed only through `secretRef` (no inline values); SQL managed-identity auth is staged behind `useManagedIdentitySql`, still false by default | [devops-iac](devops-iac.md) |
-| 062 | SLO alerting as code: `sloAlertSpecs` in each consumer's Bicep materializes KQL scheduled query rules (401/499 and hub traffic excluded) on one action group, and a framework test base pairs every alert with a severity-correct `OPERATIONS.md` triage section, failing the build in either direction | [devops-iac](devops-iac.md)/[g27](group-28-testing-infrastructure.md) |
-| 063 | WCAG 2.1 AA as a shipped test contract: `AxeOptions.Wcag21Aa` pins the four WCAG tag sets and excludes axe's advisory rules, a violation throws instead of reporting, and the scan is a cross-browser required merge check in Common plus a chromium deploy gate in both apps | [g27](group-28-testing-infrastructure.md)/[devops-cicd](devops-cicd.md) |
-| 064 | Deploy preconditions as proof of recency: `dr-freshness`, `load-freshness` and `cross-service-freshness` sit in `deploy.needs` and fail when the newest successful DR drill (8 days), k6 load run (35) or broker round-trip (5) is older than its window; no successful run at all fails too | [devops-cicd](devops-cicd.md) |
+| 062 | SLO alerting as code: `sloAlertSpecs` in each consumer's Bicep materializes KQL scheduled query rules (401/499 and hub traffic excluded) on one action group, and a framework test base pairs every alert with a severity-correct `OPERATIONS.md` triage section, failing the build in either direction | [devops-iac](devops-iac.md)/[g28](group-28-testing-infrastructure.md) |
+| 063 | WCAG 2.1 AA as a shipped test contract: `AxeOptions.Wcag21Aa` pins the four WCAG tag sets and excludes axe's advisory rules, a violation throws instead of reporting, and the scan is a cross-browser required merge check in Common plus a chromium deploy gate in both apps | [g28](group-28-testing-infrastructure.md)/[devops-cicd](devops-cicd.md) |
+| 064 | Deploy preconditions as proof of recency: `dr-freshness`, `load-freshness`, `cross-service-freshness` and `cross-browser-freshness` sit in `deploy.needs` and fail when the newest successful DR drill (8 days), k6 load run (35), broker round-trip (5) or per-engine firefox/webkit E2E leg (10) is older than its window; no successful run at all fails too | [devops-cicd](devops-cicd.md) |
 | 065 | Scaffolding templates derived from the reference app: the `dotnet new` pack `MMCA.Templates` (`mmca-app`/`mmca-module`/`mmca-command`/`mmca-query`) is staged at pack time from the MMCA.Helpdesk tree itself (no second copy to drift); generated apps ship `build/add-module.ps1`, which performs the seven wire-ups the template can only print, plus the first migration; a `template-smoke` CI job builds a generated app package-mode and sweeps for residual `Helpdesk`/`Ticket` tokens | [g14](group-14-module-system-composition.md)/[devops-cicd](devops-cicd.md) |
 | 066 | Broker transport selection + dev/prod parity: one `IMessageBus` with three `MessageBusProvider` values (`InProcess` for tests and the monolith, RabbitMQ wired by the AppHost's `WithBroker` locally, Azure Service Bus injected by both apps' Bicep in production), identical exponential retry per transport, and a non-gating Service Bus emulator test tier proving the production binding | [g04](group-04-events-outbox.md)/[g16](group-16-aspire-orchestration.md) |
 | 067 | Shared Blazor shell + `IUIModule` composition: the framework package ships the router, layout, nav menu and routable shell pages; each module contributes `NavItems`, an `Assembly` for `AdditionalAssemblies` route discovery, and app-bar/layout extension points, enumerated by `Routes.razor` at runtime (the UI-layer counterpart of ADR-059's `IModule`; Helpdesk keeps its own shell) | [g15](group-15-common-ui-framework.md)/[g25](group-25-adc-host-composition.md) |
 | 068 | Value objects as validated domain primitives: seven sealed `record` types over an abstract `ValueObject` base, each a private constructor plus a `Result`-returning `Create` factory (fitness-enforced), mapped via `OwnsMoney` or value converters (no schema change); the deliberate opposite of ADR-048's identifier aliases (identifiers cross boundaries, domain values carry invariants) | [g02](group-02-domain-building-blocks.md) |
-| 069 | Shared DataProtection key ring for scaled-out hosts: `AddCommonDataProtection` persists the key ring to one Azure blob under `DefaultAzureCredential` so cookies and antiforgery tokens minted by one replica decrypt on another; Key Vault at-rest encryption is a deliberately independent second gate, and absent config is a full no-op (adopted by ADC; Store still runs per-replica key rings) | [g16](group-16-aspire-orchestration.md)/[g08](group-08-auth.md) |
-| 070 | Fail-fast configuration contract: every settings section binds through `AddOptions().Bind().ValidateDataAnnotations().ValidateOnStart()` so a misconfigured host refuses to boot instead of failing at first use; settings consumed above Infrastructure flow through read-only singleton facades (`IApplicationSettings`, `ISmtpSettings`, `IJwtSettings`) rather than `IOptions<T>` | [g12](group-12-api-hosting-mapping.md)/[g14](group-14-module-system-composition.md) |
+| 069 | Shared DataProtection key ring for scaled-out hosts: `AddCommonDataProtection` persists the key ring to one Azure blob under `DefaultAzureCredential` so cookies and antiforgery tokens minted by one replica decrypt on another; Key Vault at-rest encryption is a deliberately independent second gate, and absent config is a full no-op (adopted by both ADC and Store) | [g16](group-16-aspire-orchestration.md)/[g08](group-08-auth.md) |
+| 070 | Fail-fast configuration contract: every settings section binds through `AddOptions().Bind().ValidateDataAnnotations().ValidateOnStart()` so a misconfigured host refuses to boot instead of failing at first use; consumers read the bound value through `IOptions<T>` of the concrete settings class, with no separate facade type to keep in sync | [g12](group-12-api-hosting-mapping.md)/[g14](group-14-module-system-composition.md) |
 | 071 | Barcode scanning + QR display, split by what each depends on: `QrCodeImage` is a plain shared component (QRCoder PNG as a data URI, no device needed), while camera reads go through `IBarcodeScannerService`, an ADR-042 capability (never throws, `null` = cancelled/denied/unsupported) with a TryAdd null fallback and a ZXing.Net.MAUI implementation, opt-in per head | [g26](group-26-device-capability-layer.md)/[g15](group-15-common-ui-framework.md) |
 | 072 | QR badge check-in + points gamification (ADC): the badge QR carries an opaque server-verified `Guid` (revocable by one `Regenerate()`), one `CheckIn` aggregate with Event/Session/Sponsor scopes behind filtered unique indexes, and an append-only points ledger whose unique `(UserId, ActivityType, SubjectKey)` index is both the redelivery-idempotency guard and the anti-farming rule | [g22](group-22-engagement-module.md)/[g17](group-17-conference-domain.md) |
 | 073 | Multi-tenancy (shared-schema + DB-per-tenant): a second named EF query filter `"Tenant"` composes by AND with `"SoftDelete"`; `ITenantContext` resolves claim-then-header behind `TenantResolutionMiddleware`, a dedicated interceptor stamps writes and refuses cross-tenant ones, and DB-per-tenant is a per-tenant connection-string override (Helpdesk is the reference adopter) | [g07](group-07-persistence-ef-core.md)/[g12](group-12-api-hosting-mapping.md) |
@@ -303,38 +312,38 @@ the full set, for orientation:
 | 075 | Audit trail: a third `SaveChangesInterceptor` (registered last, so it diffs freshly stamped values) writes per-property `AuditTrailEntries` in the **same transaction** as the data; opt-in twice (`AddAuditTrail` + `IAuditedEntity` per entity), `[Pii]` values captured redacted, retention via an ADR-074 scheduled purge | [g07](group-07-persistence-ef-core.md) |
 | 076 | Data-subject export (DSAR) contract: `ExportUserDataHandlerBase` mirrors the delete handler's ownership gate, fans out to registered `IUserDataExportSection`s, and assembles a versioned JSON export; per-section failure degrades to `Available = false` rather than failing the request, because a DSAR is a legal deadline | [g24](group-24-identity-module.md)/[g12](group-12-api-hosting-mapping.md) |
 | 077 | HybridCache substrate (amends 026): `AddCommonHybridCache` swaps `ICacheService` to L1 in-process + L2 distributed under a **disjoint `{prefix}hc:{key}` keyspace**, making the two-serialization-formats-in-one-keyspace failure impossible rather than unlikely; `IncrementAsync` bypasses L1 to keep counter semantics | [g09](group-09-caching.md) |
-| 078 | CSV export as a dedicated `[HttpGet("export")]` endpoint on `EntityControllerBase`, not content negotiation (the output cache does not vary by `Accept`); page-loops the capped query pipeline and streams up to `MaxExportRows`, truncating with an `X-Export-Truncated` header; RFC 4180 writer in-house | [g12](group-12-api-hosting-mapping.md)/[g03](group-03-querying-specifications.md) |
+| 078 | CSV export as a dedicated `[HttpGet("export")]` endpoint on `EntityControllerBase`, not content negotiation (the output cache does not vary by `Accept`); page-loops the capped query pipeline and streams up to `MaxExportRows`, announcing the ceiling in an `X-Export-Row-Limit` header and marking truncation with a trailing `# export truncated at N rows` comment row; RFC 4180 writer in-house | [g12](group-12-api-hosting-mapping.md)/[g03](group-03-querying-specifications.md) |
 | 079 | Shared HTTP middleware pipeline: `UseCommonMiddlewarePipeline` fixes one middleware order for every REST/gRPC host (exception handler through controllers), with the load-bearing adjacencies commented in code; conditional middleware registers unconditionally and stays inert by config (the ADR-014 decorator-order sibling, for the HTTP side) | [g12](group-12-api-hosting-mapping.md) |
 | 080 | Rollout + automatic revision rollback: both consumer deploys end in a post-deploy smoke gate asserting expected status codes; on failure every container app walks back to its previous revision (`az containerapp revision copy`); rollback is revision-only by construction, schema is never reverted (ADR-030/057) | [devops-cicd](devops-cicd.md) |
 | 081 | Cost baseline as a deploy gate: a read-only `cost-guard` workflow in `deploy.needs` asserts the production footprint still matches its baseline (replica caps + accepted SQL tiers), so an un-reverted manual surge blocks the next deploy; it never mutates anything | [devops-cicd](devops-cicd.md)/[devops-iac](devops-iac.md) |
 | 082 | Two-tier cross-origin posture: service hosts get named allow-listed CORS policies from one `AddCommonCors` (origins from config, empty by default), selected inside the shared pipeline; the gateways get a default policy restricting only origins, because a reverse proxy must forward arbitrary client headers | [g12](group-12-api-hosting-mapping.md)/[g16](group-16-aspire-orchestration.md) |
 | 083 | CRUD lifecycle event taxonomy: one `EntityChangedEvent<TId>` base (a `DomainEntityState` discriminator + the entity id) replaces per-entity Created/Updated/Deleted triples; business state-machine transitions deliberately keep their own event types, and the discriminator rides integration events as a frozen wire field | [g04](group-04-events-outbox.md)/[g02](group-02-domain-building-blocks.md) |
 | 084 | Stripe webhook ingress contract (Store Sales): an anonymous raw-body POST verified by `Stripe-Signature` whose status code encodes ACCEPTED-vs-PROCESSED, not success/failure; 400 only when the event cannot be accepted at all, because rejections make Stripe retry and eventually disable the endpoint; post-acceptance failures log and return 200 with ADR-054's reconciliation as backstop | [g04](group-04-events-outbox.md)/[g12](group-12-api-hosting-mapping.md) |
-| 085 | Identifier type aliases revisited (revisits 048): the wrapper-struct alternative is re-evaluated, priced (43 aliases, 42 of them `int`; 3,641 occurrences across 1,016 files to migrate) and deferred again, now behind three named revisit triggers instead of an open-ended "not now" | [g02](group-02-domain-building-blocks.md)/[g14](group-14-module-system-composition.md) |
+| 085 | Identifier type aliases revisited (revisits 048): the wrapper-struct alternative is re-evaluated, priced (48 aliases, 46 of them `int`; 3,767 lines across 1,192 files to migrate, recounted 2026-09-19) and deferred again, now behind three named revisit triggers instead of an open-ended "not now" | [g02](group-02-domain-building-blocks.md)/[g14](group-14-module-system-composition.md) |
 | 086 | Process manager deferred (relates to 054): a documented deferral shipping no code; records the shape a durable coordinator would take (MassTransit v8 saga state machine, per-instance state + deadlines) and the build trigger (3+ steps across 2+ services, state that fits no aggregate, a per-instance deadline); ADR-054's compensation + sweep suffice until then | [g04](group-04-events-outbox.md) |
 | 087 | Broker poison-message handling (amends 009): transport-aware second-level redelivery (opt-in on RabbitMQ, native on Azure Service Bus), an auto-registered `FaultIntegrationEventConsumer<TEvent>` that makes an exhausted message visible but never replays it (meter `MMCA.Common.Broker`), and a circuit breaker on the outbox broker publish only; a per-query DB breaker is rejected (does not compose with EF's execution strategy) | [g04](group-04-events-outbox.md)/[g07](group-07-persistence-ef-core.md) |
 | 088 | Gateway edge responsibilities (extends 019): the edge owns three cross-cutting behaviors via `MMCA.Common.Aspire`: `GatewayCorrelationMiddleware` ensures + forwards `X-Correlation-ID`, per-client-IP rate limiting that deliberately includes anonymous callers (inverting ADR-019's exemption), and downstream health probes on the `Ready` tag only; edge JWT pre-validation is declined with a trigger | [g16](group-16-aspire-orchestration.md) |
 | 089 | Gateway topology owned by configuration (amends 008): the route table moves out of `MapForwarder` code into YARP `ReverseProxy` configuration as the single route source, with `RouteMapTests` as a drift gate in both consumers and the per-destination HTTP version policy (ADR-012 profiles) in cluster config; the AppHost/bicep keep address books, not route tables | [g16](group-16-aspire-orchestration.md) |
 | 090 | Event upcaster registration extension point (completes 010): `IEventUpcaster<TSource, TTarget>` in the Application layer plus an `EventUpcasterRegistry` that chains V1 to V2 to V3 to the terminal contract and re-stamps `MessageId`/`DateOccurred` after every hop, so inbox dedup survives upcasting; both delivery paths consult it, and a duplicate/self-map/cycle throws at host start | [g04](group-04-events-outbox.md)/[g05](group-05-cqrs-pipeline.md) |
 | 091 | Cache-backed password reset (extends 029/032): the reset credential is one `ICacheService` record (256-bit token, only its SHA-256 stored, 30-minute TTL, single live token per address, 5 validation attempts, 3 requests per 60 minutes) rather than three columns on the user row, and `ForgotPasswordHandlerBase` returns success on every path so the endpoint is not an account-enumeration oracle | [g08](group-08-auth.md)/[g14](group-14-module-system-composition.md) |
-| 092 | Core Web Vitals budget as a shipped test contract and deploy gate: `WebVitalsCollector` installs `PerformanceObserver` hooks as a Playwright init script, `WebVitalsBudget` defaults to the good band (LCP 2500, FCP 1800, TTFB 800 ms, CLS 0.1, INP 500), a breach throws naming the page, and both apps' assertions ride the chromium `e2e-gate` | [g27](group-28-testing-infrastructure.md)/[devops-cicd](devops-cicd.md) |
-| 093 | Container image build posture: eleven four-stage Dockerfiles where the GitHub Packages token is a BuildKit secret (never an `ARG`/`ENV`), there is deliberately no separate `dotnet build` stage (publish re-restores; the RID split made every image compile twice, about 75 s), and `PublishReadyToRun=true` on the nine service/gateway images only; floating base tag and running as root are recorded as undecided | [devops-aspire](devops-aspire.md)/[devops-cicd](devops-cicd.md) |
+| 092 | Core Web Vitals budget as a shipped test contract and deploy gate: `WebVitalsCollector` installs `PerformanceObserver` hooks as a Playwright init script, `WebVitalsBudget` defaults to the good band (LCP 2500, FCP 1800, TTFB 800 ms, CLS 0.1, INP 500), a breach throws naming the page, and both apps' assertions ride the chromium `e2e-gate` | [g28](group-28-testing-infrastructure.md)/[devops-cicd](devops-cicd.md) |
+| 093 | Container image build posture: eleven four-stage Dockerfiles where the GitHub Packages token is a BuildKit secret (never an `ARG`/`ENV`), there is deliberately no separate `dotnet build` stage (publish re-restores; the RID split made every image compile twice, about 75 s), and `PublishReadyToRun=true` on the nine service/gateway images only; every base image is digest-pinned and every final stage runs as a non-root user (`USER $APP_UID`) | [devops-aspire](devops-aspire.md)/[devops-cicd](devops-cicd.md) |
 | 094 | Client-side entity data-access contract (the calling half of 034): hand-written typed bases in `MMCA.Common.UI` (`AuthenticatedServiceBase` + `EntityServiceBase<TEntityDTO, TIdentifierType>`), no generated client; the user-facing Polly retry lives in the client base rather than in ADR-009's resilience handler, and ADR-017's `Idempotency-Key` is minted client-side for creates only and held constant across the retry burst | [g15](group-15-common-ui-framework.md)/[g12](group-12-api-hosting-mapping.md) |
 | 095 | Uniqueness under soft delete: `SoftDeleteUniqueIndexConvention`, registered once in `ApplicationDbContext.ConfigureConventions`, filters every unique index on a non-owned `IAuditableEntity` to live rows, so a deleted record stops occupying its unique slot forever; a hand-authored filter wins, `HasSoftDeleteFilter` is the manual extension point, and Cosmos is a no-op | [g07](group-07-persistence-ef-core.md) |
 | 096 | Best-effort side-effect contract: one `BestEffort.ExecuteAsync(operation, logger, action, ct)` helper awaits the side effect and turns any failure into exactly one Warning plus one `besteffort.dispatch.failed` increment on its own `MMCA.Common.BestEffort` meter; caller cancellation is rethrown rather than swallowed, and the operation name stays a low-cardinality constant | [g03](group-03-querying-specifications.md)/[g22](group-22-engagement-module.md) |
 | 097 | Multi-device refresh sessions (supersedes 050): refresh tokens become rows in a `RefreshSessions` table, one per signed-in device, stored as an unsalted SHA-256 hex digest (every lookup is by hash and the input is 64 bytes of CSPRNG output), chained on rotation via `ReplacedByTokenHash`; `RefreshSession` is a flat framework record (no audit stamps, no soft delete, no concurrency token, because a revoked row must stay findable for the reuse check), `IRefreshSessionStore` is the persistence contract and `RefreshSessionCleanupService` sweeps expired rows | [g08](group-08-auth.md)/[g07](group-07-persistence-ef-core.md) |
-| 098 | Aspire for orchestration, not for testing or production dashboards: each AppHost composes the local stack and every host calls `AddServiceDefaults`/`MapDefaultEndpoints`, but integration testing stays `WebApplicationFactory` + Testcontainers (`SqlServerIntegrationTestFixtureBase<TEntryPoint>` per service, `CrossServiceFixtureBase` for the three-host tier) and `DistributedApplicationTestingBuilder` stays out; production observability is Application Insights, not the Aspire dashboard | [devops-testing](devops-testing.md)/[g27](group-28-testing-infrastructure.md)/[devops-aspire](devops-aspire.md) |
+| 098 | Aspire for orchestration, not for testing or production dashboards: each AppHost composes the local stack and every host calls `AddServiceDefaults`/`MapDefaultEndpoints`, but integration testing stays `WebApplicationFactory` + Testcontainers (`SqlServerIntegrationTestFixtureBase<TEntryPoint>` per service, `CrossServiceFixtureBase` for the three-host tier) and `DistributedApplicationTestingBuilder` stays out; production observability is Application Insights, not the Aspire dashboard | [devops-testing](devops-testing.md)/[g28](group-28-testing-infrastructure.md)/[devops-aspire](devops-aspire.md) |
 | 099 | Generic write-side entity commands (the half 034 left at create and delete): the module writes one `IEntityUpdateApplier<TEntity, TUpdateRequest, TIdentifierType>.ApplyAsync` that calls the aggregate's own guarded methods, so invariants and events keep exactly one home; `UpdateEntityCommand` carries id, request and `RowVersion` and reuses the existing concurrency/idempotency markers, `MutateEntityHandlerCore` hosts the shared load-apply-save sequence, and `CrudEntityControllerBase` exposes it over HTTP | [g05](group-05-cqrs-pipeline.md)/[g12](group-12-api-hosting-mapping.md) |
 | 100 | Outbox resolved from the messaging mode (amends 003, on the rule 021 set for the inbox): `MessageBus:EnableOutbox` is `bool?`, `IsOutboxEnabled` resolves unset as `Provider != InProcess`, an explicit value wins in both directions; on the disabled path `AddInfrastructure` registers neither `OutboxProcessor` nor `OutboxCleanupService` and adds `OutboxDisabledNoticeService` instead, the schema is kept, and the one combination that cannot work (a broker with the outbox off) is refused at startup | [g04](group-04-events-outbox.md)/[g14](group-14-module-system-composition.md) |
 | 101 | `MMCA.Common` metapackage (the Core 6): one `PackageReference` in place of the six a standard host always takes (Shared, Domain, Application, Infrastructure, API, Aspire), ordered so the bundle reads as the architecture it installs; it ships no assembly (`IncludeBuildOutput=false`, NU5128 suppressed in that project alone) and is versioned by MinVer off the same tag, so it releases in lockstep to both registries | [devops-cicd](devops-cicd.md) |
 | 102 | PBKDF2-only password hashing (supersedes 032): one `IPasswordHasher`, one `PasswordHasher` implementation registered with `TryAddSingleton` (stateless, three private constants), PBKDF2-HMAC-SHA512 with a 32-byte salt, 64-byte digest, 600,000 iterations and a `FixedTimeEquals` compare; `VerifyPassword` has no branch, so the legacy HMAC salt-length selection and every `HMACSHA512` usage are gone from `Source/` in all four repos | [g08](group-08-auth.md) |
-| 103 | bUnit component-test tier as a package: `MMCA.Common.Testing.UI` ships `BunitComponentTestBase`, which fixes once the choices every consumer UI test tree would otherwise re-derive (bUnit v2 on the xUnit v3 / Microsoft Testing Platform line, `BunitContext` and `Render<T>` isolated behind `RenderUnderTest`/`RenderAs`, the MudBlazor service set and the JS-interop stubs), so a move off that bUnit line changes one file | [g27](group-28-testing-infrastructure.md) |
+| 103 | bUnit component-test tier as a package: `MMCA.Common.Testing.UI` ships `BunitComponentTestBase`, which fixes once the choices every consumer UI test tree would otherwise re-derive (bUnit v2 on the xUnit v3 / Microsoft Testing Platform line, `BunitContext` and `Render<T>` isolated behind `RenderUnderTest`/`RenderAs`, the MudBlazor service set and the JS-interop stubs), so a move off that bUnit line changes one file | [g28](group-28-testing-infrastructure.md) |
 | 104 | Plain enums by default, `Enumeration<T>` opt-in: a bounded set is a plain C# enum unless a member must carry data or behavior; the shipped smart-enum base discovers `public static readonly` members once by `DeclaredOnly` reflection, freezes per-type value and case-insensitive name lookups, returns `Result` from `FromValue`/`FromName` (013), uses type-guarded equality that deliberately declines `IEquatable<T>`, and does not derive from `ValueObject` | [g02](group-02-domain-building-blocks.md) |
-| 105 | Data residency as a build gate: `DataResidencyTestsBase` (one `[Fact]`, rubric section 30) parses the region where a repo actually provisions PII-bearing storage from that repo's own infrastructure source of truth (ADC from the `SQL_LOCATION_OVERRIDE` default in `deploy.yml`, Store from its DR runbook) and fails the build unless `PRIVACY.md` states it, with a per-repo denylist that blocks a stale or copied region claim | [g27](group-28-testing-infrastructure.md)/[devops-cicd](devops-cicd.md) |
-| 106 | Extension members as the public DI surface: the framework's entire `Add*` registration surface is written as C# `extension(T)` blocks inside static classes under `LangVersion preview` in all four repos (82 blocks in 65 files, 23 of them `extension(IServiceCollection services)`, measured 2026-09-01); the call site is indistinguishable from a classic extension method and the compiler-emitted classic static method keeps the choice reversible, with the public-API baselines recording both shapes | [g14](group-14-module-system-composition.md) |
+| 105 | Data residency as a build gate: `DataResidencyTestsBase` (one `[Fact]`, rubric section 30) parses the region where a repo actually provisions PII-bearing storage from that repo's own infrastructure source of truth (ADC from the `SQL_LOCATION_OVERRIDE` default in `deploy.yml`, Store from its DR runbook) and fails the build unless `PRIVACY.md` states it, with a per-repo denylist that blocks a stale or copied region claim | [g28](group-28-testing-infrastructure.md)/[devops-cicd](devops-cicd.md) |
+| 106 | Extension members as the public DI surface: the framework's entire `Add*` registration surface is written as C# `extension(T)` blocks inside static classes under `LangVersion preview` in all four repos (86 blocks in the framework, 24 of them `extension(IServiceCollection services)`, measured 2026-09-19); the call site is indistinguishable from a classic extension method and the compiler-emitted classic static method keeps the choice reversible, with the public-API baselines recording both shapes | [g14](group-14-module-system-composition.md) |
 | 107 | `ExecuteInTransactionAsync` is a re-entrant, retriable, commit-once unit: an inner call joins the ambient transaction instead of nesting, the whole delegate retries under EF's execution strategy with a change-tracker reset per attempt, a failed `Result` rolls back exactly like a throw, and a commit whose outcome cannot be known surfaces as `TransactionCommitAmbiguousException` naming what each physical source did | [g07](group-07-persistence-ef-core.md)/[g05](group-05-cqrs-pipeline.md) |
 | 108 | One cross-replica mutual-exclusion primitive, `IDistributedLock` (`TryAcquireAsync(key, ttl, wait)`): non-reentrant, TTL-bounded, explicitly best-effort, owner-scoped idempotent release; Redis-backed where a connection exists, a warn-once process-local fallback where not; it collapses duplicate work and is never the only guard on an invariant persistence can enforce | [g05](group-05-cqrs-pipeline.md)/[g14](group-14-module-system-composition.md) |
-| 109 | Feature-by-folder as an enforced convention: the aggregate names the first folder level in Domain/Application/Shared, a technical root then the aggregate in UI/API/Infrastructure, at most twelve direct code files per folder, namespaces follow folders, and a layout change ships as a breaking release with a migration map (`FolderWidthTestsBase` enforces the cap in every repo) | [g27](group-28-testing-infrastructure.md) |
+| 109 | Feature-by-folder as an enforced convention: the aggregate names the first folder level in Domain/Application/Shared, a technical root then the aggregate in UI/API/Infrastructure, at most twelve direct code files per folder, namespaces follow folders, and a layout change ships as a breaking release with a migration map (`FolderWidthTestsBase` enforces the cap in every repo) | [g28](group-28-testing-infrastructure.md) |
 | 110 | Rubric v2 keeps 34 categories with stable numbering, replacing the two overlap-heavy ones in place: section 10 becomes Messaging & Integration Architecture and section 16 becomes AI-Native Application Architecture (N/A until a product feature calls a model), with criteria added to eleven others | [99-coverage-audit](99-coverage-audit.md) (rubric matrix; every chapter tag carries the v2 names since the 2026-09-05 retag), [g04](group-04-events-outbox.md) (section 10), [g19](group-19-conference-infrastructure.md) (section 16) |
 | 111 | AI session scoring governed as a production dependency: the model call sits behind `IAiScoringService` (declared in Application, carrying `ModelId` + `PromptVersion`, both persisted with every score), a golden-replay + prompt-contract evaluation suite is a deploy precondition, the untrusted half of the prompt is delimited, escaped and redacted, the response is schema-constrained, and token spend is metered and alerted against a budgeted ceiling | [g18](group-18-conference-application.md)/[g19](group-19-conference-infrastructure.md)/[devops-cicd](devops-cicd.md) |
 | 112 | Catalog owns effective pricing: an admin-managed variant discount is a variant-level owned `ValueObject` (`VariantDiscount`: percentage off or special price, an optional inclusive-start / exclusive-end window, a 50-char label) flattened onto the variant row rather than a Promotion aggregate; Catalog computes the effective price and Sales snapshots it at checkout | [g02](group-02-domain-building-blocks.md) (the `ValueObject` base only; the Store worked example sits outside this guide's two codebases) |
@@ -379,61 +388,78 @@ Management, see §4). What each is and why it's here:
   compile-time, allocation-free way to keep mapping explicit and fast.
 - **Scrutor 7**: assembly scanning and **decorator registration** (`TryDecorate`) for DI; this is how
   the CQRS decorator pipeline is wired.
-- **Microsoft.FeatureManagement 4.6**: feature flags (e.g. `Notification.PushNotifications`).
+- **Microsoft.FeatureManagement 4.7**: feature flags (e.g. `Notification.PushNotifications`).
 - **System.Linq.Dynamic.Core**: dynamic `OrderBy`/filtering for query endpoints.
 
 **Persistence**
-- **EF Core 10** with providers **SqlServer**, **Cosmos**, and **Sqlite**: the ORM. Sqlite is used
-  for fast integration tests; Cosmos is a supported document source. EF concepts you must know:
+- **EF Core 10** with providers **SqlServer**, **PostgreSQL** (`Npgsql.EntityFrameworkCore.PostgreSQL`,
+  [ADR-113](https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html)), **Cosmos**, and **Sqlite**: the ORM. Sqlite is used
+  for fast integration tests; PostgreSQL is a peer relational engine to SqlServer; Cosmos is a
+  supported document source. EF concepts you must know:
   `DbContext` (unit of work + change tracker), entity configurations (`IEntityTypeConfiguration<T>`),
   migrations (versioned schema deltas), global query filters (the soft-delete mechanism), and
   interceptors (`SaveChanges` hooks for audit + domain-event capture).
 - **StackExchange.Redis** / SignalR Redis backplane, distributed cache and SignalR scale-out.
 
 **Messaging**
-- **MassTransit 8.5.5** (RabbitMQ + Azure Service Bus transports), the broker abstraction behind
+- **MassTransit 8.5.10** (RabbitMQ + Azure Service Bus transports), the broker abstraction behind
   `IMessageBus`'s broker implementation. **Pinned to v8 by policy**: v9 requires a commercial license
   and crashes broker-enabled hosts at startup; a build-time test fails if the major reaches 9
-  (`MMCA.Common/Directory.Packages.props:49-56` carries the pin and the warning comment, and see §4).
+  (`MMCA.Common/Directory.Packages.props:123-130` carries the pin and the warning comment, and see §4).
+- **Cronos**: cron-expression parsing behind the recurring job scheduler
+  ([ADR-074](https://ivanball.github.io/docs/adr/074-recurring-job-scheduler.html)), which is built on the outbox claim-lease idiom rather than on Hangfire or Quartz.
+
+**AI (optional packages)**
+- **Microsoft.Extensions.AI 10**: the `IChatClient` abstraction the governed language-model boundary
+  (`MMCA.Common.AI`, [ADR-120](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html)) is written against; the official **Anthropic** and **OpenAI** SDKs sit
+  behind one adapter package each (`MMCA.Common.AI.Anthropic`, `MMCA.Common.AI.OpenAI`).
 
 **Transport (service extraction)**
 - **Grpc.AspNetCore / Grpc.Net.ClientFactory / Grpc.Tools / Google.Protobuf**: gRPC server + client
   + `.proto` compilation, for synchronous inter-service calls between extracted modules ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)).
 
 **UI**
-- **MudBlazor 9.7.0**: the Blazor **component library** and design system (grids, dialogs, forms,
+- **MudBlazor 9.10.0**: the Blazor **component library** and design system (grids, dialogs, forms,
   theme). Used by both `MMCA.Common.UI` and the ADC UIs.
 - **Microsoft.AspNetCore.Components.***: Blazor (Server + WebAssembly) runtime and authorization.
 - **Polly 8** (via `Microsoft.Extensions.Http.Resilience`), retry/timeout/circuit-breaker resilience
   on outbound HTTP/gRPC clients.
 
 **Hosting / observability (.NET Aspire)**
-- **Aspire.Hosting 13.4.6** (+ RabbitMQ, Azure CosmosDB integrations), local **orchestration**: the
+- **Aspire.Hosting 13.5.4** (+ RabbitMQ, Azure CosmosDB integrations), local **orchestration**: the
   AppHost spins up every service, database, broker, and a dashboard with one command.
 - **OpenTelemetry** (Api/Exporter/Instrumentation) + **Azure.Monitor.OpenTelemetry.AspNetCore**,
   structured logs, distributed traces, and metrics, exported to Azure Application Insights.
 - **Microsoft.Extensions.ServiceDiscovery**: resolves service names to endpoints (local and cloud).
-- **AspNetCore.HealthChecks.***: Redis/RabbitMQ health probes.
+- **Serilog.AspNetCore**: the host logging bootstrap beside the OpenTelemetry pipeline.
+- **AspNetCore.HealthChecks.*** (Rabbitmq, SqlServer, NpgSql, Sqlite): readiness probes for the broker
+  and the relational engines. Redis is deliberately not among them: that package's check fails
+  against Azure Managed Redis Enterprise, so `MMCA.Common.Aspire` ships a PING-only
+  `RedisPingHealthCheck` instead (`MMCA.Common/Directory.Packages.props:310-317`).
 
 **Auth / crypto**
 - **System.IdentityModel.Tokens.Jwt 8**: JWT creation/validation; JWKS key publishing for
   cross-service token validation ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) "authentication dual-fetch").
 
 **Versioning / build**
-- **MinVer 7**: derives the package version from the git tag (`vX.Y.Z`), so releases are tag-driven.
+- **MinVer 8**: derives the package version from the git tag (`vX.Y.Z`), so releases are tag-driven.
 
 **Analyzers (all at *error* severity, see §4)**
 - **Meziantou.Analyzer**, **SonarAnalyzer.CSharp**, **StyleCop.Analyzers**, **Roslynator.Analyzers**,
   **Microsoft.VisualStudio.Threading.Analyzers**.
 
 **Testing**
-- **xunit.v3 3.2**: the test framework (xUnit **v3**, not v2).
+- **xunit.v3 4.0**: the test framework (xUnit **v3**, not v2).
 - **Microsoft Testing Platform (MTP)**: the test *runner* (`global.json` sets
   `"runner": "Microsoft.Testing.Platform"`), **not** VSTest. This changes how you run a single test
   (see §6).
 - **bUnit 2**: Blazor component testing (the v2 line is the one compatible with xUnit v3 / MTP).
-- **Microsoft.Playwright 1.61** + **Deque.AxeCore.Playwright 4.12**: browser E2E and **axe-core**
+- **Microsoft.Playwright 1.62** + **Deque.AxeCore.Playwright 4.13**: browser E2E and **axe-core**
   accessibility (WCAG 2.1 AA) scanning.
+- **Testcontainers 4** (MsSql, PostgreSql, Redis, RabbitMq, ServiceBus): the real-server integration
+  tiers beside the fast Sqlite tier, with **Respawn** resetting the database between tests.
+- **BenchmarkDotNet**: the benchmark suite behind the `performance-smoke` regression gate
+  ([ADR-060](https://ivanball.github.io/docs/adr/060-performance-regression-gate.html)).
 - **NetArchTest.eNhancedEdition**: **architecture fitness tests** (assert layer/purity rules against
   compiled assemblies).
 - **Moq 4** (mocking), **AwesomeAssertions 9** (fluent assertions, a FluentAssertions-compatible
@@ -463,7 +489,7 @@ Management, see §4). What each is and why it's here:
   interfaces begin with `I` (error, line 212). The naming rules below that (private fields
   `_camelCase`, constants `PascalCase`) are declared at `warning`, which `TreatWarningsAsErrors`
   promotes to a build break anyway. Test files relax method-naming and complexity rules via the
-  `[Tests/**/*.cs]` section (line 737).
+  `[Tests/**/*.cs]` section (line 741).
 
 ### C# `extension(T)` types, read this once
 <a id="c-extensiont-types--read-this-once"></a>
@@ -493,7 +519,7 @@ to the enclosing static class, that's how this guide attributes their dependenci
 The layer rules are not just convention, they are enforced **twice**:
 
 1. **Compile-time**, `Source/Build/MMCA.Common.LayerEnforcement.targets`, imported for every
-   `MMCA.Common.*` project under `Source/` (`MMCA.Common/Directory.Build.props:99-100`), inspects
+   `MMCA.Common.*` project under `Source/` (`MMCA.Common/Directory.Build.props:140-142`), inspects
    `ProjectReference`s before build and **fails** with a descriptive error if a layer references a
    forbidden upstream layer.
 2. **Runtime (test)**, `Tests/Architecture/MMCA.Common.Architecture.Tests` (NetArchTest) asserts the
@@ -524,9 +550,9 @@ When you move a type between packages, expect *both* gates to react. This is the
   Always `--project <csproj>`, never a bare path, and get the flag right: a wrong filter flag exits
   5 having run zero tests instead of erroring out loudly. Every test project must contain at least
   one test or MTP exits 8, so CI passes `--minimum-expected-tests` on every run: `1` on the ADC legs
-  (`MMCA.ADC/.github/workflows/deploy.yml:219`) and `2000` on MMCA.Common's full solution run, where
+  (`MMCA.ADC/.github/workflows/deploy.yml:338`) and `2000` on MMCA.Common's full solution run, where
   the point is to fail a discovery regression that silently drops thousands of tests
-  (`MMCA.Common/.github/workflows/ci.yml:144`).
+  (`MMCA.Common/.github/workflows/ci.yml:158`).
 - Some UI test projects (`MMCA.Common.UI.Gallery`, `MMCA.Common.UI.E2E.Tests`) are **deliberately
   excluded** from the `.slnx` so the unit-test run stays fast; they run in a dedicated CI job and are
   built by csproj path.
@@ -573,8 +599,9 @@ Continuity · §30 Compliance, Privacy & Data Governance · §31 Cost Efficiency
 Documentation.
 
 Some categories live most naturally in the DevOps/test chapters (§13 to §14, §17, §28, §29 to §34) and are
-explained there. The coverage audit will include a matrix proving every one of the 34 is explained at
-least once against real code or a real artifact.
+explained there. The coverage audit's
+[rubric coverage matrix](99-coverage-audit.md#4-rubric-coverage-matrix) records where each of the 34
+is explained against real code or a real artifact.
 
 ---
 
