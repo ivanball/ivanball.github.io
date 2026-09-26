@@ -22,6 +22,10 @@ a shared `AuthorizationGate.Evaluate(...)`, the capability test now grants on a 
 well as on a registry role, and a second `IRequiresMfa` step-up gate runs after it. The description in
 the Revision (2026-08-18) below is the pre-2026-09-19 one: read the Revision (2026-09-19) at the end.
 The chain itself is unchanged, seven decorators on commands and six on queries).
+Revised 2026-09-25 (ADC's decorator-order fitness test composes through `AddMmcaApplicationPipeline`
+and runs `VerifyDecoratorPipeline`, as Store's already did; see the Revision (2026-09-25) at the end.
+Citations refreshed: the Common `DependencyInjection` registration helpers now span
+`DependencyInjection.cs`, `DependencyInjection.ModuleScanning.cs` and `DependencyInjection.Crud.cs`).
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -60,13 +64,13 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   exist, so `TryDecorate` can find them. The hand-written form of that sequence is `AddApplication` ->
   `AddInfrastructure` -> `AddAPI` -> module handler scan via `ModuleLoader.DiscoverAndRegister` ->
   `AddApplicationDecorators`, and `MMCA.Helpdesk.Web` still ends its host wiring that way
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:120`). The seven production service hosts
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132`). The seven production service hosts
   compose the same sequence through `AddMmcaApplicationPipeline(pipeline => ...)` instead, which runs it
   in order and seals it (see the Revision (2026-08-26) below): ADC Identity / Conference / Engagement /
-  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:288`, `...Conference.Service/Program.cs:348`,
-  `...Engagement.Service/Program.cs:279`, `...Notification.Service/Program.cs:216`) and Store Identity /
-  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:211`,
-  `...Catalog.Service/Program.cs:234`, `...Sales.Service/Program.cs:235`). Only that decorators-last
+  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:314`, `...Conference.Service/Program.cs:407`,
+  `...Engagement.Service/Program.cs:279`, `...Notification.Service/Program.cs:223`) and Store Identity /
+  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:237`,
+  `...Catalog.Service/Program.cs:257`, `...Sales.Service/Program.cs:237`). Only that decorators-last
   ordering is load-bearing; the relative position of `AddInfrastructure`/`AddAPI` is not.
 
 ## Rationale
@@ -107,10 +111,10 @@ The pipeline order and the "cache invalidation outside the transaction" rule are
 ## Revision (2026-08-18)
 **Two decorators were added to both chains, so the order recorded in the Decision above is no longer
 the shipped one.** The registration site is unchanged in kind: `AddApplicationDecorators()`
-(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:115`) still uses Scrutor
-`TryDecorate` and still documents the reverse-registration rule inline (`:57-60`), now with ASCII
-nesting diagrams of both chains beside it (`:61-85`, command chain at `:61-73`, query chain at
-`:75-85`). The literal registration sequence is `:129-135` for commands and `:138-143` for queries, so
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:114`) still uses Scrutor
+`TryDecorate` and still documents the reverse-registration rule inline (`:57-58`), now with
+nesting diagrams of both chains beside it (`:61-83`, command chain at `:61-71`, query chain at
+`:74-83`). The literal registration sequence is `:134-140` for commands and `:143-148` for queries, so
 the execution order (outermost to innermost) is now:
 
 - **Commands:** FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout ->
@@ -159,10 +163,10 @@ the execution order (outermost to innermost) is now:
 **Two placements are load-bearing and are argued in code, not only here.** Authorization sits
 **outside** caching deliberately: a cache lookup ahead of the permission check would serve another
 caller's rows to a principal not allowed to run the query, so a denied request must neither read nor
-populate the cache (`DependencyInjection.cs:93-95`, restated at
+populate the cache (`DependencyInjection.cs:92-94`, restated at
 `AuthorizationCommandDecorator.cs:13-16`, which also notes that a denied command never starts a
 transaction and never runs validation). FeatureGate stays outside Authorization so that a disabled
-feature does not leak which permission guards it (`DependencyInjection.cs:89-92`), which preserves
+feature does not leak which permission guards it (`DependencyInjection.cs:88-91`), which preserves
 ADR-031's "disabled is indistinguishable from nonexistent" property. Timeout sits **inside**
 validation and **outside** the transaction, so an invalid command never consumes budget and an expired
 budget still unwinds through the transactional decorator's rollback path.
@@ -183,7 +187,17 @@ Helpdesk each subclass the same base
 and none of the three overrides either list: the only definitions of `ExpectedCommandDecorators` and
 `ExpectedQueryDecorators` workspace-wide are the base's own
 (`DecoratorPipelineOrderTestsBase.cs:49,61`). All four repos therefore pin the same chain against
-their own genuine registration sequence. This closes the "one place to read the pipeline" claim in the Rationale, which until now rested
+their own genuine registration sequence. ADC and Store build that sequence through the same
+`AddMmcaApplicationPipeline(pipeline => pipeline.ScanModule<...Identity.Application.ClassReference>())`
+call their hosts use
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:50-51`,
+`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:52`),
+and each adds a `ComposedPipeline_LeavesNoHandlerUndecorated` fact that runs
+`services.VerifyDecoratorPipeline()` over the Identity module's whole handler set (ADC `:55`, call at
+`:66`; Store `:57`, call at `:68`); Common and Helpdesk hand-sequence `AddApplication`, the module scan
+and `AddApplicationDecorators`
+(`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/Conformance/DecoratorPipelineOrderTests.cs:38-40`,
+`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:59-61`). This closes the "one place to read the pipeline" claim in the Rationale, which until now rested
 entirely on the inline comments the Trade-offs cite as the mitigation for the Scrutor foot-gun.
 
 The trade-off list above gains one entry by construction: the chain is now seven decorators deep for a
@@ -223,44 +237,44 @@ execution order (outermost to innermost) is now:
    validation (`:47-56`).
 2. **Its placement is the interesting part: inside Caching, outside Timeout.** The registration sits
    between the caching and timeout decorators
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:141`, chain diagram at
-   `:75-85`). Validation sits **inside** caching deliberately, which is the opposite of the command
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:144`, chain diagram at
+   `:74-83`). Validation sits **inside** caching deliberately, which is the opposite of the command
    side's outside-the-transaction placement and follows from what a cache hit means: an entry can only
    exist because the same query already passed validation when that entry was first produced, so
-   re-validating on a hit spends work to reach a conclusion already reached (`:97-101`, restated at
+   re-validating on a hit spends work to reach a conclusion already reached (`:97-100`, restated at
    `ValidatingQueryDecorator.cs:26-28`). It sits **outside** the timeout for the mirror of the
    command-side reason, so a caller is not charged a slice of its execution budget for validating its
-   own bad input (`ValidatingQueryDecorator.cs:28-30`, `DependencyInjection.cs:104-107`).
+   own bad input (`ValidatingQueryDecorator.cs:28-30`, `DependencyInjection.cs:103-106`).
 3. **`AddMmcaApplicationPipeline(pipeline => ...)` is the composition path, and it seals.**
-   (`DependencyInjection.cs:612-621`.) It runs `AddApplication()`, then the caller's handler
+   (`DependencyInjection.cs:207-216`.) It runs `AddApplication()`, then the caller's handler
    registrations through a small builder (module scans, a `ModuleLoader` run, cross-service client
    registrations that replace a handler's dependencies:
    `.../MMCA.Common.Application/MmcaApplicationPipelineBuilder.cs`, argument contract at
-   `DependencyInjection.cs:578-585`), then `AddApplicationDecorators()`, in that order (`:616-620`,
-   equivalence spelled out at `:591-598`). Closing the pipeline registers a private marker type on the
-   service collection (`:145`, marker at `:699`, registered at `:712-713`, probe at `:701-710`), and any
+   `DependencyInjection.cs:173-180`), then `AddApplicationDecorators()`, in that order (`:211-215`,
+   equivalence spelled out at `:187-192`). Closing the pipeline registers a private marker type on the
+   service collection (`:150`, marker at `:294`, registered at `:307-308`, probe at `:296-305`), and any
    later `AddApplicationDecorators`, `ScanModuleApplicationServices` or second
-   `AddMmcaApplicationPipeline` **throws** naming the mistake (`:715-725`, guards at `:117`, `:182`,
-   `:614`). The same guard now also fronts the three generic-CRUD registration helpers, which close
-   handler types over an entity and are therefore just as order-sensitive: `AddEntityCrud` (`:335`),
-   `AddEntityUpdateVerb` (`:397`) and `AddEntityUpdate` (`:448`). That converts the one
+   `AddMmcaApplicationPipeline` **throws** naming the mistake (`:310-320`, guards at `:116`, `DependencyInjection.ModuleScanning.cs:49`,
+   `:209`). The same guard now also fronts the three generic-CRUD registration helpers, which close
+   handler types over an entity and are therefore just as order-sensitive: `AddEntityCrud` (`DependencyInjection.Crud.cs:74`, guard at `:80`),
+   `AddEntityUpdateVerb` (`:136`, guard at `:142`) and `AddEntityUpdate` (`:187`, guard at `:193`). That converts the one
    load-bearing ordering rule of this record (decorators last, because `TryDecorate` only wraps
    registrations that already exist) from a documented convention whose violation is silent (a handler
    registered afterwards runs with no feature gate, no authorization, no validation, no timeout and no
-   transaction, and nothing fails at startup to say so: `:594-597`) into a startup exception.
+   transaction, and nothing fails at startup to say so: `DependencyInjection.cs:189-192`) into a startup exception.
    Registrations that are not handlers stay outside the call: their order relative to the decorators
-   does not matter (`:599-602`).
-4. **`VerifyDecoratorPipeline()` is the fitness hook.** (`DependencyInjection.cs:649-691`.) Never
-   called automatically, it asserts that the pipeline was closed at all (`:651-656`) and that every
+   does not matter (`:195-196`).
+4. **`VerifyDecoratorPipeline()` is the fitness hook.** (`DependencyInjection.cs:244-286`.) Never
+   called automatically, it asserts that the pipeline was closed at all (`:246-251`) and that every
    registered `ICommandHandler<,>` / `IQueryHandler<,>` entry is wrapped, throwing with each unwrapped
-   registration named (`:682-690`, formatting at `:727-738`). The check is registration-shape only: it
+   registration named (`:277-285`, formatting at `:322-333`). The check is registration-shape only: it
    reads `ServiceDescriptor` entries and never builds a provider, so a fitness test does not have to
-   register a double for every decorator dependency (`:634-638`). What it can see is a consequence of
+   register a double for every decorator dependency (`:230-232`). What it can see is a consequence of
    how Scrutor works: decoration rewrites a handler's descriptor into a factory over a keyed copy of
    the original, so a surviving implementation type on the effective (last non-keyed) registration is
-   proof nothing wrapped it (`:639-647`, the effective-descriptor pass at `:658-674`, the predicate at
-   `:677`). The outermost decorator's type cannot be read back at all after decoration, since it
-   exists only inside a closure (`:645-646`), which is why this complements rather than replaces
+   proof nothing wrapped it (`DependencyInjection.cs:235-241`, the effective-descriptor pass at `:253-269`, the predicate at
+   `:272`). The outermost decorator's type cannot be read back at all after decoration, since it
+   exists only inside a closure (`:240-241`), which is why this complements rather than replaces
    `DecoratorPipelineOrderTestsBase`: that base resolves the real object graph to assert the *order*,
    this one asserts *coverage* without a provider.
 
@@ -342,7 +356,7 @@ One decorator pair changed inside, and the pipeline around it did not: the order
 FeatureGate -> Authorization -> Logging -> Caching -> Validating -> Timeout -> Transactional ->
 Handler for commands (seven decorators) and the same chain without Transactional for queries (six),
 registered at
-`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:137-143` and `:146-151`.
+`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140` and `:143-148`.
 
 **The authorization check moved out of the two decorators into one shared helper.**
 `AuthorizationCommandDecorator` now asks
@@ -391,3 +405,19 @@ Nothing else in this record moves. The marker-driven opt-in model, the outside-c
 inside-FeatureGate placements of Authorization and their arguments, the sealing rule of
 `AddMmcaApplicationPipeline`, and the order pinned by `DecoratorPipelineOrderTestsBase` all stand as
 written: the chain gained no member, so the conformance test's expected sequences are untouched.
+
+## Revision (2026-09-25)
+The consumer fitness tests changed, not the pipeline. ADC's `DecoratorPipelineOrderTests` now builds
+its registration sequence through `AddMmcaApplicationPipeline`, the helper its four service hosts call,
+instead of hand-sequencing `AddApplication`, `ScanModuleApplicationServices` and
+`AddApplicationDecorators`, so a regression in the helper's own ordering surfaces as a wrong nesting in
+the test run
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:43-51`). It
+also gains the `ComposedPipeline_LeavesNoHandlerUndecorated` fact, which calls
+`VerifyDecoratorPipeline()` over the whole Identity module (`:54-67`, the call at `:66`). That is the
+shape Store already had
+(`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:52`,
+`:57`, `:68`), so both production consumers now pin the order and the coverage of their pipeline.
+The order base asserts one command and one query; the coverage fact is what catches a handler anywhere
+in the module that escaped the decorators. The expected sequences are still the base's own, and the
+chain is unchanged.

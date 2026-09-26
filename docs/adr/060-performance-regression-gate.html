@@ -237,7 +237,10 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-28). Revised 2026-08-01 (corrected the count in Trade-offs: the single ratio floor
           names two of the eight benchmarks, so six, not seven, are gated on allocations alone; refreshed the
-          <code>ci.yml</code> line anchors for the <code>performance-smoke</code> job, which had shifted by about two lines).</p>
+          <code>ci.yml</code> line anchors for the <code>performance-smoke</code> job, which had shifted by about two lines).
+          Revised 2026-09-25 (records that MMCA.ADC and MMCA.Store gate every production deploy on the
+          recency of their k6 load-test run through a <code>load-freshness</code> job in <code>deploy.needs</code>; the load-test and
+          <code>ci.yml</code> citations are re-anchored).</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 12 asks for hot-path efficiency that is <strong>measured, not assumed</strong>
           (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:355</code>). MMCA.Common has a
@@ -263,11 +266,11 @@
           <ul>
           <li><p><strong>A dedicated CI job measures, then verifies.</strong> The <code>performance-smoke</code> job, named
           <code>Performance gate (BenchmarkDotNet Short + baseline verify)</code>
-          (<code>MMCA.Common/.github/workflows/ci.yml:332-333</code>), runs the suite with <code>--filter &quot;*&quot; --job Short --exporters json</code> (<code>ci.yml:362</code>) and then runs the verifier over the exported artifacts
-          (<code>ci.yml:371</code>). <code>--job Short</code> (3 warmup plus 3 iterations) is chosen to produce real
-          measurements inside the job&#39;s 15-minute budget (<code>ci.yml:336,360</code>); <code>--filter &quot;*&quot;</code> is required
+          (<code>MMCA.Common/.github/workflows/ci.yml:352-353</code>), runs the suite with <code>--filter &quot;*&quot; --job Short --exporters json</code> (<code>ci.yml:385</code>) and then runs the verifier over the exported artifacts
+          (<code>ci.yml:394</code>). <code>--job Short</code> (3 warmup plus 3 iterations) is chosen to produce real
+          measurements inside the job&#39;s 15-minute budget (<code>ci.yml:356,383</code>); <code>--filter &quot;*&quot;</code> is required
           because BenchmarkDotNet otherwise prompts for a selection and would hang the runner
-          (<code>ci.yml:359-360</code>).</p>
+          (<code>ci.yml:382-383</code>).</p>
           </li>
           <li><p><strong>The baseline is a committed JSON file, not a stored previous run.</strong>
           <code>MMCA.Common/Tests/Performance/perf-baseline.json:1-20</code> holds an <code>allocationCeilingsBytes</code> object
@@ -303,7 +306,7 @@
           (<code>MMCA.Common/build/perfgate/perfgate.csproj:2-21</code>), so the gate itself cannot become a restore or
           supply-chain problem. It reads BenchmarkDotNet&#39;s <code>*-report-full-compressed.json</code> exports from the
           results directory it is handed (<code>Program.cs:26-33</code>), which CI points at
-          <code>BenchmarkDotNet.Artifacts/results</code> (<code>ci.yml:371</code>).</p>
+          <code>BenchmarkDotNet.Artifacts/results</code> (<code>ci.yml:394</code>).</p>
           </li>
           <li><p><strong>The job is a required merge gate, not advisory.</strong> It is listed among the eight required contexts
           in <code>MMCA.Common/CONTRIBUTING.md:68-71</code> and in the reproducible ruleset payload there
@@ -326,8 +329,17 @@
           <p><strong>This gate is MMCA.Common only.</strong> The harness, the baseline and the verifier exist in that repo and
           nowhere else. MMCA.ADC and MMCA.Store have no benchmark suite and no perfgate; their performance
           artifact for backend hot paths is a k6 load test against deployed read endpoints, which runs monthly
-          on a schedule and on demand, not on a pull request (<code>MMCA.ADC/.github/workflows/load-test.yml:1-18</code>,
-          <code>MMCA.Store/.github/workflows/load-test.yml:8-18</code>). MMCA.Helpdesk has neither. The client-side
+          on a schedule and on demand, not on a pull request (<code>MMCA.ADC/.github/workflows/load-test.yml:13-23</code>,
+          <code>MMCA.Store/.github/workflows/load-test.yml:11-21</code>). Both consumers gate every production deploy on
+          that run&#39;s recency: a <code>load-freshness</code> job fails the deploy when the latest successful <code>load-test.yml</code>
+          run is older than 35 days (ADC <code>MMCA.ADC/.github/workflows/deploy.yml:873</code>, window at <code>:881</code>, query
+          at <code>:910</code>; Store <code>MMCA.Store/.github/workflows/deploy.yml:804</code>, <code>:812</code>, <code>:841</code>), and the <code>deploy</code>
+          job lists it in <code>needs</code> (ADC <code>deploy.yml:1310</code>, Store <code>deploy.yml:1229</code>). A break-glass skip
+          exists and refuses to fire without a written justification (ADC <code>deploy.yml:892-905</code>, Store
+          <code>deploy.yml:825-838</code>).
+          That makes the k6 run a standing precondition of shipping, not a per-PR measurement: it proves
+          capacity was checked within the window, not that the change being deployed kept it. MMCA.Helpdesk
+          has neither. The client-side
           counterpart, a Core Web Vitals budget asserted per deploy inside the chromium e2e-gate, is
           <a href="092-web-vitals-budget-gate.html">ADR-092</a>&#39;s decision, not this gate&#39;s.</p>
           <h2 id="rationale">Rationale</h2>
@@ -371,9 +383,9 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The Short job cannot see small latency regressions.</strong> Three warmup and three iterations
-          (<code>ci.yml:360</code>) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
+          (<code>ci.yml:383</code>) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
           useless for detecting a 5% slowdown. Detecting that would need a longer job and a dedicated runner,
-          which the 15-minute budget (<code>ci.yml:336</code>) deliberately does not buy.</li>
+          which the 15-minute budget (<code>ci.yml:356</code>) deliberately does not buy.</li>
           <li><strong>Only one ratio floor exists today</strong> (<code>perf-baseline.json:13-19</code>), so the machine-independent
           latency half of the gate protects exactly one invariant. That floor names two of the eight
           benchmarks (<code>perf-baseline.json:14-18</code>), so the remaining six are gated on allocations alone,
@@ -395,7 +407,7 @@
           the baseline.</li>
           <li><strong>A green context does not always mean the benchmarks ran.</strong> On a documentation-only PR the heavy
           steps are skipped by the <code>changes</code> classifier while all required contexts still post green, which
-          is what keeps branch protection satisfiable (<code>ci.yml:32-35,357,365</code>).</li>
+          is what keeps branch protection satisfiable (<code>ci.yml:41-44,380,388</code>).</li>
           <li><strong>Consumers inherit the numbers, not the gate.</strong> MMCA.ADC, MMCA.Store and MMCA.Helpdesk get the
           framework&#39;s bounded hot paths through the released packages, but none of them gates their own
           application code this way.</li>

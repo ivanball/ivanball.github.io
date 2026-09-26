@@ -17,7 +17,8 @@ in the consumer-host paragraph corrected to eight; source citations re-anchored)
 AI, CSP and health-report-cache waves: nineteen validated chains in the Infrastructure package, twelve of
 them reaching every host and seven opt-in, and twenty-seven framework registrations in all; nine framework
 bindings deliberately off the chain; two settings types implementing `IValidatableObject` and three custom
-`IValidateOptions<T>` in use).
+`IValidateOptions<T>` in use). Revised 2026-09-25 (both Identity `AuthenticationService` classes take
+their two `IOptions<T>` injections directly; neither app has a settings carrier class any longer).
 
 ## Context
 Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
@@ -178,12 +179,11 @@ injections itself, across four classes: `AuthenticationServiceBase<TUser>` takes
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/EmailConfirmation/SendEmailConfirmationHandlerBase.cs:44`),
 and `CachingQueryDecorator` takes an optional `IOptions<QueryCachePipelineSettings>`
 (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:48`).
-ADC adds six, one of them through a carrier class: its Identity `AuthenticationService` names no
-`IOptions` itself and takes `AuthenticationServiceSettings`
-(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:55`), the
-small class that holds the two injections it forwards to the base constructor,
-`IOptions<RefreshSessionSettings>` and `IOptions<EmailConfirmationSettings>`
-(`.../Users/AuthenticationServiceSettings.cs:19-20`). The other five take theirs directly:
+ADC adds six classes: its Identity `AuthenticationService` takes the two injections it forwards to
+the base constructor directly, `IOptions<RefreshSessionSettings>` and
+`IOptions<EmailConfirmationSettings>`
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:57-58`),
+and the other five take one each:
 `ForgotPasswordHandler` (`.../Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:25`),
 `SendEmailConfirmationHandler`
 (`.../Users/UseCases/SendEmailConfirmation/SendEmailConfirmationHandler.cs:31`), and in
@@ -191,10 +191,10 @@ Engagement `PointsAwarder`
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/Services/PointsAwarder.cs:31`),
 `GetLeaderboardHandler` (`.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs:30`) and
 `RecordRoomCheckInHandler` (`.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:32`).
-Store adds seven, with the same carrier shape: its Identity `AuthenticationService` takes
-`AuthenticationSettings`
-(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:30`),
-which holds the same two injections (`.../Users/AuthenticationSettings.cs:26-27`), plus
+Store adds seven, with the same shape: its Identity `AuthenticationService` takes the same two
+injections directly
+(`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:32-33`),
+plus
 `ForgotPasswordHandler` (`.../Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:26`),
 `SendEmailConfirmationHandler`
 (`.../Users/UseCases/EmailConfirmation/SendEmailConfirmationHandler.cs:32`),

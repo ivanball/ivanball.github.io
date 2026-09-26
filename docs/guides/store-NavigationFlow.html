@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Navigation Flow · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-09-15.">
+  <meta name="description" content="As of: 2026-09-25.">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/store-NavigationFlow.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Navigation Flow">
-  <meta property="og:description" content="As of: 2026-09-15.">
+  <meta property="og:description" content="As of: 2026-09-25.">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/store-NavigationFlow.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Navigation Flow">
-  <meta name="twitter:description" content="As of: 2026-09-15.">
+  <meta name="twitter:description" content="As of: 2026-09-25.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Store · Navigation Flow","item":"https://ivanball.github.io/docs/guides/store-NavigationFlow.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -126,7 +126,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="navigation-flow">Navigation Flow</h1>
-          <p><em>As of: 2026-09-15.</em></p>
+          <p><em>As of: 2026-09-25.</em></p>
           <p>This document maps the site navigation flow for each actor in the MMCA.Store application. Each mermaid diagram shows the pages accessible to that actor and the directional navigation links between them. (Companion to MMCA.ADC&#39;s <code>NavigationFlow.md</code>; same per-actor format.)</p>
           <h2 id="actors">Actors</h2>
           <div class="table-wrap"><table>
@@ -154,7 +154,7 @@
           </tr>
           </tbody></table></div>
           <blockquote>
-          <p><strong>Roles and enforcement:</strong> <code>Admin</code> is the only elevated role (registration creates a <code>Customer</code>). The 15 admin pages carry page-level <code>[Authorize(Roles = &quot;Admin&quot;)]</code>, regression-gated in CI by the three per-module <code>*RouteAuthorizationTests</code> (<code>MMCA.Store.CI.slnf:39,45,51</code>). Customer-facing data is additionally row-scoped server-side (see <strong>Authorization Model</strong> at the end), so the page gate is defense-in-depth, never the boundary.</p>
+          <p><strong>Roles and enforcement:</strong> <code>Admin</code> is the only elevated role (registration creates a <code>Customer</code>). The 19 admin pages carry page-level <code>[Authorize(Roles = &quot;Admin&quot;)]</code>. The three per-module <code>*RouteAuthorizationTests</code> (<code>MMCA.Store.CI.slnf:40,46,52</code>) regression-gate 17 of them in CI; the <code>/users</code> pair sits outside the governed namespaces of the Identity test, which names only <code>.Pages.Customers</code> and <code>.Pages.Roles</code> (<code>IdentityRouteAuthorizationTests.cs:26</code>). Customer-facing data is additionally row-scoped server-side (see <strong>Authorization Model</strong> at the end), so the page gate is defense-in-depth, never the boundary.</p>
           </blockquote>
           <hr>
           <h2 id="1-anonymous-user">1. Anonymous User</h2>
@@ -169,7 +169,7 @@
 
     subgraph Catalog[&quot;Public Catalog&quot;]
         Browse[&quot;/catalog&lt;br/&gt;Catalog Browse&quot;]
-        ProductDetail[&quot;/catalog/{Id}&lt;br/&gt;Product Detail&quot;]
+        ProductDetail[&quot;/catalog/:Id&lt;br/&gt;Product Detail&quot;]
     end
 
     Home[&quot;/  Store Home&quot;]
@@ -208,14 +208,14 @@
 
     subgraph Catalog[&quot;Public Catalog&quot;]
         Browse[&quot;/catalog&lt;br/&gt;Catalog Browse&quot;]
-        ProductDetail[&quot;/catalog/{Id}&lt;br/&gt;Product Detail&quot;]
+        ProductDetail[&quot;/catalog/:Id&lt;br/&gt;Product Detail&quot;]
         Reviews[&quot;Reviews section&lt;br/&gt;(anchor on the product page)&quot;]
     end
 
     subgraph Sales[&quot;Cart and Orders&quot;]
         Cart[&quot;Cart Drawer&lt;br/&gt;(layout component)&quot;]
         Orders[&quot;/orders&lt;br/&gt;My Orders&quot;]
-        OrderDetail[&quot;/orders/{Id}&lt;br/&gt;Order Detail&quot;]
+        OrderDetail[&quot;/orders/:Id&lt;br/&gt;Order Detail&quot;]
     end
 
     subgraph Identity[&quot;Profile&quot;]
@@ -248,32 +248,36 @@
           </blockquote>
           <hr>
           <h2 id="3-admin">3. Admin</h2>
-          <p>Inherits all customer pages, plus the admin CRUD surfaces for all three modules. Every page below carries <code>[Authorize(Roles = &quot;Admin&quot;)]</code>; a customer deep-linking to any of them gets Forbidden on both fresh GET and F5.</p>
+          <p>Inherits all customer pages, plus the admin CRUD surfaces for all three modules and the user and role administration pages. Every page below except the shared <code>/orders</code> pair (see the customer section) carries <code>[Authorize(Roles = &quot;Admin&quot;)]</code>; a customer deep-linking to any of them gets Forbidden on both fresh GET and F5.</p>
           <pre class="mermaid">flowchart TD
     subgraph CatalogAdmin[&quot;Catalog Admin&quot;]
         Categories[&quot;/categories&lt;br/&gt;Category List&quot;]
         CategoryCreate[&quot;/categories/create&lt;br/&gt;Create Category&quot;]
-        CategoryDetail[&quot;/categories/{Id}&lt;br/&gt;Category Detail&quot;]
+        CategoryDetail[&quot;/categories/:Id&lt;br/&gt;Category Detail&quot;]
         Products[&quot;/products&lt;br/&gt;Product List&quot;]
         ProductCreate[&quot;/products/create&lt;br/&gt;Create Product&quot;]
-        ProductDetailAdm[&quot;/products/{Id}&lt;br/&gt;Product Detail&quot;]
+        ProductDetailAdm[&quot;/products/:Id&lt;br/&gt;Product Detail&quot;]
         ReviewsAdm[&quot;/reviews&lt;br/&gt;Review Moderation&quot;]
     end
 
     subgraph SalesAdmin[&quot;Sales Admin&quot;]
         Inventory[&quot;/inventory&lt;br/&gt;Inventory List&quot;]
         InventoryCreate[&quot;/inventory/create&lt;br/&gt;Create Inventory Item&quot;]
-        InventoryDetail[&quot;/inventory/{Id}&lt;br/&gt;Inventory Detail&quot;]
+        InventoryDetail[&quot;/inventory/:Id&lt;br/&gt;Inventory Detail&quot;]
         Carts[&quot;/shoppingcarts&lt;br/&gt;Shopping Cart List&quot;]
-        CartDetail[&quot;/shoppingcarts/{Id}&lt;br/&gt;Shopping Cart Detail&quot;]
+        CartDetail[&quot;/shoppingcarts/:Id&lt;br/&gt;Shopping Cart Detail&quot;]
         OrdersAll[&quot;/orders&lt;br/&gt;All Orders&quot;]
-        OrderDetailAdm[&quot;/orders/{Id}&lt;br/&gt;Order Detail&quot;]
+        OrderDetailAdm[&quot;/orders/:Id&lt;br/&gt;Order Detail&quot;]
     end
 
     subgraph IdentityAdmin[&quot;Identity Admin&quot;]
         Customers[&quot;/customers&lt;br/&gt;Customer List&quot;]
         CustomerCreate[&quot;/customers/create&lt;br/&gt;Create Customer&quot;]
-        CustomerDetail[&quot;/customers/{Id}&lt;br/&gt;Customer Detail&quot;]
+        CustomerDetail[&quot;/customers/:Id&lt;br/&gt;Customer Detail&quot;]
+        Users[&quot;/users&lt;br/&gt;User Management&quot;]
+        UserDetail[&quot;/users/:Id&lt;br/&gt;User Detail&quot;]
+        Roles[&quot;/roles&lt;br/&gt;Role Administration&quot;]
+        RoleEdit[&quot;/roles/:Role&lt;br/&gt;Role Permission Editor&quot;]
     end
 
     Home[&quot;/  Store Home&quot;]
@@ -285,6 +289,8 @@
     Home --&gt;|nav menu| Carts
     Home --&gt;|nav menu| OrdersAll
     Home --&gt;|nav menu| Customers
+    Home --&gt;|nav menu| Users
+    Home --&gt;|nav menu, capability gated| Roles
 
     Categories --&gt;|row click| CategoryDetail
     Categories --&gt;|create| CategoryCreate
@@ -296,26 +302,33 @@
     OrdersAll --&gt;|row click| OrderDetailAdm
     Customers --&gt;|row click| CustomerDetail
     Customers --&gt;|create| CustomerCreate
-    ReviewsAdm --&gt;|reviewed product| ProductDetailAdm</pre>
+    ReviewsAdm --&gt;|reviewed product| ProductDetailAdm
+    Users --&gt;|row click| UserDetail
+    Roles --&gt;|edit role| RoleEdit
+    RoleEdit --&gt;|back| Roles</pre>
           <blockquote>
           <p>The admin order detail page opens <code>ShipOrderDialog</code> for both shipment actions: &quot;Ship order&quot; on a Paid order and &quot;Edit tracking&quot; on a Shipped one. One dialog instance serves both, and the summary panel picks the endpoint. It is a dialog rather than a route, so it does not appear as a node above.</p>
           </blockquote>
           <blockquote>
           <p><code>/reviews</code> is the moderation grid: every review whatever its status, with hide and unhide. The page carries the Admin route guard, and the endpoints behind it carry the finer-grained <code>catalog:reviews:moderate</code> permission, which today only the Admin role holds.</p>
           </blockquote>
+          <blockquote>
+          <p><code>/users</code>, <code>/users/{Id}</code>, <code>/roles</code> and <code>/roles/{Role}</code> are Store pages in the Identity UI module whose roster, operator actions and permission editor come from the framework&#39;s shared administration components (<code>UserAdminList</code> at <code>UserList.razor:12</code>, <code>RoleAdminList</code> at <code>RoleList.razor:10</code>, <code>RoleAdminEdit</code> at <code>RoleEdit.razor:10</code>; ADR-116). Each carries <code>[Authorize(Roles = &quot;Admin&quot;)]</code> (<code>:2</code> on the two role pages, <code>:5</code> on the two user pages). The Users nav item is gated on the Admin role (<code>IdentityUIModule.cs:23</code>); the Roles item is gated on the <code>roles:manage</code> capability rather than on a role (<code>IdentityUIModule.cs:29-35</code>), because the screen exists to change the role-to-capability map. Store types the detail route as <code>/users/{Id}</code> with no <code>:int</code> constraint (<code>UserDetail.razor:1</code>).</p>
+          </blockquote>
           <hr>
           <h2 id="authorization-model">Authorization Model</h2>
           <p>Three cooperating layers; the API is always the boundary:</p>
           <ol>
-          <li><strong>Page-level route guards.</strong> The 15 admin pages carry <code>[Authorize(Roles = &quot;Admin&quot;)]</code> and <code>/profile</code> / <code>/orders</code> carry <code>[Authorize]</code>. SSR session-cookie auth (ADR-022, <code>mmca_auth_access</code> HttpOnly cookie) lets these attributes pass on fresh GETs, F5, and new tabs, so deep links never render a protected shell to the wrong actor. Regression-gated by <code>Catalog/Sales/IdentityRouteAuthorizationTests</code> in CI (commit <code>c4adff2</code>).</li>
+          <li><strong>Page-level route guards.</strong> The 19 admin pages carry <code>[Authorize(Roles = &quot;Admin&quot;)]</code> and <code>/profile</code> / <code>/orders</code> carry <code>[Authorize]</code>. SSR session-cookie auth (ADR-022, <code>mmca_auth_access</code> HttpOnly cookie) lets these attributes pass on fresh GETs, F5, and new tabs, so deep links never render a protected shell to the wrong actor. Regression-gated by <code>Catalog/Sales/IdentityRouteAuthorizationTests</code> in CI (commit <code>c4adff2</code>) for every admin page except the <code>/users</code> pair, which the Identity test&#39;s namespace list does not name (<code>IdentityRouteAuthorizationTests.cs:26</code>).</li>
           <li><strong>API resource ownership (ADR-033).</strong> <code>OwnerOrAdminFilter</code> 403s requests whose <code>customer_id</code> claim mismatches the owner parameter, and <code>OwnershipHelper.GetOwnershipSpecification()</code> row-scopes collection queries so customers only ever receive their own carts/orders. Per-mutation checks on orders return 404-not-403 to avoid leaking existence.</li>
           <li><strong>In-page conditionals.</strong> <code>AuthorizeView</code> hides customer-only affordances (add-to-cart) from anonymous visitors and admin-only affordances from customers; these are UX sugar on top of layers 1-2, never the enforcement.</li>
           </ol>
-          <p>Menu items are rendered per-role, so each actor&#39;s nav menu contains only the routes shown in their diagram above, plus the framework-owned routes below, which the shared <code>MMCA.Common.UI</code> shell contributes to every host.</p>
-          <p><strong>Framework-owned routes.</strong> Two routes come from the <code>MMCA.Common.UI</code> package rather than from a Store module:</p>
+          <p>Menu items are rendered per role (the Roles item per capability), so each actor&#39;s nav menu contains only the routes shown in their diagram above, plus the framework-owned routes below, which the shared <code>MMCA.Common.UI</code> shell contributes to every host.</p>
+          <p><strong>Framework-owned routes.</strong> These routes come from the <code>MMCA.Common.UI</code> package rather than from a Store module; the UI host routes that assembly alongside its own (<code>UI.Web/Program.cs:266-267</code>):</p>
           <ul>
-          <li><code>/profile/sessions</code> (active refresh sessions) is rendered in the nav for every signed-in user, Customer and Admin alike, by the framework <code>NavMenu</code>; a host can restrict the link to one role with <code>Layout:SessionsNavRequiredRole</code>, which Store deliberately leaves unset so customers can review and revoke their own sessions.</li>
-          <li><code>/notifications/send</code> ships in the same package behind a bare <code>[Authorize]</code>, so it is routable by URL for any signed-in user, but Store registers no notification services, so it has no nav item and is not a supported Store surface (opening it fails at dependency resolution rather than rendering a form); hiding it needs a framework-side feature gate, tracked as a [C-&gt;A] item.</li>
+          <li><code>/profile/sessions</code> (active refresh sessions) is rendered in the nav for every signed-in user, Customer and Admin alike, by the framework <code>NavMenu</code> (<code>MMCA.Common.UI/Layout/NavMenu.razor:83-86</code>); a host can restrict the link to one role with <code>Layout:SessionsNavRequiredRole</code> (read at <code>NavMenu.razor:214-215</code>), which Store deliberately leaves unset so customers can review and revoke their own sessions.</li>
+          <li><code>/confirm-email</code> is the anonymous email-confirmation landing page (<code>MMCA.Common.UI/Pages/Auth/ConfirmEmail.razor:1</code>, <code>[AllowAnonymous]</code> at <code>:3</code>). Store serves the framework page rather than a copy of its own (Store commit <code>65b53f5a</code>), and the Identity service points the confirmation link at it (<code>ConfirmationUrl</code>, <code>Identity.Service/appsettings.json:116</code>). It has no nav item: a visitor reaches it only from the link in the confirmation email.</li>
+          <li><code>/notifications</code>, <code>/notifications/inbox</code> (with <code>/notifications/inbox/{Id:int}</code>) and <code>/notifications/send</code> ship in the same package, each behind a bare <code>[Authorize]</code> (<code>NotificationList.razor:5</code>, <code>NotificationInbox.razor:5</code>, <code>NotificationSend.razor:6</code>), so they are routable by URL for any signed-in user, but Store registers no notification services, so they have no nav item and are not a supported Store surface; hiding them needs a framework-side feature gate, tracked as a [C-&gt;A] item.</li>
           </ul>
           
         <div class="doc-foot btn-row">

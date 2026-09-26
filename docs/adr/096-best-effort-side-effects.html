@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-096: Best-Effort Side-Effect Contract · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19.">
+  <meta name="description" content="Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19. Revised 2026-09-25 (the ADR-054 cross-reference is re-anchored onto that record&#39;s…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-096: Best-Effort Side-Effect Contract">
-  <meta property="og:description" content="Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19.">
+  <meta property="og:description" content="Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19. Revised 2026-09-25 (the ADR-054 cross-reference is re-anchored onto that record&#39;s…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-096: Best-Effort Side-Effect Contract">
-  <meta name="twitter:description" content="Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19.">
+  <meta name="twitter:description" content="Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19. Revised 2026-09-25 (the ADR-054 cross-reference is re-anchored onto that record&#39;s…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"096 · Best-Effort Side-Effect Contract","item":"https://ivanball.github.io/docs/adr/096-best-effort-side-effects.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -235,7 +235,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-096-best-effort-side-effect-contract">ADR-096: Best-Effort Side-Effect Contract</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19.</p>
+          <p>Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19. Revised 2026-09-25 (the ADR-054 cross-reference is
+          re-anchored onto that record&#39;s current best-effort trade-off).</p>
           <h2 id="context">Context</h2>
           <p>A command that has already committed often has follow-up work attached to it: evict the output-cache
           entries the write invalidated, broadcast the new state to a live channel, send the notification the
@@ -249,7 +250,7 @@
           rather than failing the package (<code>076-data-subject-export.md:82-83</code>), ADR-091 composes the reset email in
           the handler and delivers it best-effort, &quot;awaited and its failure caught, logged and swallowed&quot;
           (<code>091-cache-backed-password-reset.md:71-76</code>), and ADR-054 makes compensation best-effort per order
-          line (<code>054-saga-compensation-and-reconciliation.md:161</code>). What none of them decides is the <strong>policy</strong>:
+          line (<code>054-saga-compensation-and-reconciliation.md:229-240</code>). What none of them decides is the <strong>policy</strong>:
           which failures may be swallowed at all, at what severity, whether cancellation counts as one of them,
           and how a swallow is made visible to somebody who is not reading the log. Answered per call site, that
           produces a repo full of hand-rolled <code>catch (Exception)</code> blocks, each choosing its own severity, its

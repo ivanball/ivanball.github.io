@@ -241,7 +241,9 @@
           an entity is audited only when it carries the <code>IAuditedEntity</code> marker. Absent registration the interceptor
           is not resolved and the whole feature is a no-op.
           Revised 2026-09-07 (Store pins the reverse <code>[Pii]</code> convention with a fitness test, and deployed SQL
-          auditing backstops the in-database trail).</p>
+          auditing backstops the in-database trail).
+          Revised 2026-09-25 (both apps&#39; SQL auditing now records UPDATE and DELETE statements against the trail
+          table, by different means, and the code anchors are refreshed).</p>
           <h2 id="context">Context</h2>
           <p>The framework already answers &quot;who touched this row last&quot;. Every <code>AuditableBaseEntity</code> carries
           <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code>, stamped by <code>AuditSaveChangesInterceptor</code> on the way into
@@ -269,10 +271,10 @@
           <h3 id="a-fourth-savechangesinterceptor-resolved-optionally-running-last">A fourth <code>SaveChangesInterceptor</code>, resolved optionally, running last</h3>
           <p><code>AuditTrailSaveChangesInterceptor</code> (Infrastructure <code>Persistence/AuditTrail/</code>) joins the interceptors
           <code>ApplicationDbContext.OnConfiguring</code> already passes to <code>optionsBuilder.AddInterceptors</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:256-278</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:292-316</code>,
           where <code>AuditSaveChangesInterceptor</code> and <code>DomainEventSaveChangesInterceptor</code> are resolved with
-          <code>GetRequiredService</code> (<code>:256-257</code>) and the tenant and audit-trail interceptors with <code>GetService</code>). The new
-          one is resolved with <code>GetService</code>, not <code>GetRequiredService</code> (<code>:278</code>): a host that never calls <code>AddAuditTrail</code>
+          <code>GetRequiredService</code> (<code>:292-293</code>) and the tenant and audit-trail interceptors with <code>GetService</code>). The new
+          one is resolved with <code>GetService</code>, not <code>GetRequiredService</code> (<code>:314</code>): a host that never calls <code>AddAuditTrail</code>
           resolves null, nothing is added to the pipeline, and the feature costs nothing.</p>
           <p><strong>Registration order is execution order and it is load-bearing.</strong> After the wave the sequence is
           <code>AuditSaveChangesInterceptor</code> (stamps <code>CreatedBy/On</code> and <code>LastModifiedBy/On</code>), then
@@ -312,8 +314,8 @@
           ADR-070 fail-fast chain, and <code>AddAuditTrail(configuration)</code> in Infrastructure&#39;s <code>DependencyInjection.cs</code>
           registers the interceptor and the settings together.</p>
           <h3 id="the-table-lives-in-every-relational-source-that-adopts-it">The table lives in every relational source that adopts it</h3>
-          <p><code>ApplicationDbContext.OnModelCreating</code> (<code>.../ApplicationDbContext.cs:331</code>) calls
-          <code>ConfigureAuditTrail(modelBuilder)</code> (<code>:353</code>, the method itself at <code>:628</code>), gated on the settings flag
+          <p><code>ApplicationDbContext.OnModelCreating</code> (<code>.../ApplicationDbContext.cs:411</code>) calls
+          <code>ConfigureAuditTrail(modelBuilder)</code> (<code>:430</code>, the method itself at <code>:844</code>), gated on the settings flag
           resolved from the root provider the way the interceptors are, creating an <code>AuditTrailEntries</code> table with
           an index on
           <code>(EntityType, EntityKey, ChangedOn)</code>. A same-transaction write requires the table in the same database as
@@ -404,11 +406,35 @@
           broken by the record that exists to prove erasure happened.</li>
           <li><strong>The trail is backstopped by database-level auditing</strong> (SEC-Store-21). The application owns its
           own trail table, so an actor with write access to the database can edit the evidence. Both apps
-          now deploy SQL auditing to the Log Analytics workspace (<code>MMCA.ADC/infra/main.bicep:790</code>,
-          <code>MMCA.Store/infra/main.bicep:833</code>), which records the statements outside the application&#39;s reach.
-          That does not make the in-database trail tamper-evident, and this record does not claim it does:
-          it means a tampering event leaves a trace somewhere the same credential cannot reach.</li>
+          deploy SQL auditing to the Log Analytics workspace, and both record <code>UPDATE</code> and <code>DELETE</code>
+          statements against the trail table there, outside the application&#39;s reach, by different means
+          (see the 2026-09-25 revision below). That makes the trail tamper-evident, not tamper-proof: the
+          same credential can still rewrite the table, but a rewrite leaves a trace somewhere that
+          credential cannot reach.</li>
           </ol>
+          <h2 id="revision-2026-09-25-both-apps-record-trail-dml-by-different-means">Revision (2026-09-25): both apps record trail DML, by different means</h2>
+          <p>Revision item 2 above previously held for Store only: ADC&#39;s server-level audit carried no statement
+          auditing, so a rewrite of <code>dbo.AuditTrailEntries</code> by the shared admin login left no record. Both apps
+          now record trail DML, each shaped by its own volume decision.</p>
+          <ul>
+          <li><strong>Store: statement auditing at the server.</strong> <code>sqlAuditingSettings</code>
+          (<code>MMCA.Store/infra/main.bicep:866</code>) lists <code>BATCH_COMPLETED_GROUP</code> plus the two authentication groups
+          (<code>:875-878</code>), routed through a <code>SQLSecurityAuditEvents</code> diagnostic setting on the master database
+          (<code>:852</code>). The rationale, including why the batch group is the only way to cover the trail table at
+          server scope, is at <code>:822-846</code>. The batch group records every statement, so the workspace daily cap
+          is sized for it (<code>MMCA.Store/infra/foundation.bicep:57</code>, <code>dailyQuotaGb: 3</code>).</li>
+          <li><strong>ADC: object-scoped auditing per database.</strong> The server-level policy <code>sqlServerAuditing</code>
+          (<code>MMCA.ADC/infra/main.bicep:827</code>) stays authentication, principal, role, permission and schema-change
+          groups only (<code>:833</code>), with no statement group, for volume (<code>:818-826</code>). A database-level policy,
+          <code>auditTrailDmlAuditing</code> (<code>:984</code>), adds <code>UPDATE ON dbo.AuditTrailEntries BY public</code> and
+          <code>DELETE ON dbo.AuditTrailEntries BY public</code> (<code>:992-993</code>) on the three databases that carry the trail
+          (<code>auditTrailDatabaseNames</code>, <code>:962</code>), each with its own <code>SQLSecurityAuditEvents</code> diagnostic setting
+          (<code>auditTrailDiagnostics</code>, <code>:968</code>). The rationale is at <code>:938-961</code>. Because the trail is append-only in
+          normal operation, these actions fire on tampering and on the retention purge only, and the daily cap
+          is unchanged. <code>SqlAuditConventionTests</code>
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/SqlAuditConventionTests.cs:12</code>)
+          pins both actions in <code>main.bicep</code> (<code>:17</code>) and the database list (<code>:36</code>).</li>
+          </ul>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the same-transaction write this copies wholesale, including the
           retry-discard and the <code>Add</code>-only mutation rule),
@@ -438,6 +464,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
+            <li><a href="#revision-2026-09-25-both-apps-record-trail-dml-by-different-means">Revision (2026-09-25): both apps record trail DML, by different means</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -3,6 +3,7 @@
 ## Status
 Accepted (2026-07-28; revised 2026-08-14, 2026-08-18, 2026-08-23, and 2026-09-03).
 Revised 2026-09-22 (the layer rules also ship as compile-time MSBuild targets inside MMCA.Common.Shared; see the Revision below).
+Revised 2026-09-25 (the live-document OpenAPI guard is reconciled with the committed OpenAPI documents both consumers now gate at build time, and the MMCA.Common.Testing.UI page-test bases for the confirm-email and role-admin pages are recorded; see the Revision (2026-09-25) below).
 
 ## Context
 ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
@@ -95,10 +96,12 @@ booted.
   `TryDecorate` applies decorators in reverse registration order, so a reordered
   `AddApplicationDecorators()` or a module scan that ran after it changes the constructed pipeline
   while every registration still exists.
-- **No committed snapshots.** The OpenAPI guard asserts against the live document rather than a
-  checked-in file (`OpenApiContractTestsBase.cs:16`), so a new controller can never leave a stale
-  snapshot behind, and the assertions are deliberately coarse: a path-count floor plus presence (not
-  exact casing) of the pinned resources (`OpenApiContractTestsBase.cs:79`).
+- **No committed snapshot in the runtime guard.** The OpenAPI guard asserts against the live document
+  rather than a checked-in file (`OpenApiContractTestsBase.cs:16`), so a new controller can never
+  leave a stale snapshot behind, and the assertions are deliberately coarse: a path-count floor plus
+  presence (not exact casing) of the pinned resources (`OpenApiContractTestsBase.cs:78-81`). The
+  committed `openapi/<host>.json` documents that MMCA.ADC and MMCA.Store diff in CI (ADR-046) are a
+  separate, build-time check owned by each consumer, not an input to this suite.
 - **Hosts extend the base where they have more to prove.** ADC Conference adds a 412
   stale-precondition test on top of the inherited 400/404 facts, driving two editors through the
   same `If-Match` tag and reusing the inherited shape assertion
@@ -194,9 +197,11 @@ from `MMCA.Common.Testing` one base from this record's set plus the ADR-079 edge
 - **Booting the host is what makes it honest.** Pinning `Production` exercises the branches a default
   `Development` boot skips, and a throwaway migrated database means the schema under test is the one
   the host's own init strategy produced, not a fixture's guess.
-- **A live document beats a snapshot.** Asserting against the served OpenAPI document removes the
-  class of failure where the guard passes because the snapshot was regenerated along with the
-  regression.
+- **A live document beats a snapshot as this suite's oracle.** Asserting against the served OpenAPI
+  document removes the class of failure where the guard passes because the snapshot was regenerated
+  along with the regression. The consumers' committed documents (ADR-046) do not reopen that failure:
+  the build regenerates them and CI fails on any uncommitted difference, so a regenerated contract
+  arrives as a reviewable diff in the PR that changed it rather than as a silent pass.
 
 ## Trade-offs
 - **Opt-in per host, exactly like ADR-015.** The framework ships the suites; a host gets the gate only
@@ -217,7 +222,7 @@ from `MMCA.Common.Testing` one base from this record's set plus the ADR-079 edge
   no broker) and the decorator suite run in the fast tier. That splits the runtime gate across two CI
   jobs with different prerequisites.
 - **The assertions are coarse by construction.** `MinimumPathCount` is a floor, `CorePublicResources`
-  checks presence rather than exact casing or schema (`OpenApiContractTestsBase.cs:80`), and the
+  checks presence rather than exact casing or schema (`OpenApiContractTestsBase.cs:78-81`), and the
   problem-details base checks shape (`status`, `title`, a
   diagnostic extension) rather than message content. These catch wholesale regressions, not subtle
   ones.
@@ -268,6 +273,35 @@ job in `MMCA.Common/.github/workflows/ci.yml` builds one valid probe and two vio
 the packed feed and asserts both error codes fire, so a file silently missing from the package cannot
 pass. Consumers receive the targets on the next lockstep version bump (ADR-016); nothing in a consumer
 changes until then.
+
+## Revision (2026-09-25): committed OpenAPI documents, and page-test bases in Testing.UI
+
+**The live-document guard now sits beside a committed document in both consumers.** MMCA.ADC and
+MMCA.Store each write `Source/Services/<host>/openapi/<host>.json` at build time, commit it, and fail
+CI on an uncommitted difference (ADR-046, Revision 2026-09-25). This suite is unchanged:
+`OpenApiContractTestsBase` still reads no committed file (`OpenApiContractTestsBase.cs:16`) and still
+asserts the served document against a floor and a pinned resource list (`:38`, `:51`). The two checks
+answer different questions: the runtime base asks whether a booted host serves a usable contract, and
+the consumer's build-time gate asks whether the contract changed without review.
+
+**Shared page-test bases for the framework's identity pages ship in `MMCA.Common.Testing.UI`.** They
+are bUnit component bases, not runtime conformance suites, and are not counted among the seven above,
+but they follow the same write-once, subclass-thin lever (ADR-015):
+`ConfirmEmailPageTestsBase`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Pages/ConfirmEmailPageTestsBase.cs:26`) pins the
+anonymous `/confirm-email` page (a complete link redeemed exactly once, an incomplete one landing on
+manual entry, a refusal keeping the form, a resend reporting the same thing either way);
+`RoleAdminListPageTestsBase<TPage>`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Pages/RoleAdminListPageTestsBase.cs:21`) and
+`RoleAdminEditPageTestsBase<TPage>`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Pages/RoleAdminEditPageTestsBase.cs:22`) pin the
+consumer's own half of the ADR-116 role roster and role editor pages. Both consumers run all three
+through one-line sealed subclasses in their Identity UI test projects: MMCA.ADC
+(`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.UI.Tests/Pages/Users/ConfirmEmailTests.cs:11`,
+`Pages/Roles/RoleListTests.cs:14`, `Pages/Roles/RoleEditTests.cs:16`) and MMCA.Store
+(`MMCA.Store/Tests/Modules/Identity/MMCA.Store.Identity.UI.Tests/Pages/Users/ConfirmEmail/ConfirmEmailTests.cs:14`,
+`Pages/Roles/RoleListTests.cs:13`, `Pages/Roles/RoleEditTests.cs:13`). Base and test counts for the
+package are owned by `MMCA.Common/FACTS.md`.
 
 ## Related
 ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, "not

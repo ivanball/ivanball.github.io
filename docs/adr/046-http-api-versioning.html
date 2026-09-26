@@ -247,7 +247,9 @@
           which have since moved; corrected the OpenAPI trade-off: <code>AddCommonOpenApi</code> plus
           <code>MapCommonOpenApi().WithDocumentPerVersion()</code> resolve one document per discovered API version rather
           than a single <code>v1</code> document).
-          Revised 2026-09-22 (MMCA.ADC commits a build-time OpenAPI document per service host, gated in CI; see the Revision below).</p>
+          Revised 2026-09-22 (MMCA.ADC commits a build-time OpenAPI document per service host, gated in CI; see the Revision below).
+          Revised 2026-09-25 (MMCA.Store adopts the same committed-document gate, so both consumers carry it;
+          re-anchored the host call-site citations; see the Revision (2026-09-25) below).</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s REST surface is served by controllers hosted in extracted service processes behind a
           YARP gateway. As those services evolve, a response shape has to be able to change without breaking a
@@ -339,11 +341,11 @@
           current host was affected either way, which is precisely why the failure could ship unnoticed.</li>
           <li><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code>
           in their startup: ADC&#39;s Conference
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:196</code>) and Identity
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:151</code>) hosts, Store&#39;s Catalog host
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:141</code>), and the same call is made
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:220</code>) and Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:152</code>) hosts, Store&#39;s Catalog host
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:142</code>), and the same call is made
           by the other extracted hosts (ADC Engagement <code>Program.cs:148</code>, ADC Notification <code>Program.cs:140</code>,
-          Store Sales <code>Program.cs:148</code>, Store Identity <code>Program.cs:134</code>) and by the monolith reference host
+          Store Sales <code>Program.cs:149</code>, Store Identity <code>Program.cs:136</code>) and by the monolith reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:35</code>).</li>
           </ul>
           <p>Application controllers beyond <code>ServiceInfo</code> declare <code>[ApiVersion(&quot;1.0&quot;)]</code> today: the second version
@@ -403,8 +405,31 @@
           because it cannot carry the design-time environment, and <code>dotnet publish</code> skips the target, so the
           container builds do not run it.</p>
           <p>The framework side is unchanged: <code>OpenApiContractTestsBase</code> still asserts the live document, and the
-          committed file is the consumer&#39;s artifact, produced by the consumer&#39;s build. A consumer that wants the
-          same gate copies the target and the CI step; it is not yet a framework primitive.</p>
+          committed file is the consumer&#39;s artifact, produced by the consumer&#39;s build. The gate is not a
+          framework primitive: each consumer carries its own copy of the target and the CI step, and both
+          consumers now do (see the 2026-09-25 revision).</p>
+          <h2 id="revision-2026-09-25-both-consumers-commit-and-gate-their-openapi-documents">Revision (2026-09-25): both consumers commit and gate their OpenAPI documents</h2>
+          <p>MMCA.Store now carries the same gate, so the committed contract is a property of both consumers
+          rather than of MMCA.ADC alone. Each repo&#39;s <code>Directory.Build.props</code> references
+          <code>Microsoft.Extensions.ApiDescription.Server</code> (<code>MMCA.ADC/Directory.Build.props:172</code>,
+          <code>MMCA.Store/Directory.Build.props:176</code>), switches the package&#39;s own build hook off
+          (<code>MMCA.Store/Directory.Build.props:186</code>), and defines the <code>MmcaGenerateOpenApiDocument</code> target
+          (<code>MMCA.ADC/Directory.Build.props:200</code>, <code>MMCA.Store/Directory.Build.props:207</code>), which writes
+          <code>Source/Services/&lt;host&gt;/openapi/&lt;host&gt;.json</code> after each <code>*.Service</code> build under the design-time
+          environment. Store&#39;s design-time environment also switches off the background work its hosts start
+          (payment reconciliation and the two backfills, <code>MMCA.Store/Directory.Build.props:221</code>), because
+          document generation starts the host. Every service <code>Program.cs</code> skips the schema initializer when
+          <code>MmcaOpenApiDesignTime</code> is set in Development: ADC Conference <code>:438</code>, Engagement <code>:315</code>, Identity
+          <code>:343</code>, Notification <code>:262</code>; Store Catalog <code>:313</code>, Sales <code>:297</code>, Identity <code>:297</code>.</p>
+          <p>ADC commits four documents and Store commits three
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/openapi/MMCA.Store.Catalog.Service.json</code>,
+          <code>MMCA.Store.Sales.Service/openapi/MMCA.Store.Sales.Service.json</code>,
+          <code>MMCA.Store.Identity.Service/openapi/MMCA.Store.Identity.Service.json</code>). Each repo&#39;s <code>deploy.yml</code>
+          runs an <code>OpenAPI documents are current</code> step in <code>build-and-test</code> after the Release build
+          (<code>MMCA.ADC/.github/workflows/deploy.yml:297</code>, <code>MMCA.Store/.github/workflows/deploy.yml:232</code>): it fails
+          when the committed count differs from the host count (Store <code>:241-243</code>) or when
+          <code>git diff --exit-code</code> finds a regenerated document (ADC <code>:309</code>, Store <code>:245</code>), and uploads the
+          regenerated set on a mismatch (ADC <code>:314</code>, Store <code>:250</code>).</p>
           <h2 id="related">Related</h2>
           <p>ADR-010 (integration-event schema versioning: the asynchronous, <code>SchemaVersion</code>-carried,
           consumer-resolved axis this deliberately contrasts with; HTTP versioning here is request-time and
@@ -431,6 +456,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-22-the-consumer-contract-is-a-committed-artifact">Revision (2026-09-22): the consumer contract is a committed artifact</a></li>
+            <li><a href="#revision-2026-09-25-both-consumers-commit-and-gate-their-openapi-documents">Revision (2026-09-25): both consumers commit and gate their OpenAPI documents</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

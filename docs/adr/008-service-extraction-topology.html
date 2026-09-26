@@ -244,7 +244,11 @@
           gains at the same time, which is the first added to it since this record. Revised 2026-09-04: the
           extraction sequence this topology supports is named as the <strong>Strangler Fig</strong> route (a new service
           beside the combined host, one route prefix moved at a time at the Gateway, the old host retired last);
-          ADC&#39;s own history was a one-step cutover and is recorded as such below.</p>
+          ADC&#39;s own history was a one-step cutover and is recorded as such below. Revised 2026-09-25: the
+          Gateway pipeline description is corrected against the code (both Gateways layer Key Vault
+          configuration, and ADC&#39;s Gateway alone carries an authorization middleware pair that evaluates each
+          route&#39;s declared <code>anonymous</code> policy, plus a session-asset upload body cap), and every anchor is
+          refreshed against current line numbers. The topology decision is unchanged.</p>
           <h2 id="context">Context</h2>
           <p>ADC began as a modular monolith: one <code>MMCA.ADC.WebAPI</code> host loaded every module (Identity, Conference,
           Engagement, Notification) in-process via the <code>ModuleLoader</code>, sharing one database and dispatching
@@ -273,26 +277,32 @@
           needs a big-bang switch. A module is extracted by (1) starting its single-module service host beside
           the combined host, which keeps running with that module turned off (<code>Modules:{Module}:Enabled=false</code>)
           and its peers satisfied by the <code>Disabled*</code> stubs the <code>ModuleLoader</code> registers for disabled modules
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:12</code>, <code>:101</code>); (2) moving
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:15</code>, <code>:108</code>); (2) moving
           that module&#39;s route prefix at the Gateway from the combined host&#39;s cluster to the new service&#39;s, one
           YARP <code>ReverseProxy</code> configuration change under ADR-089 and no client change, because the Gateway is
           the only entry point; and (3) retiring the combined host once no route points at it. Old path and
           new path coexist until traffic has moved, and step (2) reverses by flipping the same route back. ADC
           took the shortest form of this route, extracting all four modules in one step and deleting
           <code>MMCA.ADC.WebAPI</code> at the end; a consumer with a live monolith should move one module at a time.</li>
-          <li><strong>The Gateway is the only client entry point.</strong> It owns the route→service map (<code>/Auth</code>, <code>/Events</code>,
-          <code>/Bookmarks</code>, <code>/hubs</code>, <code>/.well-known</code>, …); clients (Blazor/MAUI) never address a service directly. It
+          <li><strong>The Gateway is the only client entry point.</strong> It owns the route-to-service map (<code>/Auth</code>, <code>/Events</code>,
+          <code>/Bookmarks</code>, <code>/hubs</code>, <code>/.well-known</code>, and so on); clients (Blazor/MAUI) never address a service directly. It
           has no DbContext or controllers. Its pipeline is edge rate limiting
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:64</code>, <code>:144</code>), one per-downstream readiness check
-          per service (<code>:78</code>), forwarded headers (<code>:124</code>), correlation (<code>:129</code>), security-headers middleware
-          (ADR-023, <code>:84</code>, <code>:134</code>), CORS (<code>:89</code>, <code>:137</code>), static files (<code>:149</code>), a <code>/privacy</code> minimal-API
-          endpoint (<code>:154</code>), and the proxy itself: the route table is loaded from the <code>ReverseProxy</code>
-          configuration section and mapped by <code>MapReverseProxy</code> (<code>:112-115</code>, <code>:158</code>), not expressed as
-          <code>MapForwarder</code> calls in code (ADR-089). Store&#39;s Gateway is the same shape without the static files
-          and the <code>/privacy</code> endpoint, and it additionally layers Azure Key Vault configuration
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:63</code>), which the ADC Gateway does not.</li>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:74</code>, <code>:178</code>), one per-downstream readiness check
+          per service (<code>:88</code>), forwarded headers (<code>:158</code>), correlation (<code>:163</code>), security-headers middleware
+          (ADR-023, <code>:118</code>, <code>:168</code>), CORS (<code>:123</code>, <code>:171</code>), static files (<code>:183</code>), a <code>/privacy</code> minimal-API
+          endpoint (<code>:190</code>), a request-body cap raised only for the session-asset upload path (<code>:201-213</code>),
+          authorization middleware that evaluates the <code>anonymous</code> policy every route declares
+          (<code>AddAuthorization</code> at <code>:112</code>, <code>UseAuthorization</code> at <code>:218</code>; no authentication scheme is registered,
+          so the Gateway authenticates no one, ADR-088), and the proxy itself: the route table is loaded from
+          the <code>ReverseProxy</code> configuration section and mapped by <code>MapReverseProxy</code> (<code>:146-149</code>, <code>:221</code>), not
+          expressed as <code>MapForwarder</code> calls in code (ADR-089). Both Gateways layer Azure Key Vault
+          configuration before anything binds settings (ADC <code>:67</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:63</code>). Store&#39;s Gateway is the same shape
+          without the static files, the <code>/privacy</code> endpoint, the upload cap and the authorization pair: its
+          routes declare <code>anonymous</code> too, but it registers no authorization middleware, by design
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:41-45</code>).</li>
           <li><strong>Cross-service communication uses edge transports:</strong> synchronous calls over gRPC contracts (ADR-007);
-          asynchronous flows over the outbox → MassTransit broker (ADR-003, ADR-006). Token validation is
+          asynchronous flows over the outbox to MassTransit broker (ADR-003, ADR-006). Token validation is
           federated via JWKS through the Gateway (ADR-004). Each service owns its own database (ADR-006).</li>
           <li><strong>Transport stays at the edge, enforced.</strong> <code>MicroserviceExtractionTests</code> in the architecture suite
           forbid gRPC / MassTransit / Protobuf dependencies in any Domain, Application, or Shared assembly, so the
@@ -319,13 +329,13 @@
           Bicep / Azure Container Apps.</li>
           <li><strong>Distributed-systems semantics.</strong> Cross-service consistency is eventual (outbox + integration events);
           there are no cross-service transactions or cross-database FKs (ADR-006). Bidirectional gRPC pairs
-          (Conference ↔ Engagement) need deliberate startup handling (ADR-007).</li>
+          (Conference and Engagement) need deliberate startup handling (ADR-007).</li>
           <li><strong>Transport constraints leak into hosting.</strong> The REST services run <code>Http2</code>-only on cleartext for h2c
           gRPC, while Notification runs <code>Http1AndHttp2</code> for its SignalR WebSocket upgrade: a per-host Kestrel
           nuance that didn&#39;t exist in the monolith.</li>
           <li><strong>Duplicated host wiring.</strong> Each service repeats the same pipeline setup; shared concerns live in the
           framework packages (<code>MMCA.Common.API</code>, plus <code>AddServiceDefaults</code> from <code>MMCA.Common.Aspire</code> at
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:46</code>) to limit the drift. Neither consumer
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:29</code>) to limit the drift. Neither consumer
           carries a <code>ServiceDefaults</code> project of its own.</li>
           </ul>
           <h2 id="applicability">Applicability</h2>
@@ -344,8 +354,8 @@
           nothing runs is a claim. They are not the output of a scale, team or deploy-cadence trigger. The
           conference peaked at roughly 67 concurrent users (Context above), one team owns every module, and all
           six deployables still ship in a single pipeline run from one template
-          (<code>MMCA.ADC/infra/main.bicep:1016</code>, <code>:1223</code>, <code>:1357</code>, <code>:1484</code>, <code>:1653</code>, <code>:1774</code>, deployed together by a
-          single <code>azure/arm-deploy</code> step at <code>MMCA.ADC/.github/workflows/deploy.yml:1298-1304</code>), so the
+          (<code>MMCA.ADC/infra/main.bicep:1605</code>, <code>:1830</code>, <code>:1979</code>, <code>:2110</code>, <code>:2287</code>, <code>:2431</code>, deployed together by a
+          single <code>azure/arm-deploy</code> step at <code>MMCA.ADC/.github/workflows/deploy.yml:1587-1593</code>), so the
           independent-deploy benefit this record lists is available rather than taken. What ADC does buy with the split is proof under load that the path
           works: transport stays out of Domain, Application and Shared under a build gate
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Layering/MicroserviceExtractionTests.cs:3</code>), and the

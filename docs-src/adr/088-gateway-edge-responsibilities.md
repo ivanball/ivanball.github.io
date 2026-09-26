@@ -41,6 +41,13 @@ with the rest of the framework rather than on a version of its own
 (`MMCA.ADC/Directory.Packages.props:118`, `MMCA.Store/Directory.Packages.props:14`); the 1.185.0
 figure above is the 2026-08-31 snapshot, not the current pin. Nothing in the decision changes.
 
+**Revised 2026-09-25:** the bearer-delegation paragraph now records the one edge-authorization
+difference between the two gateways: ADC's host evaluates the `anonymous` policy each route declares
+through an authorization middleware pair, while Store's routes declare the same policy and its host
+registers no authorization middleware, by design. Neither authenticates anyone. The ADC gateway
+citations in the load-balancing delegation and the adoption trade-off are refreshed against current
+line numbers. Nothing in the decision changes.
+
 ## Context
 [ADR-008](008-service-extraction-topology.md) made the Gateway the only client entry point and gave it
 three jobs: the route-to-service map, CORS, and forwarding the caller's `Authorization` header. Nothing
@@ -315,9 +322,19 @@ reads them as decisions rather than as omissions.
 **Bearer validation is delegated to the backends; the gateway forwards.** This is the same decision
 as the JWT decline above, stated from the delegation side, and the `MMCA.Common.Gateway` package
 does not revisit it: nothing in it calls `AddAuthentication`, `AddJwtBearer`, `AddAuthorization` or
-`RequireAuthorization`, and neither consumer gateway host does either
+`RequireAuthorization`, and neither consumer gateway host registers an authentication scheme
 (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs`,
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs`). The `Authorization` header travels on
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs`). The two hosts differ on authorization, and
+the difference changes nothing about the caller: both route tables declare `"AuthorizationPolicy":
+"anonymous"` on every route, and only ADC evaluates the declaration. ADC registers the authorization
+middleware pair (`AddAuthorization` at `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:112`,
+`UseAuthorization` at `:218`, the reasoning inline at `:98-111` and `:215-217`) so that each route's
+declared policy is read rather than implied, with the framework fallback policy deliberately not
+adopted, because it ships in `MMCA.Common.API` and would pull the MVC stack into a pure YARP host
+(`:108-111`). Store's routes declare `anonymous` as well, but its host registers no authorization
+middleware, by design (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:41-45`). With no
+authentication scheme on either host, an evaluated `anonymous` policy admits every request, so both
+gateways still forward every bearer untouched to the service that validates it. The `Authorization` header travels on
 YARP's default request-header copy rather than through a transform of its own: the one transform the
 package installs touches two headers and no others
 (`Transforms/GatewayTraceHeaderTransformProvider.cs:60-71`), and neither gateway's
@@ -340,7 +357,7 @@ balances across the replicas behind it. ADC declares five clusters with one dest
 (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:163-166`, `:172-175`, `:181-184`,
 `:190-193`, `:195-198`) and Store three (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:84-92`,
 `:93-101`, `:102-106`), resolved through `AddServiceDiscoveryDestinationResolver`
-(ADC `Program.cs:115`, Store `Program.cs:141`) against the bicep address book
+(ADC `Program.cs:149`, Store `Program.cs:141`) against the bicep address book
 (`MMCA.ADC/infra/main.bicep:1652-1655`). The shape is not incidental: both repositories **pin it as
 an invariant**, asserting that each cluster contains a single destination
 (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:229-231`,
@@ -453,7 +470,7 @@ off and the deployed answer is on.
   recorded decision without failing a build.
 - **Nothing gates adoption.** A gateway that never calls the three registrations behaves exactly as
   before, and no fitness function names a gateway host. Both consumer gateways do call all three
-  today (ADC `Program.cs:64`, `:78`, `:114`; Store `Program.cs:87`, `:112`, `:140`), but that is a
+  today (ADC `Program.cs:74`, `:88`, `:148`; Store `Program.cs:87`, `:112`, `:140`), but that is a
   wiring habit rather than an enforced invariant, which is the audit-the-inventory caveat ADR-005 and
   ADR-017 both record, now applied to the edge.
 

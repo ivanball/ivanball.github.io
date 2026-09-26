@@ -6,7 +6,9 @@ Context already scoped to this ADR, and the `IToastService` / `IAppDialogService
 the vendor out of call sites. Revised 2026-08-31: records that the two facade registrations live in
 their own `AddCommonUiFacades()` call, shared by `AddUIShared` and the shipped bUnit base. Revised
 2026-09-19: records the third `NavItem` visibility gate, `RequiredPermission`, which the nav menu
-filters on alongside `RequiredRole` and `RequiredClaim`.
+filters on alongside `RequiredRole` and `RequiredClaim`. Revised 2026-09-25 (re-anchored the two
+Blazor Web hosts' `MapRazorComponents` citations, which have moved, and named the ADC-only
+`.Distinct()` in the double-wiring trade-off).
 
 ## Context
 ADR-059 decided how a module plugs into the **server**: an `IModule` implementation is discovered by
@@ -93,8 +95,8 @@ Ship the application shell in the framework package and let each module plug int
 
 - **Blazor Web heads feed the same enumeration to the endpoint side.** `MapRazorComponents<App>()`
   takes the module assemblies from `GetServices<IUIModule>()` in addition to the shell assemblies
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:195-209`, which also de-duplicates, and
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:185-196`), so the router's view and the
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:287-301`, which also de-duplicates at `:295`, and
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:261-271`), so the router's view and the
   endpoint's view of the routable assemblies come from one source.
 
 Adoption today is every module UI in both apps plus the framework's own and its test host: ADC
@@ -163,8 +165,11 @@ no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Hel
   protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:11-29`).
 - **Blazor Web heads wire the assemblies twice.** The router's `AdditionalAssemblies` and the
   endpoint's `AddAdditionalAssemblies` are separate calls, so both hosts repeat the enumeration in
-  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:195-209`, `MMCA.Store.UI.Web/Program.cs:185-196`); they
-  derive it from the same `IUIModule` registrations, but the duplication is real.
+  `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:287-301`, `MMCA.Store.UI.Web/Program.cs:261-271`); they
+  derive it from the same `IUIModule` registrations, but the duplication is real. The two hosts also
+  build the list differently: ADC concatenates and applies `.Distinct()` (`:295`), because the shell
+  assemblies it lists can overlap a module's, while Store spreads the module assemblies into a
+  collection expression with no de-duplication (`MMCA.Store.UI.Web/Program.cs:266-271`).
 - **The reference seed does not demonstrate the pattern.** Helpdesk's hand-rolled shell means an
   adopter following it gets the framework's components but not this composition model.
 - **One vendor is also one upstream ceiling, and the facades cover two surfaces only.** A MudBlazor

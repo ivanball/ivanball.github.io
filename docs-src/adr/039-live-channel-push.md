@@ -6,6 +6,8 @@ Accepted (2026-07-09).
 Revised 2026-09-07 (channel subscription can be gated by an app-supplied authorizer, connections
 are capped per user, the backplane channel is namespaced per application, and ADC scopes live poll
 reads to the audience-visible states).
+Revised 2026-09-25 (re-anchored the backplane-prefix citation, which now lives in the
+`DependencyInjection.Notifications.cs` partial, and the ADC poll manage endpoint).
 ## Context
 
 Conference-day features (live polls, session Q&A, live result counters) need sub-second fan-out of
@@ -117,7 +119,7 @@ What a signed-in client is allowed to subscribe to, and how much it may hold ope
    rate limiter never sees, so it needs its own bound.
 3. **The backplane is namespaced per application.** The Redis backplane channel prefix defaults to
    the resolved application namespace
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:653`, resolver at
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:59-61`, resolver at
    `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Configuration/ApplicationNamespace.cs:53`).
 4. **ADC scopes what a live poll read returns.** `GetPollResultsHandler` treats a poll as
    audience-readable only when it has reached `Open` or `Closed` **and** its event or session is
@@ -127,5 +129,5 @@ What a signed-in client is allowed to subscribe to, and how much it may hold ope
    has staged, so reading one by id was a preview of unannounced content to any authenticated
    caller. The authoring rights in BR-236 are unchanged: this is a read-scope rule, and the manage
    surface (`GET /api/livepolls/manage`,
-   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:189`)
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:183`)
    still returns every state to a caller who passes that check.

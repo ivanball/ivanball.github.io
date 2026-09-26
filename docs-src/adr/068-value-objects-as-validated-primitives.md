@@ -7,6 +7,9 @@ anchors refreshed). Revised 2026-09-03: `Event.OrganizerContactEmail` became `Em
 adoption site, so ADC's Domain now holds no primitive email property and matches Store on that count;
 the record also notes why the validator, the length invariant and the column shape were all left
 alone, following the Speaker precedent.
+Revised 2026-09-25 (the shipped `OwnsAddress` helper named beside `OwnsMoney`: Store's `Customer.Address`
+maps through it, so no consumer hand-copies an `Address` owned-type block; the Store, ADC and
+`EntityTypeBuilderExtensions` anchors refreshed).
 
 ## Context
 A domain model has two kinds of small type: the **identity** of a thing, and a **value** the thing
@@ -69,9 +72,14 @@ Model a domain value that carries an invariant as an **immutable record value ob
   factory (`Money.cs:71-72`, `Currency.cs:43-49`, `DateRange.cs:31-35`, `DateTimeRange.cs:32-36`).
 - **Two EF mapping shapes, chosen by whether adoption is a schema change.** A multi-field value maps as
   an **owned type**: the shipped `OwnsMoney` helper
-  (`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:51`)
+  (`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:58`)
   flattens `Money` into a decimal amount column plus a three-character non-unicode ISO 4217 code column
-  (`:64-75`) and sets the navigation's requiredness from one parameter (`:78`). A single-string value
+  (`:69-83`) and sets the navigation's requiredness from one parameter (`:85`). Its sibling
+  `OwnsAddress` (`:125`, shipped in v1.192.0, `MMCA.Common/CHANGELOG.md:894`) flattens `Address` into
+  six non-unicode columns whose lengths come from `AddressInvariants` and of which only `AddressLine1`
+  is required (`:134-166`), names them from an optional prefix (`AddressLine1`, `AddressCity`, and so on
+  by default, `:127`, joined at `:185-188`) and defaults the navigation to optional (`:128`, applied at
+  `:168`). A single-string value
   maps through `HasConversion` instead, so the backing column stays a plain string column and adopting
   the value object on a property that used to be a `string` is not a migration: `EmailValueConverter`
   and `NullableEmailValueConverter`
@@ -84,7 +92,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   currency (`Money.cs:71-72`), and addition treats it as the identity element so a zero seed can
   accumulate into any currency (`Money.cs:131-137`). Because the write leg can therefore persist an
   empty code, `OwnsMoney`'s read leg falls back to the sentinel rather than a null-forgiving `.Value!`
-  (`EntityTypeBuilderExtensions.cs:19,71`, contract documented at `:30-38`), and the fallback is
+  (`EntityTypeBuilderExtensions.cs:26,78`, contract documented at `:38-45`), and the fallback is
   regression-covered (`Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Configuration/OwnsMoneyTests.cs:106`).
 - **Every serialization boundary is declared explicitly.** `Money`, `Email`, `PhoneNumber` and
   `Address` are `[DataContract]` with ordered `[DataMember]` members (`Money.cs:20,30,34`,
@@ -107,20 +115,21 @@ Model a domain value that carries an invariant as an **immutable record value ob
   returns null for a malformed entry, which the calling loop skips rather than failing the whole batch
   (`:121-126`).
 - **Adoption is real but partial.** Store maps `ProductVariant.Price`
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:21`) with
-  `OwnsMoney` (`.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:31`),
-  and `Order.Total` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:37`) is
-  seeded with `Money.Zero()` in the private constructor (`:90`) and accumulated through `Money.Add`
-  (`:122`, assigned back at `:126`), mapped `required: false` (`OrderConfiguration.cs:26`) alongside
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:26`) with
+  `OwnsMoney` (`.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:39`),
+  and `Order.Total` (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs:58`) is
+  seeded with `Money.Zero()` in the private constructor (`:171`) and accumulated through `Money.Add`
+  (`:220`, assigned back at `:224`), mapped `required: false` (`OrderConfiguration.cs:39`) alongside
   `OrderLine.UnitPrice` (`OrderLineConfiguration.cs:28`). Store Identity types `Customer.Address` as the
   framework `Address`
-  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:39`) and maps
-  `Customer.Email` through `EmailValueConverter` with `Customer.Address` through a hand-rolled `OwnsOne`
-  block (`CustomerConfiguration.cs:36,43`), and `User.Email` the same way (`UserConfiguration.cs:24`).
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:40`) and maps
+  `Customer.Email` through `EmailValueConverter` (`CustomerConfiguration.cs:35`) with `Customer.Address`
+  through the shipped `OwnsAddress` helper under its default prefix (`CustomerConfiguration.cs:44`), and
+  `User.Email` the same way as `Customer.Email` (`UserConfiguration.cs:24`).
   ADC types `User.Email` as `Email`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:39`, validated through
-  `Email.Create` at `:166` and passed to the constructor at `:180`, with the same pair repeated on the
-  social-login path at `:207,218`) with
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:52`, validated through
+  `Email.Create` at `:207` and passed to the constructor at `:221`, with the same pair repeated on the
+  social-login path at `:255,266`) with
   the same converter (`.../Identity.Infrastructure/.../UserConfiguration.cs:21`) and two optional
   Conference emails through `NullableEmailValueConverter`: a speaker's
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:31`, mapped at
@@ -165,17 +174,17 @@ Model a domain value that carries an invariant as an **immutable record value ob
 - **A sentinel beats null for an absent currency.** `Currency.None` keeps `Money.Zero()` usable as an
   accumulator seed and keeps every read path non-nullable; a null currency inside a materialized
   `Money` is a `NullReferenceException` waiting for the first read, which is precisely the failure
-  `OwnsMoney`'s fallback exists to prevent (`EntityTypeBuilderExtensions.cs:30-38`).
-- **Ship the mapping, do not repeat it.** `OwnsMoney` and the four converters put the round-trip
-  contract in one reviewed place, so a new entity configuration is one call rather than a copied lambda
-  pair that may or may not carry the sentinel fallback.
+  `OwnsMoney`'s fallback exists to prevent (`EntityTypeBuilderExtensions.cs:38-45`).
+- **Ship the mapping, do not repeat it.** `OwnsMoney`, `OwnsAddress` and the four converters put the
+  round-trip contract in one reviewed place, so a new entity configuration is one call rather than a
+  copied lambda pair that may or may not carry the sentinel fallback, or a copied six-property block
+  whose lengths may or may not match `AddressInvariants`.
 
 ## Trade-offs
 - **The pattern is not uniformly applied.** Only three of the seven types have a companion `*Invariants`
-  class; the rest inline their checks. Only `Money` has a shipped owned-type helper, so every `Address`
-  mapping is a hand-copied `OwnsOne` block of six properties
-  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:43-75`).
-  Five of the seven carry a serialization attribute, and not the same one: four are
+  class; the rest inline their checks. Only the two multi-field values have a shipped owned-type helper
+  (`OwnsMoney`, `OwnsAddress`); the single-string ones map through converters, and `DateRange` and
+  `DateTimeRange` have neither. Five of the seven carry a serialization attribute, and not the same one: four are
   `[DataContract]`/`[DataMember]` (`Money`, `Email`, `PhoneNumber`, `Address`) while `Currency` carries
   `[JsonConverter(typeof(CurrencyJsonConverter))]` (`Currency.cs:13`); only `DateRange` and
   `DateTimeRange` are annotation-free.

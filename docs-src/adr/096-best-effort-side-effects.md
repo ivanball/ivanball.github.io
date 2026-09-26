@@ -1,7 +1,8 @@
 # ADR-096: Best-Effort Side-Effect Contract
 
 ## Status
-Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19.
+Accepted (2026-08-23). Revised 2026-08-31. Revised 2026-09-19. Revised 2026-09-25 (the ADR-054 cross-reference is
+re-anchored onto that record's current best-effort trade-off).
 
 ## Context
 A command that has already committed often has follow-up work attached to it: evict the output-cache
@@ -17,7 +18,7 @@ eviction store cannot dead-letter a coherence hint, ADR-076 degrades a data-subj
 rather than failing the package (`076-data-subject-export.md:82-83`), ADR-091 composes the reset email in
 the handler and delivers it best-effort, "awaited and its failure caught, logged and swallowed"
 (`091-cache-backed-password-reset.md:71-76`), and ADR-054 makes compensation best-effort per order
-line (`054-saga-compensation-and-reconciliation.md:161`). What none of them decides is the **policy**:
+line (`054-saga-compensation-and-reconciliation.md:229-240`). What none of them decides is the **policy**:
 which failures may be swallowed at all, at what severity, whether cancellation counts as one of them,
 and how a swallow is made visible to somebody who is not reading the log. Answered per call site, that
 produces a repo full of hand-rolled `catch (Exception)` blocks, each choosing its own severity, its
