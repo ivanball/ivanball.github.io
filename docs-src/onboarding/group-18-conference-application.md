@@ -124,19 +124,21 @@ cannot precede its start date") lives in the domain factory and the invariant cl
 [DeleteEventHandler](#deleteeventhandler) is the one delete that is not the generic framework handler:
 it eagerly loads the event's owned children (`Rooms`, `EventSpeakers`, `EventQuestionAnswers`,
 `MMCA.ADC.Conference.Application/Events/UseCases/Delete/DeleteEventHandler.cs:36`), then the event's
-separate `Session` aggregates (BR-127, `DeleteEventHandler.cs:44-49`), its `Sponsor` aggregates
+separate `Session` aggregates (BR-127, `DeleteEventHandler.cs:44-48`), its `Sponsor` aggregates
 (`DeleteEventHandler.cs:53`, otherwise the public sponsor strip keeps reading orphaned rows), its
 `Partner` aggregates (`DeleteEventHandler.cs:62`, same reasoning for the landing page's partners band),
 its `Activity` aggregates (`DeleteEventHandler.cs:71`, same reasoning for the public activities page)
 and the event's `SessionAsset` aggregates (`DeleteEventHandler.cs:82`, so deleting an event does not
 leave published material pointing at a session that no longer exists), and hands all five collections
-to the domain's
+to the domain's static
 [EventCascadeDeletionDomainService](group-17-conference-domain.md#eventcascadedeletiondomainservice)
-(`DeleteEventHandler.cs:91`, BR-72/BR-55), because a cross-aggregate cascade is an application-layer
-decision. The `Speaker` and `Question` aggregates use the framework's
+(`DeleteEventHandler.cs:90`, BR-72/BR-55), because a cross-aggregate cascade is an application-layer
+decision. Only after that commit succeeds does it schedule the blob behind every deleted file asset
+for removal as a durable internal command, so a rolled-back cascade never removes a file its row still
+points at (`DeleteEventHandler.cs:91-97`, `:102-107`). The `Speaker` and `Question` aggregates use the framework's
 [DeleteEntityHandler<TEntity, TIdentifierType>](group-05-cqrs-pipeline.md#deleteentityhandlertentity-tidentifiertype)
 bound closed in the composition root (`MMCA.ADC.Conference.Application/DependencyInjection.cs:85`,
-`:97`), and `Category`, `Activity`, `Sponsor` and `Partner` get theirs from the bulk `AddEntityCrud`
+`:94`), and `Category`, `Activity`, `Sponsor` and `Partner` get theirs from the bulk `AddEntityCrud`
 calls described below.
 
 The richer update handlers ride a third base,
@@ -381,7 +383,7 @@ implementations ([EventNavigationPopulator](#eventnavigationpopulator),
 [SponsorNavigationPopulator](#sponsornavigationpopulator),
 [PartnerNavigationPopulator](#partnernavigationpopulator)
 (`MMCA.ADC.Conference.Application/Partners/PartnerNavigationPopulator.cs:12`, registered with the
-partner query service at `DependencyInjection.cs:106-107`),
+partner query service at `DependencyInjection.cs:103-104`),
 [ConferenceCategoryNavigationPopulator](#conferencecategorynavigationpopulator), plus one per child
 entity), which encapsulate which navigations to include and how to batch-load cross-source relationships
 ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)); the childless
@@ -393,20 +395,21 @@ because it is never the root of a full graph load
 All of this is wired by [DependencyInjection](#dependencyinjection), the module's **composition root**
 (`MMCA.ADC.Conference.Application/DependencyInjection.cs:55`, with the registration surface exposed as a
 C# `extension(IServiceCollection)` member at `DependencyInjection.cs:57-59`). It explicitly binds the
-closed generics and the ports Scrutor cannot infer (the cascade-deletion domain service at `:64`, the
-AI scoring pass at `:70`, the session-asset write authorization at `:75`, then each aggregate's
-navigation populator, query service, and, where the module owns one, delete handler at `:78-136`, plus
-the two cross-module validation services at `:139` and `:142`),
-and then calls `ScanModuleApplicationServices<ClassReference>()` (`DependencyInjection.cs:146`) to
+closed generics and the ports Scrutor cannot infer (the AI scoring pass at `:67`, the session-asset
+write authorization at `:72`, then each aggregate's navigation populator, query service, and, where
+the module owns one, delete handler at `:75-133`, plus the two cross-module validation services at
+`:136` and `:139`; the cascade-deletion domain service needs no registration because it is a static
+class),
+and then calls `ScanModuleApplicationServices<ClassReference>()` (`DependencyInjection.cs:143`) to
 discover the "many small things" (every handler, mapper, validator, applier, and event handler) by
 convention. [AssemblyReference](#assemblyreference) and [ClassReference](#classreference) are the marker
 types that anchor that scan (`MMCA.ADC.Conference.Application/AssemblyReference.cs:5` and `:11`).
 
 The ordering of the last block is load-bearing and the file says so. Four plain-CRUD aggregates get
 their create, update and delete verbs from one `AddEntityCrud` call each (`Category`, `Activity`,
-`Sponsor` and `Partner`, `DependencyInjection.cs:156-159`), and `Speaker` gets the derived-command
+`Sponsor` and `Partner`, `DependencyInjection.cs:153-156`), and `Speaker` gets the derived-command
 update path because BR-214's `CallerIsOrganizer` is state the request body must never hold
-(`DependencyInjection.cs:167`). Those calls sit **after** the scan on purpose: they use `TryAdd`, so the
+(`DependencyInjection.cs:164`). Those calls sit **after** the scan on purpose: they use `TryAdd`, so the
 module's own `CreateXHandler` (already registered by the scan, and the only one of the three verbs that
 still carries module vocabulary in a log line) keeps the create verb, while the update and delete verbs,
 which nothing in this assembly registers, come from the framework. The mutation itself still lives on
@@ -537,11 +540,11 @@ and turns every exportable session into one VEVENT with the room as its location
 allow-list can drift
 (`MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/CalendarExportMapper.cs:27-29`), and
 the framework's [IcsCalendarBuilder](group-08-auth.md#icscalendarbuilder) assembling the document
-(`ExportEventCalendarHandler.cs:53`). The export is role-independent by design: a privileged caller gets
+(`ExportEventCalendarHandler.cs:54`). The export is role-independent by design: a privileged caller gets
 the same filtered document (`CalendarExportMapper.cs:19-25`). The time-zone lookup has no fallback and
 says why: `EventInvariants.EnsureTimeZoneIsValid` guards every write path, so an unresolvable stored id
 is a data defect that must surface rather than quietly degrade to UTC
-(`ExportEventCalendarHandler.cs:39-41`, and the same comment on the two sibling handlers at
+(`ExportEventCalendarHandler.cs:40-42`, and the same comment on the two sibling handlers at
 `MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandler.cs:48-50`
 and `MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextHandler.cs:43-45`).
 
@@ -554,9 +557,10 @@ live flag from the same `GetLiveWindowUtc` window (`:68-69`). "Now" is every row
 the current instant, ordered by start then room (`:52-56`), and "next" is the whole batch sharing the
 earliest future start, so parallel tracks surface together rather than one arbitrary winner (`:58-66`).
 `GetNowNextHandler` injects `TimeProvider` rather than reading the clock directly (`:22`, `:29`), which
-is what makes its "now" unit-testable at a fixed instant; the two export handlers instead stamp the
-`.ics` `DTSTAMP` from `DateTimeOffset.UtcNow` directly (`ExportEventCalendarHandler.cs:53`,
-`ExportSessionCalendarHandler.cs:51-54`), so their timestamp is not injectable.
+is what makes its "now" unit-testable at a fixed instant; the two export handlers inject the same
+`TimeProvider` (`ExportEventCalendarHandler.cs:15-17`, `ExportSessionCalendarHandler.cs:16-18`) and
+stamp the `.ics` `DTSTAMP` from it (`ExportEventCalendarHandler.cs:54`,
+`ExportSessionCalendarHandler.cs:52-55`), so every timestamp in this cluster is injectable.
 [Rubric §14, Testability].
 
 ## Session materials: authorization as data, blob cleanup as a durable command
@@ -618,7 +622,12 @@ committed, so the container never loses a file the database still points at
 [DeleteSessionAssetBlobInternalCommandHandler](#deletesessionassetblobinternalcommandhandler) is
 idempotent as at-least-once execution requires: a blob that is already gone is the state the command
 asks for, so a not-found answer completes the row while any other failure is returned and left to the
-framework's backoff (`.../DeleteSessionAssetBlob/DeleteSessionAssetBlobInternalCommandHandler.cs:35-48`).
+framework's backoff. That delete is not written here: the command implements the framework's
+[IDeleteBlobInternalCommand](group-14-module-system-composition.md#ideleteblobinternalcommand)
+(`DeleteSessionAssetBlobInternalCommand.cs:29`) and the handler derives from
+[DeleteBlobInternalCommandHandlerBase<TCommand>](group-14-module-system-composition.md#deleteblobinternalcommandhandlerbasetcommand),
+contributing only the blob kind its log lines name
+(`.../DeleteSessionAssetBlob/DeleteSessionAssetBlobInternalCommandHandler.cs:10-23`).
 That command is deliberately *not* marked `IRequiresPermission`, and the record says why at length: a
 speaker deletes their own session's assets without holding the manage capability, so gating the
 deferred row on it would make the pipeline deny a delete the speaker legitimately scheduled, complete
@@ -689,10 +698,11 @@ a [SessionizeSyncResult](#sessionizesyncresult) with a primary and an optional s
 (`:127-141`), and nothing is stamped at the end of the run because the claim above already committed
 the stamp (`:163-164`). Each strategy bulk-loads its entity family in one call (no N+1,
 `MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/SessionSyncStrategy.cs:21-29`),
-upserts via the domain's `Create`/`Update` methods (`SessionSyncStrategy.cs:73-115`), skips soft-deleted
+upserts via the domain's `Create`/`Update` methods (`SessionSyncStrategy.cs:73-117`), skips soft-deleted
 rows (BR-136, `SessionSyncStrategy.cs:79-85`, warned once at `RefreshFromSessionizeHandler.cs:158-161`),
 and accumulates human-readable warnings through [SessionizeSyncWarnings](#sessionizesyncwarnings)
-instead of aborting on one bad record (`SessionSyncStrategy.cs:104-110`, plus the BR-86/BR-122 time
+instead of aborting on one bad record, for a refused update as well as a refused create, so neither
+reads as a successful sync (`SessionSyncStrategy.cs:94-99`, `:111-117`, plus the BR-86/BR-122 time
 warnings at `:53-71`). A final
 `RequestIdentityInsert()` (`RefreshFromSessionizeHandler.cs:168`) lets
 SQL Server accept Sessionize's own integer IDs before one batched `SaveChangesAsync` (`:169`).
@@ -766,53 +776,62 @@ concurrent pass and pay for every session twice (`:58-65`).
 
 [ScoreEventSessionsInternalCommandHandler](#scoreeventsessionsinternalcommandhandler) is the pass's
 shell, and every line of it is about not paying twice
-(`.../ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:39`). Conference runs with two
+(`.../ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:42-47`). Conference runs with two
 replicas and the processor polls on each, so the handler takes a per-event claim through the framework's
-`IDistributedLock` port with a fifteen-minute time-to-live (`:53`) and a
-**zero wait** (`:60`): it is lock and skip, not lock and wait, so the loser logs and returns success
-rather than queueing behind a pass already covering the same sessions (`:75-83`). The claim handle is
+`IDistributedLock` port with a fifteen-minute time-to-live (`:56`) and a
+**zero wait** (`:63`): it is lock and skip, not lock and wait, so the loser logs and returns success
+rather than queueing behind a pass already covering the same sessions (`:78-86`). The claim handle is
 released by the `await using` on success and on failure, and by its TTL when the replica is killed
 mid-pass (`:14-21`). The retry posture is split just as deliberately: a `Result` failure from the pass
 is a business outcome and replaying it would only pay for the same refusal again, so it is logged and
-the row is completed (`:87-91`), while an exception propagates and lets the framework's backoff and
-attempt ceiling decide when it is replayed and when it is dead-lettered (`:22-29`). Around the pass it
+the row is completed (`:90-94`), while an exception propagates and lets the framework's backoff and
+attempt ceiling decide when it is replayed and when it is dead-lettered (`:23-28`). It hands the
+command's `RequestedAtUtc` to the pass (`:88`), which is what lets a queued duplicate or a retry skip
+the sessions already answered. Around the pass it
 evicts the cached session reads twice, once up front so a client polling the dashboard stops seeing the
 previous scores and once after so it sees the new ones, through
 [ISessionScoresCacheEvictor](#isessionscorescacheevictor), an interface only because the application
-layer cannot see ASP.NET Core's `IOutputCacheStore` (`:73`, `:95`,
+layer cannot see ASP.NET Core's `IOutputCacheStore` (`:76`, `:98`,
 `.../ScoreEventSessions/ISessionScoresCacheEvictor.cs:13`). [Rubric §12, Performance & Scalability] and
 [Rubric §29, Resilience & Business Continuity].
 
 The pass itself is [ISessionScoringRunner](#isessionscoringrunner), implemented by
 [SessionScoringRunner](#sessionscoringrunner) and registered as a plain scoped service
-(`DependencyInjection.cs:70`) rather than a second handler, because a handler may not inject another
-handler and the architecture suite enforces it (`ISessionScoringRunner.cs:9-14`). It is a full re-score
-that loads every non-service session for the event
+(`DependencyInjection.cs:67`) rather than a second handler, because a handler may not inject another
+handler and the architecture suite enforces it (`ISessionScoringRunner.cs:9-14`). It loads every
+non-service session for the event
 (`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:30-34`),
-batch-loads the speakers into a lookup (`:39-51`), then scores session by session through
+batch-loads the speakers into a lookup (`:39-51`), and, when the command carried a request instant,
+drops every session whose score was written at or after it, because that score already answers the
+request (`:53`, `:141-174`; a `null` instant scores every session, `ISessionScoringRunner.cs:19-22`).
+It then scores the rest session by session through
 [IAiScoringService](#iaiscoringservice), a port implemented in infrastructure by
-[AnthropicScoringService](group-19-conference-infrastructure.md#anthropicscoringservice), which calls the
-Anthropic Messages API. The replace strategy is the detail worth studying, because the comment records a
-reversal (`:93-102`): an earlier version deleted every score on the event up front in one set-based
+[SessionScoringService](group-19-conference-infrastructure.md#sessionscoringservice), which sends a
+versioned prompt contract through the framework's governed `IChatClient` (MMCA.Common.AI) rather than
+constructing an `HttpClient` or naming a vendor
+(`MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:12-19`, `:46-49`); the
+port also exposes the `ModelId` and `PromptVersion` that are persisted on every score
+(`IAiScoringService.cs:15-30`). The replace strategy is the detail worth studying, because the comment records a
+reversal (`:96-105`): an earlier version deleted every score on the event up front in one set-based
 `ExecuteDeleteAsync` so the dashboard would reset to zero and count up, but that paid for the progress
 animation with real data, since N sequential paid calls follow and the first one to fail on an expired
 key or a rate limit left every session it never reached with no score at all. Today the delete is
-per-session and happens in the same step that writes the replacement (`:103-107`), so a run that dies
+per-session and happens in the same step that writes the replacement (`:106-110`), so a run that dies
 partway through has replaced only what it re-scored and a session whose call failed keeps the score it
-already had (`:98-100`); the unique filtered index on `SessionId` makes the delete-then-add pair safe,
-and the number of scores replaced is logged once at the end of the pass (`:119-122`). Each successful score is saved immediately (`:106-107`) so the UI can still
-show real-time progress, a per-session save failure only increments a counter and continues (`:112-116`),
-and the pass fails as a whole only when every session failed (`:126-132`). The contract is
+already had (`:101-103`); the unique filtered index on `SessionId` makes the delete-then-add pair safe,
+and the number of scores replaced is logged once at the end of the pass (`:122-125`). Each successful score is saved immediately (`:109-110`) so the UI can still
+show real-time progress, a per-session save failure only increments a counter and continues (`:115-119`),
+and the pass fails as a whole only when every session failed (`:129-135`). The contract is
 deliberately **never-throw**: `ScoreSessionAsync` returns a
 [SessionScoringResult](#sessionscoringresult) with a `Success` flag and seven `1.0`-`10.0` sub-scores
 (overall, topic relevance, description quality, novelty, actionable takeaways, depth/insight quality,
 credibility/experience) in *all* cases
 (`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:9`,
-`IAiScoringService.cs:40-71`), so one bad session never aborts the scoring loop. The input shapes are
+`IAiScoringService.cs:54-85`), so one bad session never aborts the scoring loop. The input shapes are
 [SessionScoringInput](#sessionscoringinput) and [SpeakerInfo](#speakerinfo)
-(`IAiScoringService.cs:23-37`); the result is mapped onto the
-[SessionAiScore](group-17-conference-domain.md#sessionaiscore) aggregate for persistence
-(`SessionScoringRunner.cs:78-82`). Keeping the *port* here and the HTTP/LLM *adapter* in
+(`IAiScoringService.cs:33-51`); the result is mapped onto the
+[SessionAiScore](group-17-conference-domain.md#sessionaiscore) aggregate for persistence together with
+the port's model id and prompt version (`SessionScoringRunner.cs:81-85`). Keeping the *port* here and the HTTP/LLM *adapter* in
 infrastructure is textbook [Rubric §3, Clean Architecture] (the application layer depends on an
 interface, never the SDK) and [Rubric §7, Microservices Readiness] (the AI provider is swappable behind
 one interface).
@@ -2066,7 +2085,7 @@ extracted without disturbing the rest.
 - **Depends on** - [IQueryHandler<in TQuery, TResult>](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) (implemented) and [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) (the only constructor dependency, `:16-17`); the aggregates [Event](group-17-conference-domain.md#event), [Session](group-17-conference-domain.md#session), [Speaker](group-17-conference-domain.md#speaker), [Category](group-17-conference-domain.md#category), and [SessionAiScore](group-17-conference-domain.md#sessionaiscore); [SpeakerLocalityHelper](#speakerlocalityhelper) and its [LocalityLookupEntry](#localitylookupentry); [SessionStatuses](group-17-conference-domain.md#sessionstatuses); the nested [StatusBucket](#statusbucket-1); [Result](group-01-result-error-handling.md#result) and [Error](group-01-result-error-handling.md#error); and the output contracts [SessionSelectionDashboardDTO](group-17-conference-domain.md#sessionselectiondashboarddto), [CategoryDistributionDTO](group-17-conference-domain.md#categorydistributiondto), [SpeakerSessionOverlapDTO](group-17-conference-domain.md#speakersessionoverlapdto), [MultiSessionSpeaker](group-17-conference-domain.md#multisessionspeaker), [SpeakerSessionSummary](group-17-conference-domain.md#speakersessionsummary), [SpeakerLocalitySummary](group-17-conference-domain.md#speakerlocalitysummary), and [SessionAiScoreDTO](group-17-conference-domain.md#sessionaiscoredto) (`:5`).
 - **Concept introduced - one snapshot, many projections, and the deliberate query-filter escape.** Two mechanisms are worth learning here. The first is the load-once discipline: the comment at `:36` records that the loads stay sequential for EF single-context safety (a `DbContext` is not thread-safe, so "parallel-friendly" here means ordered and independent, not concurrent), and every later block is a pure function over the already-materialized collections. The second is the one place the handler steps outside the framework's defaults: the speaker load passes `ignoreQueryFilters: true` (`:64`), turning off the global soft-delete filter for that read only. The comment above it explains the rule (`:55-59`): speaker deletion deliberately does not cascade to [SessionSpeaker](group-17-conference-domain.md#sessionspeaker) links (BR-70/BR-71), so a live link can point at a soft-deleted speaker, and honoring the filter would render that row as "Unknown" instead of the truth. `[Rubric §8 - Data Architecture]` assesses whether soft-delete semantics are applied deliberately rather than by reflex: this is an explicit, commented, single-read opt-out, and the comment notes that every downstream consumer re-filters the child collections in memory, so the escape cannot resurrect deleted category items. `[Rubric §12 - Performance & Scalability]` assesses request economy: five loads serve five projections. `[Rubric §15 - Best Practices & Code Quality]` assesses duplication, and that is the honest weak point (see the caveats).
 - **Walkthrough** - `HandleAsync` (`:21-128`) resolves four read-only repositories, typed `IEntityReader<,>` or `IEntityQuerier<,>` per the interface each call needs (`:25-29`), then fetches the [Event](group-17-conference-domain.md#event) and returns `Error.NotFound` decorated with source and target when it is missing (`:31-34`): this is the only decision-support handler with a failure path, pinned by `HandleAsync_WhenEventNotFound_ReturnsNotFound` (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/DecisionSupport/GetSessionSelectionDashboardHandlerTests.cs:200`). It loads the event's non-service sessions with `SessionSpeakers` and `SessionCategoryItems` included, untracked (`:36-41`), all categories with their items (`:43-46`), the distinct speaker ids referenced by live session-speaker links (`:48-53`), and those speakers with `SpeakerCategoryItems` included and query filters off (`:60-65`), indexed into a dictionary (`:66`). Two lookups follow: category-item id to name (`:68-76`) and the locality lookup built by [SpeakerLocalityHelper](#speakerlocalityhelper) from the locality categories it finds (`:78-79`). The summary counts are four `Count` passes plus one subtraction: accepted counts sessions via `SessionStatuses.IsEligible` (`:83`), accept-queue and declined count their constants, and pending is the remainder (`:81-88`). `ComputeCategoryDistribution` (`:91`, `:130-137`) reuses the same tally-then-group shape as [GetCategoryDistributionHandler](#getcategorydistributionhandler), via `CountCategoryItems` (`:139-162`) and `BuildCategoryGroups` (`:164-190`). A single speaker-to-sessions map now feeds both remaining blocks: `MapSpeakerSessions` (call `:93-94`, defined `:193-214`) groups sessions by live speaker link once. `ComputeSpeakerOverlap` (`:97`, `:216-263`) consumes that map, skips speakers missing from the lookup (`:225-226`), stamps each speaker's locality tier (`:234`), orders each speaker's sessions by title (`:237`), and sorts speakers by session count descending, then accepted-session presence, then name (`:250-260`). `ComputeSpeakerLocality` (`:100`, `:265-301`) consumes the same map rather than re-grouping, resolves each speaker to a tier defaulting to `"Unknown"` (`:274-278`), accumulates speaker, session, accepted, and accept-queue counts per tier in a case-insensitive dictionary (`:270`, `:280-288`), and emits [SpeakerLocalitySummary](group-17-conference-domain.md#speakerlocalitysummary) rows ordered by speaker count descending (`:291-300`). Finally the AI-score block loads every [SessionAiScore](group-17-conference-domain.md#sessionaiscore) whose `SessionId` is in the loaded set (`:102-110`), and `BuildAiScoreDtos` (`:325-348`) orders them by `OverallScore` descending and projects each one through `BuildSingleAiScoreDto` (`:350-381`). That projection copies the score's provenance straight through, `ModelUsed` and `PromptVersion` (`:373-374`), so the screen can attribute a number to the model and the prompt contract behind it. It is also where the "Level" category is special-cased: the handler finds the first non-deleted category whose title contains "Level" (`:335-336`), collects its item ids (`:337-339`), and `ResolveCategoryInfo` (`:399-421`) then splits a session's tags into ordinary categories and the single level value. `ResolveSpeakerLocalities` (`:383-397`) produces the distinct tier names for a scored session's speakers, again defaulting to `"Unknown"`. `ScoredOn` prefers `LastModifiedOn` and falls back to `CreatedOn` (`:375`), the audit fields the framework stamps on save.
-- **Why it's built this way** - the screen needs internally consistent numbers, and computing every block from one materialized snapshot is what guarantees the speaker panel and the category panel describe the same set of sessions. The AI scores are read here rather than computed here because scoring is background work: [ScoreEventSessionsHandler](#scoreeventsessionshandler) does the writing off the request path and the dashboard surfaces whatever rows exist, which is why the queue endpoint tells the caller to refresh after a few minutes (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:100-105`).
+- **Why it's built this way** - the screen needs internally consistent numbers, and computing every block from one materialized snapshot is what guarantees the speaker panel and the category panel describe the same set of sessions. The AI scores are read here rather than computed here because scoring is background work: [ScoreEventSessionsInternalCommandHandler](#scoreeventsessionsinternalcommandhandler) (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:42`) runs the durable scoring pass off the request path via the internal-command processor (ADR-114), delegating the per-session work to [SessionScoringRunner](#sessionscoringrunner), and the dashboard surfaces whatever score rows already exist, which is why the trigger endpoint tells the caller to refresh the dashboard after a few minutes (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:100-105`).
 - **Where it's used** - injected into [SessionSelectionController](group-20-conference-api-grpc.md#sessionselectioncontroller) as `IQueryHandler<GetSessionSelectionDashboardQuery, Result<SessionSelectionDashboardDTO>>` (`SessionSelectionController.cs:34`) and invoked from `GET SessionSelection/dashboard/{eventId}` (`:39-51`), the one decision-support endpoint the Blazor UI calls, through [SessionSelectionService](group-21-conference-ui.md#sessionselectionservice) (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/Sessions/Selection/SessionSelectionService.cs:14-32`) and onto the [SessionSelectionDashboard](group-21-conference-ui.md#sessionselectiondashboard) page.
 - **Caveats / not-in-source** - the category-distribution and speaker-overlap logic is duplicated rather than shared: `CountCategoryItems` and `BuildCategoryGroups` here (`:139-162`, `:164-190`) mirror [GetCategoryDistributionHandler](#getcategorydistributionhandler)'s equivalents, and `ComputeSpeakerOverlap` (`:216-263`) mirrors [GetSpeakerSessionOverlapHandler](#getspeakersessionoverlaphandler)'s `BuildMultiSessionSpeakers`. Nothing in source keeps the copies aligned, and they already differ in one visible way: this handler loads speakers with `ignoreQueryFilters: true` (`:64`) while the standalone overlap handler does not (`GetSpeakerSessionOverlapHandler.cs:43-47`), so a soft-deleted speaker appears on the dashboard and is absent from the narrow endpoint. The "Level" category is matched by a substring of the category title (`:335-336`), so renaming that category upstream silently empties `SessionLevel`. A session carrying more than one level tag resolves to whichever `ResolveCategoryInfo` encounters first (`:415-418`), decided by the enumeration order of the session's links. All five repositories are now resolved through `IUnitOfWork.GetReadRepository<,>()` (`:25-29`, `:103-104`), typed to the narrowest interface (`IEntityReader<,>` or `IEntityQuerier<,>`) each call needs, matching the read-only convention: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:19` versus `:29`).
 
@@ -2122,7 +2141,7 @@ extracted without disturbing the rest.
 - **Concept introduced - the never-throw service result.** [IAiScoringService](#iaiscoringservice) contracts that scoring never throws and reports failure in the result instead (`IAiScoringService.cs:9`), and this record is the vehicle. The adapter's failure path builds it with every score at `0m`, `Reasoning = "Scoring failed"`, and `Success = false` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:344-357`), so one bad session never aborts a loop over hundreds. `[Rubric §29 - Resilience & Business Continuity]` assesses whether a flaky external dependency degrades one item or the whole run: here it degrades one. `[Rubric §13 - Observability & Operability]` assesses whether an outcome is legible after the fact: `Reasoning` is persisted onto [SessionAiScore](group-17-conference-domain.md#sessionaiscore) alongside the model id, so an organizer can see why a session scored what it scored and which model said so.
 - **Walkthrough** - ten `required init` members (`:43-70`): `SessionId`; the seven `decimal` scores `OverallScore`, `TopicRelevanceScore`, `DescriptionQualityScore`, `NoveltyScore`, `ActionableTakeawaysScore`, `DepthOrInsightQualityScore`, `CredibilityExperienceScore`, each documented as 1.0 to 10.0; `Reasoning`; and `Success`. `required` on all ten means no partially-populated instance can be constructed, which is what lets the handler read `result.SessionId` rather than the loop variable when building the entity (`SessionScoringRunner.cs:82`).
 - **Why it's built this way** - the 1.0 to 10.0 range in the doc comments is documentation on this record only. The invariant is enforced one layer in, by `SessionAiScore.Create` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionAiScore.cs:77`), whose `EnsureScoreInRange` rejects anything outside `>= 1.0m and <= 10.0m` with a `SessionAiScore.OutOfRange` error (`:134-141`). Keeping the transport record permissive and the entity strict means a model that returns nonsense produces a counted failure instead of a corrupt row.
-- **Where it's used** - returned by `IAiScoringService.ScoreSessionAsync` (`IAiScoringService.cs:11-13`), produced by [AnthropicScoringService](group-19-conference-infrastructure.md#anthropicscoringservice) and by [FakeAiScoringService](group-28-testing-infrastructure.md#per-project-test-rollup) in the integration test host (`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Infrastructure/FakeAiScoringService.cs`), consumed by [ScoreEventSessionsHandler](#scoreeventsessionshandler) (`:70-83`). It is application-internal: the shape the API returns is [SessionAiScoreDTO](group-17-conference-domain.md#sessionaiscoredto).
+- **Where it's used** - returned by `IAiScoringService.ScoreSessionAsync` (`IAiScoringService.cs:11-13`), produced by [SessionScoringService](group-19-conference-infrastructure.md#sessionscoringservice) and by [FakeAiScoringService](group-28-testing-infrastructure.md#per-project-test-rollup) in the integration test host (`MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Infrastructure/FakeAiScoringService.cs`), consumed by [SessionScoringRunner](#sessionscoringrunner) (`SessionScoringRunner.cs:465-478`). It is application-internal: the shape the API returns is [SessionAiScoreDTO](group-17-conference-domain.md#sessionaiscoredto).
 - **Caveats / not-in-source** - a `Success = false` result carries all-zero scores, which `SessionAiScore.Create` would reject outright. Nothing in the type enforces that pairing; the handler simply never reaches `Create` on a failed result because it checks `Success` first (`SessionScoringRunner.cs:74-79`).
 
 `[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
@@ -2135,7 +2154,7 @@ extracted without disturbing the rest.
 - **Concept introduced - the minimized projection at an external boundary.** Everything in this record leaves the system: [SessionScoringService](group-19-conference-infrastructure.md#sessionscoringservice) concatenates the name, tagline, and bio into the prompt body it sends through the governed chat client (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:304-310`). Building a purpose-shaped record instead of passing the entity means the set of fields that can reach a third party is a three-line declaration a reviewer can read at a glance. `[Rubric §30 - Compliance/Privacy/Data Governance]` assesses data minimization at a processor boundary: the identifier is deliberately absent, so what leaves is speaker-authored public bio text with no key to join it back. `[Rubric §11 - Security]` assesses whether such a boundary is explicit rather than incidental; here it is a type, not a convention.
 - **Walkthrough** - three positional members (`:23-26`), the last two nullable. The handler builds one per non-deleted [SessionSpeaker](group-17-conference-domain.md#sessionspeaker) it can resolve, from `speaker.FullName`, `speaker.TagLine`, `speaker.Bio` (`SessionScoringRunner.cs:63-69`).
 - **Why it's built this way** - a scoring prompt needs the speaker's credibility signals and nothing else. Widening the model would silently widen what is sent to a paid third-party API, which is the kind of change a dedicated record forces into review.
-- **Where it's used** - as the `Speakers` list on [SessionScoringInput](#sessionscoringinput) (`IAiScoringService.cs:51`); constructed only in [ScoreEventSessionsHandler](#scoreeventsessionshandler) (`:64`).
+- **Where it's used** - as the `Speakers` list on [SessionScoringInput](#sessionscoringinput) (`IAiScoringService.cs:51`); constructed only in [SessionScoringRunner](#sessionscoringrunner) (`SessionScoringRunner.cs:454-460`).
 - **Caveats / not-in-source** - the doc comments state "max 500 chars" for `TagLine` and "max 4000 chars" for `Bio` (`:21-22`), but nothing in this record, the handler, or the scoring adapter truncates or validates either value: the adapter XML-escapes them (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Sessions/Scoring/SessionScoringService.cs:304-310`) and relies on the framework's `PiiRedactionGuardrail`, registered on the governed chat pipeline, to strip contact details before the call goes out, but neither step truncates. Treat those numbers as descriptive of the source fields, not as an enforced bound on the prompt. A different, unrelated `SpeakerInfo` exists in the Conference UI assembly ([SpeakerInfo](group-21-conference-ui.md#speakerinfo)); the two only share a name.
 
 ### SessionScoringInput
@@ -2146,7 +2165,7 @@ extracted without disturbing the rest.
 - **Concept** - none new; it is the request half of the never-throw port taught at [IAiScoringService](#iaiscoringservice), and the minimization rationale is taught at [SpeakerInfo](#speakerinfo). `[Rubric §3 - Clean Architecture]` assesses whether an external capability is described in the application's own language: this record names a session and its speakers, not a prompt, a token budget, or a JSON body, all of which stay inside the Infrastructure adapter.
 - **Walkthrough** - four positional members (`:33-37`). `Speakers` is documented as possibly empty (`:32`), and the handler does produce an empty list for a session whose speaker links resolve to nothing (`SessionScoringRunner.cs:63-69`). `SessionId` is carried through the call and echoed back on [SessionScoringResult](#sessionscoringresult), which is what lets the handler pair a result with its session without holding a map.
 - **Why it's built this way** - passing a purpose-built input record rather than the [Session](group-17-conference-domain.md#session) entity keeps the domain aggregate out of the adapter and keeps the prompt's ingredients auditable in four lines.
-- **Where it's used** - the sole payload parameter of `IAiScoringService.ScoreSessionAsync` (`:11-13`); built once per session by [ScoreEventSessionsHandler](#scoreeventsessionshandler) (`:69`), consumed by [AnthropicScoringService](group-19-conference-infrastructure.md#anthropicscoringservice).
+- **Where it's used** - the sole payload parameter of `IAiScoringService.ScoreSessionAsync` (`:11-13`); built once per session by [SessionScoringRunner](#sessionscoringrunner) (`SessionScoringRunner.cs:462`), consumed by [SessionScoringService](group-19-conference-infrastructure.md#sessionscoringservice).
 
 `[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
 
@@ -2155,14 +2174,14 @@ extracted without disturbing the rest.
 
 - **What it is** - the application-layer port for scoring one conference session with an AI model, plus two provenance properties: which model did the scoring, and which version of the prompt contract it was asked with.
 - **Depends on** - [SessionScoringInput](#sessionscoringinput) and [SessionScoringResult](#sessionscoringresult), both declared in this same file (`:47`, `:54`), which in turn use [SpeakerInfo](#speakerinfo) (`:37`). External: BCL only. There is no Anthropic client type anywhere in the Application assembly.
-- **Concept introduced - port and adapter for an unreliable, paid, external capability.** `[Rubric §3 - Clean Architecture]` assesses which layer owns the abstraction: the application declares the port, while the HTTP client, the prompt text, the JSON contract records, and the API key all live in Infrastructure's [AnthropicScoringService](group-19-conference-infrastructure.md#anthropicscoringservice), bound by `AddHttpClient<IAiScoringService, AnthropicScoringService>` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:36`). `[Rubric §1 - SOLID]` assesses the dependency-inversion direction: [ScoreEventSessionsHandler](#scoreeventsessionshandler) depends on this interface, so swapping vendors touches one registration. `[Rubric §29 - Resilience & Business Continuity]` assesses failure containment: the "Never throws (failure is indicated in the result)" clause (`:9`) is the Result philosophy applied to a network call, and it is what lets the handler's per-session loop keep going. `[Rubric §13 - Observability & Operability]` assesses whether an AI output can be explained after the fact: the port makes both the model id (`:16`) and the prompt version (`:30`) part of the contract, so every stored score carries the two inputs that decide what it means (the governance rule is ADR-111, `Website/docs-src/adr/111-ai-session-scoring-governance.md`). `[Rubric §14 - Testability]` assesses whether the use case can run without the dependency: [FakeAiScoringService](group-28-testing-infrastructure.md#per-project-test-rollup) implements this interface, so the scoring path is exercised with no HTTP and no API key.
+- **Concept introduced - port and adapter for an unreliable, paid, external capability.** `[Rubric §3 - Clean Architecture]` assesses which layer owns the abstraction: the application declares the port, while the prompt text and the JSON contract records live in Infrastructure's [SessionScoringService](group-19-conference-infrastructure.md#sessionscoringservice), registered with `services.TryAddScoped<IAiScoringService>(...)` over a governed `IChatClient` resolved with `GetService`, not `GetRequiredService` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:47-50`); the transport, the credential, the model, and the per-call timeout all belong to `MMCA.Common.AI`'s chat client now, so nothing in this module constructs an `HttpClient` or names a vendor. `[Rubric §1 - SOLID]` assesses the dependency-inversion direction: [SessionScoringRunner](#sessionscoringrunner) depends on this interface, so swapping providers touches one registration. `[Rubric §29 - Resilience & Business Continuity]` assesses failure containment: the "Never throws (failure is indicated in the result)" clause (`:9`) is the Result philosophy applied to a network call, and it is what lets the handler's per-session loop keep going. `[Rubric §13 - Observability & Operability]` assesses whether an AI output can be explained after the fact: the port makes both the model id (`:16`) and the prompt version (`:30`) part of the contract, so every stored score carries the two inputs that decide what it means (the governance rule is ADR-111, `Website/docs-src/adr/111-ai-session-scoring-governance.md`). `[Rubric §14 - Testability]` assesses whether the use case can run without the dependency: [FakeAiScoringService](group-28-testing-infrastructure.md#per-project-test-rollup) implements this interface, so the scoring path is exercised with no HTTP and no API key.
 - **Walkthrough**
   - `ScoreSessionAsync(SessionScoringInput, CancellationToken = default)` (`:11-13`) returns `Task<SessionScoringResult>`. There is no `Result<T>` here and no exception path: the success or failure signal is the `Success` flag on the returned record.
   - `ModelId { get; }` (`:16`) exposes which model produced a score. The handler stamps it onto the persisted entity as the `modelUsed` argument (`SessionScoringRunner.cs:85`), so a score row records both the number and its provenance.
   - `PromptVersion { get; }` (`:30`) exposes the version of the prompt contract the implementation sends, as a dated `yyyy-MM-dd.N` string, and the handler stamps it on the same call (`SessionScoringRunner.cs:85`). The doc comment (`:18-29`) is where the operating rule lives: bump it on any change to the system prompt, the user-prompt assembly (speaker formatting included), the redaction rules applied to submitted text, or the structured-output schema. It also records why the rule holds, that the golden evaluation suite pins the rendered prompt by hash per version, so an unbumped prompt change fails there rather than silently re-basing every score.
   - Scope: one session per call. Nothing on this interface batches, so the fan-out policy (sequential, one at a time) is the handler's decision rather than the port's.
 - **Why it's built this way** - defining the port in Application lets the scoring use case be exercised with a fake scorer, and lets the AI vendor change without touching the handler. Exposing `ModelId` and `PromptVersion` on the port rather than hard-coding strings in the handler means the recorded provenance cannot drift from the client that actually made the call: the implementation that assembles the prompt is the one thing that can honestly name its version.
-- **Where it's used** - constructor-injected into [ScoreEventSessionsHandler](#scoreeventsessionshandler) (`:20`); implemented by [AnthropicScoringService](group-19-conference-infrastructure.md#anthropicscoringservice) in production and [FakeAiScoringService](group-28-testing-infrastructure.md#per-project-test-rollup) in the integration test host.
+- **Where it's used** - constructor-injected into [SessionScoringRunner](#sessionscoringrunner) (`SessionScoringRunner.cs:408-411`); implemented by [SessionScoringService](group-19-conference-infrastructure.md#sessionscoringservice) in production and [FakeAiScoringService](group-28-testing-infrastructure.md#per-project-test-rollup) in the integration test host.
 
 `[Rubric §16, AI-Native Application Architecture]` applies: this type is part of the AI session-scoring feature (a model call behind a port, versioned prompt and model, an evaluation gate, metered spend; ADR-111).
 
