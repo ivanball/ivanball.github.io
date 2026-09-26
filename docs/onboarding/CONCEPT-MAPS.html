@@ -571,9 +571,10 @@
     class MONO,GW,SVC1,SVC2,SVC3,SVC4 dep</pre>
           <hr>
           <h2 id="8-persistence-database-per-service--polyglot-engines-adr-006--018--030">8. Persistence, database-per-service + polyglot engines (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> / 018 / 030)</h2>
-          <p>One concrete <code>SQLServerDbContext</code> over the abstract <code>ApplicationDbContext</code>, <strong>one instance per
-          database</strong>. Each entity is engine-agnostic; a single <code>[UseDataSource(engine)]</code> attribute on its
-          config class picks SQL Server, Cosmos, or SQLite. Cross-source relationships auto-degrade; the outbox
+          <p>One sealed context class per engine (<code>SQLServerDbContext</code>, <code>PostgreSQLDbContext</code>, <code>SqliteDbContext</code>,
+          <code>CosmosDbContext</code>) over the abstract <code>ApplicationDbContext</code>, <strong>one instance per database</strong>. Each
+          entity is engine-agnostic; a single <code>[UseDataSource(engine)]</code> attribute on its config class picks
+          SQL Server, PostgreSQL (<a href="https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html" target="_blank" rel="noopener">ADR-113</a>), Cosmos, or SQLite. Cross-source relationships auto-degrade; the outbox
           is the cross-source consistency mechanism. Each service self-applies its EF migrations at boot
           (<a href="https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html" target="_blank" rel="noopener">ADR-030</a>).</p>
           <pre class="mermaid">flowchart TD

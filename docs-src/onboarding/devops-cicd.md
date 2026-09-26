@@ -905,7 +905,7 @@ static client secret is ever stored in GitHub. `packages: read` is needed for `G
 NuGet restore of the MMCA.Common packages.
 
 `actions: read` is the least obvious of the four, and the comment above it says why (`deploy.yml:32-34`):
-the three freshness gates read run history through the Actions API, **and** `e2e-gate` needs it here
+the four freshness gates read run history through the Actions API, **and** `e2e-gate` needs it here
 because a reusable workflow can never request more than its caller holds, so `e2e.yml`'s own
 skip-if-unchanged guard would die on "Resource not accessible by integration" if the caller did not grant
 it. A `permissions:` block is a ceiling for every workflow it calls, not just for its own steps.

@@ -805,8 +805,10 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           demonstrates deliberate stratification rather than a single catch-all integration tier.</p>
           <hr>
           <h2 id="3-shipped-testing-infrastructure-packages">3. Shipped testing-infrastructure packages</h2>
-          <p>MMCA.Common ships <strong>five</strong> of its nineteen packages as testing infrastructure that downstream apps
-          consume as NuGet references rather than writing their own harness<span class="cite"><span> (<code>MMCA.Common/FACTS.md:19,35-39</code>)</span></span>:</p>
+          <p>MMCA.Common ships <strong>five</strong> of its twenty-two packages as general testing infrastructure that downstream
+          apps consume as NuGet references rather than writing their own harness (<span class="cite"><span><code>MMCA.Common/FACTS.md:19,38-42</code></span></span>;
+          a sixth, <code>MMCA.Common.AI.Testing</code>, is the language-model replay harness covered in
+          <a href="group-27-common-ai-integration.html">group-27</a>):</p>
           <ul>
           <li><code>MMCA.Common.Testing</code> (23 types), integration-test base, JWT generator, SQL fixture base, handler
           scaffold, entity builders, and the eight runtime conformance bases (this section).</li>

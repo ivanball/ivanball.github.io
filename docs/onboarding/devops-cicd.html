@@ -841,7 +841,7 @@ dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
           static client secret is ever stored in GitHub. <code>packages: read</code> is needed for <code>GITHUB_TOKEN</code>-authenticated
           NuGet restore of the MMCA.Common packages.</p>
           <p><code>actions: read</code> is the least obvious of the four, and the comment above it says why<span class="cite"><span> (<code>deploy.yml:32-34</code>)</span></span>:
-          the three freshness gates read run history through the Actions API, <strong>and</strong> <code>e2e-gate</code> needs it here
+          the four freshness gates read run history through the Actions API, <strong>and</strong> <code>e2e-gate</code> needs it here
           because a reusable workflow can never request more than its caller holds, so <code>e2e.yml</code>&#39;s own
           skip-if-unchanged guard would die on &quot;Resource not accessible by integration&quot; if the caller did not grant
           it. A <code>permissions:</code> block is a ceiling for every workflow it calls, not just for its own steps.</p>

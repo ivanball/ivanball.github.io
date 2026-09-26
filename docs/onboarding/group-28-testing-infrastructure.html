@@ -150,8 +150,9 @@
           <p><strong>What this group covers.</strong> Everything the codebase uses to <em>prove</em> itself: the five reusable
           test-support packages that ship out of <code>MMCA.Common/Source/Hosting</code> (<code>MMCA.Common.Testing</code>,
           <code>MMCA.Common.Testing.Architecture</code>, <code>MMCA.Common.Testing.Aspire</code>, <code>MMCA.Common.Testing.E2E</code>,
-          <code>MMCA.Common.Testing.UI</code>, five of the nineteen packages published from MMCA.Common and listed in
-          <span class="cite"><span><code>MMCA.Common/FACTS.md:19-40</code></span></span>), the
+          <code>MMCA.Common.Testing.UI</code>, five of the twenty-two packages published from MMCA.Common and listed in
+          <span class="cite"><span><code>MMCA.Common/FACTS.md:19-43</code></span></span>; the sixth test-support package, <code>MMCA.Common.AI.Testing</code>, belongs to
+          <a href="group-27-common-ai-integration.html">group-27</a>), the
           architecture-fitness rule library that gates the build, the runtime-conformance bases that gate a
           booted host, the backend-less component Gallery harness, the BenchmarkDotNet performance suite, and
           the many per-repo test projects that consume all of it. The distinction to hold onto while reading:
@@ -1159,7 +1160,7 @@
           (<code>MMCA.Common/.github/workflows/ci.yml:371</code>)</span></span>, so moving a number has to be a deliberate, reviewed
           change, [Rubric §12, Performance &amp; Scalability]. The same job family carries one more quiet gate
           worth knowing: the unit run is invoked with <code>--minimum-expected-tests 2000</code><span class="cite"><span>
-          (<code>MMCA.Common/.github/workflows/ci.yml:144</code>)</span></span>, so a discovery regression that silently drops thousands
+          (<code>MMCA.Common/.github/workflows/ci.yml:158</code>)</span></span>, so a discovery regression that silently drops thousands
           of tests fails the build instead of reporting a green, empty run.</p>
           <p>The takeaway for a new engineer: pick the tier that matches what you are proving (a fast unit test
           for domain logic, bUnit for a component, an integration fixture for a full request path, a
