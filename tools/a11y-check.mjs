@@ -27,7 +27,8 @@ const BASE = `http://127.0.0.1:${PORT}`;
 
 /* One of each page type. The seven root pages are hand-authored; the two docs
    pages cover the generated shell and the sidebar layout; the article page adds
-   the byline, hero, standfirst and series pager. */
+   the byline, hero, standfirst and series pager; the onboarding chapter adds the
+   collapsed citation chips and their Citations toggle. */
 const PATHS = [
   "/index.html",
   "/resume.html",
@@ -39,6 +40,7 @@ const PATHS = [
   "/docs/index.html",
   "/docs/adr/001-manual-dto-mapping.html",
   "/articles/transactional-outbox-dotnet.html",
+  "/docs/onboarding/group-27-common-ai-integration.html",
 ];
 
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];

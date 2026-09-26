@@ -23,7 +23,7 @@
   <meta name="twitter:description" content="This audit reconciles the written guide against the mechanically-extracted inventory, logs every deliberate exception, verifies the grouping/ordering…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Phase 4, Coverage Audit","item":"https://ivanball.github.io/docs/onboarding/99-coverage-audit.html"}]}</script>
-  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
@@ -91,6 +91,7 @@
         <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
         <span aria-hidden="true">/</span>
         <span class="current">Phase 4, Coverage Audit</span>
+        <button class="rail-toggle cite-toggle" type="button" data-cites-toggle aria-pressed="false">Citations</button>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -277,16 +278,16 @@
           regenerated again at <strong>framework v1.83.0</strong> (MMCA.Common <code>b9a6a28</code>; MMCA.ADC <code>17dce5a</code>; FACTS.md is the
           source of truth for the version / 13-package / 23-ADR figures). The net change since the permission pass
           (<strong>+2</strong> distinct nodes: 1,867 to 1,869) is entirely in <strong>G25 (+2):</strong> <code>FixedTimeProvider</code> (the injected-<code>TimeProvider</code>
-          test clock in <code>MarkAllNotificationsReadHandlerTests.cs:65</code>) and <code>RateLimitPartitionTests</code>
-          (<code>MMCA.Common.API.Tests/Startup/RateLimitPartitionTests.cs:16</code>, <a href="https://ivanball.github.io/docs/adr/019-rate-limiting.html" target="_blank" rel="noopener">ADR-019</a>). Both are per-project test types
+          test clock in <span class="cite"><span><code>MarkAllNotificationsReadHandlerTests.cs:65</code></span></span>) and <code>RateLimitPartitionTests</code>
+          (<span class="cite"><span><code>MMCA.Common.API.Tests/Startup/RateLimitPartitionTests.cs:16</code></span></span>, <a href="https://ivanball.github.io/docs/adr/019-rate-limiting.html" target="_blank" rel="noopener">ADR-019</a>). Both are per-project test types
           and roll up by project (768 to 770), so the individually-sectioned count is unchanged at 1,099. No type was
           added, removed, or regrouped outside G25.</p>
           <ul>
           <li><strong>Two moved declaration citations</strong> were re-verified and corrected: <code>BaseDomainEvent</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs</code> <code>:10</code> to <code>:18</code>, an <code>&lt;remarks&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs</code> <span class="cite"><span><code>:10</code></span></span> to <span class="cite"><span><code>:18</code></span></span>, an <code>&lt;remarks&gt;</code>
           block now documenting the creation-time <code>DateOccurred</code> default as a deliberate choice, comment-only,
           commit <code>b99f46c</code>) and <code>OpenApiEndpointExtensions</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs</code> <code>:16</code> to <code>:18</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs</code> <span class="cite"><span><code>:16</code></span></span> to <span class="cite"><span><code>:18</code></span></span>),
           which gained an opt-in <strong>Scalar OpenAPI UI</strong> helper (<code>MapCommonScalarUi</code>, behind the non-production guard,
           commit <code>706df4d</code>); the G12 section now documents it.</li>
           <li><strong>Four ADRs finalized since the last pass (020-023) are now cross-referenced</strong> where their patterns are
@@ -319,20 +320,20 @@
           <ul>
           <li><strong>i18n / multi-locale (<a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>, supersedes <a href="https://ivanball.github.io/docs/adr/011-single-locale-i18n.html" target="_blank" rel="noopener">ADR-011</a>).</strong> Server-side edge error localization keyed by
           <code>Error.Code</code>: <strong>G12 (+5)</strong> <code>ErrorLocalizer</code> / <code>IErrorLocalizer</code> / <code>ErrorResourceSource</code>
-          (<code>MMCA.Common.API/Localization/</code>), <code>ErrorResources</code> (<code>MMCA.Common.API/Resources/ErrorResources.cs:9</code>),
-          and <code>SupportedCultures</code> (<code>MMCA.Common.Shared/Globalization/SupportedCultures.cs:9</code>, re-homed from the
+          (<code>MMCA.Common.API/Localization/</code>), <code>ErrorResources</code><span class="cite"><span> (<code>MMCA.Common.API/Resources/ErrorResources.cs:9</code>)</span></span>,
+          and <code>SupportedCultures</code> (<span class="cite"><span><code>MMCA.Common.Shared/Globalization/SupportedCultures.cs:9</code></span></span>, re-homed from the
           <code>Shared</code>-to-G08 catch-all into G12 beside the edge localizer via a new classifier rule). Per-module
           localized error resources: <strong>G20 (+1)</strong> <code>ConferenceErrorResources</code>, <strong>G22 (+1)</strong> <code>EngagementErrorResources</code>,
           <strong>G23 (+1)</strong> <code>IdentityErrorResources</code>. Culture bootstrap + forwarding in <strong>G15</strong>: <code>MmcaCultureBootstrap</code>,
           <code>CultureDelegatingHandler</code>, <code>SharedResource</code>, the <code>IUserPreferenceReader/Writer</code> + <code>ApiUserPreferenceReader/Writer</code>
           pair, <code>UserPreferences</code> / <code>UserPreferencesRequest</code> (<code>MMCA.Common.UI/</code>).</li>
-          <li><strong>Day/Dark theme (<a href="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html" target="_blank" rel="noopener">ADR-028</a>).</strong> <strong>G15</strong> <code>ThemeService</code> (<code>MMCA.Common.UI/Services/ThemeService.cs:16</code>) plus the
+          <li><strong>Day/Dark theme (<a href="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html" target="_blank" rel="noopener">ADR-028</a>).</strong> <strong>G15</strong> <code>ThemeService</code><span class="cite"><span> (<code>MMCA.Common.UI/Services/ThemeService.cs:16</code>)</span></span> plus the
           per-user preference plumbing above; <strong>G23 (+6)</strong> <code>ChangePreferences{Command,Handler,Request}</code> /
           <code>GetUserPreferences{Query,Handler}</code> / <code>UserPreferencesResponse</code> persist <code>PreferredCulture</code> / <code>PreferredTheme</code>.
           <em>Honest adoption note:</em> the <code>AddUserPreferences</code> EF migration is <strong>not yet applied to the production ADC /
           Store Identity databases</strong>, so the Profile preferences endpoint errors in prod until it is (stated in G23).</li>
           <li><strong>PII redaction (§30 / <a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>).</strong> <strong>G02 (+2)</strong> <code>PiiRedactor</code> + its private nested <code>RedactableProperty</code>
-          (<code>MMCA.Common.Domain/Privacy/PiiRedactor.cs:24,123</code>, commit <code>b2b0aae</code>) mask <code>[Pii]</code>-marked members for
+          (<span class="cite"><span><code>MMCA.Common.Domain/Privacy/PiiRedactor.cs:24,123</code></span></span>, commit <code>b2b0aae</code>) mask <code>[Pii]</code>-marked members for
           log/telemetry-safe output; a new classifier rule routes <code>MMCA.Common.Domain.Privacy.*</code> to G02 beside the
           existing <code>PiiAttribute</code> / <code>IAnonymizable</code>.</li>
           <li><strong>G25 (+12 net, 874 total).</strong> New reusable/fitness infra sectioned in full: <code>LocalizationResourceTestsBase</code><ul>
@@ -370,9 +371,9 @@
           pseudo-localization gate:</p>
           <ul>
           <li><strong>Shared authentication workflow (<a href="https://ivanball.github.io/docs/adr/032-password-hashing.html" target="_blank" rel="noopener">ADR-032</a>, Wave 3, MMCA.Common commit <code>69dfd53</code>).</strong> <strong>G08 (+4, 54 total):</strong>
-          <code>AuthenticationServiceBase&lt;TUser&gt;</code> (<code>MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:34</code>),
-          <code>IAuthUser</code> (<code>MMCA.Common.Domain/Auth/IAuthUser.cs:10</code>), <code>OwnerOrAdminFilterOptions</code>
-          (<code>MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:11</code>), plus <code>AuthenticationValidators</code> moved in
+          <code>AuthenticationServiceBase&lt;TUser&gt;</code><span class="cite"><span> (<code>MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:34</code>)</span></span>,
+          <code>IAuthUser</code><span class="cite"><span> (<code>MMCA.Common.Domain/Auth/IAuthUser.cs:10</code>)</span></span>, <code>OwnerOrAdminFilterOptions</code><span class="cite"><span>
+          (<code>MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:11</code>)</span></span>, plus <code>AuthenticationValidators</code> moved in
           from ADC Identity.Application (byte-identical body). ADC&#39;s <code>AuthenticationService</code> is now a thin subclass
           supplying per-app hooks (its G23 section was rewritten accordingly). One new classifier prefix rule,
           <code>MMCA.Common.Domain.Auth → G08</code> (user-approved 2026-07-04), resolved the only unmapped type.</li>
@@ -437,24 +438,24 @@
           2026-07-10 in <code>Tools/invtool/classify.ps1</code>): the <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a> hub-channel trio <code>ILiveChannelPublisher</code> /
           <code>NullLiveChannelPublisher</code> / <code>SignalRLiveChannelPublisher</code> from the G07 fallback to <strong>G10</strong> (exact
           structural sibling of the push-sender trio); the Result JSON round-trip trio <code>ResultJsonConverterFactory</code> /
-          <code>ResultConverter</code> / <code>PropertyReader</code> (<code>MMCA.Common.Shared/Serialization/ResultJsonConverterFactory.cs:15,35,95</code>)
+          <code>ResultConverter</code> / <code>PropertyReader</code><span class="cite"><span> (<code>MMCA.Common.Shared/Serialization/ResultJsonConverterFactory.cs:15,35,95</code>)</span></span>
           from the G08 <code>Shared</code> catch-all to <strong>G01</strong> (the three form a 3-node cycle with <code>Result</code> itself); and
-          <code>HttpResilienceDefaults</code> (<code>MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:10</code>) to <strong>G16</strong>, since
-          its only consumers are ServiceDefaults (<code>MMCA.Common.Aspire/Extensions.cs:45-78</code>) and the typed gRPC
-          client (<code>MMCA.Common.Grpc/DependencyInjection.cs:87-108</code>), which re-apply the same Polly values.</li>
+          <code>HttpResilienceDefaults</code><span class="cite"><span> (<code>MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:10</code>)</span></span> to <strong>G16</strong>, since
+          its only consumers are ServiceDefaults<span class="cite"><span> (<code>MMCA.Common.Aspire/Extensions.cs:45-78</code>)</span></span> and the typed gRPC
+          client<span class="cite"><span> (<code>MMCA.Common.Grpc/DependencyInjection.cs:87-108</code>)</span></span>, which re-apply the same Polly values.</li>
           <li><strong>Per-group adds:</strong> G04 +1 <code>OutboxFinalizer</code>
-          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/OutboxFinalizer.cs:12</code>, the v1.110.0 async outbox
+          (<span class="cite"><span><code>MMCA.Common.Infrastructure/Persistence/Outbox/OutboxFinalizer.cs:12</code></span></span>, the v1.110.0 async outbox
           finalize); G05 +1 <code>QueryCacheKeyLocks</code> (nested in <code>CachingQueryDecorator.cs</code>, cache-stampede lock);
-          G12 +2 <a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a> authenticated output caching (<code>OutputCacheOptionsExtensions.cs:6</code>,
-          <code>PublicEndpointOutputCachePolicy.cs:35</code>); G15 +1 <code>ChannelSubscription</code> (nested in
+          G12 +2 <a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a> authenticated output caching<span class="cite"><span> (<code>OutputCacheOptionsExtensions.cs:6</code>,
+          <code>PublicEndpointOutputCachePolicy.cs:35</code>)</span></span>; G15 +1 <code>ChannelSubscription</code> (nested in
           <code>NotificationHubService.cs</code>, a new L2 cycle); G17 +7 two-event-home + live-validation contracts
           (<code>MMCA.ADC.Conference.Shared/Events/</code>: <code>CurrentEventSelector</code>, <code>CurrentEventDefaults</code>, <code>EventLiveInfo</code>,
           <code>SessionLiveInfo</code>, <code>IEventLiveValidationService</code>, <code>DisabledEventLiveValidationService</code>,
-          <code>QuestionModerationDefault</code>); G18 +3 (<code>EventLiveValidationService.cs:18</code> + the <code>GetSpeakersByEventFilter</code>
-          query/handler); G20 +3 cross-service live-validation gRPC (<code>EventLiveValidationServiceGrpcAdapter.cs:23</code>,
-          <code>GrpcErrorTrailerParser.cs:14</code>, <code>EventLiveValidationGrpcService.cs:22</code>); G10 +6 (adds
-          <code>LiveChannelPublisherGrpcAdapter.cs:20</code>, <code>LiveChannelGrpcService.cs:19</code>, the new Notification.Contracts
-          <code>DependencyInjection.cs:14</code>, plus the 3 regrouped in); G01 +3 and G16 +1 regrouped in; G26 +89 (the new
+          <code>QuestionModerationDefault</code>); G18 +3 (<span class="cite"><span><code>EventLiveValidationService.cs:18</code></span></span> + the <code>GetSpeakersByEventFilter</code>
+          query/handler); G20 +3 cross-service live-validation gRPC<span class="cite"><span> (<code>EventLiveValidationServiceGrpcAdapter.cs:23</code>,
+          <code>GrpcErrorTrailerParser.cs:14</code>, <code>EventLiveValidationGrpcService.cs:22</code>)</span></span>; G10 +6 (adds
+          <span class="cite"><span><code>LiveChannelPublisherGrpcAdapter.cs:20</code></span></span>, <span class="cite"><span><code>LiveChannelGrpcService.cs:19</code></span></span>, the new Notification.Contracts
+          <span class="cite"><span><code>DependencyInjection.cs:14</code></span></span>, plus the 3 regrouped in); G01 +3 and G16 +1 regrouped in; G26 +89 (the new
           chapter); G25 +229 rolled-up test classes (the v1.106.0 unit/integration/E2E programs plus the live-layer
           suites), including the new individually-sectioned <code>UserPreferencesTestsBase</code> (Testing.E2E), lifting the
           sectioned G25 infrastructure count 120 -&gt; 121.</li>
@@ -463,16 +464,16 @@
           duplicated 23 headings between re-authored and stale parts. Thirteen stale parts (G17 p01/p03/p04/p05,
           G18 p04/p06-p13) were re-authored to the new boundaries; final <code>verify.ps1</code> reports 0 missing and the two
           chapters have no same-type duplicate headings (the remaining <code>### StatusBucket</code> pair is two distinct
-          nested enums: <code>GetCategoryDistributionHandler.cs:94</code> and <code>GetSessionSelectionDashboardHandler.cs:308</code>).
+          nested enums: <span class="cite"><span><code>GetCategoryDistributionHandler.cs:94</code></span></span> and <span class="cite"><span><code>GetSessionSelectionDashboardHandler.cs:308</code></span></span>).
           G12&#39;s p02-p05 part/unit misalignment (chapter-complete, duplicate-free) is pre-existing and catches up on
           the next G12-touching pass, per the same convention as the v1.103.1 G18 note.</li>
           <li><strong>Corrections made while re-verifying</strong> (spot-checks + re-author passes): the G15 overview&#39;s claim that
           <code>LayoutSettings</code> is validated on start was fixed (only <code>ApiSettings</code> has
-          <code>.ValidateDataAnnotations().ValidateOnStart()</code>, <code>MMCA.Common.UI/DependencyInjection.cs:29-32</code>;
-          <code>LayoutSettings</code> is bind-only with defaults, <code>:34-36</code>); the <code>Speaker</code> section&#39;s claim that category-item
-          adds have no duplicate guard was fixed (the guard exists at <code>Speaker.cs:296-303</code>; the unguarded add is
-          <code>AddSpeakerQuestionAnswer</code>, <code>:353</code>); the <code>Event</code> walkthrough was refreshed including the new
-          <code>QuestionModerationDefault</code> field (<code>Event.cs:54</code>, BR-233).</li>
+          <code>.ValidateDataAnnotations().ValidateOnStart()</code>, <span class="cite"><span><code>MMCA.Common.UI/DependencyInjection.cs:29-32</code></span></span>;
+          <code>LayoutSettings</code> is bind-only with defaults, <span class="cite"><span><code>:34-36</code></span></span>); the <code>Speaker</code> section&#39;s claim that category-item
+          adds have no duplicate guard was fixed (the guard exists at <span class="cite"><span><code>Speaker.cs:296-303</code></span></span>; the unguarded add is
+          <code>AddSpeakerQuestionAnswer</code>, <span class="cite"><span><code>:353</code></span></span>); the <code>Event</code> walkthrough was refreshed including the new
+          <code>QuestionModerationDefault</code> field (<span class="cite"><span><code>Event.cs:54</code></span></span>, BR-233).</li>
           <li><strong>ADR cross-references:</strong> <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a> (hub channels) is now cited in G10/G15 and throughout the new
           live-layer chapter; <a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a> (authenticated output caching) in G12/G20. <strong><a href="https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html" target="_blank" rel="noopener">ADR-041</a> (observability) is not
           yet cross-referenced anywhere in the guide</strong>; its natural home is the devops-aspire chapter, which is
@@ -517,18 +518,18 @@
           directly after ADC Host Composition</strong> (chapter slot 26, ID G27 append-only); renumber fallout: the testing
           chapter shifts to slot 27 (<code>group-28-testing-infrastructure.md</code>, its file name unchanged from the prior
           append-only-ID artifact, so no part renames or link rewrites were needed).</li>
-          <li><strong><a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a> managed file storage / avatars (G07 +13, 70 -&gt; 83).</strong> <code>IFileStorageService</code>
-          (<code>MMCA.Common.Application/Interfaces/Infrastructure/IFileStorageService.cs:11</code>), <code>AzureBlobFileStorageService</code>
+          <li><strong><a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a> managed file storage / avatars (G07 +13, 70 -&gt; 83).</strong> <code>IFileStorageService</code><span class="cite"><span>
+          (<code>MMCA.Common.Application/Interfaces/Infrastructure/IFileStorageService.cs:11</code>)</span></span>, <code>AzureBlobFileStorageService</code>
           / <code>NullFileStorageService</code> (<code>MMCA.Common.Infrastructure/Services/</code>), <code>IImageProcessor</code> /
           <code>ImageSharpImageProcessor</code> (decode, auto-orient, exact-square crop, strip metadata, re-encode JPEG),
           <code>ImageContentSniffer</code> (moved in from ADC&#39;s <code>SetUserAvatar</code> slice), <code>FileStorageSettings</code>, plus <a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>&#39;s
           <code>INativePushSender</code> / <code>IPushDeviceRegistrar</code> + Azure/Null impls landing in the same infrastructure group.</li>
-          <li><strong><a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a> native push (G10 +8, 45 -&gt; 53), shipped inert.</strong> <code>AzureNotificationHubNativePushSender</code>
-          (<code>MMCA.Common.Infrastructure/Services/AzureNotificationHubNativePushSender.cs:14</code>), <code>DeviceInstallationRequest</code>
-          (<code>MMCA.Common.Shared/Notifications/PushNotifications/DeviceInstallationRequest.cs:12</code>), the OS-level FCM/APNs
+          <li><strong><a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a> native push (G10 +8, 45 -&gt; 53), shipped inert.</strong> <code>AzureNotificationHubNativePushSender</code><span class="cite"><span>
+          (<code>MMCA.Common.Infrastructure/Services/AzureNotificationHubNativePushSender.cs:14</code>)</span></span>, <code>DeviceInstallationRequest</code><span class="cite"><span>
+          (<code>MMCA.Common.Shared/Notifications/PushNotifications/DeviceInstallationRequest.cs:12</code>)</span></span>, the OS-level FCM/APNs
           third leg + <code>DevicesController</code> control plane. Honest security note captured while spot-checking: the class
           XML-doc claims ownership &quot;is stamped server-side&quot; without qualification, but only <code>PUT</code>/<code>UpsertAsync</code> stamps
-          the caller&#39;s <code>UserId</code>; <code>DeleteAsync</code> (<code>DevicesController.cs:50-56</code>) is scoped only by the client-generated
+          the caller&#39;s <code>UserId</code>; <code>DeleteAsync</code><span class="cite"><span> (<code>DevicesController.cs:50-56</code>)</span></span> is scoped only by the client-generated
           (non-enumerable) <code>installationId</code> with no ownership check. The G10 overview now describes the code&#39;s actual
           behavior, not the comment&#39;s overclaim (code wins, per the guide&#39;s ground rule).</li>
           <li><strong>Other per-group adds:</strong> G08 +2 (external-auth-broker contract <code>IExternalAuthBroker</code> /
@@ -552,9 +553,9 @@
           <li><strong>Corrections made while re-verifying</strong> (adversarial spot-checks on the authored overviews): the G08 auth
           overview&#39;s 7 <code>MMCA.Common.API</code> citations were pointing at <code>Source/Core/</code> instead of the real
           <code>Source/Presentation/MMCA.Common.API</code> layer (corrected; the section parts had it right), and its
-          <code>TokenService</code> algorithm re-check citation was split to <code>:130</code> (the <code>ValidAlgorithms</code> pin passed into
-          <code>ValidateToken</code>) + <code>:139-140</code> (the post-return header re-check); the G10 DevicesController DELETE
-          overclaim above; a G10 <code>[ApiVersion]</code> citation range widened <code>:29-30</code> -&gt; <code>:28-30</code>.</li>
+          <code>TokenService</code> algorithm re-check citation was split to <span class="cite"><span><code>:130</code></span></span> (the <code>ValidAlgorithms</code> pin passed into
+          <code>ValidateToken</code>) + <span class="cite"><span><code>:139-140</code></span></span> (the post-return header re-check); the G10 DevicesController DELETE
+          overclaim above; a G10 <code>[ApiVersion]</code> citation range widened <span class="cite"><span><code>:29-30</code></span></span> -&gt; <span class="cite"><span><code>:28-30</code></span></span>.</li>
           <li>Cycles <strong>16</strong> (unchanged this pass, re-verified via invtool). Edge resolution: <strong>8,596</strong> namespace-visible
           (~97%), <strong>237</strong> globally-unique fallback, <strong>26</strong> dropped ambiguous. <strong><a href="https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html" target="_blank" rel="noopener">ADR-041</a> (observability)</strong> remains not
           cross-referenced in the guide; its natural home is the devops-aspire chapter, outside this pass&#39;s scope
@@ -572,34 +573,34 @@
           regroups</strong>, plus a <strong>+64 net test-only rollup</strong>. No new functional group was needed (<code>classify.ps1</code>:
           <strong>0 unmapped</strong>).</p>
           <ul>
-          <li><strong>G02 +1 (27 -&gt; 28):</strong> <code>IRowVersioned</code> (<code>MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11</code>), the
+          <li><strong>G02 +1 (27 -&gt; 28):</strong> <code>IRowVersioned</code><span class="cite"><span> (<code>MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11</code>)</span></span>, the
           opt-in optimistic-concurrency marker consumed by <code>EFRepository</code> and the audit interceptor (<a href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html" target="_blank" rel="noopener">ADR-035</a>
           cited from the source doc comment; the ADR text itself was not opened this pass).</li>
-          <li><strong>G03 +1 (25 -&gt; 26):</strong> <code>FilterValueParser</code>
-          (<code>MMCA.Common.Application/Services/Filtering/FilterValueParser.cs:8</code>), which ships the IN-operator
+          <li><strong>G03 +1 (25 -&gt; 26):</strong> <code>FilterValueParser</code><span class="cite"><span>
+          (<code>MMCA.Common.Application/Services/Filtering/FilterValueParser.cs:8</code>)</span></span>, which ships the IN-operator
           dynamic-filter feature by parsing comma-delimited value lists (int/Guid lists skip unparseable
           entries; the string-list path only splits + trims).</li>
-          <li><strong>G07 +2 (83 -&gt; 85):</strong> <code>SoftDeleteUniqueIndexConvention</code>
-          (<code>.../Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:24</code>) and <code>DeferredDispatch</code>
-          (<code>.../Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:275</code>), the latter a new <strong>6th
+          <li><strong>G07 +2 (83 -&gt; 85):</strong> <code>SoftDeleteUniqueIndexConvention</code><span class="cite"><span>
+          (<code>.../Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:24</code>)</span></span> and <code>DeferredDispatch</code><span class="cite"><span>
+          (<code>.../Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:275</code>)</span></span>, the latter a new <strong>6th
           member</strong> of the L6 persistence cycle (see section 3).</li>
           <li><strong>G18 +9 (202 -&gt; 211):</strong> the batch <code>GetSessionBookmarkCountsQuery</code>/<code>Handler</code> bookmark-count perf slice
           (<code>Speakers/UseCases/GetSessionBookmarkCounts/</code>, commit <code>fa420f65</code>), the six per-field
-          <code>Session*Rules&lt;T&gt;</code> validation-rule family (<code>Sessions/Validation/SessionValidationRules.cs:37-99</code>:
-          Description/Status/LiveUrl/RecordingUrl/AccessibilityInfo/ResourceLinks) and <code>SessionRoomScheduling</code>
-          (<code>Sessions/Validation/SessionRoomScheduling.cs:14</code>).</li>
+          <code>Session*Rules&lt;T&gt;</code> validation-rule family (<span class="cite"><span><code>Sessions/Validation/SessionValidationRules.cs:37-99</code></span></span>:
+          Description/Status/LiveUrl/RecordingUrl/AccessibilityInfo/ResourceLinks) and <code>SessionRoomScheduling</code><span class="cite"><span>
+          (<code>Sessions/Validation/SessionRoomScheduling.cs:14</code>)</span></span>.</li>
           <li><strong>G21 +10 (79 -&gt; 89):</strong> the <strong>8 ADC Home-page view-model types moved in from G24</strong> (see moves below)
           plus <code>ScorePollSignal</code> / <code>ScorePollTracker</code>
-          (<code>Pages/SessionSelection/ScorePollTracker.cs:6,31</code>, commit <code>adee5058</code>), the AI-scoring poll recovery
+          (<span class="cite"><span><code>Pages/SessionSelection/ScorePollTracker.cs:6,31</code></span></span>, commit <code>adee5058</code>), the AI-scoring poll recovery
           state machine.</li>
           <li><strong>G22 +5 (67 -&gt; 72):</strong> the durable <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a> live-channel publish queue, <code>LiveChannelPublishWorkItem</code> /
           <code>ILiveChannelPublishQueue</code> / <code>LiveChannelPublishQueue</code> (<code>Engagement.Application/Live/</code>) +
-          <code>LiveChannelPublishProcessor</code> (<code>Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:21</code>,
+          <code>LiveChannelPublishProcessor</code> (<span class="cite"><span><code>Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:21</code></span></span>,
           commit <code>bf99b92a</code>).</li>
-          <li><strong>G23/Identity +4 (78 -&gt; 82):</strong> the external-login lifetime fix <code>IExternalLoginEmailVerifier</code>
-          (<code>Identity.Application/Users/IExternalLoginEmailVerifier.cs:11</code>) + <code>HttpContextExternalLoginEmailVerifier</code>
-          (<code>Identity.API/Authentication/HttpContextExternalLoginEmailVerifier.cs:17</code>, commit <code>cf69cb8e</code>) and
-          <code>ListPageActions</code> (<code>Identity.UI/Common/ListPageActions.cs:13</code>).</li>
+          <li><strong>G23/Identity +4 (78 -&gt; 82):</strong> the external-login lifetime fix <code>IExternalLoginEmailVerifier</code><span class="cite"><span>
+          (<code>Identity.Application/Users/IExternalLoginEmailVerifier.cs:11</code>)</span></span> + <code>HttpContextExternalLoginEmailVerifier</code>
+          (<span class="cite"><span><code>Identity.API/Authentication/HttpContextExternalLoginEmailVerifier.cs:17</code></span></span>, commit <code>cf69cb8e</code>) and
+          <code>ListPageActions</code><span class="cite"><span> (<code>Identity.UI/Common/ListPageActions.cs:13</code>)</span></span>.</li>
           <li><strong>G10/G20/G22/G23 shared add:</strong> a same-shaped <code>KestrelConfiguration</code> was added once per extractable
           ADC service host (Notification/Conference/Engagement/Identity, 4 total), sectioned in the module&#39;s
           chapter (counted in each group&#39;s delta above; G10 53 -&gt; 54, G20 40 -&gt; 41).</li>
@@ -645,8 +646,8 @@
           removed, 0 regrouped</strong>, plus a <strong>+2 net test-only rollup</strong>. No new functional group was needed
           (<code>classify.ps1</code>: <strong>0 unmapped</strong>).</p>
           <ul>
-          <li><strong>G03 +1 (26 -&gt; 27):</strong> <code>LongFilterStrategy</code>
-          (<code>MMCA.Common.Application/Services/Filtering/LongFilterStrategy.cs:14</code>), the v1.122.0 long-typed
+          <li><strong>G03 +1 (26 -&gt; 27):</strong> <code>LongFilterStrategy</code><span class="cite"><span>
+          (<code>MMCA.Common.Application/Services/Filtering/LongFilterStrategy.cs:14</code>)</span></span>, the v1.122.0 long-typed
           dynamic-filter strategy (comparisons plus IN/BETWEEN/IS EMPTY), joining the
           Bool/DateTime/Decimal/Guid/Int/String sibling family. The chapter also repaired a pre-existing
           gap: <code>EntityQueryParameters&lt;TEntity&gt;</code>, <code>ParameterReplacer</code>, <code>IEntityQueryPipeline</code>,
@@ -660,19 +661,19 @@
           <code>IEventBus</code> directly and the chapter overview was rewritten to drop the adapter pattern.</li>
           <li><strong>G18 (no count change):</strong> <code>GetNowNextQuery</code> now implements <code>IQueryCacheable</code> (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a> Wave 8:
           <code>CacheKey</code> under the Session-aggregate prefix, 30s <code>CacheDuration</code>); its citation moved
-          <code>GetNowNextQuery.cs:11 -&gt; :23</code> and its computed Level moved 0 -&gt; 7, relocating its section within
+          <span class="cite"><span><code>GetNowNextQuery.cs:11 -&gt; :23</code></span></span> and its computed Level moved 0 -&gt; 7, relocating its section within
           the chapter (old unit p05 -&gt; p14).</li>
           <li><strong>G25/Testing +2 net (1,242 -&gt; 1,244, all rolled up):</strong> +<code>LongFilterStrategyTests</code>,
           +<code>GetNowNextQueryCacheTests</code>, +<code>WarningCountingLogger</code> (nested,
-          <code>DistributedCacheServiceTests.cs:116</code>); -<code>IntegrationEventPublisherTests</code>;
+          <span class="cite"><span><code>DistributedCacheServiceTests.cs:116</code></span></span>); -<code>IntegrationEventPublisherTests</code>;
           <code>RecordingIntegrationEventPublisher</code> renamed in place to <code>RecordingEventBus</code>
-          (<code>TestSupport.cs:266</code>, retargeted from the deleted contract to <code>IEventBus</code>, net-zero). Extractor
-          artifact honestly recorded: the new nested <code>Item</code> fixture in <code>LongFilterStrategyTests.cs:8</code>
+          (<span class="cite"><span><code>TestSupport.cs:266</code></span></span>, retargeted from the deleted contract to <code>IEventBus</code>, net-zero). Extractor
+          artifact honestly recorded: the new nested <code>Item</code> fixture in <span class="cite"><span><code>LongFilterStrategyTests.cs:8</code></span></span>
           collides by name+namespace with the sibling files&#39; existing fixture, so declaration rows rose +2
           while distinct nodes rose +1 for that hunk.</li>
           <li>Citation-line-only shifts corrected across G03/G04/G09/G14/G25 (e.g.
-          <code>DistributedCacheService.cs:14 -&gt; :17</code>, Infrastructure <code>DependencyInjection.cs:35 -&gt; :37</code> after
-          losing the adapter registration, <code>InProcessMessageBus.cs:20 -&gt; :19</code>). Cycles <strong>16</strong> (unchanged,
+          <span class="cite"><span><code>DistributedCacheService.cs:14 -&gt; :17</code></span></span>, Infrastructure <span class="cite"><span><code>DependencyInjection.cs:35 -&gt; :37</code></span></span> after
+          losing the adapter registration, <span class="cite"><span><code>InProcessMessageBus.cs:20 -&gt; :19</code></span></span>). Cycles <strong>16</strong> (unchanged,
           same membership, re-verified via invtool). Edge resolution: <strong>8,871</strong> namespace-visible (~96%),
           <strong>331</strong> globally-unique fallback, <strong>27</strong> dropped ambiguous (rounded figures unchanged).</li>
           <li><strong>Post-author verification record:</strong> an adversarial spot-check flagged and corrected two authored
@@ -695,44 +696,44 @@
           rubric 34/34). The change is <strong>+23 production types added, 0 removed, 0 regrouped, 0 moved</strong>, plus a
           <strong>+26 test-only rollup</strong>. No new functional group was needed (<code>classify.ps1</code>: <strong>0 unmapped</strong>).</p>
           <ul>
-          <li><strong>G03 +2 (27 -&gt; 29):</strong> <code>DynamicQueryConfig</code>
-          (<code>MMCA.Common.Application/Services/Filtering/DynamicQueryConfig.cs:18</code>) and <code>PagingMath</code>
-          (<code>MMCA.Common.Application/Services/Query/PagingMath.cs:20</code>), the extracted page-size clamp shared
+          <li><strong>G03 +2 (27 -&gt; 29):</strong> <code>DynamicQueryConfig</code><span class="cite"><span>
+          (<code>MMCA.Common.Application/Services/Filtering/DynamicQueryConfig.cs:18</code>)</span></span> and <code>PagingMath</code><span class="cite"><span>
+          (<code>MMCA.Common.Application/Services/Query/PagingMath.cs:20</code>)</span></span>, the extracted page-size clamp shared
           by the query pipeline and the controller base.</li>
-          <li><strong>G07 +5 (85 -&gt; 90):</strong> the <code>ExecuteUpdateAsync</code> set-builder pair <code>IUpdatePropertySetter&lt;TEntity&gt;</code>
-          (<code>MMCA.Common.Application/Interfaces/Infrastructure/IUpdatePropertySetter.cs:13</code>) and
-          <code>UpdatePropertySetterBuilder&lt;TEntity&gt;</code>
-          (<code>MMCA.Common.Infrastructure/Persistence/Repositories/UpdatePropertySetterBuilder.cs:14</code>);
-          <code>PeriodicBackgroundService</code> (<code>MMCA.Common.Infrastructure/Services/PeriodicBackgroundService.cs:20</code>);
-          and two nested types now surfaced by the extractor, <code>DetectChangesScope</code>
-          (<code>MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:170</code>) and
-          <code>AggregateCapture</code>
-          (<code>MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:303</code>).</li>
-          <li><strong>G08 +3 (56 -&gt; 59):</strong> <code>AllowMissingOwnerAttribute</code>
-          (<code>MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:21</code>) and the striped async lock
-          <code>KeyedSemaphoreStripe</code> + its nested <code>Releaser</code>
-          (<code>MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22</code> and <code>:78</code>).</li>
-          <li><strong>G09 +2 (4 -&gt; 6):</strong> <code>CacheKeyPrefixOptions</code> and <code>CacheKeyNamespace</code>
-          (<code>MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:28</code> and <code>:41</code>), doubling the caching chapter.</li>
-          <li><strong>G12 +1 (56 -&gt; 57):</strong> <code>ConcurrencyTokenRequest</code> (<code>MMCA.Common.Shared/DTOs/ConcurrencyTokenRequest.cs:12</code>),
+          <li><strong>G07 +5 (85 -&gt; 90):</strong> the <code>ExecuteUpdateAsync</code> set-builder pair <code>IUpdatePropertySetter&lt;TEntity&gt;</code><span class="cite"><span>
+          (<code>MMCA.Common.Application/Interfaces/Infrastructure/IUpdatePropertySetter.cs:13</code>)</span></span> and
+          <code>UpdatePropertySetterBuilder&lt;TEntity&gt;</code><span class="cite"><span>
+          (<code>MMCA.Common.Infrastructure/Persistence/Repositories/UpdatePropertySetterBuilder.cs:14</code>)</span></span>;
+          <code>PeriodicBackgroundService</code><span class="cite"><span> (<code>MMCA.Common.Infrastructure/Services/PeriodicBackgroundService.cs:20</code>)</span></span>;
+          and two nested types now surfaced by the extractor, <code>DetectChangesScope</code><span class="cite"><span>
+          (<code>MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:170</code>)</span></span> and
+          <code>AggregateCapture</code><span class="cite"><span>
+          (<code>MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:303</code>)</span></span>.</li>
+          <li><strong>G08 +3 (56 -&gt; 59):</strong> <code>AllowMissingOwnerAttribute</code><span class="cite"><span>
+          (<code>MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:21</code>)</span></span> and the striped async lock
+          <code>KeyedSemaphoreStripe</code> + its nested <code>Releaser</code><span class="cite"><span>
+          (<code>MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22</code> and <code>:78</code>)</span></span>.</li>
+          <li><strong>G09 +2 (4 -&gt; 6):</strong> <code>CacheKeyPrefixOptions</code> and <code>CacheKeyNamespace</code><span class="cite"><span>
+          (<code>MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:28</code> and <code>:41</code>)</span></span>, doubling the caching chapter.</li>
+          <li><strong>G12 +1 (56 -&gt; 57):</strong> <code>ConcurrencyTokenRequest</code><span class="cite"><span> (<code>MMCA.Common.Shared/DTOs/ConcurrencyTokenRequest.cs:12</code>)</span></span>,
           the shared row-version DTO the v1.125.0 sweep swapped every lifecycle-transition record onto
           (<a href="https://ivanball.github.io/docs/adr/035-entity-lifecycle-toggles.html" target="_blank" rel="noopener">ADR-035</a>).</li>
           <li><strong>G17 +1 (85 -&gt; 86)</strong> and <strong>G22 +1 (72 -&gt; 73):</strong> the per-module transition requests built on that
-          DTO, <code>EventTransitionRequest</code> (<code>MMCA.ADC.Conference.Shared/Events/EventTransitionRequest.cs:14</code>) and
-          <code>LifecycleTransitionRequest</code> (<code>MMCA.ADC.Engagement.Shared/LifecycleTransitionRequest.cs:15</code>).</li>
+          DTO, <code>EventTransitionRequest</code><span class="cite"><span> (<code>MMCA.ADC.Conference.Shared/Events/EventTransitionRequest.cs:14</code>)</span></span> and
+          <code>LifecycleTransitionRequest</code><span class="cite"><span> (<code>MMCA.ADC.Engagement.Shared/LifecycleTransitionRequest.cs:15</code>)</span></span>.</li>
           <li><strong>G18 +5 (211 -&gt; 216):</strong> the AI session-scoring queue <code>ISessionScoringQueue</code> /
-          <code>SessionScoringEnqueueResult</code> (<code>.../DecisionSupport/ScoreEventSessions/ISessionScoringQueue.cs:31</code>
-          and <code>:4</code>) + <code>SessionScoringQueue</code> (<code>.../ScoreEventSessions/SessionScoringQueue.cs:17</code>), and the
-          server-side speaker filter <code>GetSessionsBySpeakerFilterQuery</code> / <code>GetSessionsBySpeakerFilterHandler</code>
-          (<code>.../GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterQuery.cs:11</code>, <code>...Handler.cs:21</code>) that
+          <code>SessionScoringEnqueueResult</code><span class="cite"><span> (<code>.../DecisionSupport/ScoreEventSessions/ISessionScoringQueue.cs:31</code>
+          and <code>:4</code>)</span></span> + <code>SessionScoringQueue</code><span class="cite"><span> (<code>.../ScoreEventSessions/SessionScoringQueue.cs:17</code>)</span></span>, and the
+          server-side speaker filter <code>GetSessionsBySpeakerFilterQuery</code> / <code>GetSessionsBySpeakerFilterHandler</code><span class="cite"><span>
+          (<code>.../GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterQuery.cs:11</code>, <code>...Handler.cs:21</code>)</span></span> that
           replaced the client-side virtual filter.</li>
-          <li><strong>G19 +1 (27 -&gt; 28):</strong> <code>SessionScoringProcessor</code>
-          (<code>MMCA.ADC.Conference.Infrastructure/Services/SessionScoringProcessor.cs:31</code>), the background
+          <li><strong>G19 +1 (27 -&gt; 28):</strong> <code>SessionScoringProcessor</code><span class="cite"><span>
+          (<code>MMCA.ADC.Conference.Infrastructure/Services/SessionScoringProcessor.cs:31</code>)</span></span>, the background
           drain for that queue.</li>
-          <li><strong>Chapter 23 / G26 +2 (92 -&gt; 94):</strong> the atomic counter handlers <code>LivePollVoteChangedHandler</code>
-          (<code>MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:31</code>)
-          and <code>SessionQuestionUpvoteChangedHandler</code>
-          (<code>MMCA.ADC.Engagement.Application/SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:32</code>).</li>
+          <li><strong>Chapter 23 / G26 +2 (92 -&gt; 94):</strong> the atomic counter handlers <code>LivePollVoteChangedHandler</code><span class="cite"><span>
+          (<code>MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:31</code>)</span></span>
+          and <code>SessionQuestionUpvoteChangedHandler</code><span class="cite"><span>
+          (<code>MMCA.ADC.Engagement.Application/SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:32</code>)</span></span>.</li>
           <li><strong>G25/Testing +26 net (1,244 -&gt; 1,270, all rolled up; individually-sectioned reusable infrastructure
           stays at 150):</strong> new suites across <code>MMCA.Common.Application.Tests</code>, <code>MMCA.Common.Infrastructure.Tests</code>,
           <code>MMCA.Common.Shared.Tests</code>, <code>MMCA.Common.Benchmarks</code>, <code>MMCA.ADC.Conference.Application.Tests</code> and
@@ -750,11 +751,11 @@
           <code>SessionEventIdRules&lt;T&gt;</code>, all group-18). <code>verify.ps1</code> caught it (3 missing); the sections were
           restored into their new home unit and re-verified line by line against current source, which
           surfaced one genuine drift corrected in the restored text: the bookmark-count endpoint&#39;s output-cache
-          policy is now <code>BookmarkCountsCache</code>, not <code>ConferencePublicCache</code>
-          (<code>MMCA.ADC.Conference.API/Controllers/SpeakersController.cs:264</code>). A second spot-check corrected a
+          policy is now <code>BookmarkCountsCache</code>, not <code>ConferencePublicCache</code><span class="cite"><span>
+          (<code>MMCA.ADC.Conference.API/Controllers/SpeakersController.cs:264</code>)</span></span>. A second spot-check corrected a
           loose anchor in the group-08 overview: 75-octet folding and the CRLF writes both live in
-          <code>IcsCalendarBuilder.AppendLine</code> (<code>MMCA.Common.Shared/Calendars/IcsCalendarBuilder.cs:83-104</code>), not at
-          <code>:22</code>. Final run: <strong>0 missing, rubric 34/34</strong>.</li>
+          <code>IcsCalendarBuilder.AppendLine</code><span class="cite"><span> (<code>MMCA.Common.Shared/Calendars/IcsCalendarBuilder.cs:83-104</code>)</span></span>, not at
+          <span class="cite"><span><code>:22</code></span></span>. Final run: <strong>0 missing, rubric 34/34</strong>.</li>
           </ul>
           </blockquote>
           <blockquote>
@@ -771,38 +772,38 @@
           (&quot;Bump MMCA.Common to v1.131.0 and adopt the shared health-check and test bases&quot;, #77) and the
           framework work it consumes.</p>
           <ul>
-          <li><strong>G16 +1 (16 -&gt; 17):</strong> <code>HealthCheckTags</code>
-          (<code>MMCA.Common.Aspire/HealthCheckTags.cs:6</code>), the shared liveness/readiness tag vocabulary the
+          <li><strong>G16 +1 (16 -&gt; 17):</strong> <code>HealthCheckTags</code><span class="cite"><span>
+          (<code>MMCA.Common.Aspire/HealthCheckTags.cs:6</code>)</span></span>, the shared liveness/readiness tag vocabulary the
           service hosts now register against. The chapter repacked from one sections unit to two, which
           relocated the existing <code>HttpResilienceDefaults</code> section into the new <code>p02</code> unit unchanged.</li>
           <li><strong>G22 +1 (73 -&gt; 74)</strong> and <strong>G23 +1 (82 -&gt; 83):</strong> <code>SelfHttpWarmupTask</code>, one per extractable service
-          host (<code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19</code> and
-          <code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19</code>). They are two distinct classes that share a
+          host<span class="cite"><span> (<code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19</code> and
+          <code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19</code>)</span></span>. They are two distinct classes that share a
           name, taught in their own service chapters. The Conference service has no equivalent today.</li>
           <li><strong>G25 +5 (1,270 -&gt; 1,275), of which +4 are individually sectioned:</strong> the shared host bases
-          <code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code> (<code>MMCA.Common.Testing/ProductionHostApplicationFactory.cs:22</code>)
-          and <code>GracefulShutdownTestsBase&lt;TEntryPoint&gt;</code> (<code>MMCA.Common.Testing/GracefulShutdownTestsBase.cs:24</code>),
-          the fitness base <code>ObservabilityConventionTestsBase</code>
-          (<code>MMCA.Common.Testing.Architecture/Bases/ObservabilityConventionTestsBase.cs:30</code>) and its own
-          suite <code>ObservabilityConventionTestsBaseTests</code>
-          (<code>MMCA.Common.Architecture.Tests/ObservabilityConventionTestsBaseTests.cs:14</code>); plus two rolled-up
-          suites, <code>AuthControllerBaseRateLimitTests</code>
-          (<code>MMCA.Common.API.Tests/Controllers/AuthControllerBaseRateLimitTests.cs:16</code>) and
-          <code>InfrastructureHealthChecksTests</code> (<code>MMCA.Common.Aspire.Tests/Health/InfrastructureHealthChecksTests.cs:16</code>).
-          The one <strong>removal</strong> this pass is ADC&#39;s local <code>GatewayApplicationFactory</code>
-          (<code>MMCA.ADC.Gateway.Tests/GatewayApplicationFactory.cs:12</code>), deleted in <code>01551f14</code> and functionally
+          <code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code><span class="cite"><span> (<code>MMCA.Common.Testing/ProductionHostApplicationFactory.cs:22</code>)</span></span>
+          and <code>GracefulShutdownTestsBase&lt;TEntryPoint&gt;</code><span class="cite"><span> (<code>MMCA.Common.Testing/GracefulShutdownTestsBase.cs:24</code>)</span></span>,
+          the fitness base <code>ObservabilityConventionTestsBase</code><span class="cite"><span>
+          (<code>MMCA.Common.Testing.Architecture/Bases/ObservabilityConventionTestsBase.cs:30</code>)</span></span> and its own
+          suite <code>ObservabilityConventionTestsBaseTests</code><span class="cite"><span>
+          (<code>MMCA.Common.Architecture.Tests/ObservabilityConventionTestsBaseTests.cs:14</code>)</span></span>; plus two rolled-up
+          suites, <code>AuthControllerBaseRateLimitTests</code><span class="cite"><span>
+          (<code>MMCA.Common.API.Tests/Controllers/AuthControllerBaseRateLimitTests.cs:16</code>)</span></span> and
+          <code>InfrastructureHealthChecksTests</code><span class="cite"><span> (<code>MMCA.Common.Aspire.Tests/Health/InfrastructureHealthChecksTests.cs:16</code>)</span></span>.
+          The one <strong>removal</strong> this pass is ADC&#39;s local <code>GatewayApplicationFactory</code><span class="cite"><span>
+          (<code>MMCA.ADC.Gateway.Tests/GatewayApplicationFactory.cs:12</code>)</span></span>, deleted in <code>01551f14</code> and functionally
           superseded by the shared generic base above; because the shapes differ (local concrete factory vs
           shared generic base) it is tracked as remove + add, not a move, per the earlier
           <code>AnonymousAuthenticationStateProvider</code> precedent. Reusable-infrastructure sections rose 150 -&gt; 154;
           the per-project rollup table moved <code>MMCA.ADC.Gateway.Tests</code> 6 -&gt; 5, <code>MMCA.Common.API.Tests</code> 65 -&gt; 66
           and <code>MMCA.Common.Aspire.Tests</code> 11 -&gt; 12.</li>
           <li><strong>Citation-only corrections (no behavior change):</strong> <code>AuthControllerBase</code>
-          (<code>MMCA.Common.API/Controllers/AuthControllerBase.cs</code>) <code>:16 -&gt; :40</code> in
+          (<code>MMCA.Common.API/Controllers/AuthControllerBase.cs</code>) <span class="cite"><span><code>:16 -&gt; :40</code></span></span> in
           <a href="group-12-api-hosting-mapping.html">group-12</a>, and <code>AuthController</code>
-          (<code>MMCA.ADC.Identity.API/Controllers/AuthController.cs</code>) <code>:25 -&gt; :26</code> in
+          (<code>MMCA.ADC.Identity.API/Controllers/AuthController.cs</code>) <span class="cite"><span><code>:25 -&gt; :26</code></span></span> in
           <a href="group-24-identity-module.html">group-24</a>. Three rolled-up test classes also shifted lines
-          (<code>ConstructorDependencyCountTests</code> <code>:11 -&gt; :17</code>, <code>GracefulShutdownTests</code> <code>:14 -&gt; :9</code>,
-          <code>ObservabilityConventionTests</code> <code>:17 -&gt; :7</code>); they are cited only in
+          (<code>ConstructorDependencyCountTests</code> <span class="cite"><span><code>:11 -&gt; :17</code></span></span>, <code>GracefulShutdownTests</code> <span class="cite"><span><code>:14 -&gt; :9</code></span></span>,
+          <code>ObservabilityConventionTests</code> <span class="cite"><span><code>:17 -&gt; :7</code></span></span>); they are cited only in
           <a href="00-inventory.html"><code>00-inventory.md</code></a>, which regenerates.</li>
           <li><strong>Cycles 18 -&gt; 19, and the 19th is a phantom.</strong> The new SCC pairs the two <code>SelfHttpWarmupTask</code>
           classes with each other. Neither references the other; they are unrelated types in different
@@ -823,15 +824,15 @@
           this run authored, both confirmed against source and corrected before assembly. (1) The group-22
           overview attributed the design-time migrations factory&#39;s configuration-assembly handle to the
           Application-layer <code>AssemblyReference</code>; the factory actually uses
-          <code>MMCA.ADC.Engagement.Infrastructure.AssemblyReference</code>
-          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Engagement/DesignTimeSQLServerDbContextFactory.cs:27</code>),
+          <code>MMCA.ADC.Engagement.Infrastructure.AssemblyReference</code><span class="cite"><span>
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Engagement/DesignTimeSQLServerDbContextFactory.cs:27</code>)</span></span>,
           which is the correct layer because the <code>IEntityTypeConfiguration</code> classes live in Infrastructure.
           (2) The group-12 <code>ApiControllerBase</code> section claimed the shared <code>internal static</code> <code>ErrorHttpMapping</code>
           members let <code>UnhandledResultFailureFilter</code> produce a &quot;byte-identical&quot; body. Only the status code
           and the <code>errors</code> extension are shared; <code>Title</code>/<code>Detail</code> deliberately differ (&quot;Unhandled result
           failure&quot; / &quot;The action returned a Result.Failure that was not mapped to an HTTP error response.&quot;
-          at <code>MMCA.Common.API/Middleware/UnhandledResultFailureFilter.cs:41-42</code> against &quot;Operation failed&quot; /
-          &quot;One or more errors occurred.&quot; at <code>MMCA.Common.API/Controllers/ApiControllerBase.cs:43-44</code>), so a
+          at <span class="cite"><span><code>MMCA.Common.API/Middleware/UnhandledResultFailureFilter.cs:41-42</code></span></span> against &quot;Operation failed&quot; /
+          &quot;One or more errors occurred.&quot; at <span class="cite"><span><code>MMCA.Common.API/Controllers/ApiControllerBase.cs:43-44</code></span></span>), so a
           response that fell through the filter stays distinguishable from one the controller mapped on
           purpose. Final run after both corrections: <strong>0 missing, rubric 34/34</strong>.</li>
           <li><strong>One code-side fix landed out of this sweep.</strong> Authoring the group-16 chapter surfaced a stale
@@ -843,9 +844,9 @@
           <code>OutboxProcessor</code> lives, so <code>AddServiceDefaults</code> stays usable from a host that does not take the
           persistence stack. That commit lengthened the comment by three lines, shifting the citations inside
           the type&#39;s body, so the group-16 overview and section were re-cited against <code>006812e</code>
-          (<code>OnEnd</code> <code>:24 -&gt; :27</code>, parent-chain walk <code>:34 -&gt; :37</code>, the both-names match <code>:36-37 -&gt; :39-40</code>, the
-          <code>Recorded</code> clear <code>:42 -&gt; :45</code>, the null guard <code>:26-30 -&gt; :29-33</code>, the two constants
-          <code>:20-21 -&gt; :23-24</code>, the comment itself <code>:17-19 -&gt; :17-22</code>). The type&#39;s own declaration line (<code>:15</code>)
+          (<code>OnEnd</code> <span class="cite"><span><code>:24 -&gt; :27</code></span></span>, parent-chain walk <span class="cite"><span><code>:34 -&gt; :37</code></span></span>, the both-names match <span class="cite"><span><code>:36-37 -&gt; :39-40</code></span></span>, the
+          <code>Recorded</code> clear <span class="cite"><span><code>:42 -&gt; :45</code></span></span>, the null guard <span class="cite"><span><code>:26-30 -&gt; :29-33</code></span></span>, the two constants
+          <span class="cite"><span><code>:20-21 -&gt; :23-24</code></span></span>, the comment itself <span class="cite"><span><code>:17-19 -&gt; :17-22</code></span></span>). The type&#39;s own declaration line<span class="cite"><span> (<code>:15</code>)</span></span>
           is above the comment and did not move, so the generated inventory, taxonomy and node set are
           unaffected and were not re-extracted. The chapter prose also repeated the false
           &quot;no project references&quot; reason in two places; both now state the Infrastructure-specific one.</li>
@@ -864,12 +865,12 @@
           repos (MMCA.Common #177/#179/#180, MMCA.ADC #88 to #94) and releases v1.132.0 through v1.135.0.</p>
           <ul>
           <li><strong>34 new individually-sectioned types, +60 rolled-up test types, 2 removed.</strong> G05 +1
-          (<code>IDistributedLock</code>, <code>MMCA.Common.Application/Interfaces/IDistributedLock.cs:30</code>); G07 +1
+          (<code>IDistributedLock</code>, <span class="cite"><span><code>MMCA.Common.Application/Interfaces/IDistributedLock.cs:30</code></span></span>); G07 +1
           (<code>TransactionCommitAmbiguousException</code>,
-          <code>MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/TransactionCommitAmbiguousException.cs:22</code>);
+          <span class="cite"><span><code>MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/TransactionCommitAmbiguousException.cs:22</code></span></span>);
           G14 +4 (the distributed-lock implementations and their handles, <code>Infrastructure/Concurrency/</code>);
           G15 +3 (<code>ICultureApplier</code>, <code>EndpointCultureApplier</code>, <code>ChannelReferenceCounter</code>); G17 +1
-          (<code>ConferenceReadAudience</code>, <code>Conference.Shared/Authorization/ConferenceReadAudience.cs:23</code>);
+          (<code>ConferenceReadAudience</code>, <span class="cite"><span><code>Conference.Shared/Authorization/ConferenceReadAudience.cs:23</code></span></span>);
           G18 +13 (the six <code>GetPublic*Filter</code> query/handler pairs, <code>PublicConferenceVisibility</code>,
           <code>PublicSessionStatusSpecification</code>, <code>LocalityLookupEntry</code>); G20 +2 (<code>PublicLookupReader</code>,
           <code>CurrentUserServiceExtensions</code>); G21 +1 (<code>SessionSelectionFilterOptions</code>) and <strong>-2</strong>
@@ -888,12 +889,12 @@
           successor without removing the predecessor, so seven chapters taught the same type twice: the
           assembled corpus held <strong>42</strong> duplicate headings, 28 of them in group-07 alone, where <code>p02</code>&#39;s 13
           sections were a strict subset of <code>p03</code>&#39;s 14 and <code>p04</code>&#39;s 15 a subset of <code>p05</code>&#39;s 16. The stale copies
-          were the losers on evidence (<code>p02</code> cited <code>ApplicationDbContext.cs:34</code> and <code>class</code>; <code>p03</code> cites <code>:35</code>
+          were the losers on evidence (<code>p02</code> cited <span class="cite"><span><code>ApplicationDbContext.cs:34</code></span></span> and <code>class</code>; <code>p03</code> cites <span class="cite"><span><code>:35</code></span></span>
           and <code>class (abstract)</code>), so four fully-redundant part files were deleted and the individual
           duplicates removed from <code>group-04-p02</code>, <code>group-19-p01</code>, <code>group-23-p07</code> and <code>group-24-p02</code>. One
-          deletion was caught and reverted: <code>group-25-p03</code> also held the <strong>WinUI</strong> <code>App</code>
-          (<code>MMCA.ADC.UI/Platforms/Windows/App.xaml.cs:8</code>), a distinct type from <code>p01</code>&#39;s <code>App</code>
-          (<code>MMCA.ADC.UI/App.xaml.cs:7</code>), so a name-based subset test wrongly read it as redundant; that
+          deletion was caught and reverted: <code>group-25-p03</code> also held the <strong>WinUI</strong> <code>App</code><span class="cite"><span>
+          (<code>MMCA.ADC.UI/Platforms/Windows/App.xaml.cs:8</code>)</span></span>, a distinct type from <code>p01</code>&#39;s <code>App</code><span class="cite"><span>
+          (<code>MMCA.ADC.UI/App.xaml.cs:7</code>)</span></span>, so a name-based subset test wrongly read it as redundant; that
           section was restored. A (section + citation) pair check across the whole corpus now reports <strong>0</strong>
           duplicates.</li>
           <li><strong>137 section-header citations corrected mechanically</strong> from the fresh inventory across 35 parts
@@ -902,20 +903,20 @@
           <li><strong>8 sections repaired after an adversarial prose check returned 8 DRIFTED out of 8.</strong> The sampled
           sections were the ones whose declaration line had moved furthest, and several described behaviour
           that has since inverted: <code>SafeDomainEventHandler&lt;TDomainEvent&gt;</code> was documented as swallowing handler
-          exceptions when the current code uses an exception filter that logs and <strong>rethrows</strong>
-          (<code>SafeDomainEventHandler.cs:63-67</code>); <code>WarmupHostedService</code> was documented as having no per-task
+          exceptions when the current code uses an exception filter that logs and <strong>rethrows</strong><span class="cite"><span>
+          (<code>SafeDomainEventHandler.cs:63-67</code>)</span></span>; <code>WarmupHostedService</code> was documented as having no per-task
           deadline, with the hang called out as an open gap, when a <code>WaitAsync(_taskTimeout, ...)</code> timeout and
-          a fourth <code>LogTaskTimedOut</code> message now exist (<code>WarmupHostedService.cs:69</code>, <code>:105</code>);
+          a fourth <code>LogTaskTimedOut</code> message now exist<span class="cite"><span> (<code>WarmupHostedService.cs:69</code>, <code>:105</code>)</span></span>;
           <code>QueryCacheKeyLocks</code> was documented as a <code>ConcurrentDictionary&lt;string, SemaphoreSlim&gt;</code> keyed exactly
-          when it is now a fixed-width <code>KeyedSemaphoreStripe</code> that buckets keys (<code>CachingQueryDecorator.cs:123</code>);
+          when it is now a fixed-width <code>KeyedSemaphoreStripe</code> that buckets keys<span class="cite"><span> (<code>CachingQueryDecorator.cs:123</code>)</span></span>;
           <code>MemoryCacheService</code>&#39;s claimed load-bearing write ordering no longer exists; <code>SpeakerLocalityHelper</code>&#39;s
-          <code>FindLocalityCategory</code> is now the plural <code>FindLocalityCategories</code> returning every match
-          (<code>SpeakerLocalityHelper.cs:88</code>); and <code>ConferenceTrackInfo</code> described twelve tracks with names that
-          appear nowhere in source against the real eight (<code>ADCHome.razor.cs:254-268</code>). <code>PropertyAccessor</code> and
+          <code>FindLocalityCategory</code> is now the plural <code>FindLocalityCategories</code> returning every match<span class="cite"><span>
+          (<code>SpeakerLocalityHelper.cs:88</code>)</span></span>; and <code>ConferenceTrackInfo</code> described twelve tracks with names that
+          appear nowhere in source against the real eight<span class="cite"><span> (<code>ADCHome.razor.cs:254-268</code>)</span></span>. <code>PropertyAccessor</code> and
           <code>AggregateCapture</code> were citation-stale throughout. All eight were rewritten against current source.</li>
-          <li><strong>The 20th cycle is genuine, unlike the 19th.</strong> <code>CommitFailingDbContext</code> and <code>FailingDatabaseFacade</code>
+          <li><strong>The 20th cycle is genuine, unlike the 19th.</strong> <code>CommitFailingDbContext</code> and <code>FailingDatabaseFacade</code><span class="cite"><span>
           (<code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryCommitAmbiguityTests.cs:175</code> and
-          <code>:230</code>) really do reference each other: the context holds the facade and the facade takes the context.
+          <code>:230</code>)</span></span> really do reference each other: the context holds the facade and the facade takes the context.
           Both are rolled-up test doubles, so no chapter section is affected. Edge resolution: <strong>9,543</strong>
           namespace-visible (~96%), <strong>348</strong> globally-unique fallback (338 to 348), <strong>28</strong> dropped ambiguous
           (unchanged).</li>
@@ -944,8 +945,8 @@
           <code>SoftDeletedUserValidator&lt;TUser&gt;</code>, <code>UserUseCaseLog</code>) landed in G14
           (<code>MMCA.Common.Application/Users/</code>), the preference/erasure domain contracts (<code>IErasableUser</code>,
           <code>IPasswordChangeableUser</code>, <code>IUserPreferences</code>) in G08 (<code>MMCA.Common.Domain/Auth/</code>),
-          <code>OwnedByUserSpecification&lt;TEntity, TIdentifierType&gt;</code> in G03
-          (<code>MMCA.Common.Domain/Specifications/OwnedByUserSpecification.cs:20</code>), and
+          <code>OwnedByUserSpecification&lt;TEntity, TIdentifierType&gt;</code> in G03<span class="cite"><span>
+          (<code>MMCA.Common.Domain/Specifications/OwnedByUserSpecification.cs:20</code>)</span></span>, and
           <code>UserAccountAuthControllerBase</code> in G12. The ADC Identity originals (<code>ChangePreferencesRequest</code>,
           <code>GetUserPreferencesQuery</code>, <code>UserPreferencesResponse</code>, the non-generic <code>SoftDeletedUserValidator</code>)
           were deleted from G23, and the Conference <code>OwnEventQuestionAnswerSpecification</code> /
@@ -964,9 +965,9 @@
           G25 +99 net rolled-up test types plus new individually-sectioned testing bases
           (<code>CrossServiceFixtureBase</code>, <code>DependencyInjectionAssert</code>, <code>TestPolling</code>,
           <code>ModuleConformanceTestsBase&lt;TModule&gt;</code>, <code>WebVitalsBudget</code>).</li>
-          <li><strong>The 21st cycle is genuine and test-only.</strong> <code>RecordingDistributedLock</code> and its nested <code>Handle</code>
+          <li><strong>The 21st cycle is genuine and test-only.</strong> <code>RecordingDistributedLock</code> and its nested <code>Handle</code><span class="cite"><span>
           (<code>MMCA.ADC.Conference.Infrastructure.Tests/Services/SessionScoringProcessorTests.cs:197</code> and
-          <code>:235</code>) reference each other; both are rolled-up test doubles, so no chapter section is affected.
+          <code>:235</code>)</span></span> reference each other; both are rolled-up test doubles, so no chapter section is affected.
           Edge resolution: <strong>9,964</strong> namespace-visible (~97%), <strong>358</strong> globally-unique fallback (348 to
           358), <strong>28</strong> dropped ambiguous (unchanged).</li>
           <li><strong>Method note: this pass re-authored to the new rosters, then deduplicated.</strong> 53 approved units
@@ -977,12 +978,12 @@
           emptied three part files entirely (<code>group-07-...-p07</code>, <code>group-26-...-p09</code>, <code>group-27-...-p07</code>,
           removed). A duplicate scan against the prior corpus now reports only legitimate same-name
           families (e.g. the five per-assembly Identity <code>DependencyInjection</code> classes, the fifth being the
-          newly added <code>MMCA.ADC.Identity.API/DependencyInjection.cs:18</code>).</li>
+          newly added <span class="cite"><span><code>MMCA.ADC.Identity.API/DependencyInjection.cs:18</code></span></span>).</li>
           <li><strong>Spot-checks.</strong> All 15 re-authored overviews plus the G25 rollup were adversarially spot-checked:
           14 CONFIRMED, one DRIFTED on a citation nit (the G10 overview called all four notification
           defaults no-ops; <code>IEmailSender</code>&#39;s default is the real <code>SmtpEmailSender</code>,
-          <code>MMCA.Common.Infrastructure/DependencyInjection.cs:234</code>, and <code>INotificationRecipientProvider</code>&#39;s
-          no-op default lives at <code>MMCA.Common.Application/Notifications/DependencyInjection.cs:67</code>); the
+          <span class="cite"><span><code>MMCA.Common.Infrastructure/DependencyInjection.cs:234</code></span></span>, and <code>INotificationRecipientProvider</code>&#39;s
+          no-op default lives at <span class="cite"><span><code>MMCA.Common.Application/Notifications/DependencyInjection.cs:67</code></span></span>); the
           sentence was corrected in place and re-verified against source.</li>
           </ul>
           </blockquote>
@@ -1023,10 +1024,10 @@
           globally-unique fallback (358 to 481), <strong>28</strong> dropped ambiguous (unchanged). Cycles 21 to 26;
           three of the 26 are now identical-name fallback artifacts rather than real dependencies (the
           <code>SelfHttpWarmupTask</code> service pair, plus the new test pairs <code>Priority</code> at
-          <code>MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs:89</code> /
-          <code>MMCA.Common.Shared.Tests/ValueObjects/EnumerationTests.cs:122</code> and <code>GateTestContext</code> at
-          <code>MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailModelGateTests.cs:76</code> /
-          <code>MMCA.Common.Infrastructure.Tests/Scheduling/SchedulerModelGateTests.cs:71</code>). The largest new
+          <span class="cite"><span><code>MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs:89</code></span></span> /
+          <span class="cite"><span><code>MMCA.Common.Shared.Tests/ValueObjects/EnumerationTests.cs:122</code></span></span> and <code>GateTestContext</code> at
+          <span class="cite"><span><code>MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailModelGateTests.cs:76</code></span></span> /
+          <span class="cite"><span><code>MMCA.Common.Infrastructure.Tests/Scheduling/SchedulerModelGateTests.cs:71</code></span></span>). The largest new
           genuine cycle is the eight-member G07 interceptor SCC around <code>ApplicationDbContext</code> (now including
           <code>AuditTrailSaveChangesInterceptor</code> and <code>TenantSaveChangesInterceptor</code>).</li>
           <li><strong>Method note: this pass re-authored 118 units, then deduplicated against unit rosters.</strong> The
@@ -1040,8 +1041,8 @@
           repack re-author.</li>
           <li><strong>Spot-checks.</strong> All 16 authored overview/rollup parts were adversarially spot-checked: 15
           CONFIRMED, one DRIFTED on a citation nit (the G02 overview cited the PII-erasure fitness rule at
-          <code>ArchitectureRules.Governance.cs:50</code>, a shared helper; the rule method
-          <code>EntitiesWithPiiImplementAnonymizable</code> lives at <code>ArchitectureRules.Governance.cs:11</code>); the
+          <span class="cite"><span><code>ArchitectureRules.Governance.cs:50</code></span></span>, a shared helper; the rule method
+          <code>EntitiesWithPiiImplementAnonymizable</code> lives at <span class="cite"><span><code>ArchitectureRules.Governance.cs:11</code></span></span>); the
           citation was corrected in place, alongside one cosmetic line-count fix in the G05 overview flagged
           by an otherwise-CONFIRMED check.</li>
           </ul>
@@ -1056,29 +1057,29 @@
           <li><strong>devops-cicd (3 fixes):</strong> the integration-tests gate now guards roughly 390 <code>[Fact]</code> methods
           (was 330), the three freshness jobs grant two read privileges, <code>actions: read</code> plus
           <code>contents: read</code> (<code>deploy.yml:553-555/610-612/667-669</code>), and the Testcontainers-tier description
-          cite moved to <code>cross-service-tests.yml:6-10</code>.</li>
+          cite moved to <span class="cite"><span><code>cross-service-tests.yml:6-10</code></span></span>.</li>
           <li><strong>devops-iac:</strong> new coverage for the post-08-02 pure-insertion bicep additions: the daily ACR
-          purge task (<code>foundation.bicep:83-108</code>, a third foundation resource), the two
-          <code>Telemetry__Disable*Metrics</code> env vars on all six apps (<code>main.bicep:231-238</code>), the private
-          DataProtection key-ring container (<code>main.bicep:821-827</code>) with Identity/UI wiring (<code>:1134-1135</code>,
-          <code>:1780-1781</code>) and the explicitly-not-implemented Key Vault Crypto User follow-up, the
-          <code>KeyVault__Uri</code> config source on five apps (Gateway excluded, <code>:937-939</code>), and the
+          purge task (<span class="cite"><span><code>foundation.bicep:83-108</code></span></span>, a third foundation resource), the two
+          <code>Telemetry__Disable*Metrics</code> env vars on all six apps<span class="cite"><span> (<code>main.bicep:231-238</code>)</span></span>, the private
+          DataProtection key-ring container<span class="cite"><span> (<code>main.bicep:821-827</code>)</span></span> with Identity/UI wiring<span class="cite"><span> (<code>:1134-1135</code>,
+          <code>:1780-1781</code>)</span></span> and the explicitly-not-implemented Key Vault Crypto User follow-up, the
+          <code>KeyVault__Uri</code> config source on five apps (Gateway excluded, <span class="cite"><span><code>:937-939</code></span></span>), and the
           <code>Scheduler__PollingIntervalSeconds</code> / <code>Outbox__DeadLetterRetentionDays</code> settings; every
           <code>main.bicep</code>/<code>foundation.bicep</code> cite was re-derived (insertion offsets of +15 to +101).</li>
           <li><strong>devops-aspire:</strong> the Gateway&#39;s three forwarder configs with explicit activity timeouts and the
-          two new <code>Gateway:*</code> knobs (<code>Gateway/Program.cs:75-110</code>), the eighth <code>MMCA.Common.Aspire.Hosting</code>
-          extension <code>WithE2eRegistrationThrottleLift</code> (<code>Extensions.cs:176-191</code>, replacing the inline AppHost
+          two new <code>Gateway:*</code> knobs<span class="cite"><span> (<code>Gateway/Program.cs:75-110</code>)</span></span>, the eighth <code>MMCA.Common.Aspire.Hosting</code>
+          extension <code>WithE2eRegistrationThrottleLift</code> (<span class="cite"><span><code>Extensions.cs:176-191</code></span></span>, replacing the inline AppHost
           throttle lift), a new subsection for <code>AddCommonKeyVaultConfiguration</code> / <code>AddCommonDataProtection</code> /
           <code>AddScheduledJobs</code> (each no-ops when its config key is absent), the four-meter OTel list, and a
           full AppHost/Extensions cite sweep.</li>
           <li><strong>devops-runbooks:</strong> the restore-drill narrative was inverted to match source: the DR doc now
           documents three automated paths with the weekly cron as the enforcing one, and a six-row drill
-          ledger, latest 2026-08-10 (<code>DISASTER-RECOVERY.md:120-175</code>); the stale OPERATIONS.md 3-day-window
+          ledger, latest 2026-08-10<span class="cite"><span> (<code>DISASTER-RECOVERY.md:120-175</code>)</span></span>; the stale OPERATIONS.md 3-day-window
           caution was dropped (fixed at source in ADC <code>1dd53f8d</code>); roughly 20 <code>main.bicep</code> cites re-anchored.</li>
           <li><strong>devops-testing:</strong> all 45 per-project rows re-derived from the regenerated inventory (methodology
           unchanged: distinct inventory nodes), roll-ups now 875 Common + 658 ADC = 1,533 types (was 1,246);
-          FACTS-owned fitness numbers moved to 100 methods / 32 bases / 78 executed by Common&#39;s own build
-          (<code>FACTS.md:44,47-48</code>), with <code>ModuleConformanceTestsBase</code> and its Common-repo test class newly
+          FACTS-owned fitness numbers moved to 100 methods / 32 bases / 78 executed by Common&#39;s own build<span class="cite"><span>
+          (<code>FACTS.md:44,47-48</code>)</span></span>, with <code>ModuleConformanceTestsBase</code> and its Common-repo test class newly
           covered; the shipped-package roll-up is now 95 (was 89).</li>
           </ul>
           </blockquote>
@@ -1097,10 +1098,10 @@
           <li><strong>Governance event, two classifier rules approved 2026-08-18 (no new group needed).</strong>
           <code>MMCA.Common.Domain.IntegrationEvents</code> maps to G04, created for the first framework-shipped
           concrete integration event, <code>OutputCacheEvictionRequested</code>
-          (<code>MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:23</code>, a frozen-contract
+          (<span class="cite"><span><code>MMCA.Common.Domain/IntegrationEvents/OutputCacheEvictionRequested.cs:23</code></span></span>, a frozen-contract
           candidate per its ADR-010 versioning remarks); and <code>MMCA.ADC.Gateway</code> maps to G16, created for the
           first first-party type in the Gateway host, <code>Http2ForwardingConfigFilter</code>
-          (<code>MMCA.ADC.Gateway/Http2ForwardingConfigFilter.cs:23</code>, the <code>ForwardHttp2</code> h2c rollback switch),
+          (<span class="cite"><span><code>MMCA.ADC.Gateway/Http2ForwardingConfigFilter.cs:23</code></span></span>, the <code>ForwardHttp2</code> h2c rollback switch),
           placed with the gateway edge teaching in group-16. Both were unmapped refusals; neither is a
           cohesive new subsystem, so the chapter count stays at 27.</li>
           <li><strong>Framework edge hardening dominates the Common delta (G12 +11, G16 +9).</strong> Optimistic HTTP
@@ -1136,8 +1137,8 @@
           <code>NamespaceCycleTestsBase</code>, <code>ProtoContractTestsBase</code>) and the <code>ProtoScope</code>/<code>ProtoScopeKind</code> model.</li>
           <li><strong>Authoring pass and verification:</strong> 24 units re-authored across 12 chapters. Adversarial
           spot-checks returned CONFIRMED on all sampled units after one repair: the G16 overview claimed
-          every <code>GatewayRateLimitingSettings</code> property carries <code>[Range]</code>, but <code>BypassPathPrefixes</code>
-          (<code>MMCA.Common.Aspire/Gateway/GatewayRateLimitingSettings.cs:74</code>) does not; the prose now says the
+          every <code>GatewayRateLimitingSettings</code> property carries <code>[Range]</code>, but <code>BypassPathPrefixes</code><span class="cite"><span>
+          (<code>MMCA.Common.Aspire/Gateway/GatewayRateLimitingSettings.cs:74</code>)</span></span> does not; the prose now says the
           three numeric properties. The v1.135.0 backlog of sections with corrected citations but unverified
           bodies remains open outside the parts re-authored here.</li>
           </ul>
@@ -1150,18 +1151,18 @@
           <strong>2,001</strong>, roll-ups 1,575 to <strong>1,667</strong>, <code>###</code> sections 1,834 to <strong>1,910</strong>, cycles 30 to <strong>34</strong>.</p>
           <ul>
           <li><strong>Password-reset vertical (G08 +8, G12 +5, G14 +2, <a href="https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html" target="_blank" rel="noopener">ADR-091</a>):</strong> the cache-backed
-          forgot/reset-password flow: <code>ForgotPasswordHandlerBase&lt;TUser, TCommand&gt;</code>
-          (<code>MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:35</code>) and its
-          Reset sibling, <code>PasswordResetTokenService</code> (<code>MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:26</code>),
-          <code>PasswordResetSettings</code> (<code>MMCA.Common.Application/Auth/PasswordResetSettings.cs:10</code>), and
-          <code>PasswordResetAuthControllerBase&lt;TForgotPasswordCommand, TResetPasswordCommand&gt;</code>
-          (<code>MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:43</code>).</li>
+          forgot/reset-password flow: <code>ForgotPasswordHandlerBase&lt;TUser, TCommand&gt;</code><span class="cite"><span>
+          (<code>MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:35</code>)</span></span> and its
+          Reset sibling, <code>PasswordResetTokenService</code><span class="cite"><span> (<code>MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:26</code>)</span></span>,
+          <code>PasswordResetSettings</code><span class="cite"><span> (<code>MMCA.Common.Application/Auth/PasswordResetSettings.cs:10</code>)</span></span>, and
+          <code>PasswordResetAuthControllerBase&lt;TForgotPasswordCommand, TResetPasswordCommand&gt;</code><span class="cite"><span>
+          (<code>MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:43</code>)</span></span>.</li>
           <li><strong>Event upcasting (G03 +1, G05 +2, <a href="https://ivanball.github.io/docs/adr/090-event-upcaster-registration.html" target="_blank" rel="noopener">ADR-090</a>):</strong> <code>IEventUpcaster&lt;in TSource, out TTarget&gt;</code>
-          and <code>EventUpcasterRegistry</code> (<code>MMCA.Common.Application/Services/EventUpcasterRegistry.cs:30</code>).</li>
+          and <code>EventUpcasterRegistry</code><span class="cite"><span> (<code>MMCA.Common.Application/Services/EventUpcasterRegistry.cs:30</code>)</span></span>.</li>
           <li><strong>ADC Conference application (G18 +33):</strong> the session-selection decision-support vertical
           (<code>GetContentSimilarity</code>, <code>GetSessionSelectionDashboard</code>, <code>GetSpeakerSessionOverlap</code>,
           <code>GetCategoryDistribution</code> under <code>MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/</code>,
-          incl. <code>IAiScoringService</code> at <code>.../ScoreEventSessions/IAiScoringService.cs:40</code>), calendar export
+          incl. <code>IAiScoringService</code> at <span class="cite"><span><code>.../ScoreEventSessions/IAiScoringService.cs:40</code></span></span>), calendar export
           (<code>ExportEventCalendarQuery</code>/<code>ExportSessionCalendarQuery</code>), and new sponsor/category/question
           update use-cases; G17 +4, G19 +1, G20 +1, G21 +9, G23/Identity +5, G26/Live +1, G15 +2, G07 +2
           ride the same waves.</li>
@@ -1202,12 +1203,12 @@
           by design. Approved 2026-09-02: one prefix rule <code>MMCA.Common.Gateway</code> to <strong>G16</strong>, the same home the
           2026-08-18 decision gave the ADC gateway host types (that namespace now holds 0 types, its
           <code>Http2ForwardingConfigFilter</code> having moved into the package). No new group. Members: <code>GatewaySettings</code>
-          and its six nested settings records (<code>MMCA.Common.Gateway/GatewaySettings.cs:12</code>),
-          <code>GatewayReverseProxyExtensions</code> (<code>GatewayReverseProxyExtensions.cs:26</code>), <code>ForwardedHeadersExtensions</code>
-          (<code>ForwardedHeadersExtensions.cs:23</code>), the two <code>Configuration/*ConfigFilter</code> types,
-          <code>RateLimiting/GatewayRoutePolicyExtensions.cs:27</code> and <code>Transforms/GatewayTraceHeaderTransformProvider.cs:18</code>.</li>
+          and its six nested settings records<span class="cite"><span> (<code>MMCA.Common.Gateway/GatewaySettings.cs:12</code>)</span></span>,
+          <code>GatewayReverseProxyExtensions</code><span class="cite"><span> (<code>GatewayReverseProxyExtensions.cs:26</code>)</span></span>, <code>ForwardedHeadersExtensions</code><span class="cite"><span>
+          (<code>ForwardedHeadersExtensions.cs:23</code>)</span></span>, the two <code>Configuration/*ConfigFilter</code> types,
+          <span class="cite"><span><code>RateLimiting/GatewayRoutePolicyExtensions.cs:27</code></span></span> and <span class="cite"><span><code>Transforms/GatewayTraceHeaderTransformProvider.cs:18</code></span></span>.</li>
           <li><strong>Multi-device refresh sessions (G08 +11, G07 +3, <a href="https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html" target="_blank" rel="noopener">ADR-097</a>):</strong>
-          <code>RefreshSession</code> (<code>MMCA.Common.Domain/Auth/RefreshSession.cs:31</code>), <code>IRefreshSessionStore</code>,
+          <code>RefreshSession</code><span class="cite"><span> (<code>MMCA.Common.Domain/Auth/RefreshSession.cs:31</code>)</span></span>, <code>IRefreshSessionStore</code>,
           <code>SessionStampingTokenService</code>, <code>RefreshSessionSettings</code>, <code>EFRefreshSessionStore</code> and
           <code>RefreshSessionCleanupService</code>; <code>AuthorizationPolicies</code> removed. PBKDF2-only hashing
           (<a href="https://ivanball.github.io/docs/adr/102-pbkdf2-only-password-hashing.html" target="_blank" rel="noopener">ADR-102</a>) is a body change to <code>PasswordHasher</code>, not a type change.</li>
@@ -1223,8 +1224,8 @@
           (<code>IApplicationSettings</code>, <code>IConnectionStringSettings</code>, <code>IJwtSettings</code>, <code>ISmtpSettings</code>,
           <code>IPushNotificationSettings</code>) and the <code>DefaultEngineDbContextFactories</code> family removed.</li>
           <li><strong>Move-to-Common wave (G15 +27, G16 +12, G27 +3):</strong> <code>IPublicLinkBuilder</code>, <code>NavigationPublicLinkBuilder</code>,
-          <code>InfiniteScrollSentinel</code>, <code>ListPageActions</code>, <code>MauiPublicLinkBuilder</code> and <code>ConcurrencyETag</code>
-          (<code>MMCA.Common.Shared/Http/ConcurrencyETag.cs:24</code>) left their ADC chapters for the Common ones;
+          <code>InfiniteScrollSentinel</code>, <code>ListPageActions</code>, <code>MauiPublicLinkBuilder</code> and <code>ConcurrencyETag</code><span class="cite"><span>
+          (<code>MMCA.Common.Shared/Http/ConcurrencyETag.cs:24</code>)</span></span> left their ADC chapters for the Common ones;
           <code>IUiReadCache</code>/<code>UiReadCache</code>, the toast/dialog services and <code>ModelValidation</code> are new in G15; the h2c
           health-check family, <code>BrokerSelection</code> and <code>ServiceBusEmulatorResource</code> are new in G16.</li>
           <li><strong>ADC Conference UI (G21 +44):</strong> per-entity <code>*CreateModel</code>/<code>*EditModel</code>/<code>*FormModel</code> families,
@@ -1245,8 +1246,8 @@
           spend limit, 72 in the resumed wave; 11 unchanged units reused as-is) plus the five devops chapters and
           the concept maps, all against real source with <code>path:line</code> citations. <code>verify.ps1</code>: <strong>0 missing</strong>,
           rubric <strong>34/34</strong>. Adversarial spot-checks: G18-p19 CONFIRMED; G20-p00 DRIFTED on four <code>Program.cs</code>
-          walkthrough lines off by one to two (corrected to <code>:163</code>, <code>:166-168</code>, <code>:273-277</code>, <code>:280</code>); G18-p18
-          DRIFTED on an invented <code>Checkbox</code> question type (corrected to <code>Text</code>; <code>QuestionInvariants.cs:118-129</code>
+          walkthrough lines off by one to two (corrected to <span class="cite"><span><code>:163</code></span></span>, <span class="cite"><span><code>:166-168</code></span></span>, <span class="cite"><span><code>:273-277</code></span></span>, <span class="cite"><span><code>:280</code></span></span>); G18-p18
+          DRIFTED on an invented <code>Checkbox</code> question type (corrected to <code>Text</code>; <span class="cite"><span><code>QuestionInvariants.cs:118-129</code></span></span>
           switches only on Rating, Text and Email).</li>
           </ul>
           </blockquote>
@@ -1261,20 +1262,20 @@
           to <strong>37</strong>, edges 15,415 by namespace / 589 by unique-name fallback / 42 dropped.</p>
           <ul>
           <li><strong>Per-group movement</strong> (25 of 27 groups moved; G01 and G06 are unchanged):<ul>
-          <li><strong>G02 Domain Building Blocks</strong> (36): <code>Money</code> body (<code>Money.cs:21</code>, a doc-comment cref only); 10 relocated by the v1.184.0 namespace split.</li>
+          <li><strong>G02 Domain Building Blocks</strong> (36): <code>Money</code> body (<span class="cite"><span><code>Money.cs:21</code></span></span>, a doc-comment cref only); 10 relocated by the v1.184.0 namespace split.</li>
           <li><strong>G03 Querying</strong> (38), <strong>G05 CQRS pipeline</strong> (57), <strong>G11 Navigation</strong> (12), <strong>G12 API hosting</strong> (81), <strong>G20 Conference API/gRPC</strong> (44), <strong>G21 Conference UI</strong> (146, 126 relocated) and <strong>G27 Device capability layer</strong> (99, 83 relocated): citation-only drift from the namespace split, fixed by <code>fixcites.ps1</code> with no author.</li>
-          <li><strong>G04 Events + Outbox</strong> (37): <code>IntegrationEventConsumerExtensions</code> body (<code>IntegrationEventConsumerExtensions.cs:12</code>); <code>OutboxSettings</code> regrouped in from G14.</li>
-          <li><strong>G07 Persistence &amp; EF Core</strong> (122): <code>DomainEventSaveChangesInterceptor</code> body (<code>DomainEventSaveChangesInterceptor.cs:46</code>); the 11 persistence/audit-trail/connection-string/data-source/tenancy settings types regrouped in from G14; 13 host-level services (file storage, image processing, native push, <code>TenantContext</code>, the upcasting/fault consumers, <code>PeriodicBackgroundService</code>) regrouped out to G14.</li>
+          <li><strong>G04 Events + Outbox</strong> (37): <code>IntegrationEventConsumerExtensions</code> body<span class="cite"><span> (<code>IntegrationEventConsumerExtensions.cs:12</code>)</span></span>; <code>OutboxSettings</code> regrouped in from G14.</li>
+          <li><strong>G07 Persistence &amp; EF Core</strong> (122): <code>DomainEventSaveChangesInterceptor</code> body<span class="cite"><span> (<code>DomainEventSaveChangesInterceptor.cs:46</code>)</span></span>; the 11 persistence/audit-trail/connection-string/data-source/tenancy settings types regrouped in from G14; 13 host-level services (file storage, image processing, native push, <code>TenantContext</code>, the upcasting/fault consumers, <code>PeriodicBackgroundService</code>) regrouped out to G14.</li>
           <li><strong>G08 Auth</strong> (90): <code>JwtSettings</code>, <code>JwksSettings</code>, <code>JwtSigningAlgorithm</code> regrouped in from G14. <strong>G09 Caching</strong> (9): <code>CacheSettings</code> regrouped in from G14.</li>
-          <li><strong>G10 Notifications</strong> (57): <code>NotificationHub</code> body (<code>NotificationHub.cs:17</code>). <strong>G13 gRPC contracts</strong> (6): <code>DependencyInjection</code> body (<code>DependencyInjection.cs:25</code>).</li>
-          <li><strong>G14 Module system</strong> (69): <code>DeleteUserHandlerBase&lt;TUser, TCommand&gt;</code> (<code>DeleteUserHandlerBase.cs:58</code>), two <code>DependencyInjection</code> roots (<code>:27</code>, <code>:53</code>) and <code>UserUseCaseLog</code> (<code>UserUseCaseLog.cs:11</code>) body-changed; 16 settings types out to G04/G07/G08/G09, 13 host-level services in from G07 (net 72 to 69).</li>
-          <li><strong>G15 Common UI</strong> (117): <code>AuthenticatedServiceBase</code> (<code>AuthenticatedServiceBase.cs:15</code>; namespace now <code>MMCA.Common.UI.Services.Api</code>, tokens via <code>...Services.Auth.Tokens</code>) and <code>ResultUiExtensions</code> (<code>ResultUiExtensions.cs:63</code>) body-changed.</li>
-          <li><strong>G16 Aspire</strong> (60): added <code>HealthEndpointPaths</code> (<code>HealthEndpointPaths.cs:8</code>), <code>ProbeTelemetryFilter</code> (<code>ProbeTelemetryFilter.cs:27</code>) and <code>ProbeTelemetryFilterProcessor</code> (<code>ProbeTelemetryFilterProcessor.cs:20</code>), the probe-telemetry suppression; <code>DownstreamServiceHealthCheck</code> (<code>:39</code>) and <code>Extensions</code> (<code>Extensions.cs:29</code>) body-changed.</li>
-          <li><strong>G17 Conference domain</strong> (99): <code>Event</code> (<code>Event.cs:24</code>), <code>SessionAiScore</code> (<code>SessionAiScore.cs:13</code>) and <code>SessionAiScoreDTO</code> (<code>SessionAiScoreDTO.cs:6</code>) body-changed (model + prompt versioning persisted per score, ADR-111).</li>
-          <li><strong>G18 Conference application</strong> (303): <code>IAiScoringService</code> (<code>IAiScoringService.cs:6</code>, now carries <code>ModelId</code> + <code>PromptVersion</code>), <code>ScoreEventSessionsHandler</code> (<code>:18</code>), <code>GetSessionSelectionDashboardHandler</code> (<code>:16</code>) and <code>EventDTOMapper</code> (<code>EventDTOMapper.cs:15</code>) body-changed.</li>
-          <li><strong>G19 Conference infrastructure</strong> (37): added <code>AnthropicOutputConfig</code> (<code>AnthropicScoringService.cs:452</code>), <code>AnthropicJsonSchemaFormat</code> (<code>:458</code>), <code>AnthropicUsage</code> (<code>:488</code>) and <code>ScoringInstruments</code> (<code>:326</code>) (schema-constrained output + token metering); <code>AnthropicScoringService</code> (<code>:19</code>) and its request/response records, <code>EventConfiguration</code> (<code>:12</code>) and <code>SessionAiScoreConfiguration</code> (<code>:11</code>) body-changed.</li>
+          <li><strong>G10 Notifications</strong> (57): <code>NotificationHub</code> body<span class="cite"><span> (<code>NotificationHub.cs:17</code>)</span></span>. <strong>G13 gRPC contracts</strong> (6): <code>DependencyInjection</code> body<span class="cite"><span> (<code>DependencyInjection.cs:25</code>)</span></span>.</li>
+          <li><strong>G14 Module system</strong> (69): <code>DeleteUserHandlerBase&lt;TUser, TCommand&gt;</code><span class="cite"><span> (<code>DeleteUserHandlerBase.cs:58</code>)</span></span>, two <code>DependencyInjection</code> roots<span class="cite"><span> (<code>:27</code>, <code>:53</code>)</span></span> and <code>UserUseCaseLog</code><span class="cite"><span> (<code>UserUseCaseLog.cs:11</code>)</span></span> body-changed; 16 settings types out to G04/G07/G08/G09, 13 host-level services in from G07 (net 72 to 69).</li>
+          <li><strong>G15 Common UI</strong> (117): <code>AuthenticatedServiceBase</code> (<span class="cite"><span><code>AuthenticatedServiceBase.cs:15</code></span></span>; namespace now <code>MMCA.Common.UI.Services.Api</code>, tokens via <code>...Services.Auth.Tokens</code>) and <code>ResultUiExtensions</code><span class="cite"><span> (<code>ResultUiExtensions.cs:63</code>)</span></span> body-changed.</li>
+          <li><strong>G16 Aspire</strong> (60): added <code>HealthEndpointPaths</code><span class="cite"><span> (<code>HealthEndpointPaths.cs:8</code>)</span></span>, <code>ProbeTelemetryFilter</code><span class="cite"><span> (<code>ProbeTelemetryFilter.cs:27</code>)</span></span> and <code>ProbeTelemetryFilterProcessor</code><span class="cite"><span> (<code>ProbeTelemetryFilterProcessor.cs:20</code>)</span></span>, the probe-telemetry suppression; <code>DownstreamServiceHealthCheck</code><span class="cite"><span> (<code>:39</code>)</span></span> and <code>Extensions</code><span class="cite"><span> (<code>Extensions.cs:29</code>)</span></span> body-changed.</li>
+          <li><strong>G17 Conference domain</strong> (99): <code>Event</code><span class="cite"><span> (<code>Event.cs:24</code>)</span></span>, <code>SessionAiScore</code><span class="cite"><span> (<code>SessionAiScore.cs:13</code>)</span></span> and <code>SessionAiScoreDTO</code><span class="cite"><span> (<code>SessionAiScoreDTO.cs:6</code>)</span></span> body-changed (model + prompt versioning persisted per score, ADR-111).</li>
+          <li><strong>G18 Conference application</strong> (303): <code>IAiScoringService</code> (<span class="cite"><span><code>IAiScoringService.cs:6</code></span></span>, now carries <code>ModelId</code> + <code>PromptVersion</code>), <code>ScoreEventSessionsHandler</code><span class="cite"><span> (<code>:18</code>)</span></span>, <code>GetSessionSelectionDashboardHandler</code><span class="cite"><span> (<code>:16</code>)</span></span> and <code>EventDTOMapper</code><span class="cite"><span> (<code>EventDTOMapper.cs:15</code>)</span></span> body-changed.</li>
+          <li><strong>G19 Conference infrastructure</strong> (37): added <code>AnthropicOutputConfig</code><span class="cite"><span> (<code>AnthropicScoringService.cs:452</code>)</span></span>, <code>AnthropicJsonSchemaFormat</code><span class="cite"><span> (<code>:458</code>)</span></span>, <code>AnthropicUsage</code><span class="cite"><span> (<code>:488</code>)</span></span> and <code>ScoringInstruments</code><span class="cite"><span> (<code>:326</code>)</span></span> (schema-constrained output + token metering); <code>AnthropicScoringService</code><span class="cite"><span> (<code>:19</code>)</span></span> and its request/response records, <code>EventConfiguration</code><span class="cite"><span> (<code>:12</code>)</span></span> and <code>SessionAiScoreConfiguration</code><span class="cite"><span> (<code>:11</code>)</span></span> body-changed.</li>
           <li><strong>G22 Engagement module</strong> (193) / <strong>G26 Engagement live layer</strong> (85): 14 types regrouped from the live layer into the module chapter (the <code>SessionLive</code>/<code>LivePoll</code>/<code>SessionQuestion</code>/<code>LiveEvent</code> UI services, the <code>SessionLookupService</code> family and the three live-poll EF configurations).</li>
-          <li><strong>G23 Identity module</strong> (90): <code>DeleteUserHandler</code> body (<code>DeleteUserHandler.cs:28</code>). <strong>G24 ADC host</strong> (17): <code>AppDelegate</code> (<code>AppDelegate.cs:20</code>) and <code>MauiProgram</code> (<code>MauiProgram.cs:37</code>) body-changed.</li>
+          <li><strong>G23 Identity module</strong> (90): <code>DeleteUserHandler</code> body<span class="cite"><span> (<code>DeleteUserHandler.cs:28</code>)</span></span>. <strong>G24 ADC host</strong> (17): <code>AppDelegate</code><span class="cite"><span> (<code>AppDelegate.cs:20</code>)</span></span> and <code>MauiProgram</code><span class="cite"><span> (<code>MauiProgram.cs:37</code>)</span></span> body-changed.</li>
           <li><strong>G25 Testing</strong> (2,315): +61 / -22 by name (nested fakes and specs re-homed per test class, e.g. <code>BetaSpecification</code>, <code>FakeEntity</code>, <code>DriftedTests</code>; the new 11-type <code>MMCA.ADC.Conference.Scoring.Evaluation.Tests</code> project with <code>GoldenReplayTests</code>, <code>PromptContractTests</code>, <code>LiveJudgeTests</code>; per-repo <code>FolderWidthTests</code> subclasses, ADR-109; the probe-telemetry tests), 80 body-changed; the per-project rollup counts moved for five projects (Common Infrastructure 380 to 403, Aspire 41 to 44, Shared 44 to 45, ADC Conference Infrastructure 14 to 15, Scoring.Evaluation 0 to 11).</li>
           </ul>
           </li>
@@ -1290,7 +1291,7 @@
           <li><strong>Same-day follow-up pass (2026-09-05, second PR):</strong><ul>
           <li><strong>Rubric v2 retag</strong> (<a href="https://ivanball.github.io/docs/adr/110-rubric-v2-category-realignment.html" target="_blank" rel="noopener">ADR-110</a>): the 297 section-16 Maintainability tags became section 15 Best Practices &amp; Code Quality (289) or section 34 Architecture Governance &amp; Documentation (8, where the sentence is about coupling, tech debt or shotgun surgery); the 137 section-10 Cross-Cutting tags moved to the category that absorbed their criterion, chosen by the tag&#39;s own sentence (12 Performance &amp; Scalability 49, 29 Resilience 27, 17 DevOps &amp; Deployment 20, 6 CQRS &amp; Event-Driven 19, 9 API &amp; Contract Design 12, 13 Observability 10); 35 outbox/bus/consumer sections in groups 04 and 14 gained <code>[Rubric §10, Messaging &amp; Integration Architecture]</code> and 25 AI session-scoring sections gained <code>[Rubric §16, AI-Native Application Architecture]</code>; the primer&#39;s Part A list, the concept-map rubric diagram, the matrix below and the authoring spec now carry the v2 names. <code>verify.ps1</code> still reports 34/34.</li>
           <li><strong>devops-iac bicep cites:</strong> an evidence-verifier sample (44 of 221 <code>main.bicep</code> cites) found every single-line pinpoint cite in the six-app section landing one line early on the preceding comment; 61 cites were corrected (26 comment-landing singles, 27 shorthand <code>:N</code> numbers, 8 verifier-specific items incl. one wrong parameter mapping), all against the committed f2623329.</li>
-          <li><strong>Flagged citations:</strong> of the 209 flagged at the gate, 100 had already been fixed by the sweep&#39;s authors, 6 were resolved by the new <code>fixcites.ps1 -Residual</code> text-match pass, and the remaining 92 went to 36 per-part author agents (one part each, 15-call budget): about a third were genuinely stale and were corrected (line shifts after the namespace split, a file moved from <code>Services/</code> to <code>Sessions/Scoring/</code>, the soft-deleted-user marker write that moved from ADC&#39;s <code>DeleteUserHandler</code> into <code>DeleteUserHandlerBase.cs:142-144</code>), the rest were baseline-absent false positives confirmed correct against today&#39;s source; a handful of sentences also had their pre-split namespace text corrected.</li>
+          <li><strong>Flagged citations:</strong> of the 209 flagged at the gate, 100 had already been fixed by the sweep&#39;s authors, 6 were resolved by the new <code>fixcites.ps1 -Residual</code> text-match pass, and the remaining 92 went to 36 per-part author agents (one part each, 15-call budget): about a third were genuinely stale and were corrected (line shifts after the namespace split, a file moved from <code>Services/</code> to <code>Sessions/Scoring/</code>, the soft-deleted-user marker write that moved from ADC&#39;s <code>DeleteUserHandler</code> into <span class="cite"><span><code>DeleteUserHandlerBase.cs:142-144</code></span></span>), the rest were baseline-absent false positives confirmed correct against today&#39;s source; a handful of sentences also had their pre-split namespace text corrected.</li>
           <li><strong>Same-name headings:</strong> the renderer already dedups repeated heading slugs (<code>dependencyinjection</code>, <code>dependencyinjection-1</code>, ...) in document order; the new <code>fixlinks.ps1</code> computes those effective anchors from the assembled part order, records them in <code>_typemap.tsv</code> (now one row per type instance with a <code>Namespace</code> column), and retargets cross-links by namespace proximity: 68 links rewritten, 33 typemap anchors suffixed, 76 confirmed already on the right instance, 58 left on the first instance (26 from overview parts, which carry no namespace, and 32 equidistant ties).</li>
           <li><strong>Pipeline additions</strong> (all dry-run by default): <code>fixcites.ps1 -Residual</code>, <code>fixlinks.ps1</code>, <code>repack.ps1</code> stray-part deletion and orphan-narrative cleanup, <code>devops-staleness.ps1</code> test-count diff (<code>_testcounts.json</code>) feeding the devops-testing author, <code>plan.ps1</code> typemap <code>Namespace</code> column.</li>
           </ul>
@@ -1308,28 +1309,28 @@
           fallback / 101 dropped.</p>
           <ul>
           <li><strong>Per-group movement</strong> (24 of 28 groups moved; G01, G06, G11 and G13 are unchanged):<ul>
-          <li><strong>G02 Domain Building Blocks</strong> (36): <code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code> body (<code>AuditableAggregateRootEntity.cs:13</code>, a doc-comment change; the author verified no section edit was needed).</li>
-          <li><strong>G03 Querying</strong> (42): added <code>QueryTagScope</code> and its nested <code>AmbientScope</code> (<code>QueryTagScope.cs:20</code>, <code>:61</code>) plus <code>QueryFieldContract</code> (<code>QueryFieldContract.cs:34</code>), the v1.192.0 query tags, and <code>StronglyTypedIdFilterStrategy&lt;TSelf, TValue&gt;</code> (<code>StronglyTypedIdFilterStrategy.cs:24</code>, ADR-115); <code>EntityQueryService</code> (<code>:32</code>), <code>EntityQueryPipeline</code>, <code>EntityQueryParameters</code>, <code>QueryFieldService</code> and <code>QueryFilterService</code> body-changed.</li>
-          <li><strong>G04 Events + Outbox</strong> (38): added <code>OutboxOrigin</code> (<code>OutboxOrigin.cs:29</code>, the v1.195.0 outbox-origin column); <code>BrokerEventBus</code> (<code>:31</code>), <code>BrokerMessageBus</code> (<code>:43</code>), <code>InProcessEventBus</code>, <code>IntegrationEventConsumer&lt;TEvent&gt;</code> (<code>:38</code>), <code>OutboxMessage</code> and <code>OutboxProcessor</code> (<code>:56</code>) body-changed.</li>
-          <li><strong>G05 CQRS pipeline</strong> (61): added <code>AuthorizationGate</code> (<code>AuthorizationGate.cs:19</code>, the v1.201.0 permission-claim gate), <code>IRequiresMfa</code> (<code>IRequiresMfa.cs:28</code>, ADR-116), <code>ISharedQueryCache</code> (<code>ISharedQueryCache.cs:21</code>) and <code>UserCacheKey</code> (<code>UserCacheKey.cs:26</code>); the authorization, caching and logging decorators, <code>IQueryCacheable</code> and <code>MutateEntityHandlerCore</code> (<code>MutateEntityHandlerBase.cs:52</code>) body-changed.</li>
-          <li><strong>G07 Persistence &amp; EF Core</strong> (161): +40 / -1 by name. The internal-command job queue (<code>InternalCommandProcessor.cs:47</code>, <code>InternalCommandScheduler.cs:39</code>, <code>InternalCommandDispatcher.cs:21</code>, cleanup, metrics, administration and settings, ADR-114); the PostgreSQL engine (<code>PostgreSQLDbContext.cs:23</code>, <code>EntityTypeConfigurationPostgreSQL.cs:22</code>, ADR-113); the strongly typed id converter, comparer and model configuration (<code>StronglyTypedIdValueConverter.cs:28</code>, <code>:56</code>, <code>:80</code>, <code>StronglyTypedIdModelConfiguration.cs:21</code>, ADR-115); <code>RestrictDeleteByDefaultConvention</code> (<code>RestrictDeleteByDefaultConvention.cs:41</code>, ADR-119); the stored permission grants (<code>EFPermissionGrantStore.cs:34</code>, <code>PermissionGrantCache.cs:35</code>, <code>PermissionGrantRefreshService.cs:31</code>, <code>PermissionGrantModelGate.cs:19</code>, ADR-116); <code>EFRawSqlQueryExecutor</code> (<code>EFRawSqlQueryExecutor.cs:22</code>); <code>SensitiveDataLoggingGate</code> (<code>SensitiveDataLoggingGate.cs:24</code>, ADR-122); the upload guards <code>DocumentContentSniffer</code>, <code>FileUploadOptions</code> and <code>BlobNames</code> (<code>DocumentContentSniffer.cs:49</code>, v1.199.0); <code>EfCoreConcurrencyConflictDetector</code>, <code>UtcDateTimeConverter</code>, <code>QueryTags</code>. <code>ValReturn&lt;T&gt;</code> removed. 28 body-changed, among them <code>ApplicationDbContext</code> (<code>:46</code>), <code>DbContextFactory</code> (<code>:46</code>), <code>EFRepository</code> (<code>:23</code>), <code>KeysetQueryBuilder</code> (<code>:22</code>) and <code>DesignTimeDbContextOptions</code> (<code>:11</code>).</li>
-          <li><strong>G08 Auth</strong> (152): +63 / -1 by name. Two-factor contracts (<code>ITwoFactorService.cs:16</code>, <code>ITwoFactorStore.cs:24</code>, <code>ITwoFactorAuthenticator.cs:24</code>, <code>RecoveryCodeSet</code>), email confirmation (<code>EmailConfirmationTokenService.cs:35</code>, its requests, validators, errors and settings), stored permission grants and role administration (<code>PermissionGrant.cs:24</code>, <code>IPermissionGrantStore.cs:16</code>, <code>IPermissionCatalog.cs:24</code>, <code>IRoleAdministrationService.cs:29</code>, <code>StoredPermissionRoleAdministrationService.cs:45</code>, <code>LayeredPermissionRegistry.cs:30</code>, <code>AdministrationPermissions.cs:15</code>), user administration contracts (<code>IUserAdministrationService.cs:24</code>, <code>IUserAdminDTO.cs:15</code>, <code>SetUserRolesRequest</code>), the feature-flag lifecycle (<code>FeatureFlagRegistry.cs:35</code>, <code>FeatureFlagAttribute.cs:32</code>, <code>FeatureFlagLifetime.cs:9</code>), fallback authorization (<code>FallbackAuthorizationHandler.cs:15</code>), <code>IStronglyTypedId&lt;TSelf, TValue&gt;</code> and <code>StronglyTypedId</code> (<code>IStronglyTypedId.cs:60</code>, <code>StronglyTypedId.cs:19</code>), <code>RefreshSessionRevocation</code>, <code>MessageHeaders</code>, <code>AuthErrorCodes</code>. <code>RoleNames</code> removed from Common (the role vocabulary is app-owned since v1.201.0; it now lives in ADC Identity, G23). 18 body-changed, among them <code>TokenService</code> (<code>TokenService.cs:26</code>, one <code>permission</code> claim per effective permission), <code>AuthenticationServiceBase&lt;TUser&gt;</code> (<code>:74</code>), <code>OwnerOrAdminFilterOptions</code> (<code>:13</code>, <code>BypassRole</code> required), <code>PermissionRegistry</code> and <code>UnconfiguredPermissionRegistry</code>.</li>
-          <li><strong>G09 Caching</strong> (9): <code>CacheKeyNamespace</code> and <code>CacheKeyPrefixOptions</code> body (<code>CacheKeyPrefix.cs:50</code>, <code>:31</code>).</li>
-          <li><strong>G10 Notifications</strong> (59): added <code>LiveChannelJoinAuthorizer</code> (<code>LiveChannelJoinAuthorizer.cs:43</code>) and <code>NotificationPermissionGrants</code> (<code>NotificationPermissionGrants.cs:26</code>); <code>NotificationHub</code> (<code>:25</code>), <code>SmtpEmailSender</code> (<code>:15</code>, transport security per ADR-122), <code>NotificationFeatures</code> and <code>DependencyInjection</code> body-changed.</li>
-          <li><strong>G12 API hosting</strong> (85): added <code>UsersAdminControllerBase&lt;TUserDto&gt;</code> (<code>UsersAdminControllerBase.cs:49</code>) and <code>RolesAdminControllerBase</code> (<code>RolesAdminControllerBase.cs:61</code>) (ADR-116) plus <code>StronglyTypedIdSchemaTransformer</code> and <code>StronglyTypedIdParameterTransformer</code> (<code>StronglyTypedIdSchemaTransformer.cs:24</code>, <code>:74</code>); 8 body-changed, among them <code>MiddlewarePipelineBuilder</code> (<code>:16</code>), <code>OAuthControllerBase</code> (<code>:35</code>), <code>RateLimitingSettings</code> (<code>:21</code>) and <code>WebApplicationBuilderExtensions</code> (<code>:33</code>).</li>
-          <li><strong>G14 Module system</strong> (86): added the internal-command contracts (<code>IInternalCommand.cs:38</code>, <code>IInternalCommandScheduler.cs:16</code>, <code>IInternalCommandAdministration.cs:17</code>, <code>InternalCommandDeadLetter</code>, <code>InternalCommandNameAttribute.cs:25</code>), <code>AmbientOrigin</code> and <code>ConsumerOriginRestore</code> (<code>AmbientOrigin.cs:19</code>, <code>ConsumerOriginRestore.cs:24</code>), <code>ApplicationNamespace</code> (<code>ApplicationNamespace.cs:28</code>), the two-factor and email-confirmation handler bases (<code>BeginTwoFactorEnrollmentHandlerBase.cs:35</code>, <code>ConfirmTwoFactorEnrollmentHandlerBase.cs:29</code>, <code>DisableTwoFactorHandlerBase.cs:29</code>, <code>RegenerateRecoveryCodesHandlerBase.cs:30</code>, <code>ConfirmEmailHandlerBase.cs:33</code>, <code>SendEmailConfirmationHandlerBase.cs:40</code>), <code>ImpersonatingCurrentUserService</code> and <code>ScopedUserOverride</code> (<code>ImpersonatingCurrentUserService.cs:20</code>, <code>ScopedUserOverride.cs:24</code>), <code>SmtpTransportSecurity</code> (<code>SmtpTransportSecurity.cs:26</code>, ADR-122); 16 body-changed, among them the user use-case handler bases (<code>DeleteUserHandlerBase.cs:58</code>, <code>ExportUserDataHandlerBase.cs:49</code>, <code>ChangePasswordHandlerBase.cs:36</code>) and both <code>DependencyInjection</code> roots (<code>:27</code>, <code>:62</code>).</li>
-          <li><strong>G15 Common UI</strong> (133): added the role and user administration UI (<code>RoleAdminList.razor.cs:27</code>, <code>RoleAdminEdit.razor.cs:35</code>, <code>UserAdminList.razor.cs:47</code>, their <code>RoleAdminService</code> / <code>UserAdminService&lt;TUserDto&gt;</code> clients, service contracts and resources), <code>TrustedCallerHandler</code> (<code>TrustedCallerHandler.cs:35</code>, v1.191.0), <code>OAuthFlowStateStore</code> (<code>OAuthFlowStateStore.cs:20</code>) and <code>BiometricGate</code> (<code>BiometricGate.razor.cs:17</code>); 12 body-changed, among them <code>NavItem</code> (<code>NavItem.cs:20</code>, <code>RequiredPermission</code>), <code>NotificationUIModule</code> (<code>:15</code>, gated on the manage permission), <code>AuthUIService</code> (<code>:44</code>), <code>MudToastService</code> (<code>:19</code>, live-region toasts, v1.194.0), <code>MMCATheme</code> and <code>LayoutSettings</code>.</li>
-          <li><strong>G16 Aspire</strong> (65): added <code>CachedHealthReportProvider</code> and <code>HealthReportCacheOptions</code> (<code>CachedHealthReportProvider.cs:25</code>, <code>HealthReportCacheOptions.cs:28</code>) and ADC&#39;s <code>AdcAppHostFixture</code> / <code>AdcAppHostCollection</code> / <code>AdcAppHostSmokeTests</code> (<code>AdcAppHostFixture.cs:28</code>, <code>AdcAppHostSmokeTests.cs:32</code>, on the new <code>MMCA.Common.Testing.Aspire</code> base, ADR-117); <code>AppHostCompositionSmokeTests</code> removed; <code>SecurityHeadersMiddleware</code> (<code>SecurityHeaders.cs:145</code>), <code>GatewayRateLimitingExtensions</code> (<code>:43</code>), <code>OutboxPollFilterProcessor</code> (<code>:17</code>) and both <code>Extensions</code> roots body-changed.</li>
-          <li><strong>G17 Conference domain</strong> (107): added the <code>SessionAsset</code> aggregate with its kind, invariants, limits, event and DTO (<code>SessionAsset.cs:23</code>, <code>SessionAssetChanged.cs:13</code>, <code>SessionAssetInvariants.cs:13</code>, ADR-123), <code>ConferencePermissionGrants</code> (<code>ConferencePermissionGrants.cs:27</code>) and <code>SessionizeCodeFormat</code> (<code>SessionizeCodeFormat.cs:27</code>); <code>Session</code> (<code>:22</code>), <code>SessionDTO</code>, <code>ConferencePermissions</code>, <code>ConferenceFeatures</code> and the cascade-deletion domain service body-changed.</li>
-          <li><strong>G18 Conference application</strong> (335): +38 / -6 by name. The session-asset use cases (<code>UploadSessionAssetHandler.cs:35</code>, <code>AddSessionAssetLinkHandler.cs:20</code>, <code>UpdateSessionAssetHandler.cs:20</code>, <code>DeleteSessionAssetHandler.cs:21</code>, <code>GetSessionAssetsHandler.cs:27</code>, the validation rule sets, <code>SessionAssetAccessService.cs:22</code>), <code>ScoreEventSessionsInternalCommand</code> and its handler (<code>ScoreEventSessionsInternalCommand.cs:26</code>, <code>ScoreEventSessionsInternalCommandHandler.cs:39</code>: scoring moved from the in-process queue onto an internal command, ADR-114), <code>DeleteSessionAssetBlobInternalCommand</code> (<code>:29</code>), <code>SessionScoringRunner</code> (<code>SessionScoringRunner.cs:17</code>), <code>ISessionScoresCacheEvictor</code>, and per-aggregate <code>EntityQueryService</code> subclasses; removed <code>ScoreEventSessionsCommand</code> / <code>ScoreEventSessionsHandler</code>, <code>ISessionScoringQueue</code> / <code>SessionScoringQueue</code>, <code>SessionScoringWorkItem</code> and <code>SessionScoringEnqueueResult</code>. 11 body-changed, among them <code>DeleteEventHandler</code> (<code>:22</code>), <code>DeleteSessionHandler</code> (<code>:25</code>), <code>RefreshFromSessionizeHandler</code> (<code>:20</code>) and <code>UserRegisteredHandler</code> (<code>:54</code>).</li>
-          <li><strong>G19 Conference infrastructure</strong> (27): +2 / -12 by name. The hand-rolled Anthropic request/response records (<code>AnthropicRequest</code>, <code>AnthropicResponse</code>, <code>AnthropicMessage</code>, <code>AnthropicContentBlock</code>, <code>AnthropicOutputConfig</code>, <code>AnthropicJsonSchemaFormat</code>, <code>AnthropicUsage</code>), <code>ScoringInstruments</code>, <code>SessionScoringProcessor</code>, <code>SessionScoringSweepJob</code>, <code>SessionScoringCandidate</code> and <code>SessionScoreStamp</code> are gone: the model call now goes through <code>MMCA.Common.AI</code> (ADR-120) and the sweep through an internal command (ADR-114). Added <code>SessionAssetConfiguration</code> (<code>SessionAssetConfiguration.cs:18</code>) and <code>OutputCacheSessionScoresCacheEvictor</code> (<code>:17</code>); <code>AnthropicScoringService</code> (<code>:30</code>), <code>ModuleApplicationDbContext</code> (<code>:21</code>), <code>SessionConfiguration</code> and <code>SessionizeService</code> body-changed.</li>
-          <li><strong>G20 Conference API</strong> (45): added <code>SessionAssetsController</code> (<code>SessionAssetsController.cs:51</code>); <code>SessionSelectionController</code> (<code>:31</code>), <code>EventQuestionAnswersController</code> (<code>:57</code>), <code>SessionQuestionAnswersController</code> (<code>:78</code>) and <code>DependencyInjection</code> body-changed.</li>
-          <li><strong>G21 Conference UI</strong> (153): added <code>SessionAssetsPanel</code> (<code>SessionAssetsPanel.razor.cs:31</code>), <code>SessionAssetsDownloadList</code> (<code>:18</code>), <code>SessionAssetService</code> (<code>SessionAssetService.cs:26</code>), <code>ISessionAssetUIService</code>, <code>SessionAssetDisplay</code> and the two asset request records; <code>SpeakerDetail</code> (<code>:24</code>), <code>PublicSpeakerDetail</code> (<code>:22</code>) and <code>DependencyInjection</code> body-changed.</li>
-          <li><strong>G22 Engagement module</strong> (194): added <code>EngagementPermissionGrants</code> (<code>EngagementPermissionGrants.cs:24</code>); <code>EngagementFeatures</code> and <code>DependencyInjection</code> body-changed. <strong>G26 Engagement live layer</strong> (85): 9 body-changed (<code>LivePollsController.cs:45</code>, <code>SessionQuestionsController.cs:37</code>, <code>SubmitQuestionHandler.cs:31</code>, <code>CreateLivePollHandler.cs:20</code>, <code>GetPollResultsHandler.cs:23</code>, <code>LivePollAuthorization.cs:12</code>, <code>SessionLive.razor.cs:27</code>, ...), the permission-marker adoption.</li>
-          <li><strong>G23 Identity module</strong> (113): added <code>RoleNames</code> (<code>RoleNames.cs:20</code>, moved here from Common Auth), <code>AdminRolesController</code> (<code>AdminRolesController.cs:36</code>), <code>UsersAdminController</code> (<code>:25</code>), <code>UserAdministrationService</code> (<code>:38</code>), <code>UserAdminDTO</code>, the <code>RoleList</code> / <code>RoleEdit</code> / <code>UserDetail</code> pages (<code>RoleList.razor.cs:27</code>, <code>RoleEdit.razor.cs:16</code>, <code>UserDetail.razor.cs:22</code>), email confirmation end to end (<code>ConfirmEmail.razor.cs:23</code>, <code>EmailConfirmationController.cs:34</code>, <code>EmailConfirmationService.cs:21</code>, <code>SendEmailConfirmationHandler.cs:27</code>, <code>ConfirmEmailHandler.cs:21</code>), <code>DeleteAvatarBlobInternalCommand</code> and its handler (<code>:17</code>, <code>:21</code>), <code>IdentityPermissionGrants</code>, <code>TokenPermissionGrants</code> (<code>TokenPermissionGrants.cs:34</code>) and <code>AuthenticationServiceSettings</code>; 21 body-changed, among them <code>User</code> (<code>User.cs:34</code>), <code>AuthController</code> (<code>:33</code>), <code>AuthenticationService</code> (<code>:46</code>), <code>DeleteUserHandler</code> (<code>:29</code>), <code>SetUserAvatarHandler</code> (<code>:26</code>), <code>IdentityUIModule</code> and <code>UserList</code>.</li>
-          <li><strong>G24 ADC host</strong> (22): added <code>BoundedCircuitHandler</code> with <code>BlazorCircuitLimitSettings</code> / <code>BlazorCircuitLimitExtensions</code> (<code>BoundedCircuitHandler.cs:37</code>, <code>BlazorCircuitLimitSettings.cs:17</code>) and <code>UiRateLimitingSettings</code> / <code>UiRateLimitingExtensions</code> (<code>UiRateLimitingSettings.cs:33</code>), the v1.188.0 security hardening; <code>App</code> (<code>App.xaml.cs:9</code>) and <code>MainActivity</code> (<code>:35</code>) body-changed.</li>
-          <li><strong>G27 Device capability layer</strong> (103): added <code>IAppLifecycleNotifier</code>, <code>AppLifecycleNotifier</code>, <code>AppResumedEventArgs</code> and <code>WindowLifecycleExtensions</code> (<code>IAppLifecycleNotifier.cs:13</code>, <code>AppLifecycleNotifier.cs:9</code>, <code>WindowLifecycleExtensions.cs:22</code>); the three local-cache stores, <code>ILocalCacheStore</code>, <code>DeepLinkDispatcher</code>, <code>MauiExternalAuthBroker</code> (<code>:20</code>) and <code>DependencyInjection</code> body-changed.</li>
-          <li><strong>G28 Common AI Integration</strong> (8): a new group, all eight types added: <code>AiSettings</code> and <code>AiProvider</code> (<code>AiSettings.cs:31</code>, <code>:11</code>), <code>AiServiceCollectionExtensions</code> (<code>DependencyInjection.cs:49</code>), <code>BoundedChatClient</code> (<code>BoundedChatClient.cs:51</code>), <code>UsageRecordingChatClient</code> (<code>UsageRecordingChatClient.cs:21</code>), <code>AiUsageMeter</code> (<code>AiUsageMeter.cs:20</code>), <code>IAiTokenEstimator</code> (<code>IAiTokenEstimator.cs:14</code>) and <code>PromptContract</code> (<code>PromptContract.cs:23</code>), the v1.192.0 <code>MMCA.Common.AI</code> package (ADR-120).</li>
+          <li><strong>G02 Domain Building Blocks</strong> (36): <code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code> body (<span class="cite"><span><code>AuditableAggregateRootEntity.cs:13</code></span></span>, a doc-comment change; the author verified no section edit was needed).</li>
+          <li><strong>G03 Querying</strong> (42): added <code>QueryTagScope</code> and its nested <code>AmbientScope</code><span class="cite"><span> (<code>QueryTagScope.cs:20</code>, <code>:61</code>)</span></span> plus <code>QueryFieldContract</code><span class="cite"><span> (<code>QueryFieldContract.cs:34</code>)</span></span>, the v1.192.0 query tags, and <code>StronglyTypedIdFilterStrategy&lt;TSelf, TValue&gt;</code> (<span class="cite"><span><code>StronglyTypedIdFilterStrategy.cs:24</code></span></span>, ADR-115); <code>EntityQueryService</code><span class="cite"><span> (<code>:32</code>)</span></span>, <code>EntityQueryPipeline</code>, <code>EntityQueryParameters</code>, <code>QueryFieldService</code> and <code>QueryFilterService</code> body-changed.</li>
+          <li><strong>G04 Events + Outbox</strong> (38): added <code>OutboxOrigin</code> (<span class="cite"><span><code>OutboxOrigin.cs:29</code></span></span>, the v1.195.0 outbox-origin column); <code>BrokerEventBus</code><span class="cite"><span> (<code>:31</code>)</span></span>, <code>BrokerMessageBus</code><span class="cite"><span> (<code>:43</code>)</span></span>, <code>InProcessEventBus</code>, <code>IntegrationEventConsumer&lt;TEvent&gt;</code><span class="cite"><span> (<code>:38</code>)</span></span>, <code>OutboxMessage</code> and <code>OutboxProcessor</code><span class="cite"><span> (<code>:56</code>)</span></span> body-changed.</li>
+          <li><strong>G05 CQRS pipeline</strong> (61): added <code>AuthorizationGate</code> (<span class="cite"><span><code>AuthorizationGate.cs:19</code></span></span>, the v1.201.0 permission-claim gate), <code>IRequiresMfa</code> (<span class="cite"><span><code>IRequiresMfa.cs:28</code></span></span>, ADR-116), <code>ISharedQueryCache</code><span class="cite"><span> (<code>ISharedQueryCache.cs:21</code>)</span></span> and <code>UserCacheKey</code><span class="cite"><span> (<code>UserCacheKey.cs:26</code>)</span></span>; the authorization, caching and logging decorators, <code>IQueryCacheable</code> and <code>MutateEntityHandlerCore</code><span class="cite"><span> (<code>MutateEntityHandlerBase.cs:52</code>)</span></span> body-changed.</li>
+          <li><strong>G07 Persistence &amp; EF Core</strong> (161): +40 / -1 by name. The internal-command job queue (<span class="cite"><span><code>InternalCommandProcessor.cs:47</code></span></span>, <span class="cite"><span><code>InternalCommandScheduler.cs:39</code></span></span>, <span class="cite"><span><code>InternalCommandDispatcher.cs:21</code></span></span>, cleanup, metrics, administration and settings, ADR-114); the PostgreSQL engine (<span class="cite"><span><code>PostgreSQLDbContext.cs:23</code></span></span>, <span class="cite"><span><code>EntityTypeConfigurationPostgreSQL.cs:22</code></span></span>, ADR-113); the strongly typed id converter, comparer and model configuration (<span class="cite"><span><code>StronglyTypedIdValueConverter.cs:28</code></span></span>, <span class="cite"><span><code>:56</code></span></span>, <span class="cite"><span><code>:80</code></span></span>, <span class="cite"><span><code>StronglyTypedIdModelConfiguration.cs:21</code></span></span>, ADR-115); <code>RestrictDeleteByDefaultConvention</code> (<span class="cite"><span><code>RestrictDeleteByDefaultConvention.cs:41</code></span></span>, ADR-119); the stored permission grants (<span class="cite"><span><code>EFPermissionGrantStore.cs:34</code></span></span>, <span class="cite"><span><code>PermissionGrantCache.cs:35</code></span></span>, <span class="cite"><span><code>PermissionGrantRefreshService.cs:31</code></span></span>, <span class="cite"><span><code>PermissionGrantModelGate.cs:19</code></span></span>, ADR-116); <code>EFRawSqlQueryExecutor</code><span class="cite"><span> (<code>EFRawSqlQueryExecutor.cs:22</code>)</span></span>; <code>SensitiveDataLoggingGate</code> (<span class="cite"><span><code>SensitiveDataLoggingGate.cs:24</code></span></span>, ADR-122); the upload guards <code>DocumentContentSniffer</code>, <code>FileUploadOptions</code> and <code>BlobNames</code> (<span class="cite"><span><code>DocumentContentSniffer.cs:49</code></span></span>, v1.199.0); <code>EfCoreConcurrencyConflictDetector</code>, <code>UtcDateTimeConverter</code>, <code>QueryTags</code>. <code>ValReturn&lt;T&gt;</code> removed. 28 body-changed, among them <code>ApplicationDbContext</code><span class="cite"><span> (<code>:46</code>)</span></span>, <code>DbContextFactory</code><span class="cite"><span> (<code>:46</code>)</span></span>, <code>EFRepository</code><span class="cite"><span> (<code>:23</code>)</span></span>, <code>KeysetQueryBuilder</code><span class="cite"><span> (<code>:22</code>)</span></span> and <code>DesignTimeDbContextOptions</code><span class="cite"><span> (<code>:11</code>)</span></span>.</li>
+          <li><strong>G08 Auth</strong> (152): +63 / -1 by name. Two-factor contracts (<span class="cite"><span><code>ITwoFactorService.cs:16</code></span></span>, <span class="cite"><span><code>ITwoFactorStore.cs:24</code></span></span>, <span class="cite"><span><code>ITwoFactorAuthenticator.cs:24</code></span></span>, <code>RecoveryCodeSet</code>), email confirmation (<span class="cite"><span><code>EmailConfirmationTokenService.cs:35</code></span></span>, its requests, validators, errors and settings), stored permission grants and role administration<span class="cite"><span> (<code>PermissionGrant.cs:24</code>, <code>IPermissionGrantStore.cs:16</code>, <code>IPermissionCatalog.cs:24</code>, <code>IRoleAdministrationService.cs:29</code>, <code>StoredPermissionRoleAdministrationService.cs:45</code>, <code>LayeredPermissionRegistry.cs:30</code>, <code>AdministrationPermissions.cs:15</code>)</span></span>, user administration contracts (<span class="cite"><span><code>IUserAdministrationService.cs:24</code></span></span>, <span class="cite"><span><code>IUserAdminDTO.cs:15</code></span></span>, <code>SetUserRolesRequest</code>), the feature-flag lifecycle<span class="cite"><span> (<code>FeatureFlagRegistry.cs:35</code>, <code>FeatureFlagAttribute.cs:32</code>, <code>FeatureFlagLifetime.cs:9</code>)</span></span>, fallback authorization<span class="cite"><span> (<code>FallbackAuthorizationHandler.cs:15</code>)</span></span>, <code>IStronglyTypedId&lt;TSelf, TValue&gt;</code> and <code>StronglyTypedId</code><span class="cite"><span> (<code>IStronglyTypedId.cs:60</code>, <code>StronglyTypedId.cs:19</code>)</span></span>, <code>RefreshSessionRevocation</code>, <code>MessageHeaders</code>, <code>AuthErrorCodes</code>. <code>RoleNames</code> removed from Common (the role vocabulary is app-owned since v1.201.0; it now lives in ADC Identity, G23). 18 body-changed, among them <code>TokenService</code> (<span class="cite"><span><code>TokenService.cs:26</code></span></span>, one <code>permission</code> claim per effective permission), <code>AuthenticationServiceBase&lt;TUser&gt;</code><span class="cite"><span> (<code>:74</code>)</span></span>, <code>OwnerOrAdminFilterOptions</code> (<span class="cite"><span><code>:13</code></span></span>, <code>BypassRole</code> required), <code>PermissionRegistry</code> and <code>UnconfiguredPermissionRegistry</code>.</li>
+          <li><strong>G09 Caching</strong> (9): <code>CacheKeyNamespace</code> and <code>CacheKeyPrefixOptions</code> body<span class="cite"><span> (<code>CacheKeyPrefix.cs:50</code>, <code>:31</code>)</span></span>.</li>
+          <li><strong>G10 Notifications</strong> (59): added <code>LiveChannelJoinAuthorizer</code><span class="cite"><span> (<code>LiveChannelJoinAuthorizer.cs:43</code>)</span></span> and <code>NotificationPermissionGrants</code><span class="cite"><span> (<code>NotificationPermissionGrants.cs:26</code>)</span></span>; <code>NotificationHub</code><span class="cite"><span> (<code>:25</code>)</span></span>, <code>SmtpEmailSender</code> (<span class="cite"><span><code>:15</code></span></span>, transport security per ADR-122), <code>NotificationFeatures</code> and <code>DependencyInjection</code> body-changed.</li>
+          <li><strong>G12 API hosting</strong> (85): added <code>UsersAdminControllerBase&lt;TUserDto&gt;</code><span class="cite"><span> (<code>UsersAdminControllerBase.cs:49</code>)</span></span> and <code>RolesAdminControllerBase</code><span class="cite"><span> (<code>RolesAdminControllerBase.cs:61</code>)</span></span> (ADR-116) plus <code>StronglyTypedIdSchemaTransformer</code> and <code>StronglyTypedIdParameterTransformer</code><span class="cite"><span> (<code>StronglyTypedIdSchemaTransformer.cs:24</code>, <code>:74</code>)</span></span>; 8 body-changed, among them <code>MiddlewarePipelineBuilder</code><span class="cite"><span> (<code>:16</code>)</span></span>, <code>OAuthControllerBase</code><span class="cite"><span> (<code>:35</code>)</span></span>, <code>RateLimitingSettings</code><span class="cite"><span> (<code>:21</code>)</span></span> and <code>WebApplicationBuilderExtensions</code><span class="cite"><span> (<code>:33</code>)</span></span>.</li>
+          <li><strong>G14 Module system</strong> (86): added the internal-command contracts (<span class="cite"><span><code>IInternalCommand.cs:38</code></span></span>, <span class="cite"><span><code>IInternalCommandScheduler.cs:16</code></span></span>, <span class="cite"><span><code>IInternalCommandAdministration.cs:17</code></span></span>, <code>InternalCommandDeadLetter</code>, <span class="cite"><span><code>InternalCommandNameAttribute.cs:25</code></span></span>), <code>AmbientOrigin</code> and <code>ConsumerOriginRestore</code><span class="cite"><span> (<code>AmbientOrigin.cs:19</code>, <code>ConsumerOriginRestore.cs:24</code>)</span></span>, <code>ApplicationNamespace</code><span class="cite"><span> (<code>ApplicationNamespace.cs:28</code>)</span></span>, the two-factor and email-confirmation handler bases<span class="cite"><span> (<code>BeginTwoFactorEnrollmentHandlerBase.cs:35</code>, <code>ConfirmTwoFactorEnrollmentHandlerBase.cs:29</code>, <code>DisableTwoFactorHandlerBase.cs:29</code>, <code>RegenerateRecoveryCodesHandlerBase.cs:30</code>, <code>ConfirmEmailHandlerBase.cs:33</code>, <code>SendEmailConfirmationHandlerBase.cs:40</code>)</span></span>, <code>ImpersonatingCurrentUserService</code> and <code>ScopedUserOverride</code><span class="cite"><span> (<code>ImpersonatingCurrentUserService.cs:20</code>, <code>ScopedUserOverride.cs:24</code>)</span></span>, <code>SmtpTransportSecurity</code> (<span class="cite"><span><code>SmtpTransportSecurity.cs:26</code></span></span>, ADR-122); 16 body-changed, among them the user use-case handler bases<span class="cite"><span> (<code>DeleteUserHandlerBase.cs:58</code>, <code>ExportUserDataHandlerBase.cs:49</code>, <code>ChangePasswordHandlerBase.cs:36</code>)</span></span> and both <code>DependencyInjection</code> roots<span class="cite"><span> (<code>:27</code>, <code>:62</code>)</span></span>.</li>
+          <li><strong>G15 Common UI</strong> (133): added the role and user administration UI (<span class="cite"><span><code>RoleAdminList.razor.cs:27</code></span></span>, <span class="cite"><span><code>RoleAdminEdit.razor.cs:35</code></span></span>, <span class="cite"><span><code>UserAdminList.razor.cs:47</code></span></span>, their <code>RoleAdminService</code> / <code>UserAdminService&lt;TUserDto&gt;</code> clients, service contracts and resources), <code>TrustedCallerHandler</code> (<span class="cite"><span><code>TrustedCallerHandler.cs:35</code></span></span>, v1.191.0), <code>OAuthFlowStateStore</code><span class="cite"><span> (<code>OAuthFlowStateStore.cs:20</code>)</span></span> and <code>BiometricGate</code><span class="cite"><span> (<code>BiometricGate.razor.cs:17</code>)</span></span>; 12 body-changed, among them <code>NavItem</code> (<span class="cite"><span><code>NavItem.cs:20</code></span></span>, <code>RequiredPermission</code>), <code>NotificationUIModule</code> (<span class="cite"><span><code>:15</code></span></span>, gated on the manage permission), <code>AuthUIService</code><span class="cite"><span> (<code>:44</code>)</span></span>, <code>MudToastService</code> (<span class="cite"><span><code>:19</code></span></span>, live-region toasts, v1.194.0), <code>MMCATheme</code> and <code>LayoutSettings</code>.</li>
+          <li><strong>G16 Aspire</strong> (65): added <code>CachedHealthReportProvider</code> and <code>HealthReportCacheOptions</code><span class="cite"><span> (<code>CachedHealthReportProvider.cs:25</code>, <code>HealthReportCacheOptions.cs:28</code>)</span></span> and ADC&#39;s <code>AdcAppHostFixture</code> / <code>AdcAppHostCollection</code> / <code>AdcAppHostSmokeTests</code> (<span class="cite"><span><code>AdcAppHostFixture.cs:28</code></span></span>, <span class="cite"><span><code>AdcAppHostSmokeTests.cs:32</code></span></span>, on the new <code>MMCA.Common.Testing.Aspire</code> base, ADR-117); <code>AppHostCompositionSmokeTests</code> removed; <code>SecurityHeadersMiddleware</code><span class="cite"><span> (<code>SecurityHeaders.cs:145</code>)</span></span>, <code>GatewayRateLimitingExtensions</code><span class="cite"><span> (<code>:43</code>)</span></span>, <code>OutboxPollFilterProcessor</code><span class="cite"><span> (<code>:17</code>)</span></span> and both <code>Extensions</code> roots body-changed.</li>
+          <li><strong>G17 Conference domain</strong> (107): added the <code>SessionAsset</code> aggregate with its kind, invariants, limits, event and DTO (<span class="cite"><span><code>SessionAsset.cs:23</code></span></span>, <span class="cite"><span><code>SessionAssetChanged.cs:13</code></span></span>, <span class="cite"><span><code>SessionAssetInvariants.cs:13</code></span></span>, ADR-123), <code>ConferencePermissionGrants</code><span class="cite"><span> (<code>ConferencePermissionGrants.cs:27</code>)</span></span> and <code>SessionizeCodeFormat</code><span class="cite"><span> (<code>SessionizeCodeFormat.cs:27</code>)</span></span>; <code>Session</code><span class="cite"><span> (<code>:22</code>)</span></span>, <code>SessionDTO</code>, <code>ConferencePermissions</code>, <code>ConferenceFeatures</code> and the cascade-deletion domain service body-changed.</li>
+          <li><strong>G18 Conference application</strong> (335): +38 / -6 by name. The session-asset use cases (<span class="cite"><span><code>UploadSessionAssetHandler.cs:35</code></span></span>, <span class="cite"><span><code>AddSessionAssetLinkHandler.cs:20</code></span></span>, <span class="cite"><span><code>UpdateSessionAssetHandler.cs:20</code></span></span>, <span class="cite"><span><code>DeleteSessionAssetHandler.cs:21</code></span></span>, <span class="cite"><span><code>GetSessionAssetsHandler.cs:27</code></span></span>, the validation rule sets, <span class="cite"><span><code>SessionAssetAccessService.cs:22</code></span></span>), <code>ScoreEventSessionsInternalCommand</code> and its handler (<span class="cite"><span><code>ScoreEventSessionsInternalCommand.cs:26</code></span></span>, <span class="cite"><span><code>ScoreEventSessionsInternalCommandHandler.cs:39</code></span></span>: scoring moved from the in-process queue onto an internal command, ADR-114), <code>DeleteSessionAssetBlobInternalCommand</code><span class="cite"><span> (<code>:29</code>)</span></span>, <code>SessionScoringRunner</code><span class="cite"><span> (<code>SessionScoringRunner.cs:17</code>)</span></span>, <code>ISessionScoresCacheEvictor</code>, and per-aggregate <code>EntityQueryService</code> subclasses; removed <code>ScoreEventSessionsCommand</code> / <code>ScoreEventSessionsHandler</code>, <code>ISessionScoringQueue</code> / <code>SessionScoringQueue</code>, <code>SessionScoringWorkItem</code> and <code>SessionScoringEnqueueResult</code>. 11 body-changed, among them <code>DeleteEventHandler</code><span class="cite"><span> (<code>:22</code>)</span></span>, <code>DeleteSessionHandler</code><span class="cite"><span> (<code>:25</code>)</span></span>, <code>RefreshFromSessionizeHandler</code><span class="cite"><span> (<code>:20</code>)</span></span> and <code>UserRegisteredHandler</code><span class="cite"><span> (<code>:54</code>)</span></span>.</li>
+          <li><strong>G19 Conference infrastructure</strong> (27): +2 / -12 by name. The hand-rolled Anthropic request/response records (<code>AnthropicRequest</code>, <code>AnthropicResponse</code>, <code>AnthropicMessage</code>, <code>AnthropicContentBlock</code>, <code>AnthropicOutputConfig</code>, <code>AnthropicJsonSchemaFormat</code>, <code>AnthropicUsage</code>), <code>ScoringInstruments</code>, <code>SessionScoringProcessor</code>, <code>SessionScoringSweepJob</code>, <code>SessionScoringCandidate</code> and <code>SessionScoreStamp</code> are gone: the model call now goes through <code>MMCA.Common.AI</code> (ADR-120) and the sweep through an internal command (ADR-114). Added <code>SessionAssetConfiguration</code><span class="cite"><span> (<code>SessionAssetConfiguration.cs:18</code>)</span></span> and <code>OutputCacheSessionScoresCacheEvictor</code><span class="cite"><span> (<code>:17</code>)</span></span>; <code>AnthropicScoringService</code><span class="cite"><span> (<code>:30</code>)</span></span>, <code>ModuleApplicationDbContext</code><span class="cite"><span> (<code>:21</code>)</span></span>, <code>SessionConfiguration</code> and <code>SessionizeService</code> body-changed.</li>
+          <li><strong>G20 Conference API</strong> (45): added <code>SessionAssetsController</code><span class="cite"><span> (<code>SessionAssetsController.cs:51</code>)</span></span>; <code>SessionSelectionController</code><span class="cite"><span> (<code>:31</code>)</span></span>, <code>EventQuestionAnswersController</code><span class="cite"><span> (<code>:57</code>)</span></span>, <code>SessionQuestionAnswersController</code><span class="cite"><span> (<code>:78</code>)</span></span> and <code>DependencyInjection</code> body-changed.</li>
+          <li><strong>G21 Conference UI</strong> (153): added <code>SessionAssetsPanel</code><span class="cite"><span> (<code>SessionAssetsPanel.razor.cs:31</code>)</span></span>, <code>SessionAssetsDownloadList</code><span class="cite"><span> (<code>:18</code>)</span></span>, <code>SessionAssetService</code><span class="cite"><span> (<code>SessionAssetService.cs:26</code>)</span></span>, <code>ISessionAssetUIService</code>, <code>SessionAssetDisplay</code> and the two asset request records; <code>SpeakerDetail</code><span class="cite"><span> (<code>:24</code>)</span></span>, <code>PublicSpeakerDetail</code><span class="cite"><span> (<code>:22</code>)</span></span> and <code>DependencyInjection</code> body-changed.</li>
+          <li><strong>G22 Engagement module</strong> (194): added <code>EngagementPermissionGrants</code><span class="cite"><span> (<code>EngagementPermissionGrants.cs:24</code>)</span></span>; <code>EngagementFeatures</code> and <code>DependencyInjection</code> body-changed. <strong>G26 Engagement live layer</strong> (85): 9 body-changed (<span class="cite"><span><code>LivePollsController.cs:45</code></span></span>, <span class="cite"><span><code>SessionQuestionsController.cs:37</code></span></span>, <span class="cite"><span><code>SubmitQuestionHandler.cs:31</code></span></span>, <span class="cite"><span><code>CreateLivePollHandler.cs:20</code></span></span>, <span class="cite"><span><code>GetPollResultsHandler.cs:23</code></span></span>, <span class="cite"><span><code>LivePollAuthorization.cs:12</code></span></span>, <span class="cite"><span><code>SessionLive.razor.cs:27</code></span></span>, ...), the permission-marker adoption.</li>
+          <li><strong>G23 Identity module</strong> (113): added <code>RoleNames</code> (<span class="cite"><span><code>RoleNames.cs:20</code></span></span>, moved here from Common Auth), <code>AdminRolesController</code><span class="cite"><span> (<code>AdminRolesController.cs:36</code>)</span></span>, <code>UsersAdminController</code><span class="cite"><span> (<code>:25</code>)</span></span>, <code>UserAdministrationService</code><span class="cite"><span> (<code>:38</code>)</span></span>, <code>UserAdminDTO</code>, the <code>RoleList</code> / <code>RoleEdit</code> / <code>UserDetail</code> pages<span class="cite"><span> (<code>RoleList.razor.cs:27</code>, <code>RoleEdit.razor.cs:16</code>, <code>UserDetail.razor.cs:22</code>)</span></span>, email confirmation end to end<span class="cite"><span> (<code>ConfirmEmail.razor.cs:23</code>, <code>EmailConfirmationController.cs:34</code>, <code>EmailConfirmationService.cs:21</code>, <code>SendEmailConfirmationHandler.cs:27</code>, <code>ConfirmEmailHandler.cs:21</code>)</span></span>, <code>DeleteAvatarBlobInternalCommand</code> and its handler<span class="cite"><span> (<code>:17</code>, <code>:21</code>)</span></span>, <code>IdentityPermissionGrants</code>, <code>TokenPermissionGrants</code><span class="cite"><span> (<code>TokenPermissionGrants.cs:34</code>)</span></span> and <code>AuthenticationServiceSettings</code>; 21 body-changed, among them <code>User</code><span class="cite"><span> (<code>User.cs:34</code>)</span></span>, <code>AuthController</code><span class="cite"><span> (<code>:33</code>)</span></span>, <code>AuthenticationService</code><span class="cite"><span> (<code>:46</code>)</span></span>, <code>DeleteUserHandler</code><span class="cite"><span> (<code>:29</code>)</span></span>, <code>SetUserAvatarHandler</code><span class="cite"><span> (<code>:26</code>)</span></span>, <code>IdentityUIModule</code> and <code>UserList</code>.</li>
+          <li><strong>G24 ADC host</strong> (22): added <code>BoundedCircuitHandler</code> with <code>BlazorCircuitLimitSettings</code> / <code>BlazorCircuitLimitExtensions</code><span class="cite"><span> (<code>BoundedCircuitHandler.cs:37</code>, <code>BlazorCircuitLimitSettings.cs:17</code>)</span></span> and <code>UiRateLimitingSettings</code> / <code>UiRateLimitingExtensions</code><span class="cite"><span> (<code>UiRateLimitingSettings.cs:33</code>)</span></span>, the v1.188.0 security hardening; <code>App</code><span class="cite"><span> (<code>App.xaml.cs:9</code>)</span></span> and <code>MainActivity</code><span class="cite"><span> (<code>:35</code>)</span></span> body-changed.</li>
+          <li><strong>G27 Device capability layer</strong> (103): added <code>IAppLifecycleNotifier</code>, <code>AppLifecycleNotifier</code>, <code>AppResumedEventArgs</code> and <code>WindowLifecycleExtensions</code><span class="cite"><span> (<code>IAppLifecycleNotifier.cs:13</code>, <code>AppLifecycleNotifier.cs:9</code>, <code>WindowLifecycleExtensions.cs:22</code>)</span></span>; the three local-cache stores, <code>ILocalCacheStore</code>, <code>DeepLinkDispatcher</code>, <code>MauiExternalAuthBroker</code><span class="cite"><span> (<code>:20</code>)</span></span> and <code>DependencyInjection</code> body-changed.</li>
+          <li><strong>G28 Common AI Integration</strong> (8): a new group, all eight types added: <code>AiSettings</code> and <code>AiProvider</code><span class="cite"><span> (<code>AiSettings.cs:31</code>, <code>:11</code>)</span></span>, <code>AiServiceCollectionExtensions</code><span class="cite"><span> (<code>DependencyInjection.cs:49</code>)</span></span>, <code>BoundedChatClient</code><span class="cite"><span> (<code>BoundedChatClient.cs:51</code>)</span></span>, <code>UsageRecordingChatClient</code><span class="cite"><span> (<code>UsageRecordingChatClient.cs:21</code>)</span></span>, <code>AiUsageMeter</code><span class="cite"><span> (<code>AiUsageMeter.cs:20</code>)</span></span>, <code>IAiTokenEstimator</code><span class="cite"><span> (<code>IAiTokenEstimator.cs:14</code>)</span></span> and <code>PromptContract</code><span class="cite"><span> (<code>PromptContract.cs:23</code>)</span></span>, the v1.192.0 <code>MMCA.Common.AI</code> package (ADR-120).</li>
           <li><strong>G25 Testing</strong> (2,643): +341 / -19 by name (the new <code>MMCA.Common.Testing.Aspire</code> package and its own tests, <code>MMCA.Common.AI.Tests</code>, <code>MMCA.Common.Infrastructure.PostgreSQL.Tests</code>, and the internal-command, permission-grant, strongly-typed-id, two-factor and email-confirmation test classes: Common Infrastructure +90, Application +54, Architecture +34, API +15, Shared +13, ADC Conference Application +21; removed the ADC scoring queue / processor / sweep tests and their fakes), 181 body-changed, 56 line-shifted; the per-project rollup counts moved for 26 projects (reconciled in <code>devops-testing</code>, see below).</li>
           </ul>
           </li>
@@ -1362,14 +1363,14 @@
           <li><strong>Per-group movement</strong> (13 of 28 groups moved; the rest are unchanged):<ul>
           <li><strong>G02 Domain Building Blocks</strong> (members 36): body 1, lineShift 3. The <code>IBaseEntity&lt;TIdentifierType&gt;</code> hunk is an XML-doc tag change only (<code>&lt;c&gt;init&lt;/c&gt;</code> to <code>&lt;see langword&gt;</code>), so the section was verified and left byte-identical; the three <code>Enumeration</code> cites moved with the fitness-rule remark correction (Common #421).</li>
           <li><strong>G04 Domain &amp; Integration Events + Outbox Dual-Dispatch</strong> (members 38): body 1. <code>OutputCacheEvictionRequested</code> span touched by the scorecard-lever sweep (Common #412); walkthrough re-verified against current source.</li>
-          <li><strong>G12 API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</strong> (members 85): body 1. <code>EntityControllerBase</code> hunks at <code>:576</code> and <code>:610</code> are XML-doc tag changes; section verified, no textual change.</li>
+          <li><strong>G12 API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</strong> (members 85): body 1. <code>EntityControllerBase</code> hunks at <span class="cite"><span><code>:576</code></span></span> and <span class="cite"><span><code>:610</code></span></span> are XML-doc tag changes; section verified, no textual change.</li>
           <li><strong>G14 Module System, Composition &amp; Configuration</strong> (members 86): body 2, lineShift 1. <code>DependencyInjection</code> and <code>MessageBusSettings</code> gained the broker-messaging registration path (Common #412; covered by the new <code>DependencyInjectionBrokerMessagingTests</code>).</li>
           <li><strong>G15 Common UI Framework</strong> (members 138): added 5, body 8, lineShift 2. Added <code>BlazorCspSettings</code> + <code>BlazorCspSettingsValidator</code> (configurable frame-src allow-list for the Blazor CSP, Common #417), <code>InvariantMudLocalizationInterceptor</code>, <code>StringLocalizerPluralExtensions</code> and <code>BuiltInStrings</code> (the MAUI culture-pin fix, ADR-027, Common #411); body changes in <code>BlazorCspPolicyProvider</code>, <code>NotificationSend</code>, <code>RoleAdminEdit</code>, <code>MoneyExtensions</code>, <code>RegisterModel</code>/<code>ResetPasswordModel</code> and both <code>DependencyInjection</code> roots.</li>
           <li><strong>G16 Aspire Orchestration &amp; Service Defaults</strong> (members 65): body 1. <code>Extensions</code> (ServiceDefaults) touched by Common #412; re-verified.</li>
-          <li><strong>G17 ADC Conference - Domain Model &amp; Module Contracts</strong> (members 112): added 5, body 3. The new <strong>Partner aggregate</strong> (<code>MMCA.ADC.Conference.Domain/Partners/Partner.cs:19</code>, ADC #207): <code>Partner</code>, <code>PartnerInvariants</code>, <code>PartnerType</code>, <code>PartnerDTO</code>, <code>PartnerChanged</code>; <code>ConferencePermissions</code> gained the Partners permissions and <code>EventCascadeDeletionDomainService</code> now cascades partners.</li>
+          <li><strong>G17 ADC Conference - Domain Model &amp; Module Contracts</strong> (members 112): added 5, body 3. The new <strong>Partner aggregate</strong> (<span class="cite"><span><code>MMCA.ADC.Conference.Domain/Partners/Partner.cs:19</code></span></span>, ADC #207): <code>Partner</code>, <code>PartnerInvariants</code>, <code>PartnerType</code>, <code>PartnerDTO</code>, <code>PartnerChanged</code>; <code>ConferencePermissions</code> gained the Partners permissions and <code>EventCascadeDeletionDomainService</code> now cascades partners.</li>
           <li><strong>G18 ADC Conference - Application &amp; Use Cases</strong> (members 353): added 18, body 2. The Partner use-case slice end to end (create/update handlers, request mappers and validators, the per-field <code>Partner*Rules&lt;T&gt;</code> family, <code>PartnerDTOMapper</code>, <code>PartnerNavigationPopulator</code>, <code>GetPublicPartnerFilterQuery</code>/<code>Handler</code>); <code>DeleteEventHandler</code> and the module <code>DependencyInjection</code> registered them (ADC #207).</li>
           <li><strong>G19 ADC Conference - Infrastructure &amp; Persistence</strong> (members 28): added 1, body 2. <code>PartnerConfiguration</code> (EF config) plus the <code>ModuleApplicationDbContext</code> DbSet and <code>ConferenceModuleDbSeeder</code> rows for it (ADC #207).</li>
-          <li><strong>G20 ADC Conference - API, gRPC Contracts &amp; Service Host</strong> (members 46): added 1. <code>PartnersController</code> (<code>MMCA.ADC.Conference.API/Controllers/Partners/PartnersController.cs:41</code>) with its 5-minute public output-cache policy (ADC #207).</li>
+          <li><strong>G20 ADC Conference - API, gRPC Contracts &amp; Service Host</strong> (members 46): added 1. <code>PartnersController</code><span class="cite"><span> (<code>MMCA.ADC.Conference.API/Controllers/Partners/PartnersController.cs:41</code>)</span></span> with its 5-minute public output-cache policy (ADC #207).</li>
           <li><strong>G21 ADC Conference - UI</strong> (members 168): added 15, body 16, lineShift 6. The Partner pages and models (<code>PartnerList</code>, <code>PartnerDetail</code>, <code>PartnerCreate</code>, <code>PartnerFormModel</code>/<code>CreateModel</code>/<code>EditModel</code>, <code>IPartnerUIService</code>/<code>PartnerService</code>), the home-page content alignment (<code>ADCHome</code>, <code>ADCHomeContent</code>, <code>ADCPartnerInfo</code>, <code>ADCPartnerCollectionResult</code>, ADC #207), <code>VenueMapLinks</code>, <code>SessionAssetComposer</code>, <code>SessionBookmarkButton</code> and the static category chips / Happening Now links fix (ADC #208); the <code>*Detail</code> pages migrated to <code>DetailPageBase</code>.</li>
           <li><strong>G28 Common AI Integration</strong> (members 12): added 4, body 4. The guardrail layer (<code>IChatGuardrail</code>, <code>GuardrailVerdict</code>, <code>GuardrailChatClient</code>, <code>ChatGuardrailException</code>, Common #412) inserted into the delegating-client pipeline built by <code>AiServiceCollectionExtensions</code>; <code>AiUsageMeter</code>, <code>UsageRecordingChatClient</code> and <code>PromptContract</code> re-verified.</li>
           <li><strong>G25 Testing &amp; Quality Infrastructure</strong> (members 2681): added 38, removed 8, body 37, lineShift 7. The Partner test suites across Domain/Application/API/UI/E2E (<code>PartnerTests</code>, <code>PartnerInvariantsTests</code>, <code>CreatePartnerHandlerTests</code>, <code>PartnersControllerTests</code>, <code>PartnerListPage</code>/<code>DetailPage</code>/<code>CreatePage</code>, <code>OrganizerPartnerManagementTests</code>), the guardrail tests, <code>SqlClientEntraAuthenticationTests</code> (Common #415), <code>SliceCohesionFitnessTests</code> + the <code>SliceFixtures</code> handler bases, <code>SampleDeploymentObservabilityTests</code>; the 8 removals are the arity renames and duplicates above.</li>
@@ -1387,7 +1388,7 @@
           <li>Coverage gap: unchanged; <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Fixtures/observability-main.bicep</code> remains the logged exception (a test fixture, not an operational file).</li>
           </ul>
           </li>
-          <li><strong>CONCEPT-MAPS.md:</strong> 294 mechanical checks, 0 mismatches; one relationship-level edit, the section 12 module diagram now lists Partner among the Conference aggregates (<code>Partner.cs:19</code>).</li>
+          <li><strong>CONCEPT-MAPS.md:</strong> 294 mechanical checks, 0 mismatches; one relationship-level edit, the section 12 module diagram now lists Partner among the Conference aggregates<span class="cite"><span> (<code>Partner.cs:19</code>)</span></span>.</li>
           <li><strong>Verification:</strong> <code>verify.ps1</code>: <strong>0 missing</strong>, rubric <strong>34/34</strong>.</li>
           <li><strong>Governance events:</strong> none (no new group, no classifier rule; <code>classify.ps1</code> 0 unmapped). Primer ADR table gained rows 124 (UI host as its own hardened edge, g25) and 125 (parameterized SQL only, g07/g28).</li>
           </ul>
@@ -1482,8 +1483,8 @@
           <li><strong>Cycles kept whole.</strong> <strong>18 of the 19</strong> dependency cycles (SCCs) sit inside a single group, never
           split. The one exception is the 19th, added this pass, and it is not a real cycle: the two
           identically-named <code>SelfHttpWarmupTask</code> classes
-          (<code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19</code>, <code>G22</code>, and
-          <code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19</code>, <code>G23</code>) are unrelated types in different
+          (<span class="cite"><span><code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19</code></span></span>, <code>G22</code>, and
+          <span class="cite"><span><code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19</code></span></span>, <code>G23</code>) are unrelated types in different
           services that neither references the other; the extractor&#39;s globally-unique-name fallback cannot
           distinguish them and links each to the other, producing a phantom 2-node SCC whose members sit in
           two different groups. Splitting it across the two service chapters is correct, since each chapter

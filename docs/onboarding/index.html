@@ -23,7 +23,7 @@
   <meta name="twitter:description" content="A teaching guide for an experienced .NET engineer who is new to this codebase. It walks every first-party type, explaining not just what each type is…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Overview","item":"https://ivanball.github.io/docs/onboarding/index.html"}]}</script>
-  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
@@ -91,6 +91,7 @@
         <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
         <span aria-hidden="true">/</span>
         <span class="current">Overview</span>
+        <button class="rail-toggle cite-toggle" type="button" data-cites-toggle aria-pressed="false">Citations</button>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -195,12 +196,12 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           called out where it occurs. They are listed in the
           <a href="00-dependency-manifest.html#cycles-scc-size--1-36">dependency manifest</a>. Three of them are
           name-collision artifacts rather than real dependencies: the identically-named pairs
-          <code>SelfHttpWarmupTask</code> (<code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code> and
-          <code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23</code>), <code>Priority</code>
+          <code>SelfHttpWarmupTask</code><span class="cite"><span> (<code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code> and
+          <code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23</code>)</span></span>, <code>Priority</code><span class="cite"><span>
           (<code>MMCA.Common.Infrastructure.Tests/Persistence/Conversions/EnumerationValueConverterTests.cs:89</code> and
-          <code>MMCA.Common.Shared.Tests/ValueObjects/EnumerationTests.cs:122</code>), and <code>GateTestContext</code>
+          <code>MMCA.Common.Shared.Tests/ValueObjects/EnumerationTests.cs:122</code>)</span></span>, and <code>GateTestContext</code><span class="cite"><span>
           (<code>MMCA.Common.Infrastructure.Tests/Persistence/AuditTrail/AuditTrailModelGateTests.cs:76</code> and
-          <code>MMCA.Common.Infrastructure.Tests/Scheduling/SchedulerModelGateTests.cs:71</code>) are distinct types the
+          <code>MMCA.Common.Infrastructure.Tests/Scheduling/SchedulerModelGateTests.cs:71</code>)</span></span> are distinct types the
           globally-unique-name fallback described below cannot tell apart, so each resolves to the other.</p>
           <h3 id="how-the-inventory--leveling-were-computed">How the inventory &amp; leveling were computed</h3>
           <p>The type inventory and dependency graph are produced <strong>mechanically</strong> by a small Roslyn syntactic

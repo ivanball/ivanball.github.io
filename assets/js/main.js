@@ -171,6 +171,39 @@
     sync();
   }
 
+  /* ----- Collapsed source citations -----
+     The chips are stamped at build time (chipCitations in tools/build-docs.mjs) and
+     collapsed by docs.css. The page-wide "shown" state lives on <html>, set before
+     paint by the head script when stored, so this wires the toggle, a click on one
+     chip to expand just that citation, and a hover tooltip naming the citation. */
+  function initCitations() {
+    var btn = document.querySelector("[data-cites-toggle]");
+    var content = document.querySelector(".doc-content");
+    if (!btn || !content) { return; }
+    var root = document.documentElement;
+    function shown() { return root.getAttribute("data-cites") === "shown"; }
+    function sync() { btn.setAttribute("aria-pressed", shown() ? "true" : "false"); }
+    btn.addEventListener("click", function () {
+      var show = !shown();
+      if (show) { root.setAttribute("data-cites", "shown"); }
+      else { root.removeAttribute("data-cites"); }
+      try { localStorage.setItem("mmca-cites", show ? "shown" : "collapsed"); } catch (e) { /* private mode */ }
+      sync();
+    });
+    content.addEventListener("click", function (e) {
+      var cite = !shown() && e.target.closest ? e.target.closest(".cite") : null;
+      if (!cite) { return; }
+      /* Selecting text inside an expanded citation must not collapse it. */
+      if (window.getSelection && String(window.getSelection())) { return; }
+      cite.classList.toggle("is-open");
+    });
+    content.addEventListener("mouseover", function (e) {
+      var cite = e.target.closest ? e.target.closest(".cite") : null;
+      if (cite && !cite.title) { cite.title = cite.textContent.trim().replace(/^\(|\)$/g, ""); }
+    });
+    sync();
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initThemeToggle();
     initNavToggle();
@@ -180,5 +213,6 @@
     initReveal();
     initDocToc();
     initRailToggle();
+    initCitations();
   });
 })();

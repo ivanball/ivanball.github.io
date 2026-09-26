@@ -265,6 +265,7 @@ const collections = [
     indexSrc: "00-index.md",
     files: onbFiles,
     github: null,
+    citeChips: true,
   },
   {
     id: "governance",
@@ -547,7 +548,41 @@ function renderMarkdown(md, ctx) {
   m.use({ renderer: makeRenderer(slugCounts) });
   let html = m.parse(md);
   html = html.replace(/<table>/g, '<div class="table-wrap"><table>').replace(/<\/table>/g, "</table></div>");
+  if (ctx.citeChips) html = chipCitations(html, ctx);
   return html;
+}
+
+/* Source citations (`AiSettings.cs:22`, `:39`, `Deploy.yml:10-14`) are the evidence
+   trail of the onboarding chapters, dense enough (500+ on one page) to drown the prose.
+   Each is wrapped in <span class="cite"><span>...</span></span>; docs.css collapses the
+   inner span to a small chip on screen (never in print) and main.js expands one on click,
+   or all of them through the breadcrumb's Citations toggle. A parenthetical holding
+   nothing but citations collapses as ONE chip, together with its parentheses and the
+   space before it; a citation inside prose ("defaulting to 1024 at `:28`") collapses
+   alone. Headings, links, tables and code blocks are left as they are: a table's source
+   column is reference, not prose. The markdown is untouched, so search indexes the
+   full text either way. */
+const CITE_TARGET = String.raw`(?:[\w.\-\/]*(?:[\w\-]*\.[A-Za-z]\w{0,9}|Dockerfile))?:\d+(?:-\d+)?(?:(?:,\s*|\s*-&gt;\s*):?\d+(?:-\d+)?)*`;
+const CITE_CODE = String.raw`<code>${CITE_TARGET}</code>`;
+const CITE_RE = new RegExp(
+  String.raw`(\s?)\((${CITE_CODE}(?:(?:\s*[,;]\s*|,?\s+and\s+)${CITE_CODE})*)\)|${CITE_CODE}`, "g");
+const CITE_SKIP = /<(\/?)(pre|table|a|h[1-6])\b[^>]*>/gi;
+function chipCitations(html, ctx) {
+  const chip = (seg) => seg.replace(CITE_RE, (whole, lead, inner) => {
+    ctx.cites = (ctx.cites || 0) + 1;
+    const body = inner === undefined ? whole : `${lead}(${inner})`;
+    return `<span class="cite"><span>${body}</span></span>`;
+  });
+  let out = "", last = 0, depth = 0, m;
+  CITE_SKIP.lastIndex = 0;
+  while ((m = CITE_SKIP.exec(html))) {
+    const seg = html.slice(last, m.index);
+    out += (depth === 0 ? chip(seg) : seg) + m[0];
+    depth = Math.max(0, depth + (m[1] ? -1 : 1));
+    last = CITE_SKIP.lastIndex;
+  }
+  const tail = html.slice(last);
+  return out + (depth === 0 ? chip(tail) : tail);
 }
 
 /* ----- page shell ----- */
@@ -686,7 +721,7 @@ function headAssetsHtml(prefix, extraCss = "") {
      are only discovered when the stylesheet finishes parsing, which is a visible
      swap on the h1. `crossorigin` is required on a font preload even same-origin,
      or the browser fetches the file twice. */
-  return `  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  return `  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="${prefix}assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="${prefix}assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="${prefix}assets/css/styles.css">${css}
@@ -824,13 +859,18 @@ function breadcrumbJsonLd(col, currentLabel, outRel) {
   };
 }
 
-function breadcrumbHtml(col, prefix, currentLabel, hasRail = false) {
+function breadcrumbHtml(col, prefix, currentLabel, hasRail = false, hasCites = false) {
   /* The rail toggle rides in the breadcrumb row, right-aligned, and is only
      stamped on pages that actually have a rail. Its aria-expanded is corrected
-     by main.js when a stored preference hides the rail before first paint. */
-  const railBtn = hasRail
-    ? `\n        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>`
+     by main.js when a stored preference hides the rail before first paint.
+     The Citations toggle sits beside it on pages with collapsed citations
+     (see chipCitations); aria-pressed is corrected by main.js the same way. */
+  const citeBtn = hasCites
+    ? `\n        <button class="rail-toggle cite-toggle" type="button" data-cites-toggle aria-pressed="false">Citations</button>`
     : "";
+  const railBtn = citeBtn + (hasRail
+    ? `\n        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>`
+    : "");
   const roots = (col.crumbs || DEFAULT_CRUMBS)
     .map(([name, href]) => `        <a href="${prefix}${href}">${escapeHtml(name)}</a>
         <span aria-hidden="true">/</span>`)
@@ -1101,7 +1141,7 @@ function foldSectionsIntoDocument(rec, overflow) {
 const WRITTEN_DOCS = new Set();
 for (const col of collections) {
   for (const doc of col.docs) {
-    const ctx = { srcDir: col.srcDir, outRel: doc.outRel, hasMermaid: false, toc: [] };
+    const ctx = { srcDir: col.srcDir, outRel: doc.outRel, hasMermaid: false, toc: [], citeChips: Boolean(col.citeChips), cites: 0 };
     let body = renderMarkdown(doc.md, ctx);
     const a = doc.article;
     if (a) {
@@ -1152,7 +1192,7 @@ for (const col of collections) {
     }).join("\n");
     const content =
 `    <div class="container doc-container">
-${breadcrumbHtml(col, prefix, currentLabel, Boolean(aside))}
+${breadcrumbHtml(col, prefix, currentLabel, Boolean(aside), ctx.cites > 0)}
       <div class="doc-layout${aside ? " doc-layout--toc" : ""}">
 ${sidebarHtml(col, doc.outRel)}
         <article class="doc-content">
