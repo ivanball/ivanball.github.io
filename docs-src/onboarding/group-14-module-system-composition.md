@@ -742,7 +742,7 @@ the database-per-service strategy
 ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
 [`UseDataSourceAttribute`](#usedatasourceattribute)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/UseDataSourceAttribute.cs:12-17`) names the
-**engine** ([`DataSource`](group-07-persistence-ef-core.md#datasource): SQL Server, Cosmos or SQLite)
+**engine** ([`DataSource`](group-07-persistence-ef-core.md#datasource): SQL Server, PostgreSQL, Cosmos or SQLite)
 and is carried by the provider-specific configuration base classes, so choosing a base class chooses
 the engine with no change to the entity (see
 [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)).

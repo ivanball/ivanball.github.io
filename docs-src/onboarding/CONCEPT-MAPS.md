@@ -471,9 +471,10 @@ flowchart TD
 
 ## 8. Persistence, database-per-service + polyglot engines ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) / 018 / 030)
 
-One concrete `SQLServerDbContext` over the abstract `ApplicationDbContext`, **one instance per
-database**. Each entity is engine-agnostic; a single `[UseDataSource(engine)]` attribute on its
-config class picks SQL Server, Cosmos, or SQLite. Cross-source relationships auto-degrade; the outbox
+One sealed context class per engine (`SQLServerDbContext`, `PostgreSQLDbContext`, `SqliteDbContext`,
+`CosmosDbContext`) over the abstract `ApplicationDbContext`, **one instance per database**. Each
+entity is engine-agnostic; a single `[UseDataSource(engine)]` attribute on its config class picks
+SQL Server, PostgreSQL ([ADR-113](https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html)), Cosmos, or SQLite. Cross-source relationships auto-degrade; the outbox
 is the cross-source consistency mechanism. Each service self-applies its EF migrations at boot
 ([ADR-030](https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html)).
 

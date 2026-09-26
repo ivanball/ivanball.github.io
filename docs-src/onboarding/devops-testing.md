@@ -366,8 +366,10 @@ demonstrates deliberate stratification rather than a single catch-all integratio
 
 ## 3. Shipped testing-infrastructure packages
 
-MMCA.Common ships **five** of its nineteen packages as testing infrastructure that downstream apps
-consume as NuGet references rather than writing their own harness (`MMCA.Common/FACTS.md:19,35-39`):
+MMCA.Common ships **five** of its twenty-two packages as general testing infrastructure that downstream
+apps consume as NuGet references rather than writing their own harness (`MMCA.Common/FACTS.md:19,38-42`;
+a sixth, `MMCA.Common.AI.Testing`, is the language-model replay harness covered in
+[group-27](group-27-common-ai-integration.md)):
 
 - `MMCA.Common.Testing` (23 types), integration-test base, JWT generator, SQL fixture base, handler
   scaffold, entity builders, and the eight runtime conformance bases (this section).

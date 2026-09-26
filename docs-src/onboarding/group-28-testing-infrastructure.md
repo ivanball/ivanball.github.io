@@ -3,8 +3,9 @@
 **What this group covers.** Everything the codebase uses to *prove* itself: the five reusable
 test-support packages that ship out of `MMCA.Common/Source/Hosting` (`MMCA.Common.Testing`,
 `MMCA.Common.Testing.Architecture`, `MMCA.Common.Testing.Aspire`, `MMCA.Common.Testing.E2E`,
-`MMCA.Common.Testing.UI`, five of the nineteen packages published from MMCA.Common and listed in
-`MMCA.Common/FACTS.md:19-40`), the
+`MMCA.Common.Testing.UI`, five of the twenty-two packages published from MMCA.Common and listed in
+`MMCA.Common/FACTS.md:19-43`; the sixth test-support package, `MMCA.Common.AI.Testing`, belongs to
+[group-27](group-27-common-ai-integration.md)), the
 architecture-fitness rule library that gates the build, the runtime-conformance bases that gate a
 booted host, the backend-less component Gallery harness, the BenchmarkDotNet performance suite, and
 the many per-repo test projects that consume all of it. The distinction to hold onto while reading:
@@ -1054,7 +1055,7 @@ tracking. Its results are compared in CI by `build/perfgate` against the committ
 (`MMCA.Common/.github/workflows/ci.yml:371`), so moving a number has to be a deliberate, reviewed
 change, [Rubric §12, Performance & Scalability]. The same job family carries one more quiet gate
 worth knowing: the unit run is invoked with `--minimum-expected-tests 2000`
-(`MMCA.Common/.github/workflows/ci.yml:144`), so a discovery regression that silently drops thousands
+(`MMCA.Common/.github/workflows/ci.yml:158`), so a discovery regression that silently drops thousands
 of tests fails the build instead of reporting a green, empty run.
 
 The takeaway for a new engineer: pick the tier that matches what you are proving (a fast unit test

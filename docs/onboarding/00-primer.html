@@ -546,7 +546,7 @@ Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           </tr>
           <tr>
           <td>035</td>
-          <td>Optimistic concurrency: a <code>RowVersion</code> token round-trips through <code>IConcurrencyAware</code> DTOs; a stale write maps to HTTP 412 Precondition Failed</td>
+          <td>Optimistic concurrency over HTTP preconditions: an <code>IConcurrencyAware</code> read DTO carries the <code>RowVersion</code> and the GET emits it as a weak <code>ETag</code>; a <code>[SupportsIfMatch]</code> write must echo it in <code>If-Match</code> (no precondition is 428, a stale token is 412 Precondition Failed)</td>
           <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
           </tr>
           <tr>
