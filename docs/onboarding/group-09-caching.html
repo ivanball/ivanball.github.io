@@ -409,7 +409,7 @@
           <a href="https://ivanball.github.io/docs/adr/026-caching-strategy.html" target="_blank" rel="noopener">ADR-026</a> records. Tier 2 is a separate
           HTTP output-cache edge: <code>MMCA.Common.API</code> always runs <code>app.UseOutputCache()</code> as a named step in the
           shared middleware pipeline
-          (<span class="cite"><span><code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:143-145</code></span></span>, see
+          (<span class="cite"><span><code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:131-133</code></span></span>, see
           <a href="group-12-api-hosting-mapping.html#middlewarepipelinebuilder"><code>MiddlewarePipelineBuilder</code></a>) but ships no
           policies, so each host opts in with its own <code>AddOutputCache(...)</code>. The read-heavy public services
           declare real cacheable policies through
@@ -544,7 +544,8 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:41</code>)</span></span> via
           <code>services.Configure&lt;CacheKeyPrefixOptions&gt;(configuration.GetSection(CacheKeyPrefixOptions.SectionName))</code>,
           and only when a non-null <code>IConfiguration</code> was passed<span class="cite"><span> (<code>DependencyInjection.Caching.cs:39</code>)</span></span>.
-          <code>AddInfrastructure</code> always passes one<span class="cite"><span> (<code>DependencyInjection.cs:134</code>)</span></span>, so a host composing through the
+          <code>AddInfrastructure</code> always passes one<span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:134</code>)</span></span>, so a host composing through the
           normal entry point gets the binding; a test calling the parameterless <code>AddCaching()</code> overload does
           not. The bound options are no longer read directly at the call sites; instead
           <a href="#cachekeynamespace">CacheKeyNamespace</a><code>.From(IServiceProvider)</code> resolves them (and the
@@ -1320,8 +1321,8 @@
           <a href="group-28-testing-infrastructure.html#memorycacheservicetests">MemoryCacheServiceTests</a>, which pins the
           concurrency behavior deterministically rather than racing for it: the test takes the key&#39;s own stripe
           first, then asserts that a <code>SetAsync</code> and a <code>RemoveByPrefixAsync</code> both park on it<span class="cite"><span>
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Caching/MemoryCacheServiceTests.cs:187</code>)</span></span>
-          and that <code>RemoveAsync</code> waits on the same stripe as <code>SetAsync</code><span class="cite"><span> (<code>MemoryCacheServiceTests.cs:218</code>)</span></span>.</li>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Caching/MemoryCacheServiceTests.cs:190</code>)</span></span>
+          and that <code>RemoveAsync</code> waits on the same stripe as <code>SetAsync</code><span class="cite"><span> (<code>MemoryCacheServiceTests.cs:221</code>)</span></span>.</li>
           <li><strong>Caveats / not-in-source</strong>: the cache is per-process, so two replicas hold independent and
           potentially divergent copies until each entry&#39;s TTL or an explicit eviction reconciles them. That is
           why the distributed adapters exist for scaled-out deployments, and why

@@ -1114,7 +1114,8 @@
           the deliberate suppression).</li>
           <li><strong>Walkthrough</strong>: <code>MeterName = &quot;MMCA.Common.AI&quot;</code><span class="cite"><span> (<code>AiUsageMeter.cs:26</code>)</span></span> is shared with the
           <code>ActivitySource</code> name the pipeline&#39;s OpenTelemetry layer publishes under
-          (<code>AiUsageMeter.MeterName</code> reused at <span class="cite"><span><code>DependencyInjection.cs:181</code></span></span>), so a host enables traces and metrics
+          (<code>AiUsageMeter.MeterName</code> reused at <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:181</code></span></span>),
+          so a host enables traces and metrics
           for the AI dependency with one name. <code>InputTokensCounterName</code>/<code>OutputTokensCounterName</code>
           (<span class="cite"><span><code>AiUsageMeter.cs:29,32</code></span></span>, <code>mmca.ai.input_tokens</code>/<code>mmca.ai.output_tokens</code>) name the two counters, and
           <code>CallDurationHistogramName</code> (<span class="cite"><span><code>AiUsageMeter.cs:45</code></span></span>, <code>mmca.ai.call.duration</code>) names the histogram; its doc
@@ -1143,7 +1144,8 @@
           <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener"><code>ADR-120</code></a> for this
           meter&#39;s place in the governed pipeline.</li>
           <li><strong>Where it&#39;s used</strong>: registered as a singleton and resolved by
-          <a href="#aiservicecollectionextensions"><code>AiServiceCollectionExtensions</code></a><span class="cite"><span> (<code>DependencyInjection.cs:145,167</code>)</span></span>;
+          <a href="#aiservicecollectionextensions"><code>AiServiceCollectionExtensions</code></a><span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:145,167</code>)</span></span>;
           <code>Record</code> and <code>RecordDuration</code> are called exclusively from
           <a href="#usagerecordingchatclient"><code>UsageRecordingChatClient</code></a>, which stops the clock in a <code>try</code>/<code>finally</code> so
           every outcome, including a cancellation or an exception, is recorded.</li>

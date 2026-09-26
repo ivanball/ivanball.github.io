@@ -2197,10 +2197,16 @@ Scalability] budgets are enforced inside the deploy-gating chromium leg rather t
 k6 run. `E2E_TRACE` with its **trailing slash** selects directory mode, one `<TestName>.zip` per *failed*
 test (`e2e.yml:319-324`), which is what makes a red run diagnosable offline instead of by re-running it.
 
-**Steps 8 to 10, Collect logs, stop stack, upload diagnostics** (`e2e.yml:334-364`): on `always()` the job
-collects each service's Serilog file into `artifacts/service-logs` (`e2e.yml:334-348`) and kills the
-AppHost (`e2e.yml:350-352`). The upload, however, is **failure-only** (`if: failure()`, `e2e.yml:358`)
-with a 3-day retention: the bundle runs about 350 MB per browser, and a green run produces no per-test
+**Steps 8 to 10, Collect logs, stop stack, upload diagnostics** (`e2e.yml:334-365`): on `always()` the job
+collects the Serilog rolling files of the four services **and** of the UI host into `artifacts/service-logs`
+(`e2e.yml:334-349`) and kills the AppHost (`e2e.yml:351-353`). One glob, `MMCAADC*.txt`, matches both
+`MMCAADC<Module>Service<date>.txt` and `MMCAADCUIWeb<date>.txt` (`e2e.yml:336-337`, `e2e.yml:345`). The UI
+host log matters because the UI host runs the Blazor Server circuit the suite drives, so a circuit drop or a
+prerender failure shows up there and in no service log. The step searches the working tree, `$HOME` and
+`/tmp` and flattens every hit into one folder (`e2e.yml:344-348`), because the directory each file lands in
+depends on the working directory Aspire launches the process from, and the AppHost orchestrator log only
+carries orchestration chatter, never the processes' own logs (`e2e.yml:338-341`). The upload, however, is
+**failure-only** (`if: failure()`, `e2e.yml:359`) with a 3-day retention (`e2e.yml:365`): the bundle runs about 350 MB per browser, and a green run produces no per-test
 traces and needs no offline triage. Because the collect step still runs on `always()`, a startup failure
 where no test ran at all is exactly the case that does get its artifact.
 
@@ -2586,9 +2592,16 @@ runner already has the workload.
 restore for the RTO record, verifies it comes back Online, then deletes the copy, the live databases are
 never touched (`dr-drill.yml:3-5`, Monday 06:00 UTC cron at `dr-drill.yml:31-33`). A scheduled run picks
 its target by **rotating** across the four live per-service databases by ISO week number, so each one
-gets a recovery proof roughly monthly (`dr-drill.yml:7-10`, selection at `dr-drill.yml:53-56`); a
-dispatch names the database explicitly through a `choice` input (`dr-drill.yml:17-26`). One drill a week
-that always restored the same database would prove the *procedure*, not the fleet.
+gets a recovery proof roughly monthly (`dr-drill.yml:7-10`, selection at `dr-drill.yml:70-76`); a
+dispatch names the database explicitly through a `choice` input (`dr-drill.yml:18-26`). One drill a week
+that always restored the same database would prove the *procedure*, not the fleet. The `drill` job runs
+under a 60-minute cap (`dr-drill.yml:49`), and the comment above it (`dr-drill.yml:42-48`) says why it is
+not 30: the 2026-09-14 scheduled drill was killed at the old 30-minute limit and recorded no proof. A
+measured PITR restore of an `ADC_*` database takes minutes, but Azure SQL queues the restore on the
+platform and its duration varies run to run, so 60 leaves headroom for a slow one (MMCA.Store raised the
+same job to 60 after the same failure). The cap is load-bearing beyond the drill itself: `dr-freshness`
+consumes this workflow's last success, so a drill that times out does not merely lose one run, it moves
+the deploy toward a hard block.
 `cross-service-tests.yml`
 (`cross-service-tests.yml:6-10`) is the Testcontainers tier that boots the three REST hosts in one process
 against a real SQL Server **and** a real RabbitMQ, exercising the genuine outbox to broker to consumer
@@ -2623,8 +2636,8 @@ given its own section above, but both are part of the workflow set.)
 The drill also cleans up when it does not finish. The script deletes its restored copy in a `finally` block,
 but a job cancelled at `timeout-minutes` never reaches it, and the weekly rotation means the next run targets
 a different database, so its stale-name check would not remove the leftover either; the comment
-(`dr-drill.yml:89-93`) records the 2026-09-14 scheduled run that left `ADC_Engagement-drill` at Basic-tier
-cost for five days. The **Remove leftover drill copies** step (`dr-drill.yml:94-105`) runs under
+(`dr-drill.yml:96-100`) records the 2026-09-14 scheduled run that left `ADC_Engagement-drill` at Basic-tier
+cost for five days. The **Remove leftover drill copies** step (`dr-drill.yml:101-112`) runs under
 `if: always()`, so on cancel and on failure too, finds the `adc-prod-sql-*` server (warning and exiting
 cleanly when there is none) and deletes every database on it whose name ends in `-drill`, not just this run's.
 [Rubric section 31, Cost/FinOps] assesses whether spend is bounded by design rather than by vigilance; this

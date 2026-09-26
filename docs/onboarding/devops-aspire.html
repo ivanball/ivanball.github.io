@@ -224,8 +224,8 @@ adc-notification -&gt;  ADC_Notification  (Notification service)</code></pre>
           legacy single <code>AtlDevCon</code> database is deliberately not provisioned here, and it is gone in Azure too.
           It was exported to the bacpac blob <code>sql-archive/AtlDevCon-20260902.bacpac</code> and dropped on 2026-09-02,
           so the template no longer declares it and the blob, restorable with <code>az sql db import</code>, is the rollback
-          source of record<span class="cite"><span> (<code>MMCA.ADC/infra/main.bicep:866-875</code>)</span></span>. These four databases are the entire application
-          data estate (main.bicep:880-892). Database-per-service is the topology everywhere, not a
+          source of record<span class="cite"><span> (<code>MMCA.ADC/infra/main.bicep:871-880</code>)</span></span>. These four databases are the entire application
+          data estate (main.bicep:885-897). Database-per-service is the topology everywhere, not a
           local-development shortcut.</p>
           <p><strong>Redis</strong> is also persistent (Program.cs:44-45), used by service hosts for distributed output caching
           and <code>ICacheService</code>. All four service hosts receive <code>WithReference(redis)</code> and <code>WaitFor(redis)</code>.</p>
@@ -357,8 +357,8 @@ adc-notification -&gt;  ADC_Notification  (Notification service)</code></pre>
           check all resolve from it, and the logical name collapses onto Default: one <code>SQLServerDbContext</code>
           instance, one EF change tracker, one migrations set per service. The Azure side matches exactly: the
           Bicep hands Identity only <code>DataSources__Identity__SQLServerConnectionString</code><span class="cite"><span>
-          (<code>MMCA.ADC/infra/main.bicep:1592</code>)</span></span> plus its migrations assembly (main.bicep:1593) and
-          <code>Outbox__DatabaseName</code> (main.bicep:1594), with no top-level <code>ConnectionStrings__SQLServerConnectionString</code>
+          (<code>MMCA.ADC/infra/main.bicep:1665</code>)</span></span> plus its migrations assembly (main.bicep:1666) and
+          <code>Outbox__DatabaseName</code> (main.bicep:1667), with no top-level <code>ConnectionStrings__SQLServerConnectionString</code>
           anywhere. The <code>WaitFor(database)</code> (Extensions.cs:492) ensures the service process does not start until
           SQL Server is healthy.</p>
           <p><strong>Polyglot siblings (<a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>).</strong> Two more helpers wire the non-SQL engines for the staged Conference
@@ -515,7 +515,7 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           or every cross-service call fails validation on the issuer claim. The <code>appsettings</code> default hardcodes
           the pinned dev port for a standalone F5 run, so deriving the value from the gateway resource means an
           Aspire run cannot mint wrong-issuer tokens if that port ever moves (Program.cs:368-374). Production sets
-          the equivalent from the gateway&#39;s ACA FQDN<span class="cite"><span> (<code>MMCA.ADC/infra/main.bicep:1617</code>)</span></span>.</p>
+          the equivalent from the gateway&#39;s ACA FQDN<span class="cite"><span> (<code>MMCA.ADC/infra/main.bicep:1690</code>)</span></span>.</p>
           <p>[Rubric §11, Security] assesses how credentials and tokens flow through the system. No symmetric
           JWT secret is shared between services; each non-Identity service fetches the RSA public key dynamically.
           Routing that fetch through the gateway rather than hitting Identity directly keeps the internal topology
@@ -541,7 +541,7 @@ conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           AppHost knows:</p>
           <ul>
           <li><code>Api__ApiEndpoint</code> and <code>Api__WasmApiEndpoint</code> on the UI (Program.cs:450-451). These are both halves of
-          the split <span class="cite"><span><code>infra/main.bicep:2406</code></span></span> and <code>2408</code> make in production, derived from the gateway resource
+          the split <span class="cite"><span><code>infra/main.bicep:2479</code></span></span> and <code>2481</code> make in production, derived from the gateway resource
           instead of hardcoded. The WASM one is what <code>/client-config</code> hands the <strong>browser</strong> (and what the Blazor
           CSP pins <code>connect-src</code> to), so it must be an externally reachable URL: a browser cannot resolve an
           Aspire service-discovery name. The server-side one is overridden here because exactly one consumer is
@@ -598,7 +598,7 @@ gateway.WithE2eGatewayRateLimitLift(alsoLiftWhen: forceWasm);               <spa
           hosts ever reached Application Insights, while the Gateway (which never called <code>UseSerilog</code>) did show
           up. <code>builder.Logging.AddSerilog(Log.Logger, dispose: true)</code> (line 55) adds Serilog as one provider
           alongside the others. Production then caps what ships to Azure Monitor with
-          <code>Logging__OpenTelemetry__LogLevel__Default=Warning</code><span class="cite"><span> (<code>MMCA.ADC/infra/main.bicep:254-263</code>)</span></span>; Serilog
+          <code>Logging__OpenTelemetry__LogLevel__Default=Warning</code><span class="cite"><span> (<code>MMCA.ADC/infra/main.bicep:257-266</code>)</span></span>; Serilog
           keeps writing Information to stdout, so container logs stay complete while only warnings and above
           bill against the workspace.</li>
           <li><strong><code>ConfigureEndpointsWithHealthProbe(protocols, redeclareCleartextEndpoint, cleartextPort)</code></strong><span class="cite"><span>
@@ -617,8 +617,8 @@ gateway.WithE2eGatewayRateLimitLift(alsoLiftWhen: forceWasm);               <spa
           owns. A non-integer probe port throws at startup rather than silently producing no listener, since
           the platform would then probe a closed port and the revision would never come up
           (KestrelEndpointExtensions.cs:72-76). In Azure the key is <code>8081</code> on Identity, Conference and
-          Engagement (main.bicep:1588, 1813, 1951) and <code>8082</code> on Notification (main.bicep:2101), because the
-          <a href="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html" target="_blank" rel="noopener">ADR-012</a> mixed profile already owns 8080 for ingress and 8081 for gRPC there (main.bicep:2061-2066, 2159-2160).
+          Engagement (main.bicep:1661, 1886, 2024) and <code>8082</code> on Notification (main.bicep:2174), because the
+          <a href="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html" target="_blank" rel="noopener">ADR-012</a> mixed profile already owns 8080 for ingress and 8081 for gRPC there (main.bicep:2134-2139, 2232-2233).
           Locally the key is absent on every host, which is exactly why the AppHost has to use the h2c probe
           instead.</li>
           <li><strong><code>AddCommonKeyVaultConfiguration()</code></strong><span class="cite"><span>
@@ -830,13 +830,13 @@ gateway.WithE2eGatewayRateLimitLift(alsoLiftWhen: forceWasm);               <spa
           <code>IsInstrumentationDisabled</code>, Extensions.cs:471-472). The fourth,
           <code>Telemetry:FilterProbeTelemetry</code>, is the one that defaults <strong>on</strong> and is covered on its own below
           (<code>IsProbeTelemetryFilterEnabled</code>, Extensions.cs:483-484). ADC&#39;s production Bicep sets the first three
-          explicitly: <code>Telemetry__TracesSampleRatio=0.25</code><span class="cite"><span> (<code>MMCA.ADC/infra/main.bicep:249-252</code>)</span></span>,
-          <code>Telemetry__DisableHttpClientMetrics=true</code> (main.bicep:281-284) and
-          <code>Telemetry__DisableRuntimeMetrics=true</code> (main.bicep:285-288), the last two measured at roughly 65% of
-          AppMetrics ingestion, about 290 MB of a 500 MB daily stream (main.bicep:275-280). It also stretches
-          the OTel export cadence with the standard <code>OTEL_METRIC_EXPORT_INTERVAL=300000</code> (main.bicep:296-299):
+          explicitly: <code>Telemetry__TracesSampleRatio=0.25</code><span class="cite"><span> (<code>MMCA.ADC/infra/main.bicep:252-255</code>)</span></span>,
+          <code>Telemetry__DisableHttpClientMetrics=true</code> (main.bicep:284-287) and
+          <code>Telemetry__DisableRuntimeMetrics=true</code> (main.bicep:288-291), the last two measured at roughly 65% of
+          AppMetrics ingestion, about 290 MB of a 500 MB daily stream (main.bicep:278-283). It also stretches
+          the OTel export cadence with the standard <code>OTEL_METRIC_EXPORT_INTERVAL=300000</code> (main.bicep:299-302):
           the exporter ships cumulative aggregates, so a 5x longer interval drops roughly 80% of the remaining
-          datapoints while five-minute alert windows keep the same signal (main.bicep:290-295). An unset host
+          datapoints while five-minute alert windows keep the same signal (main.bicep:293-298). An unset host
           keeps every metric family, samples every trace and exports on the SDK&#39;s 60 second default.</p>
           </li>
           </ol>
@@ -888,7 +888,7 @@ gateway.WithE2eGatewayRateLimitLift(alsoLiftWhen: forceWasm);               <spa
           sets this automatically; standalone deployments must supply it.</li>
           <li><strong>Azure Monitor</strong> when <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present (Extensions.cs:371-377),
           injected by the Bicep deployment so logs, metrics, and traces flow to the workspace-based Application
-          Insights resource (main.bicep:225-234).</li>
+          Insights resource (main.bicep:228-237).</li>
           </ul>
           <p>Both can be active simultaneously; each exports an independent copy.</p>
           <p>[Rubric §13, Observability and Operability] assesses whether a running system can be understood from
@@ -923,7 +923,7 @@ gateway.WithE2eGatewayRateLimitLift(alsoLiftWhen: forceWasm);               <spa
           that does not take the persistence stack (OutboxPollFilterProcessor.cs:17-22).</p>
           <p>[Rubric §31, Cost and FinOps] assesses whether observability costs are controlled. Suppressing poll
           spans on a 300 s polling interval in production (<code>Outbox__PollingIntervalSeconds=300</code> on all four ADC
-          container apps, <span class="cite"><span><code>MMCA.ADC/infra/main.bicep:1599, 1820, 1958, 2110</code></span></span>) eliminates the majority of
+          container apps, <span class="cite"><span><code>MMCA.ADC/infra/main.bicep:1672, 1893, 2031, 2183</code></span></span>) eliminates the majority of
           idle-process telemetry ingestion. The framework makes this the default for every consumer; individual
           services do not need to configure it.</p>
           <h3 id="probe-telemetry-filtering">Probe telemetry filtering</h3>
@@ -1239,51 +1239,51 @@ object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; 
           </thead>
           <tbody><tr>
           <td>SQL Server container (persistent)</td>
-          <td>Azure SQL Server; the same four databases (<code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>, main.bicep:887-892), each Basic 5 DTU / 2 GB (main.bicep:894-910), with weekly/monthly/yearly long-term retention on top of Basic-tier PITR (main.bicep:912-928). The legacy <code>AtlDevCon</code> database is declared in neither place (main.bicep:866-875)</td>
+          <td>Azure SQL Server; the same four databases (<code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>, main.bicep:892-897), each Basic 5 DTU / 2 GB (main.bicep:907-915) and carrying a <code>service</code> tag equal to the owning container app&#39;s, so one tag-grouped cost report splits compute and storage per service (main.bicep:170-174, 903-905), with weekly/monthly/yearly long-term retention on top of Basic-tier PITR (main.bicep:919-935). The three databases that hold an audit-trail table (<code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>; Notification has no audited entities) also get a database-level audit policy recording every <code>UPDATE</code> or <code>DELETE</code> on <code>dbo.AuditTrailEntries</code> outside the database (main.bicep:962-966, 984-1001), because the services connect with the server admin login and could otherwise rewrite the <a href="https://ivanball.github.io/docs/adr/075-audit-trail.html" target="_blank" rel="noopener">ADR-075</a> trail without a record (main.bicep:940-948). The legacy <code>AtlDevCon</code> database is declared in neither place (main.bicep:871-880)</td>
           </tr>
           <tr>
           <td>Redis container (persistent)</td>
-          <td>Azure Managed Redis (<code>Microsoft.Cache/redisEnterprise</code>, Balanced B0, no HA, main.bicep:1291-1302), OSS-cluster policy and volatile-LRU eviction (main.bicep:1310, 1313), injected as <code>ConnectionStrings__redis</code> from Key Vault (main.bicep:1614)</td>
+          <td>Azure Managed Redis (<code>Microsoft.Cache/redisEnterprise</code>, Balanced B0, no HA, main.bicep:1364-1375), OSS-cluster policy and volatile-LRU eviction (main.bicep:1383, 1386), injected as <code>ConnectionStrings__redis</code> from Key Vault (main.bicep:1687)</td>
           </tr>
           <tr>
           <td>RabbitMQ container (persistent, management plugin), or the Service Bus emulator container under <code>ADC_BROKER=servicebus</code></td>
-          <td>Azure Service Bus (Standard tier, main.bicep:943-954; Basic lacks the topics MassTransit needs, main.bicep:938-939), with one per-service SAS rule rather than one credential for the whole fleet (main.bicep:956-958)</td>
+          <td>Azure Service Bus (Standard tier, main.bicep:1016-1027; Basic lacks the topics MassTransit needs, main.bicep:1011-1012), with one per-service SAS rule rather than one credential for the whole fleet (main.bicep:1029-1031)</td>
           </tr>
           <tr>
           <td>MailDev container (fixed ports 1080/1025)</td>
-          <td>Not provisioned; a real SMTP relay via <code>Smtp__Host</code> / <code>Smtp__Port</code> / <code>Smtp__From</code> (main.bicep:1660 for Identity, 2138 for Notification)</td>
+          <td>Not provisioned; a real SMTP relay via <code>Smtp__Host</code> / <code>Smtp__Port</code> / <code>Smtp__From</code> (main.bicep:1733 for Identity, 2211 for Notification)</td>
           </tr>
           <tr>
           <td><code>MessageBus__Provider=RabbitMq</code> (AppHost default)</td>
-          <td><code>MessageBus__Provider=AzureServiceBus</code> (Bicep env var on all four services, main.bicep:1639, 1847, 1987, 2136)</td>
+          <td><code>MessageBus__Provider=AzureServiceBus</code> (Bicep env var on all four services, main.bicep:1712, 1920, 2060, 2209)</td>
           </tr>
           <tr>
           <td>Aspire dashboard (OTLP)</td>
-          <td>Application Insights workspace-based resource (<code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>, main.bicep:240-243)</td>
+          <td>Application Insights workspace-based resource (<code>APPLICATIONINSIGHTS_CONNECTION_STRING</code>, main.bicep:243-246)</td>
           </tr>
           <tr>
           <td><code>WithSQLServerDataSource</code> injects one connection-string env var</td>
-          <td>Bicep injects the same one plus <code>DataSources__{Module}__SQLServerMigrationsAssembly</code> and <code>Outbox__DatabaseName</code> (main.bicep:1592-1594)</td>
+          <td>Bicep injects the same one plus <code>DataSources__{Module}__SQLServerMigrationsAssembly</code> and <code>Outbox__DatabaseName</code> (main.bicep:1665-1667)</td>
           </tr>
           <tr>
           <td>h2c health probe from the AppHost (<code>WithH2cHealthCheck</code>)</td>
-          <td>Dedicated HTTP/1.1 probe listener via <code>HealthProbe__Port</code>, 8081 on the three h2c services (main.bicep:1588, 1813, 1951) and 8082 on Notification (main.bicep:2101), because the ACA platform probes speak HTTP/1.1</td>
+          <td>Dedicated HTTP/1.1 probe listener via <code>HealthProbe__Port</code>, 8081 on the three h2c services (main.bicep:1661, 1886, 2024) and 8082 on Notification (main.bicep:2174), because the ACA platform probes speak HTTP/1.1</td>
           </tr>
           <tr>
           <td><code>WaitFor</code> gates on <code>/alive</code>; only the UI gates on <code>/health/ready</code></td>
-          <td>The ACA probe block splits the same two paths by job: startup and liveness on <code>/alive</code>, readiness on <code>/health/ready</code>, all three against the probe port (main.bicep:1721-1745). Readiness polls every 30 s rather than 10 s, because the DB-aware check issues a <code>SELECT 1</code> per probe and neither the probe request nor its dependency row is sampled (main.bicep:1715-1720)</td>
+          <td>The ACA probe block splits the same two paths by job: startup and liveness on <code>/alive</code>, readiness on <code>/health/ready</code>, all three against the probe port (main.bicep:1794-1818). Readiness polls every 30 s rather than 10 s, because the DB-aware check issues a <code>SELECT 1</code> per probe and neither the probe request nor its dependency row is sampled (main.bicep:1788-1793)</td>
           </tr>
           <tr>
           <td>Outbox poll interval: framework default 2 s</td>
-          <td><code>Outbox__PollingIntervalSeconds=300</code> on every service (main.bicep:1599, 1820, 1958, 2110); Identity, Conference and Engagement, the three hosts that call <code>AddScheduledJobs</code>, also slow the runner&#39;s idle wake to <code>Scheduler__PollingIntervalSeconds=300</code> (main.bicep:1610, 1828, 1961). Internal commands (ADR-114) deliberately poll faster at <code>InternalCommands__PollingIntervalSeconds=60</code> (main.bicep:1605), because only a row enrolled in a transaction cannot be signalled</td>
+          <td><code>Outbox__PollingIntervalSeconds=300</code> on every service (main.bicep:1672, 1893, 2031, 2183); Identity, Conference and Engagement, the three hosts that call <code>AddScheduledJobs</code>, also slow the runner&#39;s idle wake to <code>Scheduler__PollingIntervalSeconds=300</code> (main.bicep:1683, 1901, 2034). Internal commands (ADR-114) deliberately poll faster at <code>InternalCommands__PollingIntervalSeconds=60</code> (main.bicep:1678), because only a row enrolled in a transaction cannot be signalled</td>
           </tr>
           <tr>
           <td>Telemetry knobs at their defaults (sample everything, all metric families on, probe traces filtered)</td>
-          <td><code>Telemetry__TracesSampleRatio=0.25</code>, <code>Telemetry__DisableHttpClientMetrics=true</code>, <code>Telemetry__DisableRuntimeMetrics=true</code>, <code>OTEL_METRIC_EXPORT_INTERVAL=300000</code> (main.bicep:249-252, 281-288, 296-299). <code>Telemetry__FilterProbeTelemetry</code> is set nowhere, because its default is already the production behavior</td>
+          <td><code>Telemetry__TracesSampleRatio=0.25</code>, <code>Telemetry__DisableHttpClientMetrics=true</code>, <code>Telemetry__DisableRuntimeMetrics=true</code>, <code>OTEL_METRIC_EXPORT_INTERVAL=300000</code> (main.bicep:252-255, 284-291, 299-302). <code>Telemetry__FilterProbeTelemetry</code> is set nowhere, because its default is already the production behavior</td>
           </tr>
           <tr>
           <td>Gateway: YARP request-routing lines at <code>Information</code> (Gateway/appsettings.json:6)</td>
-          <td><code>Logging__LogLevel__Yarp=Warning</code> on the gateway container and no other (main.bicep:264-273, 2268), because YARP&#39;s two lines per proxied request duplicated <code>AppRequests</code> and <code>AppDependencies</code> in the console-log stream; <code>Warning</code> keeps the forwarder&#39;s error lines</td>
+          <td><code>Logging__LogLevel__Yarp=Warning</code> on the gateway container and no other (main.bicep:267-276, 2341), because YARP&#39;s two lines per proxied request duplicated <code>AppRequests</code> and <code>AppDependencies</code> in the console-log stream; <code>Warning</code> keeps the forwarder&#39;s error lines</td>
           </tr>
           </tbody></table></div>
           <p>The transport switch (<code>RabbitMq</code> to <code>AzureServiceBus</code>) is entirely environment-driven. No code path
@@ -1488,7 +1488,7 @@ object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; 
           <code>Yarp.ReverseProxy.Health</code>) wrote roughly 300k stdout lines a day for traffic no user made, so they sit
           at <code>Warning</code> while YARP&#39;s own request-routing lines stay at <code>Information</code> (appsettings.json:6). Production
           goes one step further and caps YARP too: the Bicep sets <code>Logging__LogLevel__Yarp=Warning</code> on the gateway
-          container and no other host (main.bicep:264-273, 2268), because at <code>Information</code> YARP writes two lines per
+          container and no other host (main.bicep:267-276, 2341), because at <code>Information</code> YARP writes two lines per
           proxied request that Container Apps ships to Log Analytics, measured at about 177k lines and 77 MB a week,
           the largest console-log stream in the workspace and all of it already recorded as <code>AppRequests</code> and
           <code>AppDependencies</code>. <code>Warning</code> keeps the forwarder&#39;s error lines, so a failed proxy hop still logs.</p>
@@ -1603,7 +1603,7 @@ object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; 
           </tr>
           <tr>
           <td>§31 Cost / FinOps</td>
-          <td>The four telemetry knobs and the metric export interval; <code>OutboxPollFilterProcessor</code> and <code>ProbeTelemetryFilterProcessor</code> suppressing the two highest-volume classes of span nobody asked for; the gateway&#39;s probe-log trim (Gateway/appsettings.json:2-16) and its production-only YARP log floor (main.bicep:264-273, 2268); the 30 s readiness cadence in the ACA probe block (main.bicep:1715-1720)</td>
+          <td>The four telemetry knobs and the metric export interval; <code>OutboxPollFilterProcessor</code> and <code>ProbeTelemetryFilterProcessor</code> suppressing the two highest-volume classes of span nobody asked for; the gateway&#39;s probe-log trim (Gateway/appsettings.json:2-16) and its production-only YARP log floor (main.bicep:267-276, 2341); the 30 s readiness cadence in the ACA probe block (main.bicep:1788-1793)</td>
           </tr>
           <tr>
           <td>§32 Dependency &amp; Supply-Chain</td>
@@ -1630,11 +1630,11 @@ object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; 
           <li>Every ingestion figure quoted in the cost sections (roughly 65% of AppMetrics, about 290 MB of a
           500 MB daily stream, 100% of <code>AppRequests</code> rows from probes, the gateway&#39;s roughly 300k stdout lines a
           day, the YARP forwarder&#39;s roughly 177k console lines a week) comes from the inline comment that records the measurement, not from a workspace query this
-          chapter ran: <span class="cite"><span><code>MMCA.ADC/infra/main.bicep:264-269</code></span></span> and <code>275-280</code>,
+          chapter ran: <span class="cite"><span><code>MMCA.ADC/infra/main.bicep:267-272</code></span></span> and <code>278-283</code>,
           <span class="cite"><span><code>MMCA.Common.Aspire/Telemetry/ProbeTelemetryFilter.cs:8-11</code></span></span>
           and <span class="cite"><span><code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:2-6</code></span></span>.</li>
           <li>That the <code>AtlDevCon</code> database is actually gone from the Azure SQL server is asserted by the template&#39;s
-          comment (main.bicep:866-875), which is explicit that Incremental-mode Bicep never deleted it and an
+          comment (main.bicep:871-880), which is explicit that Incremental-mode Bicep never deleted it and an
           operator did, after the template stopped declaring it. The template can only prove the declaration is
           absent, not the server&#39;s current state.</li>
           </ul>

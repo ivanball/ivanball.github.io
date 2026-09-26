@@ -1000,7 +1000,8 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   the deliberate suppression).
 - **Walkthrough**: `MeterName = "MMCA.Common.AI"` (`AiUsageMeter.cs:26`) is shared with the
   `ActivitySource` name the pipeline's OpenTelemetry layer publishes under
-  (`AiUsageMeter.MeterName` reused at `DependencyInjection.cs:181`), so a host enables traces and metrics
+  (`AiUsageMeter.MeterName` reused at `MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:181`),
+  so a host enables traces and metrics
   for the AI dependency with one name. `InputTokensCounterName`/`OutputTokensCounterName`
   (`AiUsageMeter.cs:29,32`, `mmca.ai.input_tokens`/`mmca.ai.output_tokens`) name the two counters, and
   `CallDurationHistogramName` (`AiUsageMeter.cs:45`, `mmca.ai.call.duration`) names the histogram; its doc
@@ -1029,7 +1030,8 @@ clients, policies, validator and provider factories, then the Level 3 registrati
   [`ADR-120`](https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html) for this
   meter's place in the governed pipeline.
 - **Where it's used**: registered as a singleton and resolved by
-  [`AiServiceCollectionExtensions`](#aiservicecollectionextensions) (`DependencyInjection.cs:145,167`);
+  [`AiServiceCollectionExtensions`](#aiservicecollectionextensions)
+  (`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:145,167`);
   `Record` and `RecordDuration` are called exclusively from
   [`UsageRecordingChatClient`](#usagerecordingchatclient), which stops the clock in a `try`/`finally` so
   every outcome, including a cancellation or an exception, is recorded.

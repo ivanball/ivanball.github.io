@@ -150,10 +150,10 @@
           <blockquote>
           <p><strong>Chapter scope note.</strong> The tier chapters (<code>tier-00</code> through the sweep) document every type
           in the production codebase one by one. Test types are the logged exception: this chapter covers
-          the <strong>2,589</strong> types that live in test projects, grouped by project purpose and foundational
+          the <strong>2,621</strong> types that live in test projects, grouped by project purpose and foundational
           infrastructure, not written as one section per <code>[Fact]</code>. Individual test methods are cited only
           as worked examples. Cross-reference the tier chapters for the production types being tested.
-          The counts come from the Roslyn inventory<span class="cite"><span> (<code>00-inventory.md:25-123</code>)</span></span>, which scans
+          The counts come from the Roslyn inventory<span class="cite"><span> (<code>00-inventory.md:25-135</code>)</span></span>, which scans
           <code>MMCA.Common/Source</code>, <code>MMCA.Common/Tests</code>, <code>MMCA.ADC/Source</code> and <code>MMCA.ADC/Tests</code> only<span class="cite"><span>
           (<code>00-inventory.md:3-4</code>)</span></span>: MMCA.Store and MMCA.Helpdesk test types are named in this chapter where
           they carry a decision, but they are not in those totals.</p>
@@ -348,10 +348,10 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </ol>
           <hr>
           <h2 id="2-test-project-layout">2. Test project layout</h2>
-          <p>The inventory below is drawn from <span class="cite"><span><code>00-inventory.md:25-123</code></span></span> (test-assembly counts) and the solution
+          <p>The inventory below is drawn from <span class="cite"><span><code>00-inventory.md:25-135</code></span></span> (test-assembly counts) and the solution
           files above. Counts are distinct types per project as reported by the Roslyn inventory scan, not
           <code>[Fact]</code> counts.</p>
-          <h3 id="mmcacommon-1682-test-types-across-16-in-solution-projects--49-across-6-out-of-solution">MMCA.Common, 1,682 test types across 16 in-solution projects + 49 across 6 out-of-solution</h3>
+          <h3 id="mmcacommon-1716-test-types-across-16-in-solution-projects--49-across-6-out-of-solution">MMCA.Common, 1,716 test types across 16 in-solution projects + 49 across 6 out-of-solution</h3>
           <p><strong>Unit, Core layer</strong></p>
           <div class="table-wrap"><table>
           <thead>
@@ -373,12 +373,12 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </tr>
           <tr>
           <td><code>MMCA.Common.Application.Tests</code></td>
-          <td>397</td>
+          <td>398</td>
           <td>Unit tests for CQRS dispatcher, decorator pipeline, module loader, <code>IMessageBus</code>, validators, query pipeline, the exportable-user-data handler base, tenant-scoped cache keys and <code>ICacheService.GetOrCreate</code></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Infrastructure.Tests</code></td>
-          <td>496</td>
+          <td>499</td>
           <td>Unit/integration tests for EF base contexts, outbox processor, repository, caching, JWT generation, JWKS provider, data-source resolver, two-factor and email-confirmation token services, plus the <code>Scheduling/</code>, <code>Persistence/Tenancy/</code>, <code>Persistence/AuditTrail/</code>, <code>Persistence/InternalCommands/</code> and hybrid-cache subtrees</td>
           </tr>
           <tr>
@@ -403,7 +403,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </thead>
           <tbody><tr>
           <td><code>MMCA.Common.API.Tests</code></td>
-          <td>153</td>
+          <td>155</td>
           <td>Tests for <code>ApiControllerBase</code>, exception handlers, idempotency filter, the shared middleware pipeline, JWKS endpoint (also the consolidated home of the ADC/Store middleware coverage), session-cookie auth, CSV export and tenant resolution</td>
           </tr>
           <tr>
@@ -413,13 +413,13 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </tr>
           <tr>
           <td><code>MMCA.Common.UI.Tests</code></td>
-          <td>140</td>
+          <td>152</td>
           <td>bUnit component tests for shared Blazor components (login/register forms, nav, theming, notification pages)</td>
           </tr>
           <tr>
           <td><code>MMCA.Common.UI.Web.Tests</code></td>
-          <td>11</td>
-          <td>The Blazor Web host layer: <code>ServerTokenStorageService</code>, <code>BlazorCspPolicyProvider</code>, <code>WebFormFactor</code>, the trusted-caller header (<code>Security/TrustedCaller*Tests</code>) and the UI-host hardening kit (<code>Hardening/BoundedCircuitHandlerTests</code>, <code>Hardening/UiRateLimitingTests</code>)</td>
+          <td>12</td>
+          <td>The Blazor Web host layer: <code>ServerTokenStorageService</code>, <code>BlazorCspPolicyProvider</code>, <code>WebFormFactor</code>, the client-config endpoint (<code>ClientConfig/ClientConfigEndpointTests</code>), the trusted-caller header (<code>Security/TrustedCaller*Tests</code>) and the UI-host hardening kit (<code>Hardening/BoundedCircuitHandlerTests</code>, <code>Hardening/UiRateLimitingTests</code>)</td>
           </tr>
           </tbody></table></div>
           <p><strong>Hosting</strong></p>
@@ -468,7 +468,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </thead>
           <tbody><tr>
           <td><code>MMCA.Common.Architecture.Tests</code></td>
-          <td>215</td>
+          <td>230</td>
           <td>Thin subclasses of the shared bases plus the Common-only <code>*FitnessTests</code> family, alongside <code>CommonArchitectureMap</code> and the fake modules, drifted probes and fixtures the adversarial suites drive (see section 4)</td>
           </tr>
           </tbody></table></div>
@@ -517,7 +517,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           file, each from its own CI job, and both are described in section 7. Keeping them out of the <code>.slnx</code>
           is deliberate: a tier that needs Docker or a trusted development certificate must not be able to break
           a plain <code>dotnet build</code> of the solution for an engineer who has neither.</p>
-          <h3 id="mmcaadc-855-test-types-across-32-in-solution-projects--3-across-1-out-of-solution">MMCA.ADC, 855 test types across 32 in-solution projects + 3 across 1 out-of-solution</h3>
+          <h3 id="mmcaadc-853-test-types-across-32-in-solution-projects--3-across-1-out-of-solution">MMCA.ADC, 853 test types across 32 in-solution projects + 3 across 1 out-of-solution</h3>
           <p><strong>Unit, per-module, per-layer (Identity module)</strong></p>
           <div class="table-wrap"><table>
           <thead>
@@ -534,13 +534,13 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </tr>
           <tr>
           <td><code>MMCA.ADC.Identity.Application.Tests</code></td>
-          <td>35</td>
+          <td>34</td>
           <td>Command/query handler tests for register, login, external OAuth, profile management, plus the GDPR export path and the per-module export sections</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Identity.Shared.Tests</code></td>
-          <td>3</td>
-          <td>DTO/enum tests</td>
+          <td>2</td>
+          <td>The module&#39;s permission grants (<code>IdentityPermissionGrantsTests</code>) and the disabled attendee-query service (<code>DisabledAttendeeQueryServiceTests</code>)</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Identity.API.Tests</code></td>
@@ -579,12 +579,12 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Shared.Tests</code></td>
-          <td>18</td>
-          <td>DTO validation, enum coverage</td>
+          <td>9</td>
+          <td>DTO tests (category, event, session, speaker), the current-event defaults and selector, the Sessionize code format and the disabled event-live validation service</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.API.Tests</code></td>
-          <td>25</td>
+          <td>26</td>
           <td>Controller registration, route tests, <code>SponsorsControllerTests</code>, <code>PartnersControllerTests</code>, <code>SessionAssetsControllerTests</code>, the split event and speaker controllers (<code>EventLifecycleControllerTests</code>, <code>SpeakerLinksControllerTests</code>, <code>SpeakerSessionsControllerTests</code>), <code>ConferencePermissionGrantsTests</code> and <code>EntityExportAuthorizationTests</code></td>
           </tr>
           <tr>
@@ -595,11 +595,11 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <tr>
           <td><code>MMCA.ADC.Conference.Scoring.Evaluation.Tests</code></td>
           <td>10</td>
-          <td>The AI session scorer&#39;s behavioural suite: <code>GoldenReplayTests</code>, <code>PromptContractTests</code> and the opt-in <code>LiveJudgeTests</code> (<code>MMCA.ADC/MMCA.ADC.slnx:88</code>, in <code>CI.slnf:49</code>). Its 10 types are inside the 855 below (<code>00-inventory.md</code>, current scan); the gate that runs it is in section 7</td>
+          <td>The AI session scorer&#39;s behavioural suite: <code>GoldenReplayTests</code>, <code>PromptContractTests</code> and the opt-in <code>LiveJudgeTests</code> (<code>MMCA.ADC/MMCA.ADC.slnx:88</code>, in <code>CI.slnf:49</code>). Its 10 types are inside the 853 below (<code>00-inventory.md</code>, current scan); the gate that runs it is in section 7</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.UI.Tests</code></td>
-          <td>63</td>
+          <td>66</td>
           <td>bUnit tests for session/speaker components and dashboards, the sponsor create/detail pages and the public sponsor list</td>
           </tr>
           </tbody></table></div>
@@ -619,13 +619,13 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </tr>
           <tr>
           <td><code>MMCA.ADC.Engagement.Application.Tests</code></td>
-          <td>66</td>
+          <td>65</td>
           <td>Bookmark, feedback and live-layer handlers, plus the <code>CheckIns/</code> subtree (attendee, manual, room and sponsor-visit check-in, badge issue, attendance stats) and the <code>Points/</code> subtree (awarder, leaderboard, my-points, organizer overview, and the domain/integration-event points handlers)</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Engagement.Shared.Tests</code></td>
-          <td>7</td>
-          <td>DTO tests, plus the badge payload, check-in scope names and settings, and the points settings and subject keys</td>
+          <td>6</td>
+          <td>The badge payload, check-in scope names and settings, the points settings and subject keys, and the disabled bookmark-count service (<code>DisabledBookmarkCountServiceTests</code>)</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Engagement.API.Tests</code></td>
@@ -654,8 +654,8 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </thead>
           <tbody><tr>
           <td><code>MMCA.ADC.Notification.Application.Tests</code></td>
-          <td>5</td>
-          <td>Live-channel publish path</td>
+          <td>4</td>
+          <td><code>AttendeeNotificationRecipientProviderTests</code>, <code>UserNotificationExportServiceTests</code> and <code>DependencyInjectionTests</code>, over a shared <code>Helpers/TestSupport</code></td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Notification.API.Tests</code></td>
@@ -674,8 +674,8 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </thead>
           <tbody><tr>
           <td><code>MMCA.ADC.Architecture.Tests</code></td>
-          <td>51</td>
-          <td>42 fitness-function classes plus <code>AdcArchitectureMap</code> (see section 4)</td>
+          <td>56</td>
+          <td>54 fitness-function classes plus <code>AdcArchitectureMap</code> and the <code>ServiceModels</code> fixture (see section 4)</td>
           </tr>
           </tbody></table></div>
           <p><strong>Hosts and services</strong></p>
@@ -699,8 +699,8 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </tr>
           <tr>
           <td><code>MMCA.ADC.UI.Web.Tests</code></td>
-          <td>4</td>
-          <td>The Blazor Web head itself: <code>SecurityHeadersTests</code> and <code>UiRateLimitingTests</code> against a <code>ConferenceUiHostApplicationFactory</code>, plus <code>BoundedCircuitHandlerTests</code> (<code>MMCA.ADC/MMCA.ADC.slnx:117</code>, in <code>CI.slnf:61</code>)</td>
+          <td>7</td>
+          <td>The Blazor Web head itself: <code>SecurityHeadersTests</code> and <code>UiRateLimitingTests</code> against a <code>ConferenceUiHostApplicationFactory</code>, plus <code>BoundedCircuitHandlerTests</code>, <code>FallbackAuthorizationTests</code>, <code>ClientConfigEndpointTests</code> and <code>SerilogBootstrapTests</code> (<code>MMCA.ADC/MMCA.ADC.slnx:117</code>, in <code>CI.slnf:61</code>)</td>
           </tr>
           </tbody></table></div>
           <p><strong>Integration (per-service WebApplicationFactory, in <code>MMCA.ADC.Integration.slnf</code> only)</strong></p>
@@ -785,17 +785,19 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           </tbody></table></div>
           <h3 id="test-type-totals">Test-type totals</h3>
           <ul>
-          <li><strong>MMCA.Common:</strong> the 16 in-solution projects sum to 58 + 62 + 397 + 496 + 1 + 37 + 153 + 16 + 140 +
-          11 + 50 + 4 + 8 + 7 + 27 + 215 = <strong>1,682</strong>; the 6 out-of-solution projects add 11 + 20 + 2 + 6 + 7 +
-          3 = <strong>49</strong>, for <strong>1,731</strong>.</li>
-          <li><strong>MMCA.ADC:</strong> 73 (Identity) + 354 (Conference, incl. the 10-type scoring evaluation suite) + 135 (Engagement) + 6 (Notification) + 51
+          <li><strong>MMCA.Common:</strong> the 16 in-solution projects sum to 58 + 62 + 398 + 499 + 1 + 37 + 155 + 16 + 152 +
+          12 + 50 + 4 + 8 + 7 + 27 + 230 = <strong>1,716</strong>; the 6 out-of-solution projects add 11 + 20 + 2 + 6 + 7 +
+          3 = <strong>49</strong>, for <strong>1,765</strong>.</li>
+          <li><strong>MMCA.ADC:</strong> 71 (Identity) + 349 (Conference, incl. the 10-type scoring evaluation suite) + 133 (Engagement) + 5 (Notification) + 56
           (architecture) + 108 (four integration projects) + 16 (two Testcontainers tiers) + 9 (Gateway) + 7
-          (Services) + 4 (UI.Web) + 92 (E2E) = <strong>855</strong> in-solution, plus the 3-type AppHost smoke project =
-          <strong>858</strong>.</li>
-          <li><strong>Combined test projects: 2,589.</strong> Separately, the five shipped testing packages contribute
-          another <strong>145</strong> types (<code>MMCA.Common.Testing</code> 23, <code>.Testing.Architecture</code> 66, <code>.Testing.Aspire</code> 10,
-          <code>.Testing.E2E</code> 30, <code>.Testing.UI</code> 16): those are shipped product, not tests, which is why they are
-          counted apart.</li>
+          (Services) + 7 (UI.Web) + 92 (E2E) = <strong>853</strong> in-solution, plus the 3-type AppHost smoke project =
+          <strong>856</strong>.</li>
+          <li><strong>Combined test projects: 2,621.</strong> Separately, the five shipped testing packages contribute
+          another <strong>154</strong> types (<code>MMCA.Common.Testing</code> 25, <code>.Testing.Architecture</code> 68, <code>.Testing.Aspire</code> 10,
+          <code>.Testing.E2E</code> 32, <code>.Testing.UI</code> 19): those are shipped product, not tests, which is why they are
+          counted apart. The inventory also lists <code>MMCA.Common.AI.Testing</code> (5 types,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.AI.Testing/</code>), which ships beside the AI package rather
+          than in this family and is not in the 154.</li>
           </ul>
           <p>[Rubric §14, Testability &amp; Test Strategy]: §14 assesses the breadth and meaningfulness of the
           test suite across all layers; the project layout above, unit per layer, arch per repo,
@@ -1420,11 +1422,11 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <p>The walkthroughs below describe <strong>what each rule enforces</strong> (and the count of facts it produces);
           the rule <em>implementations</em> live in the shared package&#39;s <code>ArchitectureRules.*</code> + <code>*TestsBase</code> files,
           not in the per-repo test class.</p>
-          <h3 id="mmcacommonarchitecturetests-215-types">MMCA.Common.Architecture.Tests, 215 types</h3>
+          <h3 id="mmcacommonarchitecturetests-230-types">MMCA.Common.Architecture.Tests, 230 types</h3>
           <p>Located at <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/</code>, filed into the same
           per-area folders as the rule library (<code>Api/</code>, <code>Contracts/</code>, <code>Cqrs/</code>, <code>Domain/</code>, <code>Governance/</code>,
           <code>Layering/</code>, <code>Ui/</code>) plus the <code>*Fixtures/</code> trees the adversarial suites drive. Beside the test
-          classes sit <code>CommonArchitectureMap</code>, <code>GlobalUsings.cs</code> and the fixture files; most of the 215
+          classes sit <code>CommonArchitectureMap</code>, <code>GlobalUsings.cs</code> and the fixture files; most of the 230
           inventoried types are those fakes, drifted probes and fixtures, which is why the type count runs so
           far ahead of the number of test classes. The project falls into two halves:</p>
           <p><strong>Thin subclasses of a shared mapped base</strong> (about half the files): <code>LayerDependencyTests</code>,
@@ -1570,9 +1572,9 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           Supply-Chain]: §32 assesses whether dependency versions are tracked, pinned, and protected against
           accidental bumps; this is the build-time gate for the most dangerous version upgrades in the codebase.
           (See the primer <code>00-primer.md#nuget-lock-files--pinned-audited-sources</code> for context.)</p>
-          <h3 id="mmcaadcarchitecturetests-51-types">MMCA.ADC.Architecture.Tests, 51 types</h3>
-          <p>Located at <code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/</code>: 42 fitness-function classes
-          plus <code>AdcArchitectureMap</code>. Like the Common project, most are thin subclasses of the shared
+          <h3 id="mmcaadcarchitecturetests-56-types">MMCA.ADC.Architecture.Tests, 56 types</h3>
+          <p>Located at <code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/</code>: 54 fitness-function classes
+          plus <code>AdcArchitectureMap</code> and the <code>ServiceModels</code> fixture<span class="cite"><span> (<code>Domain/DeleteBehaviorConventionTests.cs:70</code>)</span></span>. Like the Common project, most are thin subclasses of the shared
           <code>*TestsBase</code> classes from <code>MMCA.Common.Testing.Architecture</code>, referenced as a NuGet package
           (<span class="cite"><span><code>MMCA.ADC.Architecture.Tests.csproj:41</code></span></span>; the project also references <code>MMCA.Common.Testing</code> at line
           43 for <code>DecoratorPipelineOrderTestsBase</code> and <code>MiddlewarePipelineOrderTestsBase</code>). Each supplies
@@ -1974,7 +1976,7 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           <code>continue-on-error</code> only after it earns a track record, or deleted if it proves to be a flake
           generator. That is what an honestly staged new gate looks like.</p>
           <h3 id="mmcacommon-unit-level-infrastructure-tests">MMCA.Common unit-level infrastructure tests</h3>
-          <p><code>MMCA.Common.Infrastructure.Tests</code> (496 types) uses SQLite-backed <code>EnsureCreated</code> contexts for
+          <p><code>MMCA.Common.Infrastructure.Tests</code> (499 types) uses SQLite-backed <code>EnsureCreated</code> contexts for
           tests that need a real EF pipeline, with <code>MMCA.Common.Infrastructure.Tests.MigrationsFixture</code> beside
           it as the real migrations assembly those tests point EF at. SQLite avoids the SQL Server dependency
           entirely, which is why <code>MMCA.Common</code> builds and tests without any SQL Server or Docker in the local
@@ -2019,6 +2021,16 @@ dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/
           residual first-navigation latency (line 22). The note beneath them (lines 23-25) is the kind of thing
           worth keeping: a red run here is residual cold-start timeouts, not an a11y or product regression, so
           do not &quot;fix&quot; it by disabling prerender.</p>
+          <p>When a run does go red, the evidence is in the processes&#39; own logs, not the AppHost&#39;s. The
+          <code>Collect service logs</code> step runs on <code>always()</code> and sweeps the working tree, <code>$HOME</code> and <code>/tmp</code> for
+          every <code>MMCAADC*.txt</code> rolling Serilog file, then flattens them into <code>artifacts/service-logs/</code><span class="cite"><span>
+          (<code>e2e.yml:334-349</code>)</span></span>. The glob covers the four services and the UI host (<code>MMCAADCUIWeb&lt;date&gt;.txt</code>),
+          and the UI host is in the sweep because it runs the Blazor Server circuit (lines 336-337). The search
+          is that broad because the directory each process writes to depends on the working directory Aspire
+          launches it from, and it is needed at all because the AppHost orchestrator log carries only DCP and
+          dashboard chatter, never the services&#39; own output (lines 338-341). The bundle is uploaded only on
+          <code>failure()</code> with a 3-day retention (lines 355-365): a green run needs no offline triage, and each
+          browser&#39;s diagnostics bundle runs to roughly 350 MB.</p>
           <p>The cross-browser matrix runs the same suite once per engine by varying <code>E2E_BROWSER</code>:
           <code>chromium</code>, <code>firefox</code>, <code>webkit</code>. Mobile is covered by responsive layout testing (grid to card at a
           narrow viewport), not a separate app. [Rubric §22, Responsive &amp; Cross-Browser/Device]: §22

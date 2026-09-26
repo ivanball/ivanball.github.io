@@ -1910,10 +1910,16 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           Scalability] budgets are enforced inside the deploy-gating chromium leg rather than only by the monthly
           k6 run. <code>E2E_TRACE</code> with its <strong>trailing slash</strong> selects directory mode, one <code>&lt;TestName&gt;.zip</code> per <em>failed</em>
           test<span class="cite"><span> (<code>e2e.yml:319-324</code>)</span></span>, which is what makes a red run diagnosable offline instead of by re-running it.</p>
-          <p><strong>Steps 8 to 10, Collect logs, stop stack, upload diagnostics</strong><span class="cite"><span> (<code>e2e.yml:334-364</code>)</span></span>: on <code>always()</code> the job
-          collects each service&#39;s Serilog file into <code>artifacts/service-logs</code><span class="cite"><span> (<code>e2e.yml:334-348</code>)</span></span> and kills the
-          AppHost<span class="cite"><span> (<code>e2e.yml:350-352</code>)</span></span>. The upload, however, is <strong>failure-only</strong> (<code>if: failure()</code>, <span class="cite"><span><code>e2e.yml:358</code></span></span>)
-          with a 3-day retention: the bundle runs about 350 MB per browser, and a green run produces no per-test
+          <p><strong>Steps 8 to 10, Collect logs, stop stack, upload diagnostics</strong><span class="cite"><span> (<code>e2e.yml:334-365</code>)</span></span>: on <code>always()</code> the job
+          collects the Serilog rolling files of the four services <strong>and</strong> of the UI host into <code>artifacts/service-logs</code><span class="cite"><span>
+          (<code>e2e.yml:334-349</code>)</span></span> and kills the AppHost<span class="cite"><span> (<code>e2e.yml:351-353</code>)</span></span>. One glob, <code>MMCAADC*.txt</code>, matches both
+          <code>MMCAADC&lt;Module&gt;Service&lt;date&gt;.txt</code> and <code>MMCAADCUIWeb&lt;date&gt;.txt</code><span class="cite"><span> (<code>e2e.yml:336-337</code>, <code>e2e.yml:345</code>)</span></span>. The UI
+          host log matters because the UI host runs the Blazor Server circuit the suite drives, so a circuit drop or a
+          prerender failure shows up there and in no service log. The step searches the working tree, <code>$HOME</code> and
+          <code>/tmp</code> and flattens every hit into one folder<span class="cite"><span> (<code>e2e.yml:344-348</code>)</span></span>, because the directory each file lands in
+          depends on the working directory Aspire launches the process from, and the AppHost orchestrator log only
+          carries orchestration chatter, never the processes&#39; own logs<span class="cite"><span> (<code>e2e.yml:338-341</code>)</span></span>. The upload, however, is
+          <strong>failure-only</strong> (<code>if: failure()</code>, <span class="cite"><span><code>e2e.yml:359</code></span></span>) with a 3-day retention<span class="cite"><span> (<code>e2e.yml:365</code>)</span></span>: the bundle runs about 350 MB per browser, and a green run produces no per-test
           traces and needs no offline triage. Because the collect step still runs on <code>always()</code>, a startup failure
           where no test ran at all is exactly the case that does get its artifact.</p>
           <p>[Rubric §33, Developer Experience &amp; Inner Loop] is served: the diagnostics upload makes CI failures
@@ -2289,9 +2295,16 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           restore for the RTO record, verifies it comes back Online, then deletes the copy, the live databases are
           never touched (<span class="cite"><span><code>dr-drill.yml:3-5</code></span></span>, Monday 06:00 UTC cron at <span class="cite"><span><code>dr-drill.yml:31-33</code></span></span>). A scheduled run picks
           its target by <strong>rotating</strong> across the four live per-service databases by ISO week number, so each one
-          gets a recovery proof roughly monthly (<span class="cite"><span><code>dr-drill.yml:7-10</code></span></span>, selection at <span class="cite"><span><code>dr-drill.yml:53-56</code></span></span>); a
-          dispatch names the database explicitly through a <code>choice</code> input<span class="cite"><span> (<code>dr-drill.yml:17-26</code>)</span></span>. One drill a week
-          that always restored the same database would prove the <em>procedure</em>, not the fleet.
+          gets a recovery proof roughly monthly (<span class="cite"><span><code>dr-drill.yml:7-10</code></span></span>, selection at <span class="cite"><span><code>dr-drill.yml:70-76</code></span></span>); a
+          dispatch names the database explicitly through a <code>choice</code> input<span class="cite"><span> (<code>dr-drill.yml:18-26</code>)</span></span>. One drill a week
+          that always restored the same database would prove the <em>procedure</em>, not the fleet. The <code>drill</code> job runs
+          under a 60-minute cap<span class="cite"><span> (<code>dr-drill.yml:49</code>)</span></span>, and the comment above it<span class="cite"><span> (<code>dr-drill.yml:42-48</code>)</span></span> says why it is
+          not 30: the 2026-09-14 scheduled drill was killed at the old 30-minute limit and recorded no proof. A
+          measured PITR restore of an <code>ADC_*</code> database takes minutes, but Azure SQL queues the restore on the
+          platform and its duration varies run to run, so 60 leaves headroom for a slow one (MMCA.Store raised the
+          same job to 60 after the same failure). The cap is load-bearing beyond the drill itself: <code>dr-freshness</code>
+          consumes this workflow&#39;s last success, so a drill that times out does not merely lose one run, it moves
+          the deploy toward a hard block.
           <code>cross-service-tests.yml</code><span class="cite"><span>
           (<code>cross-service-tests.yml:6-10</code>)</span></span> is the Testcontainers tier that boots the three REST hosts in one process
           against a real SQL Server <strong>and</strong> a real RabbitMQ, exercising the genuine outbox to broker to consumer
@@ -2325,8 +2338,8 @@ openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem
           <p>The drill also cleans up when it does not finish. The script deletes its restored copy in a <code>finally</code> block,
           but a job cancelled at <code>timeout-minutes</code> never reaches it, and the weekly rotation means the next run targets
           a different database, so its stale-name check would not remove the leftover either; the comment<span class="cite"><span>
-          (<code>dr-drill.yml:89-93</code>)</span></span> records the 2026-09-14 scheduled run that left <code>ADC_Engagement-drill</code> at Basic-tier
-          cost for five days. The <strong>Remove leftover drill copies</strong> step<span class="cite"><span> (<code>dr-drill.yml:94-105</code>)</span></span> runs under
+          (<code>dr-drill.yml:96-100</code>)</span></span> records the 2026-09-14 scheduled run that left <code>ADC_Engagement-drill</code> at Basic-tier
+          cost for five days. The <strong>Remove leftover drill copies</strong> step<span class="cite"><span> (<code>dr-drill.yml:101-112</code>)</span></span> runs under
           <code>if: always()</code>, so on cancel and on failure too, finds the <code>adc-prod-sql-*</code> server (warning and exiting
           cleanly when there is none) and deletes every database on it whose name ends in <code>-drill</code>, not just this run&#39;s.
           [Rubric section 31, Cost/FinOps] assesses whether spend is bounded by design rather than by vigilance; this

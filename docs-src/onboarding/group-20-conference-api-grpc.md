@@ -58,7 +58,7 @@ category) and so their write commands carry a parent identifier the generic crea
 supply. And **bespoke controllers** (seven) sit apart:
 [`SessionSelectionController`](#sessionselectioncontroller) derives from Common's
 [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase)
-(`SessionSelectionController.cs:40`), [`SessionAssetsController`](#sessionassetscontroller) from the
+(`SessionSelectionController.cs:41`), [`SessionAssetsController`](#sessionassetscontroller) from the
 same base
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionAssets/SessionAssetsController.cs:51,59`),
 and [`ServiceInfoController`](#serviceinfocontroller) from the
@@ -68,7 +68,7 @@ shared
 can model. The other four are **split-outs**, also on `ApiControllerBase`, that exist for a
 structural reason rather than a business one: ADC's architecture tests cap a controller's
 constructor at ten dependencies
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/ConstructorDependencyCountTests.cs:52`),
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/ConstructorDependencyCountTests.cs:56`),
 and [`SessionsController`](#sessionscontroller) already sits exactly at that ceiling
 (`SessionsController.cs:44-54`), so the non-CRUD sub-resources of the three busiest aggregates moved
 into siblings. [`EventLifecycleController`](#eventlifecyclecontroller) holds the event publication
@@ -110,10 +110,10 @@ is written once in Common, and a per-entity controller has almost no reason to c
 The single most important thing to learn before editing any file here is **where row scoping lives**.
 It is not threaded through each action: the framework base declares one hook,
 `GetReadSpecificationAsync`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:597`), and
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:531`), and
 every read action (both list overloads, the lookup, the by-id read and the CSV export) calls it
-(`EntityControllerBase.cs:115,170,264,378,422`). Its default answer is the synchronous half,
-`GetExportSpecification` (`EntityControllerBase.cs:626`), itself `null`, so a controller that
+(`EntityControllerBase.cs:113,168,262,312,356`). Its default answer is the synchronous half,
+`GetExportSpecification` (`EntityControllerBase.cs:560`), itself `null`, so a controller that
 overrides neither reads unscoped. Thirteen of the twenty-three Conference controllers override one of the
 two. Ten override the asynchronous hook because their rule is resolved through a query handler:
 [`SessionsController`](#sessionscontroller) (`SessionsController.cs:75`),
@@ -138,7 +138,7 @@ than a hand-rolled bypass ternary. Consequences worth memorizing: a row the spec
 excludes is a **404, not a 403** (a "forbidden" answer would confirm the id exists), the lookup
 endpoint receives the same scope as the specification's `Criteria` predicate, and the read actions in
 these files are attribute-plus-guard passthroughs whose bodies call `base` behind one fail-closed
-check (for example `EventQuestionAnswersController.cs:141-151`, `SessionsController.cs:209-236`),
+check (for example `EventQuestionAnswersController.cs:141-151`, `SessionsController.cs:210-237`),
 kept only because the route attributes must sit on the derived action. That guard is worth reading
 once: because the hook answers `null` for two different reasons (an Organizer whose scoping is
 deliberately skipped, and a non-Organizer whose owner claim cannot be resolved), each answer-controller
@@ -150,7 +150,7 @@ exists so an export can no longer drift wider than the list it mirrors.
 
 The CSV export keeps a second, blunter guard on top of the hook. Twelve controllers override
 `ExportAsync` and return `Forbid()` outright for a caller who is not a privileged reader, rather than
-serving a scoped file: `SessionsController.cs:239-249`, `SpeakersController.cs:281-291`,
+serving a scoped file: `SessionsController.cs:240-250`, `SpeakersController.cs:281-291`,
 `EventsController.cs:128-138`, `SponsorsController.cs:145-155`, `ActivitiesController.cs:145-155`,
 `PartnersController.cs:136-150` (which belts the guard with a capability attribute on the export
 action itself, `[HasPermission(ConferencePermissions.PartnersManage)]` at `PartnersController.cs:135`),
@@ -180,7 +180,7 @@ a role policy: `SessionsManage` on [`SessionsController`](#sessionscontroller)
 `QuestionsManage` (`QuestionsController.cs:34`), `SpeakersManage`
 (`SpeakerCategoryItemsController.cs:47`) and `SessionSelectionManage`
 (`SessionSelectionController.cs:32`). Reads are then re-opened action by action with
-`[AllowAnonymous]` (BR-43 public browse, for example `SessionsController.cs:135`,
+`[AllowAnonymous]` (BR-43 public browse, for example `SessionsController.cs:136`,
 `RoomsController.cs:137`). Eleven capability constants exist in total, declared once in
 `ConferencePermissions.All`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:51-61`).
@@ -314,7 +314,7 @@ response rather than re-applying the form
 
 [`SessionsController`](#sessionscontroller) shows best *how* a controller earns its overrides. Every
 read action is `[AllowAnonymous]` and `[OutputCache(PolicyName = "SessionsCache")]`
-(`SessionsController.cs:135-136,161-162,210-211,222-223`, plus the split-out calendar read at
+(`SessionsController.cs:136-137,162-163,211-212,223-224`, plus the split-out calendar read at
 `SessionCalendarController.cs:35-36`). Its read hook dispatches
 [`GetPublicSessionFilterQuery`](group-18-conference-application.md#getpublicsessionfilterquery) so a
 non-organizer never sees declined sessions (BR-132/BR-49), and because `Session` and `Event` can live
@@ -334,21 +334,21 @@ affordance via
 lives on the split-out [`SessionCalendarController`](#sessioncalendarcontroller)
 (`SessionCalendarController.cs:34-45`), a BR-86 `X-Warning` header raised on create by comparing the
 request times against the event's `StartDate`/`EndDate` and on update from the handler's
-`HasDateRangeWarning` flag (`SessionsController.cs:272-286`, `:319-323`), and an explicit
+`HasDateRangeWarning` flag (`SessionsController.cs:273-287`, `:319-323`), and an explicit
 [`Idempotent`](group-12-api-hosting-mapping.md#idempotentattribute) declaration on the create override
 so the contract is visible at the ADC endpoint rather than only inherited (`:261`). Every mutating
 action ends by evicting the `conference:sessions` and `conference` output-cache tags
-(`SessionsController.cs:288,325,336`), the write-side half of the caching contract.
+(`SessionsController.cs:289,326,337`), the write-side half of the caching contract.
 
 Conditional writes are now uniform: an update states its precondition in the HTTP `If-Match` header
 and nowhere else. [`SupportsIfMatch`](group-12-api-hosting-mapping.md#supportsifmatchattribute) sits
-on the session update (`SessionsController.cs:301`), the event update (`EventsController.cs:215`),
+on the session update (`SessionsController.cs:302`), the event update (`EventsController.cs:215`),
 the event publish and unpublish (`EventLifecycleController.cs:53,86`), the speaker update (`SpeakersController.cs:324`), the category
 update (`ConferenceCategoriesController.cs:115`), the question update (`QuestionsController.cs:114`)
 and the sponsor, partner and activity updates (`SponsorsController.cs:183`,
 `PartnersController.cs:173`, `ActivitiesController.cs:183`), and
 each action pulls the token with `SupportsIfMatchAttribute.RequiredToken(HttpContext)`
-(`SessionsController.cs:310`, `EventsController.cs:224`, `EventLifecycleController.cs:61,94`,
+(`SessionsController.cs:311`, `EventsController.cs:224`, `EventLifecycleController.cs:61,94`,
 `SpeakersController.cs:339`,
 `SponsorsController.cs:192`, `PartnersController.cs:182`): a request with no header answers
 **428 Precondition Required** and a
@@ -449,7 +449,7 @@ itself is deliberately *not* inline here. It lives in
 module's Shared project, because the token-minting Identity host has to apply the same binding: a
 token must carry the permission claims of every module, not only of the module the minting host boots
 (`DependencyInjection.cs:35-39`). `Apply` grants
-[`RoleNames`](group-08-auth.md#rolenames)`.Organizer` all ten
+[`RoleNames`](group-24-identity-module.md#rolenames)`.Organizer` all ten
 [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions) capabilities and
 `ContentEditor` only the six-capability `ContentManagement` curation subset with no event structure,
 rooms, questions or session selection
@@ -889,7 +889,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   framework read hooks and does not override the inherited `/export`. That export therefore streams the
   whole item table, protected only by the class-level `CategoriesManage` capability, since the inherited
   action carries no `[AllowAnonymous]` of its own
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:206-211`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:204-209`).
 
 ---
 
@@ -1337,7 +1337,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   [`UpdateEventQuestionAnswerCommand`](group-18-conference-application.md#updateeventquestionanswercommand)
   and [`RemoveEventQuestionAnswerCommand`](group-18-conference-application.md#removeeventquestionanswercommand)
   (`:80-83`); [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) and
-  [`RoleNames`](group-08-auth.md#rolenames) for the scoping decision (`:84`);
+  [`RoleNames`](group-24-identity-module.md#rolenames) for the scoping decision (`:84`);
   [`OwnershipHelper`](group-08-auth.md#ownershiphelper), whose
   `GetOwnershipSpecification<TSpec, TId>` resolves the export scope (`:107-112`);
   [`OwnedByUserSpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#ownedbyuserspecificationtentity-tidentifiertype)
@@ -1353,11 +1353,11 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   authorization is enforced server-side and whether results are scoped per caller rather than merely hidden
   in the UI; `[Rubric §1, SOLID]` and `[Rubric §15, Best Practices & Code Quality]` assess whether a rule has one home.
   The Common base exposes two hooks:
-  `GetReadSpecificationAsync` (asynchronous, `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:597-599`)
+  `GetReadSpecificationAsync` (asynchronous, `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:531-533`)
   and its synchronous half `GetExportSpecification`
-  (`EntityControllerBase.cs:626`), which the asynchronous one returns by default. **Every** read action
+  (`EntityControllerBase.cs:560`), which the asynchronous one returns by default. **Every** read action
   calls the asynchronous hook once per request, before the first query: `GetAllAsync`
-  (`EntityControllerBase.cs:115`), the paged overload (`:170`), `GetAllForLookupAsync` (`:378`),
+  (`EntityControllerBase.cs:113`), the paged overload (`:170`), `GetAllForLookupAsync` (`:378`),
   `GetByIdAsync` (`:422`) and `ExportAsync` (`:264`). This controller overrides the synchronous half,
   because the rule needs nothing awaited: `GetExportSpecification()` delegates to
   `OwnershipHelper.GetOwnershipSpecification<OwnedByUserSpecification<EventQuestionAnswer,
@@ -1370,8 +1370,8 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   the scoping happens in SQL, paging counts stay honest, and nothing is filtered out of an already-fetched
   page. Two consequences the base states explicitly: the specification never replaces the caller's own
   `filters` (the query service ANDs the two, so a caller can only narrow what the rule already allows,
-  `EntityControllerBase.cs:580-586`), and a `GetById` the specification rejects answers **404, not 403**,
-  because a "forbidden" would confirm the id exists (`EntityControllerBase.cs:587-591`). Because one
+  `EntityControllerBase.cs:514-520`), and a `GetById` the specification rejects answers **404, not 403**,
+  because a "forbidden" would confirm the id exists (`EntityControllerBase.cs:521-525`). Because one
   hook override cannot itself prevent a missing owner claim from reaching the query as `null`, the four
   read actions carry a guard-plus-passthrough body rather than the pure passthrough an unguarded override
   would allow (`EventQuestionAnswersController.cs:107-112`, action bodies at `:141-195`).
@@ -1387,7 +1387,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   is the same 2026-08-31 resolvable-owner rule ADR-033 states as Store's
   `OrdersController.RequireResolvableOwner`.
 - **Concept introduced, closing the CSV export as a row-scoping bypass.** The base ships a streaming CSV
-  endpoint, `ExportAsync` (`EntityControllerBase.cs:251`), whose remarks state the hazard plainly: it
+  endpoint, `ExportAsync` (`EntityControllerBase.cs:249`), whose remarks state the hazard plainly: it
   carries no authorization attributes of its own and inherits whatever the concrete controller declares
   (`:205-211`), and its rows are whatever the read hook allows, which is `null` by default (`:229-235`).
   A controller that row-scopes its lists but leaves both hooks at the default therefore hands every caller
@@ -1461,7 +1461,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Caveats / not-in-source**: the role gate on the export is now belt-and-braces rather than the only
   scoping, since the hook filters the export too. The base's remarks state that a controller which
   overrides the hook may relax such an interim role gate so an owner can export their own rows again
-  (`EntityControllerBase.cs:620-624`); this controller keeps the gate, so an attendee cannot export their
+  (`EntityControllerBase.cs:554-558`); this controller keeps the gate, so an attendee cannot export their
   own answers at all. Whether that is deliberate is not determinable from source.
 
 ---
@@ -1562,7 +1562,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   `GetPublicEventSpeakerFilterQuery` handler, which resolves the published-event id list in the Application
   layer (`:78-81`); a failed handler result degrades to `null` rather than failing the read (`:81`). The
   hook has to be asynchronous here precisely because the rule is resolved through a query handler, which is
-  the case the base's remarks describe (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:571-579`).
+  the case the base's remarks describe (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:505-513`).
   `[Rubric §12, Performance & Scalability]`: the reads are cached under the `EventsCache` policy (5-minute
   TTL, tags `conference` and `conference:events`,
   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:269`), which is exactly why the writes
@@ -1581,7 +1581,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
     doc comment (`:109-112`) names the side channel the hook closes: without the shared scope, a dropdown
     would enumerate the names the list endpoint hides. The base forwards the specification's `Criteria`
     predicate as the lookup filter, because the lookup query has no specification parameter
-    (`EntityControllerBase.cs:580-586`).
+    (`EntityControllerBase.cs:514-520`).
   - `ExportAsync` (`:139-153`) repeats the privileged-reader gate: `if (!IsPrivileged) return Forbid();`
     (`:147-150`), then `base.ExportAsync(...)` (`:152`). The doc comment states the leak an unscoped CSV
     would be: the junction rows of unpublished events, leaking exactly the existence the reads hide
@@ -1678,7 +1678,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   - All three mutations return `HandleFailure` *before* they evict (`:222, 251, 269`), so a failed command
     never disturbs the cache.
   - There is no `ExportAsync` override, and none is needed: the inherited action reads the same hook as the
-    lists (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:264`), so
+    lists (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:262`), so
     the CSV shows exactly what the list shows, and it stays behind the class-level `RoomsManage`
     capability because it carries no `[AllowAnonymous]` of its own.
 - **Why it's built this way**: rooms are read far more than they are edited (venue maps, schedule grids),
@@ -2004,12 +2004,13 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   plus one endpoint that **schedules** AI scoring of an event's sessions on the framework's durable
   internal-command processor.
 - **Depends on**: [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) (for the
-  `HandleFailure` Result-to-Problem-Details mapping, `SessionSelectionController.cs:40`); the
+  `HandleFailure` Result-to-Problem-Details mapping, `SessionSelectionController.cs:41`); the
   [`HasPermission`](group-08-auth.md#haspermissionattribute) attribute plus the
   [`ConferencePermissions`](group-17-conference-domain.md#conferencepermissions) catalog; four
   [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)
   injections (`SessionSelectionController.cs:34-37`);
-  [`IInternalCommandScheduler`](group-14-module-system-composition.md#iinternalcommandscheduler) (`:36`);
+  [`IInternalCommandScheduler`](group-14-module-system-composition.md#iinternalcommandscheduler) (`:38`); a
+  BCL `TimeProvider` (`:39`), used to stamp the scheduled command with the request instant;
   [`Result`](group-01-result-error-handling.md#result) and
   [`Error`](group-01-result-error-handling.md#error); the decision-support DTOs
   ([`SessionSelectionDashboardDTO`](group-17-conference-domain.md#sessionselectiondashboarddto),
@@ -2019,31 +2020,34 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   [`NonIdempotentAttribute`](group-12-api-hosting-mapping.md#nonidempotentattribute); a `FeatureGate`
   attribute gating on
   [`ConferenceFeatures`](group-17-conference-domain.md#conferencefeatures)`.SessionScoring`
-  (`SessionSelectionController.cs:113`); BCL `ILogger` and ASP.NET Core `[OutputCache]`.
+  (`SessionSelectionController.cs:126`); BCL `ILogger` (`:40`) and ASP.NET Core `[OutputCache]`.
 - **Concept introduced, moving long work off the request path onto a durable command processor (ADR-114).**
   `[Rubric §9, API & Contract Design]` (a focused, capability-scoped surface that answers with honest
   status codes) and `[Rubric §29, Resilience & Business Continuity]`. `ScoreSessionsAsync`
-  (`SessionSelectionController.cs:125`) is now **async**: it awaits
-  `internalCommandScheduler.ScheduleAsync(new ScoreEventSessionsInternalCommand(eventId), ...)`
-  (`:115-117`), a durable
+  (`SessionSelectionController.cs:129`) is **async**: it awaits
+  `internalCommandScheduler.ScheduleAsync(new ScoreEventSessionsInternalCommand(eventId, timeProvider.GetUtcNow().UtcDateTime), ...)`
+  (`:133-137`), a durable
   [`ScoreEventSessionsInternalCommand`](group-18-conference-application.md#scoreeventsessionsinternalcommand)
   scheduled through the framework's internal-command processor rather than the earlier in-process channel.
-  A schedule failure returns `HandleFailure(scheduled.Errors)` (`:119-122`); otherwise the action logs and
-  returns `Accepted()` (202) (`:124-125`). Unlike the earlier design there is no 409 conflict path at the
-  API edge: duplicate scheduling is absorbed by the durable handler's own per-event claim rather than
-  refused here, so only `[ProducesResponseType(StatusCodes.Status202Accepted)]` is declared (`:110`).
+  The injected `TimeProvider` stamps the command with the request instant, so a trigger queued behind an
+  already-running pass is claimed once that pass ends, and the pass that claims it skips every session
+  already scored since the request rather than since the claim (`:112-113`). A schedule failure returns
+  `HandleFailure(scheduled.Errors)` (`:139-142`); otherwise the action logs and returns `Accepted()` (202)
+  (`:144-145`). Unlike the earlier design there is no 409 conflict path at the API edge: duplicate
+  scheduling is absorbed by the durable handler's own per-event claim rather than refused here, so only
+  `[ProducesResponseType(StatusCodes.Status202Accepted)]` is declared (`:128`).
   `[Rubric §31, Cost/FinOps]` assesses whether spend is bounded by design rather than by hope: the action's
   own doc comment records that a duplicate trigger costs nothing but a row, because the handler takes a
   per-event claim before it starts, so a second pass for an event already being scored logs and completes
-  instead of paying for the same Anthropic calls twice (`:104-106`). `[Rubric §13, Observability &
+  instead of paying for the same Anthropic calls twice (`:109-111`). `[Rubric §13, Observability &
   Operability]` (structured, source-generated logging): the class is `partial` and declares one
-  `[LoggerMessage]` method, `LogScoringQueued` (`:128-129`), a compile-time generated, allocation-light log
+  `[LoggerMessage]` method, `LogScoringQueued` (`:148-149`), a compile-time generated, allocation-light log
   call. `[Rubric §12, Performance & Scalability]`: all four read endpoints carry
-  `[OutputCache(PolicyName = "ConferenceCache")]` (`:42, 56, 70, 84`).
+  `[OutputCache(PolicyName = "ConferenceCache")]` (`:46, 60, 74, 88`).
 - **Concept, opting *out* of idempotency with a written reason.** `[Rubric §9, API & Contract Design]`. Every
   other hand-written POST in this group is marked `[Idempotent]`; `ScoreSessionsAsync` is marked
   [`[NonIdempotent]`](group-12-api-hosting-mapping.md#nonidempotentattribute) instead, and the attribute
-  takes a mandatory justification string that is spelled out inline (`SessionSelectionController.cs:123`):
+  takes a mandatory justification string that is spelled out inline (`SessionSelectionController.cs:127`):
   scheduling is cheap and self-deduplicating, because the durable handler takes a per-event claim and skips
   a pass another replica is already running, so replaying the trigger costs one row rather than a second
   paid scoring run; caching the 202 instead would report acceptance for a request that never reached the
@@ -2051,25 +2055,25 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   in the source rather than a silently missing attribute.
 - **Concept, a feature gate on a scheduled (not inline) command.** `[Rubric §9, API & Contract Design]`.
   `ScoreSessionsAsync` also carries `[FeatureGate(ConferenceFeatures.SessionScoring)]`
-  (`SessionSelectionController.cs:113`), which mirrors the Sessionize refresh trigger's use of the same
+  (`SessionSelectionController.cs:126`), which mirrors the Sessionize refresh trigger's use of the same
   attribute, but for a different reason: because this action only *schedules* the command, the
   framework's `FeatureGateCommandDecorator` (which would otherwise short-circuit the command inline with a
   `NotFound` failure) does not run until the durable processor picks the job up minutes later. Without the
   action-level gate an organizer who had switched the pass off would still be told `202 Accepted` for work
   that is about to be refused. The gate covers only the scoring pass itself; the dashboard and any scores
-  already stored stay readable with the flag off (doc comment at `:99-108`).
+  already stored stay readable with the flag off (doc comment at `:115-123`).
 - **Walkthrough**
-  - Primary-constructor injection of the four query handlers, the internal-command scheduler, and the
-    logger (`SessionSelectionController.cs:33-39`); the base is
-    [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) (`:37`).
+  - Primary-constructor injection of the four query handlers, the internal-command scheduler, the time
+    provider, and the logger (`SessionSelectionController.cs:33-40`); the base is
+    [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) (`:41`).
   - Each read action follows the same shape: dispatch the query, then
-    `result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value)`. `GetDashboardAsync` (`:42`),
-    `GetCategoryDistributionAsync` (`:56`), `GetSpeakerOverlapAsync` (`:70`), and
-    `GetContentSimilarityAsync` (`:84`, which takes a `minimumSimilarity = 0.3` threshold query
-    parameter, `:86`).
-  - `ScoreSessionsAsync` (`:111`) is the only write, and now the only `async` action on the controller: it
-    awaits the schedule call and `.ConfigureAwait(false)`s it (`:115-117`) before checking
-    `scheduled.IsFailure` (`:119`).
+    `result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value)`. `GetDashboardAsync` (`:47`),
+    `GetCategoryDistributionAsync` (`:61`), `GetSpeakerOverlapAsync` (`:75`), and
+    `GetContentSimilarityAsync` (`:89`, which takes a `minimumSimilarity = 0.3` threshold query
+    parameter, `:91`).
+  - `ScoreSessionsAsync` (`:129`) is the only write, and the only `async` action on the controller: it
+    builds the command with `timeProvider.GetUtcNow().UtcDateTime` (`:135`), awaits the schedule call and
+    `.ConfigureAwait(false)`s it (`:133-137`) before checking `scheduled.IsFailure` (`:139`).
 - **Why it's built this way**: an earlier revision ran the scoring pass through an in-process, channel-based
   queue owned by this module; ADR-114 replaces that in-process design with the framework's internal-command
   processor, a durable job queue that survives a deploy or scale-in instead of losing an in-flight run. The
@@ -2163,7 +2167,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   and
   [`RemoveSessionQuestionAnswerCommand`](group-18-conference-application.md#removesessionquestionanswercommand)
   (`:78-81`); [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) with
-  [`RoleNames`](group-08-auth.md#rolenames) for the scoping decision (`:82`);
+  [`RoleNames`](group-24-identity-module.md#rolenames) for the scoping decision (`:82`);
   [`OwnershipHelper`](group-08-auth.md#ownershiphelper) (`:526`) and
   [`OwnedByUserSpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#ownedbyuserspecificationtentity-tidentifiertype);
   the [`IdempotentAttribute`](group-12-api-hosting-mapping.md#idempotentattribute); the
@@ -2278,10 +2282,12 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   the query service can apply; privileged readers get `null`.
   `[Rubric §12, Performance & Scalability]`: reads are `[OutputCache(PolicyName = "SessionsCache")]`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:275`) and the default sort is the
-  `"StartsAt,RoomId"` constant (`:133`), which sorts the schedule chronologically then by room. The comment
-  above it (`:131-132`) records the mechanism: the "ascending" suffix `QueryFieldService.ApplySorting`
-  appends binds only to the last column in Dynamic LINQ, and the leading column defaults to ascending, so
-  one string sorts both columns ascending.
+  single-column `nameof(SessionDTO.StartsAt)` constant (`:133`), sorting the schedule chronologically. The
+  comment above it (`:130-132`) records why it is one column rather than the earlier comma-joined string:
+  `QueryFieldService` resolves a sort column against the entity's own properties, so a comma-joined
+  `"StartsAt,RoomId"` value matches none of them and silently falls back to the framework's `Id` tie-break
+  instead of sorting by room; sessions that share a start time now fall through to that same `Id` tie-break
+  rather than to a secondary room sort.
 - **Walkthrough**
   - `BuildPagedSessionSpecificationAsync` (`SessionsController.cs:105-128`, doc and remarks `:88-105`) is
     the paged read's specification builder: it starts from the hook (`:110`), then intercepts and removes
@@ -2604,7 +2610,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
 - **Depends on**: [ICurrentUserService](group-08-auth.md#icurrentuserservice) (the type it extends, and the
   source of `IsInRole`) and [ConferenceReadAudience](group-17-conference-domain.md#conferencereadaudience),
   whose `PrivilegedRoles` list it evaluates (`CurrentUserServiceExtensions.cs:25`). Transitively that list
-  is [RoleNames](group-08-auth.md#rolenames)`.Organizer` and `RoleNames.ContentEditor`
+  is [RoleNames](group-24-identity-module.md#rolenames)`.Organizer` and `RoleNames.ContentEditor`
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferenceReadAudience.cs:34-38`).
   Externals: LINQ's `Any`.
 - **Concept introduced, read visibility is not authorization.** The remarks on the method are unusually
@@ -2690,7 +2696,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   `ExportAsync`: with no row scoping on the reads there is no scoping for an export to bypass, and because
   the inherited `/export` action carries no `[AllowAnonymous]` of its own it stays behind the class-level
   capability gate (the symmetry the base documents at
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:205-211`).
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:203-209`).
   The one bespoke command here, `UpdateQuestionCommand`, exists because a question update is not a plain
   property patch; the conditional-write contract is the same one taught at
   [`ConferenceCategoriesController`](#conferencecategoriescontroller).
@@ -2951,7 +2957,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   [`GetSpeakersByEventFilterQuery`](group-18-conference-application.md#getspeakersbyeventfilterquery) and
   [`GetPublicSpeakerFilterQuery`](group-18-conference-application.md#getpublicspeakerfilterquery)
   (`:47-48`); [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) with
-  [`RoleNames`](group-08-auth.md#rolenames) and the
+  [`RoleNames`](group-24-identity-module.md#rolenames) and the
   [`CurrentUserServiceExtensions`](#currentuserserviceextensions) helper (`:49, 56`); `IOutputCacheStore`
   (`:50`); the [`SpeakerDTO`](group-17-conference-domain.md#speakerdto) and
   [`SpeakerUpdateRequest`](group-18-conference-application.md#speakerupdaterequest); the
@@ -3058,7 +3064,7 @@ are the `[Rubric §9, API & Contract Design]` evidence, and the `Replace`-driven
   [`GetSessionBookmarkCountQuery`](group-18-conference-application.md#getsessionbookmarkcountquery) and
   [`GetSessionBookmarkCountsQuery`](group-18-conference-application.md#getsessionbookmarkcountsquery)
   (`:30-32`); [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) with
-  [`RoleNames`](group-08-auth.md#rolenames) (`:33`); and the
+  [`RoleNames`](group-24-identity-module.md#rolenames) (`:33`); and the
   [`SessionFeedbackDTO`](group-17-conference-domain.md#sessionfeedbackdto).
 - **Concept introduced**: none new; see the constructor-dependency-ceiling split note at
   [`SpeakerLinksController`](#speakerlinkscontroller).
