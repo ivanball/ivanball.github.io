@@ -3924,19 +3924,19 @@ in-process graph with no gRPC clients, which is precisely the reversibility
 
 - **Where it's used**: by two test classes, in two different assemblies, for two different halves of
   the same behavior.
-  [`MigrationApplyProofTests`](group-28-testing-infrastructure.md#migrationapplyprooftests) applies it
+  [`MigrationApplyProofTests`](group-28-testing-infrastructure.md#per-project-test-rollup) applies it
   through [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory) and asserts the
   history row, the created table, and that nothing stays pending
   (`MigrationApplyProofTests.cs:94-106`); that asking what is pending applies nothing (`:110-120`);
   and that a second `MigrateAsync` over an up-to-date database is a no-op rather than a re-apply whose
   `CREATE TABLE` would collide (`:124-133`).
-  [`DatabaseInitializationExtensionsTests`](group-28-testing-infrastructure.md#databaseinitializationextensionstests)
+  [`DatabaseInitializationExtensionsTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
   uses it for the production guard in
   [`DatabaseInitializationExtensions`](group-12-api-hosting-mapping.md#databaseinitializationextensions):
   the `"None"` strategy must throw naming the pending migration and must apply nothing on the way out
   (`DatabaseInitializationExtensionsTests.cs:153-154`, `:167-174`).
   Its deliberate non-consumer is
-  [`DbContextFactoryMigrationTargetTests`](group-28-testing-infrastructure.md#dbcontextfactorymigrationtargettests),
+  [`DbContextFactoryMigrationTargetTests`](group-28-testing-infrastructure.md#per-project-test-rollup),
   which needs a migrations assembly that declares nothing.
 
 - **Caveats**: the assembly is a test fixture, never shipped: `IsPackable=false`

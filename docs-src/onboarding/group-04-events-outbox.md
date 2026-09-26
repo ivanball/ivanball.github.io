@@ -1962,10 +1962,10 @@ edge) are the primary references.
   whichever caller dispatched the event (the save-changes interceptor after `SaveChangesAsync`,
   [`InProcessEventBus`](#inprocesseventbus) or [`InProcessMessageBus`](#inprocessmessagebus), or the
   background [`OutboxProcessor`](#outboxprocessor)). The only subclass in the workspace today is
-  [`TestSafeDomainEventHandler`](group-28-testing-infrastructure.md#testsafedomaineventhandler)
+  [`TestSafeDomainEventHandler`](group-28-testing-infrastructure.md#per-project-test-rollup)
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DomainEvents/SafeDomainEventHandlerTests.cs:124`),
   driven by
-  [`SafeDomainEventHandlerTests`](group-28-testing-infrastructure.md#safedomaineventhandlertests),
+  [`SafeDomainEventHandlerTests`](group-28-testing-infrastructure.md#per-project-test-rollup),
   which pin the three behaviours: log **and** propagate, the log lands before the caller sees the
   exception, and `OperationCanceledException` passes through unlogged. The cross-module sibling for
   integration events is
@@ -2063,7 +2063,7 @@ edge) are the primary references.
   `UserDeletedPointsHandler`), and Store's `ProductVariantAddedHandler`
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:33`).
   Its behaviour is pinned by
-  [`ScopedIntegrationEventHandlerBaseTests`](group-28-testing-infrastructure.md#scopedintegrationeventhandlerbasetests).
+  [`ScopedIntegrationEventHandlerBaseTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
   At runtime the subclasses are reached either through
   [`DomainEventDispatcher`](#domaineventdispatcher) in monolith mode or through
   [`IntegrationEventConsumer<TEvent>`](#integrationeventconsumertevent) in broker mode.

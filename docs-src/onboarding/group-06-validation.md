@@ -3,17 +3,17 @@
 **What this group covers.** This is the framework-level **validation kit** that
 `MMCA.Common.Application` ships so every module validates input the same way. It has four parts:
 (1) a set of composable **FluentValidation rule sets**, eleven general-purpose ones in
-`CommonValidationRules.cs` ([`RequiredStringRules<T>`](#requiredstringrulest),
-[`OptionalStringRules<T>`](#optionalstringrulest), [`EmailRules<T>`](#emailrulest),
-[`AbsoluteUrlRules<T>`](#absoluteurlrulest), [`PositiveIntRules<T>`](#positiveintrulest),
-[`PositiveDecimalRules<T>`](#positivedecimalrulest), [`NonNegativeIntRules<T>`](#nonnegativeintrulest),
-[`RequiredIdRules<T, TId>`](#requiredidrulest-tid),
-[`OptionalPositiveIdRules<T, TId>`](#optionalpositiveidrulest-tid),
-[`PasswordRules<T>`](#passwordrulest), [`StrongPasswordRules<T>`](#strongpasswordrulest)) plus the
-six address-field rules ([`AddressLine1Rules<T>`](#addressline1rulest),
-[`AddressLine2Rules<T>`](#addressline2rulest), [`CityRules<T>`](#cityrulest),
+`CommonValidationRules.cs` ([`RequiredStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest),
+[`OptionalStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest), [`EmailRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest),
+[`AbsoluteUrlRules<T>`](#absoluteurlrulest), [`PositiveIntRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest),
+[`PositiveDecimalRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest), [`NonNegativeIntRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest),
+[`RequiredIdRules<T, TId>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest),
+[`OptionalPositiveIdRules<T, TId>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest),
+[`PasswordRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest), [`StrongPasswordRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest)) plus the
+six address-field rules ([`AddressLine1Rules<T>`](#addressline1rulest-addressline2rulest-cityrulest-countryrulest),
+[`AddressLine2Rules<T>`](#addressline1rulest-addressline2rulest-cityrulest-countryrulest), [`CityRules<T>`](#addressline1rulest-addressline2rulest-cityrulest-countryrulest),
 [`StateRules<T>`](#staterulest), [`ZipCodeRules<T>`](#zipcoderulest),
-[`CountryRules<T>`](#countryrulest)) and the [`AddressValidator`](#addressvalidator) that assembles
+[`CountryRules<T>`](#addressline1rulest-addressline2rulest-cityrulest-countryrulest)) and the [`AddressValidator`](#addressvalidator) that assembles
 them; (2) the shared helper that gives every one of those rules an optional machine-readable code,
 [`OptionalErrorCodeExtensions`](#optionalerrorcodeextensions); (3) one **convention validator**,
 [`CommandRequestValidator<TCommand, TRequest>`](#commandrequestvalidatortcommand-trequest), that
@@ -92,17 +92,17 @@ failure contract for every endpoint).
 `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs` is a tiny
 `AbstractValidator<T>` generic over the *parent* type, taking an `Expression<Func<T, ...>>` selector
 in its constructor and declaring its rules in an expression-bodied constructor. Because they are
-generic-plus-selector, the same [`EmailRules<T>`](#emailrulest)
+generic-plus-selector, the same [`EmailRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest)
 (`CommonValidationRules.cs:64`) validates a value object, a request DTO, or a command; a module
 composes it with FluentValidation's `Include(...)` instead of rewriting "non-empty, valid format, max
 length" each time. The bounds are parameters, never literals in the rule: ADC's registration
 validator passes `UserInvariants.EmailMaxLength` into `EmailRules<RegisterRequest>` and pairs it with
-[`StrongPasswordRules<T>`](#strongpasswordrulest) and two
-[`RequiredStringRules<T>`](#requiredstringrulest)
+[`StrongPasswordRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) and two
+[`RequiredStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest)
 (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/RegisterRequestValidator.cs:16-19`).
 The two password rules are the one place a literal bound is intentional: both pin 8 and 128
 characters (`CommonValidationRules.cs:179-180`, `:193-194`), and
-[`StrongPasswordRules<T>`](#strongpasswordrulest) adds four complexity `Matches` rules for uppercase,
+[`StrongPasswordRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) adds four complexity `Matches` rules for uppercase,
 lowercase, digit, and non-alphanumeric (`CommonValidationRules.cs:195-198`). That pair is
 `[Rubric §11, Security]` territory: the framework offers a weak-by-default floor and a strong
 variant, and the module picks, so a consumer cannot accidentally ship a two-character password field.
@@ -119,16 +119,16 @@ code is applied to **every** rule the class declares for that field, so one fiel
 code (`CommonValidationRules.cs:11-18`); a field whose separate bounds must answer under distinct
 codes still writes its own rules. This is what lets modules subclass a framework rule instead of
 bypassing it: ADC's `SessionEventIdRules<T>` derives from
-[`RequiredIdRules<T, TId>`](#requiredidrulest-tid) and passes `"Session.EventId.Required"`
+[`RequiredIdRules<T, TId>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) and passes `"Session.EventId.Required"`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionValidationRules.cs:24-29`),
 and Store's `ProductCategoryIdRules<T>` derives from
-[`OptionalPositiveIdRules<T, TId>`](#optionalpositiveidrulest-tid) with
+[`OptionalPositiveIdRules<T, TId>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) with
 `"Product.CategoryId.Invalid"`
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/Validation/ProductValidationRules.cs:47-51`).
 The two id rules also encode a deliberate difference in what "missing" means:
-[`RequiredIdRules<T, TId>`](#requiredidrulest-tid) uses `NotEmpty`, which rejects both `0` for an
+[`RequiredIdRules<T, TId>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) uses `NotEmpty`, which rejects both `0` for an
 integer key and `Guid.Empty` for a GUID key (`CommonValidationRules.cs:133-139`,
-`:147`), while [`OptionalPositiveIdRules<T, TId>`](#optionalpositiveidrulest-tid) uses
+`:147`), while [`OptionalPositiveIdRules<T, TId>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) uses
 `GreaterThan(default(TId))` on a nullable and relies on FluentValidation skipping a comparison rule
 when the property is `null`, so "positive when provided" needs no `When` clause and no per-pass
 recompiled selector (`CommonValidationRules.cs:154-158`, `:166`).
@@ -225,8 +225,8 @@ is dispatched. The pipeline reaches the Validating stage, which resolves every `
 the container holds: hand-written ones found by the assembly scan, plus the auto-registered
 `CommandRequestValidator` that forwards to the request's validators. Those validators run the composed
 rule sets: ADC's session rules, for instance, derive `SessionTitleRules<T>` from
-[`RequiredStringRules<T>`](#requiredstringrulest) and `SessionEventIdRules<T>` from
-[`RequiredIdRules<T, TId>`](#requiredidrulest-tid)
+[`RequiredStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) and `SessionEventIdRules<T>` from
+[`RequiredIdRules<T, TId>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionValidationRules.cs:13-14`,
 `:24-25`). If every validator passes, the Timeout and Transactional
 decorators run and the handler executes inside a transaction. If any fails, `ToErrors` converts the
@@ -404,7 +404,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   Whichever validator wins, it is invoked by
   [`ValidatingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#validatingcommanddecoratortcommand-tresult)
   before the handler runs. Behavior is pinned by `CommonValidationRulesTests` in
-  [group-27](group-28-testing-infrastructure.md#commonvalidationrulestests), which exercises both the
+  [group-27](group-28-testing-infrastructure.md#per-project-test-rollup), which exercises both the
   message and the optional-code path for each fragment
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:440-538`).
 
@@ -471,7 +471,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   in turn (`:73`), accumulating failures through
   [`ValidationFailureExtensions.ToErrors`](#validationfailureextensions) (`:82`). Covered by
   `CommandRequestValidatorTests` in
-  [group-27](group-28-testing-infrastructure.md#commandrequestvalidatortests).
+  [group-27](group-28-testing-infrastructure.md#per-project-test-rollup).
 
 ### AddressLine1Rules<T>, AddressLine2Rules<T>, CityRules<T>, CountryRules<T>
 
@@ -540,7 +540,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   [`AddressValidator`](#addressvalidator), which includes each of them bound to the corresponding
   `Address` property (`AddressValidationRules.cs:17-19`, `:22`). They are covered directly by
   `AddressValidationRulesTests` in
-  [group-27](group-28-testing-infrastructure.md#addressvalidationrulestests)
+  [group-27](group-28-testing-infrastructure.md#per-project-test-rollup)
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:19`,
   `:55`, `:82`, `:130`).
 
@@ -563,9 +563,9 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   (`MMCA.Common.Shared.ValueObjects`, imported at
   `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:4`). It sits at
   Level 4 purely because of that constant reference: structurally it is the same fragment shape as the
-  Level-0 [`OptionalStringRules<T>`](#optionalstringrulest).
+  Level-0 [`OptionalStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest).
 - **Concept**: the reusable rule-fragment idiom introduced by
-  [`RequiredStringRules<T>`](#requiredstringrulest) and the other
+  [`RequiredStringRules<T>`](#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) and the other
   `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs` fragments,
   specialised to one address field. `[Rubric §1, SOLID]` assesses whether each unit has one reason to
   change; this class has exactly one, the state field's contract, and the number that expresses that
@@ -593,7 +593,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
 - **Where it's used**: composed into [`AddressValidator`](#addressvalidator) at
   `AddressValidationRules.cs:20`, and available for direct `Include(...)` by any module request
   validator whose DTO carries loose address fields. It is exercised directly by
-  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#addressvalidationrulestests)
+  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:98`),
   which builds `new StateRules<TestAddressModel>(p => p.State)` against a model type unrelated to
   `Address` and is therefore a live demonstration that the fragment is genuinely parent-agnostic.
@@ -624,7 +624,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   constant.
 - **Where it's used**: included by [`AddressValidator`](#addressvalidator) at
   `AddressValidationRules.cs:21`, and covered in isolation by
-  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#addressvalidationrulestests)
+  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:114`),
   which asserts a failure at `ZipCodeMaxLength + 1` characters rather than at a hard-coded 21, so the
   test moves with the constant.
@@ -638,9 +638,9 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   `Address` properties.
 - **Depends on**: [`Address`](group-02-domain-building-blocks.md#address) (the validated type, imported
   at `AddressValidationRules.cs:4`) and the six Level-4 fragments
-  [`AddressLine1Rules<T>`](#addressline1rulest), [`AddressLine2Rules<T>`](#addressline2rulest),
-  [`CityRules<T>`](#cityrulest), [`StateRules<T>`](#staterulest), [`ZipCodeRules<T>`](#zipcoderulest),
-  and [`CountryRules<T>`](#countryrulest). Through those it depends transitively on
+  [`AddressLine1Rules<T>`](#addressline1rulest-addressline2rulest-cityrulest-countryrulest), [`AddressLine2Rules<T>`](#addressline1rulest-addressline2rulest-cityrulest-countryrulest),
+  [`CityRules<T>`](#addressline1rulest-addressline2rulest-cityrulest-countryrulest), [`StateRules<T>`](#staterulest), [`ZipCodeRules<T>`](#zipcoderulest),
+  and [`CountryRules<T>`](#addressline1rulest-addressline2rulest-cityrulest-countryrulest). Through those it depends transitively on
   [`AddressInvariants`](group-02-domain-building-blocks.md#addressinvariants), and on FluentValidation.
 - **Concept introduced, composing a value-object validator out of field fragments.**
   `[Rubric §2, Design Patterns]` assesses whether recognised patterns are applied where they earn their
@@ -654,7 +654,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   the class doc calls out explicitly at `AddressValidationRules.cs:8-12`).
   `[Rubric §14, Testability]`: because each field's rule is a separate type, a test can construct one
   fragment over a throwaway model, which is what
-  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#addressvalidationrulestests) does
+  [`AddressValidationRulesTests`](group-28-testing-infrastructure.md#per-project-test-rollup) does
   before also exercising the assembled composite
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/AddressValidationRulesTests.cs:10`
   holds the shared `AddressValidator` instance; `:144` is the all-fields-valid case).
@@ -779,7 +779,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   and [`EventSponsorshipPacketUrlRules<T>`](group-18-conference-application.md#eventsponsorshippacketurlrulest)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:87`).
   Each wrapper supplies its own module max-length constant. Direct coverage lives in
-  [`CommonValidationRulesTests`](group-28-testing-infrastructure.md#commonvalidationrulestests)
+  [`CommonValidationRulesTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Validation/CommonValidationRulesTests.cs:565`
   for the passing shapes, `:580` for rejected schemes, `:592` for the length bound, and `:604` for the
   supplied-error-code path).
@@ -852,7 +852,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   `nameof(LoginAsync)` (`MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:165`),
   `nameof(RegisterAsync)` (`:193`), and `nameof(RefreshTokenAsync)` (`:273`), each wrapping the result in
   `Result.Failure<AuthenticationResponse>(...)`. Covered by
-  [`ValidationFailureExtensionsTests`](group-28-testing-infrastructure.md#validationfailureextensionstests).
+  [`ValidationFailureExtensionsTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 
 - **Caveats / not-in-source**: the failure's `ErrorCode` is FluentValidation's per-rule code (for example
   `"NotEmptyValidator"`) unless a validator overrides it with `.WithErrorCode(...)`; this extension passes
@@ -948,7 +948,7 @@ contract the gate emits, and by the architecture fitness tests that keep the lay
   [`GetMyPointsHandler`](group-22-engagement-module.md#getmypointshandler)
   (`.../Points/UseCases/GetMyPoints/GetMyPointsHandler.cs:40`) passing `"Points.Forbidden"`. All of them
   take the defaults, so every one reports `"Access denied."` with `ErrorType.Forbidden`. Behavior is pinned
-  by [`CurrentUserServiceExtensionsTests`](group-28-testing-infrastructure.md#currentuserserviceextensionstests),
+  by [`CurrentUserServiceExtensionsTests`](group-28-testing-infrastructure.md#per-project-test-rollup),
   which asserts the success value, the default forbidden failure, the fully-overridden failure, the
   `ArgumentNullException` on a null service, and that `AccessDeniedMessage` still equals `"Access denied."`
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Extensions/CurrentUserServiceExtensionsTests.cs:16-72`).

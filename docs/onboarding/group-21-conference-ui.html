@@ -3122,7 +3122,7 @@
           (<code>SpeakerDetail.razor.cs:198-199</code>)</span></span> and hands <code>CategoryItems</code> plus <code>CategoryTitles</code> to
           <a href="#speakercategoryitemspanel"><code>SpeakerCategoryItemsPanel</code></a><span class="cite"><span>
           (<code>Pages/Speaker/SpeakerDetail.razor:169-172</code>)</span></span>. The interface is also what
-          <a href="group-28-testing-infrastructure.html#speakerdetailtests"><code>SpeakerDetailTests</code></a> mocks<span class="cite"><span>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>SpeakerDetailTests</code></a> mocks<span class="cite"><span>
           (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Speakers/SpeakerDetailTests.cs:31</code>)</span></span>,
           which is the practical payoff of the facade: one <code>Mock&lt;ISpeakerDetailLookupService&gt;</code> stands in for
           three collaborators. <code>[Rubric §14, Testability]</code> (assesses whether collaborators can be substituted
@@ -5153,7 +5153,7 @@
           (<code>.../Pages/Question/QuestionCreate.razor:1-2</code>)</span></span>, reached from <a href="#questionlist"><code>QuestionList</code></a>&#39;s create
           button; on success it hands off to <a href="#questiondetail"><code>QuestionDetail</code></a>. It is also the one page in this
           unit with a bUnit component test class,
-          <a href="group-28-testing-infrastructure.html#questioncreatetests"><code>QuestionCreateTests</code></a><span class="cite"><span>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>QuestionCreateTests</code></a><span class="cite"><span>
           (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Questions/QuestionCreateTests.cs:19</code>)</span></span>,
           which asserts that a blank submit shows the model&#39;s own required message without MudBlazor&#39;s duplicate,
           that the required field keeps its <code>aria-required</code> affordance, that an overlong text shows the model&#39;s

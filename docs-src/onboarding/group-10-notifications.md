@@ -2518,7 +2518,7 @@ heading.)*
   registry builder, so calling it twice from two different hosts is safe and cannot pick up ambient
   state.
 - **Where it's used**: called from the ADC Notification module's
-  [DependencyInjection](#dependencyinjection-5)`.AddNotificationModule` and from
+  [DependencyInjection](#dependencyinjection-4)`.AddNotificationModule` and from
   `MMCA.ADC.Identity.Service`'s `TokenPermissionGrants`, so the capability the Identity host encodes into
   a minted token matches the one the Notification host enforces.
 

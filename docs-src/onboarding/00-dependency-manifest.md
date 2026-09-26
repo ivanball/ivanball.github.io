@@ -53,6 +53,8 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 18 | 70 |
 | 19 | 1 |
 
+<a id="cycles"></a>
+
 ## Cycles (SCC size > 1): 46
 
 | Level | Size | Members |

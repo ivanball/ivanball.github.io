@@ -2778,7 +2778,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`SpeakerDetail.razor.cs:198-199`) and hands `CategoryItems` plus `CategoryTitles` to
   [`SpeakerCategoryItemsPanel`](#speakercategoryitemspanel)
   (`Pages/Speaker/SpeakerDetail.razor:169-172`). The interface is also what
-  [`SpeakerDetailTests`](group-28-testing-infrastructure.md#speakerdetailtests) mocks
+  [`SpeakerDetailTests`](group-28-testing-infrastructure.md#per-project-test-rollup) mocks
   (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Speakers/SpeakerDetailTests.cs:31`),
   which is the practical payoff of the facade: one `Mock<ISpeakerDetailLookupService>` stands in for
   three collaborators. `[Rubric §14, Testability]` (assesses whether collaborators can be substituted
@@ -4655,7 +4655,7 @@ The companion [`DependencyInjection`](#dependencyinjection) extension `AddConfer
   (`.../Pages/Question/QuestionCreate.razor:1-2`), reached from [`QuestionList`](#questionlist)'s create
   button; on success it hands off to [`QuestionDetail`](#questiondetail). It is also the one page in this
   unit with a bUnit component test class,
-  [`QuestionCreateTests`](group-28-testing-infrastructure.md#questioncreatetests)
+  [`QuestionCreateTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
   (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/Pages/Questions/QuestionCreateTests.cs:19`),
   which asserts that a blank submit shows the model's own required message without MudBlazor's duplicate,
   that the required field keeps its `aria-required` affordance, that an overlong text shows the model's

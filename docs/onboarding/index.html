@@ -194,7 +194,7 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pr
           cross-linked. Thirty-six dependency <strong>cycles</strong> exist (mutually-dependent types, e.g. an aggregate root and
           its child entity with bidirectional EF navigations); each is kept whole within a single group and
           called out where it occurs. They are listed in the
-          <a href="00-dependency-manifest.html#cycles-scc-size--1-36">dependency manifest</a>. Three of them are
+          <a href="00-dependency-manifest.html#cycles">dependency manifest</a>. Three of them are
           name-collision artifacts rather than real dependencies: the identically-named pairs
           <code>SelfHttpWarmupTask</code><span class="cite"><span> (<code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code> and
           <code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23</code>)</span></span>, <code>Priority</code><span class="cite"><span>

@@ -214,7 +214,7 @@
           handful of <code>Shared</code> types are <code>internal</code> (the two disabled stubs), so the project grants
           <code>InternalsVisibleTo</code> to <code>Conference.API</code>, which registers them, and to its own test assembly<span class="cite"><span>
           (<code>MMCA.ADC.Conference.Shared.csproj:2-6</code>)</span></span>.</p>
-          <p>The <a href="#assemblyreference"><code>AssemblyReference</code></a>/<a href="#classreference"><code>ClassReference</code></a> pair in <code>Domain</code><span class="cite"><span>
+          <p>The <a href="#assemblyreference-classreference"><code>AssemblyReference</code></a>/<a href="#assemblyreference-classreference"><code>ClassReference</code></a> pair in <code>Domain</code><span class="cite"><span>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/AssemblyReference.cs:5,11</code>)</span></span> is the
           conventional per-project anchor every layer in this repo ships: a static holder for the compiled
           <code>Assembly</code> and its simple name<span class="cite"><span> (<code>AssemblyReference.cs:7-8</code>)</span></span> that reflection-based registration can
@@ -3978,7 +3978,7 @@
           additionally feed <a href="group-19-conference-infrastructure.html#speakerconfiguration"><code>SpeakerConfiguration</code></a>,
           <a href="group-19-conference-infrastructure.html#speakerquestionanswerconfiguration"><code>SpeakerQuestionAnswerConfiguration</code></a><span class="cite"><span>
           (<code>SpeakerQuestionAnswerConfiguration.cs:25</code>)</span></span>, and <code>SpeakerValidationRules</code>. Covered directly by
-          <a href="group-28-testing-infrastructure.html#speakerinvariantstests"><code>SpeakerInvariantsTests</code></a>.</li>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>SpeakerInvariantsTests</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: only three of the ten constants have a matching <code>EnsureXxx</code> method.
           Email, tag line, profile picture, the three URL fields and the Twitter handle are enforced by the
           application validator and the EF column width, not by a domain guard, so a caller that constructs a
@@ -4334,7 +4334,7 @@
           <a href="group-21-conference-ui.html#publicspeakerlist"><code>PublicSpeakerList</code></a> and
           <a href="group-21-conference-ui.html#publicspeakerdetail"><code>PublicSpeakerDetail</code></a>. Referenced by FK from
           <a href="#eventspeaker"><code>EventSpeaker</code></a>, <a href="#sessionspeaker"><code>SessionSpeaker</code></a>, and Identity&#39;s <code>User</code>.
-          Unit-tested by <a href="group-28-testing-infrastructure.html#speakertests"><code>SpeakerTests</code></a>.</p>
+          Unit-tested by <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>SpeakerTests</code></a>.</p>
           </li>
           </ul>
           <h3 id="speakercategoryitem">SpeakerCategoryItem</h3>
@@ -4397,7 +4397,7 @@
           <a href="group-19-conference-infrastructure.html#speakercategoryitemconfiguration"><code>SpeakerCategoryItemConfiguration</code></a>;
           read by <a href="group-18-conference-application.html#speakerlocalityhelper"><code>SpeakerLocalityHelper</code></a>.
           Unit-tested by
-          <a href="group-28-testing-infrastructure.html#speakercategoryitemtests"><code>SpeakerCategoryItemTests</code></a>.</li>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>SpeakerCategoryItemTests</code></a>.</li>
           </ul>
           <h3 id="speakerquestionanswer">SpeakerQuestionAnswer</h3>
           <blockquote>
@@ -4451,7 +4451,7 @@
           to <a href="#speakerquestionanswerdto"><code>SpeakerQuestionAnswerDTO</code></a>; persisted by
           <a href="group-19-conference-infrastructure.html#speakerquestionanswerconfiguration"><code>SpeakerQuestionAnswerConfiguration</code></a>.
           Unit-tested by
-          <a href="group-28-testing-infrastructure.html#speakerquestionanswertests"><code>SpeakerQuestionAnswerTests</code></a>.</li>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>SpeakerQuestionAnswerTests</code></a>.</li>
           </ul>
           <h3 id="question">Question</h3>
           <blockquote>
@@ -5020,7 +5020,7 @@
           (<code>:38-43</code>)</span></span>, its active sponsors<span class="cite"><span> (<code>:47-52</code>)</span></span>, its active partners<span class="cite"><span> (<code>:60-63</code>)</span></span>, its active activities<span class="cite"><span>
           (<code>:56-61</code>)</span></span>, and its active session assets, all <code>asTracking: true</code>, before calling <code>CascadeDelete</code><span class="cite"><span>
           (<code>:91</code>)</span></span>. Unit-tested by
-          <a href="group-28-testing-infrastructure.html#eventcascadedeletiondomainservicetests"><code>EventCascadeDeletionDomainServiceTests</code></a>.</p>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>EventCascadeDeletionDomainServiceTests</code></a>.</p>
           </li>
           <li><p><strong>Caveats / not-in-source</strong>: the ordering (sessions, then sponsors, then partners, then activities,
           then session assets, then event) is fixed by the method body and is not configurable; nothing in the
@@ -5083,7 +5083,7 @@
           (<code>Sponsor.cs:166-168</code>)</span></span>; the constants additionally feed
           <a href="group-19-conference-infrastructure.html#sponsorconfiguration"><code>SponsorConfiguration</code></a> and
           <code>SponsorValidationRules</code>. Covered directly by
-          <a href="group-28-testing-infrastructure.html#sponsorinvariantstests"><code>SponsorInvariantsTests</code></a>.</li>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>SponsorInvariantsTests</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: only three of the seven constants have a matching <code>EnsureXxx</code> method.
           <code>Description</code>, <code>WebsiteUrl</code>, <code>LinkedInUrl</code> and <code>TwitterHandle</code> lengths are enforced by the
           application validator and the EF column width, not by a domain guard, so a caller that constructs a
@@ -5188,7 +5188,7 @@
           <a href="group-21-conference-ui.html#sponsorlist"><code>SponsorList</code></a>,
           <a href="group-21-conference-ui.html#sponsordetail"><code>SponsorDetail</code></a> and
           <a href="group-21-conference-ui.html#sponsorcreate"><code>SponsorCreate</code></a>. Unit-tested by
-          <a href="group-28-testing-infrastructure.html#sponsortests"><code>SponsorTests</code></a>.</p>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>SponsorTests</code></a>.</p>
           </li>
           <li><p><strong>Caveats / not-in-source</strong>: the <code>Event</code> navigation&#39;s doc comment<span class="cite"><span> (<code>:47</code>)</span></span> describes it as being there
           &quot;for public visibility filtering&quot;, but the public sponsor filter does <strong>not</strong> join through it:

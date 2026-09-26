@@ -4294,19 +4294,19 @@
           </li>
           <li><p><strong>Where it&#39;s used</strong>: by two test classes, in two different assemblies, for two different halves of
           the same behavior.
-          <a href="group-28-testing-infrastructure.html#migrationapplyprooftests"><code>MigrationApplyProofTests</code></a> applies it
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>MigrationApplyProofTests</code></a> applies it
           through <a href="group-07-persistence-ef-core.html#dbcontextfactory"><code>DbContextFactory</code></a> and asserts the
           history row, the created table, and that nothing stays pending<span class="cite"><span>
           (<code>MigrationApplyProofTests.cs:94-106</code>)</span></span>; that asking what is pending applies nothing<span class="cite"><span> (<code>:110-120</code>)</span></span>;
           and that a second <code>MigrateAsync</code> over an up-to-date database is a no-op rather than a re-apply whose
           <code>CREATE TABLE</code> would collide<span class="cite"><span> (<code>:124-133</code>)</span></span>.
-          <a href="group-28-testing-infrastructure.html#databaseinitializationextensionstests"><code>DatabaseInitializationExtensionsTests</code></a>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>DatabaseInitializationExtensionsTests</code></a>
           uses it for the production guard in
           <a href="group-12-api-hosting-mapping.html#databaseinitializationextensions"><code>DatabaseInitializationExtensions</code></a>:
           the <code>&quot;None&quot;</code> strategy must throw naming the pending migration and must apply nothing on the way out<span class="cite"><span>
           (<code>DatabaseInitializationExtensionsTests.cs:153-154</code>, <code>:167-174</code>)</span></span>.
           Its deliberate non-consumer is
-          <a href="group-28-testing-infrastructure.html#dbcontextfactorymigrationtargettests"><code>DbContextFactoryMigrationTargetTests</code></a>,
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>DbContextFactoryMigrationTargetTests</code></a>,
           which needs a migrations assembly that declares nothing.</p>
           </li>
           <li><p><strong>Caveats</strong>: the assembly is a test fixture, never shipped: <code>IsPackable=false</code><span class="cite"><span>
