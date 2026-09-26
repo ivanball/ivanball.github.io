@@ -1686,8 +1686,10 @@ in-process graph with no gRPC clients, which is precisely the reversibility
   `Application:Namespace`, closing the two security findings (SEC-Common-53, SEC-Common-54) without
   asking every consumer to invent its own default.
 
-- **Where it's used**: read by [CacheKeyPrefix](group-09-caching.md#cachekeyprefix) for the Redis
-  key namespace, by [MessageBusSettings](#messagebussettings)`.EndpointPrefix`'s resolution inside
+- **Where it's used**: read by [CacheKeyPrefixOptions](group-09-caching.md#cachekeyprefixoptions)'s
+  `CacheKeyNamespace.From(IServiceProvider)` for the per-application default Redis key namespace
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:83-87`), by
+  [MessageBusSettings](#messagebussettings)`.EndpointPrefix`'s resolution inside
   `AddBrokerMessaging` when the setting is unset (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:79-81`), and referenced
   from `DependencyInjection.Messaging.cs` for the broker endpoint formatter. Covered by
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Configuration/ApplicationNamespaceTests.cs`.

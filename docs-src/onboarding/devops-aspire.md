@@ -1567,35 +1567,76 @@ All four retry via the gRPC resilience pipeline until the peer is ready.
 
 ## The AppHost composition smoke test
 
-`MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AppHostCompositionSmokeTests.cs`
+`MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostFixture.cs`,
+`MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostSmokeTests.cs`
 
 Everything above is composition code, and composition code has a specific blind spot: a renamed resource,
-a reference that no longer resolves, or a `WaitFor` cycle is invisible to `dotnet build` and to every
-other test tier, because nothing else runs the orchestration. This project exists to close that blind
-spot, and it is deliberately **one test** (AppHostCompositionSmokeTests.cs:41-62).
+a reference that no longer resolves, a `WaitFor` cycle, or a data source that stopped being injected is
+invisible to `dotnet build` and to every other test tier, because nothing else runs the orchestration (the
+cross-service tier boots three hosts directly through `WebApplicationFactory` and bypasses it entirely,
+AdcAppHostSmokeTests.cs:11-16). This project exists to close that blind spot. It is two small files over
+the framework's AppHost test base ([ADR-117](https://ivanball.github.io/docs/adr/117-apphost-integration-test-base.html)), so the ADC side states claims and the polling, waiting
+and key minting live in MMCA.Common.
 
-It boots the real AppHost through `DistributedApplicationTestingBuilder.CreateAsync<Projects.MMCA_ADC_AppHost>`
-(line 46-47), starts it, then asks the gateway for a health answer through
-`app.CreateHttpClient("gateway", "http")` (line 52). The assertion is not "the gateway is healthy" (the
-integration and E2E tiers cover behavior); it is that the composition still resolves: six project
-resources, four per-service databases, Redis, the broker, MailDev, the JWKS and gRPC references, and the
-whole `WaitFor` graph (class remarks, lines 11-18).
+**The fixture boots the stack once.** `AdcAppHostFixture` derives from
+`AppHostFixtureBase<Projects.MMCA_ADC_AppHost>` (AdcAppHostFixture.cs:28, base at
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.Generic.cs:20`) and is
+bound to one xUnit collection, `AdcAppHostCollection` (AdcAppHostFixture.cs:59-64), because starting four
+containers, four databases and six project resources per test would multiply a twelve-minute cold start
+by the number of assertions (lines 12-14). It declares three preconditions,
+`OptIn | Docker | DeveloperCertificate` (lines 31-34); the base evaluates them first
+(`AppHostEnvironmentGate.Evaluate`, AppHostFixtureBase.cs:104) and, when one is missing, never starts an
+orchestrator and records a skip reason instead. The developer certificate is on the list because the
+gateway is an https endpoint and every probe against it would otherwise fail with `UntrustedRoot`
+(AdcAppHostFixture.cs:17-21).
 
-The budgets are generous on purpose. Twelve minutes to build and start (line 33), because the first run
-on a cold agent pulls four container images before a single process starts, and eight minutes for the
-gateway to answer 200 (line 36), polled every five seconds (line 39). A connection failure while the
-gateway is still binding is treated as "not yet" rather than as a result
-(AppHostCompositionSmokeTests.cs:91-94), so the test reports the last real status it saw rather than the
-first transient error.
+The budgets are generous on purpose: twelve minutes to start and eight for readiness (line 43), against
+the framework default of five and five (`AppHostReadinessBudget.cs:23-24`), because the first run on a
+cold agent pulls four container images and each service migrates and seeds its own database before it
+reports healthy (AdcAppHostFixture.cs:37-40). The readiness budget is one deadline shared by every awaited
+resource, not a per-resource allowance (AppHostReadinessBudget.cs:28-33), and the fixture throws naming
+the resource the budget ran out on (AppHostFixtureBase.cs:250-254). `ResourcesToAwait` lists
+`notification`, `engagement`, `conference`, `identity`, `gateway` in dependency order, so a failure names
+the first thing that did not come up rather than the gateway waiting on it; the UI and MAUI heads are left
+out because nothing probes them (AdcAppHostFixture.cs:45-53). The base also mints the ephemeral RS256
+keypair Identity signs with (AppHostFixtureBase.cs:226-233), which replaced a separate openssl step in the
+workflow.
 
-It needs a Docker daemon and it is slow, so per [ADR-098](https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html) it is probational and non-gating: it runs
-`continue-on-error` in the nightly and can never block a deploy (lines 19-21). See
-[`AppHostCompositionSmokeTests`](group-16-aspire-orchestration.md#apphostcompositionsmoketests).
+**The claims are narrow, one per wiring contract** (AdcAppHostSmokeTests.cs:75-136), each a call into
+`AppHostTestBase<TFixture>` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostTestBase.cs:29`):
+
+| Test | Claim | Anchor |
+|---|---|---|
+| `TheGatewayAnswersHealth` | The gateway serves its full health report with 200 | AdcAppHostSmokeTests.cs:75-81 |
+| `TheGatewayPublishesTheIdentityKeySet` | JWKS is reachable through the gateway, the path the other three services use, since Identity's cleartext endpoint is Http2-only | AdcAppHostSmokeTests.cs:83-94 |
+| `ARestServiceAnswersOverH2c` | Identity, Conference and Engagement answer over HTTP/2 with prior knowledge | AdcAppHostSmokeTests.cs:47-52, 102-109 |
+| `NotificationAnswersOverH2cOnItsGrpcEndpoint` | Notification's dedicated `grpc` endpoint is the Http2-only half of its mixed profile ([ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html)) | AdcAppHostSmokeTests.cs:111-121 |
+| `EachServiceIsWiredToItsOwnDatabase` | Each of the four services carries a resolved connection string under its OWN logical data-source name | AdcAppHostSmokeTests.cs:39-45, 129-136 |
+
+Two details explain why these are assertions rather than pings. The h2c check asserts the negotiated
+version, not only the status, because a service that quietly fell back to HTTP/1.1 would still answer 200
+(AdcAppHostSmokeTests.cs:96-100, AppHostTestBase.cs:215-219). The data-source check stops at "present and
+parseable" on purpose: the database has its own Aspire health check, so what no other tier proves is that
+the routing key the multi-database resolver reads is the one the AppHost wrote (AppHostTestBase.cs:232-239).
+
+Every test opens with `SkipWhenUnavailable()` (AdcAppHostSmokeTests.cs:67-73), written as a branch rather
+than `Assert.SkipWhen(!Fixture.IsAvailable, Fixture.SkipReason)`: `SkipReason` is null precisely when the
+stack DID start, and `SkipWhen` validates its reason before its condition, so the one-line form throws on
+exactly the runner the tier exists for (lines 58-66).
+
+It needs a Docker daemon and it is the slowest thing in the repo per assertion, so per [ADR-098](https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html) it is
+probational and non-gating. The `apphost-smoke` job in the nightly `cross-service-tests.yml` runs it with
+`continue-on-error: true` and a 30-minute timeout (`.github/workflows/cross-service-tests.yml:204-209`),
+trusts the dev certificate first (line 271), sets the `MMCA_APPHOST_TESTS: "1"` opt-in (line 285), and
+passes `--minimum-expected-tests 1` so a run where every test silently skipped cannot pass (lines
+286-288). The `cross-service-freshness` deploy gate does not look at this job at all, so it can never block
+a deploy (lines 194-199).
 
 [Rubric §14, Testability and Test Strategy] assesses whether the test suite covers the risks the system
 actually carries. An orchestration file is a genuine failure surface with no compiler covering it, and the
-answer here is proportionate: one test, wide assertion, honest about being slow and kept off the critical
-path rather than pretending it is cheap.
+answer here is proportionate: one shared stack, one narrow claim per wiring contract, skips that name
+their missing precondition, and honest about being slow by being kept off the critical path rather than
+pretending it is cheap.
 
 ---
 
@@ -1607,7 +1648,7 @@ path rather than pretending it is cheap.
 | §11 Security | The GitHub Packages token as a BuildKit secret in all six Dockerfiles (Gateway.Dockerfile:12-14, 30-32), and the non-root `USER $APP_UID` final stage (Gateway.Dockerfile:72); JWKS discovery with no shared symmetric secret, routed through the gateway and issuer-pinned from the same resource (Program.cs:364-375); `AddCommonKeyVaultConfiguration` and `AddCommonDataProtection` as single framework calls gated on configuration keys absent locally; the hardened default CSP baseline (SecurityHeaders.cs:53-55) |
 | §12 Performance & Scalability | The ACA-tuned `SocketsHttpHandler` (Extensions.cs:85-93) and the OIDC metadata warm-up task, both aimed at Consumption-plan cold starts and idle-replica penalties; ReadyToRun publish on the five non-UI images |
 | §13 Observability & Operability | Dual OTLP / Azure Monitor export from one binary (Extensions.cs:361-378); seven MMCA.Common meters registered by literal name (Extensions.cs:199-205); probe-trace filtering that raises the signal ratio of `AppRequests` rather than only cutting volume |
-| §14 Testability & Test Strategy | `AppHostCompositionSmokeTests`, one test against the one failure surface no compiler covers, kept `continue-on-error` in the nightly per [ADR-098](https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html) |
+| §14 Testability & Test Strategy | `AdcAppHostFixture` plus `AdcAppHostSmokeTests`, one shared stack and one narrow claim per wiring contract against the one failure surface no compiler covers (AdcAppHostSmokeTests.cs:75-136), kept `continue-on-error` in the nightly per [ADR-098](https://ivanball.github.io/docs/adr/098-aspire-orchestration-not-testing-or-dashboards.html) |
 | §17 DevOps & Deployment | Persistent container lifetimes shared by the inner loop and the Aspire-driven E2E CI run; one Dockerfile per deployable behind the six-way `build-images` matrix with per-image dirty gating (`deploy.yml:1186-1207`); the parity table's environment-driven local-to-cloud mapping |
 | §29 Resilience & Business Continuity | The liveness-versus-readiness split on every startup gate (Program.cs:324-343), including the gateway's `/alive` gate that avoids the readiness-aggregate wedge; `WithReference` without `WaitFor` on the four cycle-closing edges, absorbed by the gRPC resilience pipeline; `"optional"`-tagged dependency checks that keep a degradation partial |
 | §31 Cost / FinOps | The four telemetry knobs and the metric export interval; `OutboxPollFilterProcessor` and `ProbeTelemetryFilterProcessor` suppressing the two highest-volume classes of span nobody asked for; the gateway's probe-log trim (Gateway/appsettings.json:2-16) and its production-only YARP log floor (main.bicep:267-276, 2341); the 30 s readiness cadence in the ACA probe block (main.bicep:1788-1793) |

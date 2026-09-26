@@ -5564,8 +5564,8 @@
           inbox, scheduled jobs, audit trail, refresh sessions) and a consumer&#39;s entities alike, including
           nullable <code>DateTime</code> properties, which EF configures from the same non-nullable entry.</li>
           <li><strong><code>OnModelCreating</code></strong><span class="cite"><span> (<code>:73-77</code>)</span></span>: calls <code>ApplyConfigurationsForEntitiesInContext(DataSource .PostgreSQL, modelBuilder)</code> then <code>base.OnModelCreating</code>, so the full base pipeline (soft-delete and
-          tenant filters, application-managed concurrency tokens, outbox/inbox/internal-command tables, the
-          three settings-gated tables, and the <code>ValReturn&lt;T&gt;</code> views) runs.</li>
+          tenant filters, application-managed concurrency tokens, outbox/inbox/internal-command tables, and the
+          three settings-gated tables) runs.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: shares the SQL Server shape (retry, command timeout, pending-model-
@@ -5609,7 +5609,7 @@
           <code>ApplyConfigurationsForEntitiesInContext(DataSource.Sqlite, modelBuilder)</code> then <code>base.OnModelCreating</code><span class="cite"><span>
           (<code>SqliteDbContext.cs:40-44</code>)</span></span>, so unlike Cosmos it keeps the full base pipeline: soft-delete and tenant
           filters, concurrency tokens as application-managed tokens rather than <code>rowversion</code>, the outbox and
-          inbox tables, the three settings-gated tables, and the <a href="#valreturnt"><code>ValReturn&lt;T&gt;</code></a> views. See
+          inbox tables, and the three settings-gated tables. See
           <a href="#sqlserverdbcontext"><code>SQLServerDbContext</code></a> for the shared subclass shape.</li>
           <li><strong>Why it&#39;s built this way</strong>: SQLite needs none of the SQL Server hardening (transient-failure retry,
           a per-environment command timeout), so the override is intentionally sparse, but the migrations
@@ -5676,8 +5676,7 @@
           <li><strong><code>OnModelCreating</code></strong><span class="cite"><span> (<code>SQLServerDbContext.cs:85-89</code>)</span></span>: calls
           <code>ApplyConfigurationsForEntitiesInContext(DataSource.SQLServer, modelBuilder)</code> then
           <code>base.OnModelCreating</code>, so the full base pipeline (soft-delete and tenant filters, <code>rowversion</code>
-          concurrency tokens, outbox/inbox tables, the three settings-gated tables, and the
-          <a href="#valreturnt"><code>ValReturn&lt;T&gt;</code></a> views) runs.</li>
+          concurrency tokens, outbox/inbox tables, and the three settings-gated tables) runs.</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: the <code>PendingModelChangesWarning</code> suppression is required by the

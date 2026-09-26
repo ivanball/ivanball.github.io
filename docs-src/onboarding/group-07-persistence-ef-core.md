@@ -5194,8 +5194,8 @@ survives a module being pulled out into its own service.
     nullable `DateTime` properties, which EF configures from the same non-nullable entry.
   - **`OnModelCreating`** (`:73-77`): calls `ApplyConfigurationsForEntitiesInContext(DataSource
     .PostgreSQL, modelBuilder)` then `base.OnModelCreating`, so the full base pipeline (soft-delete and
-    tenant filters, application-managed concurrency tokens, outbox/inbox/internal-command tables, the
-    three settings-gated tables, and the `ValReturn<T>` views) runs.
+    tenant filters, application-managed concurrency tokens, outbox/inbox/internal-command tables, and the
+    three settings-gated tables) runs.
 - **Why it's built this way**: shares the SQL Server shape (retry, command timeout, pending-model-
   changes suppression) because both are production-grade relational engines under
   [ADR-113](https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html); the one
@@ -5235,7 +5235,7 @@ survives a module being pulled out into its own service.
   `ApplyConfigurationsForEntitiesInContext(DataSource.Sqlite, modelBuilder)` then `base.OnModelCreating`
   (`SqliteDbContext.cs:40-44`), so unlike Cosmos it keeps the full base pipeline: soft-delete and tenant
   filters, concurrency tokens as application-managed tokens rather than `rowversion`, the outbox and
-  inbox tables, the three settings-gated tables, and the [`ValReturn<T>`](#valreturnt) views. See
+  inbox tables, and the three settings-gated tables. See
   [`SQLServerDbContext`](#sqlserverdbcontext) for the shared subclass shape.
 - **Why it's built this way**: SQLite needs none of the SQL Server hardening (transient-failure retry,
   a per-environment command timeout), so the override is intentionally sparse, but the migrations
@@ -5302,8 +5302,7 @@ survives a module being pulled out into its own service.
   - **`OnModelCreating`** (`SQLServerDbContext.cs:85-89`): calls
     `ApplyConfigurationsForEntitiesInContext(DataSource.SQLServer, modelBuilder)` then
     `base.OnModelCreating`, so the full base pipeline (soft-delete and tenant filters, `rowversion`
-    concurrency tokens, outbox/inbox tables, the three settings-gated tables, and the
-    [`ValReturn<T>`](#valreturnt) views) runs.
+    concurrency tokens, outbox/inbox tables, and the three settings-gated tables) runs.
 - **Why it's built this way**: the `PendingModelChangesWarning` suppression is required by the
   microservices-extraction design: each extracted host registers only its enabled modules'
   configurations, so its runtime model is a strict subset of the migration snapshot (the union of all

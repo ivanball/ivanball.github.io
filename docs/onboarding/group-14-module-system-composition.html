@@ -1965,8 +1965,10 @@
           <code>Application:Namespace</code>, closing the two security findings (SEC-Common-53, SEC-Common-54) without
           asking every consumer to invent its own default.</p>
           </li>
-          <li><p><strong>Where it&#39;s used</strong>: read by <a href="group-09-caching.html#cachekeyprefix">CacheKeyPrefix</a> for the Redis
-          key namespace, by <a href="#messagebussettings">MessageBusSettings</a><code>.EndpointPrefix</code>&#39;s resolution inside
+          <li><p><strong>Where it&#39;s used</strong>: read by <a href="group-09-caching.html#cachekeyprefixoptions">CacheKeyPrefixOptions</a>&#39;s
+          <code>CacheKeyNamespace.From(IServiceProvider)</code> for the per-application default Redis key namespace<span class="cite"><span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:83-87</code>)</span></span>, by
+          <a href="#messagebussettings">MessageBusSettings</a><code>.EndpointPrefix</code>&#39;s resolution inside
           <code>AddBrokerMessaging</code> when the setting is unset<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:79-81</code>)</span></span>, and referenced
           from <code>DependencyInjection.Messaging.cs</code> for the broker endpoint formatter. Covered by
           <code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Configuration/ApplicationNamespaceTests.cs</code>.</p>
