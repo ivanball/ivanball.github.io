@@ -239,37 +239,37 @@
           JWT, 15 minutes by default,
           <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:61</code></span></span>) and an opaque,
           random <strong>refresh token</strong> (64 bytes of <code>RandomNumberGenerator</code> output, Base64-encoded, valid 7 days by
-          default, <span class="cite"><span><code>TokenService.cs:145-148</code></span></span>, <span class="cite"><span><code>JwtSettings.cs:64</code></span></span>), both produced by
+          default, <span class="cite"><span><code>TokenService.cs:144-147</code></span></span>, <span class="cite"><span><code>JwtSettings.cs:64</code></span></span>), both produced by
           <a href="#tokenservice"><code>TokenService</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:26</code>)</span></span>. The access token
           carries a fixed claim spine: <code>sub</code>, <code>jti</code>, <code>iat</code>, plus name, email, and role<span class="cite"><span>
-          (<code>TokenService.cs:103-112</code>)</span></span>, and the app adds its own claims (for example <code>speaker_id</code> or
-          <code>customer_id</code>) through the <code>additionalClaims</code> parameter<span class="cite"><span> (<code>TokenService.cs:114-117</code>)</span></span>. <code>sub</code> is the
+          (<code>TokenService.cs:102-111</code>)</span></span>, and the app adds its own claims (for example <code>speaker_id</code> or
+          <code>customer_id</code>) through the <code>additionalClaims</code> parameter<span class="cite"><span> (<code>TokenService.cs:113-116</code>)</span></span>. <code>sub</code> is the
           single carrier of the user identifier: the duplicate custom claim that used to ride alongside it is
           gone, because two values that can disagree is two claim names every reader has to know<span class="cite"><span>
-          (<code>TokenService.cs:100-102</code>)</span></span>. The port <a href="#itokenservice"><code>ITokenService</code></a><span class="cite"><span>
+          (<code>TokenService.cs:99-101</code>)</span></span>. The port <a href="#itokenservice"><code>ITokenService</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ITokenService.cs:8</code>)</span></span>
           publishes both lifetimes as default interface members pinned to the same 15-minute / 7-day baseline<span class="cite"><span>
           (<code>ITokenService.cs:33</code>, <code>ITokenService.cs:40</code>)</span></span>, so a hand-written test double reports the same expiry
           the production settings would, while the concrete service derives them from the bound settings<span class="cite"><span>
-          (<code>TokenService.cs:152</code>, <code>TokenService.cs:155</code>)</span></span>.</p>
+          (<code>TokenService.cs:151</code>, <code>TokenService.cs:154</code>)</span></span>.</p>
           <p>The load-bearing design choice is a single configuration switch,
           <a href="#jwtsettings"><code>JwtSettings</code></a><code>.SigningAlgorithm</code><span class="cite"><span>
-          (<code>TokenService.cs:77</code>)</span></span>. It defaults to
+          (<code>TokenService.cs:76</code>)</span></span>. It defaults to
           <a href="#jwtsigningalgorithm"><code>JwtSigningAlgorithm</code></a><code>.RS256</code><span class="cite"><span>
           (<code>JwtSettings.cs:30</code>)</span></span>: the Identity service signs with an RSA private key and every other service
           validates against the matching public key, which it fetches over JWKS. A single-host monolith opts
           into <code>HS256</code> explicitly, where one symmetric Base64 secret both signs and validates because issuer
-          and validator are the same process<span class="cite"><span> (<code>TokenService.cs:77-88</code>, <code>TokenService.cs:207-219</code>)</span></span>. Asymmetric
+          and validator are the same process<span class="cite"><span> (<code>TokenService.cs:76-87</code>, <code>TokenService.cs:206-218</code>)</span></span>. Asymmetric
           is the default precisely because it is the shape that survives extraction: a compromised non-Identity
           service can verify tokens but cannot forge them. An issuer with no explicit public key configured
           derives one from its own private-key parameters so it can still self-validate during refresh<span class="cite"><span>
-          (<code>TokenService.cs:243-257</code>)</span></span>, and the key id from
+          (<code>TokenService.cs:242-256</code>)</span></span>, and the key id from
           <a href="#jwkssettings"><code>JwksSettings</code></a> travels into every RS256 token&#39;s
           <code>kid</code> header so a validator reading the published document selects the right key by name rather than
-          trying each in turn<span class="cite"><span> (<code>TokenService.cs:236-240</code>)</span></span>. Key material is materialized once in the constructor
+          trying each in turn<span class="cite"><span> (<code>TokenService.cs:235-239</code>)</span></span>. Key material is materialized once in the constructor
           and the owned <code>RSA</code> handles are disposed with the service<span class="cite"><span> (<code>TokenService.cs:37-38</code>,
-          <code>TokenService.cs:201-205</code>)</span></span>, so token operations never re-parse a PEM. The settings class enforces the
+          <code>TokenService.cs:200-204</code>)</span></span>, so token operations never re-parse a PEM. The settings class enforces the
           pairing rather than trusting the host: it implements <code>IValidatableObject</code> and rejects an HS256 secret
           shorter than 32 characters or an RS256 configuration with no private key<span class="cite"><span> (<code>JwtSettings.cs:70-85</code>)</span></span>.</p>
           <p>The public half is served by <a href="#rsajwksprovider"><code>RsaJwksProvider</code></a><span class="cite"><span>
@@ -296,9 +296,9 @@
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:21</code>)</span></span> so the
           first authenticated request on a cold replica does not pay the discovery round trip. Validation pins
           the expected algorithm so an attacker cannot force an algorithm swap: <code>GetPrincipalFromExpiredToken</code>
-          sets <code>ValidAlgorithms</code> to the single configured value<span class="cite"><span> (<code>TokenService.cs:177</code>)</span></span> and then re-checks the
-          token header after <code>ValidateToken</code> returns<span class="cite"><span> (<code>TokenService.cs:186-190</code>)</span></span>. Only the lifetime check is
-          skipped there<span class="cite"><span> (<code>TokenService.cs:172</code>)</span></span>, because the method exists to read claims out of an
+          sets <code>ValidAlgorithms</code> to the single configured value<span class="cite"><span> (<code>TokenService.cs:176</code>)</span></span> and then re-checks the
+          token header after <code>ValidateToken</code> returns<span class="cite"><span> (<code>TokenService.cs:185-189</code>)</span></span>. Only the lifetime check is
+          skipped there<span class="cite"><span> (<code>TokenService.cs:171</code>)</span></span>, because the method exists to read claims out of an
           already-expired token during refresh.</p>
           <h2 id="the-shared-authentication-workflow">The shared authentication workflow</h2>
           <p>Login, registration, refresh, revocation, and device listing are not re-implemented per app. They
@@ -514,13 +514,13 @@
           fails the generic constraint at compile time instead of losing behavior at run time<span class="cite"><span>
           (<code>IErasableUser.cs:25-28</code>)</span></span>. These four contracts are consumed by the shared handler bases in group 14:
           <a href="group-14-module-system-composition.html#changepasswordhandlerbasetuser-tcommand"><code>ChangePasswordHandlerBase&lt;TUser, TCommand&gt;</code></a><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:36</code>)</span></span>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:34</code>)</span></span>,
           <a href="group-14-module-system-composition.html#changepreferenceshandlerbasetuser-tcommand"><code>ChangePreferencesHandlerBase&lt;TUser, TCommand&gt;</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePreferences/ChangePreferencesHandlerBase.cs:23</code>)</span></span>,
           <a href="group-14-module-system-composition.html#getuserpreferenceshandlerbasetuser"><code>GetUserPreferencesHandlerBase&lt;TUser&gt;</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/GetPreferences/GetUserPreferencesHandlerBase.cs:21</code>)</span></span>,
           <a href="group-14-module-system-composition.html#resetpasswordhandlerbasetuser-tcommand"><code>ResetPasswordHandlerBase&lt;TUser, TCommand&gt;</code></a><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:43</code>)</span></span>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:41</code>)</span></span>,
           and
           <a href="group-14-module-system-composition.html#deleteuserhandlerbasetuser-tcommand"><code>DeleteUserHandlerBase&lt;TUser, TCommand&gt;</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:58</code>)</span></span>,
@@ -713,7 +713,7 @@
           <span class="cite"><span><code>ForgotPasswordHandlerBase.cs:145-148</code></span></span>) and the raw token, because a client without deep linking (the
           MAUI head) needs it typed into the reset page by hand<span class="cite"><span> (<code>ForgotPasswordHandlerBase.cs:124</code>)</span></span>.
           <a href="group-14-module-system-composition.html#resetpasswordhandlerbasetuser-tcommand"><code>ResetPasswordHandlerBase&lt;TUser, TCommand&gt;</code></a><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:43</code>)</span></span>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:41</code>)</span></span>
           consumes the token <em>before</em> the save on a stated trade-off (leaving it live until the write succeeds
           opens a replay window; a token burned by a later invariant failure costs the user one more reset
           request, <span class="cite"><span><code>ResetPasswordHandlerBase.cs:73-83</code></span></span>), hashes through <a href="#ipasswordhasher"><code>IPasswordHasher</code></a>
@@ -2066,7 +2066,7 @@
           itself cannot double-rotate a token
           (<a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>).</li>
           <li><strong>Where it&#39;s used</strong>: registered on both Blazor Server hosts immediately before <code>UseAuthentication()</code>,
-          <span class="cite"><span><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:228</code></span></span> (with <code>UseAuthentication()</code> on the very next
+          <span class="cite"><span><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:234</code></span></span> (with <code>UseAuthentication()</code> on the very next
           statement at <span class="cite"><span><code>:140</code></span></span>) and <span class="cite"><span><code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:178</code></span></span><span class="cite"><span> (<code>:180</code>)</span></span>. Its
           gating rules are pinned one test per branch in
           <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/CookieSessionRefreshMiddlewareTests.cs</code>:
@@ -2124,7 +2124,7 @@
           authentication instead of CSRF: it is a deliberate, commented opt-out of the fallback policy
           (SEC-Common-16) rather than an oversight.</li>
           <li><strong>Where it&#39;s used</strong>: mapped by both Blazor Server hosts,
-          <span class="cite"><span><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:247</code></span></span> and
+          <span class="cite"><span><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:255</code></span></span> and
           <span class="cite"><span><code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:194</code></span></span>. The routes are exercised end to end by
           <span class="cite"><span><code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/SessionCookieEndpointsTests.cs:125</code></span></span>,
           whose <code>CreateHostAsync</code> builds a real pipeline around the mapper; the cases that matter most are the
@@ -2185,7 +2185,7 @@
           load-bearing rule in bold: register it immediately <strong>before</strong> <code>UseAuthentication()</code> on the Blazor
           Server (UI.Web) host.</li>
           <li><strong>Where it&#39;s used</strong>: the two Blazor Server hosts<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:228</code>,
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:234</code>,
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:178</code>)</span></span>. Both the null guard and the
           pipeline wiring are covered directly at
           <span class="cite"><span><code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/CookieSessionRefreshMiddlewareTests.cs:115</code></span></span>
@@ -2354,7 +2354,7 @@
           clock through the base handler&#39;s <code>TimeProvider</code> rather than <code>DateTime.UtcNow</code> keeps the expiry check
           on the same injectable clock as the rest of the auth stack and its tests. [Rubric §14, Testability].</li>
           <li><strong>Where it&#39;s used</strong>: registered as the <code>SessionCookie</code> scheme on both Blazor Server hosts,
-          <span class="cite"><span><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:87-88</code></span></span> and
+          <span class="cite"><span><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:102-103</code></span></span> and
           <span class="cite"><span><code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:111-112</code></span></span>. Covered directly by
           <code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/SessionCookies/SessionCookieAuthenticationHandlerTests.cs</code>,
           including the fresh-token-from-Items path (<span class="cite"><span><code>:95</code></span></span>, which stashes the token under
@@ -2382,7 +2382,7 @@
           explicit <code>null</code> arguments are named, so the call site says what it is skipping. The doc comment<span class="cite"><span>
           (<code>:94-97</code>)</span></span> directs callers to use it after
           <code>AddAuthentication(SessionCookieAuthenticationHandler.SchemeName)</code>.</li>
-          <li><strong>Where it&#39;s used</strong>: <span class="cite"><span><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:88</code></span></span> and
+          <li><strong>Where it&#39;s used</strong>: <span class="cite"><span><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:103</code></span></span> and
           <span class="cite"><span><code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:112</code></span></span>, chained onto the host&#39;s
           <code>AddAuthentication(SessionCookieAuthenticationHandler.SchemeName)</code> call on the preceding line.</li>
           </ul>
@@ -2428,7 +2428,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: the same <code>AddOptions(...).Bind(...).ValidateDataAnnotations().ValidateOnStart()</code> treatment as every other settings class in the framework<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:162-165</code>)</span></span> means an out-of-range cap or a negative retention window fails the host at startup, not at the first login. Defaulting <code>Enabled</code> to <code>false</code> is the safe direction for a multi-service host: a service that never opts in never grows a table it does not own.</li>
-          <li><strong>Where it&#39;s used</strong>: bound at <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:162-165</code></span></span>; injected as <code>IOptions&lt;RefreshSessionSettings&gt;</code> into <a href="#authenticationservicebasetuser">AuthenticationServiceBase&lt;TUser&gt;</a> (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:61</code></span></span>, read for the cap at <span class="cite"><span><code>:115</code></span></span>), into <a href="group-07-persistence-ef-core.html#efrefreshsessionstore">EFRefreshSessionStore</a><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:34</code>)</span></span>, and into <a href="group-07-persistence-ef-core.html#refreshsessioncleanupservice">RefreshSessionCleanupService</a> (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionCleanupService.cs:51</code></span></span>, snapshotted at <span class="cite"><span><code>:54</code></span></span>). The design-time context helper supplies an instance so <code>dotnet ef</code> can build a model that includes the table<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:173-174</code>)</span></span>. Each app&#39;s Identity service takes it as a required constructor dependency and passes it through, for example <span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:55</code></span></span>.</li>
+          <li><strong>Where it&#39;s used</strong>: bound at <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:162-165</code></span></span>; injected as <code>IOptions&lt;RefreshSessionSettings&gt;</code> into <a href="#authenticationservicebasetuser">AuthenticationServiceBase&lt;TUser&gt;</a> (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:61</code></span></span>, read for the cap at <span class="cite"><span><code>:115</code></span></span>), into <a href="group-07-persistence-ef-core.html#efrefreshsessionstore">EFRefreshSessionStore</a><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/EFRefreshSessionStore.cs:34</code>)</span></span>, and into <a href="group-07-persistence-ef-core.html#refreshsessioncleanupservice">RefreshSessionCleanupService</a> (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionCleanupService.cs:51</code></span></span>, snapshotted at <span class="cite"><span><code>:54</code></span></span>). The design-time context helper supplies an instance so <code>dotnet ef</code> can build a model that includes the table<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:173-174</code>)</span></span>. Each app&#39;s Identity service takes it as a required constructor dependency and passes it through, for example <span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:57</code></span></span>.</li>
           </ul>
           <h3 id="useradministrationquery">UserAdministrationQuery</h3>
           <blockquote>
@@ -2525,7 +2525,7 @@
           </li>
           <li><p><strong>Why it&#39;s built this way</strong>: taking <code>email</code> on both methods, rather than treating the token as self-describing, is what lets the implementation key its records by address and enforce the per-address throttle and the one-active-token rule at the same key. Returning <code>Result&lt;UserIdentifierType&gt;</code> rather than a boolean means the redeem handler gets the account identity from the token store itself. See <a href="#passwordresettokenservice">PasswordResetTokenService</a> for the mechanics the port hides: a 32-byte random token<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:30</code>)</span></span>, only its digest stored, an attempt counter, and an address normalized through <a href="group-02-domain-building-blocks.html#email">Email</a> before it becomes a cache key<span class="cite"><span> (<code>:34-45</code>)</span></span> so <code>User@x.com</code> and <code>user@x.com</code> cannot hold independent tokens for one account.</p>
           </li>
-          <li><p><strong>Where it&#39;s used</strong>: injected into the shared <a href="group-14-module-system-composition.html#forgotpasswordhandlerbasetuser-tcommand">ForgotPasswordHandlerBase&lt;TUser, TCommand&gt;</a> (constructor parameter at <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:38</code></span></span>, called at <span class="cite"><span><code>:72</code></span></span>, where a throttled issue is logged and still answered as success) and into <a href="group-14-module-system-composition.html#resetpasswordhandlerbasetuser-tcommand">ResetPasswordHandlerBase&lt;TUser, TCommand&gt;</a> (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:46</code></span></span>, redeemed at <span class="cite"><span><code>:61-62</code></span></span>). Both apps&#39; sealed subclasses take the same dependency, for example ADC&#39;s <a href="group-24-identity-module.html#forgotpasswordhandler">ForgotPasswordHandler</a> and <a href="group-24-identity-module.html#resetpasswordhandler">ResetPasswordHandler</a>. The framework registers the concrete as scoped at <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:158</code></span></span>.</p>
+          <li><p><strong>Where it&#39;s used</strong>: injected into the shared <a href="group-14-module-system-composition.html#forgotpasswordhandlerbasetuser-tcommand">ForgotPasswordHandlerBase&lt;TUser, TCommand&gt;</a> (constructor parameter at <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:38</code></span></span>, called at <span class="cite"><span><code>:72</code></span></span>, where a throttled issue is logged and still answered as success) and into <a href="group-14-module-system-composition.html#resetpasswordhandlerbasetuser-tcommand">ResetPasswordHandlerBase&lt;TUser, TCommand&gt;</a> (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:44</code></span></span>, redeemed at <span class="cite"><span><code>:61-62</code></span></span>). Both apps&#39; sealed subclasses take the same dependency, for example ADC&#39;s <a href="group-24-identity-module.html#forgotpasswordhandler">ForgotPasswordHandler</a> and <a href="group-24-identity-module.html#resetpasswordhandler">ResetPasswordHandler</a>. The framework registers the concrete as scoped at <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:158</code></span></span>.</p>
           </li>
           </ul>
           <h3 id="iroleadministrationservice">IRoleAdministrationService</h3>
@@ -2624,7 +2624,7 @@
           <ul>
           <li><strong>What it is</strong>: a tiny <strong>parameter object</strong> that bundles the three FluentValidation validators the authentication workflow needs (login, registration, refresh) into one injectable dependency.</li>
           <li><strong>Depends on</strong>: FluentValidation&#39;s <code>IValidator&lt;T&gt;</code> (NuGet, <span class="cite"><span><code>:1</code></span></span>) over the request DTOs <a href="#loginrequest">LoginRequest</a>, <a href="#registerrequest">RegisterRequest</a>, and <a href="#refreshtokenrequest">RefreshTokenRequest</a> (all in <code>MMCA.Common.Shared.Auth</code>, <span class="cite"><span><code>:2</code></span></span>).</li>
-          <li><strong>Concept introduced: the parameter object as a constructor-arity guardrail.</strong> <code>[Rubric §1, SOLID]</code> assesses whether a class stays a single, cohesive responsibility rather than sprawling into a god class, and <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether cross-cutting dependencies are grouped so a class can grow without exploding its constructor. The doc comment<span class="cite"><span> (<code>:6-11</code>)</span></span> states the exact motive: collapsing three closely-related dependencies into one keeps the app&#39;s <code>AuthenticationService</code> <strong>below the application-service constructor-arity ceiling</strong> (a god-class analyzer guardrail) without giving up per-request validation. Because the request DTOs already live in <code>MMCA.Common.Shared.Auth</code>, the bundle is app-agnostic, which is why it could be hoisted out of the apps into the framework. The pressure is real rather than theoretical: even with the bundle, ADC&#39;s subclass constructor takes nine parameters<span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:46-55</code>)</span></span>.</li>
+          <li><strong>Concept introduced: the parameter object as a constructor-arity guardrail.</strong> <code>[Rubric §1, SOLID]</code> assesses whether a class stays a single, cohesive responsibility rather than sprawling into a god class, and <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether cross-cutting dependencies are grouped so a class can grow without exploding its constructor. The doc comment<span class="cite"><span> (<code>:6-11</code>)</span></span> states the exact motive: collapsing three closely-related dependencies into one keeps the app&#39;s <code>AuthenticationService</code> <strong>below the application-service constructor-arity ceiling</strong> (a god-class analyzer guardrail) without giving up per-request validation. Because the request DTOs already live in <code>MMCA.Common.Shared.Auth</code>, the bundle is app-agnostic, which is why it could be hoisted out of the apps into the framework. The pressure is real rather than theoretical: even with the bundle, ADC&#39;s subclass constructor takes ten parameters<span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:49-58</code>)</span></span>.</li>
           <li><strong>Walkthrough</strong>: a primary constructor takes the three <code>IValidator&lt;T&gt;</code> instances<span class="cite"><span> (<code>:16-19</code>)</span></span>, and three get-only properties surface them by name: <code>Login</code><span class="cite"><span> (<code>:22</code>)</span></span>, <code>Register</code><span class="cite"><span> (<code>:25</code>)</span></span>, and <code>Refresh</code><span class="cite"><span> (<code>:28</code>)</span></span>, each assigned from its matching constructor parameter. There is no logic here; the type exists purely to shrink the dependency footprint of its consumer.</li>
           <li><strong>Why it&#39;s built this way</strong>: a <code>sealed</code> grouping type with get-only properties is the cheapest way to fold three cohesive dependencies into one constructor slot, so the workflow base can validate each request shape without pushing its constructor over the arity limit; DI resolves the three underlying validators and composes them into this one object. Two of the three (<a href="#loginrequestvalidator">LoginRequestValidator</a>, <a href="#refreshtokenrequestvalidator">RefreshTokenRequestValidator</a>) come from the framework assembly, while <code>IValidator&lt;RegisterRequest&gt;</code> is satisfied by the app&#39;s own <code>RegisterRequestValidator</code>, so the bundle is the point where framework and app validation meet.</li>
           <li><strong>Where it&#39;s used</strong>: injected into <a href="#authenticationservicebasetuser">AuthenticationServiceBase&lt;TUser&gt;</a> (constructor parameter at <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:80</code></span></span>), whose <code>LoginAsync</code>, <code>RegisterAsync</code>, and <code>RefreshTokenAsync</code> call <code>validators.Login</code><span class="cite"><span> (<code>:124</code>)</span></span>, <code>validators.Register</code><span class="cite"><span> (<code>:190</code>)</span></span>, and <code>validators.Refresh</code><span class="cite"><span> (<code>:270</code>)</span></span> respectively before doing any work. It is registered by each app&#39;s Identity module rather than by the framework, since one of its three dependencies is app-owned: <span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:36</code></span></span> and <span class="cite"><span><code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:42</code></span></span>, both <code>TryAddScoped&lt;AuthenticationValidators&gt;()</code>.</li>
@@ -2714,7 +2714,7 @@
           </li>
           <li><p><strong>Why it&#39;s built this way</strong>: the untracked-then-tracked dual fetch keeps the common credential-verification path off the change tracker (cheaper, and soft-deleted accounts fall out via EF query filters returning the generic 401) while still giving a tracked instance to mint from (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>). Per-device session rows with hashed tokens, rotation, family revocation on reuse, and a per-user cap are the BR-205/206 model (<a href="https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html" target="_blank" rel="noopener">ADR-050</a>). Password material flows through <a href="#iauthuser">IAuthUser</a>&#39;s <code>PasswordHash</code> and <code>PasswordSalt</code> (<a href="https://ivanball.github.io/docs/adr/032-password-hashing.html" target="_blank" rel="noopener">ADR-032</a>), and the whole workflow depends only on abstractions, so it is identical whether the module runs in-process or as an extracted service.</p>
           </li>
-          <li><p><strong>Where it&#39;s used</strong>: subclassed by each app&#39;s sealed <a href="group-24-identity-module.html#authenticationservice">AuthenticationService</a>, for example <span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:46</code></span></span>, which binds <code>TUser = User</code>, adds the Attendee default role (BR-45) and the <code>speaker_id</code> claim (BR-209, built at <span class="cite"><span><code>:275</code></span></span>), and re-lists <code>IAuthenticationService</code><span class="cite"><span> (<code>:63</code>)</span></span> so it can re-implement <code>RegisterAsync</code> and <code>ExternalLoginAsync</code> outright: ADC raises its registration side-effects inside one transactional unit rather than through the <code>OnUserRegisteredAsync</code> hook, because the identity column means the id does not exist until the first save<span class="cite"><span> (<code>AuthenticationService.cs:28-39</code>)</span></span>. MMCA.Store supplies its own subclass with a <code>customer_id</code> claim. Consumed by the Identity API controllers via the <a href="#iauthenticationservice">IAuthenticationService</a> port.</p>
+          <li><p><strong>Where it&#39;s used</strong>: subclassed by each app&#39;s sealed <a href="group-24-identity-module.html#authenticationservice">AuthenticationService</a>, for example <span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:48</code></span></span>, which binds <code>TUser = User</code>, adds the Attendee default role (BR-45) and the <code>speaker_id</code> claim (BR-209, built at <span class="cite"><span><code>:275</code></span></span>), and re-lists <code>IAuthenticationService</code><span class="cite"><span> (<code>:63</code>)</span></span> so it can re-implement <code>RegisterAsync</code> and <code>ExternalLoginAsync</code> outright: ADC raises its registration side-effects inside one transactional unit rather than through the <code>OnUserRegisteredAsync</code> hook, because the identity column means the id does not exist until the first save<span class="cite"><span> (<code>AuthenticationService.cs:30-41</code>)</span></span>. MMCA.Store supplies its own subclass with a <code>customer_id</code> claim. Consumed by the Identity API controllers via the <a href="#iauthenticationservice">IAuthenticationService</a> port.</p>
           </li>
           <li><p><strong>Caveats / not-in-source</strong>: <code>ExternalLoginAsync</code> is intentionally <strong>not</strong> overridden here: the base inherits the interface&#39;s default not-supported failure, and OAuth account linking stays in the app subclass because it is coupled to the app&#39;s <code>User</code> factory surface (doc comment, <span class="cite"><span><code>:33-34</code></span></span>).</p>
           </li>
@@ -2909,7 +2909,7 @@
           <li><strong>Concept introduced: hash and salt kept apart.</strong> <code>[Rubric §11, Security]</code> assesses credential handling. Returning the hash and the salt as two distinct <code>byte[]</code> members<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/IPasswordHasher.cs:11</code>)</span></span> rather than one concatenated blob keeps the storage contract explicit: the caller persists two columns, and <code>VerifyPassword</code><span class="cite"><span> (<code>:18</code>)</span></span> is unambiguous about what it re-derives and compares. Because the algorithm and its parameters live entirely behind this interface, they can be strengthened without touching a single Application handler (<a href="https://ivanball.github.io/docs/adr/032-password-hashing.html" target="_blank" rel="noopener">ADR-032</a> sets the current hashing policy, applied inside <a href="#passwordhasher">PasswordHasher</a>).</li>
           <li><strong>Walkthrough</strong>: <code>(byte[] Hash, byte[] Salt) HashPassword(string password)</code><span class="cite"><span> (<code>:11</code>)</span></span> returns a named value tuple the caller stores as two fields. <code>bool VerifyPassword(string password, byte[] hash, byte[] salt)</code><span class="cite"><span> (<code>:18</code>)</span></span> re-derives from the supplied salt and compares. The interface declares no iteration count, algorithm identifier, or format version: every one of those is the concrete&#39;s business.</li>
           <li><strong>Why it&#39;s built this way</strong>: a two-method port is the <code>[Rubric §1, SOLID]</code> dependency-inversion story in miniature. Swapping the key-derivation function or raising the iteration count is an Infrastructure change, invisible to the register, login, and change-password use cases that only ever see this contract.</li>
-          <li><strong>Where it&#39;s used</strong>: constructor-injected into <a href="#authenticationservicebasetuser">AuthenticationServiceBase&lt;TUser&gt;</a><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:77</code>)</span></span>, which calls <code>VerifyPassword</code> on the login path<span class="cite"><span> (<code>:159</code>)</span></span> and <code>HashPassword</code> on registration<span class="cite"><span> (<code>:210</code>)</span></span>; into the shared <a href="group-14-module-system-composition.html#changepasswordhandlerbasetuser-tcommand">ChangePasswordHandlerBase&lt;TUser, TCommand&gt;</a>, which verifies the current password<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:79</code>)</span></span> before hashing the new one<span class="cite"><span> (<code>:61</code>)</span></span>; into <a href="group-14-module-system-composition.html#resetpasswordhandlerbasetuser-tcommand">ResetPasswordHandlerBase&lt;TUser, TCommand&gt;</a>, which hashes the replacement after the token redeems<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:94</code>)</span></span>; and into the per-app Identity services, handlers and seeders that derive from those, for example ADC&#39;s <a href="group-24-identity-module.html#authenticationservice">AuthenticationService</a><span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:49</code>)</span></span>, its <code>ChangePasswordHandler</code><span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordHandler.cs:26</code>)</span></span> and its module seeder (<span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModuleSeeder.cs:34</code></span></span>, which needs the hasher because seed data carries plaintext credentials).</li>
+          <li><strong>Where it&#39;s used</strong>: constructor-injected into <a href="#authenticationservicebasetuser">AuthenticationServiceBase&lt;TUser&gt;</a><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:77</code>)</span></span>, which calls <code>VerifyPassword</code> on the login path<span class="cite"><span> (<code>:159</code>)</span></span> and <code>HashPassword</code> on registration<span class="cite"><span> (<code>:210</code>)</span></span>; into the shared <a href="group-14-module-system-composition.html#changepasswordhandlerbasetuser-tcommand">ChangePasswordHandlerBase&lt;TUser, TCommand&gt;</a>, which verifies the current password<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:79</code>)</span></span> before hashing the new one<span class="cite"><span> (<code>:61</code>)</span></span>; into <a href="group-14-module-system-composition.html#resetpasswordhandlerbasetuser-tcommand">ResetPasswordHandlerBase&lt;TUser, TCommand&gt;</a>, which hashes the replacement after the token redeems<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:94</code>)</span></span>; and into the per-app Identity services, handlers and seeders that derive from those, for example ADC&#39;s <a href="group-24-identity-module.html#authenticationservice">AuthenticationService</a><span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:51</code>)</span></span>, its <code>ChangePasswordHandler</code><span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordHandler.cs:26</code>)</span></span> and its module seeder (<span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModuleSeeder.cs:34</code></span></span>, which needs the hasher because seed data carries plaintext credentials).</li>
           </ul>
           <h3 id="isoftdeleteduservalidator">ISoftDeletedUserValidator</h3>
           <blockquote>
@@ -2920,7 +2920,7 @@
           <li><strong>Depends on</strong>: BCL plus the solution-wide <code>UserIdentifierType</code> alias<span class="cite"><span> (<code>:15</code>)</span></span>. See <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a> for the alias convention and <a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a> for soft-delete versus erasure. The generic implementation is <a href="group-14-module-system-composition.html#softdeleteduservalidatortuser">SoftDeletedUserValidator&lt;TUser&gt;</a>.</li>
           <li><strong>Concept introduced: closing the stateless-token window.</strong> <code>[Rubric §11, Security]</code> assesses whether revocation is timely. A JWT is stateless: once signed it stays valid until <code>exp</code>, even if the account behind it was deleted a minute later. This port lets middleware re-ask the question on every authenticated request and fail the request when the answer is yes, with no per-handler code. The comment at <span class="cite"><span><code>:5</code></span></span> states the second motive: the interface is declared in Application and implemented against the app&#39;s own <code>User</code> aggregate precisely so the middleware never takes a cross-module domain reference. That is the same dependency inversion as the other ports in this group, applied to a cross-module read.</li>
           <li><strong>Walkthrough</strong>: one member, <code>Task&lt;bool&gt; IsUserSoftDeletedAsync(UserIdentifierType userId, CancellationToken cancellationToken = default)</code><span class="cite"><span> (<code>:15</code>)</span></span>. One question, one answer, cancellable.</li>
-          <li><strong>Where it&#39;s used</strong>: <a href="group-12-api-hosting-mapping.html#softdeletedusermiddleware">SoftDeletedUserMiddleware</a> resolves it lazily from the request scope (<span class="cite"><span><code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:75</code></span></span> calls <code>context.RequestServices.GetService&lt;ISoftDeletedUserValidator&gt;()</code>, so a host that registers no implementation simply skips the check; the reason is stated at <span class="cite"><span><code>:43</code></span></span>) and queries it on a cache miss<span class="cite"><span> (<code>:113-115</code>)</span></span>. Both apps register the shared generic against their own user type: <span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:42</code></span></span> and <span class="cite"><span><code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:43</code></span></span>, both as <code>TryAddScoped&lt;ISoftDeletedUserValidator, SoftDeletedUserValidator&lt;User&gt;&gt;()</code>.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="group-12-api-hosting-mapping.html#softdeletedusermiddleware">SoftDeletedUserMiddleware</a> resolves it lazily from the request scope (<span class="cite"><span><code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:75</code></span></span> calls <code>context.RequestServices.GetService&lt;ISoftDeletedUserValidator&gt;()</code>, so a host that registers no implementation simply skips the check; the reason is stated at <span class="cite"><span><code>:43</code></span></span>) and queries it on a cache miss<span class="cite"><span> (<code>:113-115</code>)</span></span>. Both apps register the shared generic against their own user type: <span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:37</code></span></span> and <span class="cite"><span><code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:43</code></span></span>, both as <code>TryAddScoped&lt;ISoftDeletedUserValidator, SoftDeletedUserValidator&lt;User&gt;&gt;()</code>.</li>
           </ul>
           <h3 id="itokenservice">ITokenService</h3>
           <blockquote>
@@ -2930,9 +2930,9 @@
           <li><strong>What it is</strong>: the token-minting port called by the login and refresh use cases. It builds a signed JWT access token from explicit identity facts, generates an opaque refresh token, publishes the two token lifetimes, and recovers the <code>ClaimsPrincipal</code> from an expired-but-validly-signed access token.</li>
           <li><strong>Depends on</strong>: <code>System.Security.Claims</code> (BCL, <span class="cite"><span><code>:1</code></span></span>) and the <code>UserIdentifierType</code> alias. Its Infrastructure adapter is <a href="#tokenservice">TokenService</a>, which signs with the RSA key surfaced by <a href="#ijwksprovider">IJwksProvider</a>; <a href="#sessionstampingtokenservice">SessionStampingTokenService</a> is a second, internal implementation that decorates the first.</li>
           <li><strong>Concept introduced: token creation as an Infrastructure detail.</strong> <code>[Rubric §3, Clean Architecture]</code> assesses whether library-specific types stay out of the inner layers: the handlers call this contract and never see <code>System.IdentityModel.Tokens.Jwt</code>. <code>GetPrincipalFromExpiredToken</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ITokenService.cs:48</code>)</span></span> is the linchpin of the refresh flow: it validates the signature while deliberately ignoring lifetime, so an expired access token can still identify the user whose tokens are being rotated, returning <code>null</code> when the token is invalid<span class="cite"><span> (<code>:47</code>)</span></span>.</li>
-          <li><strong>Walkthrough</strong>: <code>GenerateAccessToken(UserIdentifierType userId, string email, string role, string fullName, IEnumerable&lt;Claim&gt;? additionalClaims = null)</code><span class="cite"><span> (<code>:17-22</code>)</span></span> takes the minimum claim set as typed parameters rather than a ready-made principal, with an escape hatch for module-specific claims. <code>GenerateRefreshToken()</code><span class="cite"><span> (<code>:26</code>)</span></span> returns a cryptographically random base64 string. Two <strong>default interface members</strong> publish the lifetimes: <code>AccessTokenLifetime</code> (<span class="cite"><span><code>:33</code></span></span>, defaulting to 15 minutes) and <code>RefreshTokenLifetime</code> (<span class="cite"><span><code>:40</code></span></span>, defaulting to 7 days), both documented as the BR-205 baseline. The comments at <span class="cite"><span><code>:28-32</code></span></span> and <span class="cite"><span><code>:35-39</code></span></span> explain the split: the real implementation derives both from the bound JWT settings, so the expiry reported to a client matches the token&#39;s actual <code>exp</code>, while the defaults keep hand-written test doubles on the baseline instead of forcing every double to implement two more members. That derivation is visible in the concrete: <code>TimeSpan.FromMinutes(_jwtSettings.AccessTokenExpirationMinutes)</code> and <code>TimeSpan.FromDays(_jwtSettings.RefreshTokenExpirationDays)</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:152</code> and <code>:129</code>)</span></span>. <code>GetPrincipalFromExpiredToken(string token)</code><span class="cite"><span> (<code>:48</code>)</span></span> closes the set.</li>
+          <li><strong>Walkthrough</strong>: <code>GenerateAccessToken(UserIdentifierType userId, string email, string role, string fullName, IEnumerable&lt;Claim&gt;? additionalClaims = null)</code><span class="cite"><span> (<code>:17-22</code>)</span></span> takes the minimum claim set as typed parameters rather than a ready-made principal, with an escape hatch for module-specific claims. <code>GenerateRefreshToken()</code><span class="cite"><span> (<code>:26</code>)</span></span> returns a cryptographically random base64 string. Two <strong>default interface members</strong> publish the lifetimes: <code>AccessTokenLifetime</code> (<span class="cite"><span><code>:33</code></span></span>, defaulting to 15 minutes) and <code>RefreshTokenLifetime</code> (<span class="cite"><span><code>:40</code></span></span>, defaulting to 7 days), both documented as the BR-205 baseline. The comments at <span class="cite"><span><code>:28-32</code></span></span> and <span class="cite"><span><code>:35-39</code></span></span> explain the split: the real implementation derives both from the bound JWT settings, so the expiry reported to a client matches the token&#39;s actual <code>exp</code>, while the defaults keep hand-written test doubles on the baseline instead of forcing every double to implement two more members. That derivation is visible in the concrete: <code>TimeSpan.FromMinutes(_jwtSettings.AccessTokenExpirationMinutes)</code> and <code>TimeSpan.FromDays(_jwtSettings.RefreshTokenExpirationDays)</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:151</code> and <code>:129</code>)</span></span>. <code>GetPrincipalFromExpiredToken(string token)</code><span class="cite"><span> (<code>:48</code>)</span></span> closes the set.</li>
           <li><strong>Why it&#39;s built this way</strong>: the explicit-parameter overload is a <code>[Rubric §11, Security]</code> guardrail. The token&#39;s contents are a deliberate list, not whatever claims happened to ride in on an inbound principal. Surfacing the lifetimes through the same port removes the duplication where a caller would hard-code an expiry that could drift from the signed <code>exp</code>. Note the consumer still guards: <a href="#authenticationservicebasetuser">AuthenticationServiceBase&lt;TUser&gt;</a> falls back to the same 15-minute and 7-day baselines when an implementation reports a non-positive lifetime<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:137-146</code>)</span></span>.</li>
-          <li><strong>Where it&#39;s used</strong>: injected into <a href="#authenticationservicebasetuser">AuthenticationServiceBase&lt;TUser&gt;</a><span class="cite"><span> (<code>AuthenticationServiceBase.cs:76</code>)</span></span>, which reads the expired principal on refresh<span class="cite"><span> (<code>:278</code>)</span></span>, mints refresh tokens when opening and rotating sessions<span class="cite"><span> (<code>:627</code>, <code>:667</code>)</span></span>, and re-exposes a <em>wrapped</em> instance to subclasses through its <code>TokenService</code> property<span class="cite"><span> (<code>:82</code>)</span></span>. Each app&#39;s Identity service mints from that property, for example <span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:150-151</code></span></span> (access token plus the <code>speaker_id</code> claim). The rotated pair produced here is what <a href="#cookiesessionrefresher">CookieSessionRefresher</a> later exchanges on the browser&#39;s behalf.</li>
+          <li><strong>Where it&#39;s used</strong>: injected into <a href="#authenticationservicebasetuser">AuthenticationServiceBase&lt;TUser&gt;</a><span class="cite"><span> (<code>AuthenticationServiceBase.cs:76</code>)</span></span>, which reads the expired principal on refresh<span class="cite"><span> (<code>:278</code>)</span></span>, mints refresh tokens when opening and rotating sessions<span class="cite"><span> (<code>:627</code>, <code>:667</code>)</span></span>, and re-exposes a <em>wrapped</em> instance to subclasses through its <code>TokenService</code> property<span class="cite"><span> (<code>:82</code>)</span></span>. Each app&#39;s Identity service mints from that property, for example <span class="cite"><span><code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:153-154</code></span></span> (access token plus the <code>speaker_id</code> claim). The rotated pair produced here is what <a href="#cookiesessionrefresher">CookieSessionRefresher</a> later exchanges on the browser&#39;s behalf.</li>
           </ul>
           <h3 id="itwofactoruserstate">ITwoFactorUserState</h3>
           <blockquote>
@@ -2963,7 +2963,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: keeping the contract in Domain and keeping it small is what makes the shared auth workflow reusable across Store and ADC (both <code>User</code> aggregates satisfy it) while each aggregate stays free to model everything else its own way. See <a href="https://ivanball.github.io/docs/adr/032-password-hashing.html" target="_blank" rel="noopener">ADR-032</a> for the password-material policy, <a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a> for the dual-fetch auth model this contract feeds, and <a href="https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html" target="_blank" rel="noopener">ADR-097</a> for the refresh-token move.</li>
-          <li><strong>Where it&#39;s used</strong>: it is half the generic constraint on the shared login and registration workflow, <code>where TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;, IAuthUser</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:85</code>)</span></span>, which reads both properties on the login path<span class="cite"><span> (<code>:159</code>)</span></span> and writes the pair on registration<span class="cite"><span> (<code>:210</code>)</span></span>. It is also the base of <a href="#ipasswordchangeableuser">IPasswordChangeableUser</a>, and the shape hand-written test doubles copy<span class="cite"><span> (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Auth/AuthenticationServiceBaseTests.cs:1034</code>)</span></span>.</li>
+          <li><strong>Where it&#39;s used</strong>: it is half the generic constraint on the shared login and registration workflow, <code>where TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;, IAuthUser</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:85</code>)</span></span>, which reads both properties on the login path<span class="cite"><span> (<code>:159</code>)</span></span> and writes the pair on registration<span class="cite"><span> (<code>:210</code>)</span></span>. It is also the base of <a href="#ipasswordchangeableuser">IPasswordChangeableUser</a>, and the shape hand-written test doubles copy<span class="cite"><span> (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Auth/AuthenticationServiceBaseTests.cs:946</code>)</span></span>.</li>
           <li><strong>Caveats / not-in-source</strong>: the doc comment on <code>PasswordSalt</code> still says the salt&#39;s length selects the verify algorithm<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:22</code>)</span></span>. That was true while <a href="#passwordhasher">PasswordHasher</a> also verified a legacy HMAC-SHA512 format; the current implementation has one algorithm and one salt size (<code>SaltSize = 32</code>, <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:15</code></span></span>, with no legacy branch) per <a href="https://ivanball.github.io/docs/adr/102-pbkdf2-only-password-hashing.html" target="_blank" rel="noopener">ADR-102</a>. The comment is stale; the code is the contract.</li>
           </ul>
           <h3 id="ipasswordchangeableuser">IPasswordChangeableUser</h3>
@@ -2976,7 +2976,7 @@
           <li><strong>Concept: capability interfaces layered by workflow.</strong> <code>[Rubric §1, SOLID]</code> assesses interface segregation, and this is the pattern applied twice over: a <code>User</code> that only ever authenticates satisfies <a href="#iauthuser">IAuthUser</a>; a <code>User</code> whose app offers self-service password change implements this one and gets <code>PasswordHash</code> and <code>PasswordSalt</code> along with it, because the workflow must verify the current credential before writing the new one (the XML comment states exactly this reason, <span class="cite"><span><code>:7-9</code></span></span>). Inheritance here encodes a real dependency between capabilities rather than a taxonomy. <code>[Rubric §4, DDD]</code> also applies: the method returns <a href="group-01-result-error-handling.html#result">Result</a>, so the aggregate can refuse the change (an invariant failure) instead of the handler assuming success.</li>
           <li><strong>Walkthrough</strong>: one member, <code>Result ChangePassword(byte[] newPasswordHash, byte[] newPasswordSalt)</code><span class="cite"><span> (<code>:19</code>)</span></span>. The aggregate receives already-hashed material, never a plaintext password: hashing is the handler&#39;s job via <a href="#ipasswordhasher">IPasswordHasher</a>, so no plaintext ever reaches the Domain layer or an EF change tracker.</li>
           <li><strong>Why it&#39;s built this way</strong>: keeping the hash-and-salt pair as the parameter shape mirrors <a href="#iauthuser">IAuthUser</a>&#39;s two properties and <a href="#ipasswordhasher">IPasswordHasher</a>&#39;s tuple return, so the whole chain from handler to aggregate speaks one vocabulary. See <a href="https://ivanball.github.io/docs/adr/032-password-hashing.html" target="_blank" rel="noopener">ADR-032</a>.</li>
-          <li><strong>Where it&#39;s used</strong>: as the generic constraint <code>where TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;, IPasswordChangeableUser</code> on the shared change-password workflow<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:42</code>)</span></span>, which verifies the current password<span class="cite"><span> (<code>:55</code>)</span></span>, hashes the new one<span class="cite"><span> (<code>:61</code>)</span></span>, and calls <code>ChangePassword</code> with the result<span class="cite"><span> (<code>:62</code>)</span></span>. The forgot-password sibling, <a href="group-14-module-system-composition.html#resetpasswordhandlerbasetuser-tcommand">ResetPasswordHandlerBase&lt;TUser, TCommand&gt;</a>, calls the same member on the redeem path after <a href="#ipasswordresettokenservice">IPasswordResetTokenService</a> has identified the account<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:94-95</code>)</span></span>. Both apps&#39; <a href="group-24-identity-module.html#user">User</a> aggregates declare it<span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34-35</code>, <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:29-30</code>)</span></span>, which is also how they pick up <a href="#iauthuser">IAuthUser</a>.</li>
+          <li><strong>Where it&#39;s used</strong>: as the generic constraint <code>where TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;, IPasswordChangeableUser</code> on the shared change-password workflow<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:40</code>)</span></span>, which verifies the current password<span class="cite"><span> (<code>:55</code>)</span></span>, hashes the new one<span class="cite"><span> (<code>:61</code>)</span></span>, and calls <code>ChangePassword</code> with the result<span class="cite"><span> (<code>:62</code>)</span></span>. The forgot-password sibling, <a href="group-14-module-system-composition.html#resetpasswordhandlerbasetuser-tcommand">ResetPasswordHandlerBase&lt;TUser, TCommand&gt;</a>, calls the same member on the redeem path after <a href="#ipasswordresettokenservice">IPasswordResetTokenService</a> has identified the account<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:94-95</code>)</span></span>. Both apps&#39; <a href="group-24-identity-module.html#user">User</a> aggregates declare it<span class="cite"><span> (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:34-35</code>, <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:29-30</code>)</span></span>, which is also how they pick up <a href="#iauthuser">IAuthUser</a>.</li>
           </ul>
           <h3 id="iuserpreferences">IUserPreferences</h3>
           <blockquote>
@@ -3103,7 +3103,7 @@
           <ul>
           <li><strong>What it is</strong>: the <code>Jwks</code> section that controls whether an Identity service publishes a JSON Web Key Set at <code>/.well-known/jwks.json</code>, and where its RSA public key comes from<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:5-9</code>)</span></span>.</li>
           <li><strong>Depends on</strong>: <code>System.ComponentModel.DataAnnotations</code> for <code>[StringLength]</code> (BCL, <span class="cite"><span><code>:1</code></span></span>) only. Consumed by <a href="#rsajwksprovider">RsaJwksProvider</a> and <a href="#tokenservice">TokenService</a> through <code>IOptions&lt;JwksSettings&gt;</code>.</li>
-          <li><strong>Concept introduced: key distribution as configuration.</strong> <code>[Rubric §11, Security]</code> assesses how trust is established between services. In a single-process monolith the issuer and the validator can share one symmetric secret. Once a module is extracted, the validator must obtain the issuer&#39;s <em>public</em> key without sharing anything secret, which is what a JWKS document is for (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>, <a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a>). <code>[Rubric §7, Microservices Readiness]</code>: the framework ships the endpoint always and the key set empty, so nothing about a deployment changes until a host flips <code>Enabled</code>. The <code>kid</code> contract is the subtle part: <code>KeyId</code> is published as the JWK <code>kid</code> and must match the <code>kid</code> header on tokens the issuer signs (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:13-14</code></span></span>, restated on the property itself at <span class="cite"><span><code>:28-32</code></span></span>), otherwise a validator holding a correct key set still cannot pick the right key. <a href="#tokenservice">TokenService</a> closes that loop by taking these same options and stamping <code>KeyId</code> onto every RS256 token it signs<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:58-63</code>, <code>:57</code>, <code>:67</code>)</span></span>.</li>
+          <li><strong>Concept introduced: key distribution as configuration.</strong> <code>[Rubric §11, Security]</code> assesses how trust is established between services. In a single-process monolith the issuer and the validator can share one symmetric secret. Once a module is extracted, the validator must obtain the issuer&#39;s <em>public</em> key without sharing anything secret, which is what a JWKS document is for (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>, <a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a>). <code>[Rubric §7, Microservices Readiness]</code>: the framework ships the endpoint always and the key set empty, so nothing about a deployment changes until a host flips <code>Enabled</code>. The <code>kid</code> contract is the subtle part: <code>KeyId</code> is published as the JWK <code>kid</code> and must match the <code>kid</code> header on tokens the issuer signs (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:13-14</code></span></span>, restated on the property itself at <span class="cite"><span><code>:28-32</code></span></span>), otherwise a validator holding a correct key set still cannot pick the right key. <a href="#tokenservice">TokenService</a> closes that loop by taking these same options and stamping <code>KeyId</code> onto every RS256 token it signs<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:57-62</code>, <code>:57</code>, <code>:67</code>)</span></span>.</li>
           <li><strong>Walkthrough</strong>:<ul>
           <li><code>SectionName = &quot;Jwks&quot;</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwksSettings.cs:20</code>)</span></span>.</li>
           <li><code>Enabled</code><span class="cite"><span> (<code>:26</code>)</span></span>, defaulting to <code>false</code> with the rationale spelled out inline<span class="cite"><span> (<code>:22-25</code>)</span></span>: existing HMAC-only deployments must not start advertising an RSA key set by accident.</li>
@@ -3113,7 +3113,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: default-off plus an empty key set means the endpoint is safe to map unconditionally, and two key sources cover both &quot;inline it in configuration&quot; and &quot;mount it as a secret&quot; without a second code path in the provider.</li>
-          <li><strong>Where it&#39;s used</strong>: bound with <code>.ValidateDataAnnotations().ValidateOnStart()</code> in <code>AddInfrastructure</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:182-185</code>)</span></span>, immediately followed by the <a href="#ijwksprovider">IJwksProvider</a> registration<span class="cite"><span> (<code>:183</code>)</span></span>. <a href="#tokenservice">TokenService</a> takes it as an optional constructor dependency and falls back to <code>new JwksSettings().KeyId</code> when it is absent<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:80</code>)</span></span>.</li>
+          <li><strong>Where it&#39;s used</strong>: bound with <code>.ValidateDataAnnotations().ValidateOnStart()</code> in <code>AddInfrastructure</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:182-185</code>)</span></span>, immediately followed by the <a href="#ijwksprovider">IJwksProvider</a> registration<span class="cite"><span> (<code>:183</code>)</span></span>. <a href="#tokenservice">TokenService</a> takes it as an optional constructor dependency and falls back to <code>new JwksSettings().KeyId</code> when it is absent<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:79</code>)</span></span>.</li>
           </ul>
           <h3 id="jwtsigningalgorithm">JwtSigningAlgorithm</h3>
           <blockquote>
@@ -3125,7 +3125,7 @@
           <li><strong>Concept introduced: the deployment shape encoded as one configuration value.</strong> <code>[Rubric §11, Security]</code> assesses key management: HS256 requires every validator to hold the <em>signing</em> key, which is acceptable only while issuer and validators share a process. RS256 splits the pair, the issuer holds the private key and peers validate against the JWKS endpoint, so no peer ever holds the signing key (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>). <code>[Rubric §7, Microservices Readiness]</code>: making this a configuration value rather than a compile-time choice is what lets the same binaries run both topologies, and the type&#39;s own doc says RS256 is also the right choice for a monolith that intends to extract later, because the token format does not change when it does<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSigningAlgorithm.cs:8-12</code>)</span></span>. The operational consequence is stated just as plainly: switching a running deployment between the two invalidates every existing token, a hard cutover<span class="cite"><span> (<code>:17-18</code>)</span></span>.</li>
           <li><strong>Walkthrough</strong>: <code>HS256 = 0</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSigningAlgorithm.cs:24</code>)</span></span> and <code>RS256 = 1</code><span class="cite"><span> (<code>:27</code>)</span></span>, both with explicit ordinals.<ul>
           <li>The default is RS256, and where that default lives is worth being precise about. The enum&#39;s zero value is HS256, so a configuration binder that saw an <em>invalid</em> value would land there; but a host that simply omits <code>Jwt:SigningAlgorithm</code> never has the property set at all, and <a href="#jwtsettings">JwtSettings</a>&#39;s own initializer holds<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:30</code>)</span></span>. The default is a property initializer, not the enum ordinal.</li>
-          <li><a href="#tokenservice">TokenService</a> branches on the value once, in its constructor, and caches the resulting credentials<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:77-87</code>)</span></span>, with the RSA and HMAC builders at <span class="cite"><span><code>:194</code></span></span> and <span class="cite"><span><code>:180</code></span></span>. Each builder throws a named <code>InvalidOperationException</code> when its key material is missing<span class="cite"><span> (<code>:184</code>, <code>:200</code>)</span></span>.</li>
+          <li><a href="#tokenservice">TokenService</a> branches on the value once, in its constructor, and caches the resulting credentials<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:76-86</code>)</span></span>, with the RSA and HMAC builders at <span class="cite"><span><code>:194</code></span></span> and <span class="cite"><span><code>:180</code></span></span>. Each builder throws a named <code>InvalidOperationException</code> when its key material is missing<span class="cite"><span> (<code>:184</code>, <code>:200</code>)</span></span>.</li>
           <li>The API layer branches on the same value when configuring in-process JWT bearer validation: <code>BuildValidationParameters</code> takes the RSA path for RS256<span class="cite"><span> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:209-232</code>)</span></span> and, when the public key is absent, throws a message that points the reader at <code>AddForwardedJwtBearer</code> for services that fetch the key through JWKS at runtime instead<span class="cite"><span> (<code>:211-215</code>)</span></span>.</li>
           </ul>
           </li>
@@ -3199,7 +3199,7 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: keeping the conditional rule in code next to the properties it constrains, rather than in the registration call, means every host that binds this section gets the same guarantee without repeating it. The algorithm switch is a hard cutover that invalidates every existing token<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSigningAlgorithm.cs:17-18</code>)</span></span>, so failing the boot on a half-configured section is much cheaper than discovering it at the first sign or the first validation.</li>
-          <li><strong>Where it&#39;s used</strong>: bound in <code>AddCommonAuthentication</code><span class="cite"><span> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:146-149</code>)</span></span>, which then re-reads the section eagerly to build the token validation parameters at wiring time<span class="cite"><span> (<code>:154-157</code>)</span></span>; consumed by <a href="#tokenservice">TokenService</a> through <code>IOptions&lt;JwtSettings&gt;</code>, which branches on the algorithm once in the constructor and caches the credentials<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:64-88</code>)</span></span>.</li>
+          <li><strong>Where it&#39;s used</strong>: bound in <code>AddCommonAuthentication</code><span class="cite"><span> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:146-149</code>)</span></span>, which then re-reads the section eagerly to build the token validation parameters at wiring time<span class="cite"><span> (<code>:154-157</code>)</span></span>; consumed by <a href="#tokenservice">TokenService</a> through <code>IOptions&lt;JwtSettings&gt;</code>, which branches on the algorithm once in the constructor and caches the credentials<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:63-87</code>)</span></span>.</li>
           </ul>
           <h3 id="rsajwksprovider">RsaJwksProvider</h3>
           <blockquote>
@@ -3302,11 +3302,11 @@
           hashes on registration<span class="cite"><span> (<code>:210</code>)</span></span>;
           <a href="group-14-module-system-composition.html#changepasswordhandlerbasetuser-tcommand"><code>ChangePasswordHandlerBase&lt;TUser, TCommand&gt;</code></a>
           verifies the current password then re-hashes the new one<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:38</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:36</code>,
           <code>:55</code>, <code>:61</code>)</span></span>; and
           <a href="group-14-module-system-composition.html#resetpasswordhandlerbasetuser-tcommand"><code>ResetPasswordHandlerBase&lt;TUser, TCommand&gt;</code></a>
           only hashes<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:45</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:43</code>,
           <code>:79</code>)</span></span>, because possession of the reset token stands in for knowledge of the old password.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>VerifyPassword</code> returns a plain <code>bool</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:43</code>)</span></span>, so there is no
@@ -3328,8 +3328,8 @@
           <a href="group-08-auth.html#jwtsettings"><code>JwtSettings</code></a>,
           <a href="group-08-auth.html#jwtsigningalgorithm"><code>JwtSigningAlgorithm</code></a> and
           <a href="group-08-auth.html#jwkssettings"><code>JwksSettings</code></a>, all bound through
-          <code>IOptions&lt;T&gt;</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:64-68</code>)</span></span>;
-          <a href="#ipermissionregistry"><code>IPermissionRegistry</code></a>, a required constructor dependency<span class="cite"><span> (<code>:29</code>, <code>:66</code>)</span></span>
+          <code>IOptions&lt;T&gt;</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:63-67</code>)</span></span>;
+          <a href="#ipermissionregistry"><code>IPermissionRegistry</code></a>, a required constructor dependency<span class="cite"><span> (<code>:29</code>, <code>:65</code>)</span></span>
           that supplies the role-to-permission map baked into every access token.
           Externals: <code>System.IdentityModel.Tokens.Jwt</code> (<code>JwtSecurityToken</code>, <code>JwtSecurityTokenHandler</code>),
           <code>Microsoft.IdentityModel.Tokens</code> (<code>SigningCredentials</code>, <code>SecurityKey</code>, <code>TokenValidationParameters</code>),
@@ -3337,12 +3337,12 @@
           <li><strong>Concept introduced: asymmetric issuance, and one deliberate hole in validation.</strong>
           <code>[Rubric §11, Security]</code> assesses token issuance and algorithm-confusion defense, and two choices
           here are worth reading slowly. First, <code>GetPrincipalFromExpiredToken</code> sets <code>ValidateLifetime = false</code>
-          on purpose<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:172</code>)</span></span> under
-          a narrowly scoped <code>#pragma warning disable CA5404</code> (<span class="cite"><span><code>:171</code></span></span>, restored at <span class="cite"><span><code>:173</code></span></span>) whose comment states
+          on purpose<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:171</code>)</span></span> under
+          a narrowly scoped <code>#pragma warning disable CA5404</code> (<span class="cite"><span><code>:170</code></span></span>, restored at <span class="cite"><span><code>:172</code></span></span>) whose comment states
           why: the refresh flow&#39;s whole job is reading claims out of a token that has already expired. Every
-          other check stays on<span class="cite"><span> (<code>:168-170</code>)</span></span>. Second, the algorithm is pinned twice: <code>ValidAlgorithms</code> limits
-          validation to the one algorithm this instance was built for<span class="cite"><span> (<code>:177</code>)</span></span>, and the token header&#39;s <code>alg</code> is
-          re-compared with an ordinal string comparison <em>after</em> validation succeeds<span class="cite"><span> (<code>:186-187</code>)</span></span>. That pair is
+          other check stays on<span class="cite"><span> (<code>:167-169</code>)</span></span>. Second, the algorithm is pinned twice: <code>ValidAlgorithms</code> limits
+          validation to the one algorithm this instance was built for<span class="cite"><span> (<code>:176</code>)</span></span>, and the token header&#39;s <code>alg</code> is
+          re-compared with an ordinal string comparison <em>after</em> validation succeeds<span class="cite"><span> (<code>:185-186</code>)</span></span>. That pair is
           the defense against algorithm substitution, where an attacker takes the RSA <em>public</em> key (which is
           published on purpose) and presents it as an HMAC shared secret.
           <code>[Rubric §7, Microservices Readiness]</code> applies to the algorithm switch itself: RS256, the default,
@@ -3351,10 +3351,12 @@
           (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>). HS256 remains
           available for a single-process monolith, where issuer and validator are the same host and a shared
           secret costs nothing<span class="cite"><span> (<code>:16-23</code>)</span></span>. <code>[Rubric §14, Testability]</code> shows up in the constructor: the clock
-          is an injected <code>TimeProvider</code> with a <code>TimeProvider.System</code> fallback<span class="cite"><span> (<code>:67</code>)</span></span>, so a test can assert
-          <code>iat</code>/<code>nbf</code>/<code>exp</code> without waiting for wall-clock time to pass. A third, <code>[Rubric §20, Policy and Enforcement Points]</code> concept sits in <code>GenerateAccessToken</code> itself: every access token now carries one
-          <a href="#authclaimtypes"><code>AuthClaimTypes</code></a><code>.Permission</code> claim per permission
-          <a href="#ipermissionregistry"><code>IPermissionRegistry</code></a> grants the token&#39;s role<span class="cite"><span> (<code>:119-131</code>)</span></span>, so a client can
+          is an injected, required <code>TimeProvider</code> with no <code>TimeProvider.System</code> fallback<span class="cite"><span> (<code>:66</code>, <code>:74</code>)</span></span>,
+          resolved from whatever DI registration adds it in the container&#39;s <code>AddServices</code> call, so a test
+          passes its own and can assert <code>iat</code>/<code>nbf</code>/<code>exp</code> without waiting for wall-clock time to pass. A third,
+          <code>[Rubric §20, Policy and Enforcement Points]</code> concept sits in <code>GenerateAccessToken</code> itself: every
+          access token now carries one <a href="#authclaimtypes"><code>AuthClaimTypes</code></a><code>.Permission</code> claim per permission
+          <a href="#ipermissionregistry"><code>IPermissionRegistry</code></a> grants the token&#39;s role<span class="cite"><span> (<code>:118-130</code>)</span></span>, so a client can
           gate its own surface on a capability rather than a role name it would otherwise have to know. A host
           that declared no grants resolves <a href="#unconfiguredpermissionregistry"><code>UnconfiguredPermissionRegistry</code></a>,
           which grants nothing, and its tokens simply carry no permission claims (<span class="cite"><span><code>:46-52</code></span></span>, the constructor&#39;s
@@ -3366,63 +3368,65 @@
           nullable owned <code>RSA</code> handles. The comment at <span class="cite"><span><code>:35-36</code></span></span> explains why <code>IDisposable</code> is on the class at
           all: <code>RsaSecurityKey</code> does not own the <code>RSA</code> it wraps, so something has to.</li>
           <li>The constructor<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:64-88</code>)</span></span> takes
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:63-87</code>)</span></span> takes
           <code>IPermissionRegistry permissionRegistry</code> as a required parameter, null-guarded alongside
-          <code>jwtOptions</code><span class="cite"><span> (<code>:70-71</code>)</span></span> and assigned to <code>_permissionRegistry</code><span class="cite"><span> (<code>:74</code>)</span></span>. It materializes all key
+          <code>jwtOptions</code><span class="cite"><span> (<code>:69-70</code>)</span></span> and assigned to <code>_permissionRegistry</code><span class="cite"><span> (<code>:73</code>)</span></span>. <code>TimeProvider timeProvider</code>
+          is likewise a required parameter with no default<span class="cite"><span> (<code>:66</code>)</span></span>, assigned straight to <code>_timeProvider</code>
+          with no fallback<span class="cite"><span> (<code>:74</code>)</span></span>. It materializes all key
           material exactly once, so no token operation re-parses a PEM. For <code>JwtSigningAlgorithm.RS256</code> it
-          builds RSA credentials and pins <code>SecurityAlgorithms.RsaSha256</code><span class="cite"><span> (<code>:78-81</code>)</span></span>; the key id it passes is
-          <code>jwksSettings?.Value.KeyId</code> falling back to a default <code>JwksSettings</code> instance<span class="cite"><span> (<code>:80</code>)</span></span>, which is how
+          builds RSA credentials and pins <code>SecurityAlgorithms.RsaSha256</code><span class="cite"><span> (<code>:78-80</code>)</span></span>; the key id it passes is
+          <code>jwksSettings?.Value.KeyId</code> falling back to a default <code>JwksSettings</code> instance<span class="cite"><span> (<code>:79</code>)</span></span>, which is how
           the same <code>kid</code> ends up on both the token and the published JWK<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:45</code>)</span></span>. Otherwise it
-          builds HMAC credentials and pins <code>HmacSha256</code><span class="cite"><span> (<code>:85-86</code>)</span></span>.</li>
+          builds HMAC credentials and pins <code>HmacSha256</code><span class="cite"><span> (<code>:84-85</code>)</span></span>.</li>
           <li><code>GenerateAccessToken(userId, email, role, fullName, additionalClaims)</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:91-134</code>)</span></span> reads the
-          clock once<span class="cite"><span> (<code>:98</code>)</span></span>, then builds six claims<span class="cite"><span> (<code>:104-112</code>)</span></span>: <code>sub</code> (the user id, formatted with
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:90-141</code>)</span></span> reads the
+          clock once<span class="cite"><span> (<code>:97</code>)</span></span>, then builds six claims<span class="cite"><span> (<code>:103-111</code>)</span></span>: <code>sub</code> (the user id, formatted with
           <code>CultureInfo.InvariantCulture</code>), <code>jti</code> (a fresh GUID, so a token is individually identifiable),
-          <code>iat</code> as Unix seconds, and the standard name, email and role claims. The comment at <span class="cite"><span><code>:100-103</code></span></span> is a
+          <code>iat</code> as Unix seconds, and the standard name, email and role claims. The comment at <span class="cite"><span><code>:99-102</code></span></span> is a
           design note worth internalizing: <code>sub</code> is the <em>only</em> carrier of the user id. A duplicate custom
           claim used to ride alongside it, which meant two values that could disagree and two claim names
           every reader had to know; readers now go through
           <a href="#claimsprincipalextensions"><code>ClaimsPrincipalExtensions</code></a> instead. Caller-supplied claims are
-          appended<span class="cite"><span> (<code>:114-117</code>)</span></span>. Then, before the token is assembled, permission claims are added<span class="cite"><span>
-          (<code>:119-131</code>)</span></span>: <code>alreadyClaimed</code> collects any <code>Permission</code> claim value already present in <code>claims</code><span class="cite"><span>
-          (<code>:123-126</code>)</span></span>, and every permission <code>_permissionRegistry.GetPermissions(role)</code> returns that is not
-          already in that set is appended, ordered ordinally for a deterministic token per role<span class="cite"><span> (<code>:128-131</code>)</span></span>.
+          appended<span class="cite"><span> (<code>:113-116</code>)</span></span>. Then, before the token is assembled, permission claims are added<span class="cite"><span>
+          (<code>:118-130</code>)</span></span>: <code>alreadyClaimed</code> collects any <code>Permission</code> claim value already present in <code>claims</code><span class="cite"><span>
+          (<code>:122-125</code>)</span></span>, and every permission <code>_permissionRegistry.GetPermissions(role)</code> returns that is not
+          already in that set is appended, ordered ordinally for a deterministic token per role<span class="cite"><span> (<code>:127-130</code>)</span></span>.
           A <code>JwtSecurityToken</code> is then assembled with issuer, audience, <code>notBefore</code> from the injected clock and
           <code>expires</code> at <code>now + AccessTokenExpirationMinutes</code>, and serialized.</li>
           <li><code>GenerateRefreshToken()</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:145-149</code>)</span></span> returns 64
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:144-148</code>)</span></span> returns 64
           CSPRNG bytes Base64-encoded. It is not a JWT and carries no claims: it is an opaque bearer string
           whose only property is being unguessable, and the store it is compared against is what gives it
           meaning.</li>
           <li><code>AccessTokenLifetime</code> and <code>RefreshTokenLifetime</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:152</code>, <code>:155</code>)</span></span> project
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:151</code>, <code>:154</code>)</span></span> project
           the configured minutes and days, so callers computing an expiry timestamp never re-read settings
           and never disagree with the token just minted.</li>
           <li><code>GetPrincipalFromExpiredToken(string token)</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:164-198</code>)</span></span> builds the
-          validation parameters described above<span class="cite"><span> (<code>:166-178</code>)</span></span>, validates<span class="cite"><span> (<code>:184</code>)</span></span>, applies the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:163-197</code>)</span></span> builds the
+          validation parameters described above<span class="cite"><span> (<code>:165-177</code>)</span></span>, validates<span class="cite"><span> (<code>:183</code>)</span></span>, applies the
           post-validation <code>alg</code> re-check and returns <code>null</code> when the token is not a <code>JwtSecurityToken</code> or the
-          header disagrees<span class="cite"><span> (<code>:186-190</code>)</span></span>, and swallows every exception into <code>null</code><span class="cite"><span> (<code>:194-197</code>)</span></span>. A malformed,
+          header disagrees<span class="cite"><span> (<code>:185-189</code>)</span></span>, and swallows every exception into <code>null</code><span class="cite"><span> (<code>:193-196</code>)</span></span>. A malformed,
           forged, or wrong-issuer token therefore produces a plain &quot;no principal&quot; answer rather than a parser
           exception leaking to the caller.</li>
-          <li><code>Dispose()</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:201-205</code>)</span></span>
+          <li><code>Dispose()</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:200-204</code>)</span></span>
           releases both owned <code>RSA</code> handles.</li>
           <li><code>BuildHmacCredentials</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:207-219</code>)</span></span> throws
-          <code>InvalidOperationException</code> when <code>SecretForKey</code> is missing<span class="cite"><span> (<code>:209-213</code>)</span></span> and Base64-decodes it into
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:206-218</code>)</span></span> throws
+          <code>InvalidOperationException</code> when <code>SecretForKey</code> is missing<span class="cite"><span> (<code>:208-212</code>)</span></span> and Base64-decodes it into
           a <code>SymmetricSecurityKey</code> used for both signing and validation<span class="cite"><span> (<code>:215-217</code>)</span></span>.</li>
           <li><code>BuildRsaCredentials</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:221-276</code>)</span></span> throws when
-          <code>RsaPrivateKeyPem</code> is missing<span class="cite"><span> (<code>:225-229</code>)</span></span>, imports the private key<span class="cite"><span> (<code>:231-234</code>)</span></span>, and stamps the
-          key id on the signing key<span class="cite"><span> (<code>:240</code>)</span></span> so every RS256 token carries a <code>kid</code> header. The comment at
-          <span class="cite"><span><code>:236-239</code></span></span> gives the reason: a validator reading the published JWKS selects the key by name, and
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:220-275</code>)</span></span> throws when
+          <code>RsaPrivateKeyPem</code> is missing<span class="cite"><span> (<code>:224-228</code>)</span></span>, imports the private key<span class="cite"><span> (<code>:230-233</code>)</span></span>, and stamps the
+          key id on the signing key<span class="cite"><span> (<code>:239</code>)</span></span> so every RS256 token carries a <code>kid</code> header. The comment at
+          <span class="cite"><span><code>:235-238</code></span></span> gives the reason: a validator reading the published JWKS selects the key by name, and
           without a <code>kid</code> it has to try every published key, which stops working the moment a rotation
           publishes two. The validation key prefers the configured <code>RsaPublicKeyPem</code> and otherwise derives
-          the public parameters from the private key<span class="cite"><span> (<code>:249-257</code>)</span></span>, so an issuer configured with only a
-          private key still validates its own tokens during refresh; it carries the same key id<span class="cite"><span> (<code>:262</code>)</span></span>.
-          Both nested <code>try</code>/<code>catch</code> blocks dispose the partially built <code>RSA</code> before rethrowing<span class="cite"><span> (<code>:265-269</code>,
-          <code>:271-275</code>)</span></span>, so a bad PEM does not leak a native handle. Because all of this runs in the
+          the public parameters from the private key<span class="cite"><span> (<code>:248-256</code>)</span></span>, so an issuer configured with only a
+          private key still validates its own tokens during refresh; it carries the same key id<span class="cite"><span> (<code>:261</code>)</span></span>.
+          Both nested <code>try</code>/<code>catch</code> blocks dispose the partially built <code>RSA</code> before rethrowing<span class="cite"><span> (<code>:264-268</code>,
+          <code>:270-274</code>)</span></span>, so a bad PEM does not leak a native handle. Because all of this runs in the
           constructor, missing or malformed key material fails at host startup, not on the first login.</li>
           </ul>
           </li>
@@ -3455,7 +3459,7 @@
           <a href="#claimbaseduseridprovider"><code>ClaimBasedUserIdProvider</code></a> read back.</li>
           <li><strong>Caveats / not-in-source</strong>: nothing here rotates or reloads key material. The keys are read once in
           the constructor<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:64-88</code>)</span></span> and the
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:63-87</code>)</span></span> and the
           instance is a singleton, so a key change takes a host restart. Refresh-token storage, rotation and
           revocation are not in this file either: it only produces the random string.</li>
           </ul>
@@ -3639,7 +3643,7 @@
           </li>
           <li><strong>Walkthrough</strong>: six <code>public const string</code> fields and nothing else. <code>const</code> rather than
           <code>static readonly</code> so the values are usable in attribute arguments and in patterns that require
-          compile-time constants, the same reason <a href="#rolenames">RoleNames</a> uses <code>const</code>.</li>
+          compile-time constants, the same reason <a href="group-24-identity-module.html#rolenames">RoleNames</a> uses <code>const</code>.</li>
           <li><strong>Why it&#39;s built this way</strong>:
           <a href="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html" target="_blank" rel="noopener">ADR-020</a> makes the
           permission layer opt-in,
@@ -3652,14 +3656,14 @@
           <li><code>Permission</code> is written by <a href="#tokenservice">TokenService</a> itself, one claim per permission the
           injected <code>IPermissionRegistry</code> grants the token&#39;s role, sorted ordinally and deduplicated against
           any permission claim the caller already supplied<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:119-131</code>)</span></span>, and is read
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:118-130</code>)</span></span>, and is read
           by <a href="#permissionauthorizationhandler">PermissionAuthorizationHandler</a>, which checks
           <code>context.User.HasClaim(AuthClaimTypes.Permission, requirement.Permission)</code> before falling back to
           the registry<span class="cite"><span>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:30-31</code>)</span></span>,
           and by <a href="#claimsprincipalextensions">ClaimsPrincipalExtensions</a><code>.HasPermissionClaim</code>.</li>
           <li><code>Subject</code> is written by <a href="#tokenservice">TokenService</a> as <code>JwtRegisteredClaimNames.Sub</code>
-          (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:106</code></span></span>, with the
+          (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:105</code></span></span>, with the
           one-carrier rationale at <span class="cite"><span><code>:88-91</code></span></span>) and read through
           <a href="#claimsprincipalextensions">ClaimsPrincipalExtensions</a> by
           <a href="#currentuserservice">CurrentUserService</a>, <a href="#claimbaseduseridprovider">ClaimBasedUserIdProvider</a>,
@@ -3678,7 +3682,7 @@
           </ul>
           </li>
           <li><strong>Caveats / not-in-source</strong>: the <code>Permission</code> claim is now written by every token the framework
-          mints<span class="cite"><span> (<code>TokenService.cs:119-131</code>)</span></span>, which supersedes the older behavior where no shipped token
+          mints<span class="cite"><span> (<code>TokenService.cs:118-130</code>)</span></span>, which supersedes the older behavior where no shipped token
           issuer wrote it; a reader depending on <code>Permission</code> being absent from real tokens would be wrong
           today. The registry lookup remains the authoritative check either way, since the claim path is
           additive.</li>
@@ -3744,7 +3748,7 @@
           <li><strong>What it is</strong>: the abstraction that maps roles to the fine-grained permissions they grant, and the
           single place that knows which roles confer which capabilities<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/IPermissionRegistry.cs:3-14</code>)</span></span>.</li>
-          <li><strong>Depends on</strong>: nothing first-party; its remarks reference <a href="#rolenames">RoleNames</a> for the
+          <li><strong>Depends on</strong>: nothing first-party; its remarks reference <a href="group-24-identity-module.html#rolenames">RoleNames</a> for the
           case-insensitivity rule.</li>
           <li><strong>Concept introduced, permission (capability) authorization over role checks.</strong> <code>[Rubric §11, Security]</code> assesses the authorization model, and <code>[Rubric §1, SOLID]</code> assesses dependency inversion:
           endpoints depend on an abstraction, not on a role name. Instead of scattering
@@ -3879,10 +3883,10 @@
           </ul>
           </li>
           <li><p><strong>Why it&#39;s built this way</strong>: <a href="#tokenservice">TokenService</a> records the other half of the story in a
-          comment<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:100-103</code>)</span></span>: a
+          comment<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:99-102</code>)</span></span>: a
           duplicate custom user-id claim used to ride alongside <code>sub</code>, which meant two values that could
           disagree and two claim names every reader had to know. Collapsing the writer to one claim<span class="cite"><span>
-          (<code>TokenService.cs:106</code>)</span></span> is only safe because one reader absorbs the mapping difference, which is this
+          (<code>TokenService.cs:105</code>)</span></span> is only safe because one reader absorbs the mapping difference, which is this
           type. The <code>sid</code> half comes from
           <a href="https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html" target="_blank" rel="noopener">ADR-097</a>.</p>
           </li>
@@ -4037,7 +4041,7 @@
           <li><p><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#result"><code>Result</code></a> and
           <a href="group-01-result-error-handling.html#error"><code>Error</code></a> from <code>MMCA.Common.Shared.Abstractions</code><span class="cite"><span>
           (<code>RoleValue.cs:2</code>)</span></span>, plus <code>System.Collections.Frozen</code> from the BCL<span class="cite"><span> (<code>RoleValue.cs:1</code>)</span></span>. Its doc
-          comments point at <a href="#rolenames"><code>RoleNames</code></a> for the canonical strings<span class="cite"><span> (<code>RoleValue.cs:9</code>)</span></span> and at
+          comments point at <a href="group-24-identity-module.html#rolenames"><code>RoleNames</code></a> for the canonical strings<span class="cite"><span> (<code>RoleValue.cs:9</code>)</span></span> and at
           <code>ICurrentUserService.IsInRole</code> for the comparison semantics it matches<span class="cite"><span> (<code>RoleValue.cs:17</code>)</span></span>.
           Conceptually a value object (see <a href="group-02-domain-building-blocks.html#valueobject"><code>ValueObject</code></a>)
           but deliberately not derived from that base, for a reason the next bullet unpacks.</p>
@@ -4121,7 +4125,7 @@
           calls the shared <code>RoleValue.Validate</code> helper for its <code>IsValid</code><span class="cite"><span>
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/UserRole.cs:14,26-30,37</code>)</span></span>, so
           it inherits the rule set (case-insensitive membership, the <code>User.Role.Invalid</code> code) without
-          inheriting the type. Both key their known-role sets off the <a href="#rolenames"><code>RoleNames</code></a> constants,
+          inheriting the type. Both key their known-role sets off the <a href="group-24-identity-module.html#rolenames"><code>RoleNames</code></a> constants,
           and <a href="#permissionregistrybuilder"><code>PermissionRegistryBuilder</code></a> keeps its role keys on the same
           case-insensitive comparer to match<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/PermissionRegistryBuilder.cs:11</code>)</span></span>.</p>
@@ -4611,7 +4615,7 @@
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:52-60</code>)</span></span>,
           while ADC ignores it entirely and creates the user from email, names, hash, salt, and the default
           <code>UserRole.Attendee</code><span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:140-147</code>)</span></span>.</li>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:143-150</code>)</span></span>.</li>
           </ul>
           <h3 id="authenticationresponse">AuthenticationResponse</h3>
           <blockquote>
@@ -4714,11 +4718,11 @@
           <li><strong>Where it&#39;s used</strong>: ADC&#39;s Conference module builds entries from sessions in
           <a href="group-18-conference-application.html#calendarexportmapper"><code>CalendarExportMapper</code></a>, which does the
           event-zone to UTC conversion the contract demands (its <code>ToUtc</code> helper at
-          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/CalendarExportMapper.cs:47</code></span></span>)
-          and composes the <code>Uid</code> as <code>session-{id}@atldevcon</code> (<span class="cite"><span><code>CalendarExportMapper.cs:31-44</code></span></span>, the id at
+          <span class="cite"><span><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/CalendarExportMapper.cs:48</code></span></span>)
+          and composes the <code>Uid</code> as <code>session-{id}@atldevcon</code> (<span class="cite"><span><code>CalendarExportMapper.cs:32-45</code></span></span>, the id at
           <span class="cite"><span><code>:38</code></span></span>). The mapped entries reach
           <a href="group-18-conference-application.html#exportsessioncalendarhandler"><code>ExportSessionCalendarHandler</code></a><span class="cite"><span>
-          (<code>.../ExportCalendar/ExportSessionCalendarHandler.cs:51-54</code>)</span></span> and
+          (<code>.../ExportCalendar/ExportSessionCalendarHandler.cs:52-55</code>)</span></span> and
           <a href="group-18-conference-application.html#exporteventcalendarhandler"><code>ExportEventCalendarHandler</code></a><span class="cite"><span>
           (<code>.../ExportCalendar/ExportEventCalendarHandler.cs:46-53</code>)</span></span>.</li>
           <li><strong>Caveats / not-in-source</strong>: nothing in the type enforces that <code>StartsAtUtc</code> and <code>EndsAtUtc</code> really
@@ -4849,7 +4853,7 @@
           since nothing a client does with a session needs anything but its id. The rule is enforced by a
           reflection assertion rather than by review habit: a test asserts the type&#39;s property names contain
           neither <code>TokenHash</code> nor <code>ReplacedByTokenHash</code><span class="cite"><span>
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Auth/RefreshSessionManagementTests.cs:199-202</code>)</span></span>.
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Auth/RefreshSessionManagementTests.cs:200-203</code>)</span></span>.
           This is the read-model half of the &quot;never project a secret&quot; discipline; the same instinct is what
           keeps password hashes out of every user DTO.</li>
           <li><strong>Walkthrough</strong>: six positional parameters on a <code>sealed record</code><span class="cite"><span>
@@ -5174,15 +5178,15 @@
           <li><strong>Where it&#39;s used</strong>: ADC&#39;s Conference module only, from
           <a href="group-18-conference-application.html#exportsessioncalendarhandler"><code>ExportSessionCalendarHandler</code></a> for
           a single session<span class="cite"><span>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandler.cs:51-54</code>)</span></span>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandler.cs:52-55</code>)</span></span>
           and <a href="group-18-conference-application.html#exporteventcalendarhandler"><code>ExportEventCalendarHandler</code></a> for
           a whole event<span class="cite"><span> (<code>.../ExportCalendar/ExportEventCalendarHandler.cs:46-53</code>)</span></span>, both passing
           <a href="group-18-conference-application.html#calendarexportmapper"><code>CalendarExportMapper</code></a>&#39;s <code>ProductId</code>
           constant <code>-//MMCA//AtlDevCon//EN</code><span class="cite"><span> (<code>.../ExportCalendar/CalendarExportMapper.cs:17</code>)</span></span>.</li>
-          <li><strong>Caveats / not-in-source</strong>: both ADC handlers pass <code>DateTimeOffset.UtcNow</code> for <code>dtStamp</code><span class="cite"><span>
-          (<code>ExportSessionCalendarHandler.cs:54</code>, <code>ExportEventCalendarHandler.cs:53</code>)</span></span> rather than an injected
-          <code>TimeProvider</code>, so the determinism the builder guarantees is available to its own tests but not
-          exercised through the handlers.</li>
+          <li><strong>Caveats / not-in-source</strong>: both ADC handlers now pass an injected <code>TimeProvider</code>&#39;s <code>GetUtcNow()</code>
+          for <code>dtStamp</code><span class="cite"><span> (<code>ExportSessionCalendarHandler.cs:55</code>, <code>ExportEventCalendarHandler.cs:54</code>)</span></span>, so the
+          determinism the builder guarantees is exercised through the handlers as well as the builder&#39;s own
+          tests.</li>
           </ul>
           <h3 id="keyedsemaphorestripe">KeyedSemaphoreStripe</h3>
           <blockquote>
@@ -5383,9 +5387,9 @@
           the error decision to the caller keeps the parser free of HTTP status opinions.</li>
           <li><strong>Where it&#39;s used</strong>: server side,
           <a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a><code>.SetConcurrencyETag</code><span class="cite"><span>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:471</code>)</span></span> writes
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:405</code>)</span></span> writes
           <code>Response.Headers[ConcurrencyETag.ETagHeaderName] = ConcurrencyETag.Format(rowVersion)</code><span class="cite"><span>
-          (<code>EntityControllerBase.cs:479</code>)</span></span> after a successful by-id read<span class="cite"><span> (<code>EntityControllerBase.cs:436</code>)</span></span>, and
+          (<code>EntityControllerBase.cs:413</code>)</span></span> after a successful by-id read<span class="cite"><span> (<code>EntityControllerBase.cs:370</code>)</span></span>, and
           the CRUD base does the same after a create<span class="cite"><span>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/CrudEntityControllerBase.cs:112</code>)</span></span>;
           <a href="group-12-api-hosting-mapping.html#supportsifmatchattribute"><code>SupportsIfMatchAttribute</code></a> reads the
@@ -5434,7 +5438,7 @@
           <li><strong>Walkthrough</strong>: a <code>static class</code> with two <code>const string</code> fields and nothing else<span class="cite"><span>
           (<code>IdempotencyHeaders.cs:13-26</code>)</span></span>. <code>const</code> rather than <code>static readonly</code> so the values can appear in
           attribute arguments and constant patterns, matching <a href="#authclaimtypes"><code>AuthClaimTypes</code></a> and
-          <a href="#rolenames"><code>RoleNames</code></a> in this group.</li>
+          <a href="group-24-identity-module.html#rolenames"><code>RoleNames</code></a> in this group.</li>
           <li><strong>Why it&#39;s built this way</strong>:
           <a href="https://ivanball.github.io/docs/adr/017-request-idempotency.html" target="_blank" rel="noopener">ADR-017</a> defines the protocol: the
           client supplies the key, and a server that replays a cached response adds
@@ -6242,7 +6246,7 @@
           for any command implementing <code>ICommandWithRequest&lt;ResetPasswordRequest&gt;</code>, the constraint
           <a href="group-14-module-system-composition.html#resetpasswordhandlerbasetuser-tcommand"><code>ResetPasswordHandlerBase&lt;TUser, TCommand&gt;</code></a>
           declares<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:52</code>)</span></span>.
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:50</code>)</span></span>.
           The request arrives at
           <a href="group-12-api-hosting-mapping.html#passwordresetauthcontrollerbasetforgotpasswordcommand-tresetpasswordcommand"><code>PasswordResetAuthControllerBase&lt;TForgotPasswordCommand, TResetPasswordCommand&gt;</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/PasswordResetAuthControllerBase.cs:108</code>)</span></span>,
@@ -6617,7 +6621,7 @@
           is centralized once. SignalR keys its user-targeted sends on whatever string an <code>IUserIdProvider</code>
           returns; the built-in provider reads <code>ClaimTypes.NameIdentifier</code>. This framework mints the user id
           only into <code>sub</code> (see <a href="#tokenservice"><code>TokenService</code></a>,
-          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:106</code></span></span>), and whether that
+          <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:105</code></span></span>), and whether that
           survives as <code>sub</code> or arrives mapped to <code>NameIdentifier</code> depends on which handler authenticated the
           connection. Routing through the shared extension is what makes both shapes resolve identically, so a
           consumer that changes its inbound claim mapping does not silently start delivering zero
@@ -6635,7 +6639,7 @@
           claim value is used verbatim on this side, and the sender formats with <code>CultureInfo.InvariantCulture</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/Push/SignalRPushNotificationSender.cs:19</code>)</span></span>,
           matching the invariant formatting the token writer used<span class="cite"><span>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:106</code>)</span></span>. Keeping the whole
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:105</code>)</span></span>. Keeping the whole
           provider to one delegating line is what makes that three-way agreement checkable at a glance.</li>
           <li><strong>Where it&#39;s used</strong>: registered as
           <code>services.TryAddSingleton&lt;IUserIdProvider, ClaimBasedUserIdProvider&gt;()</code><span class="cite"><span>

@@ -190,7 +190,7 @@ FluentValidation's `AddValidatorsFromAssembly` to pick up every hand-written val
 registers it as `IValidator<TCommand>` with **`TryAddTransient`**, so an explicitly authored command
 validator always wins (`DependencyInjection.ModuleScanning.cs:118-133`). Common's own validators are registered
 separately in `AddApplication` via `AddValidatorsFromAssemblyContaining<ClassReference>()`, because
-the per-module scan only sees the module's own assembly (`DependencyInjection.cs:45-48`); that call
+the per-module scan only sees the module's own assembly (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:45-48`); that call
 is what puts [`AddressValidator`](#addressvalidator) in the container. For a command the reflective
 scan cannot see, for example a closed generic constructed at registration time,
 `AddCommandRequestValidator<TCommand, TRequest>()` (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.Crud.cs:220-226`) is the explicit

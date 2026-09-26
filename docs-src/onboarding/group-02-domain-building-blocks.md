@@ -251,7 +251,7 @@ copies the value onto the row it writes
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:152`) and the
 processor refuses to claim a row while an earlier unprocessed, non-dead-lettered row carries the same
 key in the same data source
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:564-565`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:474-475`,
 with an in-batch guard at `:516`), so ordering holds across batches and across scaled-out replicas
 rather than only within one batch. Read the doc comment before adopting it, because the trade-off is
 explicit: this is head-of-line blocking by design, so keys must be as NARROW as the requirement really
@@ -411,7 +411,7 @@ Third, the audit trail consumes both halves:
 [`AuditTrailSaveChangesInterceptor`](group-07-persistence-ef-core.md#audittrailsavechangesinterceptor)
 calls `PiiRedactor.HasPii` per entity type and writes `PiiRedactor.RedactedToken` on *both* sides of a
 change for a `[Pii]` property
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:286`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:287`,
 `:309-310`), so the trail never becomes a second, unerasable copy of a data subject's personal data.
 Scope note worth keeping: redaction of *logs* is still an opt-in helper you call, not an automatic
 logging pipeline; the framework's stated posture is to log scalar identifiers rather than whole
@@ -544,7 +544,7 @@ in it.
   bites, see [primer §6](00-primer.md#6-the-34-category-architecture-evaluation-lens).
 - **Where it's used**: the call sites in shipped code are Blazor detail pages turning their
   `[Parameter] string` route value into the module's identifier alias, for example
-  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:106`,
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Speakers/SpeakerDetail.razor.cs:98`,
   `.../Pages/Session/SessionDetail.razor.cs:104`, `.../Pages/Event/EventDetail.razor.cs:86`, and
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/Feedback/EventFeedback.razor.cs:254`;
   Store's detail pages import the same namespace (for example
@@ -710,13 +710,13 @@ in it.
   [ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html).
 - **Where it's used**: the recognizer is
   [`AuditTrailSaveChangesInterceptor`](group-07-persistence-ef-core.md#audittrailsavechangesinterceptor)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:62`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:63`),
   whose `ShouldAudit` predicate is `entry.Entity is IAuditedEntity` plus a framework-entity exclusion
-  and a "being written" state check (`AuditTrailSaveChangesInterceptor.cs:225-228`, applied to the
+  and a "being written" state check (`AuditTrailSaveChangesInterceptor.cs:226-229`, applied to the
   change-tracker entries at `:197`); it writes
   [`AuditTrailEntry`](group-07-persistence-ef-core.md#audittrailentry) rows and is registered last,
   after the audit and domain-event interceptors, so it diffs final values
-  (`AuditTrailSaveChangesInterceptor.cs:26-29`). The host gate is `AddAuditTrail`
+  (`AuditTrailSaveChangesInterceptor.cs:27-30`). The host gate is `AddAuditTrail`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:108`) plus
   [`AuditTrailSettings`](group-07-persistence-ef-core.md#audittrailsettings)`.Enabled`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26`, an
@@ -828,16 +828,16 @@ in it.
     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:149-152`).
 - **Why it's built this way**: ordering is enforced at **claim** time rather than at fetch time, which
   is what makes it survive batching and scale-out
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:453-460`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:363-370`).
   Making it opt-in per event keeps the unordered fast path free: a batch containing no keyed row runs
   exactly the query it always ran, with no subquery for the optimizer to prove away
-  (`OutboxProcessor.cs:484-489`). The decision is recorded in
+  (`OutboxProcessor.cs:394-399`). The decision is recorded in
   [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) (`003-outbox-dual-dispatch.md:142-157`).
 - **Where it's used**: [`OutboxMessage`](group-04-events-outbox.md#outboxmessage) copies the key onto
   the row it writes (`OutboxMessage.cs:86` for the column, `:115` inside `FromDomainEvent` at `:98`).
   [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) enforces it in two places:
-  `SelectOrderedCandidates` (`OutboxProcessor.cs:521-538`) keeps at most one row per key in this
-  cycle's candidate set (`:516`), and `FilterUnblocked` (`OutboxProcessor.cs:558-568`) adds the
+  `SelectOrderedCandidates` (`OutboxProcessor.cs:431-448`) keeps at most one row per key in this
+  cycle's candidate set (`:516`), and `FilterUnblocked` (`OutboxProcessor.cs:468-478`) adds the
   `NOT EXISTS` predicate to the claim update itself, so a second replica racing the same key loses on
   the row rather than on a check made before the race (`:550-554`; the retry-count conjunct at `:552`
   is what lets a dead-lettered predecessor stop blocking). The storage side is configured on
@@ -854,7 +854,7 @@ in it.
   tested, not exercised by an application event. Ordering is also **not** total under a timestamp tie:
   the predecessor test is on `OccurredOn` alone, so two rows sharing a key and an exact timestamp are
   ordered within a cycle by `Id` but neither blocks the other in SQL, which the code states as a
-  deliberate non-guarantee (`OutboxProcessor.cs:462-467`).
+  deliberate non-guarantee (`OutboxProcessor.cs:372-377`).
 
 ### IRowVersioned
 > MMCA.Common.Domain · `MMCA.Common.Domain.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11` · Level 0 · interface
@@ -1041,12 +1041,12 @@ in it.
   `MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:119`) and
   [`AuditTrailSaveChangesInterceptor`](group-07-persistence-ef-core.md#audittrailsavechangesinterceptor),
   which short-circuits per type with `PiiRedactor.HasPii`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:286`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:287`),
   caches the per-property verdict (`:492-504`), and writes `PiiRedactor.RedactedToken` into **both** the
   old and new value columns of a change row (`:309-310`).
 - **Caveats / not-in-source**: the interceptor's per-property check only sees properties EF maps to a
   real CLR member. A shadow property has no `PropertyInfo` and therefore cannot carry the attribute, so
-  it is never treated as personal data (`AuditTrailSaveChangesInterceptor.cs:488-495`).
+  it is never treated as personal data (`AuditTrailSaveChangesInterceptor.cs:489-496`).
 
 ### RedactableProperty
 > MMCA.Common.Domain · `MMCA.Common.Domain.Privacy` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:123` · Level 0 · class (private sealed, nested)
@@ -1169,7 +1169,7 @@ in it.
 - **Where it's used**: two of its members have a production consumer.
   [`AuditTrailSaveChangesInterceptor`](group-07-persistence-ef-core.md#audittrailsavechangesinterceptor)
   calls `HasPii` once per changed entity type
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:286`)
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:287`)
   and writes `RedactedToken` into both the `OldValue` and `NewValue` columns of a `[Pii]` property's
   change row (`:309-310`), which is how the change history avoids becoming a second copy of personal
   data ([ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html)); that behavior is asserted

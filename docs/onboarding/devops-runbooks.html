@@ -548,7 +548,7 @@
           which is the source of truth. The next section walks it.</p>
           <hr>
           <h2 id="dr-drillyml-and-dr-restore-drillps1-the-adr-009-restore-drill">dr-drill.yml and dr-restore-drill.ps1, the ADR-009 restore drill</h2>
-          <p><strong>Files:</strong> <code>MMCA.ADC/.github/workflows/dr-drill.yml</code> (105 lines),
+          <p><strong>Files:</strong> <code>MMCA.ADC/.github/workflows/dr-drill.yml</code> (112 lines),
           <code>MMCA.ADC/scripts/dr-restore-drill.ps1</code> (101 lines)</p>
           <p><strong>What it is.</strong> The automation behind the drill requirement above: the workflow picks a target
           database and logs in to Azure via OIDC, the PowerShell script does the restore, the timing, the
@@ -565,30 +565,30 @@
           </ul>
           <p>The job holds <code>id-token: write</code> plus <code>contents: read</code> and nothing else<span class="cite"><span> (<code>dr-drill.yml:35-37</code>)</span></span>, which
           is the least privilege an OIDC login needs, and it logs in with the same three <code>AZURE_*</code> secrets
-          <code>azure-setup.sh</code> printed<span class="cite"><span> (<code>dr-drill.yml:46-51</code>)</span></span>. Both third-party actions it uses are pinned to a
+          <code>azure-setup.sh</code> printed<span class="cite"><span> (<code>dr-drill.yml:53-58</code>)</span></span>. Both third-party actions it uses are pinned to a
           full commit SHA with the human-readable version parked in a trailing comment:
-          <code>actions/checkout@3d3c42e5...</code><span class="cite"><span> (<code>dr-drill.yml:44</code>)</span></span> and <code>azure/login@7ddb5af1...</code><span class="cite"><span>
-          (<code>dr-drill.yml:47</code>)</span></span>.</p>
+          <code>actions/checkout@3d3c42e5...</code><span class="cite"><span> (<code>dr-drill.yml:51</code>)</span></span> and <code>azure/login@7ddb5af1...</code><span class="cite"><span>
+          (<code>dr-drill.yml:54</code>)</span></span>.</p>
           <p>[Rubric §32, Dependency &amp; Supply-Chain] assesses whether third-party dependencies are pinned,
           scanned, and cannot change underfoot. A Git tag is mutable, so <code>@v3</code> in a job that mints an Azure
           OIDC token means a repointed tag could run new code with production credentials; the SHA pin removes
           that path, and the <code># v7.0.1</code> / <code># v3.0.2</code> comments keep the pin readable and updatable.</p>
           <p>Scheduled runs <strong>rotate</strong> across the four live per-service databases by ISO week number modulo 4
-          (<span class="cite"><span><code>dr-drill.yml:53-72</code></span></span>, the arithmetic at <span class="cite"><span><code>dr-drill.yml:65-68</code></span></span>), so each live database gets a recovery
+          (<span class="cite"><span><code>dr-drill.yml:60-79</code></span></span>, the arithmetic at <span class="cite"><span><code>dr-drill.yml:72-75</code></span></span>), so each live database gets a recovery
           proof roughly monthly. Which branch runs is decided purely by whether the dispatch input is present<span class="cite"><span>
-          (<code>dr-drill.yml:59</code>)</span></span>, which is what lets one job serve both triggers. The chosen database is echoed
-          into the step summary before the drill starts<span class="cite"><span> (<code>dr-drill.yml:72</code>)</span></span>, so a reader of a failed run knows
+          (<code>dr-drill.yml:66</code>)</span></span>, which is what lets one job serve both triggers. The chosen database is echoed
+          into the step summary before the drill starts<span class="cite"><span> (<code>dr-drill.yml:79</code>)</span></span>, so a reader of a failed run knows
           immediately which database was under test. Note how the input is read: the step declares
           <code>DISPATCH_DATABASE: ${{ inputs.source_database }}</code> as an environment variable<span class="cite"><span>
-          (<code>dr-drill.yml:55-56</code>)</span></span> and the shell tests <code>&quot;${DISPATCH_DATABASE:-}&quot;</code><span class="cite"><span> (<code>dr-drill.yml:59</code>)</span></span> instead of
+          (<code>dr-drill.yml:62-63</code>)</span></span> and the shell tests <code>&quot;${DISPATCH_DATABASE:-}&quot;</code><span class="cite"><span> (<code>dr-drill.yml:66</code>)</span></span> instead of
           expanding the <code>${{ }}</code> expression inline, and the whole script runs under <code>set -euo pipefail</code><span class="cite"><span>
-          (<code>dr-drill.yml:58</code>)</span></span> so an unset variable or a failed <code>az</code> call stops the step rather than silently
+          (<code>dr-drill.yml:65</code>)</span></span> so an unset variable or a failed <code>az</code> call stops the step rather than silently
           rotating to the wrong database.</p>
           <p><strong>How the inputs reach the PowerShell script.</strong> The drill step sets three variables in its own <code>env</code>
           block, <code>DRILL_RESOURCE_GROUP</code> from <code>vars.AZURE_RESOURCE_GROUP</code>, <code>DRILL_SOURCE_DATABASE</code> from the
           rotation step&#39;s output, and <code>DRILL_RESTORE_POINT_MINUTES_AGO</code> from the dispatch input with a literal
-          <code>&#39;10&#39;</code> fallback for scheduled runs<span class="cite"><span> (<code>dr-drill.yml:78-81</code>)</span></span>, then passes those variables to the script<span class="cite"><span>
-          (<code>dr-drill.yml:82-88</code>)</span></span>. The workflow&#39;s own comment states the reason<span class="cite"><span> (<code>dr-drill.yml:76-77</code>)</span></span>: values
+          <code>&#39;10&#39;</code> fallback for scheduled runs<span class="cite"><span> (<code>dr-drill.yml:85-88</code>)</span></span>, then passes those variables to the script<span class="cite"><span>
+          (<code>dr-drill.yml:89-94</code>)</span></span>. The workflow&#39;s own comment states the reason<span class="cite"><span> (<code>dr-drill.yml:83-84</code>)</span></span>: values
           reach the script through the environment rather than being interpolated into the command line, so a
           dispatch input cannot inject extra PowerShell arguments. This matters more here than in most jobs,
           because the step runs with an Azure session that holds Contributor on the production resource group.</p>
@@ -597,24 +597,33 @@
           hostile input value becomes code; routing every input through <code>env</code> and quoting it turns the same
           value back into data. The <code>type: choice</code> input<span class="cite"><span> (<code>dr-drill.yml:20-26</code>)</span></span> already constrains the database
           name to four options, so this is defence in depth rather than the only control.</p>
-          <p><strong>The sweep that runs even when the drill does not finish.</strong> The job carries a 30-minute
-          <code>timeout-minutes</code><span class="cite"><span> (<code>dr-drill.yml:42</code>)</span></span>, and a job cancelled at that limit is killed mid-step, so the
-          script&#39;s own <code>finally</code> cleanup never runs. The workflow comment records the incident that exposed
-          this<span class="cite"><span> (<code>dr-drill.yml:89-93</code>)</span></span>: the 2026-09-14 scheduled run was cancelled mid-restore and left
+          <p><strong>Why the job gets 60 minutes.</strong> The job carries a 60-minute <code>timeout-minutes</code><span class="cite"><span> (<code>dr-drill.yml:49</code>)</span></span>,
+          and the comment above it records why it is not 30<span class="cite"><span> (<code>dr-drill.yml:42-48</code>)</span></span>: the 2026-09-14 scheduled
+          run (run 34838047421) was killed at the old 30-minute limit and recorded no freshness proof. A
+          measured PITR restore of an <code>ADC_*</code> database takes minutes, but Azure SQL queues the restore on the
+          platform side and its duration varies from run to run, so 60 leaves headroom for a slow one (MMCA.Store
+          raised its own drill job to 60 after the same failure). The limit matters beyond the drill itself:
+          the <code>dr-freshness</code> deploy gate consumes this workflow&#39;s last success, so a drill that times out does
+          not just lose one measurement, it walks the next production deploy toward a hard block (the gate is
+          walked below).</p>
+          <p><strong>The sweep that runs even when the drill does not finish.</strong> A job cancelled at its
+          <code>timeout-minutes</code> is killed mid-step, so the script&#39;s own <code>finally</code> cleanup never runs. The workflow
+          comment records the incident that exposed this<span class="cite"><span> (<code>dr-drill.yml:96-100</code>)</span></span>: the same 2026-09-14
+          scheduled run was cancelled mid-restore and left
           <code>ADC_Engagement-drill</code> behind, and the weekly rotation meant the next run targeted a different
           database, so the script&#39;s name-specific stale-copy check would not have removed it either; the copy
           sat at Basic-tier cost for five days. The last step, <code>Remove leftover drill copies</code>, therefore runs
-          under <code>if: always()</code><span class="cite"><span> (<code>dr-drill.yml:94-95</code>)</span></span>, which fires on success, failure and cancellation alike.
+          under <code>if: always()</code><span class="cite"><span> (<code>dr-drill.yml:101-102</code>)</span></span>, which fires on success, failure and cancellation alike.
           It resolves the server by the same <code>adc-prod-sql-</code> name prefix the script uses, exits 0 with a
-          workflow warning when no server matches<span class="cite"><span> (<code>dr-drill.yml:100-101</code>)</span></span>, and deletes every database whose
-          name ends in <code>-drill</code><span class="cite"><span> (<code>dr-drill.yml:102-105</code>)</span></span>, not just the copy this run created. The suffix
+          workflow warning when no server matches<span class="cite"><span> (<code>dr-drill.yml:107-108</code>)</span></span>, and deletes every database whose
+          name ends in <code>-drill</code><span class="cite"><span> (<code>dr-drill.yml:109-112</code>)</span></span>, not just the copy this run created. The suffix
           filter is what keeps the sweep safe on a production server: the live <code>ADC_*</code> databases never end in
           <code>-drill</code>, so the only names it can match are throwaway copies. One consequence for a local run: a
           copy kept with the script&#39;s <code>-KeepCopy</code> switch for a manual row-count check (<span class="cite"><span><code>dr-restore-drill.ps1:83-88</code></span></span>
           honors it) is deleted by the next workflow run, so finish that check before Monday 06:00 UTC. It
           reads the resource group through
-          <code>env</code> like the drill step<span class="cite"><span> (<code>dr-drill.yml:96-97</code>)</span></span> and runs under <code>set -euo pipefail</code><span class="cite"><span>
-          (<code>dr-drill.yml:99</code>)</span></span>.</p>
+          <code>env</code> like the drill step<span class="cite"><span> (<code>dr-drill.yml:103-104</code>)</span></span> and runs under <code>set -euo pipefail</code><span class="cite"><span>
+          (<code>dr-drill.yml:106</code>)</span></span>.</p>
           <p><strong><code>AtlDevCon</code> is gone from both ends of this pair.</strong> The dispatch <code>choice</code> input now offers only the
           four live databases<span class="cite"><span> (<code>dr-drill.yml:22-26</code>)</span></span>, and the script&#39;s own <code>-SourceDatabase</code> default moved from
           <code>AtlDevCon</code> to <code>ADC_Identity</code><span class="cite"><span> (<code>dr-restore-drill.ps1:26</code>)</span></span>. Both files record why: the archive was
@@ -628,9 +637,9 @@
           <h3 id="walkthrough-of-the-script">Walkthrough of the script</h3>
           <p><strong>Parameters<span class="cite"><span> (<code>dr-restore-drill.ps1:23-30</code>)</span></span>.</strong> <code>-ResourceGroup</code> (default <code>acc-rg</code>),
           <code>-SourceDatabase</code> (default <code>ADC_Identity</code>), <code>-RestorePointMinutesAgo</code> (default 10), <code>-KeepCopy</code>, and
-          <code>-SummaryPath</code> (the workflow passes <code>$env:GITHUB_STEP_SUMMARY</code>, <span class="cite"><span><code>dr-drill.yml:74-88</code></span></span>). The workflow
+          <code>-SummaryPath</code> (the workflow passes <code>$env:GITHUB_STEP_SUMMARY</code>, <span class="cite"><span><code>dr-drill.yml:81-94</code></span></span>). The workflow
           never leans on a default: it passes an explicit <code>-SourceDatabase</code> from the rotation step and an
-          explicit <code>-ResourceGroup</code> from <code>vars.AZURE_RESOURCE_GROUP</code><span class="cite"><span> (<code>dr-drill.yml:79-80</code>)</span></span>, so the script&#39;s
+          explicit <code>-ResourceGroup</code> from <code>vars.AZURE_RESOURCE_GROUP</code><span class="cite"><span> (<code>dr-drill.yml:86-87</code>, <code>:91-92</code>)</span></span>, so the script&#39;s
           own defaults only matter to a local CLI run.</p>
           <p><strong>Server discovery<span class="cite"><span> (<code>dr-restore-drill.ps1:40-44</code>)</span></span>.</strong> Queries by name prefix (<code>adc-prod-sql-*</code>) rather
           than hard-coding the resource-token suffix, and throws a clear &quot;Did you run &#39;az login&#39;?&quot; error when
@@ -641,7 +650,7 @@
           drill on a name collision, and the freshness gate would then start blocking deploys for a reason
           that has nothing to do with recoverability. The check only covers the database being drilled this
           run, which under the weekly rotation is usually a different one, so the workflow&#39;s <code>always()</code> sweep<span class="cite"><span>
-          (<code>dr-drill.yml:94-105</code>)</span></span> is what catches a copy left by an earlier run against another database.</p>
+          (<code>dr-drill.yml:101-112</code>)</span></span> is what catches a copy left by an earlier run against another database.</p>
           <p><strong>Restore and timing<span class="cite"><span> (<code>dr-restore-drill.ps1:59-66</code>)</span></span>.</strong> A stopwatch brackets <code>az sql db restore</code>, and
           <code>$LASTEXITCODE</code> is checked explicitly<span class="cite"><span> (<code>dr-restore-drill.ps1:65</code>)</span></span> because a failing <code>az</code> call does
           not by itself throw in PowerShell. That elapsed time IS the measured RTO reported in the drill row;
@@ -652,7 +661,7 @@
           <p><strong>Cleanup<span class="cite"><span> (<code>dr-restore-drill.ps1:83-88</code>)</span></span>.</strong> The delete sits in a <code>finally</code> block, so the throwaway
           copy is removed even when the restore or the verification threw. A <code>finally</code> block cannot run in
           a process that GitHub Actions kills at <code>timeout-minutes</code>, though, which is why the workflow backs it
-          with the <code>always()</code> sweep described above<span class="cite"><span> (<code>dr-drill.yml:89-105</code>)</span></span>: between them, a weekly drill
+          with the <code>always()</code> sweep described above<span class="cite"><span> (<code>dr-drill.yml:96-112</code>)</span></span>: between them, a weekly drill
           does not accrete paid databases.</p>
           <p><strong>Result row and exit code<span class="cite"><span> (<code>dr-restore-drill.ps1:90-101</code>)</span></span>.</strong> Prints the markdown table row (date,
           source, PASS/FAIL, minutes, note) to both the console and the job summary through the <code>Write-Line</code>
@@ -1156,7 +1165,7 @@
           (<code>main.bicep:635-647</code>, <code>POST-CUTOVER-atldevcon-downgrade.md:79-121</code>)</span></span>. Three practical consequences
           follow for an operator. The four live <code>ADC_*</code> databases are the entire estate covered by PITR and LTR<span class="cite"><span>
           (<code>main.bicep:681-685</code>)</span></span>. The weekly drill rotates over exactly those four and cannot target anything
-          else<span class="cite"><span> (<code>dr-drill.yml:22-26</code>, <code>:65-68</code>)</span></span>. And recovering pre-cutover data is an <code>az sql db import</code> into
+          else<span class="cite"><span> (<code>dr-drill.yml:22-26</code>, <code>:72-75</code>)</span></span>. And recovering pre-cutover data is an <code>az sql db import</code> into
           a new database name, not a point-in-time restore.</p>
           <p>Cross-links:</p>
           <ul>
@@ -1213,11 +1222,11 @@
           </tr>
           <tr>
           <td>§31 Cost/FinOps</td>
-          <td><code>POST-CUTOVER-atldevcon-downgrade.md</code> (S0 to Basic, then archive-and-drop on a measured 0 DTU); the 2026-09-02 alert-cadence changes (<code>main.bicep:345-349</code>, <code>:464-469</code>); the thinned telemetry stream documented in <code>OPERATIONS.md:176-207</code>; the <code>dr-drill.yml</code> <code>always()</code> sweep of leftover <code>-drill</code> copies (<code>dr-drill.yml:89-105</code>), so a drill cancelled at its timeout cannot leave a billed database behind</td>
+          <td><code>POST-CUTOVER-atldevcon-downgrade.md</code> (S0 to Basic, then archive-and-drop on a measured 0 DTU); the 2026-09-02 alert-cadence changes (<code>main.bicep:345-349</code>, <code>:464-469</code>); the thinned telemetry stream documented in <code>OPERATIONS.md:176-207</code>; the <code>dr-drill.yml</code> <code>always()</code> sweep of leftover <code>-drill</code> copies (<code>dr-drill.yml:96-112</code>), so a drill cancelled at its timeout cannot leave a billed database behind</td>
           </tr>
           <tr>
           <td>§32 Dependency &amp; Supply-Chain</td>
-          <td><code>dr-drill.yml</code> (<code>actions/checkout</code> and <code>azure/login</code> pinned to full commit SHAs with the version in a trailing comment, <code>dr-drill.yml:44</code>, <code>:47</code>)</td>
+          <td><code>dr-drill.yml</code> (<code>actions/checkout</code> and <code>azure/login</code> pinned to full commit SHAs with the version in a trailing comment, <code>dr-drill.yml:51</code>, <code>:54</code>)</td>
           </tr>
           <tr>
           <td>§34 Architecture Governance</td>

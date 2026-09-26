@@ -273,7 +273,7 @@ when the write failed.
 [ADR-026](https://ivanball.github.io/docs/adr/026-caching-strategy.html) records. Tier 2 is a separate
 HTTP output-cache edge: `MMCA.Common.API` always runs `app.UseOutputCache()` as a named step in the
 shared middleware pipeline
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:143-145`, see
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:131-133`, see
 [`MiddlewarePipelineBuilder`](group-12-api-hosting-mapping.md#middlewarepipelinebuilder)) but ships no
 policies, so each host opts in with its own `AddOutputCache(...)`. The read-heavy public services
 declare real cacheable policies through
@@ -408,7 +408,8 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:41`) via
   `services.Configure<CacheKeyPrefixOptions>(configuration.GetSection(CacheKeyPrefixOptions.SectionName))`,
   and only when a non-null `IConfiguration` was passed (`DependencyInjection.Caching.cs:39`).
-  `AddInfrastructure` always passes one (`DependencyInjection.cs:134`), so a host composing through the
+  `AddInfrastructure` always passes one
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:134`), so a host composing through the
   normal entry point gets the binding; a test calling the parameterless `AddCaching()` overload does
   not. The bound options are no longer read directly at the call sites; instead
   [CacheKeyNamespace](#cachekeynamespace)`.From(IServiceProvider)` resolves them (and the
@@ -1170,8 +1171,8 @@ are catalogued in [Group 27, Testing and Quality Infrastructure](group-28-testin
   [MemoryCacheServiceTests](group-28-testing-infrastructure.md#memorycacheservicetests), which pins the
   concurrency behavior deterministically rather than racing for it: the test takes the key's own stripe
   first, then asserts that a `SetAsync` and a `RemoveByPrefixAsync` both park on it
-  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Caching/MemoryCacheServiceTests.cs:187`)
-  and that `RemoveAsync` waits on the same stripe as `SetAsync` (`MemoryCacheServiceTests.cs:218`).
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Caching/MemoryCacheServiceTests.cs:190`)
+  and that `RemoveAsync` waits on the same stripe as `SetAsync` (`MemoryCacheServiceTests.cs:221`).
 - **Caveats / not-in-source**: the cache is per-process, so two replicas hold independent and
   potentially divergent copies until each entry's TTL or an explicit eviction reconciles them. That is
   why the distributed adapters exist for scaled-out deployments, and why

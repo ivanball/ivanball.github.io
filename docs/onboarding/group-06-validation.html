@@ -328,7 +328,7 @@
           registers it as <code>IValidator&lt;TCommand&gt;</code> with <strong><code>TryAddTransient</code></strong>, so an explicitly authored command
           validator always wins<span class="cite"><span> (<code>DependencyInjection.ModuleScanning.cs:118-133</code>)</span></span>. Common&#39;s own validators are registered
           separately in <code>AddApplication</code> via <code>AddValidatorsFromAssemblyContaining&lt;ClassReference&gt;()</code>, because
-          the per-module scan only sees the module&#39;s own assembly<span class="cite"><span> (<code>DependencyInjection.cs:45-48</code>)</span></span>; that call
+          the per-module scan only sees the module&#39;s own assembly<span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:45-48</code>)</span></span>; that call
           is what puts <a href="#addressvalidator"><code>AddressValidator</code></a> in the container. For a command the reflective
           scan cannot see, for example a closed generic constructed at registration time,
           <code>AddCommandRequestValidator&lt;TCommand, TRequest&gt;()</code><span class="cite"><span> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.Crud.cs:220-226</code>)</span></span> is the explicit

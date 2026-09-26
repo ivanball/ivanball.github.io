@@ -104,16 +104,16 @@ the `Persistence` section at `:13`, range-checked between 1 and 600 seconds and 
 ADO.NET's silent 30-second default (`SQLServerDbContext.cs:55`, with the settings object resolved once
 into a field at `:36-37` using `GetService` so the design-time provider, which registers no options at
 all, cannot be made to throw), transient-fault retry (`EnableRetryOnFailure` with 5 attempts and a
-10-second cap, `:64-67`), and a suppressed `PendingModelChangesWarning` (`:80`) so an extracted service
+10-second cap, `:63-66`), and a suppressed `PendingModelChangesWarning` (`:79`) so an extracted service
 that registers only its own module's entity configurations starts cleanly against a migration snapshot
 that captures every module's tables. That warning suppression is a direct
 [Rubric §7, Microservices Readiness] decision, and the source comment states the trade-off plainly:
 monolith hosts lose the "you forgot a migration" safety net, so CI is expected to run
-`dotnet ef migrations has-pending-model-changes` as a separate gate (`:69-79`). The retry comment also
+`dotnet ef migrations has-pending-model-changes` as a separate gate (`:68-78`). The retry comment also
 carries a rule the rest of the group depends on: with retry-on-failure enabled a manual
-`BeginTransactionAsync` must run inside `Database.CreateExecutionStrategy().ExecuteAsync` (`:61-63`).
+`BeginTransactionAsync` must run inside `Database.CreateExecutionStrategy().ExecuteAsync` (`:60-62`).
 [`SqliteDbContext`](#sqlitedbcontext) (`.../DbContexts/SqliteDbContext.cs:12`) is the same shape with
-`UseSqlite` and its own migrations assembly (`:24-35`), and
+`UseSqlite` and its own migrations assembly (`:24-33`), and
 [`CosmosDbContext`](#cosmosdbcontext) (`.../DbContexts/CosmosDbContext.cs:14`) deliberately does not
 call `base.OnModelCreating`, because the relational bookkeeping tables have no place in a document
 store; it re-applies only the filters it needs (`:89-95`).
@@ -170,18 +170,18 @@ handler.
 is the producer end of the outbox, and it is the most subtle type in the group. On `SavingChanges` it
 snapshots each tracked [`IAggregateRoot`](group-02-domain-building-blocks.md#iaggregateroot) and its
 pending [`IDomainEvent`](group-04-events-outbox.md#idomainevent)s into an
-[`AggregateCapture`](#aggregatecapture) record (`:221-225`, record at `:373`), then writes an
+[`AggregateCapture`](#aggregatecapture) record (`:221-225`, record at `:380`), then writes an
 [`OutboxMessage`](group-04-events-outbox.md#outboxmessage) row for each event into the same context, so
-the events land in the database **in the same transaction** as the aggregate changes (`:207-272`). The
+the events land in the database **in the same transaction** as the aggregate changes (`:207-279`). The
 routing split happens right there: an
 [`IIntegrationEvent`](group-04-events-outbox.md#iintegrationevent) gets a row but no in-process
 dispatch (its row stays unprocessed so the [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor)
 publishes it over [`IMessageBus`](group-04-events-outbox.md#imessagebus)), while a local event gets both
-a row and the fast in-process path (`:249-258`). Before capturing, `DiscardAbandonedCapture` detaches
+a row and the fast in-process path (`:256-264`). Before capturing, `DiscardAbandonedCapture` detaches
 the `Added` outbox rows left by a previous `SavingChanges` that never reached `SavedChanges`
-(`:279-300`), which is what stops an execution-strategy retry from writing a second row per event and
+(`:286-303`), which is what stops an execution-strategy retry from writing a second row per event and
 publishing every integration event twice. The captured state is parked in a
-[`CapturedState`](#capturedstate) record (`:382`) held in a `ConditionalWeakTable` keyed by context
+[`CapturedState`](#capturedstate) record (`:389`) held in a `ConditionalWeakTable` keyed by context
 (`:62`), so it is cleaned up automatically when the context is disposed. A third weak table (`:77`)
 holds a per-context capture exclusion set: `BeginCaptureExclusion` / `EndCaptureExclusion` (`:179-195`)
 let [`DbContextFactory`](#dbcontextfactory) name exactly the entries it hides from an
@@ -196,23 +196,23 @@ one of two things. With no ambient transaction it flushes immediately: dispatch 
 [`IDomainEventDispatcher`](group-04-events-outbox.md#idomaineventdispatcher), remove exactly the
 captured events from their aggregates, mark the local outbox rows processed through
 [`OutboxFinalizer`](group-04-events-outbox.md#outboxfinalizer), and signal the outbox for integration
-events (`:325-352`). With an active transaction it removes the captured events (so a second save inside
+events (`:325`, `FlushStateAsync` at `:332-360`). With an active transaction it removes the captured events (so a second save inside
 the same transaction cannot re-capture them) and parks a [`DeferredDispatch`](#deferreddispatch)
-(`:389`) in a second weak table (`:69`); [`DbContextFactory`](#dbcontextfactory) then calls the static
+(`:396`) in a second weak table (`:69`); [`DbContextFactory`](#dbcontextfactory) then calls the static
 `FlushDeferredAsync` only after a successful commit (`:145-159`) and `DropDeferred` on rollback
 (`:162`). That is what keeps handler side effects from acting on state that could still roll back, and
 what keeps a retrying execution strategy from dispatching the same events once per attempt. Note the
 precision of the clearing: the interceptor calls `RemoveDomainEvents(capture.Events)` rather than
-clearing the aggregate wholesale (`:361-366`), so an event a handler raises on the same aggregate
+clearing the aggregate wholesale (`:368-372`), so an event a handler raises on the same aggregate
 during in-process dispatch survives to a later capture instead of being wiped. If in-process dispatch
 throws, the interceptor logs a warning and signals the outbox to retry from the persisted rows rather
-than losing the event (`:339-346`). The synchronous `SavedChanges` path cannot await a dispatcher at
+than losing the event (`:346-354`). The synchronous `SavedChanges` path cannot await a dispatcher at
 all, so it removes the captured events, signals the outbox, and leaves delivery entirely to it
 (`:124-137`). Two conditions take the everything-in-process branch instead: Cosmos DB has no relational
 outbox table, so the base exposes a `SupportsOutbox` flag (`ApplicationDbContext.cs:172`) that
 [`CosmosDbContext`](#cosmosdbcontext) overrides to `false` (`CosmosDbContext.cs:69`); and a host can
 turn the outbox off outright, which the interceptor reads once from the message-bus options into
-`_outboxEnabled` (`:55`) and honors at the same branch (`:236`, `:263-268`). This split, atomic
+`_outboxEnabled` (`:55`) and honors at the same branch (`:236`, `:269-275`). This split, atomic
 persistence plus best-effort immediate dispatch with a durable fallback, is the at-least-once contract
 of [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html); the consumer end lives
 in [Group 04](group-04-events-outbox.md).
@@ -241,7 +241,7 @@ system call, which is both an authorization hole (an `IRequiresPermission` comma
 and an audit hole (its writes would carry the system sentinel, `:1-9`).
 
 [`InternalCommandProcessor`](#internalcommandprocessor)
-(`.../InternalCommands/Processing/InternalCommandProcessor.cs:47`) is the drain: a background service
+(`.../InternalCommands/Processing/InternalCommandProcessor.cs:46`) is the drain: a background service
 that claims due rows with a lease, executes each in a fresh DI scope, and records the outcome. Every
 relational physical source this host uses has its own queue table and each cycle drains them all, so a
 service only ever runs the work queued in its own databases, and the lease is what makes scale-out
@@ -258,9 +258,8 @@ is therefore the same execution a controller would have got, not a parallel path
 any of it (`:10-20`). The rest of the processing namespace is the machinery that loop needs:
 [`IInternalCommandSignal`](#iinternalcommandsignal) and its
 [`InternalCommandSignal`](#internalcommandsignal) implementation
-(`.../Processing/InternalCommandSignal.cs:12`), a `SemaphoreSlim` capped at one permit for the same
-reason the outbox signal is (the processor drains a whole batch per cycle, so one pending wake-up is
-all the information a burst of schedules carries, `:3-11`, `:14`);
+(`.../Processing/InternalCommandSignal.cs:10`), a thin wrapper over the same
+[`WakeUpSignal`](#wakeupsignal) the outbox signal wraps (`:5-9`, `:12`);
 [`InternalCommandCycleResult`](#internalcommandcycleresult)
 (`.../Processing/InternalCommandCycleResult.cs:17`), the record struct that lets a cycle report whether
 more due work is waiting and when the oldest not-yet-due row comes due, so the loop smart-waits to
@@ -272,6 +271,30 @@ assembly-qualified name otherwise, so a rename or a namespace move does not orph
 (`:7-18`); and [`InternalCommandMetrics`](#internalcommandmetrics)
 (`.../Processing/InternalCommandMetrics.cs:17`), the one meter (`MMCA.Common.InternalCommands`, `:20`)
 carrying completions, dead letters, execution latency and observed backlog depth.
+
+The loop mechanics themselves are not the processor's own code. They live in the `Polling` namespace,
+shared with the outbox drain in [Group 04](group-04-events-outbox.md), so both table-draining services
+wait, drain and back off identically while every log, metric and activity name stays with the processor
+that owns it (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:5-11`).
+[`PollingLoop`](#pollingloop) (`PollingLoop.cs:12`) is a static class with three pieces. `RunAsync`
+(`:40-91`) waits a 5-second `StartupDelay` (`:18`), returns early when the host owns no relational
+source, then runs cycles until shutdown: a cycle that reports more ready work re-polls at once, a failed
+cycle is reported and treated as one with nothing pending, and every other cycle waits on the wake-up
+signal for `ComputeWaitTime` (`:104-122`), which is the moment the earliest upcoming row becomes ready
+plus the processing delay, capped at the polling interval and floored at one second so an overdue row
+cannot hot-loop the processor (`:21`). `DrainAllAsync` (`:135-171`) drains every
+[`TenantDataSourceTarget`](#tenantdatasourcetarget) in order and aggregates the results, and a source
+that throws is reported and contributes nothing, so one unreachable database cannot starve the others
+(`:162-167`). `ComputeRetryBackoffSeconds` (`:183-197`) is the exponential backoff for a failed row,
+`base * 2^(attempts - 1)` with the exponent clamped at 16, multiplied by a jitter factor in `[0.8, 1.2]`
+**before** the per-processor cap, so a batch that failed together in one dependency outage does not retry
+in lockstep, and a capped backoff stays exactly at the ceiling (`:173-178`, `:188-196`). The processor
+calls all three (`InternalCommandProcessor.cs:81`, `:111`, `:137`, `:597`). The wake-up it waits on is
+[`WakeUpSignal`](#wakeupsignal) (`.../Polling/WakeUpSignal.cs:16`), a `SemaphoreSlim` created with a
+maximum count of one (`:18`) whose `Signal` swallows the `SemaphoreFullException` a second pending
+wake-up raises (`:21-31`). The cap is the point: each processor drains a whole batch per cycle, so one
+pending wake-up is all the information a burst of writes carries, and an uncapped semaphore made N
+writes cost N candidate-fetch cycles per relational source that found nothing (`:3-15`).
 
 The administration namespace is the operational half. [`InternalCommandsSettings`](#internalcommandssettings)
 (`.../InternalCommands/Administration/InternalCommandsSettings.cs:15`) binds the `InternalCommands`
@@ -287,16 +310,16 @@ processor nor the sweep, so [`InternalCommandsDisabledNoticeService`](#internalc
 Information: a web front end queueing work for a dedicated worker is a legitimate posture and the
 wrong thing to discover from an absent background service (`:6-18`).
 [`InternalCommandCleanupService`](#internalcommandcleanupservice)
-(`.../Administration/InternalCommandCleanupService.cs:46`) purges completed rows past `RetentionDays`,
+(`.../Administration/InternalCommandCleanupService.cs:44`) purges completed rows past `RetentionDays`,
 because the table stores serialized command payloads that may contain personal data and the pending
 index every poll re-scans grows with it, and deletes dead-lettered rows on their own wider window,
 logging every such deletion at Warning because it destroys the only record that the work was ever
-asked for (`:15-36`). [`InternalCommandAdministration`](#internalcommandadministration)
-(`.../Administration/InternalCommandAdministration.cs:39`) is the operator surface over the same
+asked for (`:13-28`). [`InternalCommandAdministration`](#internalcommandadministration)
+(`.../Administration/InternalCommandAdministration.cs:37`) is the operator surface over the same
 targets, visiting each in its own DI scope (a tenant target only routes correctly once
 `ITenantContext` is set for that scope) and expressing requeue and purge as one set-based statement
 per target, because an operator clearing a backlog touches thousands of rows and none of the values
-written depend on the row's current state (`:17-29`). Both background services and the administration
+written depend on the row's current state (`:15-26`). Both background services and the administration
 type expand their target list per tenant that keeps its own copy of a source, for the same reason the
 audit-trail sweep does: that database has a queue table nothing else would drain.
 
@@ -376,20 +399,20 @@ and is isolated by the query filter (`:126-127`).
 
 Database-per-tenant is handled one layer up, in the factory, and background
 sweeps expand their work list through [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:49-79`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:51-81`),
 which emits the shared target for every source plus one extra
-[`TenantDataSourceTarget`](#tenantdatasourcetarget) (`:13`) per tenant that overrides a source, because
-a tenant with its own database is invisible to the shared sweep (`:33-37`).
+[`TenantDataSourceTarget`](#tenantdatasourcetarget) (`:15`) per tenant that overrides a source, because
+a tenant with its own database is invisible to the shared sweep (`:36-40`).
 
 ## Recording what changed, the audit trail
 
 [`AuditTrailSaveChangesInterceptor`](#audittrailsavechangesinterceptor)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:62`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:63`)
 is the fourth interceptor ([ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html)).
 It records a field-level history for entities marked
 [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity), writing
 [`AuditTrailEntry`](#audittrailentry) rows in the same transaction as the change they describe, on the
-outbox precedent that a trail committable without its data is worse than no trail (`:18-22`). A
+outbox precedent that a trail committable without its data is worse than no trail (`:19-24`). A
 `Modified` save produces one row per property whose value actually changed; `Added` and `Deleted`
 produce a single summary row with a null `PropertyName`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailEntry.cs:15-21`,
@@ -408,30 +431,36 @@ names the one engine the v1 read surface queries, defaulting to SQL Server becau
 [`PiiAttribute`](group-02-domain-building-blocks.md#piiattribute) records
 [`PiiRedactor`](group-02-domain-building-blocks.md#piiredactor)`.RedactedToken` on both sides, and the
 redaction happens **at capture, not at read**, so the trail cannot become a second copy of a data
-subject's personal data that erasure would have to chase (`:37-41`, applied at `:309-310`,
+subject's personal data that erasure would have to chase (`:37-41`, applied at `:310-311`,
 [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)). The framework's own
 bookkeeping types are excluded by CLR type rather than by marker absence, which is what stops the trail
-from recording its own rows in an unbounded feedback loop (`:106-118`, checked at `:225-228`). And the
+from recording its own rows in an unbounded feedback loop (`:108-120`, checked at `:226-229`). And the
 correlation value it records is the ambient `Activity` trace id rather than a scoped correlation
 service, because a singleton interceptor holding a context built by the singleton physical factory
 cannot reach a scoped service without a lifetime bug; the doc comment says exactly that and names the
 accessor pattern tenancy introduced as the way to change it later (`:43-53`). The values every row of
 one save shares (user, instant, trace id, tenant) are gathered once into a
-[`CaptureContext`](#capturecontext) record struct (`:189-193`, declared at `:541`), and a row describing
+[`CaptureContext`](#capturecontext) record struct (`:190-194`, declared at `:538`), and a row describing
 an insert whose key the database has not assigned yet is parked as a
-[`PendingEntityKey`](#pendingentitykey) (`:550`) until the store-generated key exists (`:368-401`).
+[`PendingEntityKey`](#pendingentitykey) (`:547`) until the store-generated key exists (`:363-397`).
+Every free-text value a row carries (entity type, key, property name, trace id, tenant) is cut to its
+column width through [`ColumnWidth`](#columnwidth)`.Truncate`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/ColumnWidth.cs:4`, body at
+`:10-11`), an internal helper that truncates and preserves null (`AuditTrailSaveChangesInterceptor.cs:193-194`,
+`:244`, `:309`, `:485`); the internal-command processor and the scheduled-job runner reuse it for their
+error columns (`InternalCommandProcessor.cs:513`, `:537`).
 Two more types close the feature: [`AuditTrailReader`](#audittrailreader)
 (`.../AuditTrail/AuditTrailReader.cs:35`) serves paged history for one entity behind
 [`IAuditTrailReader`](group-05-cqrs-pipeline.md#iaudittrailreader) and states its own v1 limitation,
 that it reads only the `Default` source's trail table (`:17-24`), and
-[`AuditTrailCleanupJob`](#audittrailcleanupjob) (`.../AuditTrail/AuditTrailCleanupJob.cs:48`) is the
+[`AuditTrailCleanupJob`](#audittrailcleanupjob) (`.../AuditTrail/AuditTrailCleanupJob.cs:47`) is the
 framework's own recurring [`IScheduledJob`](group-05-cqrs-pipeline.md#ischeduledjob), purging rows past
 `RetentionDays` from every relational source nightly at 03:00 UTC in 1000-row batches that read ids
-first and delete them with `ExecuteDelete` (`:58`, `:63`, `:67`, `:70-85`, `:150-176`), expanding that
+first and delete them with `ExecuteDelete` (`:57`, `:62`, `:66`, `:69-82`, `:152-166`), expanding that
 source list through [`TenantDataSourceTargets`](#tenantdatasourcetargets) so a tenant with its own
-database gets swept too (`:83`, per-tenant scope at `:105-111`). It only runs if the host also runs the
+database gets swept too (`:78`, per-tenant scope at `:94-105`). It only runs if the host also runs the
 scheduler, and a host that records the trail without one is fully supported: pruning is then the
-operator's job (`:23-27`).
+operator's job (`:23-26`).
 
 ## Repositories, specifications, and the unit of work
 
@@ -475,7 +504,7 @@ case permutations of one column name sent to an anonymous endpoint cannot mint u
 The write side patches already-tracked entities in place through an O(1)
 `Local.FindEntry` lookup instead of re-attaching (`EFRepository.cs:52-64`) and seeds `RowVersion`
 original values for optimistic concurrency on both the aggregate and any child implementing
-[`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned) (`:74-93`,
+[`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned) (`:75-93`,
 [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)). Two set-based escape
 hatches sit beside the tracked path: `ExecuteDeleteAsync`, which the interface itself documents as
 bypassing domain events, audit stamps, and soft-delete (`IRepository.cs:445-455`), and
@@ -549,7 +578,7 @@ retry resets the change tracker first so the aborted attempt's `Added` entities 
 save split at `:284-403`) for importing entities with explicit database-generated ids one table at a
 time, and the `MigrateAsync` / `HasPendingMigrationsAsync` sweeps (`:686-739`) over every source whose
 resolved [`PhysicalDataSource`](#physicaldatasource)`.UsesMigrations` says a migrations pipeline owns
-its schema (`PhysicalDataSource.cs:63-70`, target selection at `DbContextFactory.cs:724-743`).
+its schema (`PhysicalDataSource.cs:41-47`, target selection at `DbContextFactory.cs:724-743`).
 
 [`UnitOfWork`](#unitofwork) sits on top, resolving an entity's physical source through
 [`IDataSourceService`](#idatasourceservice), handing the matching context to the factory, and caching the
@@ -579,28 +608,28 @@ entity resolves to a [`DataSourceKey`](#datasourcekey)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/DataSourceKey.cs:15`), a
 `(Engine, Name)` record struct where the [`DataSource`](#datasource) engine
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:6`) is
-one of Cosmos DB, SQLite, or SQL Server, and `Name` is a **physical** database name defaulting to
+one of Cosmos DB, SQLite, SQL Server, or PostgreSQL, and `Name` is a **physical** database name defaulting to
 `"Default"` (`DataSourceKey.cs:18-23`). Two layers compute this.
 [`DataSourceResolver`](#datasourceresolver)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:15`),
 the [`IDataSourceResolver`](#idatasourceresolver) singleton (`.../DataSources/IDataSourceResolver.cs:15`),
 builds the logical-to-physical map once per engine from configuration and hands out the resolved
-[`PhysicalDataSource`](#physicaldatasource) (`:89-102`, `:139-144`). Named sources with no connection
+[`PhysicalDataSource`](#physicaldatasource) (`:93-107`, `:143-148`). Named sources with no connection
 string, or whose connection identity equals the top-level one, **collapse onto the `Default` source**,
 so a host with no `DataSources` section behaves exactly like a single-database monolith
-(`DataSourceResolver.cs:265-304`), and sources sharing a connection identity collapse onto one canonical
-key named after their alphabetically-first member (`:325-346`, canonical name at `:332`). What the
+(`DataSourceResolver.cs:260-305`), and sources sharing a connection identity collapse onto one canonical
+key named after their alphabetically-first member (`:343-370`, canonical name at `:353`). What the
 `Default` source is built from is itself resolved rather than assumed: the top-level
 `ConnectionStrings` section first, and when it names nothing for this engine while `DataSources` names
 exactly one database on it, that database becomes `Default`, which is what keeps the framework's own
-tables working in a host that declares its database only under `DataSources` (`:198-233`, captured in
-the private [`DefaultSeed`](#defaultseed) record at `:173`). Identity is the connection string compared
-ordinally, with the Cosmos database name appended because one account hosts many databases (`:447-450`).
+tables working in a host that declares its database only under `DataSources` (`:179-236`, captured in
+the private [`DefaultSeed`](#defaultseed) record at `:177`). Identity is the connection string compared
+ordinally, with the Cosmos database name appended because one account hosts many databases (`:467-476`).
 The resolver fails fast when two logical names collapsing to one database declare conflicting
-migrations assemblies (`:418-439`) and logs a warning when a separate SQL Server source falls back to
-the Default migrations assembly (`:340-346`, message at `:471`). It also substitutes the host's own
+migrations assemblies (`:433-465`) and logs a warning when a separate SQL Server source falls back to
+the Default migrations assembly (`:360-368`, message at `:499`). It also substitutes the host's own
 engine for a request naming an engine the host does not configure, in a fixed relational-first
-preference order (`:26`, `:106-107`), because every table the framework owns is relational and honoring
+preference order (`:29-30`, applied at `:97` and `:109-129`), because every table the framework owns is relational and honoring
 an unconfigured engine literally handed those components an empty connection string.
 
 What the resolver reads is two bound settings objects.
@@ -871,9 +900,9 @@ caller revokes by mutating the instances it hands back (`:16-19`).
 hard-deletes spent rows past `RetentionDays`: the row is bookkeeping, not an aggregate, and its content
 is a credential digest plus the IP and user agent of a device, so keeping it past its usefulness is both
 a growing table and a growing set of records describing a data subject
-([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html), `:8-16`). Its own doc
+([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html), `:14-23`). Its own doc
 comment names the trade the retention window makes: a rotation chain older than the window is gone, so a
-replay of a token that old reads as an unknown token instead of signalling reuse (`:17-23`). That is
+replay of a token that old reads as an unknown token instead of signalling reuse (`:25-30`). That is
 [Rubric §11, Security] meeting [Rubric §30, Compliance and Data Governance] again, in a table rather
 than in an interceptor.
 
@@ -1371,7 +1400,7 @@ survives a module being pulled out into its own service.
   [`CreateSessionHandler`](group-18-conference-application.md#createsessionhandler)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/Create/CreateSessionHandler.cs:27`
   and `:60`, where the catch drives a bounded manual-id retry),
-  [`CreateBookmarkHandler`](group-22-engagement-module.md#createbookmarkhandler) (`CreateBookmarkHandler.cs:21`),
+  [`CreateBookmarkHandler`](group-22-engagement-module.md#createbookmarkhandler) (`CreateBookmarkHandler.cs:20`),
   [`SetLeaderboardParticipationHandler`](group-22-engagement-module.md#setleaderboardparticipationhandler)
   (`SetLeaderboardParticipationHandler.cs:34`), and
   [`PointsAwarder`](group-22-engagement-module.md#pointsawarder) (`PointsAwarder.cs:32`). The framework-level
@@ -1445,10 +1474,10 @@ survives a module being pulled out into its own service.
   free, and keeping it in the Application layer beside its interface means an admin surface can render dead
   letters without referencing the EF entity or the Infrastructure assembly.
 - **Where it's used**: built by the Infrastructure implementation's projection
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxAdministration.cs:92`), from
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxAdministration.cs:91`), from
   rows matching the dead-letter predicate `ProcessedOn == null && RetryCount >= maxRetries`
-  (`OutboxAdministration.cs:88`), collected across sources and returned oldest first
-  (`OutboxAdministration.cs:107`).
+  (`OutboxAdministration.cs:87`), collected across sources and returned oldest first
+  (`OutboxAdministration.cs:106`).
 
 ### DataSourceKey
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure.Persistence` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/DataSourceKey.cs:15` · Level 1 · record struct (readonly)
@@ -1564,15 +1593,15 @@ survives a module being pulled out into its own service.
   keeps a bad source name on the same rails as any other user error. The retention sweep that would otherwise
   be a dead letter's only exit is [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice),
   whose own comment points at `IOutboxAdministration.ReplayDeadLettersAsync` as the alternative
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:152`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:147`).
 - **Where it's used**: implemented by [`OutboxAdministration`](group-04-events-outbox.md#outboxadministration)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxAdministration.cs:36-43`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxAdministration.cs:35-42`),
   registered with `TryAddScoped` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:205-206`),
   scoped because it creates one child scope per data source it visits and holds no state of its own
   (`DependencyInjection.cs:217-218`). The implementation caps one page at 500 rows so an admin call cannot ask
-  for the whole table at once (`OutboxAdministration.cs:46`), rejects a negative `skip` or an out-of-range
-  `take` as validation errors (`OutboxAdministration.cs:48-52`), and expresses replay as one set-based
-  `UPDATE` per target (`OutboxAdministration.cs:149-150`) rather than as loaded entities.
+  for the whole table at once (`OutboxAdministration.cs:45`), rejects a negative `skip` or an out-of-range
+  `take` as validation errors (`OutboxAdministration.cs:47-51`), and expresses replay as one set-based
+  `UPDATE` per target (`OutboxAdministration.cs:148-149`) rather than as loaded entities.
 - **Caveats / not-in-source**: the framework registers the service but ships no controller over it. No
   `MMCA.Common.API` endpoint and no ADC or Store call site references `ListDeadLettersAsync`,
   `ReplayDeadLettersAsync`, or `CountPendingAsync` today; outside the registration the only callers in the
@@ -1796,7 +1825,7 @@ survives a module being pulled out into its own service.
   - `UpdateAsync(TEntity entity, CancellationToken)` (`IRepository.cs:391-393`) and `UpdateRange(IEnumerable<TEntity> entities)` (`IRepository.cs:397`): mark tracked entities modified. `UpdateRange` is the one `void` member of the pair, since batch marking needs nothing awaited.
   - The two `SetOriginalRowVersion` overloads (`IRepository.cs:406`, `:417`), `TouchConcurrencyToken` (`IRepository.cs:440`), and the two database-side operations (`IRepository.cs:453`, `:450`) described above.
 - **Why it's built this way**: keeping writes in a focused interface means a query handler cannot accidentally acquire mutation methods, and the concurrency and set-based escape hatches are declared where a reader meets their warnings rather than buried in a concrete class. Constraining `TEntity` to the aggregate root mirrors the constraint on `IUnitOfWork.GetRepository` (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:20`), which is how a handler is meant to obtain one, so the two agree by construction. Leaving `Save` off the interface entirely is what makes the single save boundary of [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) enforceable: with several physical databases in one host, "save" cannot mean "save this repository".
-- **Where it's used**: command handlers that mutate aggregates, always through [`IUnitOfWork.GetRepository<TEntity, TIdentifierType>()`](#iunitofwork) (`IUnitOfWork.cs:19`); folded into [`IRepository<TEntity, TIdentifierType>`](#irepositorytentity-tidentifiertype) (`IRepository.cs:493`); implemented by [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype) (`EFRepository.cs:23-29`), which derives from [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) and adds only the write surface, and is wrapped in [`EFRepositoryDecorator<TEntity, TIdentifierType>`](#efrepositorydecoratortentity-tidentifiertype) when MiniProfiler is on (`RepositoryFactory.cs:31-41`). Both apps exercise the specialized members: in MMCA.Store, `ChangeVariantPriceHandler` calls the **child-typed** `SetOriginalRowVersion` so a race on one product variant conflicts even when the product row itself is untouched (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/ChangeVariantPrice/ChangeVariantPriceHandler.cs:45-47`, with the same pattern in `ChangeVariantSkuHandler.cs:69`); in MMCA.ADC, `ScoreEventSessionsHandler` uses `ExecuteDeleteAsync` to clear a session's previous AI scores before re-adding them (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:27`, `:105-107`).
+- **Where it's used**: command handlers that mutate aggregates, always through [`IUnitOfWork.GetRepository<TEntity, TIdentifierType>()`](#iunitofwork) (`IUnitOfWork.cs:19`); folded into [`IRepository<TEntity, TIdentifierType>`](#irepositorytentity-tidentifiertype) (`IRepository.cs:493`); implemented by [`EFRepository<TEntity, TIdentifierType>`](#efrepositorytentity-tidentifiertype) (`EFRepository.cs:23-29`), which derives from [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) and adds only the write surface, and is wrapped in [`EFRepositoryDecorator<TEntity, TIdentifierType>`](#efrepositorydecoratortentity-tidentifiertype) when MiniProfiler is on (`RepositoryFactory.cs:31-41`). Both apps exercise the specialized members: in MMCA.Store, `ChangeVariantPriceHandler` calls the **child-typed** `SetOriginalRowVersion` so a race on one product variant conflicts even when the product row itself is untouched (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/ChangeVariantPrice/ChangeVariantPriceHandler.cs:45-47`, with the same pattern in `ChangeVariantSkuHandler.cs:69`); in MMCA.ADC, `ScoreEventSessionsHandler` uses `ExecuteDeleteAsync` to clear a session's previous AI scores before re-adding them (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringRunner.cs:28`, `:105-107`).
 - **Caveats / not-in-source**: `ExecuteDeleteAsync` and `ExecuteUpdateAsync` bypass the domain-event capture that [`DomainEventSaveChangesInterceptor`](#domaineventsavechangesinterceptor) performs on save, so anything downstream that reacts to an event will not observe those writes. The interface says so in its doc comments; nothing in the type system stops it, so it stays a review rule rather than a compiler rule.
 
 ### IRepository<TEntity, TIdentifierType>
@@ -1824,18 +1853,16 @@ survives a module being pulled out into its own service.
   `[Rubric §6, CQRS & Event-Driven]` assesses whether events are raised and delivered from a single, reliable place. `SaveChangesAsync` is that place: the doc comment (`IUnitOfWork.cs:7-8`) ties persistence and domain-event dispatch into one operation, and the mechanism behind it is the interceptor plus outbox flow described on [`DomainEventSaveChangesInterceptor`](#domaineventsavechangesinterceptor).
 
   `[Rubric §14, Testability]` assesses whether the abstraction a handler depends on can be replaced without infrastructure. Because a handler asks this interface for its repositories rather than receiving them, one `Mock<IUnitOfWork>` substitutes the entire data layer; the framework ships that scaffold as [`HandlerTestBase<THandler>`](group-28-testing-infrastructure.md#handlertestbasethandler), which pre-stubs `SaveChangesAsync` to return 1 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Support/HandlerTestBase.cs:42`) and wires each registered repository mock into both `GetRepository` and `GetReadRepository` (`HandlerTestBase.cs:61-62`).
-- **Walkthrough**: nine members, in three groups.
+- **Walkthrough**: five members, in three groups.
   - `GetRepository<TEntity, TIdentifierType>()` (`IUnitOfWork.cs:19-21`): the read-write repository. Its constraint is `where TEntity : AuditableAggregateRootEntity<TIdentifierType>` (`IUnitOfWork.cs:20`), so the DDD rule that the doc comment states in prose ("Only aggregate roots can be directly persisted", `IUnitOfWork.cs:14`) is enforced by the compiler. In the implementation the call resolves the entity's physical data source through [`IDataSourceService`](#idatasourceservice), fetches the matching context, builds the repository through [`IRepositoryFactory`](#irepositoryfactory), and caches it under the closed interface type (`UnitOfWork.cs:37-45`).
   - `GetReadRepository<TEntity, TIdentifierType>()` (`IUnitOfWork.cs:29-31`): the read-only repository, constrained only to [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) (`IUnitOfWork.cs:30`), so child entities are readable even though they are not independently writable. Same resolution path, different factory method (`UnitOfWork.cs:57-65`).
   - `SaveChangesAsync(CancellationToken cancellationToken = default)` (`IUnitOfWork.cs:36`): persists everything and returns the number of state entries written (`IUnitOfWork.cs:35`). The implementation is a straight delegation (`UnitOfWork.cs:69-70`) to [`DbContextFactory`](#dbcontextfactory), which saves **every** cached context, not just one: it snapshots the contexts and loops in bounded passes (three, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:61`) so a context materialized by a domain event handler mid-save is still saved (`DbContextFactory.cs:256-270`), then throws if any tracked change is left behind rather than losing it silently (`DbContextFactory.cs:278-289`).
-  - `Save()` (`IUnitOfWork.cs:40`): the synchronous form, with the doc comment preferring the async one in async code paths (`IUnitOfWork.cs:38`). It delegates to `DbContextFactory.SaveChanges()` (`UnitOfWork.cs:73`, `DbContextFactory.cs:427-435`).
-  - `RequestIdentityInsert()` (`IUnitOfWork.cs:49`): a one-shot flag saying the next save may insert rows carrying explicit values for database-generated identity columns, for example records imported from an external system with their source ids intact (`IUnitOfWork.cs:42-48`). The implementation sets a boolean (`UnitOfWork.cs:76`, `DbContextFactory.cs:295`); the next `SaveChangesAsync` reads and immediately clears it (`DbContextFactory.cs:246-247`, which is what "automatically cleared after the save completes" means) and, for a SQL Server context, routes the save through `SaveWithIdentityInsertAsync` (`DbContextFactory.cs:266-268`), which groups the affected entries by table and wraps each group in `SET IDENTITY_INSERT ON/OFF` because SQL Server allows only one table per session to have it on (`DbContextFactory.cs:297-319`).
-  - `BeginTransaction()` (`IUnitOfWork.cs:52`), `CommitTransaction()` (`IUnitOfWork.cs:55`), `RollbackTransaction()` (`IUnitOfWork.cs:58`): manual transaction control, each fanning out across every transaction-capable cached context (`DbContextFactory.cs:437-460`). Begin skips a context that already carries a transaction, since EF throws on a second `BeginTransaction` for the same connection (`DbContextFactory.cs:441-446`). Rollback additionally drops any deferred in-process event dispatch, because the aggregate changes and their outbox rows just rolled back with it (`DbContextFactory.cs:462-466`).
-  - `ExecuteInTransactionAsync<TResult>(Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default)` (`IUnitOfWork.cs:70-72`): the member to reach for instead of the three above. Its doc comment (`IUnitOfWork.cs:60-66`) states the reason: the operation runs wrapped by the active execution strategy, so a retrying strategy such as `SqlServerRetryingExecutionStrategy` can retry the whole transaction as one retriable unit, committing on success and rolling back before an exception propagates. The implementation adds five behaviors worth knowing (`DbContextFactory.cs:518-563`, with the attempt runner at `:554-609`): a nested call joins the ambient transaction instead of opening a second one (`DbContextFactory.cs:529-530`); a returned failed [`Result`](group-01-result-error-handling.md#result) rolls back exactly like an exception (`DbContextFactory.cs:582-589`); each retry starts from a reset change tracker, so entities a failed attempt added are not inserted twice (`DbContextFactory.cs:491-497`, `:528-529`); deferred in-process domain events are flushed only after a successful commit (`DbContextFactory.cs:595-602`); and a failure of the **commit itself** is never retried, surfacing as [`TransactionCommitAmbiguousException`](#transactioncommitambiguousexception) thrown outside the strategy instead (`DbContextFactory.cs:555-560`).
-  - The two base interfaces (`IUnitOfWork.cs:10`) matter at scope teardown: [`UnitOfWork`](#unitofwork) forwards both disposal paths to the context factory (`UnitOfWork.cs:93-119`), so the async path awaits `_dbContextFactory.DisposeAsync()` (`UnitOfWork.cs:103`) rather than blocking.
-- **Why it's built this way**: under [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) a single host may own several physical databases, so "save" cannot mean "call SaveChanges on the one context". Splitting the responsibility keeps that manageable: [`IDbContextFactory`](#idbcontextfactory) owns multi-source routing, saving, transactions and disposal, while `IUnitOfWork` is the narrow per-scope facade the Application layer is allowed to see, adding only repository resolution and caching on top (`UnitOfWork.cs:13`, `:23`). Exposing `ExecuteInTransactionAsync` as a first-class member, rather than leaving callers with `BeginTransaction`, is what makes the [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html) pipeline's transaction rules enforceable in one place: business failures roll back and post-commit event dispatch is deferred. Keeping the interface in Application rather than Infrastructure is the [ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html) and Clean Architecture pairing, since a handler returns a `Result` and never sees an EF type on the way there.
+  - `RequestIdentityInsert()` (`IUnitOfWork.cs:45`): a one-shot flag saying the next save may insert rows carrying explicit values for database-generated identity columns, for example records imported from an external system with their source ids intact (`IUnitOfWork.cs:38-44`). The implementation sets a boolean (`UnitOfWork.cs:73`, `DbContextFactory.cs:295`); the next `SaveChangesAsync` reads and immediately clears it (`DbContextFactory.cs:246-247`, which is what "automatically cleared after the save completes" means) and, for a SQL Server context, routes the save through `SaveWithIdentityInsertAsync` (`DbContextFactory.cs:266-268`), which groups the affected entries by table and wraps each group in `SET IDENTITY_INSERT ON/OFF` because SQL Server allows only one table per session to have it on (`DbContextFactory.cs:297-319`).
+  - `ExecuteInTransactionAsync<TResult>(Func<CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default)` (`IUnitOfWork.cs:57-59`): the interface's only transaction-control member; the manual `Save()`, `BeginTransaction()`, `CommitTransaction()`, and `RollbackTransaction()` members it used to sit alongside are gone from the interface. Its doc comment (`IUnitOfWork.cs:47-53`) states the reason: the operation runs wrapped by the active execution strategy, so a retrying strategy such as `SqlServerRetryingExecutionStrategy` can retry the whole transaction as one retriable unit, committing on success and rolling back before an exception propagates. The implementation adds five behaviors worth knowing (`DbContextFactory.cs:518-563`, with the attempt runner at `:554-609`): a nested call joins the ambient transaction instead of opening a second one (`DbContextFactory.cs:529-530`); a returned failed [`Result`](group-01-result-error-handling.md#result) rolls back exactly like an exception (`DbContextFactory.cs:582-589`); each retry starts from a reset change tracker, so entities a failed attempt added are not inserted twice (`DbContextFactory.cs:491-497`, `:528-529`); deferred in-process domain events are flushed only after a successful commit (`DbContextFactory.cs:595-602`); and a failure of the **commit itself** is never retried, surfacing as [`TransactionCommitAmbiguousException`](#transactioncommitambiguousexception) thrown outside the strategy instead (`DbContextFactory.cs:555-560`).
+  - The two base interfaces (`IUnitOfWork.cs:10`) matter at scope teardown: [`UnitOfWork`](#unitofwork) forwards both disposal paths to the context factory (`UnitOfWork.cs:81-107`), so the async path awaits `_dbContextFactory.DisposeAsync()` (`UnitOfWork.cs:91`) rather than blocking.
+- **Why it's built this way**: under [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) a single host may own several physical databases, so "save" cannot mean "call SaveChanges on the one context". Splitting the responsibility keeps that manageable: [`IDbContextFactory`](#idbcontextfactory) owns multi-source routing, saving, transactions and disposal, while `IUnitOfWork` is the narrow per-scope facade the Application layer is allowed to see, adding only repository resolution and caching on top (`UnitOfWork.cs:13`, `:23`). Exposing `ExecuteInTransactionAsync` as the interface's only transaction-control member, rather than the manual `BeginTransaction`/`CommitTransaction`/`RollbackTransaction`/`Save` set it replaced, is what makes the [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html) pipeline's transaction rules enforceable in one place: business failures roll back and post-commit event dispatch is deferred. Keeping the interface in Application rather than Infrastructure is the [ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html) and Clean Architecture pairing, since a handler returns a `Result` and never sees an EF type on the way there.
 - **Where it's used**: injected into command handlers across the framework and both apps. In MMCA.Common: [`TransactionalCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#transactionalcommanddecoratortcommand-tresult) takes it in its primary constructor (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:22`) and calls `ExecuteInTransactionAsync` for any command marked [`ITransactional`](group-05-cqrs-pipeline.md#itransactional) (`TransactionalCommandDecorator.cs:31`); [`DeleteEntityHandler<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentityhandlertentity-tidentifiertype) takes it and resolves its write repository from it (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/DeleteEntityHandler.cs:37`, `:70`); [`EntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#entityqueryservicetentity-tentitydto-tidentifiertype) both holds it and derives its read repository from it (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:33`, `:43`, `:87`). In MMCA.ADC, [`RefreshFromSessionizeHandler`](group-18-conference-application.md#refreshfromsessionizehandler) is the live consumer of the identity-insert path, calling `RequestIdentityInsert()` immediately before the save because Sessionize imports preserve external ids into tables with IDENTITY columns (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeHandler.cs:168-169`). The single implementation is [`UnitOfWork`](#unitofwork) (`UnitOfWork.cs:13`), which is `internal sealed`, so consumers only ever see this interface.
-- **Caveats / not-in-source**: `Save()` is not the synchronous twin of `SaveChangesAsync()` in event behavior. The synchronous interceptor path cannot await the in-process dispatcher, so with the outbox enabled it clears the captured events from their aggregates and leaves their outbox rows for [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) to deliver; a context without outbox support keeps the older no-op instead, so a later async save can still deliver those events (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:114-138`). Second, `ExecuteInTransactionAsync` is not a distributed transaction: with several physical sources each gets its own transaction and commits are sequential and best effort, so a commit failure on the second source leaves the first already committed. The doc comment names that limitation and records that the thrown [`TransactionCommitAmbiguousException`](#transactioncommitambiguousexception) reports each source's outcome so the partial state is observable rather than inferred, with the outbox as the cross-source consistency mechanism (`DbContextFactory.cs:471-474`, `:487-497`).
+- **Caveats / not-in-source**: `ExecuteInTransactionAsync` is not a distributed transaction: with several physical sources each gets its own transaction and commits are sequential and best effort, so a commit failure on the second source leaves the first already committed. The doc comment names that limitation and records that the thrown [`TransactionCommitAmbiguousException`](#transactioncommitambiguousexception) reports each source's outcome so the partial state is observable rather than inferred, with the outbox as the cross-source consistency mechanism (`DbContextFactory.cs:471-474`, `:487-497`).
 
 ### BlobNames
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure.Storage` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/BlobNames.cs:10` · Level 0 · class (public static)
@@ -1925,7 +1952,7 @@ survives a module being pulled out into its own service.
   themselves.
 - **Where it's used**: the `options` parameter of
   [`IFileStorageService`](#ifilestorageservice)'s document-upload overload
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/IFileStorageService.cs:41`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/IFileStorageService.cs:36`),
   implemented by
   [`AzureBlobFileStorageService`](group-14-module-system-composition.md#azureblobfilestorageservice) and
   [`NullFileStorageService`](group-14-module-system-composition.md#nullfilestorageservice); called by
@@ -2052,21 +2079,19 @@ survives a module being pulled out into its own service.
     (`IFileStorageService.cs:17`), and the content is read from the stream's current position
     (`IFileStorageService.cs:18`).
   - `UploadAsync(string blobName, Stream content, string contentType, FileUploadOptions options, CancellationToken cancellationToken = default)`
-    (`IFileStorageService.cs:41-42`): the overload a document upload wants, storing the response headers
+    (`IFileStorageService.cs:36`): the overload a document upload wants, storing the response headers
     carried by [`FileUploadOptions`](#fileuploadoptions) (a `Content-Disposition`, for example, is what
-    makes a stored blob come back as a download under its original file name). It ships as a C# default
-    interface method that forwards to the three-argument overload
-    (`IFileStorageService.cs:691-692`) purely so an implementation written before this overload existed
-    keeps compiling; implementations SHOULD override it and honor the headers
-    (`IFileStorageService.cs:685-690`).
+    makes a stored blob come back as a download under its original file name). It has no default body:
+    every implementation must honor the headers directly rather than falling back to the three-argument
+    overload.
   - `DeleteAsync(string blobName, CancellationToken cancellationToken = default)`
-    (`IFileStorageService.cs:49`): deletes a blob; unknown names succeed (idempotent,
-    `IFileStorageService.cs:45`), which matches at-least-once cleanup semantics.
+    (`IFileStorageService.cs:42`): deletes a blob; unknown names succeed (idempotent,
+    `IFileStorageService.cs:38`), which matches at-least-once cleanup semantics.
 - **Why it's built this way**: an unconfigured default plus an `IsConfigured` gate means the framework ships
   avatar support without forcing every consumer to provision blob storage, and idempotent delete makes cleanup
-  safe to retry after a partial failure. Adding the headers-aware overload as a default interface method
-  (rather than a breaking signature change) let the document-upload path land without forcing every
-  existing `IFileStorageService` implementation to change in lockstep.
+  safe to retry after a partial failure. The headers-aware overload is a plain interface member with no
+  default implementation (`IFileStorageService.cs:36`), so every `IFileStorageService` implementation is
+  forced to honor the response headers rather than silently dropping them via a forwarding default.
 - **Where it's used**: [`SetUserAvatarHandler`](group-24-identity-module.md#setuseravatarhandler) uploads the
   normalized JPEG (`SetUserAvatarHandler.cs:29` for the injection, `:85` for the call), with
   [`RemoveUserAvatarHandler`](group-24-identity-module.md#removeuseravatarhandler) and
@@ -2532,7 +2557,7 @@ survives a module being pulled out into its own service.
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:28`).
   The consumers are the handlers whose uniqueness pre-check can lose a race:
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/Create/CreateSessionHandler.cs:27`,
-  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/UseCases/Create/CreateBookmarkHandler.cs:21`,
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/UserSessionBookmarks/UseCases/Create/CreateBookmarkHandler.cs:20`,
   `.../CheckIns/UseCases/GetOrCreateMyBadge/GetOrCreateMyBadgeHandler.cs:20`,
   `.../Points/Services/PointsAwarder.cs:32` and
   `.../Points/UseCases/SetLeaderboardParticipation/SetLeaderboardParticipationHandler.cs:33`. Behavior
@@ -2605,27 +2630,27 @@ survives a module being pulled out into its own service.
     service, and the repository factory, null-guarding the context factory and the repository factory
     into readonly fields (the data-source service is used directly from the primary-constructor
     parameter).
-  - **`_repositories`** (`UnitOfWork.cs:23`): a `Dictionary<Type, object>` keyed by the closed generic
+  - **`_repositories`** (`UnitOfWork.cs:111`): a `Dictionary<Type, object>` keyed by the closed generic
     repository interface (for example `IRepository<Order, int>`), so a repository is created at most
     once per entity type per scope.
-  - **`GetRepository<TEntity, TIdentifierType>()`** (`UnitOfWork.cs:33-46`): on a cache miss, resolves
+  - **`GetRepository<TEntity, TIdentifierType>()`** (`UnitOfWork.cs:121-134`): on a cache miss, resolves
     the entity's [`DataSourceKey`](#datasourcekey) via
-    `dataSourceService.GetDataSourceKey(typeof(TEntity))` (`UnitOfWork.cs:40`), asks the context
-    factory for the matching context (`:41`), and builds a read-write
+    `dataSourceService.GetDataSourceKey(typeof(TEntity))` (`UnitOfWork.cs:128`), asks the context
+    factory for the matching context (`:129`), and builds a read-write
     [`IRepository<TEntity, TIdentifierType>`](#irepositorytentity-tidentifiertype) through
-    [`IRepositoryFactory`](#irepositoryfactory) (`:42`); constrained to
+    [`IRepositoryFactory`](#irepositoryfactory) (`:130`); constrained to
     `AuditableAggregateRootEntity<TIdentifierType>` so only aggregate roots get a mutable repository.
-  - **`GetReadRepository<TEntity, TIdentifierType>()`** (`UnitOfWork.cs:53-66`): the same resolution
-    but calls `CreateReadOnly` (`:62`) and accepts any `AuditableBaseEntity<TIdentifierType>`,
+  - **`GetReadRepository<TEntity, TIdentifierType>()`** (`UnitOfWork.cs:141-154`): the same resolution
+    but calls `CreateReadOnly` (`:150`) and accepts any `AuditableBaseEntity<TIdentifierType>`,
     returning [`IReadRepository<TEntity, TIdentifierType>`](#ireadrepositorytentity-tidentifiertype)
     for query handlers.
-  - **Save and transaction methods** (`UnitOfWork.cs:69-91`): `SaveChangesAsync`, `Save`,
-    `RequestIdentityInsert`, `BeginTransaction`, `CommitTransaction`, `RollbackTransaction`, and
-    `ExecuteInTransactionAsync` all delegate straight to the context factory, because in a
-    multi-database scope the factory is what coordinates saving and transacting across every context
-    the scope touched.
-  - **Disposal** (`UnitOfWork.cs:93-119`): implements both `Dispose` and `DisposeAsync` over a
-    `volatile bool _disposed` flag (`UnitOfWork.cs:25`), disposing the context factory exactly once
+  - **Save and transaction methods** (`UnitOfWork.cs:157-167`): `SaveChangesAsync`,
+    `RequestIdentityInsert`, and `ExecuteInTransactionAsync` all delegate straight to the context
+    factory, because in a multi-database scope the factory is what coordinates saving and transacting
+    across every context the scope touched. `Save`, `BeginTransaction`, `CommitTransaction`, and
+    `RollbackTransaction` were removed from this pass-through set.
+  - **Disposal** (`UnitOfWork.cs:169-195`): implements both `Dispose` and `DisposeAsync` over a
+    `volatile bool _disposed` flag (`UnitOfWork.cs:113`), disposing the context factory exactly once
     and suppressing finalization on both paths.
 - **Why it's built this way**: the unit of work plus the factory hide the physical topology from
   handlers ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), and
@@ -2703,7 +2728,7 @@ survives a module being pulled out into its own service.
   it had before the trail shipped (`ApplicationDbContext.cs:71-75`).
 
 ### CaptureContext
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:541` · Level 0 · record struct (private readonly, nested)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:538` · Level 0 · record struct (private readonly, nested)
 
 - **What it is**: a four-field value carrying the provenance every trail row of one save shares:
   the acting user, the capture instant, the trace id, and the tenant.
@@ -2717,12 +2742,13 @@ survives a module being pulled out into its own service.
   identical `ChangedOn`, which is what lets a reader group a save back together.
 - **Walkthrough**: the positional members are `ChangedBy` (nullable user id), `ChangedOn` (UTC
   instant), `CorrelationId` (nullable trace id) and `TenantId` (nullable), declared at
-  `AuditTrailSaveChangesInterceptor.cs:541-545`. It is constructed exactly once per capture, in
-  `CaptureChanges` (`AuditTrailSaveChangesInterceptor.cs:189-193`), where the trace id and tenant are
-  already truncated to their column widths (`MaxCorrelationIdLength` 64 and `MaxTenantIdLength` 64,
-  `AuditTrailSaveChangesInterceptor.cs:80,83`). It is then passed by value into `CaptureEntry` and
+  `AuditTrailSaveChangesInterceptor.cs:538-542`. It is constructed exactly once per capture, in
+  `CaptureChanges` (`AuditTrailSaveChangesInterceptor.cs:190-194`), where the trace id and tenant are
+  already truncated to their column widths through [`ColumnWidth.Truncate`](#columnwidth)
+  (`MaxCorrelationIdLength` 64 and `MaxTenantIdLength` 64,
+  `AuditTrailSaveChangesInterceptor.cs:81,84`). It is then passed by value into `CaptureEntry` and
   `CaptureModifiedProperties`, which copy its fields straight onto each new
-  [`AuditTrailEntry`](#audittrailentry) (`AuditTrailSaveChangesInterceptor.cs:257-260,312-315`).
+  [`AuditTrailEntry`](#audittrailentry) (`AuditTrailSaveChangesInterceptor.cs:258-261,313-316`).
 - **Why it's built this way**: `readonly record struct` means no allocation and no defensive copying
   concerns for a value that exists only for the duration of one `SavingChanges` call; `private`
   keeps it invisible outside the interceptor. Positional syntax gives it structural equality and a
@@ -2802,10 +2828,10 @@ survives a module being pulled out into its own service.
   - `SectionName = "AuditTrail"` (`AuditTrailSettings.cs:19`), the binding key.
   - `Enabled` (`AuditTrailSettings.cs:26`), defaulting to `false`. Read by
     [`ApplicationDbContext`](#applicationdbcontext) for the model gate (`ApplicationDbContext.cs:327`)
-    and re-checked by the cleanup job before it does any work (`AuditTrailCleanupJob.cs:72-75`).
+    and re-checked by the cleanup job before it does any work (`AuditTrailCleanupJob.cs:71-74`).
   - `RetentionDays` (`AuditTrailSettings.cs:38`), `[Range(1, 3650)]` (`:37`), default `90`.
     [`AuditTrailCleanupJob`](#audittrailcleanupjob) turns it into a cutoff instant
-    (`AuditTrailCleanupJob.cs:77`) and purges from every relational source in use, skipping Cosmos
+    (`AuditTrailCleanupJob.cs:76`) and purges from every relational source in use, skipping Cosmos
     (`:79-81`) and expanding each source across the declared tenants (`:83-86`).
   - `DataSource` (`AuditTrailSettings.cs:46`), default `DataSource.SQLServer`. Note the asymmetry the
     doc calls out (`AuditTrailSettings.cs:40-45`): rows are WRITTEN to every relational source
@@ -2824,7 +2850,7 @@ survives a module being pulled out into its own service.
   `DependencyInjection.Jobs.cs:110-113`, so a bad `RetentionDays` fails the host at startup rather than at
   the first sweep. Read by [`ApplicationDbContext`](#applicationdbcontext),
   [`AuditTrailReader`](#audittrailreader) (`AuditTrailReader.cs:34-39`) and
-  [`AuditTrailCleanupJob`](#audittrailcleanupjob) (`AuditTrailCleanupJob.cs:48-55`, snapshotted at
+  [`AuditTrailCleanupJob`](#audittrailcleanupjob) (`AuditTrailCleanupJob.cs:47-54`, snapshotted at
   `:60`). Design-time tooling supplies the options object by hand so a migration can be generated
   with the table on or off (`DesignTimeDbContextHelper.cs:165-166`). The recording itself is
   [`AuditTrailSaveChangesInterceptor`](#audittrailsavechangesinterceptor), registered as a singleton
@@ -2834,7 +2860,7 @@ survives a module being pulled out into its own service.
   and `AddAuditTrailTests.cs`.
 
 ### PendingEntityKey
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:550` · Level 1 · record (private sealed, nested)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:547` · Level 1 · record (private sealed, nested)
 
 - **What it is**: a two-field pairing of a staged trail row with the entity entry whose primary key
   the database has not assigned yet. It exists only between `SavingChanges` and `SavedChanges`.
@@ -2845,18 +2871,18 @@ survives a module being pulled out into its own service.
   whether key strategy and its consequences are handled deliberately): the trail is captured
   **before** the save, which is exactly what makes it transactional, but an entity whose key is an
   identity column has no key at that moment. EF holds a temporary sentinel value that would make the
-  row unfindable by key (`AuditTrailSaveChangesInterceptor.cs:263-266`). Remembering the pair, then
+  row unfindable by key (`AuditTrailSaveChangesInterceptor.cs:264-267`). Remembering the pair, then
   rewriting the one column after the insert, is the price of capturing early; the alternative
   (capturing after the save) would put the trail outside the transaction and lose the guarantee the
   whole design exists for.
 - **Walkthrough**: the positional members are `Row` (the tracked trail row whose `EntityKey` must be
   rewritten) and `Entry` (the audited entry whose key the database assigns), declared at
-  `AuditTrailSaveChangesInterceptor.cs:550`. Instances are produced by `CaptureEntry` only when the
+  `AuditTrailSaveChangesInterceptor.cs:547`. Instances are produced by `CaptureEntry` only when the
   entry is `Added` **and** `HasTemporaryKey(entry)` returns true
-  (`AuditTrailSaveChangesInterceptor.cs:267-269`, with the temporary-key test walking every primary
+  (`AuditTrailSaveChangesInterceptor.cs:268-270`, with the temporary-key test walking every primary
   key property at `:449-466`). They are accumulated into a list and parked in a
   `ConditionalWeakTable<DbContext, List<PendingEntityKey>>` keyed by the context
-  (`AuditTrailSaveChangesInterceptor.cs:92,213-216`), then drained in `ResolveGeneratedKeysAsync` or
+  (`AuditTrailSaveChangesInterceptor.cs:93,214-217`), then drained in `ResolveGeneratedKeysAsync` or
   `ResolveGeneratedKeys` (`:368-396,402-429`).
 - **Why it's built this way**: a `record` gives value semantics and a readable two-name shape for
   something that is pure bookkeeping; `private sealed` keeps it invisible. Holding the list in a
@@ -2867,28 +2893,33 @@ survives a module being pulled out into its own service.
   [`AuditTrailSaveChangesInterceptor`](#audittrailsavechangesinterceptor).
 
 ### PermissionGrantRefreshService
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/PermissionGrantRefreshService.cs:31` · Level 1 · class (internal sealed partial, `BackgroundService`)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/PermissionGrantRefreshService.cs:31` · Level 1 · class (internal sealed partial, `PeriodicBackgroundService`)
 
 - **What it is**: the background loop that keeps [`PermissionGrantCache`](#permissiongrantcache) warm.
   It calls `RefreshAsync` on an interval for the lifetime of the host, so the cache never goes stale
-  by more than one `PermissionGrants:CacheSeconds` window (`PermissionGrantRefreshService.cs:31-91`).
+  by more than one `PermissionGrants:CacheSeconds` window (`PermissionGrantRefreshService.cs:31-63`).
 - **Depends on**: `IPermissionGrantCache` (the interface it refreshes through, not the concrete
   [`PermissionGrantCache`](#permissiongrantcache) directly), `IOptions<PermissionGrantSettings>`,
-  `ILogger<PermissionGrantRefreshService>`, an optional `TimeProvider`, and the BCL
-  `Microsoft.Extensions.Hosting.BackgroundService` it extends (`PermissionGrantRefreshService.cs:31-49`).
+  `ILogger<PermissionGrantRefreshService>`, an optional `TimeProvider`, and
+  [`PeriodicBackgroundService`](group-14-module-system-composition.md#periodicbackgroundservice)
+  it extends (`PermissionGrantRefreshService.cs:31-36`).
 - **Concept introduced, a cache that survives its own reload failing.** `[Rubric §29, Resilience &
   Business Continuity]` (assesses whether a background loop degrades rather than crashes the host) and
-  `[Rubric §13, Observability & Operability]` (a failed reload is logged, not silent). `ExecuteAsync`
-  wraps the refresh call in a general `catch` with a comment explaining why
-  (`PermissionGrantRefreshService.cs:69`): any load fault must degrade to "no stored grants" rather
-  than stop the host, because the compiled registry and whatever the last good snapshot held still
-  answer authorization checks either way.
-- **Walkthrough**: `ExecuteAsync` (`PermissionGrantRefreshService.cs:55-85`) computes the interval from
-  `_settings.CacheSeconds` (`:57`), then loops until cancellation. Each turn calls
-  `cache.RefreshAsync(stoppingToken)` inside a `try`; an `OperationCanceledException` tied to shutdown
-  returns cleanly (`:65-68`), any other exception is logged through the source-generated
-  `LogRefreshFailed` message (`:69-74`, `:87-90`) and the loop continues rather than propagating. A
-  second `try/catch` around `Task.Delay` handles cancellation during the wait the same way (`:76-83`).
+  `[Rubric §13, Observability & Operability]` (a failed reload is logged, not silent). The class remarks
+  state the direction deliberately (`PermissionGrantRefreshService.cs:13-17`): a failed load is logged
+  and retried, never fatal, because a database blip must degrade authorization to "no stored grants"
+  rather than take the host down.
+- **Walkthrough**: the whole interval loop, its cancellation handling and its catch-log-continue
+  behavior live once in [`PeriodicBackgroundService`](group-14-module-system-composition.md#periodicbackgroundservice);
+  this type supplies only four overrides. `Interval` returns `_settings.CacheSeconds`
+  (`PermissionGrantRefreshService.cs:41`). `StartupDelay` returns `TimeSpan.Zero`
+  (`:44-47`): the snapshot is primed immediately at startup, because until the first load
+  authorization sees no stored grants at all, unlike
+  [`RefreshSessionCleanupService`](#refreshsessioncleanupservice), whose first sweep waits a full
+  interval. `ExecuteCycleAsync` is one line, `cache.RefreshAsync(stoppingToken)` (`:54`), and
+  `LogCycleFailure` routes a cycle's exception to the source-generated `LogRefreshFailed` message
+  (`:57`, `:59-62`); the base class is what turns a thrown exception there into "log and keep looping"
+  rather than a host crash.
 - **Why it's built this way**: registering it through `TryAddEnumerable` rather than `AddHostedService`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:126-129`) is what keeps
   two modules calling `AddStoredPermissionGrants` from starting two refresh loops in one process, the
@@ -3016,7 +3047,7 @@ survives a module being pulled out into its own service.
   and the stored-grant administration surface.
 
 ### AuditTrailSaveChangesInterceptor
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:62` · Level 11 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:63` · Level 11 · class (sealed)
 
 - **What it is**: the EF Core save interceptor that records a field-level change history for every
   entity marked [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity), writing
@@ -3024,8 +3055,8 @@ survives a module being pulled out into its own service.
   describe.
 - **Depends on**: [`AuditTrailEntry`](#audittrailentry),
   [`CaptureContext`](#capturecontext), [`PendingEntityKey`](#pendingentitykey),
-  [`ApplicationDbContext`](#applicationdbcontext),
-  [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity),
+  [`ApplicationDbContext`](#applicationdbcontext), [`ColumnWidth`](#columnwidth) (the shared
+  truncate-to-column-width helper), [`IAuditedEntity`](group-02-domain-building-blocks.md#iauditedentity),
   [`PiiAttribute`](group-02-domain-building-blocks.md#piiattribute),
   [`PiiRedactor`](group-02-domain-building-blocks.md#piiredactor),
   [`OutboxMessage`](group-04-events-outbox.md#outboxmessage),
@@ -3037,74 +3068,74 @@ survives a module being pulled out into its own service.
   Data Architecture]`, `[Rubric §13, Observability & Operability]` (each row carries the ambient trace
   id, so a change ties back to the request or job that made it) and `[Rubric §30, Compliance, Privacy
   & Data Governance]` (personal data is redacted at capture, never at read). The class comment states
-  the guiding rule (`AuditTrailSaveChangesInterceptor.cs:18-23`): a trail that can be committed
+  the guiding rule (`AuditTrailSaveChangesInterceptor.cs:19-24`): a trail that can be committed
   without its data, or the other way round, is worse than no trail. Four mechanics are worth learning
   here as a set.
-  - **Opt in twice over** (`AuditTrailSaveChangesInterceptor.cs:32-36`): the host must call
+  - **Opt in twice over** (`AuditTrailSaveChangesInterceptor.cs:33-37`): the host must call
     `AddAuditTrail` (the context resolves this interceptor with `GetService`, so its absence is a
     silent no-op, `ApplicationDbContext.cs:311-316`) **and** set `AuditTrail:Enabled` so the table is
     mapped. Then the entity must carry the marker. Nothing about the feature is on by default.
-  - **Position in the pipeline** (`AuditTrailSaveChangesInterceptor.cs:25-31`): registered last, after
+  - **Position in the pipeline** (`AuditTrailSaveChangesInterceptor.cs:26-32`): registered last, after
     [`AuditSaveChangesInterceptor`](#auditsavechangesinterceptor), the optional
     [`TenantSaveChangesInterceptor`](#tenantsavechangesinterceptor) and
     [`DomainEventSaveChangesInterceptor`](#domaineventsavechangesinterceptor)
     (`ApplicationDbContext.cs:292-316`), so the values it diffs are final: the audit stamps are
     already written when it runs.
   - **Correlation is the trace id, not the scoped correlation context**
-    (`AuditTrailSaveChangesInterceptor.cs:43-54`): this interceptor is a singleton and the only
+    (`AuditTrailSaveChangesInterceptor.cs:44-55`): this interceptor is a singleton and the only
     service provider a context carries is the root one, so a scoped
     [`ICorrelationContext`](group-12-api-hosting-mapping.md#icorrelationcontext) is not reachable from
     here and capturing one would be a lifetime bug. The trace id is ambient and is the same value
     [`CorrelationIdMiddleware`](group-12-api-hosting-mapping.md#correlationidmiddleware) falls back to
     when a request carries no `X-Correlation-ID` header. A caller-supplied header value is therefore
     NOT recorded today.
-  - **Tenant is read off the context** (`AuditTrailSaveChangesInterceptor.cs:55-59`), through the live
+  - **Tenant is read off the context** (`AuditTrailSaveChangesInterceptor.cs:56-60`), through the live
     accessor the scoped context factory assigns (`ApplicationDbContext.cs:141`), so it does reach the
     interceptor where a scoped service would not.
 - **Walkthrough**:
-  - **Constants** (`AuditTrailSaveChangesInterceptor.cs:64-86`): the three operation names, the four
+  - **Constants** (`AuditTrailSaveChangesInterceptor.cs:65-87`): the three operation names, the four
     column widths (`MaxEntityTypeLength` 256, `MaxKeyLength` 128, `MaxCorrelationIdLength` 64,
     `MaxTenantIdLength` 64) and the `|` composite-key separator. They match the model mapping in
     `ApplicationDbContext.ConfigureAuditTrail` exactly (`ApplicationDbContext.cs:855-861`).
-  - **Static state** (`AuditTrailSaveChangesInterceptor.cs:88-119`): two `ConditionalWeakTable`s keyed
+  - **Static state** (`AuditTrailSaveChangesInterceptor.cs:89-120`): two `ConditionalWeakTable`s keyed
     by context (pending key fix-ups, and a marker for "a capture staged rows but the save has not
     finished"), a `ConcurrentDictionary` caching the PII verdict per (declaring type, property name),
     and a `HashSet<Type>` of the framework's own bookkeeping entities. That last set is guarded **by
     CLR type**, not by the absence of the marker, which is what keeps the trail from recording its own
     rows in an unbounded feedback loop and keeps the outbox, inbox and job tables out of a history
-    nobody asked for (`AuditTrailSaveChangesInterceptor.cs:107-119`). `IsFrameworkEntity(Type)`
+    nobody asked for (`AuditTrailSaveChangesInterceptor.cs:108-120`). `IsFrameworkEntity(Type)`
     (`:171`) is the `internal` window onto that set, which is both how `ShouldAudit` consults it and
     how a test can assert the exclusion list directly.
-  - **The four overrides** (`AuditTrailSaveChangesInterceptor.cs:122-163`): `SavingChangesAsync` and
+  - **The four overrides** (`AuditTrailSaveChangesInterceptor.cs:123-164`): `SavingChangesAsync` and
     `SavingChanges` both call `CaptureChanges`; `SavedChangesAsync` and `SavedChanges` both run the
     key fix-up. Each pattern-matches `eventData.Context is ApplicationDbContext` first, so a foreign
     context passes straight through.
-  - **`CaptureChanges`** (`AuditTrailSaveChangesInterceptor.cs:177-219`): the first statement is the
+  - **`CaptureChanges`** (`AuditTrailSaveChangesInterceptor.cs:178-220`): the first statement is the
     cheap double gate, `context.Model.FindEntityType(typeof(AuditTrailEntry)) is null`
     (`:179-185`), which covers both a host that never opted in and Cosmos (which skips relational
     tables), because `Set<AuditTrailEntry>()` would throw for both. Then it discards an abandoned
     capture, builds one [`CaptureContext`](#capturecontext), snapshots
     `ChangeTracker.Entries().Where(ShouldAudit).ToArray()` (`:197`, materialized before adding,
     because enumerating the tracker lazily while adding to it would throw), and captures each entry.
-  - **`ShouldAudit`** (`AuditTrailSaveChangesInterceptor.cs:225-228`): the entity carries the marker,
+  - **`ShouldAudit`** (`AuditTrailSaveChangesInterceptor.cs:226-229`): the entity carries the marker,
     is not a framework bookkeeping type, and is in state `Added`, `Modified` or `Deleted`.
-  - **`CaptureEntry`** (`AuditTrailSaveChangesInterceptor.cs:238-270`): a `Modified` entry delegates
+  - **`CaptureEntry`** (`AuditTrailSaveChangesInterceptor.cs:239-271`): a `Modified` entry delegates
     to the per-property diff; an `Added` or `Deleted` entry writes one summary row and then, only when
     the insert's key is still temporary, returns a [`PendingEntityKey`](#pendingentitykey).
-  - **`CaptureModifiedProperties`** (`AuditTrailSaveChangesInterceptor.cs:277-318`): one row per
+  - **`CaptureModifiedProperties`** (`AuditTrailSaveChangesInterceptor.cs:278-319`): one row per
     property that is `IsModified` **and** whose value actually differs. A property EF flagged as
     modified but whose value is unchanged (the whole-entity `Update` idiom) writes nothing
     (`:272-276`). `PiiRedactor.HasPii(entry.Metadata.ClrType)` is checked once per entity so a type
     with no personal data skips the per-property attribute lookup entirely (`:286`), and a PII
     property records `PiiRedactor.RedactedToken` on both sides (`:309-310`).
-  - **`DiscardAbandonedCapture`** (`AuditTrailSaveChangesInterceptor.cs:339-360`): the retry-safety
+  - **`DiscardAbandonedCapture`** (`AuditTrailSaveChangesInterceptor.cs:340-361`): the retry-safety
     mechanic. An execution strategy that retries a failed save re-runs `SavingChanges` against a
     tracker that still holds the previous attempt's `Added` rows, so without this one transient SQL
     fault writes the trail twice. It only fires when the marker is present (a completed save leaves
     none `Added`), because discarding unconditionally would also throw away trail rows a caller added
     deliberately.
   - **`ResolveGeneratedKeysAsync` and `ResolveGeneratedKeys`**
-    (`AuditTrailSaveChangesInterceptor.cs:368-396,402-429`): rebuild the key now that the insert has
+    (`AuditTrailSaveChangesInterceptor.cs:369-397,403-430`): rebuild the key now that the insert has
     assigned one, skip rows whose key did not change, and rewrite the one column with a set-based
     `ExecuteUpdate` per row, which bypasses the change tracker and the interceptor pipeline and joins
     the ambient transaction when one is open (the same technique as
@@ -3117,9 +3148,13 @@ survives a module being pulled out into its own service.
     entity yields an empty string rather than throwing), `IsPiiProperty` (`:492-504`, a shadow
     property has no `PropertyInfo` so it can never be personal data), `FormatValue` (`:510-511`,
     `CultureInfo.InvariantCulture` on purpose, so a trail read years later or on a differently
-    localized replica shows the value that was written), `ValuesEqual` (`:517-530`, byte arrays such
-    as row versions are compared by content, since reference equality would report every save as a
-    change) and `Truncate` (`:533-534`).
+    localized replica shows the value that was written) and `ValuesEqual` (`:517-530`, byte arrays
+    such as row versions are compared by content, since reference equality would report every save as
+    a change). Column-width truncation itself is no longer a private method on this type: every call
+    site (the correlation id and tenant id in `CaptureChanges` at `:193-194`, the entity type in
+    `CaptureEntry` at `:244`, the property name in `CaptureModifiedProperties` at `:309`, and the
+    composite key in `BuildEntityKey` at `:485`) now goes through the shared
+    [`ColumnWidth.Truncate`](#columnwidth) helper instead.
 - **Why it's built this way**:
   [ADR-075](https://ivanball.github.io/docs/adr/075-audit-trail.html) chose the interceptor over a
   repository decorator (which sees intent, not the tracker's diff), an application handler (which sees
@@ -3147,11 +3182,11 @@ survives a module being pulled out into its own service.
   `Conference.Service/Program.cs:296`).
 - **Caveats / not-in-source**: a caller-supplied `X-Correlation-ID` is not recorded; honoring it would
   need a live accessor on the context assigned by the scoped factory, the shape multi-tenancy
-  introduced for `TenantId` (`AuditTrailSaveChangesInterceptor.cs:51-53`). Whether that will be done
+  introduced for `TenantId` (`AuditTrailSaveChangesInterceptor.cs:52-54`). Whether that will be done
   is Not determinable from source.
 
 ### AuditTrailCleanupJob
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:48` · Level 13 · class (internal sealed partial)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.AuditTrail` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:47` · Level 13 · class (internal sealed partial)
 
 - **What it is**: the framework's own recurring job. It purges
   [`AuditTrailEntry`](#audittrailentry) rows older than the configured retention window from every
@@ -3169,43 +3204,46 @@ survives a module being pulled out into its own service.
   Compliance, Privacy & Data Governance]` (assesses whether retained data has a bounded lifetime),
   `[Rubric §31, Cost & FinOps]` (assesses whether unbounded growth is designed out) and `[Rubric §29,
   Resilience & Business Continuity]` (a first sweep over a neglected table must not become one
-  enormous transaction). The class comment makes the argument (`AuditTrailCleanupJob.cs:18-22`): a
+  enormous transaction). The class comment makes the argument (`AuditTrailCleanupJob.cs:17-21`): a
   change trail grows monotonically and stores values that may describe a data subject, so a retention
   window is not housekeeping, it is what keeps the table from being both a cost centre and a
   data-protection liability. It also records the honest limitation
-  (`AuditTrailCleanupJob.cs:23-28`): `AddAuditTrail` registers the job, but a job with no runner never
+  (`AuditTrailCleanupJob.cs:22-27`): `AddAuditTrail` registers the job, but a job with no runner never
   executes, so the host must **also** call `AddScheduledJobs` and set `Scheduler:Enabled`. A host that
   records the trail without the scheduler is fully supported and keeps recording; pruning is then the
   operator's job.
 - **Walkthrough**:
-  - **Constructor** (`AuditTrailCleanupJob.cs:48-55`): the last two parameters are optional. The scope
+  - **Constructor** (`AuditTrailCleanupJob.cs:47-54`): the last two parameters are optional. The scope
     factory and the tenancy options default to `null`, because a host without tenancy never leaves the
     job's own scope. `_settings` is snapshotted from `options.Value` (`:60`), and `RetentionDays`
     defaults to 90 with a `[Range(1, 3650)]` guard
     (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:36-37`).
-  - **`Name` and `CronExpression`** (`AuditTrailCleanupJob.cs:63,67`): `"audit-trail-cleanup"`, daily
+  - **`Name` and `CronExpression`** (`AuditTrailCleanupJob.cs:62,66`): `"audit-trail-cleanup"`, daily
     at `0 3 * * *`, chosen to sit off the daily peak for every time zone the framework runs in.
-  - **`ExecuteAsync`** (`AuditTrailCleanupJob.cs:70-87`): returns immediately when
-    `AuditTrail:Enabled` is false (`:72-75`), computes the cutoff as now minus `RetentionDays`
-    (`:77`), enumerates the physical sources in use and filters out `DataSource.CosmosDB` (`:79-81`),
-    then expands that set into per-tenant targets through
-    [`TenantDataSourceTargets`](#tenantdatasourcetargets) and sweeps each one (`:83-86`).
-  - **`PurgeTargetAsync`** (`AuditTrailCleanupJob.cs:94-112`): the shared database is swept on the
-    job's own scope; a tenant that keeps its own database gets a fresh scope with
-    [`ITenantContext.SetTenant`](group-05-cqrs-pipeline.md#itenantcontext) applied
-    (`:105-111`), because the scoped context factory binds one database per scope and the job's scope
-    is already bound to the shared one.
-  - **`PurgeWithFactoryAsync`** (`AuditTrailCleanupJob.cs:115-136`): resolves the target's context and
+  - **`ExecuteAsync`** (`AuditTrailCleanupJob.cs:69-82`): returns immediately when
+    `AuditTrail:Enabled` is false (`:71-74`), computes the cutoff as now minus `RetentionDays`
+    (`:76`), then sweeps every target
+    [`TenantDataSourceTargets.ExpandRelational`](#tenantdatasourcetargets) returns (`:78-81`); that
+    helper is what filters `DataSource.CosmosDB` out of the physical sources in use and expands the
+    rest into per-tenant targets, one call replacing what used to be inline `Where`/`Distinct` plus a
+    separate `Expand` call.
+  - **`PurgeTargetAsync`** (`AuditTrailCleanupJob.cs:89-106`): the shared database is swept on the
+    job's own scope; a tenant that keeps its own database gets a fresh scope from
+    [`TenantDataSourceTargets.CreateTenantScope`](#tenantdatasourcetargets) (`:100`), the shared
+    extension that sets [`ITenantContext`](group-05-cqrs-pipeline.md#itenantcontext) before the
+    context is asked for, because the scoped context factory binds one database per scope and the
+    job's scope is already bound to the shared one.
+  - **`PurgeWithFactoryAsync`** (`AuditTrailCleanupJob.cs:109-130`): resolves the target's context and
     re-checks the model for the trail entity (`:125-128`). Cosmos is already excluded, but a
     relational source can still lack the table when the host disabled the trail after writing it, so
     the model, not the configuration, is the authority.
-  - **`PurgeSourceAsync`** (`AuditTrailCleanupJob.cs:142-179`): the batching loop. It reads up to
+  - **`PurgeSourceAsync`** (`AuditTrailCleanupJob.cs:136-173`): the batching loop. It reads up to
     `BatchSize` (1000, `:58`) ids with `AsNoTracking`, ordered by `ChangedOn`, then deletes those ids
     with `ExecuteDeleteAsync`. The comment at `:151-153` explains the two-step shape: every relational
     provider translates an `IN` list, while a limited `DELETE` is not universally supported. The loop
     ends when a page comes back empty (`:162-165`) or short (`:172-175`), and it re-checks the
     cancellation token each turn (`:149`). No row is ever materialized as an entity.
-  - **Logging** (`AuditTrailCleanupJob.cs:181-182`): a source-generated `LoggerMessage` emitted only
+  - **Logging** (`AuditTrailCleanupJob.cs:175-176`): a source-generated `LoggerMessage` emitted only
     when a sweep actually removed rows (`:131-135`), so a quiet night logs nothing.
 - **Why it's built this way**: registering the job in `AddAuditTrail` rather than in
   `AddScheduledJobs` keeps the two features independent, which the DI comment states outright
@@ -3356,24 +3394,51 @@ survives a module being pulled out into its own service.
 
 ### RefreshSessionCleanupService
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionCleanupService.cs:48` · Level 13 · class (public sealed partial, `BackgroundService`)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionCleanupService.cs:48` · Level 13 · class (public sealed partial, `PeriodicBackgroundService`)
 
-- **What it is**: the retention sweep for the `RefreshSessions` table. On an interval it hard-deletes every session that stopped being usable more than `RetentionDays` ago (`RefreshSessionCleanupService.cs:48-157`).
-- **Depends on**: `IServiceScopeFactory`, `ILogger<RefreshSessionCleanupService>`, `IOptions<`[`RefreshSessionSettings`](group-08-auth.md#refreshsessionsettings)`>` and an optional `TimeProvider`, all primary-constructor parameters (`RefreshSessionCleanupService.cs:48-52`); inside a sweep it resolves [`IEntityDataSourceRegistry`](#ientitydatasourceregistry), [`IDataSourceResolver`](#idatasourceresolver) and [`IDbContextFactory`](#idbcontextfactory) from the scope (`:107-109`). Base class: `Microsoft.Extensions.Hosting.BackgroundService`.
+- **What it is**: the retention sweep for the `RefreshSessions` table. On an interval it hard-deletes every session that stopped being usable more than `RetentionDays` ago (`RefreshSessionCleanupService.cs:48-150`).
+- **Depends on**: `IServiceScopeFactory`, `ILogger<RefreshSessionCleanupService>`, `IOptions<`[`RefreshSessionSettings`](group-08-auth.md#refreshsessionsettings)`>` and `TimeProvider`, all primary-constructor parameters passed straight to the
+  [`PeriodicBackgroundService`](group-14-module-system-composition.md#periodicbackgroundservice) base
+  (`RefreshSessionCleanupService.cs:48-53`); inside a sweep it resolves [`IEntityDataSourceRegistry`](#ientitydatasourceregistry), [`IDataSourceResolver`](#idatasourceresolver) and [`IDbContextFactory`](#idbcontextfactory) from the scope (`:109-112`).
 - **Concept introduced, hard delete inside a soft-delete framework.** `[Rubric §30, Compliance, Privacy and Data Governance]` assesses whether personal data has a bounded lifetime, and `[Rubric §8, Data Architecture]` assesses whether operational tables have a retention story. Everything modelled as an aggregate here is soft-deleted ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)), so a hard `DELETE` is conspicuous and the class doc justifies it (`RefreshSessionCleanupService.cs:18-22`): a session is framework bookkeeping, not an aggregate. The row has no soft-delete flag and no audit stamps, and its content is a credential digest plus the IP and user-agent of the device that signed in. Keeping it past its usefulness is a growing table **and** a growing set of records describing a data subject's devices, so the sweep removes the row rather than flagging it. All three applications' soft-delete fitness tests list this type by name as a sanctioned exception (for example `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/SoftDeleteEnforcementTests.cs:53`).
 - **Walkthrough**
-  - `_settings` and `_timeProvider` are captured once, the clock defaulting to `TimeProvider.System` so tests can drive an hour-scale loop deterministically (`RefreshSessionCleanupService.cs:54-55`, parameter doc at `:44-47`).
-  - `ExecuteAsync` has two exits before the loop. `Enabled` false logs and returns (`RefreshSessionCleanupService.cs:62-66`); the comment at `:60-61` notes that registration is already gated on the flag and this second check exists for a host that registers the service by hand. `RetentionDays <= 0` logs and returns (`:68-72`), which is the documented way to keep sessions forever.
-  - The loop waits `CleanupIntervalHours` **before** the first sweep (`RefreshSessionCleanupService.cs:74`, `:82`), so cleanup never competes with startup or migration work (`:76-77`). Cancellation at shutdown breaks the loop (`:85-88`); any other exception is logged and the loop continues (`:89-92`), so one bad sweep does not end the service.
-  - `PurgeAsync` (`RefreshSessionCleanupService.cs:102-130`) computes the cutoff from the injected clock (`:104`), opens a scope and resolves the registry, resolver and context factory from it (`:106-110`).
-  - Before deleting anything it checks `context.Model.FindEntityType(typeof(RefreshSession))` and, on a miss, logs a warning naming the configured data source and returns (`RefreshSessionCleanupService.cs:115-119`). The comment at `:112-114` gives the operator-experience reason: a source can be reachable and still not map the table, and saying so once per sweep beats a translation error the operator has to decode.
-  - The delete itself is one `ExecuteDeleteAsync` over a two-armed predicate (`RefreshSessionCleanupService.cs:121-125`): revoked before the cutoff, **or** not revoked and expired before the cutoff. The method doc calls this "died" (`:96-100`), and both arms matter. A live session is never a candidate however old it is, and a session revoked minutes ago survives even if it expired long before, because that recent revocation is exactly what reuse detection reads.
-  - The per-sweep count is logged unconditionally, zero included (`RefreshSessionCleanupService.cs:129`), because a "only when it deleted something" log cannot tell an operator that retention is running at all (`:127-128`). `[Rubric §13, Observability and Operability]` assesses precisely that distinction.
-  - `ResolveDataSourceKey` (`RefreshSessionCleanupService.cs:137-142`) duplicates [`EFRefreshSessionStore`](#efrefreshsessionstore)'s resolution exactly, and the doc says why (`:132-136`): the sweep must never visit a different database than the store reads.
-  - The five log messages are source-generated `[LoggerMessage]` partials (`RefreshSessionCleanupService.cs:144-157`), which is why the class is `partial`.
+  - `_settings` is captured once; `_timeProvider` re-captures the same constructor parameter into a
+    field rather than reusing it directly, because the base constructor already consumes it and doing
+    so would be `CS9107` (`RefreshSessionCleanupService.cs:55-59`).
+  - The loop mechanics, the wait-then-sweep cycle and the catch-log-continue behavior live once in
+    [`PeriodicBackgroundService`](group-14-module-system-composition.md#periodicbackgroundservice);
+    this type supplies five overrides. `Interval` returns `CleanupIntervalHours` as hours (`:62`).
+    `StartupDelay` returns `Interval` itself (`:64-68`), so the first sweep waits one full interval,
+    unlike [`PermissionGrantRefreshService`](#permissiongrantrefreshservice), which primes
+    immediately. `IsEnabled` (`:70-91`) replaces the two early-exit checks a hand-rolled loop would
+    need: `RefreshSessions:Enabled` false logs and returns `false` (`:77-81`, the comment at `:75-76`
+    notes registration is already gated on the flag and this is for a host that registers the service
+    by hand), and `RetentionDays <= 0` logs and returns `false` too (`:83-87`), the documented way to
+    keep sessions forever; the base class skips the cycle entirely when this getter answers `false`.
+    `ExecuteCycleAsync` delegates to `PurgeAsync` (`:94`), and `LogCycleFailure` routes an uncaught
+    exception from a cycle to the source-generated `LogCleanupError` message (`:97`), so one bad sweep
+    is logged and the loop carries on rather than ending the service.
+  - `PurgeAsync` (`RefreshSessionCleanupService.cs:105-133`) computes the cutoff from the injected clock (`:107`), opens a scope and resolves the registry, resolver and context factory from it (`:109-112`).
+  - Before deleting anything it checks `context.Model.FindEntityType(typeof(RefreshSession))` and, on a miss, logs a warning naming the configured data source and returns (`RefreshSessionCleanupService.cs:118-122`). The comment at `:115-117` gives the operator-experience reason: a source can be reachable and still not map the table, and saying so once per sweep beats a translation error the operator has to decode.
+  - The delete itself is one `ExecuteDeleteAsync` over a two-armed predicate (`RefreshSessionCleanupService.cs:124-128`): revoked before the cutoff, **or** not revoked and expired before the cutoff. The method doc calls this "died" (`:99-103`), and both arms matter. A live session is never a candidate however old it is, and a session revoked minutes ago survives even if it expired long before, because that recent revocation is exactly what reuse detection reads.
+  - The per-sweep count is logged unconditionally, zero included (`RefreshSessionCleanupService.cs:132`), because a "only when it deleted something" log cannot tell an operator that retention is running at all (`:130-131`). `[Rubric §13, Observability and Operability]` assesses precisely that distinction.
+  - `ResolveDataSourceKey` (`RefreshSessionCleanupService.cs:140-145`) duplicates [`EFRefreshSessionStore`](#efrefreshsessionstore)'s resolution exactly, and the class doc says why (`:34-39`): the sweep must never visit a different database than the store reads.
+  - The five log messages are source-generated `[LoggerMessage]` partials (`RefreshSessionCleanupService.cs:147-160`), which is why the class is `partial`.
 - **Why it's built this way**: retention bounds reuse detection, and the class doc is explicit about the trade (`RefreshSessionCleanupService.cs:24-32`). BR-206 catches a replayed refresh token by finding its revoked row and revoking the whole family; a rotation chain older than the window is gone, so a replay of a token that old reads as an unknown token and fails alone instead of signalling reuse. The default window of 30 days (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:72`) is far past the default refresh-token lifetime, so every token still capable of being replayed still has its row, and a host that shortens `RefreshSessions:RetentionDays` below `Jwt:RefreshTokenExpirationDays` is choosing to lose that signal. Unlike the outbox, sessions live in exactly one physical source, which is why the sweep resolves one database rather than iterating them (`:33-39`). The sweep is the retention half of the 2026-08-27 revision of [ADR-097](https://ivanball.github.io/docs/adr/097-multi-device-refresh-sessions.html).
 - **Where it's used**: registered as a hosted service only when `RefreshSessions:Enabled` is true, read straight off configuration at registration time (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:171-174`). The comment there gives the reason for the conditional (`:151-153`): registering it unconditionally would start a sweep in every service of a modular host, all but one of which has no `RefreshSessions` table to sweep. Covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Auth/RefreshSessionCleanupServiceTests.cs`, which exercises both disabled paths, the retention predicate, the unmapped-table warning and the registration gate (`:189`, `:201`, `:218`).
 - **Caveats / not-in-source**: the default interval is 6 hours (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/RefreshSessionSettings.cs:80`, constrained to 1 through 168), and because the loop waits one full interval before its first sweep, a host that restarts more often than the configured interval never sweeps. Nothing in the service compensates for that.
+
+### ColumnWidth
+
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Conversions` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/ColumnWidth.cs:4` · Level 0 · class (internal static)
+
+- **What it is**: an internal static helper with one method, `Truncate(string? value, int maxLength)`, that cuts a string to a column's maximum length while preserving `null` (`ColumnWidth.cs:4-12`).
+- **Depends on**: nothing beyond the BCL `string` indexer and range operator.
+- **Concept introduced, a defensive width guard for audit and command persistence rather than a value-object mapping.** Both call sites write free-form diagnostic text (a trace ID, a CLR type name, a property key, a joined key string) into fixed-width columns where a value produced at runtime could exceed the column's declared size. Rather than let SQL reject the write or truncate silently at the provider, `Truncate` clips the string before it reaches EF: `value is null || value.Length <= maxLength ? value : value[..maxLength]` (`ColumnWidth.cs:31-32`). A `null` input passes straight through, so an absent value is never coerced into an empty string.
+- **Walkthrough**
+  - **`Truncate`** (`ColumnWidth.cs:31-32`): a single expression-bodied method; no allocation happens when the value already fits.
+- **Why it's built this way**: the callers (an audit interceptor and internal command processing) run outside a validated domain type, so nothing upstream already guarantees the string fits its column; `ColumnWidth.Truncate` is the one place that guarantee is enforced before the row is written.
+- **Where it's used**: `AuditTrailSaveChangesInterceptor` truncates a correlation ID, tenant ID, entity type name, property name, and joined key string through it (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:193-194,244,309,485`); `ScheduledJobRunner` and `InternalCommandProcessor` call it for the same reason at their own persistence boundaries.
 
 ### StronglyTypedIdValueComparer<TSelf>
 
@@ -3630,10 +3695,10 @@ survives a module being pulled out into its own service.
     THIS source, documented as falling back to the top-level value when empty
     (`DataSourceEntrySettings.cs:58-61`).
   - The resolver reads the relational pair through one engine-keyed switch, `GetMigrationsAssembly`
-    (`DataSourceResolver.cs:429-436`), stamps the SQLite or PostgreSQL value onto the
+    (`DataSourceResolver.cs:424-431`), stamps the SQLite or PostgreSQL value onto the
     [`PhysicalDataSource`](#physicaldatasource) via its object initializer, only for the matching engine
     (`DataSourceResolver.cs:421-423`), and names the offending setting per engine when two logical names
-    collapse onto one database with conflicting values (`DataSourceResolver.cs:455-462`).
+    collapse onto one database with conflicting values (`DataSourceResolver.cs:450-457`).
   - The XML doc carries a worked `appsettings.json` example for a `Conference` source
     (`DataSourceEntrySettings.cs:9-18`), which is the fastest way to see the intended shape.
 - **Why it's built this way**: `init`-only properties make a bound entry immutable after startup, and
@@ -3689,7 +3754,7 @@ survives a module being pulled out into its own service.
     identity, so those entries all collapse onto `Default` and contribute their declared assemblies
     through `AddExplicitMigrationsAssemblies`, conflicts included. A test pins that the single named
     entry's assembly still reaches the `Default` source that way
-    (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/DataSourceResolverTests.cs:375`).
+    (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/DataSourceResolverTests.cs:374`).
   - `CosmosDatabaseName` (`DataSourceResolver.cs:176`) is the database name entries fall back to when
     they declare none of their own, applied by `CosmosDatabaseNameOf` (`DataSourceResolver.cs:257-258`)
     and again inline while classifying entries (`DataSourceResolver.cs:284-286`).
@@ -3703,7 +3768,7 @@ survives a module being pulled out into its own service.
   computes it (`DataSourceResolver.cs:161`) and passes it to `ClassifyEntries`
   (`DataSourceResolver.cs:162`), `RegisterDefaultSource` (`DataSourceResolver.cs:163`), and
   `RegisterNamedSource` (`DataSourceResolver.cs:167`). The two behaviors it decides are pinned by
-  `DataSourceResolverTests.cs:375` and `DataSourceResolverTests.cs:396`.
+  `DataSourceResolverTests.cs:374` and `DataSourceResolverTests.cs:395`.
 - **Caveats / not-in-source**: a private nested type. It is inventoried because private nested types
   are, but nothing outside the resolver can name it, and it never leaves the constructor's call graph.
 
@@ -3885,34 +3950,34 @@ survives a module being pulled out into its own service.
   [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:61`), the
   [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:52`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:50`),
   the [`AuditTrailCleanupJob`](#audittrailcleanupjob)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:50`),
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailCleanupJob.cs:49`),
   both model-building passes of [`ApplicationDbContext`](#applicationdbcontext)
   (`ApplicationDbContext.cs:381`, `ApplicationDbContext.cs:966`), and the startup
   database-initialization path
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:54`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:53`).
 
 ### PhysicalDataSource
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:17` · Level 2 · record (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:20` · Level 2 · record (sealed)
 
 - **What it is**: the fully-resolved connection information for one physical database. Four positional
-  members, `Key` (its engine plus name identity), `ConnectionString`, `SqlServerMigrationsAssembly?`
-  and `CosmosDatabaseName` (`PhysicalDataSource.cs:17-21`), plus three members declared in the record
-  body: the init-only `SqliteMigrationsAssembly?` (`PhysicalDataSource.cs:34`), the init-only
-  `PostgreSQLMigrationsAssembly?` (`PhysicalDataSource.cs:46`), and the computed `UsesMigrations`
-  (`PhysicalDataSource.cs:63-70`).
+  members, `Key` (its engine plus name identity), `ConnectionString`, `MigrationsAssembly?` and
+  `CosmosDatabaseName` (`PhysicalDataSource.cs:20-24`), plus the computed `UsesMigrations`
+  (`PhysicalDataSource.cs:41-47`).
 - **Depends on**: [`DataSourceKey`](#datasourcekey) and, through it, [`DataSource`](#datasource).
 - **Concept, a logical name resolved into a real connection.** `[Rubric §8, Data Architecture]` covers
   the step from a configured name like `DataSources:Conference` to an actual database. The record's doc
   comment (`PhysicalDataSource.cs:5-9`) explains that it is produced by
   [`IDataSourceResolver`](#idatasourceresolver) from the top-level `ConnectionStrings` section (the
-  `Default` source) plus the named `DataSources` entries. Two members are engine-scoped:
-  `SqlServerMigrationsAssembly` is null for non-SQL-Server engines and lets each SQL database own its
-  own EF migration history (`PhysicalDataSource.cs:12-15`); `CosmosDatabaseName` is ignored for
-  relational engines (`PhysicalDataSource.cs:16`). Being a positional `record` buys two things at once
-  here: value equality, so two resolutions of the same source compare equal, and non-destructive
-  mutation, which is exactly how per-tenant routing is implemented.
+  `Default` source) plus the named `DataSources` entries. `MigrationsAssembly` is read from the
+  configuration key of the source's own engine, `SQLServerMigrationsAssembly`,
+  `SqliteMigrationsAssembly`, or `PostgreSQLMigrationsAssembly`, and is always null for Cosmos, which
+  migrates nothing (`PhysicalDataSource.cs:12-15`); `CosmosDatabaseName` is ignored for relational
+  engines (`PhysicalDataSource.cs:19`). A physical source belongs to exactly one engine, so one slot is
+  enough, and the resolver never hands one engine's assembly to another. Being a positional `record`
+  buys two things at once here: value equality, so two resolutions of the same source compare equal,
+  and non-destructive mutation, which is exactly how per-tenant routing is implemented.
 - **Walkthrough**
   - `Key` is the identity the rest of the stack routes on, and it is deliberately not recomputed when
     the connection changes. [`DbContextFactory.ResolveTenantOverride`](#dbcontextfactory) clones the
@@ -3923,30 +3988,23 @@ survives a module being pulled out into its own service.
     [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)).
   - `ConnectionString` may legitimately be empty. Both the startup initializer and `EnsureCreatedAsync`
     treat an empty connection string as "this source is not configured in this host" and skip it rather
-    than failing (`DatabaseInitializationExtensions.cs:75`, `DbContextFactory.cs:221-222`).
-  - `SqliteMigrationsAssembly` (`PhysicalDataSource.cs:34`) and `PostgreSQLMigrationsAssembly`
-    (`PhysicalDataSource.cs:46`) sit in the record body rather than in the positional parameter list on
-    purpose, and the comment says why (`PhysicalDataSource.cs:26-32`, `PhysicalDataSource.cs:36-45`):
-    the constructor and deconstruction shape of this shipped record stay exactly as they were, so a
-    consumer that builds or deconstructs it positionally is unaffected, and the resolver sets both
-    through an object initializer instead (`DataSourceResolver.cs:421-423`). At most one of the three
-    migrations-assembly properties is ever populated, since a physical source belongs to exactly one
-    engine.
-  - `UsesMigrations` (`PhysicalDataSource.cs:63-70`) is the switch that decides `Migrate` versus
+    than failing (`DatabaseInitializationExtensions.cs:74`, `DbContextFactory.cs:221-222`).
+  - `MigrationsAssembly` is a single positional parameter rather than three engine-scoped record-body
+    properties, because at most one is ever populated: `BuildPhysicalSource` on
+    [`DataSourceResolver`](#datasourceresolver) already reads it from the right engine's setting before
+    constructing the record (`DataSourceResolver.cs:403-407`).
+  - `UsesMigrations` (`PhysicalDataSource.cs:41-47`) is the switch that decides `Migrate` versus
     `EnsureCreated` for this one database. SQL Server always migrates, including the single-database
     monolith whose `Default` source names no migrations assembly at all and lets EF look next to the
-    context (`PhysicalDataSource.cs:65`). PostgreSQL follows the SQLite rule rather than the SQL Server
-    one, migrating only once a `PostgreSQLMigrationsAssembly` is configured for it
-    (`PhysicalDataSource.cs:66`), because PostgreSQL support ships with no host that already depends on
-    being migrated. SQLite migrates only once a `SqliteMigrationsAssembly` is configured for it
-    (`PhysicalDataSource.cs:67`), because a SQLite source wired by hand before that setting existed has
-    no migrations to apply and must keep being created outright. Cosmos never does: the provider has no
-    migrations pipeline (`PhysicalDataSource.cs:68`). All branches are pinned by
+    context (`PhysicalDataSource.cs:43`). PostgreSQL and SQLite share one rule rather than following the
+    SQL Server one: both migrate only once `MigrationsAssembly` is configured for them
+    (`PhysicalDataSource.cs:44`), because neither ships with a host that already depends on being
+    migrated, and a SQLite source wired by hand before that setting existed has no migrations to apply
+    and must keep being created outright. Cosmos never does: the provider has no migrations pipeline
+    (`PhysicalDataSource.cs:45`). All branches are pinned by
     `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/PhysicalDataSourceTests.cs:21`,
-    `PhysicalDataSourceTests.cs:33`, `PhysicalDataSourceTests.cs:52`, and
-    `PhysicalDataSourceTests.cs:130`, including the case where a SQLite source carries only the SQL
-    Server assembly and therefore still does not migrate (`PhysicalDataSourceTests.cs:69`); PostgreSQL
-    is additionally pinned by
+    `PhysicalDataSourceTests.cs:33`, `PhysicalDataSourceTests.cs:49`, and
+    `PhysicalDataSourceTests.cs:90`; PostgreSQL is additionally pinned by
     `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests/PostgreSQLPersistenceTests.cs`.
 - **Where it's used**: produced by [`DataSourceResolver`](#datasourceresolver) through
   `BuildPhysicalSource` (`DataSourceResolver.cs:409-423`) for both the Default source
@@ -3960,8 +4018,8 @@ survives a module being pulled out into its own service.
   hands the same record to the design-time context
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:140`),
   and the startup initializer branches on both `ConnectionString` and `UsesMigrations`
-  (`DatabaseInitializationExtensions.cs:75`, `DatabaseInitializationExtensions.cs:80`,
-  `DatabaseInitializationExtensions.cs:150`).
+  (`DatabaseInitializationExtensions.cs:74`, `DatabaseInitializationExtensions.cs:79`,
+  `DatabaseInitializationExtensions.cs:148`).
 
 ### Snapshot
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:25` · Level 2 · record (sealed, private nested)
@@ -4004,11 +4062,11 @@ survives a module being pulled out into its own service.
   can name it.
 
 ### TenantDataSourceTarget
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:13` · Level 2 · record struct (readonly)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:15` · Level 2 · record struct (readonly)
 
 - **What it is**: one unit of work for a background sweep, a `(DataSourceKey Source, string? TenantId)`
   pair. `TenantId` is null for the shared database and set when the target is a tenant that keeps its
-  own copy of that source (`TenantDataSourceTargets.cs:6-13`).
+  own copy of that source (`TenantDataSourceTargets.cs:8-15`).
 - **Depends on**: [`DataSourceKey`](#datasourcekey).
 - **Concept introduced, the sweep unit under database-per-tenant.** `[Rubric §8, Data Architecture]`
   assesses whether the storage topology is modelled explicitly rather than assumed, and `[Rubric §29,
@@ -4023,9 +4081,9 @@ survives a module being pulled out into its own service.
   (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Tenancy/TenantDataSourceTargetTests.cs:30-32`).
 - **Walkthrough**
   - The positional declaration `TenantDataSourceTarget(DataSourceKey Source, string? TenantId)`
-    (`TenantDataSourceTargets.cs:13`); the null-versus-set convention on `TenantId` is the whole
-    vocabulary of the type (`TenantDataSourceTargets.cs:11-12`).
-  - `ToString()` (`TenantDataSourceTargets.cs:17-20`) renders the bare source name for a shared target
+    (`TenantDataSourceTargets.cs:15`); the null-versus-set convention on `TenantId` is the whole
+    vocabulary of the type (`TenantDataSourceTargets.cs:13-14`).
+  - `ToString()` (`TenantDataSourceTargets.cs:19-22`) renders the bare source name for a shared target
     and appends `" (tenant {TenantId})"` for a per-tenant one, so a log line says which of two visits to
     the same source it is describing. That rendering is pinned by a test
     (`TenantDataSourceTargetTests.cs:93-94`), which is a small `[Rubric §13, Observability &
@@ -4034,17 +4092,19 @@ survives a module being pulled out into its own service.
 - **Why it's built this way**: consumers branch on `TenantId` to decide whether they need a fresh DI
   scope. A null target runs on the caller's own scope; a non-null one creates a scope, calls
   [`ITenantContext`](group-05-cqrs-pipeline.md#itenantcontext)`.SetTenant(...)` before asking for the
-  context, because the tenant is what routes the scoped factory to that tenant's connection string
-  (`OutboxCleanupService.cs:107`, `AuditTrailCleanupJob.cs:106`).
-- **Where it's used**: produced only by
-  [`TenantDataSourceTargets.Expand`](#tenantdatasourcetargets) and consumed as the loop variable of
-  every host-owned sweep: [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor)
-  (`OutboxProcessor.cs:213`, iterated at `OutboxProcessor.cs:227`),
+  context, because the tenant is what routes the scoped factory to that tenant's connection string.
+  Every sweep now gets that branch for free through
+  [`TenantDataSourceTargets.CreateTenantScope`](#tenantdatasourcetargets)
+  (`OutboxCleanupService.cs:103`, `AuditTrailCleanupJob.cs:100`).
+- **Where it's used**: produced by
+  [`TenantDataSourceTargets.Expand`](#tenantdatasourcetargets) (via `ExpandRelational`) and consumed as
+  the loop variable of every host-owned sweep: [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor)
+  (`OutboxProcessor.cs:144`, iterated at `OutboxProcessor.cs:161`),
   [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice)
-  (`OutboxCleanupService.cs:220`), [`AuditTrailCleanupJob`](#audittrailcleanupjob)
-  (`AuditTrailCleanupJob.cs:83`, and as a parameter at `AuditTrailCleanupJob.cs:95` and
-  `AuditTrailCleanupJob.cs:117`), and the startup initializer
-  (`DatabaseInitializationExtensions.cs:138-139`).
+  (`OutboxCleanupService.cs:197-198`), [`AuditTrailCleanupJob`](#audittrailcleanupjob)
+  (`AuditTrailCleanupJob.cs:78`, and as a parameter at `AuditTrailCleanupJob.cs:90` and
+  `AuditTrailCleanupJob.cs:111`), and the startup initializer
+  (`DatabaseInitializationExtensions.cs:137-138`).
 
 ### IDataSourceResolver
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/IDataSourceResolver.cs:15` · Level 3 · interface
@@ -4098,7 +4158,7 @@ survives a module being pulled out into its own service.
   [`AuditTrailReader`](#audittrailreader)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailReader.cs:36`)
   and [`ScheduledJobRunner`](group-14-module-system-composition.md#scheduledjobrunner)
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:42`), and
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobRunner.cs:43`), and
   optionally into [`TenancySettingsValidator`](group-07-persistence-ef-core.md#tenancysettingsvalidator),
   which uses `ResolveLogical` to check that a tenant override is keyed by a name that actually
   round-trips as a physical source
@@ -4140,12 +4200,12 @@ survives a module being pulled out into its own service.
   The resolver realizes the collapse rule described on
   [`IDataSourceResolver`](#idatasourceresolver). Two guardrails are worth calling out. First,
   conflicting migrations-assembly declarations on logical names that collapse to the same physical
-  database throw at construction (`DataSourceResolver.cs:454-467`), a loud fail-fast rather than a
+  database throw at construction (`DataSourceResolver.cs:449-462`), a loud fail-fast rather than a
   silent pick. Second, `[Rubric §13, Observability & Operability]` shows up in the two source-generated
-  log methods: `LogMigrationsAssemblyFallback` (`DataSourceResolver.cs:504-505`) warns when a named SQL
+  log methods: `LogMigrationsAssemblyFallback` (`DataSourceResolver.cs:499-500`) warns when a named SQL
   Server source has no dedicated migrations assembly and therefore falls back to another database's,
   whose snapshot describes a different schema, and `LogSubstituteEngine`
-  (`DataSourceResolver.cs:501-502`) states at startup that requests for an unconfigured engine are being
+  (`DataSourceResolver.cs:496-497`) states at startup that requests for an unconfigured engine are being
   served from another one.
 - **Walkthrough**
   - State (`DataSourceResolver.cs:17-39`): `AllEngines` is the build order, CosmosDB, PostgreSQL,
@@ -4185,7 +4245,7 @@ survives a module being pulled out into its own service.
     (`DataSourceResolver.cs:162`), then registers the Default source and one named source per group
     (`DataSourceResolver.cs:163-168`).
   - `ClassifyEntries` (`DataSourceResolver.cs:264-305`): computes a per-connection identity string via
-    `GetIdentity` (`DataSourceResolver.cs:478-481`), where a Cosmos identity appends the database name
+    `GetIdentity` (`DataSourceResolver.cs:473-476`), where a Cosmos identity appends the database name
     because one account hosts many databases, relational engines use the connection string alone, and
     the comparison is ordinal, so semantically-equal-but-textually-different connection strings
     deliberately do not collapse. Entries with no connection string for the engine are skipped entirely
@@ -4202,16 +4262,16 @@ survives a module being pulled out into its own service.
     source declares no migrations assembly of its own (`DataSourceResolver.cs:360-368`). The group's
     Cosmos database name comes from the canonical entry, falling back to the seed
     (`DataSourceResolver.cs:370-373`).
-  - `BuildPhysicalSource` (`DataSourceResolver.cs:409-423`): places the resolved migrations assembly in
-    the slot of the engine it belongs to, `SqlServerMigrationsAssembly` positionally for SQL Server and
-    `SqliteMigrationsAssembly` or `PostgreSQLMigrationsAssembly` through the object initializer for
-    SQLite and PostgreSQL respectively, which is what stops a SQL Server assembly from being handed to
-    `UseSqlite` or `UseNpgsql` (`DataSourceResolver.cs:403-407`, `DataSourceResolver.cs:421-422`).
-  - `ResolveMigrationsAssembly` (`DataSourceResolver.cs:442-470`): returns null for Cosmos and when no
-    explicit value exists (`DataSourceResolver.cs:447-450`), and throws when logical names sharing a
+  - `BuildPhysicalSource` (`DataSourceResolver.cs:409-423`): the migrations assembly was already read
+    from the configuration key of this source's own engine via `GetMigrationsAssembly`, so building the
+    record is a straight positional construction with the assembly passed straight through, null only
+    for Cosmos (`DataSourceResolver.cs:414-421`); which is what stops a SQL Server assembly from being
+    handed to `UseSqlite` or `UseNpgsql`.
+  - `ResolveMigrationsAssembly` (`DataSourceResolver.cs:437-465`): returns null for Cosmos and when no
+    explicit value exists (`DataSourceResolver.cs:442-445`), and throws when logical names sharing a
     database declare conflicting assemblies, naming the offending setting per engine (via a four-way
     switch over `Sqlite`/`PostgreSQL`/`SQLServer`/`CosmosDB`) and every declaration in the message
-    (`DataSourceResolver.cs:452-466`). `GetMigrationsAssembly` (`DataSourceResolver.cs:429-436`) is the
+    (`DataSourceResolver.cs:447-461`). `GetMigrationsAssembly` (`DataSourceResolver.cs:424-431`) is the
     per-engine reader that feeds it: SQLite, PostgreSQL and SQL Server have their own entry settings,
     Cosmos migrates nothing. `TopLevelMigrationsAssembly` (`DataSourceResolver.cs:246-253`), used inside
     `ResolveDefaultSeed`, is the same idea at the top-level-section layer: only SQL Server and PostgreSQL
@@ -4234,10 +4294,10 @@ survives a module being pulled out into its own service.
   including the alphabetically-first canonical name (`DataSourceResolverTests.cs:84`), the two Cosmos
   cases where the same account with a different database stays distinct while the same database
   collapses (`DataSourceResolverTests.cs:99`, `DataSourceResolverTests.cs:118`), the SQLite-only host
-  being served the framework's SQL Server default from SQLite (`DataSourceResolverTests.cs:336`), the
-  polyglot host routing each engine to itself (`DataSourceResolverTests.cs:425`), the SQL-Server-only
-  host being unchanged (`DataSourceResolverTests.cs:414`), and the host with no database at all passing
-  the engine straight through (`DataSourceResolverTests.cs:480`).
+  being served the framework's SQL Server default from SQLite (`DataSourceResolverTests.cs:335`), the
+  polyglot host routing each engine to itself (`DataSourceResolverTests.cs:424`), the SQL-Server-only
+  host being unchanged (`DataSourceResolverTests.cs:413`), and the host with no database at all passing
+  the engine straight through (`DataSourceResolverTests.cs:479`).
 
 ### EntityDataSourceRegistry
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:21` · Level 5 · class (sealed)
@@ -4334,22 +4394,28 @@ survives a module being pulled out into its own service.
   source enumeration (`EntityDataSourceRegistryTests.cs:149`).
 
 ### TenantDataSourceTargets
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:40` · Level 5 · class (static)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DataSources` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:42` · Level 5 · class (static)
 
-- **What it is**: a one-method static class that expands the physical data sources a background service
-  owns into the [`TenantDataSourceTarget`](#tenantdatasourcetarget) units it must actually visit once
-  database-per-tenant is configured (`TenantDataSourceTargets.cs:23-49`).
+- **What it is**: a static class that expands the physical data sources a background service owns into
+  the [`TenantDataSourceTarget`](#tenantdatasourcetarget) units it must actually visit once
+  database-per-tenant is configured (`TenantDataSourceTargets.cs:25-51`), plus two convenience layers
+  built on top of that expansion: an overload pair that derives the source list itself from the entity
+  registry (`ExpandRelational`, `TenantDataSourceTargets.cs:60-76`, `TenantDataSourceTargets.cs:86-100`)
+  and a scope-creation helper (`CreateTenantScope`, `TenantDataSourceTargets.cs:110-118`).
 - **Depends on**: [`DataSourceKey`](#datasourcekey),
   [`TenantDataSourceTarget`](#tenantdatasourcetarget),
   [`TenancySettings`](group-07-persistence-ef-core.md#tenancysettings) with its nested
   [`TenantEntrySettings`](group-07-persistence-ef-core.md#tenantentrysettings) and
   [`TenantDataSourceOverrideSettings`](group-07-persistence-ef-core.md#tenantdatasourceoverridesettings),
-  and [`TenancySettingsValidator.ConnectionStringFor`](group-07-persistence-ef-core.md#tenancysettingsvalidator)
+  [`TenancySettingsValidator.ConnectionStringFor`](group-07-persistence-ef-core.md#tenancysettingsvalidator)
   for the per-engine connection-string lookup
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:122`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:122`),
+  [`IEntityDataSourceRegistry`](#ientitydatasourceregistry) and [`IDataSourceResolver`](#idatasourceresolver)
+  for the `ExpandRelational` overloads, and `ITenantContext` (`group-05-cqrs-pipeline.md#itenantcontext`)
+  for `CreateTenantScope`.
 - **Concept introduced, why a per-tenant database is invisible to a shared sweep.** `[Rubric §8, Data
   Architecture]` and `[Rubric §29, Resilience & Business Continuity]` both apply, and the class remarks
-  (`TenantDataSourceTargets.cs:27-39`) carry the reasoning. A shared-schema tenant needs nothing here:
+  (`TenantDataSourceTargets.cs:29-41`) carry the reasoning. A shared-schema tenant needs nothing here:
   its rows live in the shared database that the null-tenant target already drains, and the outbox
   deliberately has no tenant column precisely so that adopting tenancy never forces a migration on an
   existing consumer. A tenant with its own database is the opposite case: its outbox rows and its
@@ -4360,39 +4426,63 @@ survives a module being pulled out into its own service.
   ([ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)).
 - **Walkthrough**
   - `Expand(IEnumerable<DataSourceKey> sources, TenancySettings? settings)`
-    (`TenantDataSourceTargets.cs:49-51`) takes a nullable settings argument, because a host that never
+    (`TenantDataSourceTargets.cs:51-53`) takes a nullable settings argument, because a host that never
     registered tenancy passes null and must still get a usable list.
   - It materializes the source sequence only when it is not already a collection
     (`sources as IReadOnlyCollection<DataSourceKey> ?? [.. sources]`,
-    `TenantDataSourceTargets.cs:53`) and sizes the result list from that count
-    (`TenantDataSourceTargets.cs:54`), since the common no-tenancy case produces exactly one target per
+    `TenantDataSourceTargets.cs:55`) and sizes the result list from that count
+    (`TenantDataSourceTargets.cs:56`), since the common no-tenancy case produces exactly one target per
     source.
   - Pass one adds the shared target for every source, `new TenantDataSourceTarget(source, null)`
-    (`TenantDataSourceTargets.cs:56-59`). This is the entire result when settings are null or declare no
-    tenants (`TenantDataSourceTargets.cs:61-64`), which is the ordering guarantee the callers rely on:
+    (`TenantDataSourceTargets.cs:58-61`). This is the entire result when settings are null or declare no
+    tenants (`TenantDataSourceTargets.cs:63-66`), which is the ordering guarantee the callers rely on:
     shared targets always come first.
   - Pass two walks the declared tenants and, for each, every source the caller owns
-    (`TenantDataSourceTargets.cs:66-76`). A pair is added only when the tenant declares an override
+    (`TenantDataSourceTargets.cs:68-78`). A pair is added only when the tenant declares an override
     keyed by that physical source name and that override carries a non-blank connection string for that
-    source's engine (`TenantDataSourceTargets.cs:70-71`). Both halves of that test matter: an override
+    source's engine (`TenantDataSourceTargets.cs:72-73`). Both halves of that test matter: an override
     for a source this host does not own adds nothing, and an override that only declares, say, a SQLite
     connection adds nothing for a SQL Server source. Both cases have their own test
     (`TenantDataSourceTargetTests.cs:64`, `TenantDataSourceTargetTests.cs:78`).
-- **Why it's built this way**: it is a pure function over settings, with no DI and no I/O, so every
+  - `ExpandRelational(IEntityDataSourceRegistry, TenancySettings?)` (`TenantDataSourceTargets.cs:60-76`)
+    is `Expand` composed with `RelationalSourcesInUse`
+    (`TenantDataSourceTargets.cs:127-128`): every relational physical source backing a registered entity,
+    Cosmos excluded because it has none of these tables, deduplicated. It is `internal`, recomputed on
+    every call by its own remark, which is deliberately cheap and tolerant of module assemblies that
+    finish loading after startup.
+  - The second `ExpandRelational` overload (`TenantDataSourceTargets.cs:86-100`) adds one more source on
+    top of that same relational set: the physical source the caller's own settings name as its table's
+    home, resolved through [`IDataSourceResolver.ResolveLogical`](#idatasourceresolver)
+    (`TenantDataSourceTargets.cs:95`), unless that configured engine is Cosmos
+    (`TenantDataSourceTargets.cs:93`). This is what an outbox or internal-command sweep uses: the entity
+    registry alone would miss the publish or scheduling table when it lives in a source no registered
+    entity happens to use.
+  - `CreateTenantScope(this IServiceScopeFactory, TenantDataSourceTarget)`
+    (`TenantDataSourceTargets.cs:110-118`) null-guards the factory, creates a scope, and, when the
+    target's `TenantId` is set, calls `ITenantContext.SetTenant` on that scope before returning it. The
+    doc comment is explicit about ordering: call it before asking the scope for a context, because the
+    tenant is what routes the scoped context factory to the tenant's connection string and is also what
+    the query filter reads.
+- **Why it's built this way**: `Expand` is a pure function over settings, with no DI and no I/O, so every
   sweep can share one expansion rule and each can unit-test its own target list without a database
   (`TenantDataSourceTargetTests.cs:20`). Keeping the tenant loop outside the sweeps also keeps the
   tenancy feature additive: a host with no `Tenancy` section gets byte-identical behavior to the
-  pre-tenancy code path (`TenantDataSourceTargetTests.cs:26`, `TenantDataSourceTargetTests.cs:36`).
-- **Where it's used**: by all four host-owned sweeps:
+  pre-tenancy code path (`TenantDataSourceTargetTests.cs:26`, `TenantDataSourceTargetTests.cs:36`). The
+  `ExpandRelational` overloads and `CreateTenantScope` centralize two things every sweep previously had
+  to get right on its own: which sources to enumerate, and the call-order rule between setting the
+  tenant and asking for the context.
+- **Where it's used**: `Expand` and its `ExpandRelational` overloads back all of the host-owned sweeps:
   [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) (`OutboxProcessor.cs:213`),
   [`OutboxCleanupService`](group-04-events-outbox.md#outboxcleanupservice)
   (`OutboxCleanupService.cs:220`), [`AuditTrailCleanupJob`](#audittrailcleanupjob)
-  (`AuditTrailCleanupJob.cs:83`), and
+  (`AuditTrailCleanupJob.cs:83`),
   [`DatabaseInitializationExtensions`](group-12-api-hosting-mapping.md#databaseinitializationextensions),
   which filters the expansion down to `t.TenantId is not null` because the shared sources were already
-  initialized in the pass above it (`DatabaseInitializationExtensions.cs:138-139`). Two of the sweeps
-  are pinned against the same expansion in tests (`TenantDataSourceTargetTests.cs:100`,
-  `TenantDataSourceTargetTests.cs:118`).
+  initialized in the pass above it (`DatabaseInitializationExtensions.cs:137-138`),
+  `InternalCommandAdministration`, `InternalCommandCleanupService`, `InternalCommandProcessor`,
+  `OutboxAdministration`, and `OutboxCleanupService`. `CreateTenantScope` is the scope-creation call each
+  of those makes per target. Two of the sweeps are pinned against the same expansion in tests
+  (`TenantDataSourceTargetTests.cs:100`, `TenantDataSourceTargetTests.cs:118`).
 - **Caveats / not-in-source**: the expansion is driven purely by declared configuration. A tenant whose
   database exists but is not declared under `Tenancy:Tenants` produces no target, and nothing in this
   class detects that; the round-trip check that a source name is a real physical name lives in
@@ -4448,7 +4538,7 @@ survives a module being pulled out into its own service.
   ([`TenantSaveChangesInterceptor`](#tenantsavechangesinterceptor) at
   `TenantSaveChangesInterceptor.cs:74` and
   [`AuditTrailSaveChangesInterceptor`](#audittrailsavechangesinterceptor) at
-  `AuditTrailSaveChangesInterceptor.cs:197`), so the suppression saves strictly more than the comment
+  `AuditTrailSaveChangesInterceptor.cs:198`), so the suppression saves strictly more than the comment
   claims; the comment is narrower than the code, not wrong about the mechanism.
 
 ### IdentityInsertGroup
@@ -4497,7 +4587,7 @@ survives a module being pulled out into its own service.
   work before saving imported entities
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeHandler.cs:168`),
   through [`IUnitOfWork`](#iunitofwork)`.RequestIdentityInsert`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:76`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:73`).
 
 ### ModelBuilderExtensions
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DbContexts` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ModelBuilderExtensions.cs:10` · Level 0 · class (internal static)
@@ -4977,7 +5067,7 @@ survives a module being pulled out into its own service.
   `IDbContextFactory<TContext>`: the two names collide, which is why consumers that need both add a
   `using IDbContextFactory = ...DbContexts.Factory.IDbContextFactory;` alias
   (`InProcessEventBus.cs:8`, `BrokerEventBus.cs:8`, `EfInboxStore.cs:8`) or fully qualify it
-  (`OutboxProcessor.cs:280`).
+  (`OutboxProcessor.cs:190`).
 - **Depends on**: [`ApplicationDbContext`](#applicationdbcontext), [`DataSourceKey`](#datasourcekey),
   and the BCL `IDisposable` plus `IAsyncDisposable` it extends (`IDbContextFactory.cs:10`).
 - **Concept introduced, addressing a context by physical source rather than by type.** `[Rubric §8,
@@ -5014,15 +5104,15 @@ survives a module being pulled out into its own service.
   and tests can mock, without leaking EF Core upward.
 - **Where it's used**: registered scoped as [`DbContextFactory`](#dbcontextfactory)
   (`DependencyInjection.cs:104`). [`UnitOfWork`](#unitofwork) delegates its whole save and transaction
-  surface to it (`UnitOfWork.cs:70-91`), the startup path resolves it to create, migrate, or verify
+  surface to it (`UnitOfWork.cs:70-79`), the startup path resolves it to create, migrate, or verify
   databases
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:58`,
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:57`,
   `:242`, and per tenant at `:144`), and the background and messaging paths resolve it per scope to
   reach a specific source ([`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor) at
-  `OutboxProcessor.cs:280`, `OutboxCleanupService.cs:110`, `OutboxAdministration.cs:244`,
-  `EfInboxStore.cs:39`, `InProcessEventBus.cs:34`, `BrokerEventBus.cs:32`, `ScheduledJobRunner.cs:213`,
-  `AuditTrailReader.cs:35`, `AuditTrailCleanupJob.cs:49`, `EFRefreshSessionStore.cs:31`, and
-  `RefreshSessionCleanupService.cs:109`).
+  `OutboxProcessor.cs:190`, `OutboxCleanupService.cs:105`, `OutboxAdministration.cs:235`,
+  `EfInboxStore.cs:39`, `InProcessEventBus.cs:34`, `BrokerEventBus.cs:32`, `ScheduledJobRunner.cs:214`,
+  `AuditTrailReader.cs:35`, `AuditTrailCleanupJob.cs:48`, `EFRefreshSessionStore.cs:31`, and
+  `RefreshSessionCleanupService.cs:112`).
 
 ### IPhysicalDbContextFactory
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.DbContexts.Factory` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/IPhysicalDbContextFactory.cs:15` · Level 12 · interface
@@ -5085,8 +5175,9 @@ survives a module being pulled out into its own service.
     defaults.
   - **`OnConfiguring`** (`:41-59`): calls `UseNpgsql(PhysicalSource.ConnectionString, npgsql => ...)`.
     The options action conditionally sets `npgsql.MigrationsAssembly(PhysicalSource
-    .PostgreSQLMigrationsAssembly)` (the same "no migrations next to the context" contract as SQL Server
-    and SQLite), applies `npgsql.CommandTimeout(_persistenceSettings.CommandTimeoutSeconds)`, and
+    .MigrationsAssembly)` (the same "no migrations next to the context" contract as SQL Server
+    and SQLite, now a single shared property on `PhysicalDataSource` rather than a per-engine one),
+    applies `npgsql.CommandTimeout(_persistenceSettings.CommandTimeoutSeconds)`, and
     enables `npgsql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10),
     errorCodesToAdd: null)` for the same transient-failure reason SQL Server does (connection drops, a
     managed instance failover, a pooler recycling a backend), with the same
@@ -5133,8 +5224,10 @@ survives a module being pulled out into its own service.
   provider.
 - **Walkthrough**: the 4-arg constructor forwards to the base (`SqliteDbContext.cs:12-17`).
   `OnConfiguring` guards its argument, then calls `UseSqlite(PhysicalSource.ConnectionString, ...)` with
-  one option: it sets `sqlite.MigrationsAssembly(PhysicalSource.SqliteMigrationsAssembly)` when that
-  value is configured (`SqliteDbContext.cs:31-34`). The comment above it states the contract this
+  one option: it sets `sqlite.MigrationsAssembly(PhysicalSource.MigrationsAssembly)` when that
+  value is configured (`SqliteDbContext.cs:31-34`), the same shared `PhysicalDataSource` property SQL
+  Server and PostgreSQL now read instead of a per-engine one. The comment above it states the contract
+  this
   shares with SQL Server (`:28-30`): without an explicit assembly EF looks for migrations next to the
   context, which lives in `MMCA.Common.Infrastructure` and has none, so a per-source migrations project
   would never be found. There is no retry policy (the store is file-local) and no command-timeout
@@ -5150,7 +5243,7 @@ survives a module being pulled out into its own service.
   [`IDbContextFactory.MigrateAsync`](#idbcontextfactory) at all, since
   [`PhysicalDataSource`](#physicaldatasource)`.UsesMigrations` returns `true` for SQLite only when that
   assembly is configured
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:63-67`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:41-47`).
   Keeping the full base pipeline is what makes this context a faithful stand-in for SQL Server in tests,
   which is how the framework's own tenancy and model-gate suites run without a database (for example
   `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Tenancy/ApplicationDbContextTenantFilterTests.cs:24`,
@@ -5191,8 +5284,9 @@ survives a module being pulled out into its own service.
     missing registration and a null value fall back to the defaults.
   - **`OnConfiguring`** (`SQLServerDbContext.cs:39-82`): calls
     `UseSqlServer(PhysicalSource.ConnectionString, sql => ...)`. The options action does three things:
-    conditionally sets `sql.MigrationsAssembly(PhysicalSource.SqlServerMigrationsAssembly)` (`:49-52`)
-    so each extracted service can point at its own per-module migrations project; applies
+    conditionally sets `sql.MigrationsAssembly(PhysicalSource.MigrationsAssembly)` (`:49-52`), the same
+    single property PostgreSQL and SQLite now read instead of a per-engine one, so each extracted
+    service can point at its own per-module migrations project; applies
     `sql.CommandTimeout(_persistenceSettings.CommandTimeoutSeconds)` (`:56`), because without it every
     command silently inherits ADO.NET's 30 second default with no way to tune it per environment (the
     setting's own default is `30`, range-validated to 1-600, at
@@ -5654,7 +5748,7 @@ survives a module being pulled out into its own service.
   `IdentityModuleSeeder.cs:35-36`), which
   [`ModuleLoader`](group-14-module-system-composition.md#moduleloader) runs through `SeedAllAsync` at
   startup, after schema initialization
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:111`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:110`).
   There is no reflection-based discovery of `IDbSeeder` and no hosted service that drains a list of
   them.
 
@@ -5744,7 +5838,7 @@ survives a module being pulled out into its own service.
   is not a general-purpose id converter) while still allowing every derived seeder to use it without an
   instance. Determinism, not uniqueness, is the property that matters: seeders must be idempotent
   across restarts, which is what production hosts rely on when they run the seeder on every boot
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:111`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:110`).
 - **Where it's used**: the base of every module seeder in both apps, for example ADC's
   [`ConferenceModuleDbSeeder`](group-19-conference-infrastructure.md#conferencemoduledbseeder)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:26`),
@@ -6080,9 +6174,8 @@ survives a module being pulled out into its own service.
 - **Walkthrough** (this is the densest type in the group; read it as capture, then route, then
   defer):
   - **Two instance fields and three static weak tables** (`:53`, `:55`, `:62`, `:69`, `:77`). The
-    fields are the clock (defaulting to `TimeProvider.System`, so an existing host keeps the old
-    constructor shape while a test can drive the `ProcessedOn` stamp) and the resolved outbox
-    posture. `StateTable` holds the [`CapturedState`](#capturedstate) between saving and saved;
+    fields are the clock, an injected `TimeProvider` with no default (`:49`, `:53`), so a test can
+    drive the `ProcessedOn` stamp directly, and the resolved outbox posture. `StateTable` holds the [`CapturedState`](#capturedstate) between saving and saved;
     `DeferredTable` holds the [`DeferredDispatch`](#deferreddispatch) list for a context inside a
     transaction; `CaptureExclusionTable` holds the aggregate instances a save must skip.
     `ConditionalWeakTable` is chosen throughout so the interceptor can stay a singleton without ever
@@ -6407,7 +6500,7 @@ survives a module being pulled out into its own service.
 - **Concept introduced, the signal-based smart-wait pattern for the internal-commands job queue.** `[Rubric §12: Performance & Scalability]` (assesses whether the system avoids wasted work and unnecessary latency): a plain fixed-interval poll trades latency for idle cost either way, while a signal lets a processor sleep long and still react immediately when work shows up. The doc comment on `WaitAsync` (`IInternalCommandSignal.cs:30-37`) states its intended caller directly: `InternalCommandProcessor`, "in place of a plain polling delay."
 - **Walkthrough**: `Signal()` (`IInternalCommandSignal.cs:27-28`) marks that due work is available; `WaitAsync(timeout, cancellationToken)` (`IInternalCommandSignal.cs:37`) waits for a signal or until `timeout` elapses, whichever comes first.
 - **Why it's built this way**: an interface, not a concrete `SemaphoreSlim` dependency, so the processor, scheduler, and administration surface can share one wake mechanism through DI and a test harness can substitute a controllable fake.
-- **Where it's used**: implemented by [`InternalCommandSignal`](#internalcommandsignal); consumed by `InternalCommandProcessor` (the wait loop), `InternalCommandScheduler`, and [`InternalCommandAdministration`](#internalcommandadministration) (it signals after a successful requeue, `InternalCommandAdministration.cs:766`); registered in `DependencyInjection.cs`.
+- **Where it's used**: implemented by [`InternalCommandSignal`](#internalcommandsignal); consumed by `InternalCommandProcessor` (the wait loop), `InternalCommandScheduler`, and [`InternalCommandAdministration`](#internalcommandadministration) (it signals after a successful requeue, `InternalCommandAdministration.cs:756`); registered in `DependencyInjection.cs`.
 
 ### InternalCommandCycleResult
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandCycleResult.cs:17` · Level 0 · record struct
@@ -6417,7 +6510,7 @@ survives a module being pulled out into its own service.
 - **Concept**: a plain readonly record struct used purely to avoid tuple sprawl across the processor's internal methods; no new pattern to teach beyond the record-struct convention used elsewhere in the framework.
 - **Walkthrough**: one line, two positional members: `HasMoreDueWork` drives whether [`InternalCommandProcessor`](#internalcommandprocessor) re-polls immediately; `EarliestUpcoming` feeds `ComputeWaitTime`.
 - **Why it's built this way**: `internal readonly record struct` keeps the per-cycle result on the stack rather than the heap, since it is produced and consumed once per poll cycle in a loop that can run continuously for the life of the host.
-- **Where it's used**: returned by `InternalCommandProcessor.ProcessDueCommandsAsync` (`InternalCommandProcessor.cs:1203,1237`) and its private per-target helper, then read by `ExecuteAsync`'s wait loop.
+- **Where it's used**: returned by `InternalCommandProcessor.ProcessDueCommandsAsync` (`InternalCommandProcessor.cs:1103,1137`) and its private per-target helper, then read by `ExecuteAsync`'s wait loop.
 
 ### InternalCommandsDisabledNoticeService
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Administration` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsDisabledNoticeService.cs:20` · Level 0 · class
@@ -6428,6 +6521,16 @@ survives a module being pulled out into its own service.
 - **Walkthrough**: `StartAsync` (`InternalCommandsDisabledNoticeService.cs:83-87`) calls the generated `LogQueueDisabled` (`InternalCommandsDisabledNoticeService.cs:92-95`) once and returns; `StopAsync` (`InternalCommandsDisabledNoticeService.cs:90`) is a no-op.
 - **Why it's built this way**: the log message itself (`InternalCommandsDisabledNoticeService.cs:94`) states the operational fact directly: scheduled work is executed only by a host that has `InternalCommands:Enabled=true` against the same databases, and no migration is needed to turn the queue on later because the `InternalCommands` table is already part of the model.
 - **Where it's used**: registered in `DependencyInjection.cs` (1 site), presumably conditioned on `InternalCommandsSettings.Enabled` being `false`.
+
+### WakeUpSignal
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Polling` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/WakeUpSignal.cs:16` · Level 0 · class
+
+- **What it is**: the shared wake-up primitive behind both queue signals: an internal, single-slot `SemaphoreSlim(0, 1)` wrapper used purely as a flag, not a resource lock.
+- **Depends on**: `System.Threading.SemaphoreSlim`, `IDisposable`.
+- **Concept**: the semaphore is capped at one permit because a drain cycle empties a whole batch per pass, so a burst of signals carries no more information than a single one; extracting it here lets both queue signals share the exact same wake-up mechanics instead of each owning a copy.
+- **Walkthrough**: `_semaphore = new(0, 1)` (`WakeUpSignal.cs:27`); `Signal()` (`WakeUpSignal.cs:30-40`) releases the semaphore and swallows `SemaphoreFullException`, because a wake-up already pending means "one batch drains everything: nothing to add"; `WaitAsync(timeout, cancellationToken)` (`WakeUpSignal.cs:46-56`) awaits the semaphore with the given timeout and re-throws `OperationCanceledException` only when the token itself requested cancellation, so shutdown propagates but a plain timeout returns normally; `Dispose()` (`WakeUpSignal.cs:59`) disposes the semaphore.
+- **Why it's built this way**: pulling this out of [`InternalCommandSignal`](#internalcommandsignal) means the internal-commands queue and the outbox share one tested wake-up implementation instead of two independent copies of the same semaphore dance.
+- **Where it's used**: wrapped by [`InternalCommandSignal`](#internalcommandsignal) (2 sites) and by `OutboxSignal` (2 sites, `MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxSignal.cs`).
 
 ### InternalCommandMetrics
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandMetrics.cs:17` · Level 1 · class (static)
@@ -6451,13 +6554,13 @@ survives a module being pulled out into its own service.
 - **Where it's used**: `InternalCommandMessage.cs` (2 sites, plus 1 more).
 
 ### InternalCommandSignal
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandSignal.cs:12` · Level 1 · class
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandSignal.cs:10` · Level 1 · class
 
-- **What it is**: the production implementation of [`IInternalCommandSignal`](#iinternalcommandsignal): a single-slot `SemaphoreSlim(0, 1)` used purely as a wake-up flag, not a resource lock.
-- **Depends on**: [`IInternalCommandSignal`](#iinternalcommandsignal) (implements), `System.Threading.SemaphoreSlim`, `IDisposable`.
+- **What it is**: the production implementation of [`IInternalCommandSignal`](#iinternalcommandsignal): a thin wrapper over the shared [`WakeUpSignal`](#wakeupsignal) wake-up primitive.
+- **Depends on**: [`IInternalCommandSignal`](#iinternalcommandsignal) (implements), [`WakeUpSignal`](#wakeupsignal), `IDisposable`.
 - **Concept**: see [`IInternalCommandSignal`](#iinternalcommandsignal) for the smart-wait rationale; this section stays compact since the abstraction is already taught there.
-- **Walkthrough**: `_semaphore = new SemaphoreSlim(0, 1)` (`InternalCommandSignal.cs:344`); `Signal()` (`InternalCommandSignal.cs:347-357`) releases the semaphore and swallows `SemaphoreFullException`, because a wake-up already pending means "one batch drains everything: nothing to add"; `WaitAsync` (`InternalCommandSignal.cs:360-370`) awaits with the given timeout and re-throws `OperationCanceledException` only when the token requested cancellation (line 368), so shutdown propagates but a plain timeout returns normally; `Dispose` (`InternalCommandSignal.cs:373`) disposes the semaphore.
-- **Why it's built this way**: a single-slot semaphore models "at least one wake-up is pending" at the lowest possible cost, without queuing redundant signals when one drain cycle already covers them all.
+- **Walkthrough**: `_signal = new WakeUpSignal()` (`InternalCommandSignal.cs:12`); `Signal()` (`InternalCommandSignal.cs:14`) and `WaitAsync(timeout, cancellationToken)` (`InternalCommandSignal.cs:17-18`) and `Dispose()` (`InternalCommandSignal.cs:21`) each forward directly to the wrapped `WakeUpSignal`.
+- **Why it's built this way**: the semaphore mechanics used to live here directly; they were extracted into [`WakeUpSignal`](#wakeupsignal) so this type and the outbox's own signal share one tested wake-up implementation instead of two copies of the same semaphore dance.
 - **Where it's used**: registered in `DependencyInjection.cs` (1 site) as the `IInternalCommandSignal` implementation consumed by [`InternalCommandProcessor`](#internalcommandprocessor) and [`InternalCommandAdministration`](#internalcommandadministration).
 
 ### InternalCommandsSettings
@@ -6471,6 +6574,16 @@ survives a module being pulled out into its own service.
 - **Where it's used**: read via `IOptions<InternalCommandsSettings>` across `DependencyInjection.cs` (5 sites), [`InternalCommandCleanupService`](#internalcommandcleanupservice) (4), `InternalCommandScheduler` (4), the test harness (3), [`InternalCommandAdministration`](#internalcommandadministration) (2), [`InternalCommandProcessor`](#internalcommandprocessor) (2), and one cleanup-service test.
 - **ADRs**: [ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html).
 
+### PollingLoop
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Polling` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:12` · Level 3 · class (static)
+
+- **What it is**: the smart-wait polling loop extracted out of the outbox and internal-commands processors so both share one implementation: run cycles until cancelled, re-poll immediately when a cycle reports more work, otherwise wait on a signal bounded by a computed smart wait; plus the retry-backoff and per-source fan-out helpers both processors also share.
+- **Depends on**: `System.TimeProvider`, [`TenantDataSourceTarget`](group-07-persistence-ef-core.md#tenantdatasourcetarget).
+- **Concept**: this is the smart-wait loop, backoff formula, and per-target fan-out originally described under `InternalCommandProcessor`/`OutboxProcessor`, now factored into one shared static class so the two processors cannot drift out of sync on the same shape. `[Rubric §12: Performance & Scalability]` still applies here directly: `ComputeWaitTime` is what turns a fixed poll into a smart wait, and `ComputeRetryBackoffSeconds`'s jitter (`PollingLoop.cs:358-360`) is what keeps a batch that failed together from retrying in lockstep against the same dependency.
+- **Walkthrough**: `StartupDelay` (`PollingLoop.cs:24`, 5 seconds) and `MinimumWait` (`PollingLoop.cs:27`, 1 second) are the shared constants; `RunAsync` (`PollingLoop.cs:46-97`) waits `StartupDelay`, returns via `onNoTargets` when `hasTargets()` is false, then loops calling `runCycle`, re-polling immediately on `HasMoreWork` and otherwise awaiting `waitForSignal` for `ComputeWaitTime`'s result, with a cycle exception reported through `onCycleError` and treated as no pending work; `ComputeWaitTime` (`PollingLoop.cs:117-133`) returns the fallback `pollingInterval` when `earliestUpcoming` is null, otherwise `earliestUpcoming + processingDelay - utcNow`, floored at `MinimumWait` and capped at `pollingInterval`; `DrainAllAsync` (`PollingLoop.cs:148-184`, targets a generic `List<TenantDataSourceTarget>` plus a `drainSource` delegate) aggregates `HasMoreWork` (OR), `EarliestUpcoming` (min) and a summed `PendingDepth` across targets, isolating one source's exception via `onSourceError` from the others; `ComputeRetryBackoffSeconds` (`PollingLoop.cs:196-210`) computes `base * 2^(attempts-1)`, clamps the exponent at `16` before `Math.Pow` (`PollingLoop.cs:201-203`, so a future settings change cannot overflow it), applies `[0.8, 1.2]` jitter BEFORE the cap so a capped backoff lands exactly at the ceiling, then caps at `capSeconds`.
+- **Why it's built this way**: the two callers (internal-commands, outbox) had nearly identical loop, wait-time, drain, and backoff code; extracting it here is a straight de-duplication, not a new abstraction over a different concept, so each caller keeps its own settings, signal, and per-source work delegate and passes them in as parameters.
+- **Where it's used**: `OutboxProcessor.cs` (7 sites) and [`InternalCommandProcessor`](#internalcommandprocessor) (`InternalCommandProcessor.cs`, 5 sites).
+
 ### InternalCommandDispatcher
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandDispatcher.cs:21` · Level 4 · class (static)
 
@@ -6483,37 +6596,37 @@ survives a module being pulled out into its own service.
 - **ADRs**: [ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html).
 
 ### InternalCommandAdministration
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Administration` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:39` · Level 13 · class
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Administration` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandAdministration.cs:37` · Level 13 · class
 
 - **What it is**: the operator-facing administration surface for the internal-commands queue: count pending work, list and paginate dead letters, requeue them, and purge completed rows, fanned out across every relational data source (and tenant) this host owns.
 - **Depends on**: `IServiceScopeFactory`, `IOptions<InternalCommandsSettings>` ([`InternalCommandsSettings`](#internalcommandssettings)), `IEntityDataSourceRegistry`, `IDataSourceResolver`, [`IInternalCommandSignal`](#iinternalcommandsignal), `TimeProvider`, `IOptions<TenancySettings>`, [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext), `InternalCommandMessage`, [`TenantDataSourceTarget`](group-07-persistence-ef-core.md#tenantdatasourcetarget) / [`TenantDataSourceTargets`](group-07-persistence-ef-core.md#tenantdatasourcetargets), `Error`/`Result` (Domain layer).
 - **Concept**: the same operator-lever shape as [`IOutboxAdministration`](group-07-persistence-ef-core.md#ioutboxadministration): count / list-dead-letters / requeue / purge, fanned out per owned data source. `[Rubric §8: Data Architecture]` (assesses how a system handles database-per-service and multi-tenant fan-out): every operation here resolves its own target set rather than assuming a single database. `[Rubric §13: Observability & Operability]`: requeue and purge are explicit, logged operator actions, not silent background behavior.
-- **Walkthrough**: `MaxPageSize` (`InternalCommandAdministration.cs:617`, `500`) bounds one page so an admin call cannot pull the whole table; `SkipError`/`TakeError`/`OlderThanError` (`InternalCommandAdministration.cs:619-626`) are pre-built `Error.Validation` instances; `CountPendingAsync` (`InternalCommandAdministration.cs:632-653`) sums a `LongCountAsync` per target using the SAME pending predicate as the processor's own poll; `ListDeadLettersAsync` (`InternalCommandAdministration.cs:656-712`) paginates across the MERGED result of every target: each target returns at most `skip + take` rows (ordered by `ScheduledOn` then `Id`), because "skip 50" must mean the same thing whether this host owns one database or four, then the merged list is re-ordered and re-paged in memory (`InternalCommandAdministration.cs:706-709`); `RequeueAsync` (`InternalCommandAdministration.cs:715-770`) resets `Attempts` to `0` and clears `DeadLetteredOn`/`ClaimedUntil`/`ClaimedBy` via `ExecuteUpdateAsync` (`InternalCommandAdministration.cs:745-751`) while deliberately preserving `LastError` (line 740-744, "the only evidence of WHY this row needed requeuing"), then calls `signal.Signal()` (`InternalCommandAdministration.cs:766`) to wake the processor immediately instead of waiting for the next poll; `PurgeProcessedAsync` (`InternalCommandAdministration.cs:773-808`) `ExecuteDeleteAsync`s processed rows older than a caller-supplied cutoff; `SelectTargets` (`InternalCommandAdministration.cs:820-835`) resolves every relational physical source in use (excluding Cosmos), plus the configured scheduling target, expanded per tenant via `TenantDataSourceTargets.Expand`, optionally narrowed to one name; `VisitAsync<T>` (`InternalCommandAdministration.cs:842-858`) opens a fresh DI scope and sets the tenant BEFORE resolving the `IDbContextFactory` context, because the tenant is both what routes the scoped factory to the right database and what the soft-delete/tenant query filter reads.
-- **Why it's built this way**: the tenant-before-context ordering and the deliberate `LastError` preservation are both stated inline as design decisions, not incidental; `LogRequeued`/`LogPurged` (`InternalCommandAdministration.cs:860-864`) give operators a durable audit trail of manual interventions on the queue.
+- **Walkthrough**: `MaxPageSize` (`InternalCommandAdministration.cs:471`, `500`) bounds one page so an admin call cannot pull the whole table; `SkipError`/`TakeError`/`OlderThanError` (`InternalCommandAdministration.cs:473-480`) are pre-built `Error.Validation` instances; `CountPendingAsync` (`InternalCommandAdministration.cs:486-507`) sums a `LongCountAsync` per target using the SAME pending predicate as the processor's own poll; `ListDeadLettersAsync` (`InternalCommandAdministration.cs:510-566`) paginates across the MERGED result of every target: each target returns at most `skip + take` rows (ordered by `ScheduledOn` then `Id`), because "skip 50" must mean the same thing whether this host owns one database or four, then the merged list is re-ordered and re-paged in memory (`InternalCommandAdministration.cs:560-563`); `RequeueAsync` (`InternalCommandAdministration.cs:569-624`) resets `Attempts` to `0` and clears `DeadLetteredOn`/`ClaimedUntil`/`ClaimedBy` via `ExecuteUpdateAsync` (`InternalCommandAdministration.cs:599-605`) while deliberately preserving `LastError` ("the only evidence of WHY this row needed requeuing"), then calls `signal.Signal()` (`InternalCommandAdministration.cs:620`) to wake the processor immediately instead of waiting for the next poll; `PurgeProcessedAsync` (`InternalCommandAdministration.cs:627-662`) `ExecuteDeleteAsync`s processed rows older than a caller-supplied cutoff; `SelectTargets` (`InternalCommandAdministration.cs:674-686`) resolves its target list through the shared `TenantDataSourceTargets.ExpandRelational` helper (also used by [`InternalCommandCleanupService`](#internalcommandcleanupservice) and [`InternalCommandProcessor`](#internalcommandprocessor)), optionally narrowed to one name; `VisitAsync<T>` (`InternalCommandAdministration.cs:693-704`) opens a fresh DI scope via the shared `scopeFactory.CreateTenantScope(target)` extension, which sets the tenant BEFORE the `IDbContextFactory` context is resolved, because the tenant is both what routes the scoped factory to the right database and what the soft-delete/tenant query filter reads; the constructor's `timeProvider` parameter is now a plain required parameter rather than an optional one defaulting to `TimeProvider.System` (`InternalCommandAdministration.cs:467,483`).
+- **Why it's built this way**: the tenant-before-context ordering and the deliberate `LastError` preservation are both stated inline as design decisions, not incidental; `LogRequeued`/`LogPurged` (`InternalCommandAdministration.cs:706-710`) give operators a durable audit trail of manual interventions on the queue.
 - **Where it's used**: registered in `DependencyInjection.cs` (1 site); referenced from `ApplicationDbContext.cs` (1); exercised by `InternalCommandAdministrationTests.cs` (4); `SoftDeleteEnforcementTests` in both `MMCA.Common.Architecture.Tests` and `MMCA.ADC.Architecture.Tests` (1 each) check its hard `ExecuteDeleteAsync`/`ExecuteUpdateAsync` calls against the restrict-delete-by-default convention.
 - **ADRs**: [ADR-119](https://ivanball.github.io/docs/adr/119-restrict-delete-by-default.html).
 
 ### InternalCommandCleanupService
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Administration` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:46` · Level 13 · class
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Administration` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:44` · Level 13 · class
 
-- **What it is**: a `BackgroundService` that periodically purges completed and dead-lettered `InternalCommands` rows past their retention windows, across every relational data source (and tenant) this host owns.
-- **Depends on**: `BackgroundService`, `IServiceScopeFactory`, `IOptions<InternalCommandsSettings>` ([`InternalCommandsSettings`](#internalcommandssettings)), `IEntityDataSourceRegistry`, `IDataSourceResolver`, `TimeProvider`, `IOptions<TenancySettings>`, [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext), `InternalCommandMessage`, [`TenantDataSourceTarget`](group-07-persistence-ef-core.md#tenantdatasourcetarget).
-- **Concept**: the same "sweep every owned target, isolate one source's failure from the rest" shape as [`InternalCommandAdministration`](#internalcommandadministration)'s own purge path; cross-reference rather than re-teach the tenant-before-context ordering. `[Rubric §29: Resilience & Business Continuity]`: an unreachable database on one source does not stop the sweep of the others (`InternalCommandCleanupService.cs:973-981`).
-- **Walkthrough**: `ExecuteAsync` (`InternalCommandCleanupService.cs:898-926`) returns immediately, logging `LogCleanupDisabled`, when `RetentionDays <= 0` (`InternalCommandCleanupService.cs:900-904,1023-1024`); otherwise it loops: waits one `CleanupIntervalHours` interval FIRST (`InternalCommandCleanupService.cs:908-914`, so cleanup never competes with startup or migration work), then calls `PurgeAsync`, catching shutdown cancellation and logging any other exception via `LogCleanupError` (`InternalCommandCleanupService.cs:921-924`) without stopping the loop; `PurgeAsync` (`InternalCommandCleanupService.cs:933-983`, `internal` so a test can drive one sweep without advancing the hour-scale timer) computes `cutoff = now - RetentionDays` and a separate `deadLetterCutoff` using `DeadLetterRetentionDays` when set, else `RetentionDays` (`InternalCommandCleanupService.cs:938-941`); for each target from `GetTargets` (`InternalCommandCleanupService.cs:1010-1021`, the same source-resolution shape as `InternalCommandAdministration.SelectTargets` minus the name filter) it sets the tenant, resolves the `ApplicationDbContext`, `ExecuteDeleteAsync`s processed rows past `cutoff` (`InternalCommandCleanupService.cs:960-963`, `LogPurged`), then calls `SweepDeadLettersAsync` (`InternalCommandCleanupService.cs:989-1004`) which deletes rows keyed on `DeadLetteredOn < deadLetterCutoff` (`LogDeadLetterPurged`); a per-source exception is caught and logged via `LogSourcePurgeError` (`InternalCommandCleanupService.cs:977-981`) rather than aborting the whole sweep.
-- **Why it's built this way**: keying the dead-letter sweep on `DeadLetteredOn` rather than a completion stamp (`InternalCommandCleanupService.cs:986-988`) reflects that a dead-lettered row never got one; the independent `DeadLetterRetentionDays` window lets operators keep abandoned commands around longer for diagnosis than ordinary completed ones.
+- **What it is**: a [`PeriodicBackgroundService`](group-14-module-system-composition.md#periodicbackgroundservice) that periodically purges completed and dead-lettered `InternalCommands` rows past their retention windows, across every relational data source (and tenant) this host owns.
+- **Depends on**: [`PeriodicBackgroundService`](group-14-module-system-composition.md#periodicbackgroundservice), `IServiceScopeFactory`, `IOptions<InternalCommandsSettings>` ([`InternalCommandsSettings`](#internalcommandssettings)), `IEntityDataSourceRegistry`, `IDataSourceResolver`, `TimeProvider`, `IOptions<TenancySettings>`, [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext), `InternalCommandMessage`, [`TenantDataSourceTarget`](group-07-persistence-ef-core.md#tenantdatasourcetarget) / [`TenantDataSourceTargets`](group-07-persistence-ef-core.md#tenantdatasourcetargets).
+- **Concept**: the same "sweep every owned target, isolate one source's failure from the rest" shape as [`InternalCommandAdministration`](#internalcommandadministration)'s own purge path; cross-reference rather than re-teach the tenant-before-context ordering. `[Rubric §29: Resilience & Business Continuity]`: an unreachable database on one source does not stop the sweep of the others. The hour-scale loop mechanics themselves (interval wait, cancellation, error logging) now come from the shared `PeriodicBackgroundService` base rather than being hand-rolled here, so this section covers only what this type overrides.
+- **Walkthrough**: the type now extends `PeriodicBackgroundService(timeProvider, logger)` (`InternalCommandCleanupService.cs:44-52`) instead of `BackgroundService` directly; it overrides `Interval` (`InternalCommandCleanupService.cs:55`, `TimeSpan.FromHours(CleanupIntervalHours)`), `StartupDelay` (`InternalCommandCleanupService.cs:57-61`, equal to `Interval`, so the first sweep still waits one full interval before competing with startup or migration work), `IsEnabled` (`InternalCommandCleanupService.cs:64-76`, `false` and logs `LogCleanupDisabled` when `RetentionDays <= 0`), `ExecuteCycleAsync` (`InternalCommandCleanupService.cs:79`, forwards straight to `PurgeAsync`), and `LogCycleFailure` (`InternalCommandCleanupService.cs:82`, forwards to `LogCleanupError`); `PurgeAsync` (`InternalCommandCleanupService.cs:89-133`, `internal` so a test can drive one sweep without advancing the hour-scale timer) computes `cutoff = now - RetentionDays` and a separate `deadLetterCutoff` using `DeadLetterRetentionDays` when set, else `RetentionDays` (`InternalCommandCleanupService.cs:91-97`); for each target from `GetTargets` (`InternalCommandCleanupService.cs:160-166`, now built through the shared `TenantDataSourceTargets.ExpandRelational` helper rather than its own inline source-resolution logic) it opens a scope via `scopeFactory.CreateTenantScope(target)` (`InternalCommandCleanupService.cs:105`, sets the tenant before the context is resolved), resolves the `ApplicationDbContext`, `ExecuteDeleteAsync`s processed rows past `cutoff` (`InternalCommandCleanupService.cs:110-113`, `LogPurged`), then calls `SweepDeadLettersAsync` (`InternalCommandCleanupService.cs:139-154`) which deletes rows keyed on `DeadLetteredOn < deadLetterCutoff` (`LogDeadLetterPurged`); a per-source exception is caught and logged via `LogSourcePurgeError` rather than aborting the whole sweep.
+- **Why it's built this way**: keying the dead-letter sweep on `DeadLetteredOn` rather than a completion stamp reflects that a dead-lettered row never got one; the independent `DeadLetterRetentionDays` window lets operators keep abandoned commands around longer for diagnosis than ordinary completed ones; moving onto `PeriodicBackgroundService` retires a hand-rolled interval loop that was nearly identical to the outbox and internal-commands processors' own loops.
 - **Where it's used**: registered as a hosted service alongside [`InternalCommandProcessor`](#internalcommandprocessor) in `DependencyInjection.cs` (1 site); its retention posture is what [`InternalCommandsDisabledNoticeService`](#internalcommandsdisablednoticeservice)'s log message calls out as the second job a `Enabled=false` host does not run; exercised directly by `InternalCommandCleanupServiceTests.cs` (4).
 - **ADRs**: [ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html).
 
 ### InternalCommandProcessor
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:47` · Level 13 · class
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.InternalCommands.Processing` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:46` · Level 13 · class
 
 - **What it is**: the `BackgroundService` at the center of the internal-commands job queue: it drains due rows across every relational data source (and tenant) this host owns, executes each via [`InternalCommandDispatcher`](#internalcommanddispatcher), and records the outcome, using a smart wait instead of a fixed polling interval.
-- **Depends on**: `BackgroundService`, `IServiceScopeFactory`, `IOptions<InternalCommandsSettings>` ([`InternalCommandsSettings`](#internalcommandssettings)), [`IInternalCommandSignal`](#iinternalcommandsignal), `IEntityDataSourceRegistry`, `IDataSourceResolver`, `TimeProvider`, `IOptions<TenancySettings>`, [`InternalCommandCycleResult`](#internalcommandcycleresult), [`InternalCommandMetrics`](#internalcommandmetrics), [`InternalCommandDispatcher`](#internalcommanddispatcher), `InternalCommandMessage`, [`TenantDataSourceTarget`](group-07-persistence-ef-core.md#tenantdatasourcetarget), [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext), `System.Diagnostics.ActivitySource`.
-- **Concept introduced, the smart-wait polling loop.** `[Rubric §12: Performance & Scalability]`: instead of a fixed poll interval, the loop computes how long until the earliest known upcoming row is due, floors that to avoid a hot loop, caps it at the configured fallback interval, and lets [`IInternalCommandSignal`](#iinternalcommandsignal) wake it early. `[Rubric §13: Observability & Operability]`: poll spans are emitted under their own suppressible activity so an idle fleet's constant polling does not dominate telemetry ingestion, and [`InternalCommandMetrics`](#internalcommandmetrics) is fed every cycle.
-- **Walkthrough**: constants: `PollActivityName` (`InternalCommandProcessor.cs:1073`, must stay in sync with `OutboxPollFilterProcessor` in `MMCA.Common.Aspire`, which has no project reference here and so duplicates the string, per the doc comment at `InternalCommandProcessor.cs:1068-1072`), `MaxErrorLength` (`InternalCommandProcessor.cs:1076`, `4000`, the column width `LastError` is truncated to), `PrincipalAuthenticationType` (`InternalCommandProcessor.cs:1082`, the auth type stamped on the identity rebuilt from a claimed row); `MinimumWait` (`InternalCommandProcessor.cs:1085`) and `StartupDelay` (`InternalCommandProcessor.cs:1091`, 5 seconds, matching the outbox processor's own startup delay); `ExecuteAsync` (`InternalCommandProcessor.cs:1099-1138`) waits `StartupDelay`, exits (logging `LogNoRelationalSources`) if `GetTargets()` is empty (`InternalCommandProcessor.cs:1103-1107`), then loops: calls `ProcessDueCommandsAsync`, re-polls immediately when `HasMoreDueWork`, otherwise computes the wait via `ComputeWaitTime` and awaits `signal.WaitAsync`; `ComputeWaitTime` (`InternalCommandProcessor.cs:1150-1168`, `static` so it is independently unit-testable) returns the fallback `pollingInterval` when `earliestUpcoming` is `null`, otherwise `earliestUpcoming + processingDelay - utcNow`, floored at `MinimumWait` and capped at `pollingInterval`; `GetSources`/`GetTargets` (`InternalCommandProcessor.cs:1175-1193`) resolve the relational physical sources this host owns plus the configured scheduling target, expanded per tenant, recomputed every cycle so a module assembly registered after startup is picked up; `ProcessDueCommandsAsync` (`InternalCommandProcessor.cs:1203-1238`, `internal` for direct test invocation) fans out over `GetTargets()`, aggregating `HasMoreDueWork` (OR), `EarliestUpcoming` (min), and pending depth (sum), isolating one source's exception via `LogSourceError` from the others, then publishes the summed depth through `InternalCommandMetrics.SetPendingDepth`; `ProcessSourceAsync` (`InternalCommandProcessor.cs:1244-1312`) per target: opens a DI scope, sets the tenant before resolving the `ApplicationDbContext` (same ordering rule as the admin and cleanup types), fetches up to `BatchSize` runnable rows via `FetchCandidatesAsync`, derives the pending-depth gauge input from that same fetch via `CountPendingAsync` (no extra query unless the batch is saturated), publishes the oldest-due-age gauge from the fetch's own first row (`InternalCommandProcessor.cs:1267-1272`, no extra query), splits the ordered rows into a due prefix and an upcoming remainder (`InternalCommandProcessor.cs:1275-1281`), returns early with no claim when nothing is due, otherwise claims the due prefix under a fresh `claimToken` and executes each claimed row, reporting `HasMoreDueWork` when the due count exactly filled `BatchSize` and at least one row progressed (`InternalCommandProcessor.cs:1307-1311`, so a saturated batch triggers an immediate re-poll); `FetchCandidatesAsync` (`InternalCommandProcessor.cs:1322-1341`) runs inside its own suppressible `Activity`, queries `AsNoTracking` rows with `ProcessedOn`/`DeadLetteredOn` null, `Attempts < MaxAttempts`, and no unexpired `ClaimedUntil`, ordered by `ScheduledOn` then `Id`; `CountPendingAsync` (`InternalCommandProcessor.cs:1349-1357+`) short-circuits to the fetched row count when it is below `BatchSize` (the fetch already saw the whole backlog) and pays for a `COUNT` query only when the batch is saturated, per the method's own doc comment (`InternalCommandProcessor.cs:1343-1348`).
-- **Why it's built this way**: every choice above is explained inline against the alternative it avoids: a fixed poll would either waste cycles or add latency, an un-suppressed poll span would swamp telemetry for an idle fleet, and a `COUNT` on every cycle would be wasted work in the (common) unsaturated case. Cite [ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html) for the queue itself; the executed handler goes through the same decorated `ICommandHandler<TCommand, Result>` pipeline any other command uses, per [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html).
+- **Depends on**: `BackgroundService`, [`PollingLoop`](#pollingloop), `IServiceScopeFactory`, `IOptions<InternalCommandsSettings>` ([`InternalCommandsSettings`](#internalcommandssettings)), [`IInternalCommandSignal`](#iinternalcommandsignal), `IEntityDataSourceRegistry`, `IDataSourceResolver`, `TimeProvider`, `IOptions<TenancySettings>`, [`InternalCommandCycleResult`](#internalcommandcycleresult), [`InternalCommandMetrics`](#internalcommandmetrics), [`InternalCommandDispatcher`](#internalcommanddispatcher), `InternalCommandMessage`, [`TenantDataSourceTarget`](group-07-persistence-ef-core.md#tenantdatasourcetarget) / [`TenantDataSourceTargets`](group-07-persistence-ef-core.md#tenantdatasourcetargets), [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext), `System.Diagnostics.ActivitySource`.
+- **Concept**: the smart-wait polling loop itself now lives in the shared [`PollingLoop`](#pollingloop) (cross-reference rather than re-teach): this type supplies its own settings, signal, and per-source work, and PollingLoop runs the loop, computes the wait, and aggregates targets. `[Rubric §12: Performance & Scalability]`: instead of a fixed poll interval, the loop computes how long until the earliest known upcoming row is due, floors that to avoid a hot loop, caps it at the configured fallback interval, and lets [`IInternalCommandSignal`](#iinternalcommandsignal) wake it early. `[Rubric §13: Observability & Operability]`: poll spans are emitted under their own suppressible activity so an idle fleet's constant polling does not dominate telemetry ingestion, and [`InternalCommandMetrics`](#internalcommandmetrics) is fed every cycle.
+- **Walkthrough**: constants: `PollActivityName` (`InternalCommandProcessor.cs:1259`, must stay in sync with `OutboxPollFilterProcessor` in `MMCA.Common.Aspire`, which has no project reference here and so duplicates the string), `MaxErrorLength` (`InternalCommandProcessor.cs:1262`, `4000`, the column width `LastError` is truncated to), `PrincipalAuthenticationType` (`InternalCommandProcessor.cs:1268`, the auth type stamped on the identity rebuilt from a claimed row); the loop's own `MinimumWait`/`StartupDelay` constants and the hand-rolled `ExecuteAsync` loop body are gone: `ExecuteAsync` (`InternalCommandProcessor.cs:1277-1291`) now just calls `PollingLoop.RunAsync`, passing `GetTargets().Count > 0` as `hasTargets`, `LogNoRelationalSources` as `onNoTargets`, a lambda that runs `ProcessDueCommandsAsync` and maps its result to the `(HasMoreWork, EarliestUpcoming)` tuple `PollingLoop` expects, `LogCycleError` as `onCycleError`, the configured delay/interval seconds, and `signal.WaitAsync` as the wait delegate; `ComputeWaitTime` (`InternalCommandProcessor.cs:1303-1308`) is now a one-line forward to `PollingLoop.ComputeWaitTime`, kept as a wrapper so its own unit tests still compile against this type; `GetTargets` (`InternalCommandProcessor.cs:1316-1322`, the standalone `GetSources` helper is gone) now resolves directly through `TenantDataSourceTargets.ExpandRelational`, recomputed every cycle so a module assembly registered after startup is picked up; `ProcessDueCommandsAsync` (`InternalCommandProcessor.cs:1332-1348`, `internal` for direct test invocation) now forwards the per-target fan-out to `PollingLoop.DrainAllAsync`, supplying `ProcessSourceAsync` as the per-target delegate and `LogSourceError` as the per-source error handler, then publishes the aggregated depth through `InternalCommandMetrics.SetPendingDepth`; `ProcessSourceAsync` per target still opens a DI scope, sets the tenant before resolving the `ApplicationDbContext` (same ordering rule as the admin and cleanup types), fetches up to `BatchSize` runnable rows via `FetchCandidatesAsync`, derives the pending-depth gauge input from that same fetch via `CountPendingAsync` (no extra query unless the batch is saturated), publishes the oldest-due-age gauge from the fetch's own first row (no extra query), splits the ordered rows into a due prefix and an upcoming remainder, returns early with no claim when nothing is due, otherwise claims the due prefix under a fresh `claimToken` and executes each claimed row, reporting `HasMoreDueWork` when the due count exactly filled `BatchSize` and at least one row progressed (so a saturated batch triggers an immediate re-poll); `FetchCandidatesAsync` runs inside its own suppressible `Activity`, queries `AsNoTracking` rows with `ProcessedOn`/`DeadLetteredOn` null, `Attempts < MaxAttempts`, and no unexpired `ClaimedUntil`, ordered by `ScheduledOn` then `Id`; `CountPendingAsync` short-circuits to the fetched row count when it is below `BatchSize` (the fetch already saw the whole backlog) and pays for a `COUNT` query only when the batch is saturated.
+- **Why it's built this way**: the loop, wait-time computation, and per-target aggregation moved into [`PollingLoop`](#pollingloop) because the outbox processor had nearly identical code; keeping `ComputeWaitTime` as a thin forwarding wrapper on this type avoids a breaking change to its own existing unit tests. An un-suppressed poll span would swamp telemetry for an idle fleet, and a `COUNT` on every cycle would be wasted work in the (common) unsaturated case. Cite [ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html) for the queue itself; the executed handler goes through the same decorated `ICommandHandler<TCommand, Result>` pipeline any other command uses, per [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html).
 - **Where it's used**: registered as a hosted service in `DependencyInjection.cs` (1 site); ADC's `ScoreEventSessionsInternalCommand` (`Conference.Application`, 1 site) is a concrete `IInternalCommand` this processor drains; `InternalCommandProcessorTests.cs` and the shared test harness exercise `ProcessDueCommandsAsync`/`ComputeWaitTime` directly; `OutboxPollFilterProcessor.cs` (`MMCA.Common.Aspire`, 2 sites) reads `PollActivityName` to filter the matching spans from export.
-- **Caveats / not-in-source**: the claim-and-execute mechanics (`ClaimDueAsync`, `ExecuteClaimedAsync`) live past line 1357 of the source file and were not re-read line-by-line for this section; the brief's own hint (`sed -n '347,770p' MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs`) covers them for anyone who needs the claim/backoff details.
+- **Caveats / not-in-source**: the claim-and-execute mechanics (`ClaimDueAsync`, `ExecuteClaimedAsync`) live further down the source file and were not re-read line-by-line for this section; `sed -n` over `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs` covers them for anyone who needs the claim/backoff details.
 - **ADRs**: [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html), [ADR-114](https://ivanball.github.io/docs/adr/114-internal-commands-durable-job-queue.html).
 
 ### GroupedCount<TKey>
@@ -6720,9 +6833,9 @@ survives a module being pulled out into its own service.
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Repositories` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:23` · Level 9 · class (internal sealed)
 
 - **What it is**: the read-write EF Core repository. It extends [`EFReadRepository<TEntity, TIdentifierType>`](#efreadrepositorytentity-tidentifiertype) with add, update, concurrency-token, and set-based delete and update operations, implementing [`IRepository<TEntity, TIdentifierType>`](#irepositorytentity-tidentifiertype) (`EFRepository.cs:10-29`). It stages changes and never saves: the class doc says so outright at `:12`.
-- **Depends on**: the base read repository, constructed with the same `DbContext` (`EFRepository.cs:24`, `:26`); two **optional** constructor dependencies, `TimeProvider` and [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) (`:24-25`); [`UpdatePropertySetterBuilder<TEntity>`](#updatepropertysetterbuildertentity) for set-based updates (`:113`); [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) as the entity constraint (`:27`); and [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype), [`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned), and [`IAuditableEntity`](group-02-domain-building-blocks.md#iauditableentity) for the concurrency and audit member names.
-- **Concept introduced, the two write paths and why one of them must stamp its own audit fields.** `[Rubric §8, Data Architecture]` assesses whether audit metadata is reliably captured, and `[Rubric §12, Performance & Scalability]` assesses whether a cross-cutting policy holds on every path rather than the common one. The framework's normal write path is change-tracked: load, mutate, save, and the save interceptors stamp `LastModifiedOn` and `LastModifiedBy` and dispatch domain events. The second path is set-based: `ExecuteUpdate` and `ExecuteDelete` issue one SQL statement over matching rows without loading or tracking them, which is far cheaper on a wide update but **bypasses the save pipeline entirely**, interceptors included. Rather than pretend the two paths are the same, this class closes the gap explicitly for audit fields on `ExecuteUpdateAsync` (`EFRepository.cs:140-151`). The class-level `<remarks>` (`:16-21`) states what the two optional dependencies are for and what happens without them: the clock and the acting user serve `ExecuteUpdateAsync`, and when they are absent (direct construction in tests) the system clock is used and the user stamp is skipped.
-- **Concept, the optional dependency as a testability affordance.** `[Rubric §14, Testability]`. `TimeProvider` and [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) default to `null` (`EFRepository.cs:25-26`), which is what lets a test construct the repository with just a context, while production construction through `ActivatorUtilities` fills both from the container. Taking `TimeProvider` at all, rather than calling `DateTime.UtcNow`, is what makes the timestamp deterministic under test, which is exactly what `EFRepositoryAuditStampTests` exercises.
+- **Depends on**: the base read repository, constructed with the same `DbContext` (`EFRepository.cs:24`, `:27`); a required `TimeProvider` (`:25`) and one **optional** constructor dependency, [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) (`:26`); [`UpdatePropertySetterBuilder<TEntity>`](#updatepropertysetterbuildertentity) for set-based updates (`:113`); [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) as the entity constraint (`:28`); and [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype), [`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned), and [`IAuditableEntity`](group-02-domain-building-blocks.md#iauditableentity) for the concurrency and audit member names.
+- **Concept introduced, the two write paths and why one of them must stamp its own audit fields.** `[Rubric §8, Data Architecture]` assesses whether audit metadata is reliably captured, and `[Rubric §12, Performance & Scalability]` assesses whether a cross-cutting policy holds on every path rather than the common one. The framework's normal write path is change-tracked: load, mutate, save, and the save interceptors stamp `LastModifiedOn` and `LastModifiedBy` and dispatch domain events. The second path is set-based: `ExecuteUpdate` and `ExecuteDelete` issue one SQL statement over matching rows without loading or tracking them, which is far cheaper on a wide update but **bypasses the save pipeline entirely**, interceptors included. Rather than pretend the two paths are the same, this class closes the gap explicitly for audit fields on `ExecuteUpdateAsync` (`EFRepository.cs:140-151`). The class-level `<remarks>` (`:17-22`) states what the required `TimeProvider` and the optional `ICurrentUserService` are for: both serve `ExecuteUpdateAsync`'s own audit stamping since that path bypasses the save pipeline, and without a user service (direct construction in tests) only the user stamp is skipped, since the clock has no fallback anymore.
+- **Concept, the optional dependency as a testability affordance.** `[Rubric §14, Testability]`. Only [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) defaults to `null` (`EFRepository.cs:26`); `TimeProvider` is a required constructor argument (`:25`), so a test must pass one explicitly (typically `TimeProvider.System` or a fake), while production construction through `ActivatorUtilities` fills both from the container. Taking `TimeProvider` at all, rather than calling `DateTime.UtcNow`, is what makes the timestamp deterministic under test, which is exactly what `EFRepositoryAuditStampTests` exercises.
 - **Walkthrough**
   - `AddAsync` and `AddRangeAsync` (`EFRepository.cs:32-43`) are thin guarded forwarders to `Entities.AddAsync` and `AddRangeAsync`. Nothing is saved here; persistence happens at the unit of work's save.
   - `UpdateAsync` (`EFRepository.cs:52-65`) has the one non-obvious body in the mutation set. It first asks the change tracker whether this key is already tracked, and if so copies values onto the tracked entry with `CurrentValues.SetValues` instead of attaching a second instance, which would throw an "already tracked" exception (`:44-50`, `:57-59`). The comment at `:55-56` explains the lookup choice: `Entities.Local.FindEntry(entity.Id)` is an O(1) key lookup against the identity map that never falls back to the database, replacing a linear scan of the `LocalView`. Untracked entities go through `Entities.Update`, which attaches and marks modified (`:61`). The method returns `Task.CompletedTask` (`:63`): it is asynchronous only for signature compatibility.
@@ -6730,7 +6843,7 @@ survives a module being pulled out into its own service.
   - The two `SetOriginalRowVersion` overloads (`EFRepository.cs:75-94`) implement optimistic concurrency by writing the client's known row version into the tracked entry's **original** value, so EF's generated UPDATE carries it in the WHERE clause and a concurrent modification raises a concurrency exception instead of silently winning. Both null-guard their arguments and then assign unconditionally (`:76-81`, `:87-92`). The second overload takes an [`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned) child entity and casts to `object` for `Entry` (`:90`), which is how a child of the aggregate gets the same protection without being an aggregate root itself.
   - `TouchConcurrencyToken(entity)` (`EFRepository.cs:97-115`) forces a concurrency check on a root that a caller wants to protect even though nothing on it changed. It is a no-op unless the tracked entry's state is exactly `Unchanged`: a root the applier already modified emits its own UPDATE carrying the concurrency predicate already, and marking a property modified on a `Deleted` or `Detached` entry would be wrong rather than merely redundant. When the entry is unchanged, it marks the `LastModifiedOn` audit property `IsModified = true`, which is what puts the row in the generated UPDATE at all; the audit interceptor then fills in the real value, so the write is a genuine edit record rather than a no-op touch, and EF appends `WHERE RowVersion = @original` from the concurrency token.
   - `ExecuteDeleteAsync` (`EFRepository.cs:118-124`) is the set-based delete: `Entities.Where(where).ExecuteDeleteAsync(...)`, returning the affected row count (`:101`).
-  - `ExecuteUpdateAsync` (`EFRepository.cs:127-154`) is the flagship. It guards both arguments (`:110-111`), constructs an [`UpdatePropertySetterBuilder<TEntity>`](#updatepropertysetterbuildertentity) (`:113`), lets the caller describe the assignments against the persistence-agnostic interface (`:114`), and throws `ArgumentException` when nothing was described (`:115-116`). Then it stamps: `LastModifiedOn` from `(timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime` unless the caller already set it (`:120-124`), and `LastModifiedBy` from the current user unless the caller already set it and only when a user id is actually available (`:126-129`). Both guards go through `builder.SetsProperty`, so an explicit caller assignment always wins. Finally the recorded assignments are replayed into EF as a method group (`:131`).
+  - `ExecuteUpdateAsync` (`EFRepository.cs:127-154`) is the flagship. It guards both arguments (`:110-111`), constructs an [`UpdatePropertySetterBuilder<TEntity>`](#updatepropertysetterbuildertentity) (`:113`), lets the caller describe the assignments against the persistence-agnostic interface (`:114`), and throws `ArgumentException` when nothing was described (`:115-116`). Then it stamps: `LastModifiedOn` from `timeProvider.GetUtcNow().UtcDateTime` unless the caller already set it (`:120-124`), and `LastModifiedBy` from the current user unless the caller already set it and only when a user id is actually available (`:126-129`). Both guards go through `builder.SetsProperty`, so an explicit caller assignment always wins. Finally the recorded assignments are replayed into EF as a method group (`:131`).
   - `sealed`, and the mutation members are non-virtual: this is the end of the inheritance chain.
 - **Why it's built this way**: keeping the write members on a subclass of the read repository rather than on a parallel type means the read behavior a write handler relies on (the tracked `GetByIdAsync`, most of all) is literally the same code a query handler runs. The contract is [ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html), and the split between staging here and flushing in [`IUnitOfWork`](#iunitofwork) is what makes one transaction span several repositories.
 - **Where it's used**: constructed by [`RepositoryFactory`](#repositoryfactory)'s `Create` through the same cached `ActivatorUtilities` factory (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:31-32`), optionally wrapped in [`EFRepositoryDecorator<TEntity, TIdentifierType>`](#efrepositorydecoratortentity-tidentifiertype) (`:34-39`). Application code reaches it through [`IUnitOfWork`](#iunitofwork)'s `GetRepository` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:33`). Covered by `EFRepositoryAdditionalTests.cs`, `EFRepositoryAuditStampTests.cs`, and `EFRepositoryIntegrationTests.cs` under `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/`.
@@ -6837,7 +6950,7 @@ survives a module being pulled out into its own service.
 - **Walkthrough**
   - `DataSources` (`TenancySettings.cs:129`): a get-only `Dictionary<string, TenantDataSourceOverrideSettings>` bound from `Tenancy:Tenants:{tenantId}:DataSources:{sourceName}`. Get-only is the correct shape for a bound dictionary, since the configuration binder populates an existing instance rather than assigning a new one.
 - **Why it's built this way**: keeping the per-tenant overrides one level below the tenant, rather than flattening connection strings onto the tenant entry, is what lets a single tenant be physically separated on one source while remaining shared on the others, which is the mixed model [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html) records.
-- **Where it's used**: read by [`DbContextFactory`](#dbcontextfactory)`.ResolveTenantOverride`, which looks up the current tenant then the requested source and clones the shared `PhysicalDataSource` with the tenant's connection string while keeping the ORIGINAL `DataSourceKey`, so one compiled EF model serves every tenant's database (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:162-187`). Also expanded by [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand`, which turns the shared sources plus every (tenant, overridden source) pair into the list the outbox and cleanup background services sweep (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:66-76`), and validated per entry by [`TenancySettingsValidator`](#tenancysettingsvalidator) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:71-106`).
+- **Where it's used**: read by [`DbContextFactory`](#dbcontextfactory)`.ResolveTenantOverride`, which looks up the current tenant then the requested source and clones the shared `PhysicalDataSource` with the tenant's connection string while keeping the ORIGINAL `DataSourceKey`, so one compiled EF model serves every tenant's database (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:162-187`). Also expanded by [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand`, which turns the shared sources plus every (tenant, overridden source) pair into the list the outbox and cleanup background services sweep (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:68-78`), and validated per entry by [`TenancySettingsValidator`](#tenancysettingsvalidator) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:71-106`).
 
 ### IndexBuilderExtensions
 
@@ -6901,7 +7014,7 @@ survives a module being pulled out into its own service.
   - `ExcludedPathPrefixes` (`:103`) plus `EffectiveExcludedPathPrefixes` (`:106-107`), the same projection shape.
   - `Tenants` (`:115`): a get-only `Dictionary<string, TenantEntrySettings>` bound from `Tenancy:Tenants:{tenantId}`, needed only for database-per-tenant.
 - **Why it's built this way**: shared-schema isolation plus optional database-per-tenant promotion is the model [ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html) records, and this class is its whole operator-facing surface. Defaulting `Enabled` to false while keeping the filter and interceptor always-on is what makes the feature safe to ship into an existing host, and keeping every relational check in a separate `IValidateOptions<T>` (rather than in attributes) is what lets the validator reach the resolved data sources.
-- **Where it's used**: bound with `ValidateOnStart` in `AddMultiTenancy`, alongside the `TryAddEnumerable` registration of [`TenancySettingsValidator`](#tenancysettingsvalidator) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:266-278`). Read at request time by [`TenantResolutionMiddleware`](group-12-api-hosting-mapping.md#tenantresolutionmiddleware), which short-circuits when disabled or on an excluded path (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:62`), walks `EffectiveResolutionOrder` reading the claim or the header (`:107-118`), lets the request through unscoped when `RequireTenant` is off (`:75-81`), and otherwise answers `400 Bad Request` (`:83`). Read at persistence time by [`DbContextFactory`](#dbcontextfactory) for per-tenant connection routing (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:45`, `:144-168`), and by the background services through [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand` so they sweep every tenant database too (`OutboxProcessor.cs:64`, `OutboxCleanupService.cs:55`, `OutboxAdministration.cs:43`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:49-79`). Startup database initialization uses the same expansion to create each tenant's database (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:132`, `:138`), and the design-time helper supplies a default instance so `dotnet ef` needs no tenancy configuration (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:156`). All of the runtime consumers take the options as NULLABLE, so a host that never called `AddMultiTenancy` resolves `null` and behaves exactly as before.
+- **Where it's used**: bound with `ValidateOnStart` in `AddMultiTenancy`, alongside the `TryAddEnumerable` registration of [`TenancySettingsValidator`](#tenancysettingsvalidator) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:266-278`). Read at request time by [`TenantResolutionMiddleware`](group-12-api-hosting-mapping.md#tenantresolutionmiddleware), which short-circuits when disabled or on an excluded path (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/TenantResolutionMiddleware.cs:62`), walks `EffectiveResolutionOrder` reading the claim or the header (`:107-118`), lets the request through unscoped when `RequireTenant` is off (`:75-81`), and otherwise answers `400 Bad Request` (`:83`). Read at persistence time by [`DbContextFactory`](#dbcontextfactory) for per-tenant connection routing (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:45`, `:144-168`), and by the background services through [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand` so they sweep every tenant database too (`OutboxProcessor.cs:64`, `OutboxCleanupService.cs:198`, `OutboxAdministration.cs:42`, `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:51-81`). Startup database initialization uses the same expansion to create each tenant's database (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:131`, `:138`), and the design-time helper supplies a default instance so `dotnet ef` needs no tenancy configuration (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:156`). All of the runtime consumers take the options as NULLABLE, so a host that never called `AddMultiTenancy` resolves `null` and behaves exactly as before.
 
 ### CrossDataSourceDegradeConvention
 
@@ -6941,7 +7054,7 @@ survives a module being pulled out into its own service.
   - `IsKnownPhysicalSource` (`:117-119`): the round-trip test. `Default` always passes; otherwise the name must survive `resolver.ResolveLogical(engine, sourceName).Name` unchanged, because an unknown logical name collapses onto `Default` and therefore comes back different.
   - `ConnectionStringFor(DataSource, TenantDataSourceOverrideSettings)` (`:122-130`): `internal static`, a switch expression mapping engine to the matching connection-string property, now with a `PostgreSQL => over.PostgreSQLConnectionString` arm alongside SQL Server, Sqlite, and Cosmos. It is `internal` rather than private because it is reused outside validation, which is the detail worth noting next.
 - **Why it's built this way**: the engine-to-property mapping is needed in three places (validation, target expansion, and connection routing), so it lives once here and the runtime paths call back into the validator's `ConnectionStringFor` rather than re-implementing the switch ([ADR-073](https://ivanball.github.io/docs/adr/073-multi-tenancy-model.html)). Making the resolver optional rather than required is what keeps the validator constructible in a host that binds tenancy without registering `AddInfrastructure`, at the cost of skipping the source-existence check there; the strategy and connection-string checks still run.
-- **Where it's used**: registered by `AddMultiTenancy` alongside `ValidateOnStart` on the options (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:266-278`). Its `ConnectionStringFor` helper is called at run time by [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand` when deciding whether a (tenant, source) pair is really overridden (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:71`) and by [`DbContextFactory`](#dbcontextfactory)`.ResolveTenantOverride` when cloning the physical source for a tenant (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:172`). Covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Tenancy/AddMultiTenancyTests.cs`, which asserts the single-registration shape (`:97-98`) and drives the validator both without a resolver (`:168`) and with one (`:206`).
+- **Where it's used**: registered by `AddMultiTenancy` alongside `ValidateOnStart` on the options (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:266-278`). Its `ConnectionStringFor` helper is called at run time by [`TenantDataSourceTargets`](#tenantdatasourcetargets)`.Expand` when deciding whether a (tenant, source) pair is really overridden (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:73`) and by [`DbContextFactory`](#dbcontextfactory)`.ResolveTenantOverride` when cloning the physical source for a tenant (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:172`). Covered by `MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Tenancy/AddMultiTenancyTests.cs`, which asserts the single-registration shape (`:97-98`) and drives the validator both without a resolver (`:168`) and with one (`:206`).
 - **Caveats / not-in-source**: the type is `internal`, so it is not part of the framework's public API and a consumer cannot subclass or replace it; a host needing extra tenancy rules registers its own additional `IValidateOptions<TenancySettings>`.
 
 ### EntityTypeBuilderExtensions
@@ -7203,14 +7316,14 @@ survives a module being pulled out into its own service.
 - **Concept introduced, reflective activation traded for a cached compiled factory.** `ActivatorUtilities.CreateInstance` is the usual way to build a type whose constructor mixes DI-resolved services with caller-supplied arguments, and it is what this class used to call. Its cost is per call: it matches the constructor by reflection every time and caches nothing, so a request touching four aggregates paid four reflective activations. `ActivatorUtilities.CreateFactory` does the matching **once** and returns an `ObjectFactory`, a compiled delegate that can be invoked repeatedly. The insight that makes caching safe is stated in the code (`RepositoryFactory.cs:74-79`): each **closed** repository type here always takes the same argument shape, so the delegate can be keyed by type alone with no risk of a shape mismatch. `[Rubric §12, Performance & Scalability]` assesses whether hot paths avoid repeated per-call work; repository creation is on every command and query, so a per-type one-time cost replaces a per-call one. `[Rubric §15, Best Practices & Code Quality]` assesses whether an optimization is justified in place rather than left as folklore; the doc comment names the exact scenario it fixes.
 - **Concept reinforced, decoration decided by configuration.** The decorator pattern itself is taught in the CQRS pipeline chapter. Here it appears in its simplest form and with a switch: `ApplicationSettings.UseMiniProfiler` (`MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:14`) decides whether the plain repository is returned or is passed as the inner instance of a timing decorator. When the flag is off there is no wrapper object and no indirection at all, so profiling costs nothing in a production host that leaves it off. `[Rubric §13, Observability & Operability]` assesses whether the system can be inspected without being rebuilt; per-repository timing is a configuration flip.
 - **Walkthrough**
-  - **Primary constructor** (`RepositoryFactory.cs:15-18`): captures the provider into `_serviceProvider` and, importantly, resolves `IOptions<ApplicationSettings>.Value` once into `_applicationSettings` rather than on every call. Nothing else is resolved at construction, so the class stays cheap to create per scope (`DependencyInjection.cs:123` registers it scoped).
+  - **Primary constructor** (`RepositoryFactory.cs:15-18`): captures the provider into `_serviceProvider` and, importantly, resolves `IOptions<ApplicationSettings>.Value` once into `_applicationSettings` rather than on every call. Nothing else is resolved at construction, so the class stays cheap to create per scope (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:123` registers it scoped).
   - **`Create<TEntity, TIdentifierType>(DbContext dbContext)`** (`:26-42`): builds `EFRepository<TEntity, TIdentifierType>` through `Factory(..., DbContextArg)(_serviceProvider, [dbContext])` (`:31-32`). Only the context is passed positionally; the repository's two remaining constructor parameters are optional, `TimeProvider?` and `ICurrentUserService?` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:23-27`), and come from the provider, with the class doc recording the fallback when they are absent: the system clock and no user stamp (`EFRepository.cs:17-22`). When `UseMiniProfiler` is true (`:34`) the instance is re-wrapped by activating `EFRepositoryDecorator<TEntity, TIdentifierType>` with an argument shape of `[typeof(IRepository<TEntity, TIdentifierType>)]` (`:36-38`), matching the decorator's single `inner` parameter (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepositoryDecorator.cs:14`).
   - **`CreateReadOnly<TEntity, TIdentifierType>(DbContext dbContext)`** (`:50-66`): the identical sequence against `EFReadRepository` and `EFReadRepositoryDecorator`, with the looser [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype) constraint.
   - **`DbContextArg`** (`:68`): a single static `Type[]` holding `typeof(DbContext)`, shared by both creation paths so the common case allocates no argument-type array per call.
   - **`FactoryCache`** (`:70`): a static `ConcurrentDictionary<Type, ObjectFactory>`, so the compiled delegates are shared process-wide across scopes and requests, not per factory instance.
   - **`Factory(Type implementationType, Type[] argumentTypes)`** (`:81-85`): `FactoryCache.GetOrAdd(implementationType, static (type, args) => ActivatorUtilities.CreateFactory(type, args), argumentTypes)`. Two details are deliberate: the value factory is `static`, so it captures nothing, and the argument types travel through `GetOrAdd`'s state parameter instead of a closure, which is what keeps the lookup allocation-free on the hit path.
 - **Why it's built this way**: [`UnitOfWork`](#unitofwork) must create a repository over a **specific** context instance chosen by data source (`UnitOfWork.cs:40-42`), which no container registration can express, so something has to do the activation by hand. Once that step exists, it is also the natural place to fold in the optional profiling decorator, and the natural place to pay the reflection cost once rather than per call. The class is `public` while all four types it builds are `internal`, which is the point: consumers get the contract and the composition, never the concrete repository types.
-- **Where it's used**: injected into [`UnitOfWork`](#unitofwork) (`UnitOfWork.cs:13`, `:16`) and called from `GetRepository` (`:42`) and `GetReadRepository` (`:62`). Because the unit of work caches one repository per entity type per scope (`:38-44`), the factory typically runs once per entity type per request, and the compiled delegate is reused for every later request in the process. All four composition outcomes are pinned directly against a real SQLite context: plain repository with the flag off, decorated with it on, and the same pair for the read side (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Repositories/RepositoryFactoryTests.cs:43-93`), plus two tests asserting the built instances are functional repositories (`:95-115`). Those tests construct the factory directly with `Options.Create(new ApplicationSettings { UseMiniProfiler = false })` (`:98`, `:100`), which is the shape the primary constructor takes.
+- **Where it's used**: injected into [`UnitOfWork`](#unitofwork) (`UnitOfWork.cs:13`, `:16`) and called from `GetRepository` (`:42`) and `GetReadRepository` (`:62`). Because the unit of work caches one repository per entity type per scope (`:38-44`), the factory typically runs once per entity type per request, and the compiled delegate is reused for every later request in the process. All four composition outcomes are pinned directly against a real SQLite context: plain repository with the flag off, decorated with it on, and the same pair for the read side (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Repositories/RepositoryFactoryTests.cs:45-95`), plus two tests asserting the built instances are functional repositories (`:95-115`). Those tests construct the factory directly with `Options.Create(new ApplicationSettings { UseMiniProfiler = false })` (`:98`, `:100`), which is the shape the primary constructor takes.
 - **Caveats / not-in-source**: the cache is keyed by implementation type only, which is correct exactly as long as every call site for a given closed type passes the same argument shape. Both current call sites do, and the doc comment states that assumption (`RepositoryFactory.cs:74-79`), but nothing in the code enforces it: a future overload passing a different `argumentTypes` array for an already-cached type would silently reuse the first delegate.
 
 

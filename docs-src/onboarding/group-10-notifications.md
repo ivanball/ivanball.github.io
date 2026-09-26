@@ -915,7 +915,9 @@ without any of the four ever taking the others down, and without a retried reque
   [UserNotification](#usernotification) rows with their shared [PushNotification](#pushnotification)
   content, optionally narrows that join by scope, and projects the pair into a single flat
   [UserNotificationDTO](#usernotificationdto).
-- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) (typed repositories) and
+- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork), resolved as
+  [IReadRepository<TEntity, TIdentifierType>](group-07-persistence-ef-core.md#ireadrepositorytentity-tidentifiertype)
+  via `GetReadRepository` for both entities (lines 33-34), and
   [IQueryableExecutor](group-07-persistence-ef-core.md#iqueryableexecutor) (EF terminal operations kept
   out of Application), injected via primary constructor (lines 16-18), plus
   [PagingMath](group-03-querying-specifications.md#pagingmath). Implements
@@ -942,7 +944,8 @@ without any of the four ever taking the others down, and without a retried reque
   records why: the offset is computed in 64-bit because a 32-bit `(PageNumber - 1) * PageSize` wraps
   negative near `int.MaxValue`, and SQL Server rejects a negative `OFFSET` outright
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/PagingMath.cs:32-43`). Then: grab the
-  two repositories from the unit of work, each typed by entity and identifier alias (lines 33-34); build
+  two read-only repositories from the unit of work via `GetReadRepository`, each typed by entity and
+  identifier alias (lines 33-34); build
   the push-notification source, which is `TableNoTracking` unchanged for an unscoped read and gains a
   `pn.ScopeKey == null || pn.ScopeKey == scopeKey` predicate when a scope is supplied (lines 39-44, the
   local `string scopeKey` on line 42 giving the expression tree a non-nullable capture); build the LINQ
@@ -973,7 +976,9 @@ without any of the four ever taking the others down, and without a retried reque
 
 - **What it is**: the query handler behind the unread badge: it counts a user's unread
   [UserNotification](#usernotification) rows, optionally narrowed to a scope, and returns the integer.
-- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) and
+- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork), resolved as
+  [IReadRepository<TEntity, TIdentifierType>](group-07-persistence-ef-core.md#ireadrepositorytentity-tidentifiertype)
+  via `GetReadRepository` (line 22, and again for the scoped path at line 34), and
   [IQueryableExecutor](group-07-persistence-ef-core.md#iqueryableexecutor) (primary constructor,
   lines 13-15). Implements
   [IQueryHandler<in TQuery, TResult>](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)`<GetUnreadNotificationCountQuery, Result<int>>`.
@@ -989,10 +994,11 @@ without any of the four ever taking the others down, and without a retried reque
   so the bell can poll without materializing the inbox. It is also a good illustration of why
   [IQueryableExecutor](group-07-persistence-ef-core.md#iqueryableexecutor) exists: the handler composes
   the predicate in Application and hands the still-unexecuted `IQueryable` to Infrastructure to run.
-- **Walkthrough**: get the [UserNotification](#usernotification) repository from the unit of work
-  (line 22); compose the base filter over `TableNoTracking` for the user's unread rows (lines 24-25); when
-  and only when a non-blank `ScopeKey` arrived, resolve the [PushNotification](#pushnotification)
-  repository and re-form the query as a join keeping rows whose parent is unscoped or matches the scope
+- **Walkthrough**: get the [UserNotification](#usernotification) read-only repository from the unit of
+  work via `GetReadRepository` (line 22); compose the base filter over `TableNoTracking` for the user's
+  unread rows (lines 24-25); when and only when a non-blank `ScopeKey` arrived, resolve the
+  [PushNotification](#pushnotification) read-only repository the same way and re-form the query as a join
+  keeping rows whose parent is unscoped or matches the scope
   (lines 31-40, with `select un` so the projection stays `UserNotification`); run
   `queryableExecutor.CountAsync` (line 42); return `Result.Success(count)` (line 44). No paging, no
   mapping, no failure branch: the count either comes back or the call throws through the pipeline.
@@ -1054,7 +1060,9 @@ without any of the four ever taking the others down, and without a retried reque
 - **What it is**: the query handler for the push *sent history*: a reverse-chronological page of
   [PushNotification](#pushnotification) rows (no per-user join), mapped to
   [PushNotificationDTO](#pushnotificationdto).
-- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork),
+- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork), resolved as
+  [IReadRepository<TEntity, TIdentifierType>](group-07-persistence-ef-core.md#ireadrepositorytentity-tidentifiertype)
+  via `GetReadRepository` (line 31),
   [IQueryableExecutor](group-07-persistence-ef-core.md#iqueryableexecutor) and
   [PushNotificationDTOMapper](#pushnotificationdtomapper) (primary constructor, lines 15-18), plus
   [PagingMath](group-03-querying-specifications.md#pagingmath). Implements
@@ -1070,7 +1078,8 @@ without any of the four ever taking the others down, and without a retried reque
   as the reason it was extracted (`PagingMath.cs:14-18`).
 - **Walkthrough**: `const int MaxPageSize = 500` (line 21) then
   `PagingMath.Clamp(query.PageNumber, query.PageSize, MaxPageSize)` (line 30); get the
-  [PushNotification](#pushnotification) repository (line 31); ask the repository itself for the total via
+  [PushNotification](#pushnotification) read-only repository via `GetReadRepository` (line 31); ask the
+  repository itself for the total via
   `repository.CountAsync` (line 33, note this one goes through the repository, not the queryable
   executor, because there is no composed predicate to count); page `TableNoTracking` ordered by
   `CreatedOn` descending with `Skip`/`Take` and materialize the entities through the executor
@@ -1198,7 +1207,7 @@ without any of the four ever taking the others down, and without a retried reque
   [Group 08](group-08-auth.md). `[Rubric §15, Best Practices & Code Quality]`: a `const string` means the grant site
   and the check site cannot drift apart by a typo.
 - **Walkthrough**: one `public const string` on a `static` class (`NotificationPermissions.cs:7-11`).
-- **Where it's used**: granted to [RoleNames](group-08-auth.md#rolenames)`.Organizer` and to no other
+- **Where it's used**: granted to [RoleNames](group-24-identity-module.md#rolenames)`.Organizer` and to no other
   role by ADC's Notification module wiring
   (`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/DependencyInjection.cs:38`, see
   [DependencyInjection](#dependencyinjection)); enforced on the framework's
@@ -2489,10 +2498,10 @@ heading.)*
 - **What it is**: the one place ADC binds the Notification module's single capability to a role. Its
   only member, `Apply(PermissionRegistryBuilder permissions)`, grants
   [NotificationPermissions](#notificationpermissions)`.Manage` (sending push notifications and reading
-  the send history) to [RoleNames](group-08-auth.md#rolenames)`.Organizer` and to no other role
+  the send history) to [RoleNames](group-24-identity-module.md#rolenames)`.Organizer` and to no other role
   (lines 28-31).
 - **Depends on**: [PermissionRegistryBuilder](group-08-auth.md#permissionregistrybuilder) (the parameter
-  it accumulates into), [RoleNames](group-08-auth.md#rolenames), and
+  it accumulates into), [RoleNames](group-24-identity-module.md#rolenames), and
   [NotificationPermissions](#notificationpermissions).
 - **Concept, one grant map two callers can share.** The binding used to be written inline as a lambda at
   the one call site that needed it. Pulling it into a named, static `Apply` method lets a second host
@@ -3215,7 +3224,7 @@ both keep the raw type name as their heading.)*
   permission grant is app-specific. `[Rubric §11, Security]` shows in that grant: the doc comment
   (lines 21-29) states the whole authorization story for the module in one place, that
   [NotificationPermissions](#notificationpermissions)`.Manage` is held by
-  [RoleNames](group-08-auth.md#rolenames)`.Organizer` and by no other role, so an attendee cannot
+  [RoleNames](group-24-identity-module.md#rolenames)`.Organizer` and by no other role, so an attendee cannot
   broadcast and no content editor holds a notification capability it was not given. The map itself now
   lives in [NotificationPermissionGrants](#notificationpermissiongrants) rather than an inline lambda
   here, because the token-minting Identity host applies the identical binding (comment lines 40-43).

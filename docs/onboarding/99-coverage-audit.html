@@ -1433,6 +1433,46 @@
           <li><strong>Governance events:</strong> none (no new group, no classifier rule). Primer ADR table gained rows 126 (event sourcing not adopted, g02/g04) and 127 (actor model not adopted, g07/g09/g10); row 124 now links g15 alongside g25.</li>
           </ul>
           </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, 2026-09-26 full drift sweep).</strong> Regenerated
+          at MMCA.Common <code>834a8fa</code> + MMCA.ADC <code>3a32fd34</code> (both clean; prior pass <code>0527211</code> /
+          <code>0883e184</code>, spanning Common releases v1.210.0 and v1.211.0). Net change: <strong>+37</strong> distinct nodes (4,997 to <strong>5,034</strong>),
+          80 added and 43 removed by name, <strong>47</strong> line-shifted (same type, new <code>file:line</code>),
+          287 body-only, 0 regrouped; <code>classify.ps1</code> reports 0 unmapped and the per-group counts
+          sum to 5,034. Individually-sectioned types 2,671 to <strong>2,704</strong>, roll-ups 2,318 to <strong>2,330</strong>,
+          <code>###</code> sections 2,601 to <strong>2,647</strong>, cycles 45 to <strong>46</strong>,
+          edges 18,427 by namespace / 745 by unique-name fallback / 97 dropped.</p>
+          <ul>
+          <li><strong>Per-group movement</strong> (16 of 28 groups moved; the rest are unchanged):<ul>
+          <li><strong>G04 Events + Outbox</strong> (38): body 5. <code>OutboxProcessor</code>, <code>OutboxSignal</code>, <code>OutboxCleanupService</code>, <code>OutboxAdministration</code> and <code>InProcessEventBus</code> reworked: the processor&#39;s wait-and-wake loop now runs on the shared polling core (Common #440), plus code-health wave 2 edits (#439).</li>
+          <li><strong>G07 Persistence &amp; EF Core</strong> (165): added 3, body 20. <code>PollingLoop</code> and <code>WakeUpSignal</code> (<code>Persistence.Polling</code>) are the polling core the outbox and internal-command processors now share (#440); <code>ColumnWidth</code> (<code>Persistence.Conversions</code>) is new in #439, which also touched the three engine contexts, <code>UnitOfWork</code>/<code>IUnitOfWork</code>, the interceptors, <code>EFRepository&lt;TEntity, TIdentifierType&gt;</code>, data-source routing and the cleanup jobs.</li>
+          <li><strong>G08 Authentication &amp; Authorization</strong> (153): body 1. <code>TokenService</code> (#439).</li>
+          <li><strong>G10 Notifications</strong> (59): body 3. The three notification query handlers (#439).</li>
+          <li><strong>G12 API Hosting</strong> (88): added 3, body 4. <code>CommonForwardedHeaders</code> + <code>CommonForwardedHeadersExtensions</code> and <code>EntityCsvExporter&lt;TEntityDTO&gt;</code> extracted into Common by the drift-analysis wave (v1.211.0, #443); the HTTPS-redirect exemption now keys on negotiated cleartext HTTP/2 (<code>MiddlewarePipelineBuilder.IsCleartextHttp2</code>).</li>
+          <li><strong>G14 Module System &amp; Composition</strong> (88): added 2, body 4. <code>DeleteBlobInternalCommandHandlerBase&lt;TCommand&gt;</code> + <code>IDeleteBlobInternalCommand</code> extracted (#443) and now back both ADC blob-delete commands; <code>ScheduledJobRunner</code>, <code>PeriodicBackgroundService</code> and the two password-handler bases edited (#439/#440).</li>
+          <li><strong>G15 Common UI Framework</strong> (153): added 10, body 2. The v1.211.0 extractions (#443): <code>DetailPageBase</code> (from the Conference UI), the email-confirmation page and UI service (<code>ConfirmEmail</code>, <code>ConfirmationState</code>, <code>IEmailConfirmationUIService</code>, <code>EmailConfirmationUIService</code>, from the Identity UI), the client-config endpoint (<code>ClientConfigBuilder</code>, <code>ClientConfigEndpointExtensions</code>, <code>MmcaClientConfigBootstrap</code>), <code>RatingStars</code> and <code>TokenHydrationWarmup</code>.</li>
+          <li><strong>G17 Conference Domain</strong> (111): added 1, removed 2, body 2. <code>SessionStatuses</code> moved from the Domain to the Shared project; <code>IEventCascadeDeletionDomainService</code> is gone because <code>EventCascadeDeletionDomainService</code> is now a static class (ADC #220); the <code>SessionDTO</code> description limit rose to 8,000 for long Sessionize abstracts (#224).</li>
+          <li><strong>G18 Conference Application</strong> (358): body 18. The scoring runner and its internal command (#224, the poll no longer finishing early), read-side handlers moved onto read repositories (#220), <code>SessionSyncStrategy</code> (#224), and the session-asset blob delete on the new Common base (#221/#222).</li>
+          <li><strong>G20 Conference API</strong> (52): body 2. <code>SessionsController</code> (default title sort, #223) and <code>SessionSelectionController</code> (#224).</li>
+          <li><strong>G21 Conference UI</strong> (162): added 1, removed 7, body 24. <code>DetailPageBase</code> left for Common (every page link now targets the G15 section); <code>ADCHome</code> binds <code>EventDTO</code>/<code>SponsorDTO</code>/<code>PartnerDTO</code> through the UI services, so its six private info/result records are gone; <code>SessionStatusDisplay</code> is new; the create/detail pages and the scoring poll tracker were edited (#220/#222/#224).</li>
+          <li><strong>G22 Engagement Module</strong> (194): removed 1, body 5. <code>IBookmarkManagementDomainService</code> is gone; <code>BookmarkManagementDomainService</code> is static (#220).</li>
+          <li><strong>G26 Engagement Live Layer</strong> (85): body 5. The five poll and question query handlers (#220).</li>
+          <li><strong>G23 Identity Module</strong> (107): removed 6, body 7. The email-confirmation UI moved to Common (see G15), <code>IdentitySettings</code> and <code>AuthenticationServiceSettings</code> were removed, and the avatar blob delete runs on the Common base (#221/#222).</li>
+          <li><strong>G24 ADC Host Composition</strong> (17): body 1. <code>DeviceUIModule</code> (#220).</li>
+          <li><strong>G25 Testing &amp; Quality Infrastructure</strong> (2,771): added 60, removed 27, body 184. Tests for all of the above (15 new Common architecture fitness fixtures, 12 Common UI tests); <code>MMCA.ADC.Conference.Shared.Tests</code> fell 18 to 9 with the <code>SessionStatuses</code> move, and 14 rollup counts moved.</li>
+          </ul>
+          </li>
+          <li><strong>Handled mechanically (no re-authoring):</strong> 1,076 citation remaps, 4 more by baseline-text match, 633 section repacks, 33 cross-link rewrites; 174 citations flagged for an author.</li>
+          <li><strong>Authoring pass:</strong> 130 units: 107 driven by the delta (9 overview, 1 rollup, 92 sections, 5 devops) plus 23 parts opened only to repair flagged citations; 59 units carried a citation-repair list. Sections units ran on sonnet from their briefs, the rest on opus. Adversarial spot-check: 6 of 6 CONFIRMED.</li>
+          <li><strong>Outside the type pipeline:</strong> 5 of 5 <code>devops-*</code> chapters refreshed against ADC #222 (<code>dr-drill.yml</code> timeout 30 to 60 minutes, the UI host log in the E2E artifact, the audit-trail DML auditing and per-service cost tags in <code>main.bicep</code>, which also shifted every later <code>main.bicep</code> cite); <code>devops-testing</code> per-project counts reconciled to the inventory.<ul>
+          <li>Coverage gap: unchanged; <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Fixtures/observability-main.bicep</code> remains the logged exception.</li>
+          </ul>
+          </li>
+          <li><strong>CONCEPT-MAPS.md:</strong> unchanged. The one mechanical flag (&quot;four AI packages&quot; against the 22-package total) was a false positive: four is the AI subset, and <code>MMCA.Common/FACTS.md</code> lists exactly those four.</li>
+          <li><strong>Verification:</strong> <code>verify.ps1</code>: <strong>0 missing</strong>, rollup contract <strong>0 failures</strong>, citation integrity <strong>0 failures</strong>, rubric <strong>34/34</strong>. A heading-anchor scan over the assembled chapters found 94 links to an anchor that does not exist; the 46 that pointed at an existing type in the wrong chapter (40 of them <code>RoleNames</code>, which lives in G23, not G08) or at the removed <code>IEventCascadeDeletionDomainService</code> were fixed. The remaining 48 predate this pass and are an open item: links to types removed in earlier sweeps (mostly earlier scoring-pipeline types, <code>ScoreEventSessionsHandler</code>, <code>AnthropicScoringService</code>, <code>SessionScoringProcessor</code>) plus family and generic headings whose slug the scan could not model.</li>
+          <li><strong>Governance events:</strong> none (no new group, no classifier rule). The primer ADR table already matches the 127-record index.</li>
+          </ul>
+          </blockquote>
           <hr>
           <h2 id="2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</h2>
           <h3 id="21-generated--scaffolded-code-not-sectioned-134-files">2.1 Generated / scaffolded code, not sectioned (134 files)</h3>
