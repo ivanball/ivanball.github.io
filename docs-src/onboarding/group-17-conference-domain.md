@@ -72,7 +72,7 @@ handful of `Shared` types are `internal` (the two disabled stubs), so the projec
 `InternalsVisibleTo` to `Conference.API`, which registers them, and to its own test assembly
 (`MMCA.ADC.Conference.Shared.csproj:2-6`).
 
-The [`AssemblyReference`](#assemblyreference)/[`ClassReference`](#classreference) pair in `Domain`
+The [`AssemblyReference`](#assemblyreference-classreference)/[`ClassReference`](#assemblyreference-classreference) pair in `Domain`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/AssemblyReference.cs:5,11`) is the
 conventional per-project anchor every layer in this repo ships: a static holder for the compiled
 `Assembly` and its simple name (`AssemblyReference.cs:7-8`) that reflection-based registration can
@@ -3624,7 +3624,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   additionally feed [`SpeakerConfiguration`](group-19-conference-infrastructure.md#speakerconfiguration),
   [`SpeakerQuestionAnswerConfiguration`](group-19-conference-infrastructure.md#speakerquestionanswerconfiguration)
   (`SpeakerQuestionAnswerConfiguration.cs:25`), and `SpeakerValidationRules`. Covered directly by
-  [`SpeakerInvariantsTests`](group-28-testing-infrastructure.md#speakerinvariantstests).
+  [`SpeakerInvariantsTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: only three of the ten constants have a matching `EnsureXxx` method.
   Email, tag line, profile picture, the three URL fields and the Twitter handle are enforced by the
   application validator and the EF column width, not by a domain guard, so a caller that constructs a
@@ -3962,7 +3962,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   [`PublicSpeakerList`](group-21-conference-ui.md#publicspeakerlist) and
   [`PublicSpeakerDetail`](group-21-conference-ui.md#publicspeakerdetail). Referenced by FK from
   [`EventSpeaker`](#eventspeaker), [`SessionSpeaker`](#sessionspeaker), and Identity's `User`.
-  Unit-tested by [`SpeakerTests`](group-28-testing-infrastructure.md#speakertests).
+  Unit-tested by [`SpeakerTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 
 ### SpeakerCategoryItem
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/SpeakerCategoryItem.cs:14` · Level 7 · class (sealed)
@@ -4020,7 +4020,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   [`SpeakerCategoryItemConfiguration`](group-19-conference-infrastructure.md#speakercategoryitemconfiguration);
   read by [`SpeakerLocalityHelper`](group-18-conference-application.md#speakerlocalityhelper).
   Unit-tested by
-  [`SpeakerCategoryItemTests`](group-28-testing-infrastructure.md#speakercategoryitemtests).
+  [`SpeakerCategoryItemTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 
 ### SpeakerQuestionAnswer
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Speakers` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/SpeakerQuestionAnswer.cs:13` · Level 7 · class (sealed)
@@ -4070,7 +4070,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   to [`SpeakerQuestionAnswerDTO`](#speakerquestionanswerdto); persisted by
   [`SpeakerQuestionAnswerConfiguration`](group-19-conference-infrastructure.md#speakerquestionanswerconfiguration).
   Unit-tested by
-  [`SpeakerQuestionAnswerTests`](group-28-testing-infrastructure.md#speakerquestionanswertests).
+  [`SpeakerQuestionAnswerTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 
 ### Question
 > MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Questions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/Question.cs:14` · Level 7 · class (sealed, aggregate root)
@@ -4611,7 +4611,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   (`:38-43`), its active sponsors (`:47-52`), its active partners (`:60-63`), its active activities
   (`:56-61`), and its active session assets, all `asTracking: true`, before calling `CascadeDelete`
   (`:91`). Unit-tested by
-  [`EventCascadeDeletionDomainServiceTests`](group-28-testing-infrastructure.md#eventcascadedeletiondomainservicetests).
+  [`EventCascadeDeletionDomainServiceTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: the ordering (sessions, then sponsors, then partners, then activities,
   then session assets, then event) is fixed by the method body and is not configurable; nothing in the
   source explains why sessions precede sponsors, partners, activities, and session assets, and since
@@ -4670,7 +4670,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   (`Sponsor.cs:166-168`); the constants additionally feed
   [`SponsorConfiguration`](group-19-conference-infrastructure.md#sponsorconfiguration) and
   `SponsorValidationRules`. Covered directly by
-  [`SponsorInvariantsTests`](group-28-testing-infrastructure.md#sponsorinvariantstests).
+  [`SponsorInvariantsTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: only three of the seven constants have a matching `EnsureXxx` method.
   `Description`, `WebsiteUrl`, `LinkedInUrl` and `TwitterHandle` lengths are enforced by the
   application validator and the EF column width, not by a domain guard, so a caller that constructs a
@@ -4765,7 +4765,7 @@ are the primary references; the business rules themselves are catalogued in ADC'
   [`SponsorList`](group-21-conference-ui.md#sponsorlist),
   [`SponsorDetail`](group-21-conference-ui.md#sponsordetail) and
   [`SponsorCreate`](group-21-conference-ui.md#sponsorcreate). Unit-tested by
-  [`SponsorTests`](group-28-testing-infrastructure.md#sponsortests).
+  [`SponsorTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: the `Event` navigation's doc comment (`:47`) describes it as being there
   "for public visibility filtering", but the public sponsor filter does **not** join through it:
   [`GetPublicSponsorFilterHandler`](group-18-conference-application.md#getpublicsponsorfilterhandler)

@@ -485,8 +485,8 @@
           an opt-in cache bolted onto a database-per-service system. Everything in the bound <code>Cache</code> section is
           fail-open by design<span class="cite"><span> (<code>CacheSettings.cs:10-15</code>)</span></span>: no value there can turn a cache outage or a slow
           populate into an error. The unit tests for these types, including the Redis-backed
-          <a href="group-28-testing-infrastructure.html#distributedcacheserviceredistests"><code>DistributedCacheServiceRedisTests</code></a>
-          and <a href="group-28-testing-infrastructure.html#hybridcacheserviceredistests"><code>HybridCacheServiceRedisTests</code></a>,
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>DistributedCacheServiceRedisTests</code></a>
+          and <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>HybridCacheServiceRedisTests</code></a>,
           are catalogued in <a href="group-28-testing-infrastructure.html">Group 27, Testing and Quality Infrastructure</a>.</p>
           <h3 id="cachekeyprefixoptions">CacheKeyPrefixOptions</h3>
           <blockquote>
@@ -617,7 +617,7 @@
           (<code>CacheSettings.cs:32</code>)</span></span>, which is what both distributed adapters actually read at runtime.
           <a href="#memorycacheservice">MemoryCacheService</a> does <strong>not</strong> route through this type at all; it builds
           <code>MemoryCacheEntryOptions</code> inline. Unit-tested by
-          <a href="group-28-testing-infrastructure.html#cacheoptionstests">CacheOptionsTests</a>.</li>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup">CacheOptionsTests</a>.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>DefaultExpiration</code> has no first-party caller outside <code>Create</code> itself<span class="cite"><span>
           (<code>CacheOptions.cs:41</code>)</span></span> and its test; it is a published convenience on the package surface. And do not
           read the 30 seconds as a universal cache floor: because <a href="#memorycacheservice">MemoryCacheService</a>
@@ -691,8 +691,8 @@
           <a href="#hybridcacheservice">HybridCacheService</a><code>.RemoveByPrefixAsync</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:173-179</code>)</span></span>.
           Exercised against a real Redis by
-          <a href="group-28-testing-infrastructure.html#distributedcacheserviceredistests">DistributedCacheServiceRedisTests</a>
-          and <a href="group-28-testing-infrastructure.html#hybridcacheserviceredistests">HybridCacheServiceRedisTests</a>,
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup">DistributedCacheServiceRedisTests</a>
+          and <a href="group-28-testing-infrastructure.html#per-project-test-rollup">HybridCacheServiceRedisTests</a>,
           which live in a separate <code>MMCA.Common.Infrastructure.Redis.Tests</code> project over Testcontainers rather
           than in the unit loop.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>KeysAsync</code> (SCAN) is O(keyspace) on the Redis side. That is acceptable
@@ -965,7 +965,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:59</code>)</span></span>, and
           <code>AddCommonHybridCache()</code> replaces it<span class="cite"><span> (<code>DependencyInjection.Caching.cs:163-164</code>)</span></span>. The default
           <code>GetOrCreateAsync</code> body is covered by
-          <a href="group-28-testing-infrastructure.html#cacheservicegetorcreatetests">CacheServiceGetOrCreateTests</a>.</li>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup">CacheServiceGetOrCreateTests</a>.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>IncrementAsync</code> is <strong>not atomic</strong> on any shipped implementation. The
           default body is a read-modify-write, and both distributed adapters override it with the same shape
           rather than Redis <code>INCR</code>, for the storage-format reason spelled out in the
@@ -1079,9 +1079,9 @@
           (<code>DependencyInjection.Caching.cs:73</code>)</span></span>; otherwise it falls back to
           <a href="#memorycacheservice">MemoryCacheService</a>. Downstream it is consumed only through the interface.
           Covered by
-          <a href="group-28-testing-infrastructure.html#distributedcacheservicetests">DistributedCacheServiceTests</a> and,
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup">DistributedCacheServiceTests</a> and,
           against a real Redis,
-          <a href="group-28-testing-infrastructure.html#distributedcacheserviceredistests">DistributedCacheServiceRedisTests</a>.</li>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup">DistributedCacheServiceRedisTests</a>.</li>
           <li><strong>Caveats / not-in-source</strong>: all seven deployed service hosts call <code>AddCommonHybridCache()</code> inside a
           Redis-conditional block (for example
           <span class="cite"><span><code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:201-204</code></span></span>,
@@ -1206,11 +1206,11 @@
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94</code>,
           <code>MMCA.Store.Sales.Service/Program.cs:111</code>, <code>MMCA.Store.Identity.Service/Program.cs:100</code>)</span></span>. Everything
           downstream still talks to <a href="#icacheservice">ICacheService</a> and is unaware. Covered by
-          <a href="group-28-testing-infrastructure.html#hybridcacheservicetests">HybridCacheServiceTests</a>, the
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup">HybridCacheServiceTests</a>, the
           registration semantics by
-          <a href="group-28-testing-infrastructure.html#addcommonhybridcachetests">AddCommonHybridCacheTests</a>, and the
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup">AddCommonHybridCacheTests</a>, and the
           storage format against a real Redis by
-          <a href="group-28-testing-infrastructure.html#hybridcacheserviceredistests">HybridCacheServiceRedisTests</a>.</li>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup">HybridCacheServiceRedisTests</a>.</li>
           <li><strong>Caveats / not-in-source</strong>: replica L1 staleness after an invalidation is bounded by the local
           expiration (30 seconds by default, <code>Cache:LocalCacheDuration</code> to change it), not by the eviction,
           because only the evicting process&#39;s L1 is cleared<span class="cite"><span> (<code>HybridCacheService.cs:29-34</code>)</span></span>. That is the
@@ -1318,7 +1318,7 @@
           <a href="group-08-auth.html#passwordresettokenservice">PasswordResetTokenService</a>,
           <a href="group-08-auth.html#softdeletedusercache">SoftDeletedUserCache</a> and
           <a href="group-12-api-hosting-mapping.html#idempotencyfilter">IdempotencyFilter</a>. Unit-tested by
-          <a href="group-28-testing-infrastructure.html#memorycacheservicetests">MemoryCacheServiceTests</a>, which pins the
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup">MemoryCacheServiceTests</a>, which pins the
           concurrency behavior deterministically rather than racing for it: the test takes the key&#39;s own stripe
           first, then asserts that a <code>SetAsync</code> and a <code>RemoveByPrefixAsync</code> both park on it<span class="cite"><span>
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Caching/MemoryCacheServiceTests.cs:190</code>)</span></span>

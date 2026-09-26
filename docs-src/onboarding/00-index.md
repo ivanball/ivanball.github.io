@@ -51,7 +51,7 @@ reference is allowed (functional cohesion can outrank strict progressive disclos
 cross-linked. Thirty-six dependency **cycles** exist (mutually-dependent types, e.g. an aggregate root and
 its child entity with bidirectional EF navigations); each is kept whole within a single group and
 called out where it occurs. They are listed in the
-[dependency manifest](00-dependency-manifest.md#cycles-scc-size--1-36). Three of them are
+[dependency manifest](00-dependency-manifest.md#cycles). Three of them are
 name-collision artifacts rather than real dependencies: the identically-named pairs
 `SelfHttpWarmupTask` (`MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23` and
 `MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23`), `Priority`

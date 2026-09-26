@@ -1642,7 +1642,7 @@
           with every <code>HasMaxLength</code> reading an <code>AddressInvariants</code> constant, <span class="cite"><span><code>CustomerConfiguration.cs:47-73</code></span></span>);
           <a href="group-08-auth.html#registerrequest"><code>RegisterRequest</code></a> carries an optional <code>Address? Address = null</code><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Requests/RegisterRequest.cs:18</code>)</span></span>; the
-          <a href="group-06-validation.html#addressline1rulest"><code>AddressLine1Rules&lt;T&gt;</code></a> family and
+          <a href="group-06-validation.html#addressline1rulest-addressline2rulest-cityrulest-countryrulest"><code>AddressLine1Rules&lt;T&gt;</code></a> family and
           <a href="group-06-validation.html#addressvalidator"><code>AddressValidator</code></a> validate the request-side shape.</li>
           </ul>
           <h3 id="addressinvariants">AddressInvariants</h3>
@@ -1681,7 +1681,7 @@
           <li><strong>Where it&#39;s used</strong>: called from <code>Address.Create</code><span class="cite"><span> (<code>Address.cs:78</code>)</span></span>; every max-length constant is
           read by <code>CustomerConfiguration</code> in Store Identity<span class="cite"><span>
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:47-73</code>)</span></span>
-          and by the <a href="group-06-validation.html#addressline1rulest"><code>AddressLine1Rules&lt;T&gt;</code></a> family in the
+          and by the <a href="group-06-validation.html#addressline1rulest-addressline2rulest-cityrulest-countryrulest"><code>AddressLine1Rules&lt;T&gt;</code></a> family in the
           Application layer.</li>
           </ul>
           <h3 id="emailinvariants">EmailInvariants</h3>
@@ -1980,8 +1980,8 @@
           <a href="group-07-persistence-ef-core.html#auditsavechangesinterceptor"><code>AuditSaveChangesInterceptor</code></a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:104-105</code>)</span></span>
           and covered by
-          <a href="group-28-testing-infrastructure.html#auditablebaseentitytests"><code>AuditableBaseEntityTests</code></a> and
-          <a href="group-28-testing-infrastructure.html#auditablebaseentityadditionaltests"><code>AuditableBaseEntityAdditionalTests</code></a>.</li>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>AuditableBaseEntityTests</code></a> and
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>AuditableBaseEntityAdditionalTests</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: the delete stamps are written only on a <strong>transition</strong> of the flag<span class="cite"><span>
           (<code>AuditSaveChangesInterceptor.cs:98-102</code>)</span></span>, so updating an already-deleted row keeps the stamps of
           the delete that produced it rather than refreshing them.</li>
@@ -2156,9 +2156,9 @@
           which calls <code>RemoveDomainEvents</code> per captured entry<span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:371</code>)</span></span>.
           Covered by
-          <a href="group-28-testing-infrastructure.html#auditableaggregaterootentitytests"><code>AuditableAggregateRootEntityTests</code></a>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>AuditableAggregateRootEntityTests</code></a>
           and
-          <a href="group-28-testing-infrastructure.html#auditableaggregaterootentityadditionaltests"><code>AuditableAggregateRootEntityAdditionalTests</code></a>.</li>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>AuditableAggregateRootEntityAdditionalTests</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: <code>SetItems</code> and the child helpers operate purely on the in-memory
           collection. If an aggregate was loaded without its children included, <code>GetChildOrNotFound</code> returns
           <code>NotFound</code> for a child that exists in the database; nothing in this class detects that case.</li>
@@ -2571,7 +2571,7 @@
           <span class="cite"><span><code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderInvariants.cs:28</code></span></span> and
           <span class="cite"><span><code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductInvariants.cs:76</code></span></span>.
           Exercised directly by
-          <a href="group-28-testing-infrastructure.html#commoninvariantstests"><code>CommonInvariantsTests</code></a>.</p>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>CommonInvariantsTests</code></a>.</p>
           </li>
           <li><p><strong>Caveats / not-in-source</strong>: <code>EnsureTimeZoneIsValid</code> resolves against the <strong>host&#39;s</strong> time zone
           database<span class="cite"><span> (<code>CommonInvariants.cs:268</code>)</span></span>, so an identifier valid on a Windows developer machine and an

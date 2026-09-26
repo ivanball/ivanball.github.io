@@ -370,7 +370,7 @@
           <span class="cite"><span><code>MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:51</code></span></span>, and
           the SignalR publish processor
           <span class="cite"><span><code>MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:45</code></span></span>. Its own behavior is
-          pinned by <a href="group-28-testing-infrastructure.html#bestefforttests"><code>BestEffortTests</code></a><span class="cite"><span>
+          pinned by <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>BestEffortTests</code></a><span class="cite"><span>
           (<code>BestEffortTests.cs:13</code>)</span></span>.</li>
           <li><strong>Caveats / not-in-source</strong>: nothing here retries. A swallowed side effect is gone, not queued, so
           anything that must eventually happen belongs in the outbox
@@ -485,7 +485,7 @@
           (<span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/EventUpcasterStartupValidator.cs:27</code></span></span>
           calls <code>ResolveTerminalType</code> for that side effect), so a broken graph fails the host rather than the
           first message. Behavior is pinned by
-          <a href="group-28-testing-infrastructure.html#eventupcasterregistrytests"><code>EventUpcasterRegistryTests</code></a>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>EventUpcasterRegistryTests</code></a>
           (identity at <span class="cite"><span><code>:88</code></span></span> and <span class="cite"><span><code>:187</code></span></span>, chain walking at <span class="cite"><span><code>:116</code></span></span> and <span class="cite"><span><code>:130</code></span></span>, envelope preservation at <span class="cite"><span><code>:153</code></span></span>,
           and one test per constructor rejection at <span class="cite"><span><code>:199</code></span></span>, <span class="cite"><span><code>:211</code></span></span>, <span class="cite"><span><code>:223</code></span></span>).</li>
           <li><strong>Caveats / not-in-source</strong>: the walk trusts declared types. An upcaster that returns an instance
@@ -799,9 +799,9 @@
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Categories/CategoryEntityQueryService.cs:21</code>,
           <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerEntityQueryService.cs:21</code>)</span></span>.
           Behavior is pinned by
-          <a href="group-28-testing-infrastructure.html#entityqueryservicetests"><code>EntityQueryServiceTests</code></a>,
-          <a href="group-28-testing-infrastructure.html#entityqueryserviceprojectiontests"><code>EntityQueryServiceProjectionTests</code></a>,
-          and <a href="group-28-testing-infrastructure.html#entityqueryserviceresolutiontests"><code>EntityQueryServiceResolutionTests</code></a>.</li>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>EntityQueryServiceTests</code></a>,
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>EntityQueryServiceProjectionTests</code></a>,
+          and <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>EntityQueryServiceResolutionTests</code></a>.</li>
           <li><strong>Caveats / not-in-source</strong>: this class does not clamp the page size it <em>applies</em> (the clamp lives
           in <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a>&#39;s <code>ApplyPaging</code>,
           <span class="cite"><span><code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:274-284</code></span></span>),

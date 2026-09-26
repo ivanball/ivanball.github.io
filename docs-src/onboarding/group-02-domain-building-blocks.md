@@ -1477,7 +1477,7 @@ in it.
   with every `HasMaxLength` reading an `AddressInvariants` constant, `CustomerConfiguration.cs:47-73`);
   [`RegisterRequest`](group-08-auth.md#registerrequest) carries an optional `Address? Address = null`
   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Requests/RegisterRequest.cs:18`); the
-  [`AddressLine1Rules<T>`](group-06-validation.md#addressline1rulest) family and
+  [`AddressLine1Rules<T>`](group-06-validation.md#addressline1rulest-addressline2rulest-cityrulest-countryrulest) family and
   [`AddressValidator`](group-06-validation.md#addressvalidator) validate the request-side shape.
 
 ### AddressInvariants
@@ -1513,7 +1513,7 @@ in it.
 - **Where it's used**: called from `Address.Create` (`Address.cs:78`); every max-length constant is
   read by `CustomerConfiguration` in Store Identity
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Infrastructure/Persistence/EntityConfiguration/CustomerConfiguration.cs:47-73`)
-  and by the [`AddressLine1Rules<T>`](group-06-validation.md#addressline1rulest) family in the
+  and by the [`AddressLine1Rules<T>`](group-06-validation.md#addressline1rulest-addressline2rulest-cityrulest-countryrulest) family in the
   Application layer.
 
 ### EmailInvariants
@@ -1797,8 +1797,8 @@ in it.
   [`AuditSaveChangesInterceptor`](group-07-persistence-ef-core.md#auditsavechangesinterceptor)
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:104-105`)
   and covered by
-  [`AuditableBaseEntityTests`](group-28-testing-infrastructure.md#auditablebaseentitytests) and
-  [`AuditableBaseEntityAdditionalTests`](group-28-testing-infrastructure.md#auditablebaseentityadditionaltests).
+  [`AuditableBaseEntityTests`](group-28-testing-infrastructure.md#per-project-test-rollup) and
+  [`AuditableBaseEntityAdditionalTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: the delete stamps are written only on a **transition** of the flag
   (`AuditSaveChangesInterceptor.cs:98-102`), so updating an already-deleted row keeps the stamps of
   the delete that produced it rather than refreshing them.
@@ -1966,9 +1966,9 @@ in it.
   which calls `RemoveDomainEvents` per captured entry
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:371`).
   Covered by
-  [`AuditableAggregateRootEntityTests`](group-28-testing-infrastructure.md#auditableaggregaterootentitytests)
+  [`AuditableAggregateRootEntityTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
   and
-  [`AuditableAggregateRootEntityAdditionalTests`](group-28-testing-infrastructure.md#auditableaggregaterootentityadditionaltests).
+  [`AuditableAggregateRootEntityAdditionalTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: `SetItems` and the child helpers operate purely on the in-memory
   collection. If an aggregate was loaded without its children included, `GetChildOrNotFound` returns
   `NotFound` for a child that exists in the database; nothing in this class detects that case.
@@ -2262,7 +2262,7 @@ in it.
   `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderInvariants.cs:28` and
   `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductInvariants.cs:76`.
   Exercised directly by
-  [`CommonInvariantsTests`](group-28-testing-infrastructure.md#commoninvariantstests).
+  [`CommonInvariantsTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: `EnsureTimeZoneIsValid` resolves against the **host's** time zone
   database (`CommonInvariants.cs:268`), so an identifier valid on a Windows developer machine and an
   identifier valid on a Linux CI runner are not guaranteed to be the same set. Nothing in this file

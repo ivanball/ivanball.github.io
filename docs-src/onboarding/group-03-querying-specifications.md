@@ -256,7 +256,7 @@ The fourth co-located type is [`EventUpcasterRegistry`](#eventupcasterregistry) 
   `MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:51`, and
   the SignalR publish processor
   `MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:45`. Its own behavior is
-  pinned by [`BestEffortTests`](group-28-testing-infrastructure.md#bestefforttests)
+  pinned by [`BestEffortTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
   (`BestEffortTests.cs:13`).
 - **Caveats / not-in-source**: nothing here retries. A swallowed side effect is gone, not queued, so
   anything that must eventually happen belongs in the outbox
@@ -369,7 +369,7 @@ The fourth co-located type is [`EventUpcasterRegistry`](#eventupcasterregistry) 
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/Consumers/EventUpcasterStartupValidator.cs:27`
   calls `ResolveTerminalType` for that side effect), so a broken graph fails the host rather than the
   first message. Behavior is pinned by
-  [`EventUpcasterRegistryTests`](group-28-testing-infrastructure.md#eventupcasterregistrytests)
+  [`EventUpcasterRegistryTests`](group-28-testing-infrastructure.md#per-project-test-rollup)
   (identity at `:88` and `:187`, chain walking at `:116` and `:130`, envelope preservation at `:153`,
   and one test per constructor rejection at `:199`, `:211`, `:223`).
 - **Caveats / not-in-source**: the walk trusts declared types. An upcaster that returns an instance
@@ -673,9 +673,9 @@ The fourth co-located type is [`EventUpcasterRegistry`](#eventupcasterregistry) 
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Categories/CategoryEntityQueryService.cs:21`,
   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/SpeakerEntityQueryService.cs:21`).
   Behavior is pinned by
-  [`EntityQueryServiceTests`](group-28-testing-infrastructure.md#entityqueryservicetests),
-  [`EntityQueryServiceProjectionTests`](group-28-testing-infrastructure.md#entityqueryserviceprojectiontests),
-  and [`EntityQueryServiceResolutionTests`](group-28-testing-infrastructure.md#entityqueryserviceresolutiontests).
+  [`EntityQueryServiceTests`](group-28-testing-infrastructure.md#per-project-test-rollup),
+  [`EntityQueryServiceProjectionTests`](group-28-testing-infrastructure.md#per-project-test-rollup),
+  and [`EntityQueryServiceResolutionTests`](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: this class does not clamp the page size it *applies* (the clamp lives
   in [`EntityQueryPipeline`](#entityquerypipeline)'s `ApplyPaging`,
   `MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:274-284`),

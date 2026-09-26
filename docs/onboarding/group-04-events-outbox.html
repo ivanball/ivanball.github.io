@@ -2115,10 +2115,10 @@
           whichever caller dispatched the event (the save-changes interceptor after <code>SaveChangesAsync</code>,
           <a href="#inprocesseventbus"><code>InProcessEventBus</code></a> or <a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a>, or the
           background <a href="#outboxprocessor"><code>OutboxProcessor</code></a>). The only subclass in the workspace today is
-          <a href="group-28-testing-infrastructure.html#testsafedomaineventhandler"><code>TestSafeDomainEventHandler</code></a><span class="cite"><span>
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>TestSafeDomainEventHandler</code></a><span class="cite"><span>
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DomainEvents/SafeDomainEventHandlerTests.cs:124</code>)</span></span>,
           driven by
-          <a href="group-28-testing-infrastructure.html#safedomaineventhandlertests"><code>SafeDomainEventHandlerTests</code></a>,
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>SafeDomainEventHandlerTests</code></a>,
           which pin the three behaviours: log <strong>and</strong> propagate, the log lands before the caller sees the
           exception, and <code>OperationCanceledException</code> passes through unlogged. The cross-module sibling for
           integration events is
@@ -2220,7 +2220,7 @@
           <code>UserDeletedPointsHandler</code>), and Store&#39;s <code>ProductVariantAddedHandler</code><span class="cite"><span>
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/DomainEventHandlers/ProductVariantAddedHandler.cs:33</code>)</span></span>.
           Its behaviour is pinned by
-          <a href="group-28-testing-infrastructure.html#scopedintegrationeventhandlerbasetests"><code>ScopedIntegrationEventHandlerBaseTests</code></a>.
+          <a href="group-28-testing-infrastructure.html#per-project-test-rollup"><code>ScopedIntegrationEventHandlerBaseTests</code></a>.
           At runtime the subclasses are reached either through
           <a href="#domaineventdispatcher"><code>DomainEventDispatcher</code></a> in monolith mode or through
           <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a> in broker mode.</li>

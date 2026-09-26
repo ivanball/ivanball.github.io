@@ -231,10 +231,10 @@
           that client fixes its model at construction, the per-call model pin one layer out is what keeps a
           prompt contract&#39;s model meaningful on both adapters<span class="cite"><span> (<code>:28-31</code>)</span></span>.</p>
           <p>Each adapter registers itself through its own <code>extension(IServiceCollection)</code> block:
-          <a href="#anthropicaiservicecollectionextensions">AnthropicAiServiceCollectionExtensions</a><span class="cite"><span>
+          <a href="#anthropicaiservicecollectionextensions-openaiservicecollectionextensions">AnthropicAiServiceCollectionExtensions</a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI.Anthropic/DependencyInjection.cs:17</code>)</span></span> exposes
           <code>AddAnthropicAiProvider()</code><span class="cite"><span> (<code>:26</code>)</span></span> and
-          <a href="#openaiservicecollectionextensions">OpenAiServiceCollectionExtensions</a><span class="cite"><span>
+          <a href="#anthropicaiservicecollectionextensions-openaiservicecollectionextensions">OpenAiServiceCollectionExtensions</a><span class="cite"><span>
           (<code>MMCA.Common/Source/Core/MMCA.Common.AI.OpenAI/DependencyInjection.cs:17</code>)</span></span> exposes
           <code>AddOpenAiProvider()</code><span class="cite"><span> (<code>:26</code>)</span></span>. Both use <code>TryAddEnumerable</code> (<span class="cite"><span><code>:30</code></span></span> in each file), so registration is
           additive and idempotent and a host can register several providers and pick one per environment in
@@ -1648,7 +1648,7 @@
           first call. The model and output ceiling passed as SDK defaults are not the last word: <code>BoundedChatClient</code>
           still pins and clamps per call<span class="cite"><span> (<code>AnthropicAiProviderFactory.cs:141-143</code>)</span></span>, because a default is a
           suggestion and a bound is not. Recorded in <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener">ADR-120</a>.</li>
-          <li><strong>Where it&#39;s used</strong>: registered by <a href="#anthropicaiservicecollectionextensions"><code>AnthropicAiServiceCollectionExtensions</code></a>.<code>AddAnthropicAiProvider()</code>; exercised by
+          <li><strong>Where it&#39;s used</strong>: registered by <a href="#anthropicaiservicecollectionextensions-openaiservicecollectionextensions"><code>AnthropicAiServiceCollectionExtensions</code></a>.<code>AddAnthropicAiProvider()</code>; exercised by
           <code>MMCA.Common/Tests/Core/MMCA.Common.AI.Tests/Providers/AdapterFactoryTests.cs</code>.</li>
           </ul>
           <h3 id="openaiproviderfactory">OpenAiProviderFactory</h3>
@@ -1678,7 +1678,7 @@
           same way it is on adapters (Anthropic&#39;s) that honor a per-request override. The eager
           <code>InvalidOperationException</code> on a missing model or key fails at first <code>Create</code> call rather than deeper
           inside the SDK. Recorded in <a href="https://ivanball.github.io/docs/adr/120-governed-chat-client-boundary.html" target="_blank" rel="noopener">ADR-120</a>.</li>
-          <li><strong>Where it&#39;s used</strong>: registered by <a href="#openaiservicecollectionextensions"><code>OpenAiServiceCollectionExtensions</code></a>.<code>AddOpenAiProvider()</code>; exercised by
+          <li><strong>Where it&#39;s used</strong>: registered by <a href="#anthropicaiservicecollectionextensions-openaiservicecollectionextensions"><code>OpenAiServiceCollectionExtensions</code></a>.<code>AddOpenAiProvider()</code>; exercised by
           <code>MMCA.Common/Tests/Core/MMCA.Common.AI.Tests/Providers/AdapterFactoryTests.cs</code>.</li>
           </ul>
           <h3 id="anthropicaiservicecollectionextensions-openaiservicecollectionextensions">AnthropicAiServiceCollectionExtensions, OpenAiServiceCollectionExtensions</h3>

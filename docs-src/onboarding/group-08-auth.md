@@ -606,7 +606,7 @@ and writes the credential through the aggregate's `ChangePassword`
 *because* of a lockout is not left locked out (`ResetPasswordHandlerBase.cs:110`).
 [`ResetPasswordRequestValidator`](#resetpasswordrequestvalidator)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ResetPasswordRequestValidator.cs:12`)
-includes the same [`StrongPasswordRules<T>`](group-06-validation.md#strongpasswordrulest) that
+includes the same [`StrongPasswordRules<T>`](group-06-validation.md#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) that
 registration and change-password use (`ResetPasswordRequestValidator.cs:23`), so a reset is not a way
 around the complexity policy. The endpoints are
 [`PasswordResetAuthControllerBase<TForgotPasswordCommand, TResetPasswordCommand>`](group-12-api-hosting-mapping.md#passwordresetauthcontrollerbasetforgotpasswordcommand-tresetpasswordcommand)
@@ -2676,7 +2676,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Concept introduced: two-factor state read through a capability interface, not the concrete `User`.** `[Rubric §1, SOLID]` assesses interface segregation: a shared handler that needs to know whether TOTP is enrolled never needs the rest of the app's `User` shape, so it depends on this narrow contract instead. `[Rubric §11, Security]` assesses the shape of the stored secret itself: `TwoFactorSecret` (`:35`) is nullable, meaning "no enrollment started" is representable without a sentinel value, and `TwoFactorRecoveryCodeHashes` (`:42`) holds hashes, not the plaintext codes a user was shown once at generation time.
 - **Walkthrough**: `bool IsTwoFactorEnabled` (`:29`) gates whether a code is demanded at sign-in. `string? TwoFactorSecret` (`:35`) is the Base32 shared secret, `null` until enrollment begins. `IReadOnlyCollection<string> TwoFactorRecoveryCodeHashes` (`:42`) is empty both before enrollment and after every recovery code has been spent, which the doc comment (`:38-39`) states is a state the user recovers from by regenerating rather than an error condition.
 - **Why it's built this way**: keeping this state on its own interface, separate from [IAuthUser](#iauthuser) and [IPasswordChangeableUser](#ipasswordchangeableuser), lets an app opt into two-factor without every existing `User` aggregate needing new members it never populates. See [ADR-116](https://ivanball.github.io/docs/adr/116-identity-completions-opt-in.html) for the opt-in model this interface belongs to.
-- **Where it's used**: the generic constraint on [BeginTwoFactorEnrollmentHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#begintwofactorenrollmenthandlerbasetuser-tcommand) (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/TwoFactor/BeginTwoFactorEnrollmentHandlerBase.cs`), and it is the state [ITwoFactorStore](#itwofactorstore) reads and writes against the concrete `User`.
+- **Where it's used**: the generic constraint on [BeginTwoFactorEnrollmentHandlerBase<TCommand>](group-14-module-system-composition.md#begintwofactorenrollmenthandlerbasetcommand) (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/TwoFactor/BeginTwoFactorEnrollmentHandlerBase.cs`), and it is the state [ITwoFactorStore](#itwofactorstore) reads and writes against the concrete `User`.
 
 ### IAuthUser
 > MMCA.Common.Domain · `MMCA.Common.Domain.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:16` · Level 0 · interface
@@ -2726,7 +2726,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Walkthrough**
   - **Width and reason constants** (`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/RefreshSession.cs:33-55`): `TokenHashLength = 64` (the width of a hex-encoded SHA-256 digest, `:34`), `IpAddressMaxLength = 45` (sized to fit an IPv4-mapped IPv6 literal, `:37`), `UserAgentMaxLength = 512` (`:40`), `ReasonRevokedMaxLength = 64` (`:43`), and the four revocation reasons `ReasonRotated` (`:46`), `ReasonSignedOut` (`:49`), `ReasonReuseDetected` (`:52`), and `ReasonSessionCap` (`:55`). Publishing the widths as `public const` on the Domain type is what lets the EF configuration derive every column width from the same numbers (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionModelBuilderExtensions.cs:47`, `:52`, `:56-58`) rather than repeating magic numbers in a mapping file.
   - **State** (`:57-92`): `Id` defaults to a fresh `Guid` (`:58`); `UserId`, `TokenHash`, `CreatedAt` and `ExpiresAt` are `required` and `init`-only (`:61-70`), so a session cannot be constructed without them and cannot be rewritten afterwards. The three mutable members carry `private set` and change only through `Revoke`: `RevokedAt` (`:73`), `ReplacedByTokenHash` (`:79`), `ReasonRevoked` (`:82`). `IpAddress` (`:89`) and `UserAgent` (`:92`) are optional `init`-only capture. The comment on `IpAddress` (`:84-88`) is a good example of documenting what a field is **not** for: it identifies a session in a "your devices" list and gives an audit trail for a revocation, and it is never part of a validation decision, so a mobile client changing networks is not signed out.
-  - **Derived state**: `IsRevoked => RevokedAt is not null` (`:95`) and `IsActiveAt(DateTime utcNow) => !IsRevoked && ExpiresAt > utcNow` (`:99`). Passing the instant in rather than reading a clock keeps the type free of ambient time, which is what makes it directly unit-testable (see [RefreshSessionTests](group-28-testing-infrastructure.md#refreshsessiontests)).
+  - **Derived state**: `IsRevoked => RevokedAt is not null` (`:95`) and `IsActiveAt(DateTime utcNow) => !IsRevoked && ExpiresAt > utcNow` (`:99`). Passing the instant in rather than reading a clock keeps the type free of ambient time, which is what makes it directly unit-testable (see [RefreshSessionTests](group-28-testing-infrastructure.md#per-project-test-rollup)).
   - **`Create(...)`** (`:112-145`), the factory returning `Result<RefreshSession>` in the framework's standard shape (see the primer on factory methods and the [Result](group-01-result-error-handling.md#result) pattern). Two guards: a blank token fails with `RefreshSession.TokenRequired` (`:120-126`), and an expiry at or before creation fails with `RefreshSession.ExpiryInPast` (`:128-134`), both `Error.Validation`. On success it hashes the token on the way in (`:139`), so **the plaintext never reaches a property**, and truncates the two optional capture fields to their column widths (`:142-143`). Truncating in the factory rather than trusting the caller is what keeps an oversized `User-Agent` header from turning a login into a database error.
   - **`HashToken(string refreshToken)`** (`:160-164`): `Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken)))`, guarded by `ArgumentException.ThrowIfNullOrWhiteSpace` (`:162`). The `<remarks>` (`:151-157`) is the one piece of this file to read twice: the encoding is **part of the contract, not an implementation detail**, because a consumer's data migration has to reproduce it exactly to carry existing tokens over. It even gives the T-SQL equivalent, `CONVERT(char(64), HASHBYTES('SHA2_256', CONVERT(varchar(max), Token)), 2)`, and explains both halves of why it matches: style 2 emits upper-case hex with no `0x` prefix, and the `varchar` conversion is what makes the hashed bytes UTF-8 rather than SQL Server's default UTF-16. `[Rubric §8, Data Architecture]` and `[Rubric §34, Architecture Governance & Documentation]` both apply here: a hash format that a migration must reproduce is a published contract, and it is documented as one.
   - **`Revoke(DateTime revokedAt, string reason, string? replacedByTokenHash = null)`** (`:174-189`): the only mutator. It is **idempotent by refusal** (`:166-169`), returning `Error.Invariant("RefreshSession.AlreadyRevoked", ...)` when the session is already revoked (`:176-182`) rather than silently overwriting, so the first reason and instant recorded are the ones kept. That matters for forensics: a session revoked by reuse detection must not have that reason overwritten by a later sign-out. On success it stamps the instant, the truncated reason, and the successor hash (`:184-186`).
@@ -3197,7 +3197,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   - `RecordFailedAttemptAsync` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:121-142`): computes `attempts = entry.FailedAttempts + 1` and the remaining lifetime from `ExpiresAtUnixSeconds` (`:126-127`). At `MaxValidationAttempts`, or once the remaining lifetime is non-positive, it deletes the record (`:129-133`). Otherwise it rewrites the entry with `entry with { FailedAttempts = attempts }` and a TTL of the **remaining** seconds, not a fresh lifetime (`:135-141`), because a wrong guess must not be able to extend how long the token stays redeemable.
   - `InvalidToken()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:144-148`) is the single failure factory: unknown, expired, mismatched and attempt-capped all collapse to one `Auth.InvalidResetToken` error with one message. That uniformity is deliberate: distinct errors would make the endpoint an oracle for which addresses have an outstanding reset.
 - **Why it's built this way**: [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html) records the decision. It extends [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) (the cache-backed protection idiom reused here) and sits beside [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html), which decided how a password is stored but not how a user who has lost one gets a new one. Keeping the token out of the database is what makes the feature additive: no migration, no new table, and nothing to reap.
-- **Where it's used**: registered `services.TryAddScoped<IPasswordResetTokenService, PasswordResetTokenService>()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:158`), directly after the `PasswordResetSettings` binding (`:137-140`). [ForgotPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand) calls `IssueAsync` and emails the resulting link (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:73`); [ResetPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand) calls `ValidateAndConsumeAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:76-78`) **before** the save, because leaving the token live until the write succeeds would open a replay window, and a token burned by a later invariant failure only costs the user one more reset request (`:58-60`). It is unit-tested by [PasswordResetTokenServiceTests](group-28-testing-infrastructure.md#passwordresettokenservicetests).
+- **Where it's used**: registered `services.TryAddScoped<IPasswordResetTokenService, PasswordResetTokenService>()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:158`), directly after the `PasswordResetSettings` binding (`:137-140`). [ForgotPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#forgotpasswordhandlerbasetuser-tcommand) calls `IssueAsync` and emails the resulting link (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:73`); [ResetPasswordHandlerBase<TUser, TCommand>](group-14-module-system-composition.md#resetpasswordhandlerbasetuser-tcommand) calls `ValidateAndConsumeAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:76-78`) **before** the save, because leaving the token live until the write succeeds would open a replay window, and a token burned by a later invariant failure only costs the user one more reset request (`:58-60`). It is unit-tested by [PasswordResetTokenServiceTests](group-28-testing-infrastructure.md#per-project-test-rollup).
 - **Caveats / not-in-source**: the per-email request throttle inherits [LoginProtectionService](#loginprotectionservice)'s non-atomic increment, and the source says so where it matters (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:53-54`): concurrent requests can undercount, which loosens the throttle but never tightens it. The failed-attempt rewrite is a read-modify-write too, so a burst of simultaneous wrong guesses can lose increments against the attempt cap; sequential guessing still trips it.
 
 ### AdministrationPermissions
@@ -3774,7 +3774,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   and its Store twin); validated by ADC's
   `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/ChangePasswordRequestValidator.cs:11`,
   which requires a non-empty `CurrentPassword` (`:15-16`) and includes the shared
-  [StrongPasswordRules<T>](group-06-validation.md#strongpasswordrulest) for `NewPassword` (`:18`).
+  [StrongPasswordRules<T>](group-06-validation.md#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) for `NewPassword` (`:18`).
 - **Caveats / not-in-source**: nothing in this type prevents the password strings from reaching a log.
   That is an operational convention (PII masking plus the "never log the body" habit), not a
   compile-time or runtime guarantee.
@@ -3852,7 +3852,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   `ConfirmEmailCommand`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ConfirmEmail/ConfirmEmailCommand.cs`)
   by the shared
-  [ConfirmEmailHandlerBase](group-14-module-system-composition.md#confirmemailhandlerbase); exposed by
+  [ConfirmEmailHandlerBase](group-14-module-system-composition.md#confirmemailhandlerbasetuser-tcommand); exposed by
   ADC's `EmailConfirmationController`'s anonymous, rate-limited, idempotent `POST confirm-email`
   (`EmailConfirmationController.cs:72-82`), which answers 204 on success; posted by ADC's
   `EmailConfirmationService` UI client.
@@ -4036,7 +4036,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   comment repeats the never-logged rule for `NewPassword` (`ResetPasswordRequest.cs:8`), the same
   convention [LoginRequest](#loginrequest) states.
 - **Why it's built this way**: the new password goes through the *same*
-  [StrongPasswordRules<T>](group-06-validation.md#strongpasswordrulest) that registration and
+  [StrongPasswordRules<T>](group-06-validation.md#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) that registration and
   change-password use, so a reset cannot become a way around the complexity policy
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ResetPasswordRequestValidator.cs:7-11,16-23`).
   Reusing one rule set rather than restating it per endpoint is the reason the policy cannot drift.
@@ -4081,7 +4081,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/EmailConfirmationController.cs:46-61`);
   carried by `SendEmailConfirmationCommand`
   (`EmailConfirmationController.cs:58`), handled by the shared
-  [SendEmailConfirmationHandlerBase](group-14-module-system-composition.md#sendemailconfirmationhandlerbase).
+  [SendEmailConfirmationHandlerBase](group-14-module-system-composition.md#sendemailconfirmationhandlerbasetuser-tcommand).
   ADC's own `AuthController.RegisterAsync` schedules the send as part of registration rather than
   calling this endpoint directly.
 
@@ -5623,8 +5623,8 @@ live in later groups; this chapter is the engine those endpoints call into.
   comment is explicit that the minimalism is a security property, not laziness. Credential verification
   "happens in the authentication service to avoid leaking information about which field was wrong"
   (`LoginRequestValidator.cs:7-9`). Notice what is *absent*: no
-  [`PasswordRules<T>`](group-06-validation.md#passwordrulest) or
-  [`StrongPasswordRules<T>`](group-06-validation.md#strongpasswordrulest) include. Applying the
+  [`PasswordRules<T>`](group-06-validation.md#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) or
+  [`StrongPasswordRules<T>`](group-06-validation.md#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) include. Applying the
   complexity policy at login would tell an attacker that a candidate password could not possibly be the
   stored one, and would lock out any account whose password predates the current policy. Complexity
   belongs on the *writing* paths only, which is why
@@ -5753,7 +5753,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   `Email`, presence on `Token`, and the shared strong-password policy on `NewPassword`
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/ResetPasswordRequestValidator.cs:16-23`).
 - **Depends on**: [`ResetPasswordRequest`](#resetpasswordrequest);
-  [`StrongPasswordRules<T>`](group-06-validation.md#strongpasswordrulest); `FluentValidation`'s
+  [`StrongPasswordRules<T>`](group-06-validation.md#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest); `FluentValidation`'s
   `AbstractValidator<T>` and its `Include` composition.
 - **Concept introduced, composing a rule set with `Include`.** `[Rubric §11, Security]` assesses whether
   a policy holds on every path that can change the guarded value, and `[Rubric §1, SOLID]` the
@@ -5776,7 +5776,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   a lookup, not a shape. Then
   `Include(new StrongPasswordRules<ResetPasswordRequest>(x => x.NewPassword))` (`:23`) grafts the seven
   policy rules onto the `NewPassword` field. Note the contrast with the weaker sibling
-  [`PasswordRules<T>`](group-06-validation.md#passwordrulest) (`CommonValidationRules.cs:174-181`), which
+  [`PasswordRules<T>`](group-06-validation.md#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-requiredidrulest-tid-optionalpositiveidrulest-tid-passwordrulest-strongpasswordrulest) (`CommonValidationRules.cs:174-181`), which
   enforces length only; reset deliberately takes the strong one.
 - **Why it's built this way**: the reset flow is
   [ADR-091](https://ivanball.github.io/docs/adr/091-cache-backed-password-reset.html), and the hashing
