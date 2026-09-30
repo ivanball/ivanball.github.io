@@ -251,7 +251,10 @@
           current <code>auth-ip</code> surface: the gRPC exemption reads endpoint metadata rather than a content type,
           anonymous hub traffic is metered before the anonymous exemption applies, the second global
           partition key is the subject claim, and <code>auth-ip</code> now covers password reset and email confirmation
-          alongside login and register).</p>
+          alongside login and register).
+          Revised 2026-09-30 (the global and <code>UserPolicy</code> partitions key on the subject claim first and fall
+          back to identity name, because the name claim carries the non-unique full name, so two users with the
+          same name shared one bucket; MMCA.Common v1.213.0).</p>
           <h2 id="context">Context</h2>
           <p>Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
           Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -282,7 +285,7 @@
           <code>AnonymousHubPermitLimit</code> first, and only every other anonymous request falls through to the
           exemption (see the Revision (2026-09-07)).</li>
           <li><strong>Caps each authenticated caller</strong> to <code>globalPermitLimit</code> (default 300) requests per fixed
-          one-minute window, partitioned by identity name, then the subject (<code>sub</code>) claim, then remote IP,
+          one-minute window, partitioned by the subject (<code>sub</code>) claim, then identity name, then remote IP,
           rejecting overage with <code>429 Too Many Requests</code>.</li>
           </ul>
           </li>
