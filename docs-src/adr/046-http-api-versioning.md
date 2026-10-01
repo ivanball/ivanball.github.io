@@ -16,6 +16,9 @@ than a single `v1` document).
 Revised 2026-09-22 (MMCA.ADC commits a build-time OpenAPI document per service host, gated in CI; see the Revision below).
 Revised 2026-09-25 (MMCA.Store adopts the same committed-document gate, so both consumers carry it;
 re-anchored the host call-site citations; see the Revision (2026-09-25) below).
+Revised 2026-10-01 for v1.217.0 (the host registers the single `v1` OpenAPI document itself and
+`AddCommonOpenApi` only configures it; per-version documents are gone; see the Revision (2026-10-01,
+v1.217.0) below).
 
 ## Context
 The framework's REST surface is served by controllers hosted in extracted service processes behind a
@@ -55,15 +58,17 @@ proves two live versions coexist.
   (`WebApplicationBuilderExtensions.cs:50`) and substituting the version into the URL where a host
   routes one (`SubstituteApiVersionInUrl = true`, `WebApplicationBuilderExtensions.cs:51`). The
   explorer's default-version behavior is inherited rather than configured, exactly as the comment
-  above it records (`WebApplicationBuilderExtensions.cs:39`-`WebApplicationBuilderExtensions.cs:41`). That
-  group format names the OpenAPI documents `AddCommonOpenApi` registers through the versioning
-  builder (`WebApplicationBuilderExtensions.cs:91`, `WebApplicationBuilderExtensions.cs:93`), one
-  per discovered API version (`WebApplicationBuilderExtensions.cs:82`-`WebApplicationBuilderExtensions.cs:84`,
-  so `1.0` is the `v1` document). `MapCommonOpenApi` serves them at `/openapi/{documentName}.json`
-  outside Production only
-  (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/OpenApiEndpointExtensions.cs:42`, guarded at
-  `OpenApiEndpointExtensions.cs:44`, mapped with `.WithDocumentPerVersion()` and `.AllowAnonymous()` at
-  `OpenApiEndpointExtensions.cs:46`).
+  above it records (`WebApplicationBuilderExtensions.cs:39`-`WebApplicationBuilderExtensions.cs:41`). The
+  explorer feeds the controllers' API descriptions to the OpenAPI generator; it does not name the
+  documents. Since v1.217.0 each host registers the single `v1` document itself with ASP.NET Core's
+  `services.AddOpenApi()`, and `AddCommonOpenApi`
+  (`WebApplicationBuilderExtensions.cs:95`, contract in the doc comment at `:81`-`:93`) registers no
+  document: it configures every document the host registered. `MapCommonOpenApi` serves it at
+  `/openapi/v1.json` outside Production only
+  (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/OpenApiEndpointExtensions.cs:60`, guarded at
+  `OpenApiEndpointExtensions.cs:62`, mapped `.AllowAnonymous()` at `OpenApiEndpointExtensions.cs:74`),
+  and fails at startup when the host registered no `v1` document (`OpenApiEndpointExtensions.cs:64`-`:72`).
+  Why the host must keep the call: see the Revision (2026-10-01, v1.217.0).
 - **A shipped exemplar proves two versions coexist.** `ServiceInfoControllerBase`
   (`Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:30`) serves the same
   `/ServiceInfo` route under two versions selected by the header: `GetV1` is mapped to `1.0`
@@ -108,6 +113,8 @@ proves two live versions coexist.
   unbound rather than the versioning that produces the null: an unbound `{tenant}` or `{region}` fails
   identically. It goes inert once the upstream null check lands. The header-based reader above means no
   current host was affected either way, which is precisely why the failure could ship unnoticed.
+  Since v1.217.0 MMCA.Common no longer references `Asp.Versioning.OpenApi`; the guard stays because it
+  costs nothing and still protects any other consumer of the API descriptions from the same null.
 - **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
   in their startup: ADC's Conference
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:218`) and Identity
@@ -149,15 +156,16 @@ resource has yet needed to evolve its shape.
 - **Header versioning is less discoverable than a URL segment.** A version chosen by header does not
   show up in a copied URL or a browser address bar, so the version in play is only visible to a
   caller that reads request/response headers.
-- **The OpenAPI documents are dev/CI only, and only `v1` is pinned.** `MapCommonOpenApi` is a no-op
-  in Production (`OpenApiEndpointExtensions.cs:44`), so the machine-readable contract is an internal
-  dev/CI artifact rather than a public production surface. The route resolves one document per
-  discovered API version (`.WithDocumentPerVersion()`, `OpenApiEndpointExtensions.cs:46`), but
-  nothing asserts the generated document set: the framework baseline fetches only `/openapi/v1.json`
-  (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/OpenApi/OpenApiBaselineTests.cs:54`), as does
-  each consumer's contract test through the shared default
-  (`Source/Hosting/MMCA.Common.Testing/Conformance/OpenApiContractTestsBase.cs:31`), so what a host
-  declaring `2.0` publishes under `v2` is generated by convention and left unasserted.
+- **The OpenAPI document is dev/CI only, and there is one: `v1`.** `MapCommonOpenApi` is a no-op
+  in Production (`OpenApiEndpointExtensions.cs:62`), so the machine-readable contract is an internal
+  dev/CI artifact rather than a public production surface. Since v1.217.0 each host registers only the
+  `v1` document, so a version a controller adds beyond `1.0` (today only the `2.0` `ServiceInfo`
+  action) is served and exercised by the fitness contract above but appears in no generated document.
+  The framework baseline and each consumer's contract test fetch `/openapi/v1.json`
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/OpenApi/OpenApiBaselineTests.cs`,
+  `Source/Hosting/MMCA.Common.Testing/Conformance/OpenApiContractTestsBase.cs:31`). A host that later
+  needs a second documented version registers a second document itself; the framework no longer
+  generates one per version.
 
 ## Revision (2026-09-22): the consumer contract is a committed artifact
 
@@ -219,6 +227,37 @@ framework helper `InitializeDatabaseUnlessDesignTimeAsync`
 (`Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:144`, check at
 `:151`), which each service `Program.cs` calls, and ADC's `OpenAPI documents are current` step
 (`MMCA.ADC/.github/workflows/deploy.yml:305`) also checks the committed count (`:314`).
+
+## Revision (2026-10-01, v1.217.0): the host registers the OpenAPI document
+
+**What changed.** `AddCommonOpenApi` used to register the documents itself through the versioning
+builder (`AddApiVersioning().AddOpenApi()`, one document per discovered API version), and
+`MapCommonOpenApi` mapped them with `.WithDocumentPerVersion()`. Both ADC and Store therefore kept
+their own `services.AddOpenApi()` plus a hand-written `MapOpenApi().AllowAnonymous()` instead of the
+framework pair. Switching a host to the framework pair changed its committed document: across ADC's four
+hosts 134 operation summaries disappeared, `info.title` became `GetDocument.Insider | v1`, `info.version` went
+from `1.0.0` to `1.0`, every `api-version` header gained `enum: ["1.0"]`, and an extra `v2` document
+appeared.
+
+**Why.** The .NET 10 OpenAPI XML-comment source generator attaches a project's controller summaries by
+intercepting the `AddOpenApi` call sites of the project being compiled. A registration made inside the
+framework assembly is never intercepted, so the host's summaries were lost. The versioning
+registration's own transformers produced the title, version, enum and extra-document differences.
+
+**Decision now (MMCA.Common #465).** The host keeps the `services.AddOpenApi()` call in its own
+project; `AddCommonOpenApi` (`WebApplicationBuilderExtensions.cs:95`) only configures the registered
+documents (the ADR-115 strongly-typed-identifier transformers, `:102`-`:106`, and the parameter
+backfill guard); `MapCommonOpenApi` maps the plain `v1` document and throws when none was registered.
+`Asp.Versioning.OpenApi` is no longer a dependency. Its analyzer rule AV0030 still fires on the plain
+mapping (the rule ships with the versioning packages Common keeps) and is suppressed at that one
+declaration as a false positive (`OpenApiEndpointExtensions.cs:56`-`:59`). Every ADC and Store service
+host now registers as `services.AddOpenApi(); services.AddCommonOpenApi();` and maps with
+`app.MapCommonOpenApi()` (ADC Conference `Program.cs:317`, `:318`, `:451`; Engagement `:165`, `:166`,
+`:327`; Identity `:177`, `:178`, `:352`; Notification `:148`, `:149`, `:269`; Store Catalog `:193`,
+`:194`, `:322`; Sales `:167`, `:168`, `:306`; Identity `:154`, `:155`, `:306`; adopted in ADC #234 and
+Store #179). The swap left all seven committed documents byte-identical in content, which is the
+acceptance test the change was held to. `AddCommonOpenApiHostRegistrationTests` pins the contract in
+the framework.
 
 ## Related
 ADR-010 (integration-event schema versioning: the asynchronous, `SchemaVersion`-carried,
