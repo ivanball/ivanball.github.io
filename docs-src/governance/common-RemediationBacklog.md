@@ -64,6 +64,7 @@ Derived from the [scorecard](common-ArchitectureScorecard.md): Maturity **96.6%*
 
 ### [ ] #23 · Front-End Performance
 - [ ] **Initial-load and measurement lever** (effort M): there is no CI payload/bundle budget and no lazy-loading or code-splitting anywhere in `Source/` (zero `LazyAssemblyLoader`/`OnNavigateAsync` matches, zero payload/bundle/size-budget matches in `ci.yml`), and the web-vitals ceilings (4000/3000/1500/0.1/500) sit 1.6x to 1.9x above the package's own good-band defaults, with the suite's own comment calling them interim. INP is sampled on one page and Chromium only (`WebVitalsE2ETests.cs:21` `InpBudgetMs = 500`, `:61` drives an interaction).
+  - *Evaluated and not adopted (2026-10-01): route-level WASM lazy loading.* It needs a framework lazy-module registry, an `OnNavigateAsync` hook in Common's `Routes.razor` and deferred DI registration, and in ADC the landing module (Conference) and a layout-rendered module (Engagement) must load eagerly anyway, so little would be deferred. The payload-budget gate (`.github/actions/wasm-payload-budget`, consumed by the consumers' CI) is the #23 lever instead. Revisit when a consumer gains a large module that is neither the landing route nor rendered by the layout.
 
 ### [ ] #24 · Forms, Validation & UX Safety
 - [ ] **Three-part lever** (effort M):

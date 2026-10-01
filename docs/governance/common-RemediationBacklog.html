@@ -298,7 +298,10 @@
           </ul>
           <h3 id="23--front-end-performance">[ ] #23 · Front-End Performance</h3>
           <ul>
-          <li><input disabled="" type="checkbox"> <strong>Initial-load and measurement lever</strong> (effort M): there is no CI payload/bundle budget and no lazy-loading or code-splitting anywhere in <code>Source/</code> (zero <code>LazyAssemblyLoader</code>/<code>OnNavigateAsync</code> matches, zero payload/bundle/size-budget matches in <code>ci.yml</code>), and the web-vitals ceilings (4000/3000/1500/0.1/500) sit 1.6x to 1.9x above the package&#39;s own good-band defaults, with the suite&#39;s own comment calling them interim. INP is sampled on one page and Chromium only (<code>WebVitalsE2ETests.cs:21</code> <code>InpBudgetMs = 500</code>, <code>:61</code> drives an interaction).</li>
+          <li><input disabled="" type="checkbox"> <strong>Initial-load and measurement lever</strong> (effort M): there is no CI payload/bundle budget and no lazy-loading or code-splitting anywhere in <code>Source/</code> (zero <code>LazyAssemblyLoader</code>/<code>OnNavigateAsync</code> matches, zero payload/bundle/size-budget matches in <code>ci.yml</code>), and the web-vitals ceilings (4000/3000/1500/0.1/500) sit 1.6x to 1.9x above the package&#39;s own good-band defaults, with the suite&#39;s own comment calling them interim. INP is sampled on one page and Chromium only (<code>WebVitalsE2ETests.cs:21</code> <code>InpBudgetMs = 500</code>, <code>:61</code> drives an interaction).<ul>
+          <li><em>Evaluated and not adopted (2026-10-01): route-level WASM lazy loading.</em> It needs a framework lazy-module registry, an <code>OnNavigateAsync</code> hook in Common&#39;s <code>Routes.razor</code> and deferred DI registration, and in ADC the landing module (Conference) and a layout-rendered module (Engagement) must load eagerly anyway, so little would be deferred. The payload-budget gate (<code>.github/actions/wasm-payload-budget</code>, consumed by the consumers&#39; CI) is the #23 lever instead. Revisit when a consumer gains a large module that is neither the landing route nor rendered by the layout.</li>
+          </ul>
+          </li>
           </ul>
           <h3 id="24--forms-validation--ux-safety">[ ] #24 · Forms, Validation &amp; UX Safety</h3>
           <ul>

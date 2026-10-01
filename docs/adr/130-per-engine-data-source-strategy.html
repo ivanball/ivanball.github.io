@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-130: Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing (the CHANGELOG carries no entry for it yet).…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-130: Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)">
+  <meta property="og:description" content="Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing (the CHANGELOG carries no entry for it yet).…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-130: Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)">
+  <meta name="twitter:description" content="Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing (the CHANGELOG carries no entry for it yet).…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)","item":"https://ivanball.github.io/docs/adr/130-per-engine-data-source-strategy.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 131 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
+        <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
+        <li><a href="130-per-engine-data-source-strategy.html" aria-current="page">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
+        <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-130-per-engine-data-source-strategy-engine-facts-instead-of-branching-on-the-enum">ADR-130: Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing
+          (the CHANGELOG carries no entry for it yet). Refines <a href="018-polyglot-persistence.html">ADR-018</a> (engine as
+          a routing decision) and <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a> (the fourth engine)
+          without changing <a href="006-database-per-service.html">ADR-006</a> (one sealed context class per engine, one
+          instance per database).</p>
+          <h2 id="context">Context</h2>
+          <p>MMCA.Common persists through four engines named by one shipped public enum, <code>DataSource</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IDataSourceService.cs:6</code>):
+          <code>CosmosDB</code> (<code>:9</code>), <code>Sqlite</code> (<code>:12</code>), <code>SQLServer</code> (<code>:15</code>) and <code>PostgreSQL</code> (<code>:22</code>), the last appended
+          rather than inserted because the three before it are public API with fixed ordinals (<code>:17-21</code>).</p>
+          <p>Every place the framework behaved differently per engine named an enum value or sniffed the EF
+          provider name, so the knowledge of what one engine can do was spread over the resolver, context
+          creation, model building, conventions, the soft-delete filter, the audit row-version stamp, the read
+          repository, transactions, migration targets and the startup initializer. Adding PostgreSQL under
+          ADR-113 meant finding every one of those branches by hand, and nothing in the compiler points at a
+          branch that was missed. Two engine facts also lived in odd places: whether a context
+          could hold the outbox was a separate <code>ApplicationDbContext.SupportsOutbox</code> override, and the SQL
+          Server identity-insert path sat inside the context factory under an engine-specific name,
+          <code>RequestIdentityInsert</code>. SQLite also quoted identifiers two ways: its soft-delete filter used double
+          quotes while its filtered-index predicates used SQL Server brackets. The prior shape is described in
+          the two MMCA.Common commits that replaced it, aa8297fb (the contract) and 23eff3a0 (the routing).</p>
+          <h2 id="decision">Decision</h2>
+          <p>One internal strategy object per engine answers every engine question, looked up through a static
+          registry keyed by the shipped enum. Call sites read engine facts; they no longer name an engine.</p>
+          <ul>
+          <li><p><strong>The contract.</strong> <code>IDataSourceEngine</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/IDataSourceEngine.cs:18</code>)
+          groups its members in three kinds (<code>:14-15</code>): DESCRIPTIVE facts (substitution priority, entity
+          configuration interface, migrations setting name, connection identity, and the connection-string
+          and migrations-assembly readers, <code>:29-69</code>), one <code>Capabilities</code> value (<code>:74</code>), and BEHAVIOUR hooks
+          where the engine must act rather than answer (context creation, key and table mapping, INCLUDE
+          columns, column quoting, the soft-delete filter and the explicit-key dialect, <code>:83-119</code>). The enum
+          value stays the engine&#39;s identity (<code>:20-21</code>).</p>
+          </li>
+          <li><p><strong>The registry is static.</strong> <code>DataSourceEngines</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/DataSourceEngines.cs:19</code>)
+          holds the four engines in one array (<code>:22-28</code>), indexes them in a frozen dictionary (<code>:30-31</code>), and
+          exposes <code>For(DataSource)</code>, which throws <code>InvalidOperationException</code> for an unregistered value
+          (<code>:40-43</code>), and <code>All</code> (<code>:34</code>). Its remarks record why it is not a DI service (<code>:9-12</code>) and that a
+          fifth engine is one class plus one line in the array (<code>:15-16</code>).</p>
+          </li>
+          <li><p><strong>The enum and its ordinals stay.</strong> <code>DataSource</code> is unchanged; the registry is keyed by it
+          (<code>DataSourceEngines.cs:30-31</code>), so configuration, <code>[UseDataSource]</code> attributes and anything that
+          persisted or serialized an ordinal keep working.</p>
+          </li>
+          <li><p><strong>Capabilities are only the facts that differ.</strong> <code>DataSourceEngineCapabilities</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/DataSourceEngineCapabilities.cs:23-28</code>)
+          has five members, and its remarks state the rule (<code>:5-7</code>): anything that splits the engines exactly
+          along the relational line is one <code>IsRelational</code> flag, which covers same-source <code>.Include()</code>,
+          transactions, raw SQL, indexes, foreign-key delete behavior, <code>Any(predicate)</code> translation and the
+          framework&#39;s own tables (<code>:15-19</code>). The other four are <code>Migrations</code> (a three-value <code>MigrationPolicy</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/MigrationPolicy.cs:8-20</code>),
+          <code>ConnectionStringRequired</code>, <code>NullsSortFirstAscending</code>, and <code>RowVersion</code> (a three-value
+          <code>RowVersionStrategy</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/RowVersionStrategy.cs:8-17</code>).
+          The four engines answer:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Engine</th>
+          <th>Substitution priority</th>
+          <th>Migrations</th>
+          <th>Connection string required</th>
+          <th>IsRelational</th>
+          <th>Nulls first ascending</th>
+          <th>RowVersion</th>
+          <th>Explicit-key dialect</th>
+          <th>Column quoting</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>SQL Server</td>
+          <td>0</td>
+          <td>Always</td>
+          <td>yes</td>
+          <td>yes</td>
+          <td>yes</td>
+          <td>StoreGenerated</td>
+          <td>itself</td>
+          <td><code>[col]</code></td>
+          </tr>
+          <tr>
+          <td>PostgreSQL</td>
+          <td>1</td>
+          <td>WhenAssemblyConfigured</td>
+          <td>no</td>
+          <td>yes</td>
+          <td>no</td>
+          <td>ClientStamped</td>
+          <td>none</td>
+          <td><code>&quot;col&quot;</code></td>
+          </tr>
+          <tr>
+          <td>SQLite</td>
+          <td>2</td>
+          <td>WhenAssemblyConfigured</td>
+          <td>no</td>
+          <td>yes</td>
+          <td>yes</td>
+          <td>ClientStamped</td>
+          <td>none</td>
+          <td><code>&quot;col&quot;</code></td>
+          </tr>
+          <tr>
+          <td>Cosmos DB</td>
+          <td>3</td>
+          <td>Never</td>
+          <td>no</td>
+          <td>no</td>
+          <td>yes</td>
+          <td>None</td>
+          <td>none</td>
+          <td><code>[col]</code> (unused)</td>
+          </tr>
+          </tbody></table></div>
+          <p>Sources: <code>SQLServerDataSourceEngine.cs:29</code>, <code>:42-46</code>, <code>:49</code>, <code>:114</code>;
+          <code>PostgreSQLDataSourceEngine.cs:27</code>, <code>:40-44</code>, <code>:47</code>, <code>:113</code>; <code>SqliteDataSourceEngine.cs:26</code>,
+          <code>:39-43</code>, <code>:46</code>, <code>:112</code>; <code>CosmosDataSourceEngine.cs:28</code>, <code>:42-46</code>, <code>:49</code>, <code>:114</code> (all under
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/</code>). Cosmos builds
+          no soft-delete filter (<code>CosmosDataSourceEngine.cs:117</code>).</p>
+          </li>
+          <li><p><strong>Call sites read the engine.</strong> A context exposes its engine as <code>ApplicationDbContext.Engine</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:61</code>).
+          The resolver orders substitution by <code>SubstitutionPriority</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:36</code>)
+          and reads migration policy and connection strings through the engine (<code>:393</code>, <code>:450</code>, <code>:470</code>,
+          <code>:500</code>, <code>:503</code>); <code>PhysicalDataSource.UsesMigrations</code> switches on <code>Migrations</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:42</code>);
+          the row-version mapping and stamp read <code>RowVersion</code>
+          (<code>ApplicationDbContext.cs:591</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:59</code>);
+          include support reads <code>IsRelational</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceService.cs:32</code>);
+          context creation, key mapping and the soft-delete SQL call the behaviour hooks
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/PhysicalDbContextFactory.cs:32</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:77</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/SoftDeleteFilterSql.cs:35</code>, <code>:70</code>).
+          The one policy constant that still names an engine is the resolver&#39;s framework default,
+          <code>SQLServer</code> (<code>DataSourceResolver.cs:23</code>).</p>
+          </li>
+          <li><p><strong>Outbox support is the engine&#39;s relational flag.</strong> <code>ApplicationDbContext.SupportsOutbox</code> is gone;
+          the outbox routing decision reads <code>context.Engine.Capabilities.IsRelational</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessEventBus.cs:81</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:236</code>).</p>
+          </li>
+          <li><p><strong>Explicit-key insert is engine-neutral at the API.</strong> <code>IUnitOfWork.RequestIdentityInsert</code> is renamed
+          <code>RequestExplicitKeyInsert</code>, with no alias
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:45</code>,
+          documented at <code>:38-44</code>), and so are <code>IDbContextFactory</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/IDbContextFactory.cs:40</code>)
+          and <code>DbContextFactory</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:321</code>).
+          The engine-specific half is <code>IExplicitKeyInsertDialect</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/IExplicitKeyInsertDialect.cs:13</code>),
+          which finds the per-table groups (<code>:21</code>, grouped as <code>ExplicitKeyInsertGroup</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/Engines/ExplicitKeyInsertGroup.cs:12</code>)
+          and builds the toggle statement (<code>:28</code>); the factory keeps the engine-neutral rounds (<code>:5-11</code>) and
+          uses the dialect only when the engine has one (<code>DbContextFactory.cs:292</code>). SQL Server is its own
+          dialect (<code>SQLServerDataSourceEngine.cs:19</code>, <code>:49</code>) and emits <code>SET IDENTITY_INSERT [schema].[table] ON</code> or <code>OFF</code>
+          (<code>:163</code>); the other three return <code>null</code>, so the save runs unchanged.</p>
+          </li>
+          <li><p><strong>Raw SQL is registered only where it can run.</strong> <code>AddRawSqlQueryExecutor</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:400</code>, called at <code>:116</code>)
+          resolves the host&#39;s framework default engine and registers <code>IRawSqlQueryExecutor</code> only when that
+          engine is relational (<code>:409-411</code>). A Cosmos-default host gets no registration, so a service that
+          injects the executor fails at container validation instead of on its first statement (<code>:391-396</code>).
+          Both branches are tested
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/DependencyInjectionInfrastructureTests.cs:273</code>,
+          <code>:294</code>).</p>
+          </li>
+          <li><p><strong>SQLite quotes with double quotes everywhere.</strong> <code>SqliteDataSourceEngine.QuoteColumn</code> returns
+          <code>&quot;col&quot;</code> (<code>SqliteDataSourceEngine.cs:111-112</code>), the same form as its soft-delete filter (<code>:115</code>), so
+          filtered-index predicates on SQLite (the outbox, internal-command and push-notification <code>DedupKey</code>
+          filters) change from <code>[Column]</code> to <code>&quot;Column&quot;</code>.</p>
+          </li>
+          <li><p><strong>Settings keep their per-engine properties.</strong> <code>ConnectionStringSettings</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/ConnectionStringSettings.cs:12</code>)
+          and <code>DataSourceEntrySettings</code> still carry one named property per engine (for example
+          <code>ConnectionStringSettings.cs:18</code>, <code>:28</code>, <code>:40</code>, <code>:43</code>;
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceEntrySettings.cs:22</code>,
+          <code>:28</code>, <code>:38</code>, <code>:56</code>), and each engine reads its own (<code>SQLServerDataSourceEngine.cs:52-70</code>). A fifth
+          engine adds one property per settings class.</p>
+          </li>
+          </ul>
+          <p>A source-scanning fitness test keeps new branches out:
+          <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DataSourceBranchingFitnessTests.cs:71</code>
+          fails on any <code>DataSource.&lt;Engine&gt;</code> reference or engine-context type check outside a file-level
+          allow-list of the reviewed remaining references (engine classes, sealed contexts naming themselves,
+          settings defaults, the design-time helper, the configuration shim bases, <code>IndexBuilderExtensions</code>&#39;
+          default parameter, framework-default engine requests and <code>FrameworkDefaultEngine</code>), each entry
+          carrying its reason, and <code>:83</code> fails on an allow-list entry that no longer has a hit, so the list
+          cannot go stale. Its failure message names this record.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>One place per engine.</strong> An engine&#39;s behavior is now one class, and a fifth engine is one class
+          plus one registry line (<code>DataSourceEngines.cs:15-16</code>); a missed branch can no longer hide in a
+          call site, because call sites no longer hold engine branches.</li>
+          <li><strong>Static because the consumers have no container.</strong> Model-building conventions,
+          <code>EntityTypeConfiguration.ApplyEngineConventions</code>, <code>SoftDeleteFilterSql</code> and <code>IndexBuilderExtensions</code>
+          run where no service provider is reachable (<code>DataSourceEngines.cs:9-11</code>), and the engines are
+          stateless facts about a closed enum only Common extends (<code>:11-12</code>), so DI would add a lookup path
+          that half the callers cannot use and no extensibility.</li>
+          <li><strong>Fewer, truer capabilities.</strong> A flag per relational feature would be seven booleans that always
+          move together; one <code>IsRelational</code> flag says what is actually true today
+          (<code>DataSourceEngineCapabilities.cs:14-20</code>), and a capability gets its own member only when an engine
+          genuinely answers differently (PostgreSQL&#39;s null ordering, SQL Server&#39;s required connection string,
+          the three row-version strategies).</li>
+          <li><strong>Fail at startup, not at first use.</strong> Registering the raw-SQL executor conditionally turns a
+          call-time <code>NotSupportedException</code> on Cosmos into a container-validation failure
+          (<code>DependencyInjection.cs:391-396</code>), the same fail-fast stance as
+          <a href="070-fail-fast-configuration-contract.html">ADR-070</a>.</li>
+          <li><strong>One dialect per engine.</strong> SQLite accepts both quote forms, but a model that mixes them is two
+          dialects to read and to reason about; the filter and the index predicates now agree
+          (<code>SqliteDataSourceEngine.cs:111-115</code>).</li>
+          <li><strong>An API name that describes the request, not the engine.</strong> <code>RequestExplicitKeyInsert</code> says what
+          the caller wants; whether an engine needs a toggle to honour it is the dialect&#39;s business
+          (<code>IExplicitKeyInsertDialect.cs:5-11</code>).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Breaking for consumers.</strong> The <code>RequestIdentityInsert</code> rename has no alias
+          (<code>IUnitOfWork.cs:45</code>); a Cosmos-default host that injects <code>IRawSqlQueryExecutor</code> now fails at
+          startup (<code>DependencyInjection.cs:409</code>); and a SQLite consumer with migrations sees a model diff on
+          the outbox, internal-command and push-notification filtered indexes and needs a migration.</li>
+          <li><strong>Static means not replaceable.</strong> A consumer cannot substitute or add an engine; the registry is
+          internal (<code>DataSourceEngines.cs:19</code>) and so is the contract (<code>IDataSourceEngine.cs:18</code>). That is
+          the intended scope, since the enum is closed.</li>
+          <li><strong><code>IsRelational</code> is coarse by design.</strong> An engine that is relational but lacks one of the features
+          it stands for (<code>DataSourceEngineCapabilities.cs:15-19</code>) would force the flag to split.</li>
+          <li><strong>Settings stay engine-shaped.</strong> Each engine is a named property on each settings class
+          (<code>ConnectionStringSettings.cs:18-49</code>), so a fifth engine touches every settings class and its
+          validator, not just the engine.</li>
+          <li><strong>The gate is textual.</strong> <code>DataSourceBranchingFitnessTests</code> matches source text, so a branch written
+          without naming an engine value or an engine context type (for example on a provider-name string)
+          passes it; review still owns that case.</li>
+          <li><strong>Cosmos carries an unused quoting answer.</strong> It returns brackets from <code>QuoteColumn</code>
+          (<code>CosmosDataSourceEngine.cs:114</code>) only because the interface requires one; it builds no filtered
+          index (<code>:117</code>).</li>
+          </ul>
+          <h2 id="alternatives-rejected">Alternatives rejected</h2>
+          <ul>
+          <li><strong>Engines registered in DI</strong> (weighed 2026-10-01). Engines as <code>IDataSourceEngine</code> services resolved
+          from the container. Rejected because the conventions, <code>EntityTypeConfiguration</code> and the SQL builders
+          run without a container (<code>DataSourceEngines.cs:9-11</code>), so they would need the static lookup anyway,
+          leaving two lookup paths, and because the enum is closed so DI buys no extensibility (<code>:11-12</code>).
+          Revisit if consumers are ever allowed to contribute an engine.</li>
+          <li><strong>A dictionary-keyed per-engine settings model</strong> (rejected 2026-10-01). One <code>Engines</code> dictionary
+          keyed by engine name in place of the named per-engine properties. Rejected because it breaks every
+          consumer&#39;s <code>appsettings</code> and every Bicep app setting that names those keys, for no current need:
+          four engines fit four properties. Revisit if the engine count grows enough that per-property
+          settings become the bottleneck, and then in a release that ships the configuration migration with
+          it.</li>
+          <li><strong>Keep SQLite&#39;s mixed quoting</strong> (weighed 2026-10-01). Leaving brackets in SQLite filtered-index
+          predicates would have kept existing SQLite snapshots stable with no migration. Rejected by the owner
+          in favor of one dialect per engine; the cost is the one-time model diff above.</li>
+          <li><strong>A capability flag per relational feature</strong> (weighed 2026-10-01). Separate booleans for include,
+          transactions, raw SQL, indexes and the rest. Rejected because every engine answers them identically
+          along the relational line (<code>DataSourceEngineCapabilities.cs:5-7</code>). Revisit when an engine splits
+          them.</li>
+          <li><strong>Keep <code>SupportsOutbox</code> as its own override.</strong> Rejected because the outbox needs exactly the
+          relational tables <code>IsRelational</code> already describes (<code>DataSourceEngineCapabilities.cs:18-19</code>); a second
+          answer to the same question can disagree with the first.</li>
+          </ul>
+          <h2 id="consequences">Consequences</h2>
+          <ul>
+          <li><strong>Consumer upgrade.</strong> Rename <code>RequestIdentityInsert</code> calls to <code>RequestExplicitKeyInsert</code>; on a
+          Cosmos-default host, remove any <code>IRawSqlQueryExecutor</code> dependency; on SQLite with migrations, add a
+          migration for the re-quoted filtered indexes.</li>
+          <li><strong>Adding an engine.</strong> Append to <code>DataSource</code> (never insert, <code>IDataSourceService.cs:17-21</code>), write
+          one <code>IDataSourceEngine</code>, add it to <code>DataSourceEngines.Registered</code> (<code>DataSourceEngines.cs:22-28</code>), and
+          add one property per settings class.</li>
+          <li><strong>What to watch.</strong> Allow-list growth in <code>DataSourceBranchingFitnessTests</code>: a new entry is a new
+          engine-specific site outside the strategy and needs the same justification as the existing ones.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="006-database-per-service.html">ADR-006</a> (one sealed context per engine),
+          <a href="018-polyglot-persistence.html">ADR-018</a> (engines behind one model and the resolver),
+          <a href="113-postgresql-as-a-first-class-engine.html">ADR-113</a> (the fourth engine),
+          <a href="030-startup-sole-migrator.html">ADR-030</a> (the startup migrator that reads <code>Migrations</code>),
+          <a href="035-optimistic-concurrency.html">ADR-035</a> (the row-version token <code>RowVersion</code> maps),
+          <a href="095-soft-delete-unique-indexes.html">ADR-095</a> (the soft-delete filtered indexes whose SQLite quoting
+          changed), <a href="125-parameterized-sql-only.html">ADR-125</a> (the raw-SQL executor now registered
+          conditionally). Framework version and package figures live in <code>MMCA.Common/FACTS.md</code>.</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/130-per-engine-data-source-strategy.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
+            <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-131: Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing. Records the owner&#39;s TD-08 decision for Option A of…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-131: Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)">
+  <meta property="og:description" content="Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing. Records the owner&#39;s TD-08 decision for Option A of…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-131: Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)">
+  <meta name="twitter:description" content="Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing. Records the owner&#39;s TD-08 decision for Option A of…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)","item":"https://ivanball.github.io/docs/adr/131-same-origin-api-proxy.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> all these words</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 131 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub/Apple) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
+        <li><a href="071-barcode-scanning-and-qr-display.html">071 · Device Capability Pattern for Barcode Scanning and QR Display</a></li>
+        <li><a href="072-qr-badge-check-in-and-points.html">072 · QR Badge Check-In and Points Gamification in ADC</a></li>
+        <li><a href="073-multi-tenancy-model.html">073 · Multi-Tenancy (Shared-Schema Query Filter plus DB-per-Tenant Routing)</a></li>
+        <li><a href="074-recurring-job-scheduler.html">074 · Recurring Job Scheduler (Persistent Cron Jobs on the Outbox Claim-Lease Pattern)</a></li>
+        <li><a href="075-audit-trail.html">075 · Audit Trail (Same-Transaction Field-Level Change History)</a></li>
+        <li><a href="076-data-subject-export.html">076 · Data-Subject Export (DSAR) as a Framework Contract</a></li>
+        <li><a href="077-hybridcache-substrate.html">077 · HybridCache as an Opt-In ICacheService Substrate (Amends ADR-026)</a></li>
+        <li><a href="078-csv-export-endpoint.html">078 · CSV Export as a Dedicated Endpoint, Not Content Negotiation</a></li>
+        <li><a href="079-shared-http-middleware-pipeline.html">079 · One Shared, Ordered HTTP Middleware Pipeline for Every Service Host</a></li>
+        <li><a href="080-deploy-rollout-revision-rollback.html">080 · Production Rollout with Automatic Revision-Only Rollback</a></li>
+        <li><a href="081-cost-baseline-deploy-gate.html">081 · The Cost Baseline as a Hard Deploy Gate</a></li>
+        <li><a href="082-two-tier-cors-posture.html">082 · Two-Tier Cross-Origin Posture: Allow-Listed Service Policies, an Any-Header Gateway Policy</a></li>
+        <li><a href="083-crud-lifecycle-event-taxonomy.html">083 · One CRUD Lifecycle Event per Entity with a State Discriminator</a></li>
+        <li><a href="084-stripe-webhook-ingress.html">084 · Stripe Webhook Ingress (Acceptance-Coded Responses and Startup Self-Registration)</a></li>
+        <li><a href="085-identifier-type-aliases-revisited.html">085 · Identifier Type Aliases Revisited (Wrapper Structs Deferred Again, With Triggers)</a></li>
+        <li><a href="086-process-manager-deferred.html">086 · A Process Manager Is Deferred, Not Absent (Relates to ADR-054)</a></li>
+        <li><a href="087-broker-poison-message-handling.html">087 · Broker Poison-Message Handling: Second-Level Redelivery and Fault Observability</a></li>
+        <li><a href="088-gateway-edge-responsibilities.html">088 · Gateway Edge Responsibilities (and the Three It Declines)</a></li>
+        <li><a href="089-gateway-topology-owned-by-configuration.html">089 · Gateway Topology Owned by Configuration</a></li>
+        <li><a href="090-event-upcaster-registration.html">090 · Event Upcaster Registration Extension Point</a></li>
+        <li><a href="091-cache-backed-password-reset.html">091 · Cache-Backed Password Reset</a></li>
+        <li><a href="092-web-vitals-budget-gate.html">092 · Core Web Vitals Budget as a Shipped Test Contract and Deploy Gate</a></li>
+        <li><a href="093-container-image-posture.html">093 · Container Image Build and Runtime Posture</a></li>
+        <li><a href="094-client-entity-data-access.html">094 · Client-Side Entity Data-Access Contract</a></li>
+        <li><a href="095-soft-delete-unique-indexes.html">095 · Uniqueness Under Soft Delete (Filtered Unique Indexes)</a></li>
+        <li><a href="096-best-effort-side-effects.html">096 · Best-Effort Side-Effect Contract</a></li>
+        <li><a href="097-multi-device-refresh-sessions.html">097 · Multi-Device Refresh Sessions (Hashed, Rotating, Per Device)</a></li>
+        <li><a href="098-aspire-orchestration-not-testing-or-dashboards.html">098 · Aspire for Orchestration, Not for Testing or Production Dashboards</a></li>
+        <li><a href="099-generic-write-side-entity-commands.html">099 · Generic Write-Side Entity Commands (Create, Update, Delete Without a Handler per Aggregate)</a></li>
+        <li><a href="100-outbox-opt-in-resolved-from-messaging-mode.html">100 · The Outbox Is Resolved from the Messaging Mode, Not Always On</a></li>
+        <li><a href="101-common-metapackage.html">101 · An MMCA.Common Metapackage for the Core Six</a></li>
+        <li><a href="102-pbkdf2-only-password-hashing.html">102 · PBKDF2-Only Password Hashing</a></li>
+        <li><a href="103-bunit-component-test-tier.html">103 · bUnit Component-Test Tier as a Shipped Package</a></li>
+        <li><a href="104-smart-enums-as-opt-in-capability.html">104 · Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</a></li>
+        <li><a href="105-data-residency-build-gate.html">105 · The Published Data-Residency Claim as a Build Gate</a></li>
+        <li><a href="106-extension-members-as-public-di-surface.html">106 · C# Extension Members as the Public DI Registration Surface</a></li>
+        <li><a href="107-transaction-execution-contract.html">107 · Transaction Execution and Commit-Ambiguity Contract</a></li>
+        <li><a href="108-distributed-lock-primitive.html">108 · Cross-Replica Mutual Exclusion via IDistributedLock</a></li>
+        <li><a href="109-feature-by-folder-convention.html">109 · Feature-by-Folder Layout as an Enforced Convention</a></li>
+        <li><a href="110-rubric-v2-category-realignment.html">110 · Rubric Version 2, Category Realignment at 34</a></li>
+        <li><a href="111-ai-session-scoring-governance.html">111 · AI Session Scoring Governance</a></li>
+        <li><a href="112-catalog-owned-effective-pricing.html">112 · Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</a></li>
+        <li><a href="113-postgresql-as-a-first-class-engine.html">113 · PostgreSQL as a First-Class Engine</a></li>
+        <li><a href="114-internal-commands-durable-job-queue.html">114 · Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</a></li>
+        <li><a href="115-strongly-typed-identifiers-opt-in.html">115 · Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</a></li>
+        <li><a href="116-identity-completions-opt-in.html">116 · Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</a></li>
+        <li><a href="117-apphost-integration-test-base.html">117 · AppHost Integration Testing as a Shipped Package</a></li>
+        <li><a href="118-message-transport-library-policy.html">118 · Message Transport Library Policy (MassTransit v8 Pin and Exit Strategy)</a></li>
+        <li><a href="119-restrict-delete-by-default.html">119 · Delete Behavior Is an Explicit Business Rule (Restrict by Default)</a></li>
+        <li><a href="120-governed-chat-client-boundary.html">120 · Governed Language-Model Boundary (MMCA.Common.AI)</a></li>
+        <li><a href="121-ephemeral-in-process-work-queue.html">121 · Ephemeral In-Process Work Queue (Bounded Channel plus Hosted Drain)</a></li>
+        <li><a href="122-dev-only-relaxations-fail-closed.html">122 · Dev-Only Relaxations Are Environment-Gated and Fail Closed</a></li>
+        <li><a href="123-speaker-session-assets.html">123 · Speaker-Published Session Materials</a></li>
+        <li><a href="124-blazor-circuit-ceiling-ui-edge.html">124 · The Server-Rendered UI Host Is Its Own Hardened Edge</a></li>
+        <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
+        <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
+        <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
+        <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
+        <li><a href="131-same-origin-api-proxy.html" aria-current="page">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-131-same-origin-api-proxy-a-backend-for-frontend-that-keeps-tokens-out-of-browser-script">ADR-131: Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-10-01). Targeted at MMCA.Common v1.218.0, which is unreleased at the time of writing.
+          Records the owner&#39;s TD-08 decision for Option A of the token-storage design note; the implementing
+          MMCA.Common commits are 4cfb4a35 (the proxy), b542dde1 (downloads through the proxy) and fba02c29
+          (refresh outcomes and the same-origin gate). Opt-in per host: a host that does not call
+          <code>AddCommonSameOriginApiProxy</code> is unchanged (<code>MMCA.Common/UPGRADING.md:149</code>). Extends
+          <a href="022-browser-session-cookie-auth.html">ADR-022</a> (the HttpOnly session cookie, until now read only for
+          server-side rendering) and <a href="051-client-auth-token-lifecycle.html">ADR-051</a> (the client token
+          lifecycle) without changing <a href="088-gateway-edge-responsibilities.html">ADR-088</a> (the gateway stays the
+          API edge).</p>
+          <h2 id="context">Context</h2>
+          <p>A Blazor WebAssembly client calls the API through the gateway, which is a different origin from the
+          UI host, so the HttpOnly session cookies the UI host writes (ADR-022) never travel with those calls.
+          The client therefore authenticates with a bearer token script can read: a host that does not opt in
+          still attaches the stored token to the notification hub through
+          <code>options.AccessTokenProvider = _tokenStorageService.GetAccessTokenAsync</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:366</code>),
+          and to every <code>&quot;APIClient&quot;</code> call through <code>AuthDelegatingHandler</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:12</code>). One
+          successful script injection can then lift a live token and use it from anywhere until it expires.</p>
+          <p>The ADC token-storage design note (kept in the private ADC repository) weighed four answers to &quot;how
+          does an HttpOnly credential reach a cross-origin API&quot;: A, a same-origin proxy on the UI host; B, a
+          cookie scoped to a registrable domain shared by UI and API, sent straight to the gateway; C, keep the
+          script-readable token and shrink the blast radius (enforced CSP, short TTLs); and C+, an interim
+          hybrid with the refresh token in the HttpOnly cookie and the access token held in memory. C+ removes
+          the long-lived prize but still leaves a usable access token in script for its lifetime. The pieces A
+          needs already existed: the cookie pair and its writer (<code>ISessionCookieStore</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/ISessionCookieStore.cs:14</code>, HttpOnly,
+          Secure outside Development, 7-day lifetime, <code>:9-10</code>), and a single-flight refresher over that cookie
+          (<code>ICookieSessionRefresher</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:32</code>, striped
+          per refresh token, <code>:63-72</code>).</p>
+          <h2 id="decision">Decision</h2>
+          <p>The UI host serves the API on its own origin and forwards to the gateway server-side, attaching the
+          bearer it reads from the HttpOnly cookie. The browser never holds a token that any API accepts.</p>
+          <ul>
+          <li><strong>Opt-in, hosted in MMCA.Common.UI.Web.</strong> <code>AddCommonSameOriginApiProxy(IConfiguration)</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyServiceExtensions.cs:51</code>)
+          binds and validates the settings on start (<code>:55-67</code>), registers YARP&#39;s forwarder (<code>:76</code>) and data
+          protection (<code>:77</code>), and replaces the Blazor Server circuit&#39;s <code>ITokenRefresher</code> and
+          <code>ISessionCookieSync</code> with protected-handoff implementations (<code>:83-84</code>).
+          <code>MapCommonSameOriginApiProxy()</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpointExtensions.cs:33</code>)
+          maps <code>{PathPrefix}/{**path}</code> for every method, WebSocket upgrades included, anonymous by
+          declaration, without antiforgery and outside the OpenAPI description (<code>:49-52</code>). It fails the boot
+          when the registration call is missing (<code>:38-42</code>) or when a later registration displaced the handoff
+          services, because that would put the access token back in the page (<code>:59-69</code>, <code>:85-90</code>).</li>
+          <li><strong>Settings.</strong> <code>SameOriginApiProxySettings</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettings.cs:21</code>,
+          section <code>SameOriginApiProxy</code>, <code>:24</code>): <code>PathPrefix</code> <code>/api</code> (<code>:38</code>), <code>GatewayAddress</code> defaulting to
+          <code>Api:ApiEndpoint</code> so an Aspire discovery name resolves as it does for the host&#39;s other clients
+          (<code>:46</code>, filled at <code>SameOriginApiProxyServiceExtensions.cs:57-64</code>), token-issuing paths
+          <code>auth/login</code>, <code>auth/register</code>, <code>auth/oauth/exchange</code> plus any <code>AdditionalTokenIssuingPaths</code>
+          (<code>:31</code>, <code>:52</code>), <code>RefreshPath</code> <code>auth/refresh</code> (<code>:59</code>), <code>RevokePath</code> <code>auth/revoke</code> (<code>:66</code>) and
+          <code>SessionCookieSameSite</code> <code>Strict</code> (<code>:74</code>). The validator refuses a prefix with route syntax, a
+          non-absolute gateway and any <code>SameSite</code> other than <code>Strict</code> or <code>Lax</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxySettingsValidator.cs:26-43</code>).</li>
+          <li><strong>The request pipeline, in order.</strong> <code>SameOriginApiProxyEndpoint</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginApiProxyEndpoint.cs:26</code>)
+          runs every gate before anything is forwarded (<code>:209-235</code>):<ol>
+          <li><strong>Same-origin gate.</strong> An <code>Origin</code> that is not exactly the host&#39;s own (scheme, host and port as the
+          app sees them; a sibling subdomain is another origin), a WebSocket upgrade with no <code>Origin</code>, or a
+          <code>Sec-Fetch-Site</code> other than <code>same-origin</code> is refused 403 <code>cross_origin_rejected</code>; <code>none</code> is
+          allowed only on a plain GET or HEAD, for a user-initiated navigation such as a pasted download
+          link (<code>:109-185</code>, own-origin comparison <code>:139-153</code>, refusal <code>:211-216</code>).</li>
+          <li><strong><code>OPTIONS</code> answered locally</strong> with 204 and no CORS grant, never forwarded, so the gateway&#39;s CORS
+          policy is never consulted on the proxy&#39;s behalf (<code>:218-225</code>).</li>
+          <li><strong>CSRF header.</strong> Every unsafe method must carry exactly <code>X-CSRF: 1</code> or gets 403
+          <code>csrf_header_required</code> (<code>:101-107</code>, <code>:227-232</code>); the constants are <code>SameOriginProxyHeaders</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/SameOriginProxyHeaders.cs:11</code>,
+          <code>:14</code>, <code>:17</code>).</li>
+          <li><strong>Session step.</strong> A request with a session cookie is validated or refreshed through
+          <code>ICookieSessionRefresher.ValidateOrRefreshAsync</code>; sign-in requests skip it so a stale session
+          cannot block a login (<code>SameOriginApiProxyEndpoint.cs:79-90</code>).</li>
+          <li><strong>Forward</strong> through YARP over HTTP/1.1 with a 100-second activity timeout, so WebSocket upgrades
+          forward as plain upgrades (<code>:34-42</code>, <code>:315-325</code>), with the bearer attached server-side.</li>
+          <li><strong>One forced refresh and replay</strong> when a safe, bodiless method comes back 401 (a revoked token
+          or a rotated key); nothing with a body is re-sent (<code>:191-194</code>, <code>:289-305</code>).</li>
+          </ol>
+          </li>
+          <li><strong>What the forward rewrites.</strong> <code>SameOriginProxyTransformer</code> replaces any browser <code>Authorization</code> with
+          the session&#39;s bearer, drops the <code>X-CSRF</code> header and strips the two session cookies from the upstream
+          <code>Cookie</code> header
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SameOriginProxyTransformer.cs:60-62</code>,
+          <code>:156-172</code>). A successful token-issuing response moves the pair into the cookies and reaches the
+          browser with <code>accessToken</code> replaced by its claims-only form and <code>refreshToken</code> emptied (<code>:91</code>,
+          <code>:134-143</code>); a revoke forwards the bearer and clears the cookies whatever the upstream answered
+          (<code>:84-87</code>). A browser POST to the refresh path is answered by the proxy itself from the refresh
+          cookie, in the same stripped shape (<code>SameOriginApiProxyEndpoint.cs:267-287</code>, <code>:332-350</code>).</li>
+          <li><strong>Stateless: tokens stay in the existing cookie.</strong> No server-side session store; the proxy reads and
+          writes the same HttpOnly pair through <code>ISessionCookieStore</code> (<code>ISessionCookieStore.cs:20</code>, <code>:24</code>).</li>
+          <li><strong>The browser holds an unsigned claims copy.</strong> <code>SessionClaimsToken.Create</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionClaimsToken.cs:25-33</code>)
+          keeps the access token&#39;s payload under an <code>{&quot;alg&quot;:&quot;none&quot;,&quot;typ&quot;:&quot;JWT&quot;}</code> header with an empty
+          signature (<code>:17</code>), enough to render authentication state and nothing any API accepts (<code>:7-13</code>).
+          Opting in sets <code>SessionCookieSettings.ClaimsOnlyBrowserTokens</code>, so <code>/auth/session/token</code> returns the
+          claims copy and <code>POST /auth/session-cookie</code> ignores script-supplied tokens
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieSettings.cs:21-29</code>,
+          set at <code>SameOriginApiProxyServiceExtensions.cs:69-74</code>).</li>
+          <li><strong>Refresh outcomes are three, not two.</strong> <code>SessionRefreshStatus</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionRefreshOutcome.cs:4</code>) is
+          <code>Refreshed</code>, <code>Rejected</code> (no refresh cookie, or the identity endpoint answered 400, 401 or 403) and
+          <code>Unavailable</code> (5xx, 429, timeout, network failure, unreadable body) (<code>:10-23</code>), classified at
+          <code>CookieSessionRefresher.cs:119-121</code>. The proxy clears the cookies and answers 401 only on
+          <code>Rejected</code>; on <code>Unavailable</code> it keeps them, forwards and replays nothing, and answers 503 with the
+          upstream <code>Retry-After</code>, or 5 seconds when there is none (<code>SameOriginApiProxyEndpoint.cs:45</code>,
+          <code>:237-261</code>).</li>
+          <li><strong>The Blazor Server circuit trades handoffs, not tokens.</strong> The circuit keeps calling the gateway
+          server-to-server; it exchanges tokens with the cookies only as data-protected, purpose-bound
+          handoffs that live one minute
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/SameOriginProxy/SessionHandoffProtector.cs:19</code>,
+          <code>:21-27</code>).</li>
+          <li><strong>The WebAssembly client switches by configuration.</strong> <code>/client-config</code> adds
+          <code>SameOriginApiEndpoint</code> only on an opted-in host
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:99</code>),
+          the bootstrap resolves it against the app base address
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/MmcaClientConfigBootstrap.cs:98</code>),
+          and <code>ApiSettings.SameOriginApiEndpoint</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/ApiSettings.cs:33</code>) then becomes the
+          <code>&quot;APIClient&quot;</code> base address
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:114</code>) and adds
+          <code>SameOriginProxyRequestHandler</code> (<code>DependencyInjection.cs:131-132</code>), which removes any
+          <code>Authorization</code> header and stamps <code>X-CSRF: 1</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/SameOriginProxyRequestHandler.cs:11</code>,
+          <code>:18-20</code>).</li>
+          <li><strong>Hubs are proxied too.</strong> On an opted-in client the notification hub connects through the proxy
+          with the CSRF header and no access-token provider (<code>NotificationHubService.cs:76</code>, <code>:360-364</code>); the
+          proxy attaches the bearer to the upgrade server-side.</li>
+          <li><strong>Downloads follow the API client.</strong> <code>ApiFileDownloadButton</code> resolves its anchor base as
+          <code>SameOriginApiEndpoint</code>, then <code>WasmApiEndpoint</code>, then <code>ApiEndpoint</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/Forms/ApiFileDownloadButton.razor.cs:98</code>),
+          so a top-level GET carries the cookie and the proxy supplies the bearer.</li>
+          <li><strong>MAUI is excluded.</strong> Native heads keep OS SecureStorage and talk to the gateway directly; the
+          <code>&quot;APIClient&quot;</code> pipeline changes only when <code>SameOriginApiEndpoint</code> is configured, which only an
+          opted-in host&#39;s WebAssembly client receives (<code>DependencyInjection.cs:95-99</code>).</li>
+          <li><strong>SameSite: Strict by default, Lax allowed.</strong> The framework-wide cookie default stays <code>Lax</code>
+          (<code>SessionCookieSettings.cs:19</code>); opting in raises it to the proxy&#39;s <code>SessionCookieSameSite</code>,
+          <code>Strict</code> unless the host chooses <code>Lax</code> (<code>SameOriginApiProxySettings.cs:68-74</code>). CSRF protection
+          rests on the header and origin gates above, not on <code>SameSite</code>. ADC&#39;s 1.218.0 adoption branch
+          (<code>feat/common-1.218.0-adoption</code>, unmerged at the time of writing) sets <code>Lax</code> so a signed-in user
+          arriving from a mailed deep link keeps the session on the first server render
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:47-51</code>).</li>
+          <li><strong>Gates.</strong> The behavior is pinned by <code>SameOriginApiProxyOptInTests</code> (hosts that do not opt in are
+          unchanged,
+          <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Web.Tests/SameOriginProxy/SameOriginApiProxyOptInTests.cs:21</code>),
+          <code>SameOriginApiProxyCsrfTests</code> (<code>SameOriginApiProxyCsrfTests.cs:12</code>), <code>SameOriginApiProxyOriginTests</code>
+          (<code>SameOriginApiProxyOriginTests.cs:14</code>), <code>SameOriginApiProxyRefreshOutcomeTests</code>
+          (<code>SameOriginApiProxyRefreshOutcomeTests.cs:14</code>), <code>SameOriginApiProxyHubTests</code>
+          (<code>SameOriginApiProxyHubTests.cs:25</code>), <code>SameOriginApiProxyTokenTests</code>
+          (<code>SameOriginApiProxyTokenTests.cs:15</code>) and <code>SameOriginApiProxyAuthFlowTests</code>
+          (<code>SameOriginApiProxyAuthFlowTests.cs:20</code>), all in the same folder.</li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Tokens out of script, with no infrastructure prerequisite.</strong> An injected script can still call the
+          API as the user while the page is open, but it cannot carry a token away: the only token in script
+          is the unsigned claims copy (<code>SessionClaimsToken.cs:7-13</code>). Option B buys the same property only
+          once UI and API share a registrable domain in every environment.</li>
+          <li><strong>Reuse, not a second auth system.</strong> The proxy is built on the cookie writer and the single-flight
+          refresher that already served server-side rendering (<code>ISessionCookieStore.cs:14</code>,
+          <code>CookieSessionRefresher.cs:63-72</code>), so there is one place a session is refreshed and one cookie
+          format.</li>
+          <li><strong>The right package.</strong> MMCA.Common.UI.Web is server-only; the MMCA.Common.UI Razor class library is
+          loaded by WebAssembly and MAUI heads, which cannot host a forwarder, and MMCA.Common.API is
+          referenced by every service, which would carry a YARP dependency into hosts that never front a
+          browser.</li>
+          <li><strong>Defense in depth for CSRF.</strong> A cookie that authenticates data calls must not be usable from
+          another origin. The custom header cannot be sent cross-origin without a preflight, and the proxy
+          never answers a preflight with a grant (<code>SameOriginApiProxyEndpoint.cs:218-225</code>); the origin gate
+          covers what the header cannot, a WebSocket upgrade, which is a GET and is not CORS-protected
+          (<code>:116-117</code>). Both gates were added after an adversarial review found upgrades and preflights open
+          (commit fba02c29).</li>
+          <li><strong>A blip at the identity endpoint must not sign users out.</strong> Treating every failed refresh as the
+          end of the session cleared the cookies on a 5xx or a timeout; separating <code>Unavailable</code> from
+          <code>Rejected</code> keeps a live session and tells the client when to retry
+          (<code>SessionRefreshOutcome.cs:12-23</code>).</li>
+          <li><strong>SameSite is a usability choice, not the CSRF control.</strong> Because the header and origin gates carry
+          CSRF, a consumer can choose <code>Lax</code> for deep links without weakening the data path; <code>None</code> stays
+          impossible (<code>SameOriginApiProxySettingsValidator.cs:40-43</code>).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>One extra hop.</strong> Every browser API call and every hub frame passes through the UI host before the
+          gateway (<code>SameOriginApiProxyEndpoint.cs:315-319</code>).</li>
+          <li><strong>The UI host becomes a stateful-ish auth edge.</strong> It owns refresh, the refresh race, the 401 replay
+          and cookie rotation for browser traffic (<code>SameOriginApiProxyEndpoint.cs:289-305</code>,
+          <code>:332-350</code>); a UI host outage now takes the browser&#39;s API path down with it.</li>
+          <li><strong>The UI host rate limiter now meters API traffic.</strong> Its exempt prefixes are <code>/health</code>, <code>/alive</code>,
+          <code>/_framework</code>, <code>/_content</code> and <code>/hubs</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:50</code>),
+          so every proxied <code>/api/**</code> call, including the hub at <code>/api/hubs/notifications</code>
+          (<code>NotificationHubService.cs:76</code>), counts against the per-IP window and the concurrency ceiling of
+          <a href="124-blazor-circuit-ceiling-ui-edge.html">ADR-124</a>.</li>
+          <li><strong>Ingress hosts must adopt forwarded headers or lose every POST.</strong> The origin gate compares against
+          the scheme, host and port as the app sees them (<code>SameOriginApiProxyEndpoint.cs:132-138</code>), so a host
+          behind a TLS-terminating ingress must call <code>UseCommonUiForwardedHeaders()</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeadersExtensions.cs:24</code>)
+          first, or every browser POST is refused (<code>UPGRADING.md:139-142</code>).</li>
+          <li><strong>Registration order matters.</strong> <code>AddCommonSameOriginApiProxy</code> must come after every
+          <code>ITokenRefresher</code> and <code>ISessionCookieSync</code> registration; the boot fails otherwise
+          (<code>SameOriginApiProxyServiceExtensions.cs:29-35</code>).</li>
+          <li><strong>Client code that presented the browser-held token breaks.</strong> Decoding it for claims still works;
+          sending it to the gateway does not (<code>UPGRADING.md:143-144</code>), and requests a host writes by hand must
+          add <code>X-CSRF: 1</code> on unsafe methods (<code>UPGRADING.md:137-138</code>).</li>
+          <li><strong>Script on the page can still act as the user.</strong> The proxy removes theft, not use: an injected
+          script runs same-origin and passes both gates. Content Security Policy
+          (<a href="023-security-response-headers.html">ADR-023</a>) stays the control for that.</li>
+          </ul>
+          <h2 id="alternatives-rejected">Alternatives rejected</h2>
+          <ul>
+          <li><strong>Option B: a same-site cookie sent straight to the API</strong> (weighed 2026-10-01). Rejected because it
+          needs UI and gateway under one registrable domain in every environment (DNS, certificates,
+          infrastructure), a cookie-JWT path in every service, and credentialed gateway CORS. Revisit if
+          production puts UI and API under one parent domain for other reasons.</li>
+          <li><strong>Stopping at the C+ hybrid</strong> (weighed 2026-10-01). Rejected because the access token stays in
+          script for its lifetime, so theft is shortened rather than removed. C+ was the interim step, not the
+          target.</li>
+          <li><strong>A server-side session store</strong> (rejected 2026-10-01). Holding tokens in a store keyed by an opaque
+          session id would make every UI host depend on a stateful store and its availability; the existing
+          HttpOnly cookie already keeps the tokens out of script, so the proxy stays stateless. Revisit if
+          token size outgrows a cookie or server-side revocation of a browser session becomes a requirement.</li>
+          <li><strong>Hosting the proxy in MMCA.Common.UI or MMCA.Common.API</strong> (rejected 2026-10-01). The Razor class
+          library is loaded by WebAssembly and MAUI heads, and the API package by every service, which would
+          push YARP into hosts that front no browser.</li>
+          <li><strong><code>SameSite</code> or an antiforgery token as the CSRF control</strong> (rejected 2026-10-01). <code>SameSite=Lax</code>
+          must remain available for deep links, and the API client is not a form post; the fixed header plus
+          the origin gate cover both fetches and WebSocket upgrades.</li>
+          <li><strong>Forwarding <code>OPTIONS</code> to the gateway</strong> (rejected 2026-10-01, after review). The gateway&#39;s CORS
+          policy would then decide whether <code>X-CSRF</code> may be sent cross-origin to the proxy
+          (<code>SameOriginApiProxyEndpoint.cs:218-219</code>).</li>
+          <li><strong>Proxying MAUI too</strong> (rejected 2026-10-01). A native head has no DOM and no script-injection
+          surface, keeps tokens in OS SecureStorage, and would only gain a hop.</li>
+          </ul>
+          <h2 id="consequences">Consequences</h2>
+          <ul>
+          <li><strong>Adoption, per Blazor Web host.</strong> Register after the session-cookie and token registrations, map
+          next to the session-cookie endpoints after <code>UseAuthorization</code>, configure the section only where a
+          default does not fit, and call <code>UseCommonUiForwardedHeaders()</code> first behind an ingress
+          (<code>UPGRADING.md:118-149</code>).</li>
+          <li><strong>The gateway URL stays configured.</strong> <code>ApiEndpoint</code> keeps the gateway address for full-page
+          navigations that must reach the gateway itself, such as the external sign-in challenge
+          (<code>ApiSettings.cs:25-31</code>).</li>
+          <li><strong>What to watch.</strong> UI host 429s and concurrency rejections on <code>/api/**</code> after a consumer opts in
+          (the limiter above now sees API and hub traffic), 503 <code>session_refresh_unavailable</code> rates as a
+          signal of identity-endpoint health, and 403 <code>cross_origin_rejected</code> spikes after an ingress change,
+          which usually mean forwarded headers are missing.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="022-browser-session-cookie-auth.html">ADR-022</a> (the HttpOnly session cookie the proxy reads),
+          <a href="051-client-auth-token-lifecycle.html">ADR-051</a> (client token lifecycle across render modes),
+          <a href="023-security-response-headers.html">ADR-023</a> (security headers and the CSP),
+          <a href="082-two-tier-cors-posture.html">ADR-082</a> (the gateway CORS posture the proxy never consults),
+          <a href="088-gateway-edge-responsibilities.html">ADR-088</a> and
+          <a href="089-gateway-topology-owned-by-configuration.html">ADR-089</a> (the gateway behind the proxy),
+          <a href="124-blazor-circuit-ceiling-ui-edge.html">ADR-124</a> (the UI host as its own hardened edge),
+          <a href="070-fail-fast-configuration-contract.html">ADR-070</a> (startup validation of the proxy settings).
+          Framework version and package figures live in <code>MMCA.Common/FACTS.md</code>.</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/131-same-origin-api-proxy.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
+            <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

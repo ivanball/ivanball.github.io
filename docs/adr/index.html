@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 129 ADRs</summary>
+        <summary>All 131 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -228,6 +228,8 @@
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
         <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
+        <li><a href="130-per-engine-data-source-strategy.html">130 · Per-Engine Data Source Strategy (Engine Facts Instead of Branching on the Enum)</a></li>
+        <li><a href="131-same-origin-api-proxy.html">131 · Same-Origin API Proxy (a Backend-for-Frontend That Keeps Tokens Out of Browser Script)</a></li>
           </ol>
         </nav>
       </details>
@@ -237,7 +239,7 @@
           <h1 id="architecture-decision-records">Architecture Decision Records</h1>
           <p>Accepted ADRs explaining <em>why</em> the core cross-cutting patterns exist. Read these before changing a
           pattern they describe: they capture context and trade-offs that aren&#39;t obvious from the code.</p>
-          <p><strong>129 accepted ADRs</strong>, 001-129, numbered contiguously with one row per ADR in the table below.
+          <p><strong>131 accepted ADRs</strong>, 001-131, numbered contiguously with one row per ADR in the table below.
           This file owns the ADR count and range (<code>MMCA.Common/FACTS.md</code>): read them here rather than
           recounting, and when you add an ADR, update this line with its row. <code>tools/adr-index.ps1</code> in this
           repo re-derives both from the files and fails if this line, the table, or a link drifts from them;
@@ -895,9 +897,20 @@
           <td>The tactical aggregate contract</td>
           <td>One entity contract: sealed classes over <code>BaseEntity</code> / <code>AuditableBaseEntity</code> / <code>AuditableAggregateRootEntity</code>, construction only through a <code>Create</code> returning <code>Result&lt;T&gt;</code>, no public setters, child access through the root, invariants in static <code>*Invariants</code> classes composed with <code>Result.Combine</code>. <code>EntityConventionTestsBase</code> and the naming rules gate construction, sealing, setters, placement and static invariant classes; child access and <code>Result.Combine</code> stay convention.</td>
           </tr>
+          <tr>
+          <td><a href="130-per-engine-data-source-strategy.html">130</a></td>
+          <td>Per-engine data source strategy</td>
+          <td>One internal <code>IDataSourceEngine</code> per engine (SQL Server, PostgreSQL, SQLite, Cosmos DB), looked up through the static <code>DataSourceEngines.For(DataSource)</code> registry (static because conventions and SQL builders run without a container), so call sites read engine facts instead of branching on the kept <code>DataSource</code> enum. Capabilities collapse to <code>IsRelational</code> plus the few that differ (migrations, required connection string, null ordering, row version), and outbox support folds into <code>IsRelational</code>. <code>RequestIdentityInsert</code> is renamed <code>RequestExplicitKeyInsert</code>; the raw-SQL executor is registered only on a relational default engine; SQLite quotes with double quotes everywhere. Per-engine settings properties kept; a dictionary-keyed settings model rejected 2026-10-01.</td>
+          </tr>
+          <tr>
+          <td><a href="131-same-origin-api-proxy.html">131</a></td>
+          <td>Same-origin API proxy (backend-for-frontend)</td>
+          <td>Opt-in per Blazor Web host (TD-08 Option A, MMCA.Common 1.218.0): <code>AddCommonSameOriginApiProxy</code> plus <code>MapCommonSameOriginApiProxy</code> in the server-only MMCA.Common.UI.Web serve <code>/api/**</code> on the UI host&#39;s own origin and forward to the gateway through YARP, attaching the bearer read from the existing HttpOnly session cookie, so the browser holds only an unsigned <code>alg:none</code> claims copy that authorizes nothing. Every proxied request, WebSocket upgrades included, must be same-origin by <code>Origin</code> and <code>Sec-Fetch-Site</code>; <code>OPTIONS</code> is answered locally and never forwarded; unsafe methods also need <code>X-CSRF: 1</code>. Stateless (no server-side session store); hubs and file downloads go through it too; a refused refresh clears the cookies and answers 401 while an undecidable one keeps them and answers 503 with <code>Retry-After</code>. Cookies default to <code>SameSite=Strict</code> under the proxy, <code>Lax</code> allowed (CSRF rests on the header and origin gates). MAUI is excluded. Rejected: a same-site cookie straight to the API (shared-domain mandate), stopping at the C+ hybrid, a session store, hosting in MMCA.Common.UI or MMCA.Common.API. Costs: one hop, the UI host becomes an auth edge, its rate limiter meters API traffic, and ingress hosts must call <code>UseCommonUiForwardedHeaders()</code> or every browser POST is refused.</td>
+          </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>
-          <p>Copy the structure of an existing record: <strong>Status</strong> (Proposed / Accepted / Superseded, date and
+          <p>Start from <code>docs-src/adr/_template.md</code> in this repo (it is not rendered; the generator only picks
+          up <code>NNN-*.md</code>), which carries the structure every record uses: <strong>Status</strong> (Proposed / Accepted / Superseded, date and
           link when superseding), <strong>Context</strong> (the forces and the problem), <strong>Decision</strong> (what we chose, in
           enough detail to implement), <strong>Rationale</strong> (why this over the alternatives), <strong>Trade-offs</strong> (what it
           costs), and <strong>Alternatives rejected</strong> whenever something was genuinely considered and dropped.
