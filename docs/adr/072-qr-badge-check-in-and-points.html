@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -282,7 +284,7 @@
           get-or-create command rather than a query
           (<code>.../Engagement.Application/CheckIns/UseCases/GetOrCreateMyBadge/GetOrCreateMyBadgeHandler.cs</code>). Two
           unique indexes cover it, on <code>UserId</code> and on <code>Credential</code>
-          (<code>.../Engagement.Infrastructure/Persistence/EntityConfiguration/AttendeeBadgeConfiguration.cs:31-36</code>).</p>
+          (<code>.../Engagement.Infrastructure/Persistence/EntityConfiguration/CheckIns/AttendeeBadgeConfiguration.cs:31-36</code>).</p>
           <ul>
           <li>The credential is <code>Guid.NewGuid()</code> and explicitly <strong>not</strong> <code>Guid.CreateVersion7()</code>
           (<code>AttendeeBadge.cs:65-68</code>): a v7 value embeds a timestamp and orders monotonically, which is exactly
@@ -290,33 +292,33 @@
           <li><code>Regenerate()</code> (<code>:59-63</code>) issues a new credential, which revokes every previously printed or
           screenshotted copy in one write.</li>
           <li>The wire format is <code>mmca-adc:badge:{credential}</code>
-          (<code>.../Engagement.Shared/CheckIns/BadgePayload.cs:15-20</code>). <code>TryExtractCredential</code> (<code>:30-45</code>) accepts the
+          (<code>.../Engagement.Shared/CheckIns/Badges/BadgePayload.cs:15-20</code>). <code>TryExtractCredential</code> (<code>:30-45</code>) accepts the
           prefixed form <strong>or</strong> a bare GUID, case-insensitively, and rejects <code>Guid.Empty</code>, so the manual path can
           take a typed value and the scanner can reject a foreign QR by prefix.</li>
           </ul>
           <h3 id="organizers-scan-attendees-with-two-recorded-self-service-exceptions">Organizers scan attendees, with two recorded self-service exceptions</h3>
-          <p><code>/check-in</code> (<code>.../Engagement.UI/Pages/CheckIn/CheckInScan.razor:1-2</code>) is <code>[Authorize(Roles = &quot;Organizer&quot;)]</code>
+          <p><code>/check-in</code> (<code>.../Engagement.UI/Pages/CheckIns/CheckInScan.razor:1-2</code>) is <code>[Authorize(Roles = &quot;Organizer&quot;)]</code>
           and its writes carry <code>[HasPermission(EngagementPermissions.CheckInManage)]</code>
           (<code>&quot;engagement:checkin:manage&quot;</code>, <code>.../Engagement.Shared/Authorization/EngagementPermissions.cs:23</code>,
-          applied at <code>.../Engagement.API/Controllers/CheckInsController.cs:75</code>, <code>:99</code>, <code>:179</code>). The attendee&#39;s page
+          applied at <code>.../Engagement.API/Controllers/CheckInsController.cs:79</code>, <code>:103</code>, <code>:183</code>). The attendee&#39;s page
           <code>/my-badge</code> is authenticated-only and displays, never writes. Every <code>CheckIn</code> row therefore records both
           parties: <code>UserId</code> (<code>.../Engagement.Domain/CheckIns/CheckIn.cs:31</code>) and <code>CheckedInByUserId</code> (<code>:49</code>).</p>
           <p>Two later endpoints on the same controller are the exception, and are deliberately built as one: they
           are attendee scans of a <strong>printed</strong> QR and carry no <code>[HasPermission]</code> at all.
-          <code>POST /checkins/sponsor-visits</code> (<code>CheckInsController.cs:128-143</code>) records a booth visit behind
-          <code>[FeatureGate(EngagementFeatures.SponsorVisits)]</code> (<code>:130</code>), and <code>POST /checkins/room-visits</code>
-          (<code>:159-174</code>) checks the caller into whatever session a room is hosting behind
-          <code>[FeatureGate(EngagementFeatures.RoomCheckIn)]</code> (<code>:161</code>). Neither takes an attendee from the request:
+          <code>POST /checkins/sponsor-visits</code> (<code>CheckInsController.cs:132-147</code>) records a booth visit behind
+          <code>[FeatureGate(EngagementFeatures.SponsorVisits)]</code> (<code>:134</code>), and <code>POST /checkins/room-visits</code>
+          (<code>:163-178</code>) checks the caller into whatever session a room is hosting behind
+          <code>[FeatureGate(EngagementFeatures.RoomCheckIn)]</code> (<code>:165</code>). Neither takes an attendee from the request:
           the identity comes from the token, as on <code>/my-badge</code>, and the room endpoint resolves the session
           server-side from the room plus a configured grace window rather than accepting a session id
-          (<code>:145-158</code>; <code>CheckInSettings.RoomCheckInGraceMinutes</code>, 15 by default, read at
-          <code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:51</code>). For these rows the two
+          (<code>:149-162</code>; <code>CheckInSettings.RoomCheckInGraceMinutes</code>, 15 by default, read at
+          <code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:53</code>). For these rows the two
           parties are the same person, which the aggregate says outright (<code>CheckIn.cs:46-49</code>).</p>
           <p>The scan surface adapts to the head rather than branching on platform, per ADR-071:
-          <code>ScannerAvailable =&gt; Scanner.IsSupported</code> (<code>CheckInScan.razor.cs:38</code>) gates the camera card
-          (<code>CheckInScan.razor:68</code>), while the manual attendee-search panel is <strong>always</strong> rendered, because on a web
-          or Windows head that search <em>is</em> the check-in surface (<code>CheckInScan.razor:108-113</code>). The scan loop
-          discards a non-badge QR and keeps scanning rather than failing (<code>CheckInScan.razor.cs:127-133</code>).</p>
+          <code>ScannerAvailable =&gt; Scanner.IsSupported</code> (<code>CheckInScan.razor.cs:41</code>) gates the camera card
+          (<code>CheckInScan.razor:69</code>), while the manual attendee-search panel is <strong>always</strong> rendered, because on a web
+          or Windows head that search <em>is</em> the check-in surface (<code>CheckInScan.razor:113-116</code>). The scan loop
+          discards a non-badge QR and keeps scanning rather than failing (<code>CheckInScan.razor.cs:130-136</code>).</p>
           <h3 id="one-checkin-aggregate-carrying-a-scope">One <code>CheckIn</code> aggregate carrying a scope</h3>
           <p><code>CheckInScope</code> is <code>Event = 0</code> / <code>Session = 1</code> / <code>Sponsor = 2</code>
           (<code>.../Engagement.Shared/CheckIns/CheckInScope.cs:14</code>, <code>:17</code>, <code>:23</code>), and one aggregate covers all
@@ -332,7 +334,7 @@
           processor reports <code>AlreadyCheckedIn = true</code> without a write
           (<code>.../Engagement.Application/CheckIns/Services/CheckInProcessor.cs:71-75</code>, surfaced on the DTO at
           <code>:147</code>), so no second integration event is published. Three <strong>filtered unique indexes</strong> are the backstop under a concurrent double scan
-          (<code>.../EntityConfiguration/CheckInConfiguration.cs:49-62</code>): <code>(UserId, EventId)</code> filtered to <code>[Scope] = 0</code>,
+          (<code>.../EntityConfiguration/CheckIns/CheckInConfiguration.cs:49-62</code>): <code>(UserId, EventId)</code> filtered to <code>[Scope] = 0</code>,
           <code>(UserId, SessionId)</code> filtered to <code>[Scope] = 1</code>, and <code>(UserId, SponsorId)</code> filtered to <code>[Scope] = 2</code>
           (<code>:60-62</code>), all three also excluding soft-deleted rows. The third one is what makes a shared sponsor
           deep link worth nothing past the first scan.</p>
@@ -341,7 +343,7 @@
           at all, is marked <code>IAuditedEntity</code> so that absence of an update is provable in the data rather than
           merely asserted (<code>:31</code>), raises <code>PointsEntryChanged</code> on create (<code>:96-101</code>), and carries a
           unique index on <code>(UserId, ActivityType, SubjectKey)</code>
-          (<code>.../EntityConfiguration/PointsEntryConfiguration.cs:46-48</code>). That one index is simultaneously the
+          (<code>.../EntityConfiguration/Points/PointsEntryConfiguration.cs:46-48</code>). That one index is simultaneously the
           idempotency guard for redelivered integration events and the anti-farming rule: because the subject key is
           <code>session:{id}</code>, <code>event:{id}</code> or <code>sponsor:{id}</code>
           (<code>.../Engagement.Shared/Points/PointsSubjectKeys.cs:16-32</code>, max 64 chars at <code>:14</code>),
@@ -417,8 +419,8 @@
           (<code>.../Points/IntegrationEventHandlers/AttendeeCheckedInPointsHandler.cs:65-99</code>, sponsor branch at
           <code>:88-94</code>; <code>PointsActivityType.SponsorVisit = 6</code>). Room self check-in has no rule of its own: it writes
           an ordinary session-scoped <code>CheckIn</code> through the shared core
-          (<code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:72-81</code>, the scope argument at
-          <code>:76</code>), so it earns the <code>SessionCheckIn</code> row above and inherits its once-per-session cap.</p>
+          (<code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:74-83</code>, the scope argument at
+          <code>:78</code>), so it earns the <code>SessionCheckIn</code> row above and inherits its once-per-session cap.</p>
           <p><code>AttendeeCheckedIn</code> (<code>.../Engagement.Shared/CheckIns/IntegrationEvents/AttendeeCheckedIn.cs:24-32</code>) is
           raised inside <code>CheckIn.Create</code> (<code>CheckIn.cs:112-119</code>), so the outbox captures it in the same transaction
           as the row (ADR-003), and it carries <code>Scope</code> as a <strong>string</strong> (<code>:26</code>) so a new scope stays additive.
@@ -430,12 +432,14 @@
           <p>The two feedback events are new to the Conference module
           (<code>.../Conference.Shared/Sessions/IntegrationEvents/SessionFeedbackSubmitted.cs:20-26</code>,
           <code>.../Conference.Shared/Events/IntegrationEvents/EventFeedbackSubmitted.cs:19-24</code>) and are raised on the
-          <strong>answer-create path only</strong>, never on the BR-107 upsert-update path. Three handlers raise them, and
-          the create-path-only rule holds at all three: <code>AddSessionQuestionAnswerHandler.cs:112</code>,
-          <code>AddEventQuestionAnswerHandler.cs:109-112</code>, and the batch path
-          <code>BatchAddSessionQuestionAnswersHandler.cs:155-156</code>, which emits one <code>SessionFeedbackSubmitted</code> per
-          newly created answer so a whole form submitted in one call produces exactly what the single-answer
-          handler would have produced call by call (<code>:152-154</code>). One feedback form therefore produces one event
+          <strong>answer-create path only</strong>, never on the BR-107 upsert-update path. Four handlers raise them, and
+          the create-path-only rule holds at all four: the single-answer paths
+          <code>AddSessionQuestionAnswerHandler.cs:113</code> and <code>AddEventQuestionAnswerHandler.cs:104</code>, and the two batch
+          paths <code>BatchAddSessionQuestionAnswersHandler.cs:156-157</code> and
+          <code>BatchAddEventQuestionAnswersHandler.cs:153-154</code>, each of which emits one feedback event per newly
+          created answer so a whole form submitted in one call produces exactly what the single-answer handler
+          would have produced call by call (<code>BatchAddSessionQuestionAnswersHandler.cs:153-155</code>,
+          <code>BatchAddEventQuestionAnswersHandler.cs:150-152</code>). One feedback form therefore produces one event
           per answer row on either path, and the shared subject key collapses them to one award.</p>
           <p><code>QuestionAsked</code> rides the existing in-module <code>SessionQuestionChanged</code> domain event, filtered to
           <code>DomainEntityState.Added</code> (<code>.../Points/DomainEventHandlers/SessionQuestionSubmittedPointsHandler.cs:60-64</code>),
@@ -443,14 +447,14 @@
           <h3 id="the-leaderboard-is-opt-in-and-opting-in-is-a-row">The leaderboard is opt-in, and opting in is a row</h3>
           <p><code>LeaderboardOptIn</code> (<code>.../Engagement.Domain/Points/LeaderboardOptIn.cs:32</code>, <code>:35</code>) holds <code>UserId</code> and a
           <code>DisplayName</code> snapshot, resolved server-side from the caller&#39;s token claims rather than accepted from the
-          request body (<code>SetLeaderboardParticipationHandler.cs:154-185</code>, the three claim lookups at <code>:156-158</code>;
+          request body (<code>SetLeaderboardParticipationHandler.cs:150-197</code>, the three claim lookups at <code>:168-170</code>;
           the request carries only <code>Participate</code>, <code>:50-52</code>).
-          Opting out soft-deletes the row (<code>LeaveAsync</code>, <code>:118-136</code>, <code>active.Delete()</code> at <code>:130</code>) and rejoining
-          reactivates it (<code>JoinAsync</code>, <code>:84-89</code>, the BR-135 pattern), so nobody&#39;s name is on the board without a
+          Opting out soft-deletes the row (<code>LeaveAsync</code>, <code>:130-148</code>, <code>active.Delete()</code> at <code>:142</code>) and rejoining
+          reactivates it (<code>JoinAsync</code>, <code>:60-124</code>, the reactivation at <code>:98</code>, the BR-135 pattern), so nobody&#39;s name is on the board without a
           live opt-in. Erasure is a separate, irreversible promise: <code>EraseDisplayName()</code> (<code>LeaderboardOptIn.cs:119-130</code>)
           overwrites the published name in place when the account behind it is erased, and it is driven by a fourth
           broker consumer, <code>UserDeleted</code> -&gt; <code>UserDeletedPointsHandler</code> (<code>Program.cs:289</code>, the mapping documented at
-          <code>:263</code>), because the published name is the one piece of personal data the Identity-side erasure cannot
+          <code>:261-263</code>), because the published name is the one piece of personal data the Identity-side erasure cannot
           reach across the database boundary (<code>Program.cs:265-267</code>). The row itself survives (anonymize-in-place,
           ADR-005). <code>GetLeaderboard</code>
           (<code>.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs</code>) reads only opted-in users&#39; entries
@@ -458,10 +462,10 @@
           (<code>SumByAsync</code>, <code>:55-59</code>, filtered to the opted-in ids at <code>:58</code>), then orders by total and display name
           (<code>:68-69</code>) and assigns distinct sequential ranks (<code>:73</code>).</p>
           <p><code>Engagement.CheckIn</code> and <code>Engagement.Points</code> are feature flags enforced with <code>[FeatureGate]</code> at the
-          controllers (<code>CheckInsController.cs:33</code>, <code>PointsController.cs:34</code>, ADR-031), and the two self-service
+          controllers (<code>CheckInsController.cs:37</code>, <code>PointsController.cs:34</code>, ADR-031), and the two self-service
           surfaces added two more, gated per action rather than per controller so each printed artifact can be
-          retired on its own: <code>Engagement.SponsorVisits</code> (<code>.../Engagement.Shared/EngagementFeatures.cs:37</code>) and
-          <code>Engagement.RoomCheckIn</code> (<code>:44</code>). GDPR export is extended in the
+          retired on its own: <code>Engagement.SponsorVisits</code> (<code>.../Engagement.Shared/EngagementFeatures.cs:59</code>) and
+          <code>Engagement.RoomCheckIn</code> (<code>:71</code>). GDPR export is extended in the
           same pass: <code>user_engagement_export.proto</code> gains <code>points_entries</code>, <code>leaderboard_opt_in</code> and
           <code>leaderboard_display_name</code> (<code>:34-41</code>) plus an <code>EngagementPointsEntryExportItem</code> message (<code>:63-80</code>); the
           check-in history followed as <code>check_ins = 6</code> (<code>:45</code>) with an <code>EngagementCheckInExportItem</code> message
@@ -484,7 +488,7 @@
           now priced instead of avoided: the once-per-subject filtered unique index caps a leaked sponsor link at
           one award per attendee (<code>CheckInConfiguration.cs:60-62</code>), the award is a single per-sponsor grant
           and zero-able mid-conference (<code>PointsSettings.cs:32-37</code>), each surface has its own kill switch
-          (<code>EngagementFeatures.cs:37</code>, <code>:44</code>), and the row still records both parties even when they are the
+          (<code>EngagementFeatures.cs:59</code>, <code>:71</code>), and the row still records both parties even when they are the
           same person (<code>CheckIn.cs:46-49</code>), so a self-recorded row is identifiable as one rather than
           indistinguishable from an organizer scan. Both flags ship on
           (<code>.../MMCA.ADC.Engagement.Service/appsettings.json:21-22</code>), so the exception is live, not dormant:
@@ -537,9 +541,9 @@
           <li><strong>Duplicate-key detection is an injected framework concern, not module code.</strong> The Application layer
           references neither EF Core nor SqlClient, so it cannot read a provider error number itself. It asks
           someone who can: <code>IUniqueConstraintViolationDetector</code>
-          (<code>MMCA.Common.Application/Interfaces/Infrastructure/IUniqueConstraintViolationDetector.cs:31</code>) is
+          (<code>MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUniqueConstraintViolationDetector.cs:31</code>) is
           constructor-injected into all three ADC handlers that can lose an insert race, so <code>PointsAwarder</code>
-          (<code>:32</code>, catch filter at <code>:75</code>), <code>SetLeaderboardParticipationHandler</code> (<code>:34</code>, <code>:104</code>) and
+          (<code>:32</code>, catch filter at <code>:75</code>), <code>SetLeaderboardParticipationHandler</code> (<code>:34</code>, <code>:115</code>) and
           <code>GetOrCreateMyBadgeHandler</code> (<code>:21</code>, <code>:54</code>) classify one way rather than three. The registered
           implementation walks the inner exception chain matching <strong>SQL Server error numbers 2601 and 2627
           first</strong> (<code>MMCA.Common.Infrastructure/Persistence/SqlServerUniqueConstraintViolationDetector.cs:34</code>,
@@ -567,6 +571,19 @@
           and 0 is reserved as &quot;unset&quot; on the C# side, so a reader of the raw export sees <code>3</code> rather than
           <code>SessionFeedback</code>. The check-in export item repeats the trade for <code>scope</code> (<code>:82-86</code>).</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>One content fact changed and is corrected in place in the Decision: a fourth handler raises the
+          feedback events. The event-side batch path, <code>BatchAddEventQuestionAnswersHandler.cs:153-154</code>, emits one
+          <code>EventFeedbackSubmitted</code> per newly created answer exactly as the session-side batch path does
+          (<code>BatchAddSessionQuestionAnswersHandler.cs:156-157</code>), so the create-path-only rule and the
+          one-award-per-subject collapse hold at all four raise sites. No decision or rationale changed. The
+          remaining edits are citation refreshes after files moved into feature subfolders
+          (<code>Engagement.Shared/CheckIns/Badges/</code>, <code>Engagement.UI/Pages/CheckIns/</code>,
+          <code>EntityConfiguration/CheckIns/</code> and <code>EntityConfiguration/Points/</code>, and MMCA.Common&#39;s
+          <code>Interfaces/Infrastructure/Persistence/IUniqueConstraintViolationDetector.cs:31</code>) and line shifts in
+          <code>CheckInsController.cs</code>, <code>EngagementFeatures.cs</code>, <code>RecordRoomCheckInHandler.cs</code>,
+          <code>CheckInScan.razor(.cs)</code>, <code>SetLeaderboardParticipationHandler.cs</code>, the two single-answer feedback
+          handlers and the Engagement service <code>Program.cs</code>.</p>
           <h2 id="related">Related</h2>
           <p><a href="071-barcode-scanning-and-qr-display.html">ADR-071</a> (the framework halves this consumes: the QR component on
           <code>/my-badge</code> and the scanner capability behind <code>/check-in</code>),
@@ -595,6 +612,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

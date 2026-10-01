@@ -13,14 +13,14 @@ fixture. The decision itself is unchanged.
 ## Context
 ADR-030 decides **who** applies a migration: every service host runs `DatabaseInitStrategy = Migrate`
 and self-applies its pending EF Core migrations at startup as the sole migrator, with no deploy-step
-`sqlcmd` backstop (`MMCA.Store/.github/workflows/deploy.yml:1197-1204`,
-`MMCA.ADC/.github/workflows/deploy.yml:1306-1316`). It says nothing about what **shape** a migration
+`sqlcmd` backstop (`MMCA.Store/.github/workflows/deploy.yml:1366-1373`,
+`MMCA.ADC/.github/workflows/deploy.yml:1474-1484`). It says nothing about what **shape** a migration
 may take.
 
 That gap is load-bearing because production rollback is **revision-only**. When the post-deploy smoke
 gate fails, the deploy rolls every container app back to its previous revision with
-`az containerapp revision copy --from-revision` (`MMCA.Store/.github/workflows/deploy.yml:1360-1361`,
-`MMCA.ADC/.github/workflows/deploy.yml:1462-1463`). That reverts the **image** and nothing else:
+`az containerapp revision copy --from-revision` (`MMCA.Store/.github/workflows/deploy.yml:1551`,
+`MMCA.ADC/.github/workflows/deploy.yml:1640`). That reverts the **image** and nothing else:
 the new revision already migrated the database on boot, and no down-migration runs. The previous
 release therefore keeps serving traffic against the **new** schema, which is exactly the statement
 both repos' CONTRIBUTING makes (`MMCA.Store/CONTRIBUTING.md:56-59`, `MMCA.ADC/CONTRIBUTING.md:57-60`).
@@ -28,7 +28,7 @@ A `DropColumn` shipped alongside the code that stopped reading it makes the roll
 release rather than a recovery.
 
 The existing build-time gate does not cover this. `dotnet ef migrations has-pending-model-changes`
-(`MMCA.Store/.github/workflows/deploy.yml:263-277`, `MMCA.ADC/.github/workflows/deploy.yml:359-373`)
+(`MMCA.Store/.github/workflows/deploy.yml:411-425`, `MMCA.ADC/.github/workflows/deploy.yml:430-444`)
 asserts a migration **exists** for every model change; it has no opinion on whether that migration is
 survivable one release back. The gate below is the shape rule that ADR-030 left open. It arrived in
 MMCA.ADC with the 2026-07-19 security/resilience/ops review batch (commit `adee5058`, PR #38) and was
@@ -44,21 +44,21 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
 - **A migration ADDED by a PR may not drop without a marker.** The `Expand/contract migration guard
   (schema rollback safety)` step fails the build when a newly added migration's `Up()` matches
   `\.(DropColumn|DropTable|DropIndex)\s*(<[^>]*>)?\s*\(` and the same `Up()` body does not carry the
-  override marker (`MMCA.Store/.github/workflows/deploy.yml:279-325`,
-  `MMCA.ADC/.github/workflows/deploy.yml:203-249`). Those three operations are the entire matched set.
+  override marker (`MMCA.Store/.github/workflows/deploy.yml:427-478`, regex at `:470`;
+  `MMCA.ADC/.github/workflows/deploy.yml:234-282`, regex at `:274`). Those three operations are the entire matched set.
 - **The marker's documented format is one comment line:**
   `// EXPAND-CONTRACT-OVERRIDE: <why this drop is safe one release back>`
   (`MMCA.Store/CONTRIBUTING.md:72-74`, `MMCA.ADC/CONTRIBUTING.md:73-75`). What the step actually
   enforces is looser: `grep -q 'EXPAND-CONTRACT-OVERRIDE'` over the `Up()` body
-  (`MMCA.Store/.github/workflows/deploy.yml:318`, `MMCA.ADC/.github/workflows/deploy.yml:242`), so the
+  (`MMCA.Store/.github/workflows/deploy.yml:471`, `MMCA.ADC/.github/workflows/deploy.yml:275`), so the
   token must appear inside `Up()`, but the `//` prefix, the colon and the reason text are convention,
   not validation.
 - **"Added by this PR" means git-added, base-relative, path-scoped.** The step fetches the PR base and
   runs `git diff --diff-filter=A --name-only "origin/<base_ref>...HEAD"` limited to
   `Source/Hosting/MMCA.Store.Migrations.SqlServer.*/Migrations/*.cs` (respectively
-  `MMCA.ADC.Migrations.SqlServer.*`) (`MMCA.Store/.github/workflows/deploy.yml:301-302`,
-  `MMCA.ADC/.github/workflows/deploy.yml:225-226`). `*.Designer.cs` files are skipped explicitly
-  (`MMCA.Store/.github/workflows/deploy.yml:313-315`, `MMCA.ADC/.github/workflows/deploy.yml:237-239`),
+  `MMCA.ADC.Migrations.SqlServer.*`) (`MMCA.Store/.github/workflows/deploy.yml:454-455`,
+  `MMCA.ADC/.github/workflows/deploy.yml:258-259`). `*.Designer.cs` files are skipped explicitly
+  (`MMCA.Store/.github/workflows/deploy.yml:466-468`, `MMCA.ADC/.github/workflows/deploy.yml:270-272`),
   the model snapshot is a modification rather than an addition so it never enters the list, and the
   dot before the wildcard means only per-module migration projects match. Today that is every
   migration project in both repos: `MMCA.Store.Migrations.SqlServer.{Catalog,Identity,Sales}` and
@@ -67,19 +67,19 @@ Schema changes follow **expand/contract**, and a CI step enforces the contract h
   the pathspec.
 - **Only the `Up()` body is scanned.** The body is extracted with
   `awk '/protected override void Up\(/{flag=1} /protected override void Down\(/{flag=0} flag'`
-  (`MMCA.Store/.github/workflows/deploy.yml:316`, `MMCA.ADC/.github/workflows/deploy.yml:240`), because
+  (`MMCA.Store/.github/workflows/deploy.yml:469`, `MMCA.ADC/.github/workflows/deploy.yml:273`), because
   every additive migration's `Down()` legitimately drops what `Up()` added and `Down()` never runs at
   startup: down-migration is explicit tooling only.
 - **It is a merge gate, not a deploy gate.** The step lives in the `build-and-test` job, which both
-  repos run only on `pull_request` (`MMCA.Store/.github/workflows/deploy.yml:178`,
-  `MMCA.ADC/.github/workflows/deploy.yml:194`) and document as a required merge check
+  repos run only on `pull_request` (`MMCA.Store/.github/workflows/deploy.yml:257`,
+  `MMCA.ADC/.github/workflows/deploy.yml:225`) and document as a required merge check
   (`MMCA.Store/CONTRIBUTING.md:37-38`, `MMCA.ADC/CONTRIBUTING.md:37-38`). Nothing re-checks the shape
   on the push to `main` that deploys. The step also carries the repo-wide change filter
   `if: needs.changes.outputs.code == 'true'`
-  (`MMCA.Store/.github/workflows/deploy.yml:304`, `MMCA.ADC/.github/workflows/deploy.yml:227`), so a
+  (`MMCA.Store/.github/workflows/deploy.yml:428`, `MMCA.ADC/.github/workflows/deploy.yml:235`), so a
   PR the `changes` job classifies as docs-only skips the guard entirely. That is not a hole: `code`
   goes false only when every changed file is Markdown
-  (`MMCA.Store/.github/workflows/deploy.yml:140`), and a PR that adds a migration `.cs` file always
+  (`MMCA.Store/.github/workflows/deploy.yml:189-190`, `MMCA.ADC/.github/workflows/deploy.yml:138-139`), and a PR that adds a migration `.cs` file always
   sets it true.
 - **The common legitimate override is an index rebuilt in place.** Adding INCLUDE columns or a filter
   emits a `DropIndex` immediately followed by a `CreateIndex` under the same name, which a
@@ -145,25 +145,36 @@ lands as an added migration in each consumer, which is where the gate sees it.
   reaches `main` without a PR.
 - **The diff fails closed, and the checkout it depends on is elsewhere in the file.** Neither repo
   wraps the diff in `|| true` any more: an unresolvable diff prints an `::error::` and exits 1
-  (`MMCA.Store/.github/workflows/deploy.yml:298-305`,
-  `MMCA.ADC/.github/workflows/deploy.yml:220-229`), and only a diff that resolves to an empty added
+  (`MMCA.Store/.github/workflows/deploy.yml:451-458`,
+  `MMCA.ADC/.github/workflows/deploy.yml:253-262`), and only a diff that resolves to an empty added
   list prints "No new migration files in this diff: expand/contract guard passes." and exits 0
-  (`MMCA.Store/.github/workflows/deploy.yml:306-309`, `MMCA.ADC/.github/workflows/deploy.yml:230-233`).
+  (`MMCA.Store/.github/workflows/deploy.yml:459-462`, `MMCA.ADC/.github/workflows/deploy.yml:263-266`).
   Both `build-and-test` checkouts now set `fetch-depth: 0`
-  (`MMCA.Store/.github/workflows/deploy.yml:182-188`, `MMCA.ADC/.github/workflows/deploy.yml:198-201`),
+  (`MMCA.Store/.github/workflows/deploy.yml:261-267`, `MMCA.ADC/.github/workflows/deploy.yml:229-232`),
   so the two repos run the same step against the same git object graph. The residual cost is that the
   gate's correctness lives in another step's `with:` block, directly above the guard in MMCA.ADC but
-  some ninety lines above it in MMCA.Store: drop the `fetch-depth` and every PR reds on a step that
+  about 160 lines above it in MMCA.Store (the OpenAPI, coverage and EF steps sit between them): drop the `fetch-depth` and every PR reds on a step that
   has nothing to do with the change, which is the deliberate direction for that failure to point. As
   accepted (2026-07-28) this record described the opposite. The diff was `$(git diff ... || true)` and
   the MMCA.Store checkout was shallow, so the step passed vacuously on every run from 2026-07-25 to
   2026-07-28, a three-day window in which a required check reported green without ever evaluating a
-  migration (`MMCA.Store/.github/workflows/deploy.yml:184-187`).
+  migration (`MMCA.Store/.github/workflows/deploy.yml:263-266`).
 - **It gates the migration, not the application.** Nothing verifies that the previous release's code
   tolerates the new schema; an expand migration that adds a required column the old revision never
   writes is invisible to the gate.
 - **Partial adoption is a real gap for the reference app.** MMCA.Helpdesk is the seed developers copy,
   and the rule it teaches by example today is the unmarked drop.
+
+## Revision (2026-10-01)
+No decision or rationale changed. Both `deploy.yml` files grew, so every workflow citation is
+re-anchored to the current lines: the startup-migrate note (`MMCA.Store/.github/workflows/deploy.yml:1366-1373`,
+`MMCA.ADC/.github/workflows/deploy.yml:1474-1484`), the rollback call (Store `:1551`, ADC `:1640`), the
+model-drift gate (Store `:411-425`, ADC `:430-444`), the guard step (Store `:427-478`, ADC `:234-282`)
+with its diff, Designer skip, `Up()` extraction, regex and marker lines, the `pull_request` condition
+(Store `:257`, ADC `:225`), the Markdown-only `code` filter (Store `:189-190`, ADC `:138-139`) and the
+`fetch-depth: 0` checkouts (Store `:261-267`, ADC `:229-232`). The regex, the three-operation set and
+the fail-closed behavior are unchanged. The one wording correction: in MMCA.Store the checkout now sits
+about 160 lines above the guard rather than ninety.
 
 ## Related
 ADR-030 (decides that each service self-applies its migrations at startup, which is precisely why a

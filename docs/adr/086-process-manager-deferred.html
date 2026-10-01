@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -274,8 +276,15 @@
           <p>Nothing in the four repositories has all three properties. A content sweep of the <code>Source</code> trees for
           <code>MassTransitStateMachine</code>, <code>SagaStateMachineInstance</code>, <code>ISaga</code> and <code>InMemorySagaRepository</code> returns
           <strong>no match in any repo</strong>, which is the verifiable form of &quot;no orchestrated workflow exists&quot;.
-          <code>PaymentReconciliationService</code> in MMCA.Store&#39;s Sales module is still the only reconciliation sweep,
-          and <code>PeriodicBackgroundService</code> still has exactly one production subclass.</p>
+          <code>PaymentReconciliationService</code> in MMCA.Store&#39;s Sales module is still the only reconciliation sweep
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:69</code>).
+          <code>PeriodicBackgroundService</code> has five production subclasses: that sweep
+          (<code>PaymentReconciliationService.cs:75</code>) plus four MMCA.Common maintenance jobs
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/RefreshSessionCleanupService.cs:53</code>,
+          <code>.../Persistence/Auth/PermissionGrantRefreshService.cs:36</code>,
+          <code>.../Persistence/InternalCommands/Administration/InternalCommandCleanupService.cs:52</code>,
+          <code>.../Persistence/Outbox/Administration/OutboxCleanupService.cs:54</code>), none of which coordinates a
+          workflow.</p>
           <p>Writing an orchestrator now would therefore be building the coordinator before the workflow. This
           record exists because the alternative failure mode is worse: the first genuine multi-step
           cross-service workflow arriving with no recorded design, and being answered with a fifth ad-hoc status
@@ -314,8 +323,8 @@
           <h3 id="the-constraint-that-shapes-the-technology-choice">The constraint that shapes the technology choice</h3>
           <p>MassTransit is <strong>pinned to v8</strong> and the pin is a build gate
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>): <code>MassTransit</code>, <code>MassTransit.RabbitMQ</code> and
-          <code>MassTransit.Azure.ServiceBus.Core</code> are all held at 8.5.10 in
-          <code>MMCA.Common/Directory.Packages.props:95-97</code>, because v9 requires a commercial license. The v8 saga
+          <code>MassTransit.Azure.ServiceBus.Core</code> are all held at 8.5.11 in
+          <code>MMCA.Common/Directory.Packages.props:128-130</code>, because v9 requires a commercial license. The v8 saga
           state machine and its EF Core saga repository are fully capable, so the pin does not block the design;
           what it blocks is assuming a future v9 feature, and it means the coordinator inherits the pin&#39;s own
           risk. If v8 stops receiving security fixes, a process manager built on it is inside the blast radius
@@ -401,6 +410,19 @@
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Payments/Reconciliation/PaymentReconciliationService.cs:68</code>)
           is still the only reconciliation sweep, and <code>PeriodicBackgroundService</code> still has exactly one
           production subclass (<code>PaymentReconciliationService.cs:74</code>).</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Two current-state statements are refreshed. The MassTransit pin is
+          8.5.11 for all three packages, still v8 (<code>MMCA.Common/Directory.Packages.props:128-130</code>), so the
+          licensing constraint stands unchanged. <code>PeriodicBackgroundService</code> no longer has exactly one production
+          subclass: beside <code>PaymentReconciliationService</code> (<code>PaymentReconciliationService.cs:75</code>) it now has four
+          MMCA.Common maintenance jobs (<code>RefreshSessionCleanupService.cs:53</code>, <code>PermissionGrantRefreshService.cs:36</code>,
+          <code>InternalCommandCleanupService.cs:52</code>, <code>OutboxCleanupService.cs:54</code>). None of them is a reconciliation
+          sweep or a workflow coordinator, so the absence evidence for this record&#39;s trigger holds. The
+          2026-09-11 Revision above is kept as written; its <code>PaymentReconciliationService.cs:68</code>/<code>:74</code> anchors
+          now sit at <code>:69</code>/<code>:75</code>, and the arm call it attributes to <code>CheckOutHandler</code> is a
+          <code>deadlineScheduler.ArmAsync</code> call there (<code>CheckOutHandler.cs:180</code>) that delegates to
+          <code>CheckOutDeadlineScheduler</code>, which schedules the <code>ExpireUnpaidOrderInternalCommand</code>
+          (<code>.../ShoppingCarts/UseCases/CheckOut/CheckOutDeadlineScheduler.cs:55-56</code>).</p>
           <h2 id="related">Related</h2>
           <p><a href="054-saga-compensation-and-reconciliation.html">ADR-054</a> (the accepted mechanism this record defers an
           alternative to: choreographed compensation, the persisted aggregate marker, and the reconciliation
@@ -434,6 +456,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-11-the-first-per-instance-deadline-exists-and-it-is-not-a-state-machine">Revision (2026-09-11): the first per-instance deadline exists, and it is not a state machine</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

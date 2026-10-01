@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -290,9 +292,10 @@
           </ul>
           </li>
           <li><strong>Anonymous abuse is handled by the right-shaped control, not the global limiter.</strong> Public reads
-          are served from the output cache (<code>UseOutputCache</code>; ADC&#39;s Conference service defines
-          <code>EventsCache</code> / <code>CategoriesCache</code> / <code>QuestionsCache</code> / <code>RoomsCache</code> policies on its public
-          controllers), and login/registration brute-force is handled by <code>LoginProtectionService</code>
+          are served from the output cache (<code>UseOutputCache</code>; ADC&#39;s Conference service defines one
+          public-endpoint policy per public aggregate, among them <code>EventsCache</code> / <code>CategoriesCache</code> /
+          <code>QuestionsCache</code> / <code>RoomsCache</code>,
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:266-295</code>), and login/registration brute-force is handled by <code>LoginProtectionService</code>
           (exponential-backoff account lockout after <code>MaxFailedAttempts</code> failed logins, plus per-IP
           registration throttling).</li>
           <li><strong>A per-IP cap on the anonymous authentication endpoints, on by default.</strong> <code>AddCommonRateLimiting</code>
@@ -321,8 +324,11 @@
           (one password, many emails) from a single source was otherwise unthrottled. Three details are deliberate:
           <code>RefreshAsync</code> is <strong>not</strong> throttled (renewal is automatic and periodic, and Blazor Server circuits
           issue it server-side from the UI host&#39;s IP); a request with no attributable IP gets <code>NoLimiter</code>
-          rather than sharing one bucket with every other such request, mirroring the global limiter&#39;s
-          fail-open posture; and the default is 30 rather than a tighter 10 for the same shared-IP reason,
+          rather than sharing one bucket with every other such request (a deliberate difference from the
+          global limiter, which puts an unattributable authenticated request in one shared <code>&quot;authenticated&quot;</code>
+          bucket and an unattributable anonymous hub request in one shared <code>&quot;anonymous-hub&quot;</code> bucket,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:62</code>,
+          <code>:152</code>, <code>:284-285</code>); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
           since every Server-circuit user&#39;s login leaves from the UI host&#39;s address.</li>
           <li><strong>The remaining named policies are opt-in, per-endpoint tightening.</strong> <code>AddCommonRateLimiting</code> also
           registers <code>FixedPolicy</code> and <code>UserPolicy</code>, which a specific action can apply with
@@ -510,6 +516,19 @@
           One name on both sides of the boundary is the point: a client sending under one key while the
           gateway reads another fails open silently, as a plain throttled caller.</li>
           </ol>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Two current-state statements in the Decision were corrected. The
+          ADC Conference output-cache list now reads as a sample of a larger per-aggregate set
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:266-295</code>) rather than as the
+          complete set. The <code>auth-ip</code> no-IP rule (<code>NoLimiter</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:284-285</code>)
+          no longer claims to mirror the global limiter, because the global limiter does not fail open for
+          unattributable traffic: an authenticated request with no subject, name or IP shares the
+          <code>&quot;authenticated&quot;</code> bucket (<code>:149-152</code>) and an anonymous hub request with no IP shares the
+          <code>&quot;anonymous-hub&quot;</code> bucket (<code>:62</code>); only anonymous non-hub traffic gets <code>NoLimiter</code> (<code>:68</code>), and that
+          is the anonymous exemption, not a no-IP rule. The rate-limiting registration now lives in the
+          partial <code>WebApplicationBuilderExtensions.RateLimiting.cs</code>, so the <code>WebApplicationBuilderExtensions.cs</code>
+          anchors in the Revisions above are historical and are not rewritten.</p>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
           ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
@@ -539,6 +558,7 @@
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

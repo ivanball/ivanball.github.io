@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -244,7 +246,9 @@
           (<code>IdempotencyConventionTestsBase</code>) fails any <code>[HttpPost]</code> action that declares neither, so the last
           Trade-off below (&quot;an action that should be idempotent but is missing <code>[Idempotent]</code> gets no
           protection&quot;) becomes a declared decision rather than an oversight. The shared auth controllers declare
-          their intent both ways. See the Revision (2026-08-18) at the end.</p>
+          their intent both ways. See the Revision (2026-08-18) at the end. Revised 2026-10-01 (keys are bound
+          to the request body with a 422 on reuse, replays carry <code>Location</code> and <code>ETag</code>, and lock or cache faults
+          fail open; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>Write endpoints (POST / PUT / PATCH) are exposed to <strong>client retries and double-submits</strong>: a flaky
           network, an impatient user double-clicking, or a resilience pipeline re-issuing a request can cause the
@@ -264,7 +268,11 @@
           requests with this key are the same operation.&quot;</li>
           <li><strong>The key is scoped to the caller and the endpoint, not taken bare.</strong> The cache key is
           <code>idempotency:{SHA-256(subject | method | route template | client key)}</code>, where the subject is the
-          caller&#39;s <code>user_id</code> claim or, unauthenticated, <code>anon:{remote address}</code>. Keying on the bare
+          caller&#39;s user id from <code>FindUserIdValue()</code> (the <code>sub</code> claim, falling back to
+          <code>ClaimTypes.NameIdentifier</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:26-28</code>) or,
+          unauthenticated, <code>anon:{remote address}</code> (<code>anon:unknown</code> when there is no address,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:541-542</code>). Keying on the bare
           client-supplied value made the key space global: two callers who happened to choose the same value
           shared an entry, so one user&#39;s serialized response body was replayed to another, and because
           services can share a single cache instance the collision also reached across endpoints and across
@@ -275,7 +283,15 @@
           when the host wires one and otherwise to an in-process memory cache (ADR-026), so cross-instance /
           cross-restart replay holds only when a distributed backing is configured. A later request with the same
           key replays the cached response and adds an <code>X-Idempotent-Replay: true</code> header so clients can tell a
-          replay from a fresh execution.</li>
+          replay from a fresh execution. The replay also re-emits the stored <code>Location</code> and <code>ETag</code> headers
+          (<code>IdempotencyFilter.cs:386-392</code>, fields at <code>IdempotencyRecord.cs:25-26</code>); <code>Location</code> is resolved
+          for <code>Created</code>, <code>CreatedAtRoute</code> and <code>CreatedAtAction</code> results (<code>IdempotencyFilter.cs:507-528</code>).</li>
+          <li><strong>The key is bound to the request body.</strong> Every record carries a SHA-256 <code>RequestBodyHash</code>
+          (<code>IdempotencyRecord.cs:24</code>), computed from the body the resource stage buffered
+          (<code>IdempotencyFilter.cs:122-123</code>, <code>:183-194</code>). A request reusing a key with a different body is not
+          replayed: it gets <strong>422</strong> with an &quot;Idempotency-Key reuse&quot; <code>ProblemDetails</code>
+          (<code>IdempotencyFilter.cs:373-379</code>, <code>:323-332</code>), a status distinct from the in-flight 409 because the
+          client must pick a new key rather than retry.</li>
           <li><strong>The lock spans execute-and-store, and it is an <code>IDistributedLock</code> when one is registered.</strong> The
           filter takes a fast-path cache read (no lock), then holds a lock across the re-check, the action, and
           the store, so a duplicate cannot slip in between the action finishing and its response reaching the
@@ -286,7 +302,11 @@
           script, held for a 30s time-to-live with a 5s wait for the current holder. A duplicate that cannot
           acquire within that wait, and finds nothing cached when it gives up, gets <strong>409 Conflict</strong> with a
           retry-with-the-same-key <code>ProblemDetails</code>: the original is still running somewhere, so executing would
-          be the double write this filter exists to prevent.</li>
+          be the double write this filter exists to prevent (<code>IdempotencyFilter.cs:262-271</code>).</li>
+          <li><strong>Infrastructure faults fail open.</strong> When the lock backend throws, the action runs without the lock
+          (<code>IdempotencyFilter.cs:254-259</code>); a cache read fault counts as a miss (<code>:363-368</code>) and a store fault
+          is logged and swallowed (<code>:452-456</code>). Each increments the <code>idempotency.degraded</code> counter
+          (<code>IdempotencyMetrics.cs:46-47</code>).</li>
           <li><strong>The striped semaphore is the fallback for a host that registers no lock.</strong> Without an
           <code>IDistributedLock</code> the filter serializes on a striped <code>SemaphoreSlim</code> (<code>KeyedSemaphoreStripe</code>, the
           same double-check pattern), which is correct for a single replica and for tests. Striping is
@@ -333,8 +353,13 @@
           expiry re-executes.</li>
           <li><strong>Response-shape coupling.</strong> Only a 2xx <code>ObjectResult</code> or a body-less 2xx <code>StatusCodeResult</code> is cached,
           and the cached body is the serialized value, so an endpoint whose response depends on per-request state
-          (other than the body) will replay the original, not a freshly-computed response. Response headers are
-          not part of the record either, so a replayed 201 does not carry the original <code>Location</code>.</li>
+          (other than the body) will replay the original, not a freshly-computed response. Of the response
+          headers, only <code>Location</code> and <code>ETag</code> are part of the record (<code>IdempotencyRecord.cs:25-26</code>); any other
+          header the original wrote is not replayed.</li>
+          <li><strong>A lock or cache outage removes the guard rather than the endpoint.</strong> Failing open
+          (<code>IdempotencyFilter.cs:254-259</code>) keeps writes available when Redis is down, at the price that
+          duplicates arriving during the outage are not serialized; <code>idempotency.degraded</code> is the signal that
+          this is happening.</li>
           <li><strong>A key is only ever replayed to the caller that produced it.</strong> Scoping to the subject means a
           client that retries under a different identity (a rotated anonymous address, or a token exchange
           between the first attempt and the retry) misses the cache and re-executes. That is the correct
@@ -405,6 +430,28 @@
           <li><strong>Adoption is per repo, like every other fitness base.</strong> A consumer that never subclasses
           <code>IdempotencyConventionTestsBase</code> gets exactly the previous posture.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>The Decision and Trade-offs are corrected to the filter as it runs today. Four statements had drifted.
+          The cache-key subject is <code>FindUserIdValue()</code> (<code>sub</code>, then <code>ClaimTypes.NameIdentifier</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:26-28</code>), not a
+          <code>user_id</code> claim, with <code>anon:unknown</code> when there is no remote address
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:541-542</code>). A key
+          is bound to a SHA-256 of the request body (<code>IdempotencyRecord.cs:24</code>), and reuse with a different body
+          is refused with 422 instead of replayed (<code>IdempotencyFilter.cs:373-379</code>, <code>:323-332</code>), which is why the
+          resource stage buffers the body when a key is present. Replays re-emit <code>Location</code> and <code>ETag</code>
+          (<code>IdempotencyRecord.cs:25-26</code>, <code>IdempotencyFilter.cs:386-392</code>, <code>:507-528</code>), so the earlier &quot;a replayed
+          201 does not carry the original <code>Location</code>&quot; no longer holds. Lock, cache-read and cache-store faults
+          fail open and increment <code>idempotency.degraded</code> (<code>IdempotencyFilter.cs:254-259</code>, <code>:363-368</code>,
+          <code>:452-456</code>), which qualifies the mutual-exclusion Trade-off.</p>
+          <p>The shared auth split described in the Revision (2026-08-18) has also moved: register is now
+          <code>[NonIdempotent]</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:93-94</code>;
+          a retry hits the email-exists 409 rather than a replayed token pair), so every POST on
+          <code>AuthControllerBase</code> and <code>OAuthControllerBase</code> is <code>[NonIdempotent]</code>, and the shared <code>[Idempotent]</code>
+          actions are forgot-password and reset-password
+          (<code>.../Controllers/PasswordResetAuthControllerBase.cs:75-76</code>, <code>:99-100</code>). The OAuth exchange is now at
+          <code>OAuthControllerBase.cs:177-178</code> and <code>complete</code> at <code>:97</code>; the filter&#39;s buffering guard is at
+          <code>IdempotencyFilter.cs:122-123</code> and <code>ReadIdempotencyKey</code> at <code>:164-171</code>; the gate&#39;s simple-name remark
+          spans <code>ArchitectureRules.Idempotency.cs:38-41</code>. That earlier section is left as written.</p>
           <h2 id="related">Related</h2>
           <p>ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the
           response the filter caches/replays), ADR-014 (the filter keeps the handler thin), ADR-009 (the resilience
@@ -432,6 +479,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

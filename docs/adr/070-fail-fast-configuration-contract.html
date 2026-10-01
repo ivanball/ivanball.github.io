@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -274,56 +276,68 @@
           <ul>
           <li><strong>One binding shape, used everywhere.</strong>
           <code>AddOptions&lt;T&gt;().Bind(configuration.GetSection(T.SectionName)).ValidateDataAnnotations().ValidateOnStart()</code>
-          is the required form (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:87-90</code>).
+          is the required form (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:71-74</code>).
           <code>.BindConfiguration(T.SectionName)</code> is the accepted shorthand for the <code>Bind(GetSection(...))</code> step and
           is what Store&#39;s Sales module uses for all six of the sections it binds
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:49-52</code>, <code>:54-57</code>, <code>:59-62</code>,
-          <code>:64-67</code>, <code>:69-72</code>, <code>:74-77</code>).
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:51-54</code>, <code>:56-59</code>, <code>:61-64</code>,
+          <code>:66-69</code>, <code>:76-79</code>, <code>:81-84</code>).
           <code>ValidateOnStart()</code> is the load-bearing link: without it the annotations are evaluated lazily on first
           resolution, which is exactly the first-use failure the contract exists to prevent.</li>
           <li><strong>The framework owns the base set.</strong> Nineteen sections are bound this way in the Infrastructure package&#39;s
-          <code>DependencyInjection.cs</code> alone. Nine sit directly inside <code>AddInfrastructure</code> (<code>ConnectionStringSettings</code>
-          <code>:87-90</code>, <code>SmtpSettings</code> <code>:108-111</code>, <code>PersistenceSettings</code> <code>:154-157</code>, <code>OutboxSettings</code> <code>:159-162</code>,
-          <code>LoginProtectionSettings</code> <code>:164-167</code>, <code>PasswordResetSettings</code> <code>:170-173</code>, <code>RefreshSessionSettings</code>
-          <code>:178-181</code>, <code>MessageBusSettings</code> <code>:193-196</code>, <code>JwksSettings</code> <code>:198-201</code>), a tenth arrives through the
-          private <code>AddInternalCommands</code> helper that <code>AddInfrastructure</code> calls (<code>:238</code>): <code>InternalCommandsSettings</code>
-          (<code>:1083-1087</code>), and two more arrive through the
-          <code>services.AddCaching(configuration)</code> call that <code>AddInfrastructure</code> itself makes (<code>:150</code>):
-          <code>CacheSettings</code> (<code>:276-279</code>) and <code>QueryCachePipelineSettings</code> (<code>:281-284</code>). Those twelve reach every host
-          that registers the package. The remaining seven sit in opt-in registration methods a host calls only when
-          it wants the feature: <code>SchedulerSettings</code> in <code>AddScheduledJobs</code> (<code>:437-440</code>), <code>TwoFactorSettings</code> in
-          <code>AddTwoFactorAuthentication</code> (<code>:472-475</code>), <code>EmailConfirmationSettings</code> in <code>AddEmailConfirmation</code>
-          (<code>:500-503</code>), <code>PermissionGrantSettings</code> in <code>AddStoredPermissionGrants</code> (<code>:537-540</code>), <code>AuditTrailSettings</code>
-          in <code>AddAuditTrail</code> (<code>:639-642</code>), <code>TenancySettings</code> in <code>AddMultiTenancy</code> (<code>:688-691</code>), and
-          <code>PushNotificationSettings</code> in <code>AddPushNotifications</code> (<code>:822-825</code>). The two cache sections take the chain
-          only when the caller passes configuration: the parameterless <code>AddCaching</code> overload registers both
-          unbound (<code>:288-289</code>), so <code>IOptions&lt;T&gt;</code> resolves to the compiled-in defaults instead of failing a caller
-          that configures no cache section at all. Eight more are bound outside that file: <code>IdempotencySettings</code>
+          <code>DependencyInjection</code> partial class, which spans <code>DependencyInjection.cs</code> and its <code>.Caching</code>, <code>.Auth</code>,
+          <code>.Jobs</code> and <code>.Notifications</code> parts. Nine sit directly inside <code>AddInfrastructure</code> (the method starting at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:56</code>; <code>ConnectionStringSettings</code>
+          <code>:71-74</code>, <code>SmtpSettings</code> <code>:92-95</code>, <code>PersistenceSettings</code> <code>:138-141</code>, <code>OutboxSettings</code> <code>:143-146</code>,
+          <code>LoginProtectionSettings</code> <code>:148-151</code>, <code>PasswordResetSettings</code> <code>:154-157</code>, <code>RefreshSessionSettings</code>
+          <code>:162-165</code>, <code>MessageBusSettings</code> <code>:177-180</code>, <code>JwksSettings</code> <code>:182-185</code>), a tenth arrives through the
+          private <code>AddInternalCommands</code> helper that <code>AddInfrastructure</code> calls (<code>:222</code>): <code>InternalCommandsSettings</code>
+          (<code>DependencyInjection.Jobs.cs:148-152</code>, the helper starting at <code>:146</code>), and two more arrive through the
+          <code>services.AddCaching(configuration)</code> call that <code>AddInfrastructure</code> itself makes (<code>:134</code>):
+          <code>CacheSettings</code> (<code>DependencyInjection.Caching.cs:43-46</code>) and <code>QueryCachePipelineSettings</code> (<code>:48-51</code>).
+          Those twelve reach every host that registers the package. The remaining seven sit in opt-in registration
+          methods a host calls only when it wants the feature: <code>SchedulerSettings</code> in <code>AddScheduledJobs</code>
+          (<code>DependencyInjection.Jobs.cs:39-42</code>), <code>TwoFactorSettings</code> in <code>AddTwoFactorAuthentication</code>
+          (<code>DependencyInjection.Auth.cs:41-44</code>), <code>EmailConfirmationSettings</code> in <code>AddEmailConfirmation</code>
+          (<code>DependencyInjection.Auth.cs:69-72</code>), <code>PermissionGrantSettings</code> in <code>AddStoredPermissionGrants</code>
+          (<code>DependencyInjection.Auth.cs:110-113</code>), <code>AuditTrailSettings</code> in <code>AddAuditTrail</code>
+          (<code>DependencyInjection.Jobs.cs:110-113</code>), <code>TenancySettings</code> in <code>AddMultiTenancy</code>
+          (<code>DependencyInjection.cs:268-271</code>), and <code>PushNotificationSettings</code> in <code>AddPushNotifications</code>
+          (<code>DependencyInjection.Notifications.cs:43-46</code>). The two cache sections take the chain only when the
+          caller passes configuration: <code>AddCaching</code> takes an optional <code>IConfiguration</code>
+          (<code>DependencyInjection.Caching.cs:26</code>) and, called without one, registers both unbound (<code>:55-56</code>), so
+          <code>IOptions&lt;T&gt;</code> resolves to the compiled-in defaults instead of failing a caller that configures no cache
+          section at all. Twelve more are bound outside the Infrastructure package: <code>IdempotencySettings</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:77-80</code>), <code>JwtSettings</code>, bound
           inside <code>AddCommonAuthentication</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:640-643</code>,
-          the method starting at <code>:638</code>), <code>ApiSettings</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:39-42</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:146-149</code>,
+          the method starting at <code>:144</code>), <code>RateLimitingSettings</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:353</code>),
+          <code>ApiSettings</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:39-42</code>),
           <code>GatewayRateLimitingSettings</code>, bound by the Aspire hosting package&#39;s <code>AddGatewayRateLimiting</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:255-258</code>), and
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:273-276</code>),
           <code>GatewaySettings</code>, bound by the Gateway package&#39;s <code>AddMmcaGateway</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewayReverseProxyExtensions.cs:54-57</code>), <code>AiSettings</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:92-95</code>), <code>BlazorCspSettings</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:54-56</code>), and
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:123-126</code>), <code>ContentPolicySettings</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/GuardrailServiceCollectionExtensions.cs:67-70</code>),
+          <code>BlazorCspSettings</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:54-56</code>),
+          <code>BlazorCircuitLimitSettings</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:55-58</code>),
+          <code>UiRateLimitingSettings</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:164-167</code>), and
           <code>HealthReportCacheOptions</code>, bound by the Aspire hosting package
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:259-262</code>).
-          Twenty-seven framework registrations in all.</li>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:33-36</code>).
+          Thirty-one framework registrations in all.</li>
           <li><strong>Each service host adds exactly two of its own</strong>, <code>ApplicationSettings</code> and <code>ModulesSettings</code>, and the
           same pair of chains covers all eight hosts across the three application repos. Seven of the eight reach
           them through one shared framework call rather than an inline copy: <code>AddModuleHost</code> binds and validates
           both sections before it builds the host&#39;s <code>ModuleLoader</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:61-64</code> and <code>:69-72</code>,
           the method starting at <code>:51</code>), so ADC&#39;s four services
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:309-311</code>, and the comment at <code>:300</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:365-367</code>, and the comment at <code>:356</code>
           says what the call binds) and Store&#39;s three
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:123-125</code>) each declare the two
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:124-126</code>) each declare the two
           sections in a single line of host code. The Helpdesk monolith seed still writes both chains out in its
-          own <code>Program.cs</code> (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:18-21</code> and <code>:82-85</code>), which is
+          own <code>Program.cs</code> (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:19-22</code> and <code>:94-97</code>), which is
           exactly what the shared call expands to, so the contract reads the same whether a host takes the helper
           or spells it out. Modules may add their own sections on the same chain, as Store&#39;s Sales module does for
           Stripe.</li>
@@ -336,31 +350,37 @@
           RS256 with no private key fails to boot rather than failing to sign its first token.</li>
           <li><strong><code>IOptions&lt;T&gt;</code> of the concrete settings class is the one resolution surface.</strong> Code that needs a
           bound section takes it at the point of use: <code>TokenService</code> takes <code>IOptions&lt;JwtSettings&gt;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:55</code>) beside an optional
-          <code>IOptions&lt;JwksSettings&gt;</code> that names the signing key in the token&#39;s <code>kid</code> header (<code>:68</code>), both of
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:72</code>) beside an optional
+          <code>IOptions&lt;JwksSettings&gt;</code> that names the signing key in the token&#39;s <code>kid</code> header (<code>:76</code>), both of
           <code>SmtpEmailSender</code>&#39;s constructors take <code>IOptions&lt;SmtpSettings&gt;</code> (<code>.../Mail/SmtpEmailSender.cs:29</code> and
           <code>:50</code>), <code>RepositoryFactory</code> takes
           <code>IOptions&lt;ApplicationSettings&gt;</code>
           (<code>.../Persistence/Repositories/Factory/RepositoryFactory.cs:15</code>), and <code>EntityControllerBase</code> resolves
           the same options per request in its <code>MaxPageSize</code> and <code>MaxExportRows</code> accessors
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:62</code> and <code>:82</code>).
-          Settings classes declare <code>get</code>/<code>init</code> members only
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Mail/SmtpSettings.cs:18-37</code>), so the value a
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:63</code> and <code>:83</code>).
+          Settings classes declare <code>get</code>/<code>init</code> members
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Mail/SmtpSettings.cs:18-59</code>), so the value a
           consumer reads is one it cannot rebind, and there is no second type per section to keep in step with
-          the class the chain binds and validates.</li>
+          the class the chain binds and validates. Two framework types keep a public setter:
+          <code>ModuleSettings.RemoteDependencies</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ModuleSettings.cs:38</code>, with CA2227
+          suppressed at <code>:37</code> because configuration binding needs it) and the three members of
+          <code>OwnerOrAdminFilterOptions</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:16</code>,
+          <code>:24</code>, <code>:31</code>).</li>
           <li><strong>Nine recorded exceptions in the framework, seven of them on one shared reason: an absent section is a
           working default, not a misconfiguration.</strong> <code>CacheKeyPrefixOptions</code> is bound with a bare <code>services.Configure</code>
           and no validation, because an absent section must leave cache keys exactly as callers write them (a
           single call inside <code>AddCaching</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:274</code>, the method starting
-          at <code>:259</code>).
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:41</code>, the method
+          starting at <code>:26</code>).
           <code>LayoutSettings</code> binds with <code>AddOptions().Bind()</code> and nothing after it for the same reason: it is
           optional footer copy (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:45-46</code>),
           and the two client-side sections registered beside it bind exactly the same way because an absent
           section leaves the compiled-in defaults: the staleness policy <code>UiReadCacheOptions</code> (<code>:50-51</code>) and
           <code>NotificationBellOptions</code> (<code>:53-54</code>).
-          <code>NativePushSettings</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:863-864</code>)
-          and <code>FileStorageSettings</code> (<code>:895-896</code>) bind the same way inside their opt-in registration methods,
+          <code>NativePushSettings</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:84-85</code>)
+          and <code>FileStorageSettings</code> (<code>:116-117</code>) bind the same way inside their opt-in registration methods,
           both of which read the section back and turn themselves into a no-op when it is absent or incomplete,
           so a host registers them unconditionally and switches the feature on by configuration alone.
           <code>SecurityHeadersSettings</code> binds through an options builder that calls <code>.Bind</code> only when configuration
@@ -370,7 +390,7 @@
           <code>DataSourcesSettings</code> is the one exception with a mechanical rather than a policy reason: it is
           constructed directly from the section rather than through <code>AddOptions</code>, because a root-level dictionary
           section does not bind through the options pipeline
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:102-104</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:86-88</code>).
           <code>OwnerOrAdminFilterOptions</code> is the ninth and keeps more of the chain than the rest: it binds with
           <code>ValidateDataAnnotations()</code> and drops only <code>ValidateOnStart</code>, because its required <code>BypassRole</code> has no
           framework default (the framework knows no role names), so validating at startup would fail every host
@@ -379,8 +399,8 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:91-92</code>, the reason at <code>:87-90</code>).</li>
           <li><strong>Consumer hosts take the same escape twice, and write the reason at the call site.</strong> ADC&#39;s Engagement
           service binds <code>PointsSettings</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:126-127</code>) and <code>CheckInSettings</code>
-          (<code>:133-134</code>) without <code>ValidateOnStart</code>: the defaults are working values and an explicit zero is the
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:124-125</code>) and <code>CheckInSettings</code>
+          (<code>:131-132</code>) without <code>ValidateOnStart</code>: the defaults are working values and an explicit zero is the
           documented per-rule kill switch, so no value an organizer could set should stop that host from booting
           mid-conference. Both follow the rule the framework&#39;s nine follow: an exception is legitimate when the
           section has no invalid value, and the reason belongs in a comment beside the binding rather than left
@@ -388,15 +408,18 @@
           </ul>
           <p><strong>Every layer reads a bound section the same way.</strong> Inside Infrastructure and API that is a constructor
           or per-request <code>IOptions&lt;T&gt;</code>: <code>OutboxProcessor</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:59</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:60</code>),
           <code>BrokerEventBus</code> (<code>.../Messaging/BrokerEventBus.cs:35</code>), <code>LoginProtectionService</code>
           (<code>.../Auth/LoginProtectionService.cs:21</code>), <code>RsaJwksProvider</code> (<code>.../Auth/RsaJwksProvider.cs:14</code>),
           <code>SQLServerDbContext</code> (<code>.../Persistence/DbContexts/SQLServerDbContext.cs:36</code>), and <code>IdempotencyFilter</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:428</code>). Consumer code
-          reads its own sections the same way: Store&#39;s Sales Infrastructure in <code>StripeClientFactory.cs:19</code>,
-          <code>StripePaymentService.cs:60</code>, <code>StripeWebhookRegistrationService.cs:27</code> and
-          <code>PaymentReconciliationService.cs:35-36</code>, and ADC&#39;s web host in its <code>/client-config</code> minimal-API handler
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:148</code>).</p>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:443</code>), and so does the
+          framework&#39;s <code>/client-config</code> minimal-API handler, which reads <code>IOptions&lt;ApiSettings&gt;</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/ClientConfig/ClientConfigEndpointExtensions.cs:51</code>)
+          and which ADC&#39;s web host maps with <code>app.MapClientConfigEndpoint</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:247</code>). Consumer code reads its own sections the
+          same way: Store&#39;s Sales Infrastructure in <code>StripeClientFactory.cs:37</code>, <code>StripePaymentService.cs:63</code> (and
+          <code>:67</code>), <code>StripeWebhookRegistrationService.cs:37</code>, <code>PaymentReconciliationService.cs:71-72</code>,
+          <code>DenormalizationBackfillService.cs:40</code> and <code>OrderFulfilledBackfillService.cs:39</code>.</p>
           <p>The Application layer names the options pipeline too, and the framework supplies five of those
           injections itself, across four classes: <code>AuthenticationServiceBase&lt;TUser&gt;</code> takes
           <code>IOptions&lt;RefreshSessionSettings&gt;</code>
@@ -420,21 +443,25 @@
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Points/Services/PointsAwarder.cs:31</code>),
           <code>GetLeaderboardHandler</code> (<code>.../Points/UseCases/GetLeaderboard/GetLeaderboardHandler.cs:30</code>) and
           <code>RecordRoomCheckInHandler</code> (<code>.../CheckIns/UseCases/RecordRoomCheckIn/RecordRoomCheckInHandler.cs:32</code>).
-          Store adds seven, with the same shape: its Identity <code>AuthenticationService</code> takes the same two
+          Store adds ten, with the same shape: its Identity <code>AuthenticationService</code> takes the same two
           injections directly
-          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:32-33</code>),
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:33-34</code>),
           plus
           <code>ForgotPasswordHandler</code> (<code>.../Users/UseCases/ForgotPassword/ForgotPasswordHandler.cs:26</code>),
           <code>SendEmailConfirmationHandler</code>
           (<code>.../Users/UseCases/EmailConfirmation/SendEmailConfirmationHandler.cs:32</code>),
           <code>CreateCheckoutSessionCommandValidator</code>
           (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionCommandValidator.cs:22</code>),
-          <code>CheckOutHandler</code> (<code>.../ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:51</code>),
+          <code>CheckOutDeadlineScheduler</code> (<code>.../ShoppingCarts/UseCases/CheckOut/CheckOutDeadlineScheduler.cs:27</code>),
           <code>ExpireUnpaidOrderInternalCommandHandler</code>
-          (<code>.../Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs:35</code>), and
+          (<code>.../Orders/InternalCommands/ExpireUnpaidOrderInternalCommandHandler.cs:35</code>),
           <code>OrderPaymentFailedSagaHandler</code>, which is the one site that resolves its
           <code>IOptions&lt;UnpaidOrderExpirySettings&gt;</code> from a scope rather than taking it in the constructor
-          (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:72</code>).
+          (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:72</code>), and in Catalog three classes that take
+          <code>IOptions&lt;StoreTimeZoneSettings&gt;</code>: <code>ProductVariantDTOMapper</code>, optionally
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/DTOs/ProductVariantDTOMapper.cs:29</code>),
+          <code>SetProductDiscountHandler</code> (<code>.../Products/UseCases/SetProductDiscount/SetProductDiscountHandler.cs:22</code>)
+          and <code>SetVariantDiscountHandler</code> (<code>.../Products/UseCases/SetVariantDiscount/SetVariantDiscountHandler.cs:23</code>).
           Only Helpdesk&#39;s Application layer names no <code>IOptions</code> at all.</p>
           <p>The contract is therefore one rule rather than two: the <strong>fail-fast chain is mandatory for every
           section</strong> other than the exceptions recorded above, and <strong><code>IOptions&lt;T&gt;</code> at the point of consumption is
@@ -461,11 +488,18 @@
           <li><strong>One options surface, validated once.</strong> A read-only alias interface per settings class would be a
           second type to keep in step with the class the chain binds, and a second way for a reader to ask the
           same question. <code>IOptions&lt;T&gt;</code> of the concrete class is the one surface a consumer sees, the <code>init</code>-only
-          members are what make the value unwritable at the point of use, and the validation that ran at boot
+          members (everywhere but the two setter-bearing types named above) are what make the value unwritable
+          at the point of use, and the validation that ran at boot
           covers every reader because there is only one bound instance to read.</li>
-          <li><strong>One shape makes the contract auditable.</strong> Because the chain is textually identical everywhere it
-          appears, a grep for <code>ValidateOnStart</code> is a complete inventory of what a host validates at boot: the
-          twenty-seven framework registrations, plus whatever the host and its modules add. Collapsing the two
+          <li><strong>One shape makes the contract auditable.</strong> Because every chain ends in <code>ValidateOnStart()</code>,
+          even where it varies (<code>BlazorCspSettings</code> drops <code>ValidateDataAnnotations()</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:54-56</code>; <code>RateLimitingSettings</code>
+          writes the chain on one line,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:353</code>;
+          Store&#39;s <code>StoreTimeZoneSettings</code> inserts a delegate <code>.Validate(...)</code>,
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/CatalogModule.cs:40-44</code>), a grep for
+          <code>ValidateOnStart</code> is a complete inventory of what a host validates at boot: the
+          thirty-one framework registrations, plus whatever the host and its modules add. Collapsing the two
           host-owned sections into <code>AddModuleHost</code> shortens that inventory rather than hiding it, since the pair
           is now read once in the framework instead of eight times across the repos.</li>
           </ul>
@@ -486,20 +520,26 @@
           Infrastructure ones. The alternative buys that purity with an alias type per settings class, and this
           record takes the pipeline over the second type.</li>
           <li><strong>Data annotations are the vocabulary.</strong> Anything richer needs <code>IValidatableObject</code> or a custom
-          <code>IValidateOptions&lt;T&gt;</code>, and both escape hatches are in use: the former twice, the latter three times.
-          <code>JwtSettings</code> implements <code>IValidatableObject</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:16</code>), and so does <code>AiSettings</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:31</code>), whose section is bound with the full chain
-          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:92-95</code>). Three sections carry a
-          separate validator class instead, each registered with <code>TryAddEnumerable</code> beside the chain that binds
-          it so two modules calling the same registration method cannot run the validation twice.
+          <code>IValidateOptions&lt;T&gt;</code>, and both escape hatches are in use in the framework: the former three times, the
+          latter four times. <code>JwtSettings</code> implements <code>IValidatableObject</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/JwtSettings.cs:16</code>), and so do <code>AiSettings</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/AiSettings.cs:22</code>), whose section is bound with the full chain
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:123-126</code>), and <code>ContentPolicySettings</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Guardrails/ContentPolicySettings.cs:23</code>). Four validator
+          classes sit beside a chain instead, each registered with <code>TryAddEnumerable</code> so two modules calling the
+          same registration method cannot run the validation twice.
+          <code>AiProviderValidator</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/Providers/AiProviderValidator.cs:16</code>, registered at
+          <code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:94</code>) exists because whether the
+          configured provider names a registered <code>IAiProviderFactory</code> depends on what the host registered, which
+          no annotation on <code>AiSettings</code> can see.
           <code>TenancySettingsValidator</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Tenancy/TenancySettingsValidator.cs:23-24</code>,
-          registered at <code>DependencyInjection.cs:533-534</code>) exists because confirming that a tenant&#39;s data-source
+          registered at <code>DependencyInjection.cs:274-275</code>) exists because confirming that a tenant&#39;s data-source
           override names a real physical source needs <code>IDataSourceResolver</code>, which no annotation can reach.
           <code>ConnectionStringSettingsValidator</code>
           (<code>.../Persistence/DataSources/ConnectionStringSettingsValidator.cs:30-31</code>,
-          registered at <code>DependencyInjection.cs:88-89</code>) exists because the &quot;a host must reach some database&quot; rule
+          registered at <code>DependencyInjection.cs:81-82</code>) exists because the &quot;a host must reach some database&quot; rule
           spans two sections at once, <code>ConnectionStrings</code> and <code>DataSources</code>, so a SQLite-only host that declares
           its databases as named sources is legitimate while a host declaring none anywhere is not.
           <code>BlazorCspSettingsValidator</code>
@@ -510,11 +550,34 @@
           the shape of each entry in a collection rather than about a single property. The cost of
           the second form is that the rule
           leaves the settings type and has to be registered separately, so a host that binds the section without
-          also registering the validator validates less than it appears to.</li>
+          also registering the validator validates less than it appears to. Store uses both forms on its own
+          sections: a separate <code>PaymentReconciliationSettingsValidator</code>, registered with <code>TryAddEnumerable</code>
+          beside its chain (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:73-74</code>), and an
+          inline <code>.Validate(...)</code> delegate on the <code>StoreTimeZoneSettings</code> chain
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/CatalogModule.cs:43</code>).</li>
           <li><strong>A bound value is a snapshot.</strong> <code>IOptions&lt;T&gt;</code> captures the instance built at binding time and never
           observes a configuration reload. A section that genuinely needs reload would have to move to
           <code>IOptionsMonitor&lt;T&gt;</code>, and none does today.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed; the inventory and several descriptions were brought back in line with
+          source. The framework now has thirty-one registrations on the chain rather than twenty-seven: a grep finds
+          33 <code>ValidateOnStart()</code> calls under <code>MMCA.Common/Source</code>, two of them the host-owned pair in
+          <code>ModuleHostExtensions.cs:61-64</code> and <code>:69-72</code>, and the four new ones are <code>RateLimitingSettings</code>
+          (<code>WebApplicationBuilderExtensions.RateLimiting.cs:353</code>), <code>ContentPolicySettings</code>
+          (<code>GuardrailServiceCollectionExtensions.cs:67-70</code>), <code>BlazorCircuitLimitSettings</code>
+          (<code>BlazorCircuitLimitExtensions.cs:55-58</code>) and <code>UiRateLimitingSettings</code>
+          (<code>UiRateLimitingExtensions.cs:164-167</code>), so twelve sections now bind outside the Infrastructure package.
+          The Infrastructure <code>DependencyInjection</code> class is a partial split across five files, and <code>AddCaching</code> is
+          one method with an optional <code>IConfiguration</code> (<code>DependencyInjection.Caching.cs:26</code>) rather than two
+          overloads. The &quot;<code>get</code>/<code>init</code> members only&quot; statement now names its two exceptions
+          (<code>ModuleSettings.cs:38</code>, <code>OwnerOrAdminFilterOptions.cs:16</code>). The Rationale no longer calls the chain
+          textually identical, since three variants exist. The escape-hatch counts are now three
+          <code>IValidatableObject</code> types and four framework validators (<code>AiProviderValidator.cs:16</code> is new), plus
+          Store&#39;s validator and inline delegate. The <code>/client-config</code> read moved from ADC&#39;s host into the framework
+          (<code>ClientConfigEndpointExtensions.cs:51</code>), Store&#39;s <code>CheckOutHandler</code> no longer takes <code>IOptions</code> (its
+          injection is in <code>CheckOutDeadlineScheduler.cs:27</code>), and Store&#39;s Application layer now names ten classes.
+          Every other citation was re-anchored in place.</p>
           <h2 id="related">Related</h2>
           <p>ADR-025 (startup warm-up and readiness gating: this contract decides what happens <em>before</em> a host reaches
           that machinery), ADR-031 (feature flags read from configuration, whose section this contract governs the
@@ -536,6 +599,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

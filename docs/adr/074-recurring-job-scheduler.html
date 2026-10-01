@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -258,10 +260,10 @@
           <h3 id="the-scheduler-is-the-outbox-claim-lease-pattern-applied-to-cron-not-hangfire-and-not-quartznet">The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET</h3>
           <p>A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
           outbox claims a batch with an <code>ExecuteUpdateAsync</code> that sets <code>LockedUntil</code> and <code>LockToken</code> in one statement
-          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:479-483</code>, inside <code>ClaimEligibleAsync</code>, <code>:456</code>) over a shared
+          (<code>.../Persistence/Outbox/Processing/OutboxProcessor.cs:401-405</code>, inside <code>ClaimEligibleAsync</code>, <code>:378</code>) over a shared
           <code>FilterClaimable</code> predicate that admits only rows whose <code>LockedUntil</code> is null or already in the past
-          (<code>:535-537</code>), then re-reads the claimed
-          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:492-496</code>). A due job is claimed the same way, so two replicas can
+          (<code>:453-459</code>), then re-reads the claimed
+          set by <code>LockToken</code> so a partial claim processes only its own rows (<code>:413-418</code>). A due job is claimed the same way, so two replicas can
           never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.</p>
           <p>Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
           and host, and a licensing posture that varies by storage provider. Quartz.NET would have brought a large
@@ -283,11 +285,11 @@
           <h3 id="the-job-store-is-one-row-per-job-in-the-default-source-only">The job store is one row per job, in the Default source only</h3>
           <p><code>ScheduledJobEntry</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobEntry.cs</code>)
           carries <code>JobName</code> (the primary key), <code>CronExpression</code>, <code>NextRunOn</code>, <code>LastRunOn</code>, <code>LastOutcome</code>,
-          <code>LastDurationMs</code>, <code>LockedUntil</code> and <code>LockToken</code>. It is deliberately <strong>not</strong> an <code>IAuditableEntity</code>: it
+          <code>LastError</code>, <code>LastDurationMs</code>, <code>LockedUntil</code> and <code>LockToken</code> (<code>ScheduledJobEntry.cs:26-74</code>). It is deliberately <strong>not</strong> an <code>IAuditableEntity</code>: it
           self-stamps nothing, it is never soft-deleted, and no global query filter reaches it. That falls out of the
           mapping rather than being asserted: the soft-delete filter is applied only to entity types assignable to
-          <code>IAuditableEntity</code> (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:370</code>, <code>:379</code>), and
-          <code>ConfigureScheduler</code> maps the table with no <code>HasQueryFilter</code> call of its own (<code>:594-619</code>). That is the
+          <code>IAuditableEntity</code> (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:457</code>, <code>:466</code>), and
+          <code>ConfigureScheduler</code> maps the table with no <code>HasQueryFilter</code> call of its own (<code>:805-841</code>). That is the
           <code>OutboxMessage</code> precedent: infrastructure rows are not domain rows.</p>
           <p>The table lives in the <strong>Default</strong> source and only there. The outbox exists once per relational database
           because an outbox row must be written in the same transaction as the aggregate that produced it
@@ -330,23 +332,23 @@
           queue and a schedule has no queue.</p>
           <p>Registration is two calls. <code>AddScheduledJobs(configuration)</code> binds the settings and registers the runner;
           <code>AddScheduledJob&lt;TJob&gt;()</code> adds one job from any module, using the accumulate-across-modules idiom that
-          <code>AddPermissions</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:47</code>)
-          and its <code>EnsurePermissionRegistry</code> helper (<code>:61</code>) already establish. That registration takes <strong>no schedule
-          argument</strong> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:440</code>): the schedule is
+          <code>AddPermissions</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:103</code>)
+          and its <code>EnsurePermissionRegistry</code> helper (<code>:117</code>) already establish. That registration takes <strong>no schedule
+          argument</strong> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:72</code>): the schedule is
           the job&#39;s own <code>CronExpression</code> property, and the one way to retime a shipped job without a release is
           configuration, the <code>Scheduler:Jobs:{Name}:Cron</code> section bound by <code>SchedulerSettings.Jobs</code>
           (<code>.../Infrastructure/Scheduling/SchedulerSettings.cs:54-60</code>) into <code>ScheduledJobOverrideSettings.Cron</code> (<code>:74</code>).
           The runner resolves the two per job on every cycle, the override when it is present and non-blank and the
-          compiled-in default otherwise (<code>ResolveCronExpression</code>, <code>.../Infrastructure/Scheduling/ScheduledJobRunner.cs:162</code>).
+          compiled-in default otherwise (<code>ResolveCronExpression</code>, <code>.../Infrastructure/Scheduling/ScheduledJobRunner.cs:170</code>).
           The table is created only when the settings flag is on, the same gating <a href="075-audit-trail.html">ADR-075</a> uses.
-          Every cycle the registered jobs are <strong>upserted by <code>JobName</code></strong> (<code>SyncRegistrationsAsync</code>, <code>:259</code>), which is why
+          Every cycle the registered jobs are <strong>upserted by <code>JobName</code></strong> (<code>SyncRegistrationsAsync</code>, <code>:267</code>), which is why
           an override edited on a running host takes effect on the next cycle: the stored expression is rewritten and
           the next occurrence recomputed from the current instant, with a row whose expression is unchanged left alone.</p>
           <h3 id="design-time-gets-the-same-flag">Design-time gets the same flag</h3>
           <p><code>DesignTimeDbContextOptions.EnableScheduler</code>
           (<code>.../Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:41</code>) is the design-time mirror of
           <code>Scheduler:Enabled</code>, and <code>DesignTimeDbContextHelper</code> feeds it to the context as a fixed
-          <code>SchedulerSettings</code> (<code>.../Design/DesignTimeDbContextHelper.cs:136-137</code>). Without that flag the design-time
+          <code>SchedulerSettings</code> (<code>.../Design/DesignTimeDbContextHelper.cs:160-161</code>). Without that flag the design-time
           model diverges from the runtime model and <code>dotnet ef</code> breaks for every consumer.</p>
           <h3 id="the-framework-dogfoods-it">The framework dogfoods it</h3>
           <p><code>AuditTrailCleanupJob</code>, the retention purge of <a href="075-audit-trail.html">ADR-075</a>, ships as the framework&#39;s first
@@ -407,6 +409,16 @@
           <li><strong>One runner per host, and it is shared.</strong> A slow job delays the jobs due behind it, exactly as
           <a href="052-background-job-execution.html">ADR-052</a>&#39;s single-reader drain does for its queue.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. The job-store field list now names <code>LastError</code>, a nullable string the
+          entry already carries (<code>.../Infrastructure/Scheduling/ScheduledJobEntry.cs:57</code>) and maps with a 2048-character
+          cap (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:827</code>). Citations were refreshed to current lines:
+          the outbox claim (<code>OutboxProcessor.cs:378</code>, <code>:401-405</code>, <code>:413-418</code>, <code>FilterClaimable</code> <code>:453-459</code>), the
+          soft-delete filter and <code>ConfigureScheduler</code> (<code>ApplicationDbContext.cs:457</code>, <code>:466</code>, <code>:805-841</code>),
+          <code>AddPermissions</code> and <code>EnsurePermissionRegistry</code> (<code>AuthorizationExtensions.cs:103</code>, <code>:117</code>),
+          <code>AddScheduledJob&lt;TJob&gt;()</code>, which now lives in <code>DependencyInjection.Jobs.cs:72</code>, <code>ResolveCronExpression</code> and
+          <code>SyncRegistrationsAsync</code> (<code>ScheduledJobRunner.cs:170</code>, <code>:267</code>), and the design-time scheduler settings
+          (<code>DesignTimeDbContextHelper.cs:160-161</code>).</p>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox whose claim-lease idiom and smart wait this reuses
           verbatim, and whose at-least-once posture it inherits along with the idempotency obligation on job bodies),
@@ -437,6 +449,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

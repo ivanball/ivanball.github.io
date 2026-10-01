@@ -22,11 +22,15 @@ MMCA.ADC (four services, the Gateway, the Blazor web host) and five in MMCA.Stor
 the Gateway, the Blazor web host). They are uniform by copy, not by a shared base file or a template:
 each one is a four-stage file with the same shape (`base` on
 `mcr.microsoft.com/dotnet/aspnet:10.0`, `build` on `mcr.microsoft.com/dotnet/sdk:10.0`, `publish`,
-`final`), and the differences between them are the project path, the `COPY` granularity, and one
-publish property (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Dockerfile:1,6,37,46`).
+`final`), and the differences between them are the project path, the `COPY` granularity (the two
+web-host images also copy the `.slnx`), whether the build-stage restore passes `--locked-mode` (the
+two web-host images do not: `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile:41`,
+`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Dockerfile:46`), and one publish property
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Dockerfile:4,10,41,55`).
 Both of those base images are named by `sha256` digest with the tag kept as a readable suffix, and
-the digest pair is per repository: the six ADC images resolve one runtime and SDK pair, the five
-Store images resolve another (see Revision (2026-09-07) item 1).
+all eleven images resolve the same runtime and SDK pair (ADC
+`.../MMCA.ADC.Conference.Service/Dockerfile:4` and `:10`, Store
+`.../MMCA.Store.Sales.Service/Dockerfile:5` and `:12`; see Revision (2026-09-07) item 1).
 Nothing in the repositories reconciles them: an edit to one is an edit to one.
 
 That uniformity encodes three decisions that were made once, defended in Dockerfile comments, and
@@ -36,31 +40,31 @@ that a later hardening pass started from a stated position rather than from a di
 ran on 2026-09-07 and closed both.
 
 The images are built in CI, not by hand: a fan-out `build-images` matrix job with one leg per image
-(`MMCA.ADC/.github/workflows/deploy.yml:1179,1189-1207` for the six ADC legs,
-`MMCA.Store/.github/workflows/deploy.yml:1091,1101-1116` for the five Store legs) runs
+(`MMCA.ADC/.github/workflows/deploy.yml:1048,1063-1081` for the six ADC legs,
+`MMCA.Store/.github/workflows/deploy.yml:998,1008-1023` for the five Store legs) runs
 `docker/build-push-action@v7` over a buildx builder
-(`MMCA.ADC/.github/workflows/deploy.yml:1224-1229`), pushes each image to ACR under both the commit
-sha and `latest` (`:1235-1237`), and caches layers in that same registry with `mode=max`
-(`:1251-1252`). The job runs concurrently with the e2e gate and rolls nothing out; that separation
+(`MMCA.ADC/.github/workflows/deploy.yml:1099-1104`), pushes each image to ACR under both the commit
+sha and `latest` (`:1110-1112`), and caches layers in that same registry with `mode=max`
+(`:1126-1127`). The job runs concurrently with the e2e gate and rolls nothing out; that separation
 is ADR-080's subject, not this one's.
 
 ## Decision
 **1. The GitHub Packages credential is a BuildKit secret, never an `ARG` or `ENV`.** Both
 applications' `nuget.config` source-maps `MMCA.*` to GitHub Packages, so every restore inside an
 image needs a token. It arrives as `--secret id=github_token`, mounted into the restore `RUN`
-(`.../MMCA.ADC.Conference.Service/Dockerfile:26-28`) and again into the publish `RUN` (`:42-44`),
+(`.../MMCA.ADC.Conference.Service/Dockerfile:30-32`) and again into the publish `RUN` (`:51-53`),
 because publish performs its own restore pass. The value is read out of `/run/secrets/github_token`
 into a shell-local `GITHUB_TOKEN` that lives only for that command, which is the variable
 `nuget.config` expands. The Dockerfile states the reason in place: a build-arg promoted to `ENV`
-lands in image layers, the build cache, and `docker history` (`:8-10`). CI passes it as a
+lands in image layers, the build cache, and `docker history` (`:12-14`). CI passes it as a
 `secrets:` input to the build action, not a `build-args:` input
-(`MMCA.ADC/.github/workflows/deploy.yml:1243-1244`,
-`MMCA.Store/.github/workflows/deploy.yml:1158-1159`), and the workflow repeats the constraint in its
-own comments (`MMCA.ADC/.github/workflows/deploy.yml:1169-1172`). Secret *content* is deliberately not
+(`MMCA.ADC/.github/workflows/deploy.yml:1118-1119`,
+`MMCA.Store/.github/workflows/deploy.yml:1065-1066`), and the workflow repeats the constraint in its
+own comments (`MMCA.ADC/.github/workflows/deploy.yml:1038-1041`). Secret *content* is deliberately not
 part of the BuildKit cache key, so rotating the token does not invalidate the restore layer; that is
 safe only because the package set is pinned by committed lock files and any
 `Directory.Packages.props` change lands in a `COPY` layer that busts the cache anyway
-(`MMCA.ADC/.github/workflows/deploy.yml:1238-1242`).
+(`MMCA.ADC/.github/workflows/deploy.yml:1113-1117`).
 
 **2. There is deliberately no separate `dotnet build` stage.** The `build` stage restores and stops;
 `publish` does its own restore and build. This is a measured decision, dated in the file: on
@@ -68,35 +72,38 @@ safe only because the package set is pinned by committed lock files and any
 ReadyToRun publish emitted `bin/Release/net10.0/linux-x64/`, because the SDK infers a RID for
 ReadyToRun. Different paths, so publish never reused build output and every image compiled twice,
 about 75 seconds of pure waste per image
-(`.../MMCA.ADC.Conference.Service/Dockerfile:30-35`). The Store Dockerfiles carry the same note and
+(`.../MMCA.ADC.Conference.Service/Dockerfile:34-39`). The Store Dockerfiles carry the same note and
 cite the ADC measurement rather than repeating it
-(`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Dockerfile:32-37`). Nothing is lost by dropping the
+(`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Dockerfile:47-52`). Nothing is lost by dropping the
 stage: analyzer gating (`TreatWarningsAsErrors`, `AnalysisMode=All`) runs inside publish. The two
 web-host images, which do not use ReadyToRun, drop the stage for the weaker reason that it is one
-redundant MSBuild evaluation (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile:39-41`,
-`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Dockerfile:39-41`).
+redundant MSBuild evaluation (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile:46-48`,
+`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Dockerfile:51-53`).
 
 **3. `PublishReadyToRun=true` on the nine service and gateway images, and only those.** The four ADC
-services and the ADC Gateway (`.../MMCA.ADC.Conference.Service/Dockerfile:44`,
-`.../MMCA.ADC.Identity.Service/Dockerfile:44`, `.../MMCA.ADC.Engagement.Service/Dockerfile:44`,
-`.../MMCA.ADC.Notification.Service/Dockerfile:44`, `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Dockerfile:47`)
+services and the ADC Gateway (`.../MMCA.ADC.Conference.Service/Dockerfile:53`,
+`.../MMCA.ADC.Identity.Service/Dockerfile:53`, `.../MMCA.ADC.Engagement.Service/Dockerfile:53`,
+`.../MMCA.ADC.Notification.Service/Dockerfile:53`, `MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Dockerfile:58`)
 and the three Store services and the Store Gateway
-(`.../MMCA.Store.Catalog.Service/Dockerfile:42`, `.../MMCA.Store.Identity.Service/Dockerfile:42`,
-`.../MMCA.Store.Sales.Service/Dockerfile:42`,
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Dockerfile:45`) AOT-compile IL at publish time. The two
-Blazor web hosts do not (`.../MMCA.ADC.UI.Web/Dockerfile:48`,
-`.../MMCA.Store.UI.Web/Dockerfile:47`). The stated purpose is cold start: deploys, restarts and
-scale-out replicas skip first-request JIT (`.../MMCA.ADC.Conference.Service/Dockerfile:39-40`), and
+(`.../MMCA.Store.Catalog.Service/Dockerfile:59`, `.../MMCA.Store.Identity.Service/Dockerfile:59`,
+`.../MMCA.Store.Sales.Service/Dockerfile:59`,
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Dockerfile:66`) AOT-compile IL at publish time. The two
+Blazor web hosts do not (`.../MMCA.ADC.UI.Web/Dockerfile:55`,
+`.../MMCA.Store.UI.Web/Dockerfile:59`). The stated purpose is cold start: deploys, restarts and
+scale-out replicas skip first-request JIT (`.../MMCA.ADC.Conference.Service/Dockerfile:43-44`), and
 the containers those replicas land on are fractional-vCPU Container Apps: all six ADC apps
 (identity, conference, engagement, notification, gateway, ui) run on 0.25 vCPU / 0.5 GiB
-(`MMCA.ADC/infra/main.bicep:1058,1267,1391,1532,1692,1805`). On that much CPU, JIT time is not
+(`MMCA.ADC/infra/main.bicep:1666,1895,2036,2183,2361,2502`). On that much CPU, JIT time is not
 noise.
 
 **4. Every image is published with `UseAppHost=false` and started through the shared runtime.** The
 `final` stage is the `base` stage plus the publish output, `ENV ASPNETCORE_ENVIRONMENT=Production`,
 `USER $APP_UID` (added 2026-09-07, see the revision below) and `ENTRYPOINT ["dotnet", "<Host>.dll"]`
-(`.../MMCA.ADC.Conference.Service/Dockerfile:46-50`); the base stage exposes 8080 and 8081, the
-REST and h2c gRPC ports of the ADR-012 endpoint profile (`:3-4`). No image installs a package, adds
+(`.../MMCA.ADC.Conference.Service/Dockerfile:55-68`); the base stage exposes 8080 and 8081
+(`:6-7`). For Identity, Conference and Engagement, 8080 is the h2c ingress endpoint and 8081 the
+HTTP/1.1 health-probe listener (`MMCA.ADC/infra/main.bicep:1867,1870,1962-1963,1969`); only
+Notification serves h2c gRPC on 8081, the ADR-012 mixed profile, with its probe listener on 8082
+(`MMCA.ADC/infra/main.bicep:2162-2163,2196-2201`). No image installs a package, adds
 a shell script, or runs a health-check command of its own: liveness is the Container Apps probe
 configured in Bicep.
 
@@ -108,7 +115,7 @@ configured in Bicep.
 the same runtime layer, and Microsoft's monthly runtime patches arrive as a Dependabot bump of the
 digest rather than as a side effect of rebuilding (ADR-038). That restores the symmetry with the
 application layer, which was already pinned: the deployment references each image by commit sha, not
-by `latest` (`MMCA.ADC/.github/workflows/deploy.yml:1236,1403`). See Revision (2026-09-07)
+by `latest` (`MMCA.ADC/.github/workflows/deploy.yml:1111,1282,1316-1321`). See Revision (2026-09-07)
 item 1.
 
 **Every image drops privileges.** `USER $APP_UID` is the last instruction before the entrypoint in
@@ -120,12 +127,12 @@ outside the range a non-root user cannot bind
 (`.../MMCA.ADC.Conference.Service/Dockerfile:59-66`). See Revision (2026-09-07) item 2.
 
 What stays open is the gate, not the image. Each deploy scans the image it pushes with Trivy, but
-report-only in both consumers (`MMCA.ADC/.github/workflows/deploy.yml:1297`,
-`MMCA.Store/.github/workflows/deploy.yml:1183`), so a base-layer CRITICAL or HIGH is printed in the
+report-only in both consumers (`MMCA.ADC/.github/workflows/deploy.yml:1172-1173`,
+`MMCA.Store/.github/workflows/deploy.yml:1090,1097`), so a base-layer CRITICAL or HIGH is printed in the
 step log and does not stop a rollout. ADC scans every leg's tag, including a leg that only re-tagged
-an unchanged image; Store scans only a leg that rebuilt (`MMCA.Store/.github/workflows/deploy.yml:1184`),
+an unchanged image; Store scans only a leg that rebuilt (`MMCA.Store/.github/workflows/deploy.yml:1091`),
 since an unchanged image was scanned by the deploy that built it. The supply-chain job generates its
-CycloneDX SBOM from the solution filter (`MMCA.ADC/.github/workflows/deploy.yml:606-616`), so it describes the NuGet graph
+CycloneDX SBOM from the solution filter (`MMCA.ADC/.github/workflows/deploy.yml:623-636`), so it describes the NuGet graph
 and not the image, which leaves that report-only scan as the only thing in either pipeline that
 looks at the base layer at all. Flipping it to gating is recorded as a follow-up beside each step
 rather than decided here: see Revision (2026-09-07) item 4 and Revision (2026-09-10).
@@ -155,10 +162,10 @@ rather than decided here: see Revision (2026-09-07) item 4 and Revision (2026-09
   yes, two no) is deliberate, but it means "they are all the same" is already false and a reader
   cannot rely on any single file as the canonical one.
 - **Full-source copies make the cache coarse.** The service images copy the whole `Source/` tree
-  before restore (`.../MMCA.ADC.Conference.Service/Dockerfile:23`) because the project-reference
+  before restore (`.../MMCA.ADC.Conference.Service/Dockerfile:27`) because the project-reference
   chains through the migrations projects are deep, so any source edit invalidates the restore layer
   for those images. The Gateway and web-host images copy individual `.csproj` files first and keep
-  the finer-grained cache (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Dockerfile:21`).
+  the finer-grained cache (`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Dockerfile:30-31`).
 - **ReadyToRun costs build time and image size.** It compiles per RID at publish, which is time
   spent on every image build and bytes carried in every layer, in exchange for latency at start.
 - **The token is still a token.** Passing it as a secret protects the image, not the feed
@@ -288,3 +295,28 @@ comment (`:1293-1296`) names floating base images as the reason to stay non-gati
 is stale: the base images are digest-pinned (Revision (2026-09-07) item 1), so ADC can either flip
 `continue-on-error` to `false` or rewrite the comment to state the real remaining reason. That choice
 is left open here rather than decided.
+
+## Revision (2026-10-01)
+
+No decision or rationale changed. Three statements in Context and decision 4 no longer matched the
+files and are corrected in place. **The digest pair is shared, not per repository**: all eleven
+Dockerfiles name the same `aspnet` and `sdk` digests
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Dockerfile:4,10`,
+`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Dockerfile:5,12`). **The Dockerfiles also differ
+in the build-stage restore**: nine pass `--locked-mode` and the two web-host images do not
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile:41`,
+`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Dockerfile:46`), which the Revision (2026-09-10) table
+already recorded. **8081 is not the gRPC port on the cited image**: on Identity, Conference and
+Engagement it is the HTTP/1.1 health-probe listener beside the h2c ingress on 8080
+(`MMCA.ADC/infra/main.bicep:1962-1963,1969`), and only Notification serves h2c gRPC on 8081, with its
+probe on 8082 (`MMCA.ADC/infra/main.bicep:2196-2201`).
+
+Every other Dockerfile, `deploy.yml` and `main.bicep` citation in Context, Decision, Runtime
+postures and Trade-offs is re-anchored to the current line; the workflows and Dockerfiles moved, the
+behavior did not. The earlier Revision sections keep the anchors they recorded. For reference, the
+ADC Trivy step is now `MMCA.ADC/.github/workflows/deploy.yml:1172` (pin `:1174`, `continue-on-error`
+`:1173`, `exit-code: '1'` `:1180`) and Store's is `MMCA.Store/.github/workflows/deploy.yml:1090`
+(pin `:1098`, `continue-on-error` `:1097`, `exit-code: '0'` `:1104`, follow-up `:1081-1086`); the
+non-root `USER` line in the Store services is `Dockerfile:72`; and ADC's Trivy comment still names a
+floating base image as the reason to stay non-gating (`MMCA.ADC/.github/workflows/deploy.yml:1168-1171`),
+so the stale-reason finding in Revision (2026-09-10) still stands.

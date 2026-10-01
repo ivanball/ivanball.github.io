@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -242,7 +244,9 @@
           any frame buffer is allocated, beside the existing compressed-size cap).
           Revised 2026-09-12 (the extension points here carry DOCUMENT uploads as well as images; the
           avatar-only scope statement below is superseded by
-          <a href="123-speaker-session-assets.html">ADR-123</a>).</p>
+          <a href="123-speaker-session-assets.html">ADR-123</a>).
+          Revised 2026-10-01 (avatar blob deletion is a durable internal command rather than an inline
+          storage call; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
           BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -273,8 +277,10 @@
           up to 2 MB; server re-encodes to 256x256 JPEG via <code>IImageProcessor</code> (client-declared content
           types are advisory only); blob name <code>{userId}-{random8}.jpg</code> in the infrastructure-provisioned
           public-read <code>avatars</code> container (so the URL path reads <code>avatars/{userId}-{random8}.jpg</code>);
-          upload deletes the previous blob; the URL lives on the user entity as <code>[Pii]</code>,
-          nulled on anonymize with the blob deleted; exported in the GDPR data export.</li>
+          replacing, removing or erasing an avatar schedules a durable <code>DeleteAvatarBlobInternalCommand</code>
+          (<a href="114-internal-commands-durable-job-queue.html">ADR-114</a>) rather than deleting the blob inline; the
+          URL lives on the user entity as <code>[Pii]</code>, nulled on anonymize with the blob delete scheduled in
+          the same transaction; exported in the GDPR data export.</li>
           </ul>
           <h2 id="consequences">Consequences</h2>
           <ul>
@@ -282,8 +288,8 @@
           anonymous-visible surfaces without SAS plumbing. The random blob suffix prevents enumeration;
           the trade-off (anyone with the URL can fetch the image) is accepted and documented in the
           consumer&#39;s privacy policy.</li>
-          <li>A replaced or deleted avatar deletes its blob, but CDN/browser caches may serve the old URL
-          briefly; the random suffix means the new upload never reuses the old URL, so staleness is
+          <li>A replaced or deleted avatar has its blob deleted eventually (at-least-once, through the
+          internal-command processor, within its retry budget), and CDN/browser caches may serve the old URL briefly; the random suffix means the new upload never reuses the old URL, so staleness is
           bounded by cache TTLs.</li>
           <li><code>DefaultAzureCredential</code> in production means the storage account needs a data-plane role
           (Storage Blob Data Contributor) for the app identity - a bicep-level grant, not a secret.</li>
@@ -335,6 +341,30 @@
           same terms and for the same reason, with unguessability supplied by a server-minted GUID inside the
           blob path instead of a random suffix. See ADR-123 for the aggregate, the authorization rule and the
           per-consumer contract (ADC BR-116b).</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>Avatar blob deletion no longer happens as an inline storage call. Every path that retires an avatar
+          schedules a <code>DeleteAvatarBlobInternalCommand</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteAvatarBlob/DeleteAvatarBlobInternalCommand.cs:17</code>,
+          named <code>Identity.DeleteAvatarBlob.v1</code> at <code>:16</code>) through the internal-command queue of
+          <a href="114-internal-commands-durable-job-queue.html">ADR-114</a>. Replacing an avatar schedules the previous
+          blob post-commit
+          (<code>.../Users/UseCases/SetUserAvatar/SetUserAvatarHandler.cs:156-160</code>), removing one does the same
+          (<code>.../Users/UseCases/RemoveUserAvatar/RemoveUserAvatarHandler.cs:74-76</code>), and deleting the user
+          schedules it inside the erasure transaction so the row commits or rolls back with the anonymized
+          aggregate (<code>.../Users/UseCases/DeleteUser/DeleteUserHandler.cs:61-71</code>). The reason is durability: a
+          best-effort call lost the instruction whenever storage was unreachable, while a queued row is
+          retried up to <code>InternalCommands:MaxAttempts</code> (default 5,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:39</code>)
+          and then dead-lettered for operator action
+          (<code>.../Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:461-467</code>), so an outage longer
+          than the retry budget still needs a manual replay. Only the erasure path is fully transactional:
+          replace and remove schedule after <code>SaveChangesAsync</code> has committed
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:316-319</code>),
+          so a host death between commit and scheduling, or a failed schedule, leaves an orphaned blob that
+          is only logged for manual removal (<code>.../Users/UseCases/SetUserAvatar/SetUserAvatarHandler.cs:162-165</code>,
+          <code>.../Users/UseCases/RemoveUserAvatar/RemoveUserAvatarHandler.cs:78-81</code>). Deletion is therefore eventual
+          and at-least-once once scheduled, not synchronous; the Decision and Consequences bullets above are corrected to say so. The public-read
+          container, the random suffix and the cache-TTL bound on staleness are unchanged.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -351,6 +381,7 @@
             <li><a href="#consequences">Consequences</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-12">Revision (2026-09-12)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

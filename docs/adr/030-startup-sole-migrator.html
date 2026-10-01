@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -248,11 +250,12 @@
           throw a per-source breakdown if any is behind.</li>
           </ul>
           <p>Any other value is a configuration mistake and stops startup before a single source is created
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:47</code>, the
-          check itself at <code>:182-195</code>). The setting governs migrations only: a source no migrations pipeline owns
-          (Cosmos, or SQLite with no migrations assembly declared) is created with EF&#39;s <code>EnsureCreated</code> ahead of
-          the strategy switch, because it has no migration to apply and nothing else would ever create it
-          (<code>:70-87</code>); a tenant&#39;s own copy of such a source is created the same way under <code>&quot;Migrate&quot;</code> (<code>:152-164</code>).</p>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:57</code>, the
+          check itself at <code>:229-236</code>, its message at <code>:241-242</code>). The setting governs migrations only: a source no
+          migrations pipeline owns (Cosmos, or PostgreSQL or SQLite with no migrations assembly declared) is
+          created with EF&#39;s <code>EnsureCreated</code> ahead of the strategy switch, because it has no migration to apply and
+          nothing else would ever create it (<code>:70-98</code>); a tenant&#39;s own copy of such a source is created the same
+          way under either strategy (<code>&quot;Migrate&quot;</code> at <code>:199-211</code>, <code>&quot;None&quot;</code> at <code>:249-263</code>).</p>
           <p>The framework&#39;s own comments mark <code>&quot;None&quot;</code> as the production strategy and <code>&quot;Migrate&quot;</code> as dev/test. Both
           production apps deliberately diverge from that recommendation, and the divergence was bought with an
           incident, so it deserves to be recorded.</p>
@@ -262,8 +265,8 @@
           at startup, before the new revision serves traffic. There is deliberately <strong>no</strong> separate deploy-step
           migration (no <code>sqlcmd</code> / <code>dotnet ef database update</code> apply in <code>deploy.yml</code>).</p>
           <ul>
-          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:1059,1204,1329</code> (Identity/Catalog/Sales)
-          and <code>MMCA.ADC/infra/main.bicep:1099,1299,1421,1567</code> (Identity/Conference/Engagement/Notification) all set
+          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:1521,1687,1819</code> (Identity/Catalog/Sales)
+          and <code>MMCA.ADC/infra/main.bicep:1715,1935,2069,2221</code> (Identity/Conference/Engagement/Notification) all set
           <code>DatabaseInitStrategy = &#39;Migrate&#39;</code>.</li>
           <li><strong>One applier per revision.</strong> Each service runs <code>minReplicas: 1</code>, so the startup <code>MigrateAsync</code> is not
           racing sibling replicas of the same revision. (Since the 2026-07-19 outbox lease revision, ADR-003,
@@ -271,12 +274,14 @@
           is scale-out safe by construction, so above one replica the setting is a cost/migration choice.)</li>
           <li><strong>No deploy-step backstop, on purpose.</strong> Both <code>deploy.yml</code> files carry an explicit comment that there
           is <em>no external <code>sqlcmd</code> migration backstop</em> and that each service is the <strong>sole migrator</strong>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:1197-1204</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1307-1314</code>). The
+          (<code>MMCA.Store/.github/workflows/deploy.yml:1366-1374</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:1475-1484</code>). The
           <code>sqlcmd</code> that <em>is</em> installed in the pipeline is a connectivity/readiness probe, not a migration apply.</li>
           <li><strong>Build-time drift gate, not a runtime apply.</strong> CI runs
-          <code>dotnet ef migrations has-pending-model-changes</code> (Store <code>deploy.yml:273</code>, ADC <code>deploy.yml:369</code>) so a
+          <code>dotnet ef migrations has-pending-model-changes</code> (Store <code>deploy.yml:421</code>, ADC <code>deploy.yml:440</code>) so a
           model that has drifted from its migrations fails the build, but that gate only <em>detects</em>; it never
-          applies anything. The container does the applying.</li>
+          applies anything. The container does the applying. The gate sits in <code>build-and-test</code>, which runs on
+          pull requests only (Store <code>deploy.yml:257</code>, ADC <code>deploy.yml:225</code>), so a deploy dispatched by hand does
+          not re-run it.</li>
           <li><strong>This overrides the framework&#39;s documented &quot;None for production&quot; recommendation</strong>, accepting
           auto-migrate-on-boot in prod as the price of one fewer moving part.</li>
           <li><strong>It came from a real incident.</strong> A previous <code>sqlcmd</code> migration backstop in <code>deploy.yml</code> <em>raced</em> the
@@ -298,7 +303,10 @@
           <ul>
           <li><strong>Auto-migrate-in-production is what <code>&quot;None&quot;</code> exists to prevent.</strong> An unintended or destructive
           migration would ship itself on the next deploy. The apps accept this; the build-time model-drift gate
-          is the compensating control, and the per-service blast radius bounds the damage.</li>
+          is the compensating control, together with the expand/contract migration guard, which fails a pull
+          request adding a migration that contains <code>DropColumn</code>/<code>DropTable</code>/<code>DropIndex</code> unless it carries an
+          <code>EXPAND-CONTRACT-OVERRIDE</code> marker (Store <code>deploy.yml:427-472</code>, ADC <code>deploy.yml:234-276</code>), and the
+          per-service blast radius bounds the damage.</li>
           <li><strong>A failed startup migration fails the new revision.</strong> ACA keeps traffic on the previous revision
           (readiness gating, ADR-025), but a <em>half-applied</em> migration still needs manual recovery: there is no
           automated down-migration.</li>
@@ -361,6 +369,20 @@
           ADR-059 records how the loader discovers and orders those seeders; this record owns the policy of
           running them in production on every boot.</li>
           </ol>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed: every service host still sets <code>DatabaseInitStrategy = &#39;Migrate&#39;</code> in
+          production and remains the sole migrator of its database. The Context now records two framework
+          facts that had moved under it: PostgreSQL joins Cosmos and SQLite as an engine whose migrationless
+          source is created with <code>EnsureCreated</code> ahead of the strategy switch
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:70-98</code>), and
+          a tenant&#39;s own copy of such a source is created under either strategy, not only under <code>&quot;Migrate&quot;</code>
+          (<code>:199-211</code>, <code>:249-263</code>). The Decision notes that the model-drift gate runs on pull requests only, and
+          the Trade-offs name the expand/contract migration guard as a second build-time control beside it.
+          Refreshed citations: the strategy check (<code>:57</code>, <code>:229-236</code>, <code>:241-242</code>), both <code>main.bicep</code> setting lines,
+          both <code>deploy.yml</code> sole-migrator comments and drift-gate steps. Separately, the startup path the
+          2026-08-07 revision describes is now reached through <code>InitializeDatabaseUnlessDesignTimeAsync</code>, which
+          skips initialization and seeding only for build-time OpenAPI generation in Development (<code>:144-160</code>);
+          production still migrates and re-seeds on every boot.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -378,6 +400,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

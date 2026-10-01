@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -276,7 +278,9 @@
           rules, the MassTransit-v8 pin, and ADR-009&#39;s resilience gate.</li>
           <li><strong>Non-breaking by construction.</strong> A <code>virtual</code> get-only default (<code>=&gt; 1</code>) means no existing event
           changes and no outbox row migrates: System.Text.Json tolerates the missing field on old payloads and
-          the type supplies the default; new rows simply gain <code>&quot;schemaVersion&quot;:1</code>.</li>
+          the type supplies the default; new rows simply gain <code>&quot;SchemaVersion&quot;:1</code> (the outbox serializer
+          options set no naming policy, so outbox payloads keep PascalCase:
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20</code>, <code>:140</code>).</li>
           <li><strong>New-type-for-breaking-change</strong> is the only safe option when transport binds by type (MassTransit)
           and consumers are independently deployed: an in-place reshape has no compatibility window.</li>
           </ul>
@@ -353,10 +357,13 @@
           entity one level down hides the leak without removing it; it stops at framework and BCL types, which
           are not the repo&#39;s to police, and it unwraps arrays, nullables and generic collection arguments, so
           <code>IReadOnlyList&lt;OrderLine&gt;</code> is judged on <code>OrderLine</code>
-          (<code>.../ArchitectureRules.IntegrationEventPurity.cs:89</code>). Recursion is bounded by a visited set, so a
-          payload record that refers back to itself terminates. Both rules are vacuous for a module-less map:
-          MMCA.Common is the framework rather than a module, and its own shipped event is governed by the
-          public API baseline instead.</p>
+          (<code>UnwrapTypeArguments</code> at <code>.../ArchitectureRules.IntegrationEventPurity.cs:133-148</code>, called from the
+          walk at <code>:101</code>). Recursion is bounded by a visited set (<code>:94</code>), so a
+          payload record that refers back to itself terminates. Only the residency rule is vacuous for a
+          module-less map (<code>:22-25</code>): MMCA.Common is the framework rather than a module, so its own shipped
+          event answers to the public API baseline rather than to a module&#39;s Shared assembly. The payload rule
+          has no such guard and walks <code>OutputCacheEvictionRequested</code> in Common&#39;s own build
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Contracts/IntegrationEventPayloadPurityTests.cs:11-15</code>, <code>:72-75</code>).</p>
           <p><strong>Why the type system alone was not enough.</strong> <code>BaseIntegrationEvent</code> still derives from
           <code>BaseDomainEvent</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:11</code>),
           which is what lets one outbox row and one dispatcher carry both kinds of event, and <code>IEventBus</code>
@@ -371,6 +378,16 @@
           new-type-plus-upcaster migration this record already governs
           (<a href="090-event-upcaster-registration.html">ADR-090</a>), which is a far larger act than the one this
           amendment asks for.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed; two statements and one citation were corrected against source.
+          The amendment claimed both purity rules are vacuous for a module-less map; only the residency rule
+          returns early when <code>map.ModuleNames.Count == 0</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.IntegrationEventPurity.cs:22-25</code>),
+          while <code>IntegrationEventPayloadsAreDomainFree</code> (<code>:56-78</code>) walks the framework&#39;s own event. The
+          unwrapping citation moved from <code>:89</code> (the recursive walk) to <code>UnwrapTypeArguments</code> (<code>:133-148</code>). The
+          Rationale&#39;s outbox example now shows <code>&quot;SchemaVersion&quot;:1</code>, because the outbox serializer options set
+          only <code>ReferenceHandler.IgnoreCycles</code> and no naming policy
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20</code>, <code>:140</code>).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -387,6 +404,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#amendment-2026-09-11-integration-event-payload-purity">Amendment (2026-09-11): integration-event payload purity</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

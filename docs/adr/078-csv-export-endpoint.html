@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -240,15 +242,16 @@
           read hook that supersedes that hook in v1.165.0; all three consumers run on pins that carry them.
           Unlike the wave&#39;s other features this one is NOT opt-in: every controller deriving from
           <code>EntityControllerBase</code> gains the endpoint automatically, under that controller&#39;s own authorization
-          posture, so consumers re-baseline their OpenAPI contract snapshots in the sweep.</p>
+          posture, so the consumers that carry OpenAPI contract tests (ADC and Store) re-baseline their snapshots
+          in the sweep.</p>
           <h2 id="context">Context</h2>
           <p>The request is &quot;export what you filtered&quot;. The generic entity surface of
           <a href="034-generic-entity-query-layer.html">ADR-034</a> already accepts a full query vocabulary on the paged route
-          (<code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:153</code>): sparse fieldsets through
-          <code>fields</code>, dynamic per-type filtering bound by <code>QueryFilterModelBinder</code> (<code>EntityControllerBase.cs:165</code>),
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:154</code>): sparse fieldsets through
+          <code>fields</code>, dynamic per-type filtering bound by <code>QueryFilterModelBinder</code> (<code>EntityControllerBase.cs:166</code>),
           <code>sortColumn</code> / <code>sortDirection</code>, and pagination reported in <code>X-Pagination</code>. A user who has narrowed a grid
           to the rows they care about wants those exact rows as a file. The framework produced no file at all: the
-          four generic reads that predate this record (<code>EntityControllerBase.cs:106</code>, <code>:153</code>, <code>:371</code>, <code>:410</code>)
+          four generic reads that predate this record (<code>EntityControllerBase.cs:107</code>, <code>:154</code>, <code>:308</code>, <code>:347</code>)
           return JSON and nothing else.</p>
           <p>The obvious implementation is content negotiation: keep the same URL, have the client send
           <code>Accept: text/csv</code>, and register an <code>OutputFormatter</code>. Exploration of the real source found two behaviors
@@ -257,7 +260,7 @@
           <li><strong>The output cache does not vary by <code>Accept</code>.</strong> <code>PublicEndpointOutputCachePolicy</code>
           (<a href="040-authenticated-output-caching-for-public-reads.html">ADR-040</a>) sets
           <code>context.CacheVaryByRules.QueryKeys = &quot;*&quot;</code>
-          (<code>Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:81</code>). The key has
+          (<code>Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:96</code>). The key has
           exactly one other dimension, and it is not a header: when <code>ITenantContext</code> resolves a tenant the policy
           stamps that tenant into <code>CacheVaryByRules.VaryByValues[TenantVaryByKey]</code>
           (<code>PublicEndpointOutputCachePolicy.cs:102-105</code>, the <code>&quot;t&quot;</code> key constant at <code>:50</code>), and an unresolved
@@ -269,7 +272,7 @@
           cache entry, so a CSV request can be served a stored JSON body with a <code>Content-Type</code> that no longer
           matches what the formatter would have produced.</li>
           <li><strong>A negotiation failure is silent.</strong> <code>AddAPI</code> sets <code>options.ReturnHttpNotAcceptable = false</code>
-          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:48</code>), so a request for a media type no
+          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:49</code>), so a request for a media type no
           formatter can produce does not get 406: it falls back to the default formatter. A caller asking for CSV
           against a controller where the formatter did not apply receives JSON with a 200 and no signal that it
           asked for something else.</li>
@@ -280,30 +283,36 @@
           answer either: how many rows an export returns. The query pipeline caps any
           unpaginated read at <code>EntityQueryPipeline.MaxUnboundedResultLimit = 1000</code>
           (<code>Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:23</code>, applied by <code>Take(...)</code> at
-          <code>:98</code>, <code>:193</code> and <code>:247</code>), and there is no <code>IAsyncEnumerable</code> path through it. A naive &quot;read it all, write CSV&quot;
+          <code>:99</code>, <code>:195</code> and <code>:250</code>, and clamping a paged read&#39;s page size in <code>ApplyPaging</code> at <code>:274-283</code>), and there
+          is no <code>IAsyncEnumerable</code> path through it. A naive &quot;read it all, write CSV&quot;
           export therefore returns 1000 rows and says nothing about the rest.</p>
           <h2 id="decision">Decision</h2>
           <h3 id="a-dedicated-route-not-a-media-type">A dedicated route, not a media type</h3>
           <p><code>EntityControllerBase</code> gains a virtual <code>[HttpGet(&quot;export&quot;)] ExportAsync(...)</code> action
-          (<code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:247</code>). It accepts the same query
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:248</code>, method at <code>:252-293</code>). It accepts the same query
           surface as the paged route: <code>sortColumn</code>, <code>sortDirection</code>, <code>fields</code>, <code>includeFKs</code>, and <code>filters</code> bound by
           <code>[ModelBinder(typeof(QueryFilterModelBinder))]</code>, so a grid that produced a <code>paged</code> URL produces an
           <code>export</code> URL by changing one path segment. It returns a streamed <code>text/csv</code> response with a
           <code>Content-Disposition</code> attachment filename of <code>{controller}-{yyyyMMddTHHmmssZ}.csv</code>: the routed controller
-          name as the stem (<code>ExportFileNamePrefix</code>, <code>EntityControllerBase.cs:547</code>) and a UTC timestamp in basic-format
+          name as the stem (<code>ExportFileNamePrefix</code>, <code>EntityControllerBase.cs:484-497</code>) and a UTC timestamp in basic-format
           ISO 8601, a literal <code>T</code> separator and a trailing <code>Z</code> with no other separators, so the name is legal on every
-          file system and sorts chronologically in any locale (<code>BuildExportFileName</code>, <code>:724-727</code>).</p>
+          file system and sorts chronologically in any locale (<code>BuildExportFileName</code>, <code>:585-588</code>).</p>
           <p>A distinct path avoids both findings without touching either global setting: the route is not the cached
           route, and a client cannot ask for CSV and silently receive JSON, because asking for CSV means calling a
           different URL.</p>
           <h3 id="the-page-loop-is-how-the-row-cap-is-answered">The page loop is how the row cap is answered</h3>
-          <p><code>ExportAsync</code> does not issue one unpaged query. It loops server-side over the existing paged
+          <p><code>ExportAsync</code> does not issue one unpaged query. It hands the CSV work to the internal static
+          <code>EntityCsvExporter&lt;TEntityDTO&gt;</code> (<code>Source/Presentation/MMCA.Common.API/Export/EntityCsvExporter.cs:17</code>,
+          called from <code>EntityControllerBase.cs:270-289</code>), whose loop runs server-side over the existing paged
           <code>IEntityQueryService.GetAllAsync</code>
           (<code>Source/Core/MMCA.Common.Application/Interfaces/Mapping/IEntityQueryService.cs:60</code>) at a page size of
           <code>ApplicationSettings.MaxPageSize</code>
           (<code>Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:17</code>, default 500), writing each
-          page&#39;s rows into the response as they materialize, until a page comes back short or the export cap is
-          reached. Every page is a bounded, already-supported read, so <code>MaxUnboundedResultLimit</code> is never the thing
+          page&#39;s rows into the response as they materialize, until the last page is written or the export cap is
+          reached. A short page counts as the last page only when the rows written have reached the page&#39;s reported
+          <code>TotalItemCount</code> (or the page is empty), because the query pipeline clamps every page to its own ceiling
+          and a full clamped page can come back shorter than the requested size (<code>IsLastPage</code>,
+          <code>EntityCsvExporter.cs:196-197</code>). Every page is a bounded, already-supported read, so <code>MaxUnboundedResultLimit</code> is never the thing
           that decides how large an export is.</p>
           <p>Adding an <code>IAsyncEnumerable</code> path through <code>EntityQueryPipeline</code> is the better long-term answer: one
           query, one open reader, no repeated <code>Skip</code>. It is deliberately deferred out of this wave. It changes the
@@ -313,31 +322,36 @@
           <p><code>ApplicationSettings</code> gains <code>MaxExportRows</code>, default 100,000, range-attributed <code>[Range(1, 10_000_000)]</code>
           (<code>Source/Core/MMCA.Common.Application/Settings/ApplicationSettings.cs:32-33</code>); the controller independently
           treats a configured value of zero or less as unconfigured and falls back to the same default
-          (<code>EntityControllerBase.cs:78-86</code>, <code>DefaultMaxExportRows</code> at <code>:526</code>), because a cap of zero would serve every
+          (<code>EntityControllerBase.cs:78-86</code>, <code>DefaultMaxExportRows</code> at <code>:463</code>), because a cap of zero would serve every
           caller a header-only file. The ceiling is advertised in a header and the truncation is not, and the split is
           forced by streaming. <code>BeginExportResponse</code> sets the content type, the <code>Content-Disposition</code> filename and one
           export header, <code>X-Export-Row-Limit</code>, carrying the configured cap (<code>ExportRowLimitHeaderName</code>,
-          <code>EntityControllerBase.cs:535</code>, sent at <code>:708-715</code>) before the first body byte goes out. Whether the cap was
+          <code>EntityControllerBase.cs:472</code>, sent at <code>:569-576</code>, invoked by the exporter at <code>EntityCsvExporter.cs:147</code>
+          once the first page has succeeded) before the first body byte goes out. Whether the cap was
           actually reached is known only after the last page is read, by which time the headers are frozen, and
           buffering the whole file to learn the answer first would defeat the streaming the endpoint exists for. So at
           the ceiling the export stops and writes a final CSV comment row into the body,
-          <code># export truncated at N rows</code> (<code>TruncationMarker</code>, <code>:837-838</code>, written at <code>:347-350</code>), where it is still
-          writable. There is no <code>X-Export-Truncated</code> header. Truncation is a normal outcome with a signal, not an
+          <code># export truncated at N rows</code> (<code>TruncationMarker</code>, <code>EntityCsvExporter.cs:323-324</code>, written at <code>:179-182</code>), where it is still
+          writable. When the cap lands exactly on a page boundary, the page&#39;s reported <code>TotalItemCount</code> decides
+          whether rows were left behind, without querying a further page (<code>:170-173</code>). There is no <code>X-Export-Truncated</code> header. Truncation is a normal outcome with a signal, not an
           error: the response has already begun streaming by the time the cap is reached, so a status code is no longer
           available to carry it either.</p>
           <p>The same reasoning answers the other post-header failure. A page query that fails <em>after</em> streaming began
-          cannot return Problem Details either, so the export logs a warning (<code>LogExportPageFailure</code>, <code>:852-864</code>) and
+          cannot return Problem Details either, so the export logs a warning (<code>LogExportPageFailure</code>,
+          <code>EntityControllerBase.cs:596-608</code>, passed to the exporter at <code>:288</code>) and
           closes the file with a second trailing marker, <code># export incomplete after N rows</code> (<code>IncompleteMarker</code>,
-          <code>:843-844</code>, written at <code>:304</code> inside the mid-stream failure branch at <code>:295-306</code>). The two markers say
+          <code>EntityCsvExporter.cs:329-330</code>, written at <code>:137</code> inside the mid-stream failure branch at <code>:128-139</code>). The two markers say
           different things on purpose: truncated means the cap stopped a healthy read, incomplete means the read
           itself broke. Without the second one a failed export would look like a complete export of fewer rows. A
-          failure on the FIRST page, before any byte is written, still returns through <code>HandleFailure</code> (<code>:298</code>).</p>
+          failure on the FIRST page, before any byte is written, comes back from the exporter as a failed <code>Result</code>
+          (<code>EntityCsvExporter.cs:130-131</code>) that the controller still returns through <code>HandleFailure</code>
+          (<code>EntityControllerBase.cs:292</code>).</p>
           <h3 id="the-csv-writer-is-in-house">The CSV writer is in-house</h3>
           <p><code>CsvWriter</code> (internal static, <code>Source/Presentation/MMCA.Common.API/Export/CsvWriter.cs:34</code>) implements
           RFC 4180: quote a field when it contains the separator, a quote, or a line break; escape an embedded quote by
           doubling it; terminate rows with CRLF; lead with a UTF-8 BOM. The BOM is <strong>unconditional</strong>, not a setting
-          (<code>CsvWriter.cs:36-45</code>). It is written once from <code>ExportAsync</code> at <code>EntityControllerBase.cs:315</code>, through a
-          <code>StreamWriter</code> constructed with <code>CsvWriter.Utf8NoPreamble</code> (<code>EntityControllerBase.cs:277</code>, encoding at
+          (<code>CsvWriter.cs:36-45</code>). It is written once by the exporter at <code>EntityCsvExporter.cs:148</code>, through a
+          <code>StreamWriter</code> constructed with <code>CsvWriter.Utf8NoPreamble</code> (<code>EntityCsvExporter.cs:121</code>, encoding at
           <code>CsvWriter.cs:55</code>), so the encoding emits no preamble of its own and the file gets exactly one BOM rather
           than two. Without it Excel reads a UTF-8 file in
           the machine&#39;s ANSI code page and every accented character becomes mojibake on the desktops these exports are
@@ -348,18 +362,18 @@
           imposes it on every consumer of every package pin
           (<a href="038-supply-chain-provenance.html">ADR-038</a>, <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>).</p>
           <h3 id="column-names-come-from-the-same-shaper-the-json-response-uses">Column names come from the same shaper the JSON response uses</h3>
-          <p><code>ResolveExportColumns</code> (<code>EntityControllerBase.cs:774-793</code>) takes the header row from the keys of the first
-          row of page one, normalized by <code>ShapeExportRow</code> (<code>:804-806</code>): a field-subset request already arrives as a
+          <p><code>ResolveColumns</code> (<code>EntityCsvExporter.cs:260-279</code>) takes the header row from the keys of the first
+          row of page one, normalized by <code>ShapeRow</code> (<code>EntityCsvExporter.cs:290-292</code>): a field-subset request already arrives as a
           shaped dictionary from the query service, and a full-DTO request is shaped by <code>QueryFieldService.ShapeData</code>
           (<code>Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:75</code>), the single-row sibling of the
           <code>ShapeCollectionData</code> (<code>:96</code>) the JSON reads run over a page. Both project through the same cached
           accessors and write each value under its camelCase name via <code>JsonNamingPolicy.CamelCase</code>
           (<code>QueryFieldService.cs:43</code>, <code>:110</code>), so there is no second naming convention to keep in step. When page one comes back empty there is no row to read keys from, so the
           columns fall back to reflection over <code>TEntityDTO</code> in property-declaration order, filtered by the requested
-          fields (<code>:784-792</code>), which is the order the shaper would have produced had there been a row.</p>
+          fields (<code>EntityCsvExporter.cs:266-278</code>), which is the order the shaper would have produced had there been a row.</p>
           <p>The one place the CSV columns are not the JSON property names is subtraction, never renaming: both paths
-          drop the columns CSV cannot render faithfully (<code>IsExportableColumn</code>, <code>:675</code>, applied at <code>:778</code> and by type
-          at <code>:789</code>), so a binary or collection-typed property is absent from the file while it is present in the JSON
+          drop the columns CSV cannot render faithfully (<code>IsExportableColumn</code>, <code>EntityCsvExporter.cs:213</code>, applied at <code>:264</code> and by type
+          at <code>:275</code>), so a binary or collection-typed property is absent from the file while it is present in the JSON
           response for the same request.</p>
           <h3 id="ientitycontrollerbase-is-deliberately-not-touched"><code>IEntityControllerBase</code> is deliberately not touched</h3>
           <p>The endpoint is a base-class method only. Adding a member to the public
@@ -371,17 +385,18 @@
           <h3 id="the-streamed-response-passes-the-failure-filter-untouched">The streamed response passes the failure filter untouched</h3>
           <p><code>UnhandledResultFailureFilter</code> acts only when the action result is an <code>ObjectResult</code> carrying a failed
           <code>Result</code> (<code>Source/Presentation/MMCA.Common.API/Middleware/UnhandledResultFailureFilter.cs:28</code>). <code>ExportAsync</code>
-          returns an <code>EmptyResult</code> (<code>EntityControllerBase.cs:355</code>), which is neither, so it flows through the filter
+          returns an <code>EmptyResult</code> (<code>EntityControllerBase.cs:292</code>), which is neither, so it flows through the filter
           pipeline unmodified and the <a href="013-result-pattern.html">ADR-013</a> contract stays intact for the JSON routes
           without a special case for this one. A failure detected before streaming begins still returns through
-          <code>HandleFailure</code> (<code>:261</code>, <code>:298</code>).</p>
+          <code>HandleFailure</code> (<code>:262</code>, <code>:292</code>).</p>
           <h3 id="adoption-is-automatic-and-the-sweep-work-is-contract-snapshots">Adoption is automatic, and the sweep work is contract snapshots</h3>
           <p>ADC, Store, and Helpdesk inherit <code>/export</code> on every <code>EntityControllerBase</code> derivative the moment they take
           the pin (Helpdesk&#39;s <code>TicketsController</code> derives from the base at
           <code>Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/Controllers/TicketsController.cs:61</code> and carries no export
-          code of its own). No registration call exists to make. The visible work in each consumer sweep PR is
+          code of its own). No registration call exists to make. The visible work in the ADC and Store sweep PRs is
           re-baselining the OpenAPI contract snapshots asserted by <code>OpenApiContractTestsBase</code>
-          (<a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a>), which otherwise fail on the added path.</p>
+          (<a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a>), which otherwise fail on the added path;
+          Helpdesk subclasses no <code>OpenApiContractTestsBase</code> and has no snapshots to move.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>A route is an unambiguous request; an <code>Accept</code> header is a preference.</strong> Given a cache policy that
@@ -421,31 +436,32 @@
           test pinning each gate). The follow-up shipped in v1.151.0 as <code>GetExportSpecification()</code>, a
           protected virtual hook whose result the export applies to every page it streams. v1.165.0 supersedes
           it by widening the hook rather than replacing it: the primary hook is now
-          <code>GetReadSpecificationAsync(CancellationToken)</code> (<code>EntityControllerBase.cs:597-599</code>), honored by all
-          <strong>five</strong> read actions (<code>:115</code>, <code>:170</code>, <code>:264</code>, <code>:378</code>, <code>:422</code>), with <code>GetExportSpecification()</code>
-          (<code>:626</code>) demoted to its synchronous default. Asynchrony is the point: row scoping is usually resolved
+          <code>GetReadSpecificationAsync(CancellationToken)</code> (<code>EntityControllerBase.cs:534-536</code>), honored by all
+          <strong>five</strong> read actions (<code>:116</code>, <code>:171</code>, <code>:265</code>, <code>:315</code>, <code>:359</code>), with <code>GetExportSpecification()</code>
+          (<code>:563</code>) demoted to its synchronous default. Asynchrony is the point: row scoping is usually resolved
           through a query handler or a claim lookup that hits a store, and the synchronous hook forced such a
           controller to hand-override all five actions just to get an <code>await</code> in first. Both hooks default to
           null, which keeps the v1.150.0 behavior byte for byte, and the specification is resolved once per
-          request so one instance filters every page of the loop (<code>:263-264</code>). Store scopes through both shapes:
-          <code>OrdersController</code> overrides the synchronous hook (<code>Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrdersController.cs:244-245</code>,
-          its admin gate relaxed back to ownership scoping with only the fail-closed owner check left at
-          <code>:224-235</code>), <code>ShoppingCartsController</code> the async one (<code>:206</code>). ADC&#39;s Conference controllers express
+          request so one instance filters every page of the loop (<code>:264-265</code>). Store scopes through both shapes:
+          <code>OrdersController</code> overrides the synchronous hook (<code>Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/OrdersController.cs:241-242</code>,
+          its admin gate relaxed back to ownership scoping with only the fail-closed owner check left in its
+          <code>ExportAsync</code> override at <code>:220-232</code>), <code>ShoppingCartsController</code> the async one (<code>:200</code>). ADC&#39;s Conference controllers express
           their read predicates as specifications through the same hooks (<code>EventsController.GetExportSpecification()</code>
-          at <code>Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:74-75</code>,
-          <code>Controllers/Sessions/SessionQuestionAnswersController.cs:96</code>, and async overrides on
-          <code>Controllers/Sessions/SessionsController.cs:77</code>, <code>Controllers/Speakers/SpeakersController.cs:105</code>,
+          at <code>Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Events/EventsController.cs:69-70</code>,
+          <code>Controllers/Sessions/SessionQuestionAnswersController.cs:107</code>, and async overrides on
+          <code>Controllers/Sessions/SessionsController.cs:75</code>, <code>Controllers/Speakers/SpeakersController.cs:96</code>,
           <code>Controllers/Sponsors/SponsorsController.cs:69</code> among others), and keep their <code>Forbid</code> gates on
-          bulk export anyway (<code>Controllers/Events/EventsController.cs:141-144</code>,
+          bulk export anyway (<code>Controllers/Events/EventsController.cs:136-139</code>,
           <code>Controllers/Sessions/SessionsController.cs:248-251</code>): a deliberate
           privileged-reader-only policy on a whole-catalog file, not a gap in what the framework can scope.
           v1.151.0 also hardened the formatter: binary and collection properties produce no column instead of
-          rendering type names (<code>IsExportableType</code>, <code>:667-670</code>), and a <code>fields=</code> request naming one fails
-          validation up front (<code>ValidateExportFields</code>, <code>:685-702</code>, called first in <code>ExportAsync</code> at <code>:259-261</code>).</li>
+          rendering type names (<code>IsExportableType</code>, <code>EntityCsvExporter.cs:205-208</code>), and a <code>fields=</code> request naming one fails
+          validation up front (<code>ValidateFields</code>, <code>EntityCsvExporter.cs:60-77</code>, called first in <code>ExportAsync</code> at
+          <code>EntityControllerBase.cs:260-262</code>).</li>
           <li><strong>N queries, not one stream.</strong> An export at the default settings is up to 200 round trips
           (<code>MaxExportRows</code> 100,000 over <code>MaxPageSize</code> 500), each with its own <code>Skip</code>/<code>Take</code>, and it holds a
           response open for their combined duration. There is no export-specific timeout budget: the page loop
-          (<code>EntityControllerBase.cs:280-345</code>) opens no <code>CancellationTokenSource</code> of its own, so the limits are the
+          (<code>EntityCsvExporter.cs:124-177</code>) opens no <code>CancellationTokenSource</code> of its own, so the limits are the
           row cap and whatever the host and client already enforce.</li>
           <li><strong>A short file is signalled where spreadsheets do not look.</strong> The one export header,
           <code>X-Export-Row-Limit</code>, names the ceiling and never says whether the export hit it, and both trailing
@@ -470,9 +486,27 @@
           which is correct for an operator extract and means an export cannot be absorbed by the cache tier the
           way the read routes are (<a href="019-rate-limiting.html">ADR-019</a> rate limiting is the only load control on it).</li>
           <li><strong>Adding an endpoint to a shared base moves every consumer&#39;s OpenAPI document in one release.</strong> Under
-          lockstep versioning (ADR-016) there is no phased rollout: all three consumers re-baseline their contract
-          snapshots (ADR-058) in the same sweep.</li>
+          lockstep versioning (ADR-016) there is no phased rollout: the consumers with OpenAPI contract tests (ADC
+          and Store) re-baseline their contract snapshots (ADR-058) in the same sweep.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. The CSV machinery now lives outside the controller, in the internal static
+          <code>EntityCsvExporter&lt;TEntityDTO&gt;</code> (<code>Source/Presentation/MMCA.Common.API/Export/EntityCsvExporter.cs:17</code>): the
+          page loop (<code>:124-177</code>), both trailing markers (<code>:323-324</code>, <code>:329-330</code>), column resolution and row shaping
+          (renamed <code>ResolveColumns</code> at <code>:260-279</code> and <code>ShapeRow</code> at <code>:290-292</code>), the exportability checks
+          (<code>:205-208</code>, <code>:213</code>) and field validation (renamed <code>ValidateFields</code>, <code>:60-77</code>), along with the
+          <code>StreamWriter</code> and BOM write (<code>:121</code>, <code>:148</code>). The controller keeps the action, the row scope, the file
+          name and the headers (<code>EntityControllerBase.cs:248-293</code>, <code>:569-576</code>, <code>:585-588</code>), and passes
+          <code>BeginExportResponse</code> and <code>LogExportPageFailure</code> to the exporter as callbacks (<code>:287-288</code>); the record&#39;s
+          citations are re-anchored accordingly, along with the drifted <code>EntityControllerBase.cs</code>, cache policy,
+          <code>AddAPI</code>, query pipeline, Store and ADC line numbers. Two statements are corrected to match the code: a
+          short page ends the loop only once the rows written reach the reported <code>TotalItemCount</code>, because the
+          pipeline clamps pages (<code>IsLastPage</code>, <code>EntityCsvExporter.cs:196-197</code>; the clamp is
+          <code>EntityQueryPipeline.cs:274-283</code>), and at a cap that falls on a page boundary truncation is decided from
+          that total (<code>EntityCsvExporter.cs:170-173</code>). The contract-snapshot sweep work applies to ADC (four
+          <code>OpenApiContractTestsBase</code> subclasses) and Store (three), not to Helpdesk, which has none. ADC also commits
+          build-time OpenAPI documents that list the added <code>/export</code> paths
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/openapi/MMCA.ADC.Conference.Service.json</code>).</p>
           <h2 id="related">Related</h2>
           <p><a href="034-generic-entity-query-layer.html">ADR-034</a> (the generic entity surface and query contract this extends,
           and the <code>MaxUnboundedResultLimit</code> ceiling that forced the page loop),
@@ -480,8 +514,8 @@
           <code>Accept</code>-blind cache key is one of the two forcing findings),
           <a href="013-result-pattern.html">ADR-013</a> (the <code>Result</code> contract at the edge and the unhandled-failure filter the
           streamed result passes through untouched),
-          <a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a> (the shipped OpenAPI contract snapshots every
-          consumer re-baselines for the added path),
+          <a href="058-runtime-conformance-suites-as-a-package.html">ADR-058</a> (the shipped OpenAPI contract snapshots ADC and
+          Store re-baseline for the added path),
           <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> and <a href="038-supply-chain-provenance.html">ADR-038</a> (why a
           published framework declines a CSV dependency, and why a public interface gains no member),
           <a href="019-rate-limiting.html">ADR-019</a> (the per-principal limiter that is the only load control standing in front
@@ -502,6 +536,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

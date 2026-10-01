@@ -16,6 +16,7 @@ paths counted per client IP, and the `auth-ip` window's algorithm is configurabl
 default; a third `ICacheService` implementation, the opt-in `HybridCacheService`, also overrides
 `IncrementAsync`; and `ResetPasswordHandlerBase` is a second framework call site, clearing the
 failed-attempt counter after a password reset).
+Revised 2026-10-01 (change-password is a third framework call site, with a principal-keyed counter; every ADC and Store service host calls `AddCommonHybridCacheWhenRedisConfigured`, so with Redis configured the counters run through `HybridCacheService.IncrementAsync`; see Revision below).
 ## Context
 ADR-019's global rate limiter is **principal-keyed**: it caps requests per authenticated principal,
 and anonymous traffic is exempt with one metered exception, the configured real-time hub path
@@ -58,7 +59,11 @@ table.
   `IncrementRegistrationCountAsync(ip)` bumps the per-IP counter. A missing/empty IP is a deliberate
   **no-op (fail-open)**.
 - **Keyed by submitted email / client IP, not by principal**, so it works before authentication: the
-  gap a per-principal limiter cannot fill.
+  gap a per-principal limiter cannot fill. The one principal-keyed use is the authenticated
+  change-password flow, which keys its counter on `password-change:{userId}`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:128-129`)
+  because the user has no address to key on there, and a separate key keeps a change-password lockout
+  from locking the owner out of sign-in.
 - **The email key is the normalized address, not the raw request string.** Keys route through the same
   `Email` value-object normalization (trim, lowercase) the user lookup uses, so every spelling that
   resolves to one account shares one counter and one lockout. Building keys from raw input made the
@@ -74,7 +79,10 @@ table.
   surfaces as a 500 on the login and registration endpoints that own it. A readable counter was worth
   more than an atomic one. `MemoryCacheService` does not override the member either, so memory mode runs
   the same default. `HybridCacheService`, the opt-in two-level implementation a host selects by calling
-  `AddCommonHybridCache` (which replaces whatever `ICacheService` was registered), overrides it with the
+  `AddCommonHybridCache` (which replaces whatever `ICacheService` was registered) or its guarded form
+  `AddCommonHybridCacheWhenRedisConfigured`, which registers it only when the Redis connection string
+  is set (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:200-212`),
+  overrides it (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:253`) with the
   same read-modify-write shape and additionally forces both legs past the in-process L1: an L1 hit would
   let a replica read a stale counter and write it back near its starting value, which is a security
   control quietly weakened by a cache optimization. The accepted cost, in the code's own words: parallel attempts can overwrite each
@@ -92,10 +100,15 @@ table.
   lives in `AuthenticationServiceBase<TUser>` (`MMCA.Common.Application.Auth`): `CheckLockoutAsync`
   before credential validation, `IncrementFailedAttemptsAsync` on each failed attempt,
   `ResetFailedAttemptsAsync` on a successful login, and `CheckRegistrationRateLimitAsync` /
-  `IncrementRegistrationCountAsync` around sign-up. One further framework call site sits outside that
-  base: `ResetPasswordHandlerBase` takes `ILoginProtectionService` as a constructor dependency and
+  `IncrementRegistrationCountAsync` around sign-up. Two further framework call sites sit outside that
+  base. `ResetPasswordHandlerBase` takes `ILoginProtectionService` as a constructor dependency and
   calls `ResetFailedAttemptsAsync(request.Email)` once the new credential is persisted, so a user who
-  reset the password *because* of a lockout is not left locked out by it. Store and ADC
+  reset the password *because* of a lockout is not left locked out by it. `ChangePasswordHandlerBase`
+  takes it as well (`ChangePasswordHandlerBase.cs:47`) and runs the full sequence on its own key:
+  `CheckLockoutAsync` before the current-password verify (`:89`), `IncrementFailedAttemptsAsync` on a
+  wrong current password (`:97`) and `ResetFailedAttemptsAsync` on a correct one (`:102`), so the
+  endpoint is not an unthrottled password oracle for anyone holding a session. Store and ADC
+  `ChangePasswordHandler` subclass it and inject the service. Store and ADC
   `AuthenticationService` are sealed
   subclasses that inject `ILoginProtectionService` into the base constructor and inherit those calls;
   neither app invokes the protection methods directly. Settings bind from the `"LoginProtection"`
@@ -120,7 +133,11 @@ table.
 - **Cache-scoped state weakens under scale-out without Redis.** In memory mode the counters are
   per-replica and evaporate on restart, so a multi-replica deployment that did not wire a distributed
   cache does not aggregate an attacker hitting different replicas. The answer is the same as ADR-026:
-  register a distributed cache once scaled out (both apps do).
+  register a distributed cache once scaled out. Both apps do: every ADC and Store service host calls
+  `AddCommonHybridCacheWhenRedisConfigured` (for example
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:133`,
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:101`), so with Redis configured
+  the counters run through `HybridCacheService.IncrementAsync`.
 - **Normalization widens the DoS lever slightly.** Collapsing every spelling onto one counter is what
   makes the lockout enforceable, and it also means an attacker no longer needs to guess the exact
   spelling the victim uses to lock them out. That is the same targeted-DoS trade below, not a new one:
@@ -165,6 +182,23 @@ from the 2026-09-07 security review.
    401 for an address with no account came back in a fraction of the time a real check takes, which
    is a membership oracle that no amount of response-body sameness closes. The generic
    `Auth.InvalidCredentials` answer (`:156`, `:163`) is unchanged.
+
+## Revision (2026-10-01)
+The login lockout and registration throttle are unchanged. Two current-state statements were
+corrected. First, `ResetPasswordHandlerBase` is no longer the only framework call site outside
+`AuthenticationServiceBase<TUser>`: `ChangePasswordHandlerBase` injects `ILoginProtectionService`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:47`)
+and runs check, increment and reset around the current-password verify (`:89`, `:97`, `:102`), so a
+signed-in session cannot guess the current password without hitting the same exponential lockout.
+Its counter is keyed `password-change:{userId}` (`:128-129`), a principal key rather than an email,
+so the "keyed by submitted email / client IP" bullet now names this one exception. Second, the
+scale-out path is the hybrid cache rather than `DistributedCacheService` alone: every ADC and Store
+service host calls the guarded `AddCommonHybridCacheWhenRedisConfigured`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:200-212`), so with
+Redis configured the counters run through `HybridCacheService.IncrementAsync`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:253`), the same
+non-atomic read-modify-write with L1 bypassed. The line anchors inside the 2026-09-07 Revision record
+the code as it stood then and are left as written.
 
 ## Alternatives rejected
 - **Making the failed-attempt and registration counters atomic.** The increment in

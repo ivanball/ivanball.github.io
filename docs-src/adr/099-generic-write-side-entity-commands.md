@@ -32,9 +32,9 @@ a status and a child collection, and the update handler is the same twelve lines
 shared load-mutate-save machinery already existed
 (`Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:52`, whose
 `MutateCoreAsync` at `:271` loads the aggregate (`:281`), stamps the caller's concurrency token
-(`:291-292`), runs the mutation (`:294`), touches the root's concurrency token when the request was
+(`:291-296`), runs the mutation (`:298`), touches the root's concurrency token when the request was
 conditional (`MutateEntityHandlerBase.cs:314`, added 2026-09-07 for SEC-Common-77 so a write that
-changed only child rows still emits a root `UPDATE` carrying the caller's token) and saves (`:303`)),
+changed only child rows still emits a root `UPDATE` carrying the caller's token) and saves (`:316`)),
 so what was missing was not the workflow but a command and a handler generic enough to close over any
 aggregate, plus somewhere for the module to say which aggregate method a request maps to.
 
@@ -76,11 +76,12 @@ Ship the generic write side as four additive pieces plus a registration helper.
      `CommandRequestValidator<TCommand, TRequest>`
      (`Source/Core/MMCA.Common.Application/Validation/CommandRequestValidator.cs:30`). The module
      scan's reflection bridge registers that pairing for every command a module assembly declares
-     (`Source/Core/MMCA.Common.Application/DependencyInjection.cs:254-270`), and because this command
-     is a closed generic constructed at registration time, which the scan cannot see,
-     `AddEntityCrud` registers the bridge for it explicitly (`:351-353`). A module writes
-     `IValidator<TUpdateRequest>` and nothing else; the command is validated before the transaction
-     opens, by the same Validating decorator every hand-written command goes through (ADR-014).
+     (`Source/Core/MMCA.Common.Application/DependencyInjection.ModuleScanning.cs:119-135`), and
+     because this command is a closed generic constructed at registration time, which the scan cannot
+     see, `AddEntityCrud` registers the bridge for it explicitly
+     (`Source/Core/MMCA.Common.Application/DependencyInjection.Crud.cs:94-96`). A module writes
+     `IValidator<TUpdateRequest>` and nothing else; the command is validated by the same Validating
+     decorator every hand-written command goes through (ADR-014).
    - It implements `ICacheInvalidating` (`:52`) with a `CachePrefix` defaulting to
      `typeof(TEntity).FullName + ":"` (`:65`), the aggregate-prefix convention consumers already key
      cached reads under, because the generic controller constructs the command itself and cannot
@@ -89,7 +90,7 @@ Ship the generic write side as four additive pieces plus a registration helper.
 3. **One generic update handler, on the existing base.**
    `UpdateEntityHandler<TEntity, TEntityDTO, TIdentifierType, TUpdateRequest>`
    (`Source/Core/MMCA.Common.Application/UseCases/Crud/UpdateEntityHandler.cs:48`) derives from the
-   DTO-returning `MutateEntityHandlerBase` (`MutateEntityHandlerBase.cs:343`) and overrides three
+   DTO-returning `MutateEntityHandlerBase` (`MutateEntityHandlerBase.cs:356`) and overrides three
    members: the id (`UpdateEntityHandler.cs:68`), the row version (`:76`), and `MutateAsync`, which
    is a single delegation to the applier (`:84-92`). It is left unsealed so a module can subclass it
    to declare the `Includes` a particular aggregate's mutation needs, or to add a `[LoggerMessage]`
@@ -107,10 +108,10 @@ Ship the generic write side as four additive pieces plus a registration helper.
 
 5. **One registration call per aggregate.**
    `AddEntityCrud<TEntity, TEntityDTO, TIdentifierType, TCreateRequest, TUpdateRequest>()`
-   (`Source/Core/MMCA.Common.Application/DependencyInjection.cs:331`) registers the create, update
-   and delete handlers closed over that aggregate's types (`:339-349`), plus the update command's
-   validator bridge (`:351-353`), which the module scan cannot register because the command is a
-   closed generic constructed here. Two properties are deliberate (`:301-309`):
+   (`Source/Core/MMCA.Common.Application/DependencyInjection.Crud.cs:74`) registers the create,
+   update and delete handlers closed over that aggregate's types (`:82-92`), plus the update
+   command's validator bridge (`:94-96`), which the module scan cannot register because the command
+   is a closed generic constructed here. Two properties are deliberate (`:45-51`):
    - **Closed, not open-generic**, because Scrutor's `TryDecorate` wraps concrete service types: an
      open `ICommandHandler<,>` registration would resolve completely undecorated and
      `VerifyDecoratorPipeline()` could not see it.
@@ -118,7 +119,7 @@ Ship the generic write side as four additive pieces plus a registration helper.
      a delete that must load its children first) registers its own handler for that verb before this
      call and keeps the generic pair for the other two.
 
-   It calls `ThrowIfPipelineSealed` (`:337`), so registering after `AddApplicationDecorators()` fails
+   It calls `ThrowIfPipelineSealed` (`:80`), so registering after `AddApplicationDecorators()` fails
    loudly rather than leaving three handlers unwrapped (ADR-014).
 
 6. **PUT ships on a new derived controller base, not on the shipped one.**
@@ -143,15 +144,20 @@ Ship the generic write side as four additive pieces plus a registration helper.
 - **Invariants and events keep exactly one home.** The applier calls the aggregate's guarded methods,
   so a generic PUT raises the same `{Entity}Changed` event with the same state discriminator a
   hand-written handler would (ADR-083), and a refused invariant stops the write before the save
-  (`MutateEntityHandlerBase.cs:294-296`).
+  (`MutateEntityHandlerBase.cs:298-300`).
 - **A new base beats a wider one.** Adding a fifth type parameter to the shipped base would break
   every consumer's controllers at compile time in exchange for one action. Inheritance costs one word
   in a class declaration for the controllers that want the verb and nothing at all for those that do
   not.
-- **The command is a command, not a shortcut.** Because it implements the two existing markers, it
-  inherits the whole ADR-014 pipeline (feature gate, authorization, logging, caching, validation,
-  timeout, transaction) rather than a parallel path with its own semantics. Nothing about a generic
-  update is exempt from what a hand-written command gets.
+- **The command is a command, not a shortcut.** It implements two existing markers,
+  `ICommandWithRequest<TUpdateRequest>` and `ICacheInvalidating` (`UpdateEntityCommand.cs:52`), and
+  runs through the same ADR-014 decorator chain as a hand-written command rather than a parallel path
+  with its own semantics. The marker-driven steps apply on the same terms as everywhere else: it is
+  validated and invalidates its cache prefix, and it gets a transaction, a permission check or a
+  timeout only when a derived command adds `ITransactional`, `IRequiresPermission` or `IHasTimeout`
+  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:29-31`,
+  `AuthorizationGate.cs:46`, `TimeoutCommandDecorator.cs:65`), exactly as a hand-written command
+  that does not declare them.
 - **`TryAdd` makes the helper partial-adoptable.** Reaching for one bespoke handler does not mean
   abandoning the other two, which is the failure mode of an all-or-nothing scaffold.
 
@@ -177,15 +183,18 @@ Ship the generic write side as four additive pieces plus a registration helper.
 - **Nothing in the framework opts a consumer in: every registration is a line the module writes.**
   Adoption is per aggregate and partial. ADC's Conference module registers it for four aggregates,
   `Category`, `Activity`, `Sponsor` and `Partner`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:143-145`,
-  and `Partner` at `:159`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/DependencyInjection.cs:149-151`,
+  and `Partner` at `:152`),
   Store's Catalog for `Product` (one call per field-scoped update request) and `Category`
-  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:73-76`,
-  `:77`, `:84`),
+  (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/DependencyInjection.cs:101-104`,
+  `:105`, `:112`),
   and Store's Identity for `Customer`
-  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:66-68`),
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/DependencyInjection.cs:78-80`),
   each call placed after the convention scan so `TryAdd` leaves the hand-written handlers those
-  modules keep (the create verbs, and Catalog's `DeleteCategoryHandler`) exactly where they were. An
+  modules keep (the create verbs, Catalog's `DeleteCategoryHandler` and `DeleteProductHandler`, and
+  `CategoryAssignParentUpdateHandler`, a subclass of `UpdateEntityHandler`, at
+  `.../MMCA.Store.Catalog.Application/DependencyInjection.cs:97-100`, `:107-111`) exactly where they
+  were. An
   aggregate whose lifecycle is guarded rather than plain CRUD keeps its own handlers, and no
   migration is asked of anyone.
 
@@ -373,3 +382,21 @@ writes run the generic path in production; the four kinds listed above are what 
 - **A `virtual HandleAsync` on `DeleteEntityHandler` allows a subclass to replace the workflow
   entirely**, not just extend it, and `Includes` is a string collection resolved at query time, so a
   renamed navigation property fails on a request rather than in a build.
+
+## Revision (2026-10-01)
+
+No decision changed; two statements in the current-state sections were corrected and stale citations
+re-anchored. The Rationale claimed the generic update inherits every ADR-014 step including the
+transaction and timeout. `UpdateEntityCommand` implements only `ICommandWithRequest<TUpdateRequest>`
+and `ICacheInvalidating` (`UpdateEntityCommand.cs:52`), and the transactional, permission and timeout
+steps are marker-driven (`TransactionalCommandDecorator.cs:29-31`, `AuthorizationGate.cs:46`,
+`TimeoutCommandDecorator.cs:65`), so the generic update gets them only when a derived command opts in;
+Decision 2 no longer says it is validated "before the transaction opens". The list of hand-written
+handlers that `TryAdd` leaves in place now also names Store Catalog's `DeleteProductHandler` and
+`CategoryAssignParentUpdateHandler` (`MMCA.Store.Catalog.Application/DependencyInjection.cs:97-100`,
+`:107-111`). Anchors refreshed: the mutate workflow (`MutateEntityHandlerBase.cs:291-296`, `:298`,
+`:298-300`, `:316`, DTO base `:356`); the registration helpers, now split into partial files
+(`DependencyInjection.Crud.cs:74`, `:80`, `:82-92`, `:94-96`, `:45-51`;
+`DependencyInjection.ModuleScanning.cs:119-135`); and the consumer registrations in ADC Conference
+(`:149-152`), Store Catalog (`:101-105`, `:112`) and Store Identity (`:78-80`). Anchors inside the
+2026-08-30 Revision are left as recorded.

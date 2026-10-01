@@ -51,7 +51,7 @@ every REST/gRPC host call it instead of composing its own.
   scheme/host capture, forwarded headers, gRPC-exempt HTTPS redirect, response compression, routing,
   CORS, authentication, tenant resolution, rate limiter, soft-deleted-user check, authorization,
   output cache, JWKS and OIDC discovery endpoints, controllers. Both overloads route through one
-  private helper that builds the list and applies it in order (`WebApplicationExtensions.cs:153-164`).
+  private helper that builds the list and applies it in order (`WebApplicationExtensions.cs:163-179`).
 - **A scoped escape hatch, validated at startup.** The
   `UseCommonMiddlewarePipeline(Action<MiddlewarePipelineBuilder>)` overload
   (`WebApplicationExtensions.cs:60`) hands the host the seeded builder, which can `InsertBefore`,
@@ -120,31 +120,31 @@ every REST/gRPC host call it instead of composing its own.
   the first passes the request straight through unless `Tenancy:Enabled` is set
   (`Middleware/TenantResolutionMiddleware.cs:62`), the second resolves `ISoftDeletedUserValidator`
   lazily and no-ops where no implementation is registered
-  (`Middleware/SoftDeletedUserMiddleware.cs:43-50`), so the pipeline is literally one shape on every
+  (`Middleware/SoftDeletedUserMiddleware.cs:43-47`, the lazy `GetService` call at `:75`), so the pipeline is literally one shape on every
   host rather than a per-host permutation.
 - **Every REST/gRPC host calls it.** All seven extracted services in the two production apps: ADC
-  Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:315`), ADC Conference
-  (`MMCA.ADC.Conference.Service/Program.cs:377`), ADC Engagement
-  (`MMCA.ADC.Engagement.Service/Program.cs:313`), ADC Notification
-  (`MMCA.ADC.Notification.Service/Program.cs:245`), Store Catalog
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:267`), Store Identity
-  (`MMCA.Store.Identity.Service/Program.cs:258`) and Store Sales
-  (`MMCA.Store.Sales.Service/Program.cs:279`). The reference app calls it too
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:130`), and because that tree **is** the
+  Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:343`), ADC Conference
+  (`MMCA.ADC.Conference.Service/Program.cs:442`), ADC Engagement
+  (`MMCA.ADC.Engagement.Service/Program.cs:318`), ADC Notification
+  (`MMCA.ADC.Notification.Service/Program.cs:263`), Store Catalog
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:313`), Store Identity
+  (`MMCA.Store.Identity.Service/Program.cs:297`) and Store Sales
+  (`MMCA.Store.Sales.Service/Program.cs:297`). The reference app calls it too
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:142`), and because that tree **is** the
   `mmca-app` template (`MMCA.Helpdesk/.template.config/template.json:5,7`, ADR-065), a scaffolded app
   gets the same line: the generated `MMCA.ECommerce` sample has it at
   `MMCA.ECommerce/Source/Hosts/MMCA.ECommerce.Web/Program.cs:100`.
 - **Hosts extend it by appending, after the call, or through the builder.** Service hosts map their
   extra endpoints below the one line: OpenAPI outside Production
-  (`MMCA.ADC.Notification.Service/Program.cs:247-250`), the SignalR hub (`:262`, which
+  (`MMCA.ADC.Notification.Service/Program.cs:270-277`), the SignalR hub (`:284`, which
   `SignalRExtensions.cs:18-19` documents as "call after `UseCommonMiddlewarePipeline`"), and gRPC
-  services (`:267` and `:275`). A host that needs a change inside the edge uses the configure overload
+  services (`:293` and `:301`). A host that needs a change inside the edge uses the configure overload
   instead; no host does today, and every one of the eight production and reference hosts calls the
   zero-argument overload.
 
 Scope is REST and gRPC service hosts. The Blazor UI hosts and the YARP gateways deliberately do not
-call it: the gateways compose a much thinner chain (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:124-158`,
-`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:150-172`), and the UI hosts hand-compose their own,
+call it: the gateways compose a much thinner chain (`MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:158-221`,
+`MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:150-173`), and the UI hosts hand-compose their own,
 reusing two pieces of this pipeline through public methods. The first is the forwarded-headers posture,
 opened first in each UI pipeline via `UseCommonUiForwardedHeaders()`
 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:192`,
@@ -204,7 +204,7 @@ which is the public method the pipeline's `RequestLocalization` step calls
   assumption stated in the code: the ingress is the only thing that can reach the container
   (`CommonForwardedHeaders.cs:19-20`).
 - **Security-response headers are not in this pipeline.** ADR-023's `UseCommonSecurityHeaders` is applied
-  by the gateways and UI hosts only (`MMCA.ADC.Gateway/Program.cs:134`, `MMCA.Store.Gateway/Program.cs:159`,
+  by the gateways and UI hosts only (`MMCA.ADC.Gateway/Program.cs:168`, `MMCA.Store.Gateway/Program.cs:159`,
   `MMCA.ADC.UI.Web/Program.cs:198`, `MMCA.Store.UI.Web/Program.cs:192`). A service host exposed directly,
   without a gateway in front, would serve responses without them.
 - **One step in the fixed order is currently dead weight.** The pre-forwarded scheme/host capture
@@ -219,6 +219,15 @@ which is the public method the pipeline's `RequestLocalization` step calls
   and its `Build()` adjacency invariant guards the capture's fidelity, not a live consumer.
   A related casualty of the accepted revision: the method's summary comment, which used to list a
   stale subset of the order, now points at the step-name contract instead of restating it.
+
+## Revision (2026-10-01)
+Anchor refresh only; no decision or rationale changed. Refreshed citations: the private
+`ApplyPipeline` helper (`WebApplicationExtensions.cs:163-179`), the lazy validator resolution in
+`SoftDeletedUserMiddleware.cs` (`:43-47`, call at `:75`), the eight `UseCommonMiddlewarePipeline()` call
+sites (ADC Identity `:343`, Conference `:442`, Engagement `:318`, Notification `:263`; Store Catalog
+`:313`, Identity `:297`, Sales `:297`; Helpdesk Web `:142`), the Notification host extras (OpenAPI
+`:270-277`, hub `:284`, gRPC `:293` and `:301`), and the gateway chains (ADC `:158-221` with security
+headers at `:168`; Store `:150-173`).
 
 ## Related
 [ADR-014](014-cqrs-decorator-pipeline.md) (the in-process sibling: one fixed decorator order for commands

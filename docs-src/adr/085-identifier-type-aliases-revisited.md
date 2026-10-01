@@ -57,10 +57,15 @@ Three facts frame the decision, all counted in the four repositories' `Source` t
   project file entry, no using), but the wrapper primitives themselves ship in MMCA.Common:
   the `IStronglyTypedId<TSelf, TValue>` contract (`Identifiers/IStronglyTypedId.cs:60`) and the
   `StronglyTypedId` helper class (`Identifiers/StronglyTypedId.cs:19`) plus a JSON converter factory,
-  a `TypeConverter`, a registry and EF mappings live in
-  `MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/` (six files), wired by one DI call,
+  a `TypeConverter`, a registry and the object-mapper wrap/unwrap pair
+  (`Identifiers/StronglyTypedIdMappings.cs:5-7`) live in
+  `MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/` (six files); the EF value converter
+  lives in Infrastructure
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conversions/StronglyTypedIdValueConverter.cs:28`,
+  nullable twin `:56`) and is applied from `ApplicationDbContext.ConfigureConventions`
+  (`Persistence/DbContexts/ApplicationDbContext.cs:402-409`). All of it is wired by one DI call,
   `AddStronglyTypedIds`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:775`), and shape-checked
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:366`), and shape-checked
   by a fitness rule, `StronglyTypedIdsAreReadonlyRecordStructs`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.StronglyTypedIds.cs:34`).
   That capability is [ADR-115](115-strongly-typed-identifiers-opt-in.md), and it is opt-in: no
@@ -106,14 +111,14 @@ switching.
 That radius is measurable, and the measurement only means something with its counting rule stated.
 An **alias token** here is any `*IdentifierType` token other than the framework's own generic
 parameter `TIdentifierType`, counted in the `.cs` and `.razor` files of the four `Source` trees on
-2026-09-19, with tests, `bin` and `obj` excluded, one hit per source line that carries at least one
-such token. On that rule the aliases appear on **3,767 lines across 1,192 files**: 288 in 117 files in
-MMCA.Common, 2,227 in 682 files in MMCA.ADC, 1,188 in 362 files in MMCA.Store, and 64 in 31 files in
-MMCA.Helpdesk. (Counting every token rather than every line raises the total to 3,978 and leaves the
-file count unchanged.) Excluding `TIdentifierType` is what makes the framework figure honest: 729 of
-MMCA.Common's 1,017 `IdentifierType` lines carry only that generic parameter, which a wrapper
+2026-10-01, with tests, `bin` and `obj` excluded, one hit per source line that carries at least one
+such token. On that rule the aliases appear on **3,869 lines across 1,209 files**: 296 in 117 files in
+MMCA.Common, 2,282 in 694 files in MMCA.ADC, 1,227 in 367 files in MMCA.Store, and 64 in 31 files in
+MMCA.Helpdesk. (Counting every token rather than every line raises the total to 4,099 and leaves the
+file count unchanged.) Excluding `TIdentifierType` is what makes the framework figure honest: 735 of
+MMCA.Common's 1,031 `IdentifierType` lines carry only that generic parameter, which a wrapper
 migration re-satisfies with a new type argument rather than rewrites call
-site by call site. Every one of the 3,767 is a signature, a property, a generic argument, or a DTO
+site by call site. Every one of the 3,869 is a signature, a property, a generic argument, or a DTO
 field that a wrapper migration would have to either change or prove it can leave alone. Because
 MMCA.Common is a published package family released in lockstep
 ([ADR-016](016-lockstep-versioning-masstransit-pin.md)), the framework share of that count
@@ -149,7 +154,7 @@ Absent all three, this stays a recorded, priced deferral rather than an open que
 - **The cost is paid once and the benefit accrues per defect avoided, and the defect count is
   currently zero.** No production incident in any of the four repos has been traced to a swapped
   identifier. That is not proof of safety, and this record does not claim it is; it is the only
-  evidence available, and it does not support a 1,192-file change.
+  evidence available, and it does not support a 1,209-file change.
 - **A partial migration is worse than either endpoint.** Wrapping some identifiers and not others
   produces a codebase where the absence of a compiler error means nothing, because the reader cannot
   tell whether a given call site is protected or merely un-migrated. The change is therefore
@@ -179,7 +184,7 @@ Absent all three, this stays a recorded, priced deferral rather than an open que
   identifier assignment, so with no wrapper declared it matches nothing. Trigger 1 therefore depends on a
   production defect being *traced* to a transposition, and a wrong-user check-in is exactly the kind
   of defect that gets written off as a scanning mistake instead.
-- **The migration price rises with the codebase.** The 3,767 lines counted here are a snapshot
+- **The migration price rises with the codebase.** The 3,869 lines counted here are a snapshot
   and the number only grows. Deferring on cost grounds means the cost argument gets stronger every
   release, which is the classic shape of a decision that is never revisited on its merits.
 - **Trigger 3 is not measured.** No count of cross-module scalar identifier references is maintained,
@@ -301,3 +306,14 @@ files. The framework split moves with it: `MMCA.Common/Source` carries 1,017 `Id
 729 of them the generic parameter, leaving 288 alias-token lines. The trade-off about the price
 rising with the codebase keeps documenting itself: the surface grew by roughly 5 percent in eight
 days without anyone deciding to grow it.
+
+## Revision (2026-10-01)
+No decision, trigger, rationale or trade-off changed. The migration-surface census is re-measured on
+the same rule: **3,869 lines across 1,209 files** (Common 296/117, ADC 2,282/694, Store 1,227/367,
+Helpdesk 64/31), 4,099 tokens, and `MMCA.Common/Source` now carries 1,031 `IdentifierType` lines, 735
+of them the generic parameter alone. The Context bullet on the wrapper capability is corrected in one
+detail: the sixth file in `MMCA.Common.Shared/Identifiers/` is the object-mapper wrap/unwrap pair
+(`StronglyTypedIdMappings.cs:5-7`), not an EF mapping; the EF value converter lives in Infrastructure
+(`Persistence/Conversions/StronglyTypedIdValueConverter.cs:28`, nullable twin `:56`) and is applied
+from `ApplicationDbContext.ConfigureConventions` (`ApplicationDbContext.cs:402-409`). The
+`AddStronglyTypedIds` citation is re-anchored to `DependencyInjection.cs:366`.

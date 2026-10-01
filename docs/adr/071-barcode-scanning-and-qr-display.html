@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -304,8 +306,9 @@
           <code>TaskCompletionSource&lt;string?&gt;</code> (<code>Capabilities/Media/BarcodeScanPage.cs:23-24</code>) that four paths can complete
           and only the first wins: a decode, the cancel button, the hardware back gesture, and
           <code>OnDisappearing</code>; the caller&#39;s <code>CancellationToken</code> is bridged to the same <code>Cancel()</code>
-          (<code>MauiBarcodeScannerService.cs:97</code>). Only 2D formats are read (<code>BarcodeScanPage.cs:36</code>), because 1D
-          symbologies multiply false positives on a badge screen.</li>
+          (<code>MauiBarcodeScannerService.cs:97</code>). Only 2D formats are read (<code>BarcodeScanPage.cs:36</code>), because the
+          affordance is a QR/DataMatrix scan and admitting the 1D formats multiplies false positives on a
+          shaky handheld frame (<code>:34-35</code>).</li>
           <li><strong>Permission stays with the head, not the framework.</strong> No framework code calls
           <code>Permissions.RequestAsync&lt;Permissions.Camera&gt;</code>. An undeclared or denied camera produces a preview that
           never decodes and is cancelled out of, which the contract already renders as <code>null</code>
@@ -315,7 +318,7 @@
           </ul>
           <p>Packaging follows ADR-042 exactly: <code>QRCoder</code> 1.8.0 (MIT) is a <code>MMCA.Common.UI</code> dependency and
           <code>ZXing.Net.Maui.Controls</code> 0.10.4 (MIT) a <code>MMCA.Common.UI.Maui</code> one, both pinned in
-          <code>MMCA.Common/Directory.Packages.props</code> (<code>:158</code>, <code>:192</code>), and the MAUI package keeps its
+          <code>MMCA.Common/Directory.Packages.props</code> (<code>:191</code>, <code>:225</code>), and the MAUI package keeps its
           windows-job build and pack.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -362,8 +365,9 @@
           <li><strong>A null fallback still masks a missing registration.</strong> This is ADR-042&#39;s recorded trade-off, and here
           it is functional rather than decorative: a MAUI head that forgets <code>UseCommonBarcodeScanner</code> gets the
           same behavior as a browser head. The mitigation is on the consumer, which is why ADC&#39;s check-in page
-          branches on <code>IsSupported</code> and renders a manual entry path instead (ADR-072) rather than hiding a
-          button.</li>
+          shows its scan card only when <code>IsSupported</code> is true (<code>CheckInScan.razor:69-93</code>, <code>ScannerAvailable</code>
+          at <code>CheckInScan.razor.cs:41</code>) and always renders a manual attendee search beside it on every head
+          (<code>CheckInScan.razor:113-118</code>, ADR-072), so the task stays completable when the scanner is absent.</li>
           <li><strong>Opt-in means the platform matrix is not uniform.</strong> A Windows or Mac Catalyst MAUI head that calls
           <code>UseCommonBarcodeScanner</code> still reports <code>IsSupported == false</code>, so &quot;registered&quot; and &quot;usable&quot; are two
           different questions a caller has to ask separately.</li>
@@ -375,6 +379,15 @@
           what a camera decodes. The security of a scan therefore lives entirely in the consumer&#39;s verification
           step, which is exactly why ADR-072&#39;s credential is server-verified rather than self-describing.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. The package pin citations are re-anchored to
+          <code>MMCA.Common/Directory.Packages.props:191</code> (QRCoder 1.8.0) and <code>:225</code> (ZXing.Net.Maui.Controls 0.10.4).
+          The 2D-only reason now quotes the source comment (<code>BarcodeScanPage.cs:34-35</code>: the affordance is a
+          QR/DataMatrix scan, and 1D formats multiply false positives on a shaky handheld frame). The
+          null-fallback trade-off is corrected to describe what ADC&#39;s check-in page does: it hides the scan card
+          behind <code>ScannerAvailable =&gt; Scanner.IsSupported</code> (<code>CheckInScan.razor:69-93</code>,
+          <code>CheckInScan.razor.cs:41</code>) and renders the manual search on every head (<code>CheckInScan.razor:113-118</code>),
+          rather than substituting the manual path for the scanner.</p>
           <h2 id="related">Related</h2>
           <p><a href="042-device-capability-abstraction.html">ADR-042</a> (the capability pattern this extends: contract in
           <code>MMCA.Common.UI</code>, native implementation in <code>MMCA.Common.UI.Maui</code>, override after <code>AddUIShared</code>),
@@ -399,6 +412,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

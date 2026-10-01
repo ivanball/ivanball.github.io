@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html" aria-current="page">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -255,7 +257,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13</code>, <code>IsDeleted</code> at <code>:20</code>,
           <code>CreatedOn</code> at <code>:25</code>). Deletion is a flag rather than a fact appended to a log: <code>Delete()</code> sets
           <code>IsDeleted = true</code> at <code>:77</code>, and a global query filter hides the row from every normal read
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:413</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454</code>, the filter applied at <code>:466</code>).
           The audit fields are stamped by the save itself, from the identity the caller passed in
           (<code>.../DbContexts/ApplicationDbContext.cs:189</code>). ADC&#39;s <code>LivePoll</code> is representative, an aggregate root
           holding its own current status
@@ -273,7 +275,7 @@
           (<code>.../DbContexts/ApplicationDbContext.cs:664</code>, and per service database in ADC at
           <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs:1589</code>),
           the processor drains it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:57</code>),
           and the consume edge de-duplicates it
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:38</code>). A
           processed outbox row is a delivered message; nothing reads it back and no code path rebuilds state
@@ -337,6 +339,10 @@
           module already owns its own database and outbox (<a href="006-database-per-service.html">ADR-006</a>), so an
           event-sourced module is contained behind the same module contract rather than a persistence migration
           for the workspace. Every other module keeps the current-state row.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Two citations were re-anchored: the soft-delete global query filter
+          now points at <code>ApplySoftDeleteFilters</code> (<code>.../DbContexts/ApplicationDbContext.cs:454</code>, the filter at
+          <code>:466</code>), and the outbox processor at its class declaration (<code>.../Outbox/Processing/OutboxProcessor.cs:57</code>).</p>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (at-least-once delivery of domain events, the mechanism a
           per-aggregate event log would duplicate rather than replace),
@@ -365,6 +371,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#when-to-revisit">When to revisit</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

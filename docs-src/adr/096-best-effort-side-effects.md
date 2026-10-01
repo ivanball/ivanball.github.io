@@ -13,7 +13,7 @@ back, retry or 500 an operation whose real work already succeeded.
 
 Five records each answer that question locally, for their own feature, and each answer is right:
 ADR-024 makes a push delivery failure non-fatal and records `MarkAsFailed` instead
-(`024-push-notifications.md:57`), ADR-026 makes cross-service cache eviction best-effort so a broken
+(`024-push-notifications.md:65-67`), ADR-026 makes cross-service cache eviction best-effort so a broken
 eviction store cannot dead-letter a coherence hint, ADR-076 degrades a data-subject export per section
 rather than failing the package (`076-data-subject-export.md:82-83`), ADR-091 composes the reset email in
 the handler and delivers it best-effort, "awaited and its failure caught, logged and swallowed"
@@ -23,8 +23,8 @@ which failures may be swallowed at all, at what severity, whether cancellation c
 and how a swallow is made visible to somebody who is not reading the log. Answered per call site, that
 produces a repo full of hand-rolled `catch (Exception)` blocks, each choosing its own severity, its
 own treatment of cancellation and its own decision to count nothing. ADR-041 records the counter this
-record's helper emits and notes that it is wired to no alert (`041-observability-and-telemetry.md:197-202`,
-`:219-222`), but it records the instrument, not the contract behind it.
+record's helper emits and notes that it is wired to no alert (`041-observability-and-telemetry.md:235-240`,
+`:258-261`), but it records the instrument, not the contract behind it.
 
 ## Decision
 One framework helper defines the contract, and a swallow that does not go through it is a deliberate,
@@ -47,7 +47,7 @@ documented exception.
   `operation` tag (`:115`). It is a meter of its own rather than a counter folded into
   `MMCA.Common.Cqrs`, because best-effort dispatch is not part of the CQRS pipeline and an operator can
   drop or keep it independently of the RED metrics (`:93-97`). The Aspire service defaults subscribe it
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:205`).
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:313`).
 - **The operation name is a low-cardinality constant.** It becomes a metric tag (`:22`), so call sites
   pass a `const` or a fixed prefix plus a value from a small fixed set. A blank name throws
   `ArgumentException` and a null logger or action throws `ArgumentNullException` (`:51-53`): the helper
@@ -60,21 +60,25 @@ documented exception.
   follow-up must outlive a caller that has already walked away: the framework's own output-cache
   eviction helper passes it explicitly
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:78-92`,
-  the token at `:90`; the ADC broadcasts take the parameter's default for the same reason,
-  `.../SubmitQuestionHandler.cs:122-124`).
+  the token at `:90`; the ADC submit and moderation broadcasts take the parameter's default for the
+  same reason, `.../SubmitQuestionHandler.cs:197-200`, the call closing at `:235`, and
+  `.../ModerateQuestionHandler.cs:157`, while the three ADC domain-event handlers pass their own
+  `cancellationToken`, `.../SessionQuestionUpvoteChangedHandler.cs:84`,
+  `.../LivePollVoteChangedHandler.cs:83` and `.../UserSessionBookmarkCacheEvictionHandler.cs:80`).
 - **The contract is pinned by tests.** `BestEffortTests` covers the transparent success path, token
   passthrough, one-Warning-per-failure, the `operation`-tagged increment observed through a
   `MeterListener`, the rethrow of the caller's cancellation, the swallow of a non-caller cancellation,
   and argument validation
   (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Services/BestEffortTests.cs:15-141`).
 
-Adoption today is **eleven call sites**: six in ADC Engagement, four in Store, and the framework's own
+Adoption today is **twelve call sites**: six in ADC Engagement, five in Store, and the framework's own
 eviction helper. The ADC six are the
 live-channel drain worker, whose operation name is the prefix `live-channel-publish:` plus the work
 item's event name and whose own catch turns the rethrown cancellation into a quiet stop
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:36`,
 `:45-58`, `:60-65`); three session-question broadcasts, `session-question-submit-broadcast`
-(`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:34`, call at `:131`),
+(`.../SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:41`, call at `:206`, which enqueues
+onto the live-channel publish queue at `:217-218` rather than publishing inline),
 `session-question-moderation-broadcast` (`.../UseCases/Moderate/ModerateQuestionHandler.cs:31`, call at
 `:138`) and `session-question-upvote-broadcast`
 (`.../DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:45`, call at `:52`); the poll-results
@@ -82,42 +86,51 @@ broadcast `livepoll-results-broadcast`
 (`.../LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:44`, call at `:51`); and the
 cross-host cache eviction `bookmark-cache-evict-broadcast`
 (`.../UserSessionBookmarks/DomainEventHandlers/UserSessionBookmarkCacheEvictionHandler.cs:56`, call at
-`:68-80`). The Store four are a checkout display label, `checkout-customer-name`, resolved outside the
-transaction so an unreachable Identity leaves the name null instead of failing an otherwise valid
-checkout
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:107`);
-two inventory label fetches sharing the operation name `inventory-catalog-labels`, so a Catalog service
+`:68-80`). The Store five are a checkout display label, `checkout-customer-name`, resolved by the
+checkout preflight outside the transaction so an unreachable Identity leaves the name null instead of
+failing an otherwise valid checkout
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:77-87`,
+the operation name at `:78`, the outside-the-transaction reasoning at `:17-24`);
+three inventory label fetches sharing the operation name `inventory-catalog-labels`, so a Catalog service
 that drops out leaves rows with whatever labels they had
-(`.../Inventory/UseCases/Create/CreateInventoryItemHandler.cs:68` and
-`.../Inventory/UseCases/BulkSet/BulkSetInventoryHandler.cs:67`); and the post-save eviction broadcast
+(`.../Inventory/UseCases/Create/CreateInventoryItemHandler.cs:68`,
+`.../Inventory/UseCases/BulkSet/BulkSetInventoryHandler.cs:67` and
+`.../Inventory/UseCases/Set/AdjustInventoryHandler.cs:66-67`); and the post-save eviction broadcast
 `review-anonymize-cache-evict-broadcast` raised after a customer erasure anonymizes reviews, where a
 broker fault must not fail an erasure that has already committed
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Reviews/IntegrationEventHandlers/CustomerErasedHandler.cs:62`,
-call at `:109-115`). Two of those four are pre-commit reads rather than post-commit follow-ups: the
+call at `:109-115`). Four of those five are pre-commit reads rather than post-commit follow-ups (the
+create fetch runs before `base.PersistAsync` at `CreateInventoryItemHandler.cs:82`, the set fetch before
+`SaveChangesAsync` at `AdjustInventoryHandler.cs:81`): the
 contract is about what a failure is allowed to do to the caller, not about where in the handler the
-work sits. The eleventh is the framework's own multi-tag eviction helper,
+work sits. The twelfth is the framework's own multi-tag eviction helper,
 `OutputCacheEvictionExtensions.TryEvictTagsAsync`, whose operation name is the constant prefix
 `output-cache-evict:` plus the tag being evicted
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionExtensions.cs:34`,
-`:78-92`). Store Catalog reaches it from five controllers, each naming its own low-cardinality cache
-tag: `catalog:categories` from `Controllers/CategoriesController.cs:168`, and `catalog:products` from
-`ProductsController.cs:242`, `ProductVariantsController.cs:140`, `ProductImagesController.cs:208` and
-`ReviewsController.cs:451`.
+`:78-92`). Store Catalog reaches it from seven controllers, each passing fixed low-cardinality cache
+tags: `catalog:categories` and `catalog:products` together from `Controllers/CategoriesController.cs:171`,
+`ProductsController.cs:169` and `ProductVariantsController.cs:206`, and `catalog:products` alone from
+`ProductImagesController.cs:217`, `ReviewsController.cs:320`, `ReviewModerationController.cs:162` and
+`ProductAttributesController.cs:151`.
 
 One swallow deliberately stays hand-rolled, and it says so in code. The framework's own
 `OutputCacheEvictionHandler` hand-rolls the same swallow-log-count shape against
 `cache.eviction.failed` on the `MMCA.Common.OutputCache` meter
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheEvictionHandler.cs:51-62`): it is
 the one documented non-reuse of this helper inside the framework, and ADR-026 records the rationale
-(`026-caching-strategy.md:507-511`).
+(`026-caching-strategy.md:560-565`).
 
 Store's `AddVariantHandler` used to be the second hand-rolled case, and it now shows what the contract
 says to do when a side effect is too important to swallow: stop swallowing it. It no longer catches
-anything and no longer publishes inline. After the commit it schedules a durable ADR-114 internal
-command, `PublishProductVariantChangedInternalCommand`, carrying the `ProductId` and the
-database-generated `ProductVariantId`, with `CancellationToken.None` so the follow-up outlives a caller
+anything and no longer publishes inline. After `SaveChangesAsync` populates the database-generated
+`ProductVariantId`, it schedules a durable ADR-114 internal
+command, `PublishProductVariantChangedInternalCommand`, carrying the `ProductId` and that
+`ProductVariantId`, with `CancellationToken.None` so the follow-up outlives a caller
 that has walked away
-(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/AddVariant/AddVariantHandler.cs:93-96`).
+(`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/UseCases/AddVariant/AddVariantHandler.cs:89-92`).
+The command is `ITransactional` (`AddVariantCommand.cs:25`), so the scheduler only enrolls the row and
+the transactional pipeline saves it just before the commit: the row commits with the variant
+(`AddVariantHandler.cs:76-79`, `:94-95`).
 The scheduled row is the durable record, so a broker fault retries with backoff instead of stranding the
 variant without inventory; an inline publish left a window in which a crash between the commit and the
 publish lost the event outright, and the outbox could not help because the row only lands there once
@@ -125,7 +138,7 @@ publish lost the event outright, and the outbox could not help because the row o
 loses the event. That failure arrives as a `Result`, not an exception, and is still isolated from the
 caller's outcome (the variant is committed, and a client retry with a null SKU would create a duplicate),
 and it is still logged at **Error** with both ids, because it is the case where an admin has to create
-the inventory record by hand (`:98-99`, the `[LoggerMessage]` at `:109-112`).
+the inventory record by hand (`:96-97`, the `[LoggerMessage]` at `:107-110`).
 
 ## Rationale
 - **One policy beats five local leniencies.** Each feature record is still right about its own
@@ -149,17 +162,17 @@ the inventory record by hand (`:98-99`, the `[LoggerMessage]` at `:109-112`).
 ## Trade-offs
 - **Nothing gates use of the helper.** There is no fitness rule, analyzer or architecture test that
   fails a build for a hand-rolled `catch (Exception)` that should have been a `BestEffort` call; the
-  helper is a convention backed by review. The only inventory is a search, which is how the eleven call
+  helper is a convention backed by review. The only inventory is a search, which is how the twelve call
   sites and the one remaining hand-rolled swallow above were enumerated.
 - **The Warning carries the operation name and the exception, nothing else.** No entity id, no
   correlation payload beyond the ambient scope. `SubmitQuestionHandler` records that cost explicitly:
   the question id is one log line earlier, not in the best-effort warning
-  (`.../Submit/SubmitQuestionHandler.cs:125-127`).
+  (`.../Submit/SubmitQuestionHandler.cs:200-202`).
 - **The counter is failure-only and alerts on nothing.** A healthy system emits zero, and zero is
   indistinguishable from a host that never wired the meter. ADR-041 puts it in exactly that gap
-  (`041-observability-and-telemetry.md:219-222`).
+  (`041-observability-and-telemetry.md:258-261`).
 - **The meter name is a duplicated literal.** `MMCA.Common.Aspire` subscribes it by string because that
-  package has no reference to Application (`BestEffort.cs:89-92`, `Extensions.cs:205`), so a rename has
+  package has no reference to Application (`BestEffort.cs:89-92`, `Extensions.Telemetry.cs:313`), so a rename has
   to move in two places or the metric silently stops being exported.
 - **A swallow is still a loss.** The helper decides that the caller does not see the failure; it does
   not make the side effect happen. A cache entry heals on its own TTL, but a lost broadcast never
@@ -167,6 +180,24 @@ the inventory record by hand (`:98-99`, the `[LoggerMessage]` at `:109-112`).
 - **Two "best effort" counters exist.** `cache.eviction.failed` and `besteffort.dispatch.failed` count
   the same shape of event on different meters, one per the ADR-026 non-reuse and one from this helper,
   so an operator asking "what is silently failing" has two places to look.
+
+## Revision (2026-10-01)
+No decision or rationale changed; the adoption inventory and several statements about it are
+corrected. Adoption is twelve call sites, not eleven: Store's inventory set path is a fifth Store site,
+a third `inventory-catalog-labels` fetch
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Inventory/UseCases/Set/AdjustInventoryHandler.cs:66-67`).
+The `checkout-customer-name` call lives in the checkout preflight, not the handler
+(`.../ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:77-87`). Four of the five Store sites are
+pre-commit reads, not two. Only the ADC submit and moderation broadcasts take the token parameter's
+default; the three domain-event handlers pass their own token
+(`.../SessionQuestionUpvoteChangedHandler.cs:84`, `.../LivePollVoteChangedHandler.cs:83`,
+`.../UserSessionBookmarkCacheEvictionHandler.cs:80`). Store Catalog reaches `TryEvictTagsAsync` from
+seven controllers, three of them evicting two tags at once (`CategoriesController.cs:171`). The
+`AddVariantHandler` schedule runs inside the `ITransactional` command and commits with the variant
+rather than after the commit (`AddVariantHandler.cs:76-79`, `:94-95`). Citations refreshed: the meter
+subscription (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Telemetry.cs:313`),
+`SubmitQuestionHandler`, `AddVariantHandler`, the controller lines, and the ADR-024, ADR-026 and
+ADR-041 cross-references.
 
 ## Related
 [ADR-024](024-push-notifications.md) (push delivery failure is non-fatal and recorded rather than

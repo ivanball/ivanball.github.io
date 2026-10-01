@@ -63,7 +63,8 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a dedicated package,
 
 - **Safe defaults for every contract, TryAdd-registered by `AddUIShared`.**
   `AddDeviceCapabilityDefaults` (`Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs`)
-  registers a null or neutral implementation per contract (`Fallbacks/`), so shared components
+  registers a null or neutral implementation per contract, kept beside its contract in the concern
+  sub-folder (for example `Services/Capabilities/Interop/NullShareService.cs`), so shared components
   resolve every capability on every head with zero host changes. Three fallback flavors:
   browser-equivalent (JS interop), null-object exposing `IsSupported == false` (components hide the
   affordance), and constant stubs (Blazor Server connectivity is always online: a dead circuit
@@ -155,3 +156,10 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a dedicated package,
   (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/Auth/MauiExternalAuthBroker.cs:43`)
   until the head supplies `OAuth:MobileRedirectScheme`, so a misconfigured head quietly keeps the web
   anchor flow rather than failing fast.
+
+## Revision (2026-10-01)
+No decision or rationale changed. The Decision bullet on safe defaults no longer points at a
+`Fallbacks/` folder, which does not exist: each null fallback sits beside its contract in a concern
+sub-folder of `Source/Presentation/MMCA.Common.UI/Services/Capabilities/` (Accessibility, Auth,
+DeviceStatus, DeviceStorage, Geo, Interop, Media, Notifications), for example
+`Source/Presentation/MMCA.Common.UI/Services/Capabilities/Interop/NullShareService.cs`.

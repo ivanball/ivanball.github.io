@@ -50,8 +50,8 @@ application code do not.
 - **Standard .NET library guidance, applied at the boundary where it holds.** The rule is scoped to
   exactly the code that ships in packages; it is not blanket-applied to the apps, where it would be
   360+ sites of pure noise (measured across Store/ADC before this decision, and the current scale is
-  far past that: a raw `\bawait\b` scan on 2026-09-19 counts 779 occurrences in `MMCA.Store/Source`
-  and 1,453 in `MMCA.ADC/Source`, 2,232 combined, which is the upper bound on the CA2007 sites the
+  far past that: a raw `\bawait\b` scan on 2026-10-01 counts 793 occurrences in `MMCA.Store/Source`
+  and 1,490 in `MMCA.ADC/Source`, 2,283 combined, which is the upper bound on the CA2007 sites the
   rule would open there).
 - **Mechanical, with the enforcement and the remediation at different levels.** The build gate is the
   enforced half: a new context-capturing await in packaged non-UI code fails the build, so it costs no
@@ -61,8 +61,8 @@ application code do not.
 
 ## Trade-offs
 - **Visual noise in framework source.** Every await in `Source/` (except UI packages) carries
-  `.ConfigureAwait(false)` (324 sites at adoption; 1,076 gated sites as of the 2026-09-19 snapshot,
-  out of 1,186 across `Source/` once the exempt UI packages are counted back in). The gate makes it
+  `.ConfigureAwait(false)` (324 sites at adoption; 1,115 gated sites as of the 2026-10-01 snapshot,
+  out of 1,234 across `Source/` once the exempt UI packages are counted back in). The gate makes it
   uniform, so the noise is consistent rather than sporadic.
 - **A per-repo delta in an otherwise shared analyzer baseline.** The workspace keeps one
   byte-identical `.editorconfig` baseline across the four repos; this policy lives in the marked
@@ -471,3 +471,32 @@ depends on them. The policy, the gate and the exemption are unchanged.
    both unmoved from the 2026-09-11 pass, so a per-line scan reports 1,451 for ADC and 2,230
    combined. `MMCA.Store/Source` carries no double-await line, so its 779 occurrences and 779
    matching lines are the same number.
+
+## Revision (2026-10-01)
+A count and anchor refresh only. No decision or rationale changed: the policy, the gate
+(`MMCA.Common/.editorconfig:833`) and the UI exemption (`:836`) stand as written. The Rationale and
+Trade-offs figures are refreshed to the measurements below; the earlier revisions keep theirs as
+history. Framework counts are taken at MMCA.Common `main` `eeb87e6c`; Store counts at
+`origin/main` `53acbe40`.
+
+1. **Framework site counts.** `MMCA.Common/Source/**/*.cs` holds 1,234 `ConfigureAwait(false)`
+   occurrences across 242 files (1,234 matching lines, so no line carries two), of which 119 sit
+   inside the exempt UI packages across 39 files (`MMCA.Common.UI` 63 across 19 files,
+   `MMCA.Common.UI.Maui` 54 across 19 files, `MMCA.Common.UI.Web` 2 in 1 file), leaving 1,115 under
+   the gate across 203 files. The exempt split moved (`MMCA.Common.UI` gained 7 occurrences and 2
+   files, `MMCA.Common.UI.Maui` 2 occurrences), so growth is not confined to gated code this window.
+2. **Consumer-scale upper bound.** A raw `\bawait\b` scan gives 793 occurrences across 152 files in
+   `MMCA.Store/Source/**/*.cs` and 1,490 across 291 files in `MMCA.ADC/Source/**/*.cs`, 2,283
+   combined. `.razor` files, still outside the scan, would add 9 occurrences across 2 files in Store
+   and 23 across 9 files in ADC.
+3. **The occurrence-versus-line delta still turns on two lines.** The
+   `await using var claim = await ...` pattern sits at
+   `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:78`
+   (previously `:75`) and
+   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:147`,
+   so a per-line scan reports 1,488 for ADC and 2,281 combined. Store carries no double-await line
+   (793 both ways).
+4. **The remediation examples moved.** The two `dotnet format analyzers` examples that target
+   SA1210/SA1211 now sit at `Website/docs-src/guides/common-GETTING-STARTED.md:186` and
+   `MMCA.Helpdesk/build/templates/stage.ps1:1236`, superseding the `:162` and `:1235` citations in
+   the 2026-09-11 revision.

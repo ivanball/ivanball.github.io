@@ -30,6 +30,8 @@ consumer service could not resolve the tenant of an integration event: the outbo
 message both arrived untenanted, so the delivery ran in the system context. The row now stores the
 tenant it was written under and the consumer restores `MMCA-Tenant-Id` before anything reads the
 scope; see the Revision (2026-09-11) at the end.
+Revised 2026-10-01 (the Decision no longer claims the outbox row has no tenant column, and the
+tenant-unaware factory is now `PhysicalDbContextFactory`; see Revision below).
 
 ## Context
 MMCA.Common already partitions data along two axes and neither of them is a tenant. ADR-006 partitions by
@@ -39,12 +41,12 @@ to", had no recorded answer, which meant every consumer that ever needed one wou
 column here, a `Where` clause in each handler there, and one forgotten handler is a customer data leak.
 
 The framework does have the machinery this needs, built for a different reason. `ApplySoftDeleteFilters`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:367`,
-called from `OnModelCreating` (`:331`) at `:333`) proves that a global predicate applied by expression tree
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454`,
+called from `OnModelCreating` (`:417`) at `:419`) proves that a global predicate applied by expression tree
 to every matching entity type makes an invariant unforgettable, and EF10's **named** query filters
-(`modelBuilder.Entity(clrType).HasQueryFilter(SoftDeleteFilterName, filter)`, `:379`, the name itself a
-constant at `:388`) mean a second filter can be added beside the first rather than replacing it. The
-interceptor pipeline resolved in `OnConfiguring` (`:249-271`) proves that a write-side rule can be enforced
+(`modelBuilder.Entity(clrType).HasQueryFilter(SoftDeleteFilterName, filter)`, `:466`, the name itself a
+constant at `:475`) mean a second filter can be added beside the first rather than replacing it. The
+interceptor pipeline resolved in `OnConfiguring` (`:298-323`) proves that a write-side rule can be enforced
 once for every context.
 
 That left a specific set of open questions: whether a tenant is a row discriminator or a database, what
@@ -97,26 +99,26 @@ hostname-to-tenant map and certificate handling that no consumer needs today.
 mirrors `CorrelationIdMiddleware`, which is a named step of the same edge pipeline
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:40`, its name a
 constant at `MiddlewarePipelineStepNames.cs:20`). Tenant resolution is its own step
-(`MiddlewarePipelineBuilder.cs:113-119`), placed immediately **after** the `Authentication` step
-(`:109-111`), because a claim-first resolution order requires that `HttpContext.User` already be populated.
+(`MiddlewarePipelineBuilder.cs:107-113`), placed immediately **after** the `Authentication` step
+(`:103-105`), because a claim-first resolution order requires that `HttpContext.User` already be populated.
 `UseCommonMiddlewarePipeline`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:48`, with a
-`configure` overload at `:60`) applies the steps through `ApplyPipeline` (`:140`), which seeds
-`MiddlewarePipelineBuilder.CreateDefault()` (`MiddlewarePipelineBuilder.cs:32`): the order is data,
+`configure` overload at `:60`) applies the steps through `ApplyPipeline` (`:168`), which seeds
+`MiddlewarePipelineBuilder.CreateDefault()` (`MiddlewarePipelineBuilder.cs:31`): the order is data,
 frozen by the `MiddlewarePipelineOrderTestsBase` fitness function rather than by a sequence of inline
-`Use*` calls. Like the `SoftDeletedUserFilter` step (`MiddlewarePipelineBuilder.cs:130`, its name at
+`Use*` calls. Like the `SoftDeletedUserFilter` step (`MiddlewarePipelineBuilder.cs:123-125`, its name at
 `MiddlewarePipelineStepNames.cs:59`) the tenant step is registered unconditionally and inert by default,
 keeping the pipeline one shape across every host. When `RequireTenant` is true and nothing resolves on a
 non-excluded path, it returns 400 with a ProblemDetails body.
 
 ### Writes are guarded by their own interceptor
 `TenantSaveChangesInterceptor` is a **separate** interceptor from the audit one (one concern per
-interceptor, matching how audit stamping and domain-event capture are already split at `:256-257`, where
-it is registered between the two at `:266`). It stamps `TenantId` on Added entries and throws
+interceptor, matching how audit stamping and domain-event capture are already split at `:298-299`, where
+it is registered between the two at `:308`). It stamps `TenantId` on Added entries and throws
 `CrossTenantWriteException` on any Added, Modified, or Deleted entry whose tenant differs from the
 resolved one. It is always registered
 (`TryAddSingleton<TenantSaveChangesInterceptor>`,
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:76`), and with no tenant
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:69`), and with no tenant
 resolved it is inert for updates, deletes, and every entity that does not carry `ITenantEntity`: the
 system context is unrestricted on the write side exactly as it is on the read side. Inserts are the one
 exception. `StampOrVerifyInsert` throws `CrossTenantWriteException.ForUnresolvedTenant` when an Added
@@ -125,16 +127,17 @@ exception. `StampOrVerifyInsert` throws `CrossTenantWriteException.ForUnresolved
 because a row that no tenant can ever read is a worse outcome than a failed save; a system scope that
 names the tenant explicitly (a seeder, a per-tenant job) still writes.
 `DesignTimeDbContextHelper` registers it too
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:132`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:155`),
 so `dotnet ef` scaffolds against exactly the runtime interceptor pipeline for consumers with and without
 tenancy. Its absence is survivable rather than fatal: `OnConfiguring` resolves the tenant interceptor with
-`GetService` (`ApplicationDbContext.cs:264`) and falls back to the two-interceptor chain (`:268-270`), so a
+`GetService` (`ApplicationDbContext.cs:306`) and falls back to the two-interceptor chain (`:310-313`), so a
 directly-constructed test or design-time context that never registered it still builds.
 
 ### The tenant is read live, not copied at context creation
 `ApplicationDbContext` gains `internal Func<string?>? TenantIdAccessor` and
-`CurrentTenantId => TenantIdAccessor?.Invoke()`. The scoped context factory assigns
-`() => tenantContext?.TenantId` when it creates a context, and the value is read at query-compile time
+`CurrentTenantId => TenantIdAccessor?.Invoke()` (`ApplicationDbContext.cs:140`, `:147`). The scoped
+context factory assigns `() => tenantContext.TenantId` when it creates a context
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:151`), and the value is read at query-compile time
 rather than captured at construction. Copying at creation would make correctness depend on the middleware
 having run before the first context in the scope existed, a hazard no test catches and a reordered
 pipeline reintroduces silently.
@@ -142,8 +145,8 @@ pipeline reintroduces silently.
 ### DB-per-tenant is a connection-string override behind the same key
 When `TenancySettings.Tenants[tenant].DataSources[key.Name]` has an entry, the scoped `DbContextFactory`
 clones the resolver's `PhysicalDataSource`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:17`)
-with the override connection string and the **same `DataSourceKey`**, so EF's model cache key is unchanged
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:20`)
+with the override connection string and the **same `DataSourceKey`** (`DbContextFactory.cs:185-192`), so EF's model cache key is unchanged
 and one model still serves every tenant. Creation goes through a new
 `IPhysicalDbContextFactory.Create(key, physical)` overload (`:37`) beside the original single member
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/IPhysicalDbContextFactory.cs:22`).
@@ -157,21 +160,29 @@ overridden context exists, restating the one-scope-one-tenant invariant where it
 `EFReadRepository` names the one filter it means to drop instead of dropping every filter. A single shared
 field carries the name,
 `private static readonly string[] SoftDeleteFilterOnly = [DbContexts.ApplicationDbContext.SoftDeleteFilterName]`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:33`), and
-it is passed to `IgnoreQueryFilters` at all **eight** call sites (`:52`, `:81`, `:102`, `:198`, `:288`,
-`:365`, `:379`, `:446`): one field rather than eight inline arrays, so the set of filters a
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:40`), and
+it is passed to `IgnoreQueryFilters` at all **eight** call sites (`:57`, `:86`, `:107`, `:203`, `:393`,
+`:470`, `:484`, `:571`): one field rather than eight inline arrays, so the set of filters a
 soft-delete-inclusive read drops cannot diverge between two of them. The repository's `ignoreQueryFilters: true` parameter has always meant
 "include soft-deleted rows", and naming the filter keeps that meaning exactly while making it impossible
 for a soft-delete-inclusive read to cross tenants.
 
 ### Background work drains and migrates per tenant
 `OutboxProcessor` and `OutboxCleanupService` enumerate `(source, tenant?)` pairs from `TenancySettings`
-and call `ITenantContext.SetTenant` inside the per-source scope before obtaining the context
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:266`), so the
-factory routes to the tenant's database and the claim-lease update (`:479-483`, the `ExecuteUpdateAsync`
-that sets `LockedUntil` and `LockToken`) runs against the right rows. There is deliberately **no `OutboxMessage` schema change**: a `TenantId` column
-would force a migration on every consumer on upgrade, for a discriminator the per-tenant database already
-provides and shared-schema tenancy does not need (the row sits in its aggregate's database either way).
+(`TenantDataSourceTargets.ExpandRelational`, called at `OutboxProcessor.cs:148`: one shared target per
+source plus one target per tenant that overrides that source) and call `ITenantContext.SetTenant` inside
+the per-target scope before obtaining the context, through the shared `CreateTenantScope` helper
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:134-145`,
+called at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:192`
+and `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxCleanupService.cs:103`), so the
+factory routes to the tenant's database and the claim-lease update (`OutboxProcessor.cs:401-405`, the `ExecuteUpdateAsync`
+that sets `LockedUntil` and `LockToken`) runs against the right rows. Routing does not depend on a tenant
+column, but the row does carry one: `OutboxMessage.TenantId`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:93`) is a nullable
+string mapped with a 64-character, non-Unicode limit
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:684`),
+and it records the tenant the row was written under so delivery can restore it (see the Revision
+(2026-09-11)).
 
 `InitializeDatabaseAsync` gains a per-tenant pass: a fresh scope per tenant, `SetTenant`, then the same
 `DatabaseInitStrategy` semantics and migrations assembly per overridden source. Module seeding stays
@@ -213,9 +224,7 @@ per-tenant database override, so the runnable seed exercises both halves of this
 - **Same `DataSourceKey`, different connection string, is the smallest possible DB-per-tenant.** An
   override changes where a source points, not what a source is, so the entity registry, the model cache,
   the migrations assembly, and the per-source outbox all keep working unchanged.
-- **A live accessor removes an ordering hazard rather than documenting it,** and no outbox column keeps
-  the upgrade free: every consumer would otherwise pay a migration on every source for a discriminator a
-  per-tenant database already carries.
+- **A live accessor removes an ordering hazard rather than documenting it.**
 - **The decorator is where the cache knows about scope.** Pushing tenancy into `ICacheService` would mean
   a singleton reaching for scoped state, which is exactly the shape that produces cross-request bleed.
 
@@ -224,13 +233,15 @@ per-tenant database override, so the runnable seed exercises both halves of this
   `IgnoreQueryFilters()` on a raw `Table` surface drops the tenant filter along with soft-delete. Writes
   remain guarded by `TenantSaveChangesInterceptor`, and `MMCA.Common/Source` carries **zero** parameterless
   `IgnoreQueryFilters()` call sites today (the only mentions are the doc comments at
-  `EFReadRepository.cs:30` and `TenantSaveChangesInterceptor.cs:32` explaining why the named form is used),
+  `EFReadRepository.cs:37` and `TenantSaveChangesInterceptor.cs:32` explaining why the named form is used),
   but no automated gate holds that count: no architecture rule, fitness test, or CI step checks for the
   parameterless form, so nothing fails a build if a future call site appears. ADR-055's
   `ApplicationLayer_DoesNotUseRawQueryableSurfaces` is partial cover only: it does not reach Infrastructure.
-- **The EF-style singleton adapter factories are tenant-unaware by design.**
-  `DefaultSqlServerDbContextFactory` and its siblings exist for tooling and adapter scenarios that have no
-  scope and therefore no tenant. A context obtained through them sees every tenant's rows.
+- **The singleton physical factory is tenant-unaware by design.**
+  `PhysicalDbContextFactory.Create` (both overloads,
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/PhysicalDbContextFactory.cs:37`
+  and `:40`) has no scope and therefore no tenant: only the scoped `DbContextFactory` assigns `TenantIdAccessor`
+  (`DbContextFactory.cs:151`), so a context obtained straight from the physical factory sees every tenant's rows.
 - **Fail-closed means a misconfigured claim takes the whole surface down.** A deployment whose identity
   provider stops emitting `tenant_id` returns 400 on every non-excluded route rather than degrading to a
   reduced view. That is the intended trade, and it is still an outage.
@@ -307,3 +318,33 @@ startup to say that one publisher in the mesh is still behind: the signal is an 
 looks the same as a legitimately system-raised event. Adoption is also unchanged, and it is why this
 closes a hole rather than fixing an outage: ADC and Store are single-tenant, and Helpdesk remains the
 reference adopter.
+
+## Revision (2026-10-01)
+**The body now agrees with the column the 2026-09-11 Revision added.** "Background work drains and
+migrates per tenant" still stated that there was deliberately no `OutboxMessage` schema change, and the
+Rationale still credited the absent column with keeping the upgrade free. Both were wrong after
+2026-09-11: `OutboxMessage.TenantId` exists
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:93`), nullable and
+mapped at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:684`.
+The Decision now says so and the Rationale clause is dropped. Database routing for background work is
+unchanged in substance: the targets come from `TenantDataSourceTargets.ExpandRelational` and the tenant is
+set through the shared `CreateTenantScope` helper
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/TenantDataSourceTargets.cs:134-145`).
+That file's remarks (`TenantDataSourceTargets.cs:32-33`) still say the outbox has no tenant column; the
+source comment is stale, not the column.
+
+**The tenant-unaware factory named in Trade-offs no longer exists.** `DefaultSqlServerDbContextFactory` and
+its siblings are gone from `MMCA.Common/Source`; the remaining runtime path with no tenant is the singleton
+`PhysicalDbContextFactory.Create` (both overloads,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/PhysicalDbContextFactory.cs:37`
+and `:40`), and at design time `DesignTimeDbContextHelper` constructs contexts directly without one
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:56`,
+`:78`, `:99`), since only the scoped factory assigns `TenantIdAccessor`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:151`,
+without a null-conditional). The trade itself is unchanged.
+
+**Anchors refreshed.** The `ApplicationDbContext` filter, `OnConfiguring` and interceptor anchors, the
+middleware step and `ApplyPipeline` anchors, the interceptor registrations in `DependencyInjection` and
+`DesignTimeDbContextHelper`, `PhysicalDataSource`, the eight `EFReadRepository` call sites (still eight),
+and the outbox scope and claim-lease anchors were re-anchored to current source. The anchors inside the
+Revision (2026-09-11) are left as that record wrote them.

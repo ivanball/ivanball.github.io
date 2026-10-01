@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-113: PostgreSQL as a First-Class Engine · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-09-09). Extends ADR-006 (one sealed context class per engine) and ADR-018 (engine as a routing decision) with a fourth engine.">
+  <meta name="description" content="Accepted (2026-09-09). Extends ADR-006 (one sealed context class per engine) and ADR-018 (engine as a routing decision) with a fourth engine. Revised…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-113: PostgreSQL as a First-Class Engine">
-  <meta property="og:description" content="Accepted (2026-09-09). Extends ADR-006 (one sealed context class per engine) and ADR-018 (engine as a routing decision) with a fourth engine.">
+  <meta property="og:description" content="Accepted (2026-09-09). Extends ADR-006 (one sealed context class per engine) and ADR-018 (engine as a routing decision) with a fourth engine. Revised…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-113: PostgreSQL as a First-Class Engine">
-  <meta name="twitter:description" content="Accepted (2026-09-09). Extends ADR-006 (one sealed context class per engine) and ADR-018 (engine as a routing decision) with a fourth engine.">
+  <meta name="twitter:description" content="Accepted (2026-09-09). Extends ADR-006 (one sealed context class per engine) and ADR-018 (engine as a routing decision) with a fourth engine. Revised…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"113 · PostgreSQL as a First-Class Engine","item":"https://ivanball.github.io/docs/adr/113-postgresql-as-a-first-class-engine.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -237,7 +239,8 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-09-09). Extends <a href="006-database-per-service.html">ADR-006</a> (one sealed context class per
           engine) and <a href="018-polyglot-persistence.html">ADR-018</a> (engine as a routing decision) with a fourth
-          engine.</p>
+          engine. Revised 2026-10-01 (the Helpdesk canary and the <code>--database postgresql</code> template choice
+          are shipped, the canary as an advisory template-generated job; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>The framework has shipped three database engines since its first release: SQL Server, Azure Cosmos DB
           and SQLite. Every one of them is reached the same way, because <a href="006-database-per-service.html">ADR-006</a>
@@ -288,11 +291,11 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/PostgreSQLDbContext.cs:23</code>)
           calls <code>UseNpgsql</code> with the resolved connection string, the per-source migrations assembly, the
           configured command timeout and the same retry-on-failure posture <code>SQLServerDbContext</code> uses
-          (<code>PostgreSQLDbContext.cs:52-72</code>), and suppresses <code>PendingModelChangesWarning</code> for the same
-          microservice-extraction reason. <code>PhysicalDbContextFactory</code> gains one switch arm
+          (<code>PostgreSQLDbContext.cs:51-82</code>, retry at <code>:74-77</code>), and suppresses <code>PendingModelChangesWarning</code> for the same
+          microservice-extraction reason (<code>PostgreSQLDbContext.cs:82</code>). <code>PhysicalDbContextFactory</code> gains one switch arm
           (<code>.../DbContexts/Factory/PhysicalDbContextFactory.cs:47</code>) and
           <code>ApplyConfigurationsForEntitiesInContext</code> one more
-          (<code>.../DbContexts/ApplicationDbContext.cs:831</code>).</p>
+          (<code>.../DbContexts/ApplicationDbContext.cs:961</code>).</p>
           </li>
           <li><p><strong>The mapping is the SQL Server mapping, not PostgreSQL house style.</strong>
           <code>EntityTypeConfigurationPostgreSQL&lt;TEntity, TIdentifierType&gt;</code>
@@ -310,9 +313,10 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/SoftDeleteFilterSql.cs:34-47</code>),
           so the automatic convention and the opt-in <code>HasSoftDeleteFilter</code> extension can never disagree.
           The outbox filters are built through one <code>QuoteColumn</code> helper
-          (<code>.../DbContexts/ApplicationDbContext.cs:548</code>) that returns the bracketed form for every
+          (<code>.../DbContexts/ApplicationDbContext.cs:619-620</code>, delegating to
+          <code>SoftDeleteFilterSql.QuoteColumn</code>) that returns the bracketed form for every
           engine except PostgreSQL, so the literals SQL Server and SQLite have always produced are
-          byte-identical. <code>IncludeColumns</code> (<code>.../DbContexts/ApplicationDbContext.cs:574</code>) picks the
+          byte-identical. <code>IncludeColumns</code> (<code>.../DbContexts/ApplicationDbContext.cs:645-651</code>) picks the
           provider&#39;s own <code>IncludeProperties</code> overload for the same reason.</p>
           </li>
           <li><p><strong>Timestamps are normalized in the model, never with the process-wide switch.</strong>
@@ -328,7 +332,7 @@
           </li>
           <li><p><strong>A PostgreSQL source migrates only when it names a migrations assembly.</strong>
           <code>PhysicalDataSource.UsesMigrations</code> answers true for PostgreSQL only when
-          <code>PostgreSQLMigrationsAssembly</code> is set (<code>.../DataSources/PhysicalDataSource.cs:63-70</code>), which is
+          <code>PostgreSQLMigrationsAssembly</code> is set (<code>.../DataSources/PhysicalDataSource.cs:41-47</code>), which is
           the SQLite rule rather than the SQL Server one. SQL Server always migrates because hosts have
           depended on that since the first release; PostgreSQL ships with no such host, so a source with
           nothing to apply is created outright by <code>DatabaseInitializationExtensions</code>
@@ -348,8 +352,8 @@
           </li>
           <li><p><strong>Readiness and orchestration are peers, not extras.</strong>
           <code>AddInfrastructureHealthChecks()</code> registers an <code>AddNpgSql</code> check per declared PostgreSQL database
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:580</code>), named <code>postgresql</code> for the
-          first one, and <code>WithPostgreSQLDataSource(database, logicalName)</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:232</code>), named <code>postgresql</code> for
+          the first one (<code>Extensions.Health.cs:263</code>), and <code>WithPostgreSQLDataSource(database, logicalName)</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:513</code>) wires a service
           project to its own <code>PostgresDatabaseResource</code> with the same reference / <code>WaitFor</code> / environment
           shape <code>WithSQLServerDataSource</code> uses. <strong>No Aspire client integration is added</strong>
@@ -361,36 +365,38 @@
           <code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests</code> is a Testcontainers project outside
           <code>MMCA.Common.slnx</code> (the posture <code>Tests/Core/MMCA.Common.Infrastructure.Redis.Tests</code> established:
           Docker-gated, own CI job, kept out of the fast solution-wide unit loop), run by the
-          <code>postgresql-integration</code> CI job (<code>MMCA.Common/.github/workflows/ci.yml:847</code>). It creates the whole
+          <code>postgresql-integration</code> CI job (<code>MMCA.Common/.github/workflows/ci.yml:881</code>). It creates the whole
           schema, round-trips an auditable entity&#39;s UTC audit stamps, proves a soft-deleted row is hidden AND
-          frees its unique slot, and writes and drains outbox rows for both a local domain event and an
-          integration event. The three failures listed in the Context section are each caught by one of
+          frees its unique slot, writes and drains the outbox row of a local domain event, and writes the
+          outbox row of an integration event and asserts it stays pending for <code>OutboxProcessor</code>
+          (<code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests/PostgreSQLPersistenceTests.cs:217-260</code>). The three failures listed in the Context section are each caught by one of
           those, and by nothing in the unit tier.</p>
           </li>
           </ol>
           <h3 id="rollout-the-helpdesk-canary-and-the-template-axis">Rollout: the Helpdesk canary and the template axis</h3>
-          <p>Both are follow-ups, deliberately NOT in the PR that introduces the engine: a framework capability
-          lands in a release, and a consumer adopts it after that release, which is the same order every other
-          framework change has taken.</p>
+          <p>Both live in MMCA.Helpdesk, outside the framework: a framework capability lands in a release, and a
+          consumer adopts it after that release, which is the same order every other framework change has
+          taken.</p>
           <ol>
-          <li><strong>MMCA.Helpdesk canary (one PR after the release).</strong> Helpdesk is the runnable reference app and
-          the CI consumer canary, and it already builds against framework source through its checked-in
-          <code>local.props</code>. A <code>--database postgresql</code> shape of it exercises the whole path end to end: entity
-          configurations on <code>EntityTypeConfigurationPostgreSQL</code>, a
-          <code>MMCA.Helpdesk.Migrations.PostgreSQL.Tickets</code> project scaffolded through
-          <code>DesignTimeDbContextHelper.CreatePostgreSQL</code>, and the AppHost using
-          <code>WithPostgreSQLDataSource</code>. The <code>consumer-source-build</code> CI job&#39;s SQL half (start a server, apply
-          real migrations, assert <code>__EFMigrationsHistory</code> and the framework&#39;s own <code>dbo.OutboxMessages</code>
-          table exist) is the shape to mirror for it.</li>
-          <li><strong>Template axis.</strong> <code>MMCA.Helpdesk/.template.config/template.json</code> already carries a <code>database</code>
-          choice parameter with <code>sqlserver</code> and <code>sqlite</code> and two derived symbols, <code>engineName</code>
-          (<code>SqlServer</code> / <code>Sqlite</code>) and <code>engineNameUpper</code> (<code>SQLServer</code> / <code>Sqlite</code>), that rename the
-          migrations project, the provider package ids, the design-time helper call, the context class, the
-          configuration base and the connection-string settings. The proposal is a third choice,
-          <code>--database postgresql</code>, whose derived values are <code>PostgreSQL</code> for BOTH symbols: the framework
-          spells this engine the same way in both positions, which is the one place the new choice is
-          simpler than the existing two. Cutting it is a template re-pack (<code>templates-vX.Y.Z</code>), so it rides
-          the release after the canary proves the shape.</li>
+          <li><strong>MMCA.Helpdesk canary.</strong> The <code>postgresql-canary</code> CI job
+          (<code>MMCA.Helpdesk/.github/workflows/ci.yml:146-155</code>) is ADVISORY: <code>continue-on-error: true</code> and not
+          a required check, so it reds for visibility without failing the run. It runs
+          <code>build/templates/canary-postgresql.ps1</code>, which generates an app with <code>--database postgresql</code>,
+          builds and tests it in package mode against the released framework, scaffolds its first migration
+          and applies it to a <code>postgres:17</code> service container (<code>ci.yml:157-158</code>, <code>ci.yml:191-195</code>), then
+          asserts the schema landed (<code>ci.yml:202-208</code>). The seed itself stays SQL Server: no
+          <code>Migrations.PostgreSQL</code> project is checked in, entity configurations reach
+          <code>EntityTypeConfigurationPostgreSQL</code> through the template rename, and the AppHost&#39;s
+          <code>WithPostgreSQLDataSource</code> branch is injected at staging time
+          (<code>MMCA.Helpdesk/build/templates/stage.ps1:430-451</code>).</li>
+          <li><strong>Template axis.</strong> <code>MMCA.Helpdesk/.template.config/template.json</code> carries a <code>database</code> choice
+          parameter with <code>sqlserver</code>, <code>sqlite</code> and <code>postgresql</code> (<code>template.json:264</code>) and two derived
+          symbols, <code>engineName</code> and <code>engineNameUpper</code>, that rename the migrations project, the provider
+          package ids, the design-time helper call, the context class, the configuration base and the
+          connection-string settings. For <code>--database postgresql</code> both derive <code>PostgreSQL</code>
+          (<code>template.json:74-91</code>): the framework spells this engine the same way in both positions, which is
+          the one place this choice is simpler than the other two. The two package ids the rename cannot
+          reach (the EF provider and the readiness check) are injected by <code>stage.ps1:480-507</code>.</li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <p>The shape follows from the alternatives that were weighed and declined:</p>
@@ -440,9 +446,28 @@
           is read into a local before the lambda instead. The fitness rule
           (<a href="015-architecture-fitness-functions.html">ADR-015</a>) caught it; the note is recorded so the next
           engine does not rediscover it.</li>
-          <li><strong>PostgreSQL is not yet exercised by a consumer.</strong> The framework&#39;s own tier proves the provider;
-          no shipped application runs on it. The Helpdesk canary above closes that.</li>
+          <li><strong>No shipped application runs on PostgreSQL.</strong> The framework&#39;s own tier proves the provider and
+          the advisory Helpdesk canary above proves a generated <code>--database postgresql</code> app builds and
+          migrates against a real server, but the Helpdesk seed, ADC and Store all stay on SQL Server
+          (none of their <code>Source/</code> trees derives from <code>EntityTypeConfigurationPostgreSQL</code>).</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>The two rollout follow-ups are no longer plans. The Helpdesk canary ships as the advisory
+          <code>postgresql-canary</code> job (<code>MMCA.Helpdesk/.github/workflows/ci.yml:146-155</code>, <code>continue-on-error</code>,
+          not a required check), and its shape differs from the one first proposed: instead of a checked-in
+          <code>MMCA.Helpdesk.Migrations.PostgreSQL.Tickets</code> project and an AppHost edit in the seed, it generates
+          an app with <code>--database postgresql</code> through <code>build/templates/canary-postgresql.ps1</code>, scaffolds the
+          first migration and applies it to a <code>postgres:17</code> container, with the <code>WithPostgreSQLDataSource</code>
+          branch injected by <code>MMCA.Helpdesk/build/templates/stage.ps1:430-451</code>. The template&#39;s <code>postgresql</code>
+          choice is shipped (<code>MMCA.Helpdesk/.template.config/template.json:264</code>, both derived symbols
+          <code>PostgreSQL</code> at <code>template.json:74-91</code>). Decision 9 is corrected: the framework tier drains the
+          outbox row of a local domain event only and asserts an integration event&#39;s row stays pending
+          (<code>Tests/Core/MMCA.Common.Infrastructure.PostgreSQL.Tests/PostgreSQLPersistenceTests.cs:217-260</code>).
+          The trade-off on consumer coverage now says what remains true: no shipped application runs on the
+          engine. Citations refreshed: <code>PostgreSQLDbContext.cs:51-82</code> (retry <code>:74-77</code>, warning <code>:82</code>),
+          <code>ApplicationDbContext.cs:961</code>, <code>:619-620</code> and <code>:645-651</code>, <code>PhysicalDataSource.cs:41-47</code>, the
+          readiness check moved to <code>MMCA.Common.Aspire/Extensions.Health.cs:232</code> and <code>:263</code>, and the
+          <code>postgresql-integration</code> job to <code>ci.yml:881</code>. The engine decision and its rationale are unchanged.</p>
           <h2 id="related">Related</h2>
           <p><a href="006-database-per-service.html">ADR-006</a> (one sealed context per engine, one instance per database),
           <a href="018-polyglot-persistence.html">ADR-018</a> (the engine axis this record adds a member to),
@@ -471,6 +496,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -253,8 +255,10 @@
           <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/IProductVariantService.cs:34</code>).
           Any pricing model that needs Sales to understand promotions grows that wire surface and makes the
           extraction harder to reverse. Second, checkout already freezes a price: <code>CheckOutHandler</code> fetches
-          unit prices from Catalog and <code>CheckOutDomainService</code> copies them onto order lines
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:65-67</code>,
+          unit prices from Catalog through its <code>CheckOutPreflight</code> collaborator and <code>CheckOutDomainService</code>
+          copies them onto order lines
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:74-76</code>,
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutPreflight.cs:50-52</code>,
           <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/CheckOutDomainService.cs:113-121</code>).
           The cart stores quantities, not money.</p>
           <p>The tempting shape is a Promotion aggregate with its own lifecycle, targets and precedence rules.
@@ -273,16 +277,16 @@
           nothing: <code>Product.SetDiscountOnAllVariants</code> refuses a product that has no active variant to discount
           (<code>Product.NoActiveVariants</code>, an invariant error surfaced as 400) and otherwise validates the discount
           against every active variant&#39;s list price before it touches any of them
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:588-597</code>,
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:588-603</code>,
           <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductInvariants.cs:114</code>).</p>
           <p><strong>The list price is preserved and the effective price is computed in one method.</strong>
           <code>ProductVariant.Price</code> stays the list price whatever the discount says, so clearing a discount
           restores the original price with no bookkeeping. <code>ProductVariant.GetEffectivePrice(now)</code> and its
           static twin <code>ResolveEffectivePrice</code> are the single computation
-          (<code>ProductVariant.cs:164-184</code>): they return the list price when there is no discount, when the window
+          (<code>ProductVariant.cs:171-172,183-191</code>): they return the list price when there is no discount, when the window
           does not cover <code>now</code>, and when the stored pairing no longer resolves. Every caller goes through it:
           the DTO mapper for the read model
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/DTOs/ProductVariantDTOMapper.cs:40-41</code>)
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/DTOs/ProductVariantDTOMapper.cs:48-49</code>)
           and the cross-module pricing service over its projection
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductVariantService.cs:84-90</code>),
           both against an injected <code>TimeProvider</code>.</p>
@@ -292,8 +296,8 @@
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/VariantUnitPrice.cs:32</code>,
           <code>IProductVariantService.cs:104</code>). The label is resolved only while its discount is in force at the
           instant asked, so an expired or not-yet-open window names nothing (<code>ProductVariantService.cs:103</code>).
-          <code>CheckOutHandler</code> translates the triple into Sales&#39; own <code>OrderLinePricing</code> record at the module
-          boundary (<code>CheckOutHandler.cs:75</code>, <code>OrderLinePricing.cs:22</code>), which is what keeps <code>Sales.Domain</code> free
+          <code>CheckOutPreflight</code> translates the triple into Sales&#39; own <code>OrderLinePricing</code> record at the module
+          boundary (<code>CheckOutPreflight.cs:58-60</code>, <code>OrderLinePricing.cs:22</code>), which is what keeps <code>Sales.Domain</code> free
           of any reference to <code>Catalog.Shared</code>. The three values land on <code>OrderLine.UnitPrice</code>,
           <code>OrderLine.ListPrice</code> and <code>OrderLine.PromotionLabel</code> (<code>OrderLine.cs:30,42,49</code>), guarded by
           <code>OrderInvariants.EnsureListPriceIsValid</code> (non-negative, same currency, never below the unit price)
@@ -311,7 +315,7 @@
           struck &quot;Was&quot; amount, the HTML-encoded label and the &quot;You saved&quot; total
           (<code>SendOrderPaidEmailInternalCommandHandler.cs:96,104,119</code>). The order detail page renders the same
           three from the order&#39;s own read model, plus an accessible &quot;Was X, now Y&quot; sentence
-          (<code>Sales.UI/Pages/Orders/OrderLinesPanel.razor:56,72,95</code>). Every one appears only when there is a
+          (<code>Sales.UI/Pages/Orders/OrderLinesPanel.razor:56,58,72,96</code>). Every one appears only when there is a
           saving. <code>OrderPaid</code> still carries the order&#39;s <code>TotalSavings</code> and each line&#39;s <code>ListPrice</code> and
           <code>PromotionLabel</code> (<code>Orders/DomainEvents/OrderPaid.cs:21,42</code>), but its one subscriber now reads only
           the order id and the customer id from it.</p>
@@ -322,21 +326,21 @@
           (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Contracts/Protos/user_sales_export.proto:87,90</code>,
           <code>UserSalesExportService.cs:70-71</code>): new numbers on existing messages, which a peer built against the
           previous generation ignores. The <code>ProductVariantChanged</code> integration event keeps carrying the list
-          price and nothing else (<code>Product.cs:544-545</code>), so ADR-010&#39;s schema-version rule is not engaged and
+          price and nothing else (<code>Product.cs:545-546</code>), so ADR-010&#39;s schema-version rule is not engaged and
           ADR-083&#39;s one-lifecycle-event-per-entity taxonomy is unchanged. The two Sales columns land NOT NULL
           with defaults plus a guarded backfill from the unit price, add-only under ADR-057
           (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260907232734_AddOrderLineListPrice.cs:60-63</code>).</p>
-          <p><strong>The effective price must stay above zero.</strong> Sales&#39; order-line validator rejects a non-positive unit
-          price
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Validation/OrderLineValidationRules.cs:33</code>),
-          so a discount that resolves to zero would produce a variant that can be added to a cart and never
-          checked out. Catalog refuses that pairing at the write instead: <code>VariantDiscount.ApplyTo</code> fails with
+          <p><strong>The effective price must stay above zero.</strong> Sales allows a zero line price
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderInvariants.cs:24-30</code>) but refuses
+          an order whose total the payment provider cannot charge, a zero total included, before anything is
+          written (<code>CheckOutHandler.cs:155-160</code>), so a discount that resolves to zero would produce a variant
+          that can be added to a cart and fails checkout whenever it leaves the order unchargeable. Catalog refuses that pairing at the write instead: <code>VariantDiscount.ApplyTo</code> fails with
           <code>EffectivePriceNotPositive</code> (<code>VariantDiscount.cs:61-62,216-218,237-239</code>), which in practice means a
           zero-priced variant cannot carry a discount at all.</p>
           <p>The three write endpoints are gated on <code>catalog:pricing:manage</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Authorization/CatalogPermissions.cs:29</code>,
           <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductVariantsController.cs:150-151,177-178</code>,
-          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:248-249</code>), a narrower
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductsController.cs:142-143</code>), a narrower
           permission than variant management, and follow ADR-035&#39;s two-token rule: the product ETag in
           <code>If-Match</code>, the variant row version in the body.</p>
           <h2 id="rationale">Rationale</h2>
@@ -359,11 +363,11 @@
           a sale that ends between cart-add and checkout charges the list price, with no reconciliation job.</p>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Cached reads lag a window boundary by up to five minutes.</strong> The three write commands implement
+          <li><strong>Cached reads lag a window boundary by up to 60 seconds.</strong> The three write commands implement
           <code>ICacheInvalidating</code> and their controllers evict the <code>catalog:products</code> output-cache tag, so an
           admin edit is visible at once. A window that opens or closes on the clock evicts nothing, so a
-          cached storefront read can show the pre-boundary price until the tag&#39;s five-minute TTL expires
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:155</code>). Checkout is never stale
+          cached storefront read can show the pre-boundary price until the products cache policy&#39;s 60-second TTL expires
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:153-158</code>). Checkout is never stale
           because it is a live cross-service call.</li>
           <li><strong>An order line records the two prices and the promotion&#39;s name, not the promotion itself.</strong> A line
           answers &quot;struck from 24.99, charged at 19.99, Summer Sale&quot;, which is what the receipt, the order
@@ -382,6 +386,19 @@
           price on a page and be charged list price seconds later at a window boundary. Accepted as the cost
           of not pinning a promotion into the cart.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>Two statements no longer matched the code and are corrected in place; the decision itself is
+          unchanged. The products output-cache policy now expires after 60 seconds rather than five minutes,
+          because a product payload carries a clock-dependent effective price
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:153-158</code>), so a window boundary
+          shows within a minute. The Sales order-line validator that rejected a non-positive unit price no
+          longer exists: the Sales domain allows a zero line price (<code>OrderInvariants.cs:24-30</code>) and checkout
+          instead refuses an order total the payment provider cannot charge (<code>CheckOutHandler.cs:155-160</code>).
+          Catalog&#39;s refusal of a discount that resolves to zero is unchanged (<code>VariantDiscount.cs:61-62</code>).
+          Citations were also refreshed: the Catalog price fetch and the <code>OrderLinePricing</code> translation now
+          live in <code>CheckOutPreflight</code> (<code>CheckOutPreflight.cs:50-52,58-60</code>), and the anchors into
+          <code>ProductVariant.cs</code>, <code>ProductVariantDTOMapper.cs</code>, <code>Product.cs</code>, <code>ProductsController.cs</code> and
+          <code>OrderLinesPanel.razor</code> were re-pointed.</p>
           <h2 id="related">Related</h2>
           <ul>
           <li><a href="005-soft-delete-vs-erasure.html">ADR-005</a>, <a href="006-database-per-service.html">ADR-006</a>: each service owns
@@ -413,6 +430,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

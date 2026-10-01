@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -261,7 +263,7 @@
           <code>Tests/Integration/MMCA.ADC.AppHost.SmokeTests</code> project boots the real AppHost through
           <code>DistributedApplicationTestingBuilder</code>, and it sits deliberately outside every <code>.slnx</code> and <code>.slnf</code>
           so no ordinary build picks it up: CI restores and builds it by explicit project path
-          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:221</code>, <code>:264</code>). Before this package existed that
+          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:225</code>, <code>:268</code>). Before this package existed that
           project asked the gateway for one health answer, and what it proved is how little of the code around
           that answer is ADC-specific: a startup budget, a readiness budget, a poll interval, a poll loop that
           treats a connection failure as &quot;not yet&quot;, and a teardown. Roughly a hundred lines of infrastructure
@@ -332,7 +334,7 @@
           (<code>.../DeveloperCertificateAvailability.cs:61-75</code>). Installing or trusting a certificate is a
           machine-level act a test fixture has no business performing silently; a CI job that needs one runs
           <code>dotnet dev-certs https --trust</code> as an explicit step
-          (<code>MMCA.Common/.github/workflows/ci.yml:924</code>, in the <code>apphost-testing</code> job declared at <code>:882</code>).</p>
+          (<code>MMCA.Common/.github/workflows/ci.yml:1000</code>, in the <code>apphost-testing</code> job declared at <code>:958</code>).</p>
           </li>
           <li><p><strong>The RS256 keypair is minted when the environment has none.</strong> <code>EphemeralRsaKeyPair.Create()</code>
           (<code>.../Preconditions/EphemeralRsaKeyPair.cs:42</code>) generates an RSA-2048 pair and the fixture pushes
@@ -375,8 +377,16 @@
           unit test cross-asserts each pair against the framework constant it mirrors.</p>
           </li>
           <li><p><strong>Skipping is the consuming project&#39;s call.</strong> The package takes no dependency on the xUnit
-          assertion library, so a test class writes
-          <code>Assert.SkipWhen(!Fixture.IsAvailable, Fixture.SkipReason!)</code> itself. That keeps the skip API where
+          assertion library (the csproj references only <code>xunit.v3.extensibility.core</code>,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/MMCA.Common.Testing.Aspire.csproj:25</code>), so a
+          test class writes the skip itself, always with a non-null reason: <code>Assert.SkipWhen(!Fixture.IsAvailable, Fixture.SkipReason ?? &quot;...&quot;)</code>
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Aspire.AppHostTests/SampleAppHostTests.cs:155</code>,
+          <code>MMCA.Store/Tests/Integration/MMCA.Store.AppHost.SmokeTests/AppHostCompositionSmokeTests.cs:50</code>) or
+          an <code>if (!Fixture.IsAvailable) Assert.Skip(...)</code> branch
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostSmokeTests.cs:67-73</code>).
+          <code>SkipReason</code> is null exactly when the stack started, and <code>SkipWhen</code> validates its reason before
+          the condition, so a null-forgiven <code>Fixture.SkipReason!</code> throws <code>ArgumentNullException</code> on the
+          runner the tier exists for (<code>.../AdcAppHostSmokeTests.cs:59-66</code>). That keeps the skip API where
           a test project already has it and keeps one more package out of a consumer&#39;s graph.</p>
           </li>
           <li><p><strong>The tier runs in CI, advisory, against an in-repo sample.</strong>
@@ -437,7 +447,8 @@
           <li><strong>A consumer&#39;s smoke tier is a subclass.</strong> <code>MMCA.ADC.AppHost.SmokeTests</code> is two files. The fixture
           is <code>AdcAppHostFixture : AppHostFixtureBase&lt;Projects.MMCA_ADC_AppHost&gt;</code>
           (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostFixture.cs:28</code>), whose whole
-          body is a <code>Budget</code> override (<code>:42</code>, twelve minutes startup and eight readiness, because a cold
+          body is a <code>RequiredEnvironment</code> override (<code>:31</code>, opt-in, Docker and the developer certificate), a
+          <code>Budget</code> override (<code>:42</code>, twelve minutes startup and eight readiness, because a cold
           agent pulls four container images before a process starts) and a <code>ResourcesToAwait</code> override
           (<code>:52</code>, the four services then the gateway, in dependency order so a failure names the first thing
           that did not come up). The tests are
@@ -451,8 +462,8 @@
           four endpoints (<code>:108</code> for the three REST services, <code>:120</code> for Notification&#39;s dedicated <code>grpc</code>
           endpoint) and <code>AssertDataSourceAsync</code> over four data sources (<code>:135</code>), none of which the earlier
           project asserted. The workflow job keeps its <code>dotnet dev-certs</code> step
-          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:271</code>) and runs no <code>openssl</code> keypair step
-          (<code>:278</code>), since the fixture mints one. MMCA.Store&#39;s tier is the same shape
+          (<code>MMCA.ADC/.github/workflows/cross-service-tests.yml:275</code>) and runs no <code>openssl</code> keypair step
+          (<code>:282</code>), since the fixture mints one. MMCA.Store&#39;s tier is the same shape
           (<code>MMCA.Store/Tests/Integration/MMCA.Store.AppHost.SmokeTests/StoreAppHostFixture.cs:23</code>,
           <code>.../AppHostCompositionSmokeTests.cs:26</code>).</li>
           <li><strong>Cost: this is the slowest tier per assertion, and it is deliberately advisory.</strong> The
@@ -471,11 +482,24 @@
           in each consumer&#39;s <code>Directory.Packages.props</code> moves together at the next release
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>).</li>
           <li><strong>Aspire versions are now coupled in one more place.</strong> <code>Aspire.Hosting.Testing</code> is pinned at the
-          same 13.5.4 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:360</code>, against
-          <code>Aspire.Hosting</code> at <code>:351</code>), because the
+          same 13.6.0 as every other Aspire entry (<code>MMCA.Common/Directory.Packages.props:371</code>, against
+          <code>Aspire.Hosting</code> at <code>:362</code>), because the
           testing host builds the application model the AppHost package produces; a version split between
           them is a model mismatch rather than an upgrade.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Decision 9 is corrected: it showed
+          <code>Assert.SkipWhen(!Fixture.IsAvailable, Fixture.SkipReason!)</code> as the consumer&#39;s skip, a form that
+          throws <code>ArgumentNullException</code> whenever the stack does start, because <code>SkipReason</code> is then null and
+          <code>SkipWhen</code> validates its reason first
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostSmokeTests.cs:59-66</code>). No
+          consumer uses it; all three supply a non-null reason (decision 9 now cites each). The package&#39;s own
+          XML documentation still recommends the null-forgiven form
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/Fixtures/AppHostFixtureBase.cs:35</code>). The ADC
+          fixture&#39;s body is recorded with its third override, <code>RequiredEnvironment</code>
+          (<code>.../AdcAppHostFixture.cs:31</code>). The Aspire pin reads 13.6.0 on every Aspire entry
+          (<code>MMCA.Common/Directory.Packages.props:362</code>, <code>:371</code>). Refreshed anchors: <code>ci.yml:958</code> and <code>:1000</code>,
+          <code>cross-service-tests.yml:225</code>, <code>:268</code>, <code>:275</code> and <code>:282</code>.</p>
           <h2 id="related">Related</h2>
           <p><a href="098-aspire-orchestration-not-testing-or-dashboards.html">ADR-098</a> (the orchestration posture this tier
           tests without changing),
@@ -500,6 +524,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

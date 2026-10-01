@@ -13,13 +13,15 @@ the difference between them.
 The expensive half has moved out. Session scoring is scheduled as a durable internal command
 ([ADR-114](114-internal-commands-durable-job-queue.md)): the trigger endpoint writes a row through
 `IInternalCommandScheduler.ScheduleAsync`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:115-117`)
-and answers `202 Accepted` unconditionally (`:110`, `:125`), and the framework's leased, retrying,
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:132-136`)
+and answers `202 Accepted` once the row is written (`:144`), with a failed schedule surfaced through
+`HandleFailure` (`:138-141`) and a `[FeatureGate(ConferenceFeatures.SessionScoring)]` gate (`:125`)
+answering 404 while the flag is off, and the framework's leased, retrying,
 dead-lettering processor runs the pass. Duplicate runs are held off across replicas by a per-event
 `IDistributedLock` claim taken inside the handler
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:75-77`,
-`ClaimTimeToLive` of 15 minutes at `:53`, `ClaimWait` of `TimeSpan.Zero` at `:60`), and the loser of
-that claim logs and returns `Result.Success()` (`:79-83`). The handler says where its retries come
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:78-80`,
+`ClaimTimeToLive` of 15 minutes at `:56`, `ClaimWait` of `TimeSpan.Zero` at `:63`), and the loser of
+that claim logs and returns `Result.Success()` (`:82-86`). The handler says where its retries come
 from: the framework's backoff and attempt ceiling "replaces the local three-attempt requeue the
 in-process queue carried" (`:28`).
 
@@ -36,8 +38,8 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
   interface both resolving to the **one** instance (`TryAddSingleton<LiveChannelPublishQueue>()` plus
   `TryAddSingleton<ILiveChannelPublishQueue>(sp => sp.GetRequiredService<LiveChannelPublishQueue>())`
   at
-  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:56-57`,
-  with the "one concrete singleton, exposed to handlers via the interface" note at `:55`). Registering
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:53-54`,
+  with the "one concrete singleton, exposed to handlers via the interface" note at `:52`). Registering
   the two separately would give producers a queue nobody drains. Capacity is a per-job constant
   (`1024` at
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Live/LiveChannelPublishQueue.cs:18`,
@@ -78,7 +80,7 @@ starts an untracked `Task` from a request, and nothing that must run lands here.
   - *From the command handler side of a non-transactional command, once its save has returned.*
     `TransactionalCommandDecorator` wraps only commands implementing `ITransactional` and passes
     everything else straight through
-    (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:28-29`,
+    (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:30-31`,
     marker at `.../UseCases/Markers/ITransactional.cs:6`); no Engagement command implements it, so for
     these handlers `SaveChangesAsync` **is** the commit. Three of the four sites get the ordering
     structurally, because a `MutateEntityHandlerBase` subclass
@@ -147,6 +149,21 @@ One implementation exists: `LiveChannelPublishQueue` / `LiveChannelPublishProces
   channel loses it silently, and putting a broadcast through a durable command pays a row, a poll
   interval and a lease for something worth less than the write.
 
+## Revision (2026-10-01)
+No decision or rationale changed. Two Context and Related statements are corrected: the scoring
+trigger no longer answers `202 Accepted` unconditionally, because a
+`[FeatureGate(ConferenceFeatures.SessionScoring)]` attribute
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:125`)
+answers 404 with the flag off and a failed schedule returns `HandleFailure` (`:138-141`), leaving
+`Accepted()` (`:144`) for the success path only; and ADR-025's warm-up is one of several framework
+hosted services rather than the only other one (for example `OutboxProcessor` at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:209`,
+`InternalCommandProcessor` at `.../DependencyInjection.Jobs.cs:175`, `WarmupHostedService` at
+`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:102`). Citations refreshed: the
+`ScheduleAsync` call, the scoring handler's claim, TTL, wait and loser lines (the cache evict at
+`ScoreEventSessionsInternalCommandHandler.cs:76` now precedes the claim), the Engagement queue
+registrations, and the `TransactionalCommandDecorator` pass-through.
+
 ## Related
 [ADR-114](114-internal-commands-durable-job-queue.md) (the durable, leased, retrying queue that owns
 expensive and must-run work),
@@ -155,5 +172,6 @@ per-replica dedup),
 ADR-039 (live channel push, the one instance of this pattern),
 ADR-003 (the outbox, and the post-commit domain-event deferral the first enqueue shape relies on),
 ADR-014 (the transactional decorator whose commit boundary post-commit work attaches to),
-ADR-025 (startup warm-up, the other hosted-service use in the framework),
+ADR-025 (startup warm-up, one of several framework hosted services alongside the outbox and
+internal-command processors),
 [ADR-052](052-background-job-execution.md) (superseded: the record that covered both halves).

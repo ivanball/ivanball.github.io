@@ -44,7 +44,7 @@ The framework's generic parameter already admits a wrapper. `BaseEntity<TIdentif
 its identifier only to `notnull`
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:34-37`), and
 `EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>` and `IBaseDTO<TIdentifierType>` do the
-same (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:45`,
+same (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:43`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IBaseDTO.cs:9-10`). A `readonly record struct`
 satisfies `notnull`, so nothing in the entity, DTO or controller hierarchy had to change and no
 shipped signature moved. What was missing was everything around the type: JSON, EF Core mapping,
@@ -108,13 +108,13 @@ the framework pushes a consumer toward a wrapper.**
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdTypeConverter.cs:21`)
    converts to and from both text and the primitive, and delegates its text leg to the same
    `IParsable` implementation, so both routes parse identically.
-   `StronglyTypedIdTypeConverters.Register` / `.RegisterAll` (`:89`, `:108`) register it through
+   `StronglyTypedIdTypeConverters.Register` / `.RegisterAll` (`:89`, `:119`) register it through
    `TypeDescriptor.AddAttributes`, so no `[TypeConverter]` attribute is needed on a consumer's
    wrapper.
 
 6. **One call is the whole opt-in.**
    `services.AddStronglyTypedIds(typeof(OrderId).Assembly)`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:770`) scans the named
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:366`) scans the named
    assemblies for wrappers, registers the `TypeConverter` for each, and registers a
    `StronglyTypedIdRegistry` singleton
    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:22`). A host
@@ -123,7 +123,7 @@ the framework pushes a consumer toward a wrapper.**
 7. **EF Core maps a wrapper as a PRE-CONVENTION type mapping, registered once on the base
    context.** `ApplicationDbContext.ConfigureConventions` resolves the registry with `GetService` and
    applies it
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:333-335`);
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:407-409`);
    `StronglyTypedIdModelConfiguration.Apply`
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/StronglyTypedIdModelConfiguration.cs:29`)
    declares `configurationBuilder.Properties(identifierType).HaveConversion(converterType, comparerType)`
@@ -154,7 +154,7 @@ the framework pushes a consumer toward a wrapper.**
    there is no `>` to build a range predicate from, and an ordering operator on a wrapped column is
    refused by `ValidateFilters` as a 400 rather than silently widening the result set.
    `QueryFilterService.ResolveStrategy` builds and memoizes the strategy on first use
-   (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:396-407`),
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:399-417`),
    so a consumer never calls `RegisterStrategy` per identifier. Sorting is untouched: an `ORDER BY`
    over a converted column is the primitive's ordering
    ([ADR-034](034-generic-entity-query-layer.md) sort keys).
@@ -167,7 +167,7 @@ the framework pushes a consumer toward a wrapper.**
     parameters, which a schema transformer never sees: MVC's API explorer describes a
     `TypeConverter`-bound parameter as a plain string. Both are registered by `AddCommonOpenApi`
     across every versioned document
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:504-505`).
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:104-105`).
 
 11. **Mapperly needs nothing in the normal case and one attribute in the other.** A DTO implements
     `IBaseDTO<TIdentifierType>` over the SAME identifier type its entity uses, so a wrapper maps to
@@ -198,17 +198,17 @@ the framework pushes a consumer toward a wrapper.**
 
 13. **Adoption is zero and this record says so.** No production type in MMCA.Common, MMCA.Store,
     MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample implements `IStronglyTypedId<,>`. The only
-    implementations anywhere are the fixtures in six of the framework's own test files. The 48
+    implementations anywhere are the fixtures in seven of the framework's own test files. The 48
     aliases in force across the four repositories on 2026-09-19 (46 `int`, two `System.Guid`) are
     untouched, and no consumer needs a version-bump behaviour change:
     without a call to `AddStronglyTypedIds`, every framework site that reads the registry treats its
     absence as "no wrappers in use".
 
-14. **The contract is pinned by 77 executed tests, not by adoption.** Shared: 33 executed cases
+14. **The contract is pinned by 78 executed tests, not by adoption.** Shared: 34 executed cases
     across `StronglyTypedIdTests.cs`, `StronglyTypedIdSerializationTests.cs` and
     `StronglyTypedIdTypeConverterTests.cs` (equality, the compile-time separation of two
     same-primitive identifiers, parsing, JSON round trips including null, nesting, collections and
-    dictionary keys, and the `TypeDescriptor` registration). Infrastructure: 21 in
+    dictionary keys, and the `TypeDescriptor` registration, including the nullable-converter refresh). Infrastructure: 21 in
     `StronglyTypedIdPersistenceTests.cs` (9 facts plus four theories over the three relational
     engines), including per-engine model assertions for SQLite, SQL Server and PostgreSQL, a SQLite
     round trip that inserts through a real database and reads a generated wrapped `int` key back, a
@@ -278,11 +278,12 @@ the framework pushes a consumer toward a wrapper.**
 - **The ADR-085 transposition risk is only closed for adopters.** `CheckIn`'s five identifier
   parameters
   (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:57-64`) are
-  still five `int`s. They are not five in a row, as this record previously said: a `CheckInScope`
-  parameter sits between `userId` and the run of four that follows it, which narrows the transposable
-  window without closing it, since four adjacent `int`-aliased parameters remain. Shipping the capability does not retire the risk; it makes retiring it a choice
+  still three `int`s and two `int?`s (`sessionId` and `sponsorId`, `:61-62`). They are not five in a
+  row, as this record previously said: a `CheckInScope` parameter sits between `userId` and the run of
+  four that follows it, which narrows the transposable window without closing it, since four adjacent
+  `int`-aliased parameters remain and an `int` converts implicitly to `int?`. Shipping the capability does not retire the risk; it makes retiring it a choice
   someone can now make cheaply for one aggregate at a time.
-- **A capability nobody uses is a capability nobody has stress-tested.** 77 tests against fixtures
+- **A capability nobody uses is a capability nobody has stress-tested.** 78 tests against fixtures
   are not a production module with real migrations, a real wire history and a real query surface.
   The same honesty ADR-104 applies to `Enumeration<T>` applies here.
 - **The `IParsable` implementations are explicit, so `OrderId.Parse(...)` does not compile.** That is
@@ -293,8 +294,9 @@ the framework pushes a consumer toward a wrapper.**
   is a deliberate narrowing, and it is a behaviour difference a client would notice if a column
   changed type.
 - **Public API surface with no consumer.** The 55 declarations these types add across Shared,
-  Infrastructure, API and Testing.Architecture are now in the unshipped baselines and become frozen
-  at the next release under [ADR-015](015-architecture-fitness-functions.md)'s RS0016/RS0017 gate.
+  Infrastructure, API and Testing.Architecture are in the shipped baselines (`PublicAPI.Shipped.txt`
+  in each of the four packages) and are frozen under
+  [ADR-015](015-architecture-fitness-functions.md)'s RS0016/RS0017 gate.
   Removing any of it later is a breaking change to the package surface.
 - **EF discovery needs the type list up front.** The mapping has to be declared pre-convention, and
   at `ConfigureConventions` time no entity type exists yet, so the framework cannot discover wrappers
@@ -303,8 +305,15 @@ the framework pushes a consumer toward a wrapper.**
   model build, which is loud but not self-explanatory.
 - **`TypeDescriptor` registration is process-global.** `StronglyTypedIdTypeConverters.Register` calls
   `TypeDescriptor.AddAttributes`, which is not scoped to a host. In a process running two hosts (an
-  in-memory test server pair) the registration is shared. It is idempotent, so the practical effect
-  is nil, but it is not per-container state.
+  in-memory test server pair) the registration is shared, and sharing is not free: `TypeDescriptor`
+  caches the `Nullable<TId>` converter with whatever underlying converter it saw first, so if anything
+  resolved it before registration, MVC treated an optional wrapped query parameter as a complex type
+  and the request answered 500. `Register` therefore refreshes the nullable type after adding the
+  attribute
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdTypeConverter.cs:102-111`),
+  pinned by
+  `MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/StronglyTypedIdTypeConverterTests.cs:60`.
+  The registration is idempotent, but it is not per-container state.
 
 ## Related
 [ADR-048](048-primitive-identifier-type-aliases.md) (the primitive alias decision this record leaves
@@ -350,3 +359,34 @@ still `int`-aliased, so the trade-off holds; the word "consecutive" was wrong.
 MMCA.Store each declare a `StronglyTypedIdTestsBase` subclass over their own architecture map, and
 all three pass vacuously. MMCA.Helpdesk declares none. Decision point 12 named only MMCA.Common,
 which was true when written and had become incomplete.
+
+## Revision (2026-10-01)
+The decision is unchanged: the framework still ships the capability, the aliases are still the
+default, and adoption is still zero. Three statements were corrected against source and several
+citations re-anchored.
+
+**`TypeDescriptor` sharing had a real failure mode, now mitigated.** The trade-off said the
+process-global registration was idempotent and its practical effect nil. It was not: `TypeDescriptor`
+caches the `Nullable<TId>` converter with the underlying converter it first saw, so a lookup made
+before registration (another host in the same process, a library scanning types) left an optional
+wrapped query parameter bound as a complex type and the request answered 500. `Register` now calls
+`TypeDescriptor.Refresh` on the nullable type
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdTypeConverter.cs:102-111`),
+pinned by a new fact
+(`MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/StronglyTypedIdTypeConverterTests.cs:60`)
+whose fixture is a seventh test file declaring a wrapper. The executed-test count is therefore 78
+(Shared 34), not 77 (Shared 33).
+
+**The public API surface is shipped, not unshipped.** All 55 declarations sit in the four packages'
+`PublicAPI.Shipped.txt` files (Shared 34, Infrastructure 10, API 6, Testing.Architecture 5), and no
+`PublicAPI.Unshipped.txt` carries any of them, so the surface is already frozen.
+
+**`CheckIn`'s identifier parameters are not all `int`.** `sessionId` and `sponsorId` are
+`SessionIdentifierType?` and `SponsorIdentifierType?`
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:61-62`), so the
+five are three `int`s and two `int?`s. The transposition risk stands, because an `int` converts
+implicitly to `int?`.
+
+Re-anchored: `EntityControllerBase.cs:43`, `StronglyTypedIdTypeConverter.cs:119` (`RegisterAll`),
+`DependencyInjection.cs:366`, `ApplicationDbContext.cs:407-409`, `QueryFilterService.cs:399-417` and
+`WebApplicationBuilderExtensions.cs:104-105`.

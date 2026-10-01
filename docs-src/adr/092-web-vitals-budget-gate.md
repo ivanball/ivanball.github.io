@@ -12,8 +12,8 @@ now carries the same `backend-test-gate` pairing that only ADC had.
 ## Context
 Rubric section 23 asks for client-side performance that is measured rather than assumed, naming Core
 Web Vitals (LCP, INP, CLS) or an equivalent as the evidence
-(`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:606`, category at `:596`). It is the
-client-side complement of section 12 (`:349`), which the backend already answers two ways: ADR-060
+(`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:648`, category at `:638`). It is the
+client-side complement of section 12 (`:380`), which the backend already answers two ways: ADR-060
 gates MMCA.Common's hot paths on a committed BenchmarkDotNet baseline, and the deployed apps run a k6
 load test against read endpoints on a schedule.
 
@@ -41,7 +41,7 @@ assertions ride the existing deploy-gating E2E suite.
 
 - **The collector is a shipped, dependency-free measurement type.** `WebVitalsCollector`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Infrastructure/WebVitalsCollector.cs:20`, in
-  the published package `MMCA.Common.Testing.E2E`, `MMCA.Common/FACTS.md:36`) installs
+  the published package `MMCA.Common.Testing.E2E`, `MMCA.Common/FACTS.md:41`) installs
   `PerformanceObserver` hooks as a Playwright init script so they exist before first paint
   (`InstallAsync`, `:40`, script at `:26-35`), accumulating LCP, CLS, FCP and an event-timing INP
   sample into `window.__vitals`. `CollectAsync` (`:47`) reads them back and stamps TTFB from
@@ -75,8 +75,8 @@ assertions ride the existing deploy-gating E2E suite.
   overloading the first, whose optional parameters would make the two ambiguous at the call site
   (`:70-72`). Install-before-navigate is the load-bearing part: observers installed after the
   navigation record no LCP, FCP or TTFB for that load (`:5-11`). Every suite routes through the block (ADC
-  `WebVitalsTests.cs:90`, Store `:42`, `:52`, `:62`, the framework gallery `WebVitalsE2ETests.cs:40`,
-  `:48`, `:56`); Store's product-detail test is the one caller that still drives the collector
+  `WebVitalsTests.cs:90`, Store `:42`, `:52`, `:62`, the framework gallery `WebVitalsE2ETests.cs:47`,
+  `:61`, `:73`); Store's product-detail test is the one caller that still drives the collector
   directly, because it reaches its page by navigation rather than by path (Store
   `WebVitalsTests.cs:76-89`).
 - **Both deployed apps assert the shipped defaults.** ADC's `WebVitalsTests`
@@ -97,28 +97,28 @@ assertions ride the existing deploy-gating E2E suite.
   INP 24 on run 29146556386, roughly 10x to 30x
   (`MMCA.Store/.../WebVitalsTests.cs:17-19`). Both were calibrated 2026-07-11.
 - **The assertions ride the deploy gate because the workflow runs the whole project.** `e2e.yml` runs
-  `dotnet test --project ...E2E.Tests.csproj` with no filter (ADC `.github/workflows/e2e.yml:326-329`,
-  Store `:369-372`) and points `WEB_VITALS_OUTPUT_DIR` at the uploaded diagnostics directory (ADC
-  `:304`, Store `:364`). `deploy.yml` calls that workflow chromium-only as `e2e-gate` (ADC
-  `deploy.yml:677-692`, Store `:634-649`), and the `deploy` job both lists it in `needs` (ADC
-  `:1054`, Store `:999`) and requires it to be `success` or `skipped` (ADC `:1092`, Store `:1038`). A
+  `dotnet test --project ...E2E.Tests.csproj` with no filter (ADC `.github/workflows/e2e.yml:334-337`,
+  Store `:394-397`) and points `WEB_VITALS_OUTPUT_DIR` at the uploaded diagnostics directory (ADC
+  `:312`, Store `:383`). `deploy.yml` calls that workflow chromium-only as `e2e-gate` (ADC
+  `deploy.yml:827-842`, Store `:799-814`), and the `deploy` job both lists it in `needs` (ADC
+  `:1185`, Store `:1136`) and requires it to be `success` or `skipped` (ADC `:1230`, Store `:1177`). A
   front-end performance budget is therefore a production precondition on the same footing as the SBOM,
   the cost guard and the freshness gates, and `deploy.yml` says so where the k6 gate is defined (ADC
-  `:754-755`, Store `:709-713`).
+  `:873-874`, Store `:846-847`).
 - **The framework measures its own UI, under its own looser numbers.** `WebVitalsE2ETests`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsE2ETests.cs:15`) measures the
-  backend-less in-process gallery on three pages, login (`:40`), components (`:48`) and grid (`:56`),
+  backend-less in-process gallery on three pages, login (`:47`), components (`:61`) and grid (`:73`),
   through the same shipped extension, against a `WebVitalsBudget` of LCP 4000 ms, FCP 3000 ms, TTFB
   1500 ms, CLS 0.1 and INP 500 ms (constants at `:17-21`, assembled at `:36-37`). All five metrics
   are specified, so the gallery gates on the same set the apps do; the three loose ceilings are a
   recorded step down from the opening 8000/4000/0.25 set and step down again to the package default
   after one green cross-browser cycle (`:28-30`). The gallery is a backstop against catastrophic
   regression in the shared chrome (a render loop, a giant synchronous asset, a layout-shifting theme
-  change), not a calibrated app budget (`:7-14`). The components test is the one case in the whole
-  adoption set that drives an interaction, a plain button click passed to
-  `MeasureWebVitalsWithInteractionAsync` (`:59-65`, documented at `:52-55`), so INP is sampled there
-  rather than skipped. Each test adds one in-class guard, `AssertSomethingWasMeasured` (`:42`, `:50`, `:58`,
-  defined at `:66-69`), which fails when neither TTFB nor FCP was recorded, so an all-zero sample
+  change), not a calibrated app budget (`:7-14`). The components test is the one gallery case that
+  drives an interaction, and the only caller of `MeasureWebVitalsWithInteractionAsync` in the
+  adoption set: a plain button click passed to that member (`:61-65`, documented at `:52-55`), so INP
+  is sampled there rather than skipped. Each test adds one in-class guard, `AssertSomethingWasMeasured` (`:49`, `:67`, `:75`,
+  defined at `:83-86`), which fails when neither TTFB nor FCP was recorded, so an all-zero sample
   cannot clear every ceiling by never having been measured.
 - **The regression behaviour is pinned by unit tests, not by the browser runs.**
   `WebVitalsBudgetTests` (`.../MMCA.Common.UI.E2E.Tests/WebVitals/WebVitalsBudgetTests.cs:12`) starts no
@@ -128,7 +128,7 @@ assertions ride the existing deploy-gating E2E suite.
   (`:66-73`), and the exact text of the sample line (`:32-43`).
 
 Adoption is the two deployed apps plus the framework gallery. **MMCA.Helpdesk has neither**: it pins
-the package (`MMCA.Helpdesk/Directory.Packages.props:84`) but has no E2E test project at all, so the
+the package (`MMCA.Helpdesk/Directory.Packages.props:94`) but has no E2E test project at all, so the
 seed carries no worked example of a client-side budget, the same gap ADR-063 records for
 accessibility.
 
@@ -163,26 +163,26 @@ accessibility.
 
 ## Trade-offs
 - **The gate is ui-scoped and may legitimately skip.** Both apps gate `e2e-gate` on a `ui` change
-  filter (ADC `deploy.yml:688`, Store `:645`) and `deploy` accepts `skipped` for it (ADC `:1092`,
-  Store `:1038`), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
+  filter (ADC `deploy.yml:838`, Store `:810`) and `deploy` accepts `skipped` for it (ADC `:1230`,
+  Store `:1177`), so a backend-only or infra-only deploy ships with no Web Vitals measurement of that
   commit. Both apps pair the gate with a `backend-test-gate` carrying the exact inverse condition
-  (ADC `deploy.yml:419`, `:421`; Store `:376`, `:378`), but that job runs no browser, so it leaves
+  (ADC `deploy.yml:465`, `:467`; Store `:500`, `:502`), but that job runs no browser, so it leaves
   this budget unmeasured on those deploys. Same intended cost trade as the accessibility gate, and the same caveat: "deployed"
   does not always mean "the budget ran on this commit".
 - **It never runs on a pull request.** The E2E project is in neither solution filter and the gate is
-  push/dispatch only (ADC `deploy.yml:688`, Store `:645`), so a regression is caught between merge and
+  push/dispatch only (ADC `deploy.yml:838`, Store `:810`), so a regression is caught between merge and
   rollout, not before merge.
 - **The measured configuration is not the production one.** CI pins the UI to `InteractiveServer`
-  (ADC `e2e.yml:218`, Store `:210`), so the numbers describe Server-mode prerender-then-hydrate under
+  (ADC `e2e.yml:226`, Store `:229`), so the numbers describe Server-mode prerender-then-hydrate under
   runner contention, not production's `InteractiveAuto` on real hardware (ADC
   `WebVitalsTests.cs:15-18`, the caveat ADR-056 also records).
 - **A marginal breach can be retried away.** The suite runs with `--retry-failed-tests 2` (ADC
-  `e2e.yml:329`, Store `:372`), which is what absorbs a contention spike but also means a budget that
+  `e2e.yml:337`, Store `:396`), which is what absorbs a contention spike but also means a budget that
   fails once and passes twice reports green.
 - **LCP and CLS are Chromium-only.** On Firefox and WebKit those observers fail silently and the
   fields stay 0, so the assertions pass vacuously (`WebVitalsCollector.cs:14-16`). The deploy gate is
   chromium-only, so this is real only for MMCA.Common's three-engine `ui-e2e` matrix
-  (`MMCA.Common/.github/workflows/ci.yml:237`), where two of the three legs assert LCP and CLS against
+  (`MMCA.Common/.github/workflows/ci.yml:248`, matrix at `:257`), where two of the three legs assert LCP and CLS against
   nothing. The gallery's `AssertSomethingWasMeasured` guard catches only the total-vacuity case
   (nothing measured at all), not this per-metric one.
 - **Coverage is a hand-picked page list.** Four pages in ADC and four in Store, against far larger
@@ -192,15 +192,28 @@ accessibility.
   page-specific, a search box on the single grid page (ADC `WebVitalsTests.cs:31-35`, Store
   `:44-49`); on every other measured page INP stays 0 and its assertion is skipped, so interaction
   latency is asserted on one page per app. The gallery's components test is the only other place in
-  the adoption set that drives one (`WebVitalsE2ETests.cs:59-65`).
+  the adoption set that drives one (`WebVitalsE2ETests.cs:61-65`).
 - **The green-run artifact is written but not kept.** Both workflows upload the diagnostics bundle
-  only on failure (ADC `e2e.yml:355-359`, Store `:398-404`), and MMCA.Common's `ui-e2e` job sets no
+  only on failure (ADC `e2e.yml:360-365`, Store `:457-462`), and MMCA.Common's `ui-e2e` job sets no
   `WEB_VITALS_OUTPUT_DIR` at all and uploads no Web Vitals artifact of its own (what it does upload
-  is the chromium leg's coverage file and, on failure, Playwright traces) (`ci.yml:353-359`), so the JSON
+  is the chromium leg's coverage file and, on failure, Playwright traces) (`ci.yml:331-337`, `:339-345`), so the JSON
   lands beside the test binaries and is discarded with the runner. There is no time series: the
   sample line in the run log is the only surviving record of a green run.
 - **Nothing stops a ceiling being raised to silence a red gate.** As with ADR-060's baseline, the
   defaults are a value in source and widening them is a reviewable diff, not a tool-enforced one.
+
+## Revision (2026-10-01)
+No decision or rationale changed. One sentence is corrected: the gallery's components test was
+described as the only case in the whole adoption set that drives an interaction, but ADC's session
+list and Store's catalog page also drive one through the placeholder path (ADC
+`WebVitalsTests.cs:69`, Store `:57`), as the Decision and Trade-offs already say. It now reads as the
+one gallery case and the only caller of `MeasureWebVitalsWithInteractionAsync`
+(`WebVitalsE2ETests.cs:61-65`). Citations are refreshed for the rubric
+(`ArchitectureEvaluationCriteria.md:648`, `:638`, `:380`), `FACTS.md:41`, the gallery tests
+(`WebVitalsE2ETests.cs:47`, `:61`, `:73`, guard `:83-86`), both `e2e.yml` and `deploy.yml` files
+(ADC `deploy.yml:827-842`, Store `:799-814`; Store's test step now pipes through `tee` under
+`pipefail`, Store `e2e.yml:392-397`), MMCA.Common `ci.yml:248` and the Helpdesk pin
+(`Directory.Packages.props:94`).
 
 ## Related
 [ADR-063](063-accessibility-conformance-gate.md) (the structural sibling: the same package, the same

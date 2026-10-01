@@ -1,11 +1,11 @@
 # ADR-105: The Published Data-Residency Claim as a Build Gate
 
 ## Status
-Accepted (2026-09-01).
+Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below).
 
 ## Context
 Both deployed apps publish a privacy policy at their repo root, and each has a section that tells a
-user where their personal data is stored (`MMCA.ADC/PRIVACY.md:61`, `MMCA.Store/PRIVACY.md:53`).
+user where their personal data is stored (`MMCA.ADC/PRIVACY.md:61`, `MMCA.Store/PRIVACY.md:54`).
 That sentence is a public commitment about a named jurisdiction, and it is one of the few parts of a
 privacy policy that a reader could in principle check against reality.
 
@@ -15,7 +15,7 @@ actually provisioned lives in infrastructure code that moves for reasons having 
 the policy: ADC pins its SQL server's region to a default declared inside its deploy workflow,
 deliberately separate from where its Container Apps run, because the subscription blocks the SQL
 resource provider in the resource group's own location
-(`MMCA.ADC/.github/workflows/deploy.yml:1152-1157`); Store runs single-region and records that region
+(`MMCA.ADC/.github/workflows/deploy.yml:1302-1307`); Store runs single-region and records that region
 as a single sentence in its DR runbook (`MMCA.Store/infra/DISASTER-RECOVERY.md:19`). Either can move
 without anyone opening `PRIVACY.md`, and the failure is silent: nothing breaks, no test goes red, no
 alert fires, and the app keeps serving traffic while the published claim is false. This workspace had
@@ -41,22 +41,22 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
 
 1. **One shared base, one test, authored in the framework.** `DataResidencyTestsBase`
    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DataResidencyTestsBase.cs:14`)
-   declares a single `[Fact]`, `PrivacyPolicy_DataStorageRegion_MatchesDeployedRegion` (`:25-45`),
+   declares a single `[Fact]`, `PrivacyPolicy_DataStorageRegion_MatchesDeployedRegion` (`:26-45`),
    and names the rubric category it serves in its own summary (`:3-13`, rubric section 30,
-   Compliance, Privacy and Governance). It is one of the 47 abstract bases in that package's
-   `Bases/` directory, so it is subclassed per repo rather than copied.
+   Compliance, Privacy and Governance). It is one of the abstract bases in that package's
+   `Bases/` directory (count in `MMCA.Common/FACTS.md`), so it is subclassed per repo rather than copied.
 
 2. **The repo supplies its own source of truth.** The only abstract behavior is
-   `ExtractDeployedRegion(string repoRoot)` (`:53`), documented to parse the region from whatever the
+   `ExtractDeployedRegion(string repoRoot)` (`:87`), documented to parse the region from whatever the
    repo actually provisions from (a workflow default, an infra runbook, a Bicep parameter) and to
    assert with a clear `because` when its expected marker is missing rather than return an empty
-   string (`:47-52`). The base makes no assumption about where a repo's truth lives.
+   string (`:81-86`). The base makes no assumption about where a repo's truth lives.
 
 3. **Both files are read from the working tree, not embedded.** The test locates the repo root by
    walking up from the test assembly's base directory to the directory holding `{RepoToken}.slnx`
-   (`:28`, via
-   `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureMapBase.cs:79-90`), then
-   reads `PRIVACY.md` from that root (`:34`). The repo identity comes from the same `IArchitectureMap`
+   (`:29`, via
+   `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureMapBase.cs:79-91`), then
+   reads `PRIVACY.md` from that root (`:35`). The repo identity comes from the same `IArchitectureMap`
    every other rule in the package takes (`:16`).
 
 4. **Absence fails, it does not pass.** The extracted region must be non-null and non-whitespace
@@ -65,14 +65,18 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
    goes red rather than silently comparing nothing.
 
 5. **Matching is whitespace-insensitive and case-insensitive, in both directions.** `Normalize`
-   strips every whitespace character and upper-cases the rest (`:57-58`, CA1308 rationale at
-   `:55-56`), and is applied to the policy text and to the extracted region alike, so a policy
-   written in prose form matches an Azure region token written without spaces (`:35`, `:37-38`). The
-   assertion is containment: the normalized policy must contain the normalized region.
+   strips every whitespace character and upper-cases the rest (`:93-94`, CA1308 rationale at
+   `:91-92`), and the protected static `ContainsRegionClaim` applies it to the policy text and to the
+   extracted region alike (`:62-63`), so a policy written in prose form matches an Azure region token
+   written without spaces (`:37-38`). The assertion is a whole-token match (`:57-79`): an occurrence
+   counts only when no digit follows it (`:69`) and the text before it does not end in an Azure
+   directional prefix (`:70-71`, the five prefixes at `:89`), so `westus` does not match "West US 2"
+   and `centralus` does not match "South Central US" (pinned by
+   `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DataResidencyTestsBaseTests.cs:12-22`).
 
 6. **A denylist blocks stale and copied claims from returning.** `ForbiddenResidencyClaims` is a
-   virtual, empty-by-default list (`:23`); every entry is normalized and asserted absent from the
-   policy (`:40-44`), with a failure message stating that the claim is stale or belongs to another
+   virtual, empty-by-default list (`:24`); every entry is asserted absent from the policy through the
+   same whole-token comparison (`:40-44`, call at `:42`), with a failure message stating that the claim is stale or belongs to another
    deployment. This is what a positive match alone cannot catch: a policy can name the correct region
    and still carry a contradicting sentence beside it.
 
@@ -81,7 +85,7 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
    reads `.github/workflows/deploy.yml`, finds the `SQL_LOCATION_OVERRIDE:-` marker, asserts it is
    present, and takes the letters and digits that follow it as the region (`:20-31`, marker at `:24`,
    assertion at `:26-27`). That default is the region ADC's SQL server and database land in
-   (`MMCA.ADC/.github/workflows/deploy.yml:1157`). Its denylist carries one entry, the
+   (`MMCA.ADC/.github/workflows/deploy.yml:1307`). Its denylist carries one entry, the
    pre-migration claim that once contradicted the deployed region (`:16`, explained at `:9-10`).
 
 8. **Store parses its DR runbook.** `DataResidencyTests`
@@ -100,14 +104,18 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
 10. **Adoption is exactly the two deployed apps.** ADC and Store subclass the base; MMCA.Helpdesk
     references the same package
     (`MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MMCA.Helpdesk.Architecture.Tests.csproj:24`)
-    but declares no `DataResidencyTests` and has no `PRIVACY.md`, and MMCA.Common has neither. The
+    but declares no `DataResidencyTests` and has no `PRIVACY.md`. MMCA.Common derives from the base only
+    through a private probe that pins the comparison helper, deliberately not collected as a test
+    (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DataResidencyTestsBaseTests.cs:5-9,24-31`),
+    so it carries no residency gate of its own. The
     base is available to any consumer; it applies to a repo that publishes a residency claim, which
     today is the two apps with users.
 
 11. **The base is frozen public API.** The type, its constructor, the `[Fact]`, the abstract `Map`
-    and `ExtractDeployedRegion`, and the virtual `ForbiddenResidencyClaims` are all in the package's
+    and `ExtractDeployedRegion`, the static `ContainsRegionClaim`, and the virtual
+    `ForbiddenResidencyClaims` are all in the package's
     shipped baseline
-    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/PublicAPI.Shipped.txt:40-42,237-238,370`),
+    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/PublicAPI.Shipped.txt:71-73,326-327,498,519`),
     so reshaping the extension point is a reviewable text diff and a breaking change under ADR-015.
 
 ## Rationale
@@ -117,9 +125,9 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
   artifact nothing in the build was reading.
 - **The truth has to be per repo, because the deployments genuinely differ.** ADC's SQL region is set
   independently of its compute region for a subscription-level reason
-  (`MMCA.ADC/.github/workflows/deploy.yml:1152-1156`), while Store's whole footprint is one region
-  documented in its DR runbook. A single hardcoded extractor would have fit neither; making
-  `ExtractDeployedRegion` the only abstract member keeps the assertion, the normalization and the
+  (`MMCA.ADC/.github/workflows/deploy.yml:1302-1306`), while Store's whole footprint is one region
+  documented in its DR runbook. A single hardcoded extractor would have fit neither; leaving only
+  `Map` and `ExtractDeployedRegion` abstract keeps the assertion, the normalization and the
   denylist shared while the parsing stays local.
 - **Build time is the right time, because both inputs are committed.** ADR-081's cost baseline has to
   query Azure, because the thing it guards is live resource configuration that drifts by hand. What a
@@ -143,17 +151,17 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
 - **It proves the policy agrees with a file, not with Azure.** Both extractors read committed text.
   A database provisioned by hand into another region, a restore into a different geography, or a
   geo-redundant backup target is invisible to this gate. In ADC's case the marker parsed is a shell
-  default (`MMCA.ADC/.github/workflows/deploy.yml:1157`), so a deploy run with `SQL_LOCATION_OVERRIDE`
+  default (`MMCA.ADC/.github/workflows/deploy.yml:1307`), so a deploy run with `SQL_LOCATION_OVERRIDE`
   set lands the SQL server in a region the test will never see, and the test still passes.
-- **Containment is looser than equality.** The assertion is that the normalized policy contains the
-  normalized region (`DataResidencyTestsBase.cs:37-38`), so a policy naming several regions passes as
-  long as one of them matches, and a match anywhere in the document counts, including in a sentence
+- **A whole-token match is looser than equality.** The assertion is that some whole-token occurrence
+  of the region exists in the policy (`DataResidencyTestsBase.cs:37-38`, loop at `:64-76`), so a policy
+  naming several regions passes as long as one of them matches, and a match anywhere in the document counts, including in a sentence
   that is not the residency statement. The denylist is the only counterweight and it is hand
   maintained.
-- **Whitespace-stripped containment makes one region token a prefix of another.** After
-  normalization a shorter region token is a substring of its numbered sibling, so a policy naming the
-  numbered variant satisfies an extracted base-region token. The check is strong against a wholly
-  different region and weak against an adjacent one.
+- **The whole-token guard is a heuristic.** Adjacent regions are told apart by a digit check and a
+  hardcoded list of five directional prefixes (`DataResidencyTestsBase.cs:69-71,89`), not by a
+  catalogue of Azure region names, so a region spelling that neither rule anticipates is not
+  separated from its neighbour.
 - **The markers are load-bearing strings inside files maintained for other reasons.** Renaming the
   workflow's override variable, or reflowing the DR sentence so its comma moves, breaks the build in
   a repo where nobody touched the privacy policy
@@ -161,7 +169,7 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
   `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/DataResidencyTests.cs:24,30-32`). That
   is the intended fail-loud posture, but the cost lands on an unrelated edit.
 - **The suite needs the repo working tree.** `FindRepoRoot` walks up for `{RepoToken}.slnx` and throws
-  when it is absent (`ArchitectureMapBase.cs:79-90`), so this rule cannot run from a copied artifact
+  when it is absent (`ArchitectureMapBase.cs:79-91`), so this rule cannot run from a copied artifact
   the way an assembly-only rule can.
 - **One region per repo, one storage class.** The model is a single string compared against a single
   policy. A second store of personal data in another location (blob storage, a broker's retained
@@ -169,6 +177,22 @@ source of truth, and fails the build unless the repo's `PRIVACY.md` states that 
 - **Nothing detects a missing subclass.** A consumer that publishes a `PRIVACY.md` and never derives
   from the base gets no failure and no warning; the gate exists only where someone opted in. The
   framework ships the rule, the repo has to adopt it.
+
+## Revision (2026-10-01)
+Region matching moved from plain containment to a whole-token comparison. The protected static
+`ContainsRegionClaim` (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DataResidencyTestsBase.cs:57-79`)
+normalizes both sides and accepts an occurrence only when no digit follows it and no Azure directional
+prefix precedes it (`:69-71`, `:89`); both the positive assertion (`:37-38`) and the denylist
+(`:42`) go through it. It narrows the prefix weakness this record previously listed as a trade-off: a
+shorter region token no longer matches its numbered sibling or a sibling formed by a preceding
+directional word, as pinned by
+`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DataResidencyTestsBaseTests.cs:12-22`.
+A directional suffix is not checked, so `brazilsouth` still matches "Brazil Southeast" (the
+heuristic trade-off above).
+The helper is shipped public API (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/PublicAPI.Shipped.txt:498`).
+Decisions 5, 6, 10 and 11, the Rationale wording on abstract members and two Trade-offs are updated
+to match; the remaining edits refresh citations (`deploy.yml`, `PRIVACY.md`, `DataResidencyTestsBase.cs`,
+`ArchitectureMapBase.cs`) and replace the restated abstract-base count with a link to `MMCA.Common/FACTS.md`.
 
 ## Related
 [ADR-009](009-resilience-and-recovery-objectives.md) (the single-region acceptance a consumer must

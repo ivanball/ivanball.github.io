@@ -44,9 +44,9 @@ Ship the application shell in the framework package and let each module plug int
   (`AuthClaimTypes.Permission`, compared ordinally, `MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:94`),
   so an entry states the capability it needs rather than the role a given host grants it through.
 - **The router discovers module pages at runtime from the registrations.** `Routes.razor` injects
-  `IEnumerable<IUIModule>` (`MMCA.Common.UI/Routes.razor:4`) and hands
+  `IEnumerable<IUIModule>` (`MMCA.Common.UI/Routes.razor:7`) and hands
   `UIModules.Select(m => m.Assembly)` to the `Router`'s `AdditionalAssemblies`, with `AppAssembly`
-  pinned to the shell's own assembly and `NotFoundPage` to the shipped 404 page (`:7-9`). Nothing in
+  pinned to the shell's own assembly and `NotFoundPage` to the shipped 404 page (`:12-14`). Nothing in
   the shell names a module.
 - **The shell ships the routable pages every app needs.** Home `/` (`MMCA.Common.UI/Pages/Home.razor:1`),
   Login `/login` and Register `/register` (`Pages/Auth/Login.razor:1`, `Pages/Auth/Register.razor:1`),
@@ -54,23 +54,28 @@ Ship the application shell in the framework package and let each module plug int
   (`Pages/NotFound.razor:1`), `/forbidden` (`Pages/Forbidden.razor:1`), and the notification surfaces
   `/notifications`, `/notifications/inbox`, `/notifications/send`
   (`Pages/Notifications/NotificationList.razor:1`, `NotificationInbox.razor:1`, `NotificationSend.razor:1`).
+  A host that opts in with `Layout:HideNotificationPagesWhenUnregistered`
+  (`MMCA.Common.UI/Common/Settings/LayoutSettings.cs:49`) and registers no `NotificationUIModule` gets
+  the not-found page on those three routes instead (`Routes.razor:16`,
+  `MMCA.Common.UI/Notifications/NotificationPageGate.cs:22`).
 - **Unauthenticated and unauthorized both resolve inside the shell.** `AuthorizeRouteView` sends an
   anonymous visitor through `RedirectToLogin` and an authenticated-but-unauthorized one to the
-  dedicated `Forbidden` page rather than a bare alert (`Routes.razor:11-29`).
+  dedicated `Forbidden` page rather than a bare alert (`Routes.razor:27-50`, `RedirectToLogin` at `:41`,
+  `Forbidden` at `:47`).
 - **The nav menu is assembled from the registrations, trimmed per user.** `NavMenu` injects the same
-  enumeration (`MMCA.Common.UI/Layout/NavMenu.razor:8`), flattens every module's `NavItems`, drops
+  enumeration (`MMCA.Common.UI/Layout/NavMenu.razor:9`), flattens every module's `NavItems`, drops
   items whose `RequiredRole`, `RequiredClaim` or `RequiredPermission` the current principal does not
-  carry (the three filters compose, each skipped when its property is null), and splits the
-  remainder into the General, My Account and Administration sections (`:196-204`).
+  carry (the three filters compose, each skipped when its property is null, `:254-256`), and splits the
+  remainder into the General, My Account and Administration sections (`:259-261`).
 - **Two component extension points render module-supplied types.** `MainLayout` reads
   `AppBarComponentTypes` and `LayoutComponentTypes` off the registrations
-  (`MMCA.Common.UI/Layout/MainLayout.razor:98-99`) and renders them through `DynamicComponent` in the
-  top app bar (`:41-44`, mirrored on the mobile top row at `NavMenu.razor:41-43`) and at the root of
+  (`MMCA.Common.UI/Layout/MainLayout.razor:101-102`) and renders them through `DynamicComponent` in the
+  top app bar (`:41-44`, mirrored on the mobile top row at `NavMenu.razor:45-48`) and at the root of
   the layout (`:80-83`), so a module can add an icon with a badge or a drawer without touching the
   layout.
 - **Registration is one call.** `AddUIModule<TModule>()` runs the Scrutor scan for the module's entity
   services and then registers the descriptor as a singleton `IUIModule`
-  (`MMCA.Common.UI/DependencyInjection.cs:207-217`); modules with extra services register the
+  (`MMCA.Common.UI/DependencyInjection.cs:273-282`); modules with extra services register the
   descriptor directly with `AddSingleton<IUIModule, TModule>()` after their own registrations
   (`MMCA.Common.UI/Notifications/DependencyInjection.cs:39`,
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/DependencyInjection.cs:76`).
@@ -85,7 +90,7 @@ Ship the application shell in the framework package and let each module plug int
   `ConfirmAsync`, where dismissing the prompt counts as declining, so a caller only ever branches on
   `true`. Both facades are registered by one extracted call, `AddCommonUiFacades()`, which
   TryAdd-registers `MudToastService` and `MudAppDialogService` over MudBlazor's `ISnackbar` and
-  `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:162-167`). `AddUIShared` calls it (`:110`),
+  `IDialogService` (`MMCA.Common.UI/DependencyInjection.cs:181-184`). `AddUIShared` calls it (`:121`),
   and so does the shipped bUnit base
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:53`),
   so a component test resolves the two contracts without pulling in the rest of the shared-UI surface.
@@ -102,17 +107,17 @@ Ship the application shell in the framework package and let each module plug int
 Adoption today is every module UI in both apps plus the framework's own and its test host: ADC
 Conference, Identity and Engagement
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/ConferenceUIModule.cs:14`,
-`Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:13`,
+`Identity/MMCA.ADC.Identity.UI/IdentityUIModule.cs:15`,
 `Engagement/MMCA.ADC.Engagement.UI/EngagementUIModule.cs:17`); Store Catalog, Sales and Identity
 (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/CatalogUIModule.cs:13`,
-`Sales/MMCA.Store.Sales.UI/SalesUIModule.cs:16`, `Identity/MMCA.Store.Identity.UI/IdentityUIModule.cs:13`);
+`Sales/MMCA.Store.Sales.UI/SalesUIModule.cs:16`, `Identity/MMCA.Store.Identity.UI/IdentityUIModule.cs:15`);
 the framework's own notification module
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Notifications/NotificationUIModule.cs:15`); and the
 backend-less component gallery, whose stub descriptor is the only reason its `/components` page is
 routable (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Stubs/GalleryUIModule.cs:14`,
 registered at `GalleryHost.cs:91`). Two adopters are **host-only**: ADC's `DeviceUIModule` adds the
 MAUI-only device settings page plus the deep-link listener
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:19`, registered at `MauiProgram.cs:159`), and
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/DeviceUIModule.cs:18`, registered at `MauiProgram.cs:159`), and
 Store's `MauiUIModule` contributes no nav and no pages at all, existing purely to hang the native
 theme sync on the layout extension point (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiUIModule.cs:14`,
 registered at `MauiProgram.cs:81`). MMCA.Helpdesk deliberately does **not** adopt this: the seed's
@@ -162,7 +167,7 @@ no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Hel
   to the `RequiredRole` / `RequiredClaim` / `RequiredPermission` filtering the shell applies at
   render time.
 - **Hiding a nav item is not authorization.** The trimming in `NavMenu` is presentation only; route
-  protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:11-29`).
+  protection still comes from `AuthorizeRouteView` and the pages' own attributes (`Routes.razor:27-50`).
 - **Blazor Web heads wire the assemblies twice.** The router's `AdditionalAssemblies` and the
   endpoint's `AddAdditionalAssemblies` are separate calls, so both hosts repeat the enumeration in
   `Program.cs` (`MMCA.ADC.UI.Web/Program.cs:287-301`, `MMCA.Store.UI.Web/Program.cs:261-271`); they
@@ -177,6 +182,16 @@ no `ApiSettings`-backed client pipeline (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Hel
   `MudTablePager` combobox exception to the WCAG 2.1 AA gate). Components still reference MudBlazor
   types directly, so `IToastService` / `IAppDialogService` shrink a vendor swap to a bounded project
   rather than making it a configuration change.
+
+## Revision (2026-10-01)
+No decision or rationale changed. Re-anchored the citations that moved: `Routes.razor` (inject `:7`,
+router `:12-14`, `AuthorizeRouteView` `:27-50`), `NavMenu.razor` (inject `:9`, filters `:254-256`,
+section split `:259-261`, mobile top row `:45-48`), `MainLayout.razor:101-102`, `DependencyInjection.cs`
+(`AddUIModule` `:273-282`, `AddCommonUiFacades` `:181-184`, called at `:121`), both `IdentityUIModule.cs:15`
+and `DeviceUIModule.cs:18`. Also recorded a previously omitted opt-in: with
+`Layout:HideNotificationPagesWhenUnregistered` set and no `NotificationUIModule` registered, the router
+answers the notification routes with the not-found page
+(`MMCA.Common.UI/Routes.razor:16`, `MMCA.Common.UI/Notifications/NotificationPageGate.cs:22`).
 
 ## Related
 ADR-059 (the server-side `IModule` contract this mirrors in the presentation layer), ADR-056 (the

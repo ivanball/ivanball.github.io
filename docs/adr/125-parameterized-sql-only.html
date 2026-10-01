@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html" aria-current="page">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -256,9 +258,9 @@
           <p>The framework also runs on four engines (<a href="018-polyglot-persistence.html">ADR-018</a>), and one of them has
           no SQL command surface at all, so &quot;raw SQL&quot; cannot be offered as a capability every host has. Before
           v1.192.0 the landing shape for a raw scalar read was four keyless <code>ValReturn&lt;T&gt;</code> entities mapped to no
-          table and queried by nobody (<code>MMCA.Common/CHANGELOG.md:645-651</code>); the pair of additions this record
-          covers shipped in v1.192.0 (<code>MMCA.Common/CHANGELOG.md:530</code>, the interface at <code>:600-609</code> and the
-          fitness base at <code>:610-613</code>).</p>
+          table and queried by nobody (<code>MMCA.Common/CHANGELOG.md:1153-1159</code>); the pair of additions this record
+          covers shipped in v1.192.0 (<code>MMCA.Common/CHANGELOG.md:1038</code>, the interface at <code>:1108-1117</code> and the
+          fitness base at <code>:1118-1121</code>).</p>
           <h2 id="decision">Decision</h2>
           <p>Give raw SQL exactly one door whose signature makes the unsafe call uncompilable, and ban the four raw
           EF members in module code with a fitness test rather than a guideline.</p>
@@ -279,10 +281,10 @@
           <li><strong>The statement joins the caller&#39;s unit of work.</strong> The executor takes its context from the scoped
           <code>IDbContextFactory</code> and calls EF&#39;s <code>Database.SqlQuery&lt;T&gt;</code> on it (<code>EFRawSqlQueryExecutor.cs:54</code>), so
           the read shares the caller&#39;s connection and any transaction an <code>ITransactional</code> command opened. It is
-          registered scoped, one line below the singleton <code>IQueryableExecutor</code> and deliberately not a singleton
-          itself
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:126</code>, the sibling at
-          <code>:121</code> and the reason at <code>:123-125</code>), and is <code>internal</code>,
+          registered scoped, as the next registration after the singleton <code>IQueryableExecutor</code> and deliberately not a
+          singleton itself
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:110</code>, the sibling at
+          <code>:105</code> and the reason at <code>:107-109</code>), and is <code>internal</code>,
           so the abstraction is the only public surface.</li>
           <li><strong>The ban is a test, not a paragraph.</strong> <code>ModuleCode_UsesParameterizedSqlOnly</code>
           (<code>RawSqlConventionTestsBase.cs:66</code>) scans the <code>.cs</code> files of every mapped module and fails on member
@@ -295,30 +297,34 @@
           <li><strong>Scope is every project a module owns, not just its Application layer.</strong> The default scan walks the
           repo&#39;s <code>Source/</code> tree for each project name the map attributes to a business module (<code>:48-63</code>),
           because a raw statement is as dangerous in a module&#39;s Infrastructure as in its Application.</li>
-          <li><strong><code>AllowedFiles</code> is an adoption ratchet, and today it holds one entry across three repos.</strong> The base
+          <li><strong><code>AllowedFiles</code> is an adoption ratchet, and today it holds one entry across four repos.</strong> The base
           declares it empty (<code>:39</code>) and skips a file whose name is listed (<code>:81</code>). MMCA.Common lists exactly
           one file, <code>DbContextFactory.cs</code>, with the reason inline
           (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:25-32</code>):
           the <code>SET IDENTITY_INSERT</code> statement has no parameterized form, because a T-SQL identifier cannot be a
           command parameter, and the schema and table names are read off EF model metadata rather than caller
           input
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:343-344</code>,
-          the OFF statement at <code>:353-354</code>). That call site also carries the matching Sonar <code>S2077</code> suppression
-          with the same reasoning (<code>:342</code>, restored at <code>:357</code>), so the exemption is stated twice and names its
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:411-412</code>,
+          the OFF statement at <code>:421-422</code>, the schema and table read at <code>:470-471</code>). That call site also carries the matching Sonar <code>S2077</code> suppression
+          with the same reasoning (<code>:410</code>, restored at <code>:425</code>), so the exemption is stated twice and names its
           justification in both places. MMCA.ADC declares no override, so it inherits the empty list
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:14-16</code>, with
           the reason written in its class documentation at <code>:10-12</code>), and MMCA.Store declares the empty list
           explicitly
           (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/RawSqlConventionTests.cs:18</code>).
-          Both application repos therefore start at zero: the rule blocks every new raw call site rather than
+          MMCA.Helpdesk leaves the list un-overridden on purpose, so the scaffold hands an adopter an empty list
+          rather than an inherited exemption
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:186-190</code>).
+          The three application repos therefore start at zero: the rule blocks every new raw call site rather than
           ratcheting down from an inherited set.</li>
-          <li><strong>All three repos subclass the same body.</strong> MMCA.Common declares no business modules, so its subclass
+          <li><strong>All four repos subclass the same body.</strong> MMCA.Common declares no business modules, so its subclass
           redirects the scan onto the framework&#39;s own Application and Infrastructure projects
           (<code>RawSqlConventionTests.cs:17-22</code>), on the grounds that the one place shipping a raw-SQL surface is
           the one place that must not leave a concatenated statement lying around as the example. MMCA.ADC
           keeps the base scan and appends the thin Notification module, which is not a mapped module
           (<code>RawSqlConventionTests.cs:24-33</code>). MMCA.Store takes the base scan unchanged
-          (<code>RawSqlConventionTests.cs:12</code>, <code>:15</code>).</li>
+          (<code>RawSqlConventionTests.cs:12</code>, <code>:15</code>), and so does MMCA.Helpdesk
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:191-194</code>).</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -336,8 +342,8 @@
           statement text across every value, so the server reuses its cached plan instead of compiling one per
           distinct literal.</li>
           <li><strong>An empty ratchet is worth stating.</strong> The <code>AllowedFiles</code> list exists so a repo with existing raw
-          call sites can adopt the rule the day it lands instead of after a cleanup. Two of the three repos
-          needed nothing, and the third needed one file for a statement T-SQL cannot parameterize at all, so
+          call sites can adopt the rule the day it lands instead of after a cleanup. Three of the four repos
+          needed nothing, and the fourth needed one file for a statement T-SQL cannot parameterize at all, so
           the exemption surface is a known, justified constant rather than a growing list.</li>
           <li><strong>Relational-only is a stated limit rather than an assumption.</strong> Under
           <a href="018-polyglot-persistence.html">ADR-018</a> a host can default to Cosmos DB, which speaks its own query
@@ -372,11 +378,19 @@
           <li><strong>The Cosmos refusal is discovered at runtime</strong> (<code>:46-52</code>). Nothing at compile time tells a module
           author that the host it will be deployed into defaults to a non-relational engine.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Citations refreshed: the CHANGELOG anchors (<code>MMCA.Common/CHANGELOG.md:1038</code>,
+          <code>:1108-1117</code>, <code>:1118-1121</code>, <code>:1153-1159</code>), the executor registration (<code>DependencyInjection.cs:110</code>, sibling
+          <code>:105</code>, reason <code>:107-109</code>) and the <code>SET IDENTITY_INSERT</code> call site (<code>DbContextFactory.cs:410-425</code>,
+          metadata at <code>:470-471</code>). The repo count moves from three to four: MMCA.Helpdesk also subclasses
+          <code>RawSqlConventionTestsBase</code> and leaves <code>AllowedFiles</code> empty
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:186-194</code>), so the
+          ratchet still holds one entry across all four repos.</p>
           <h2 id="related">Related</h2>
           <p><a href="055-repository-and-specification-contract.html">ADR-055</a> (the repository plus specification path this
           escape hatch sits beside, and the reason the hatch stays narrow),
           <a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function style this rule is written in,
-          including the shared <code>*TestsBase</code> package all three repos subclass),
+          including the shared <code>*TestsBase</code> package all four repos subclass),
           <a href="018-polyglot-persistence.html">ADR-018</a> (the four-engine model that makes &quot;relational only&quot; a real
           constraint rather than a formality),
           <a href="109-feature-by-folder-convention.html">ADR-109</a> (the same move applied to folder layout: a convention
@@ -398,6 +412,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

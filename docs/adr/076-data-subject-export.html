@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -271,8 +273,8 @@
           deletion and data export, in each)&quot; (<code>UserOwnershipRule.cs:9-20</code>). The same remarks record why it was
           hoisted as a plain helper instead of a base class: &quot;because the two data-export handlers stay app-level
           (their projections are entirely app-specific)&quot;. Deletion did get a base class, <code>DeleteUserHandlerBase</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:58</code>),
-          which calls that helper at <code>DeleteUserHandlerBase.cs:83</code>.</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:62</code>),
+          which calls that helper at <code>DeleteUserHandlerBase.cs:87</code>.</p>
           <p><strong>This record supersedes that reasoning for the export half.</strong> It treated a handler as one indivisible
           thing, either app-specific or not. It is two: an orchestration (authorize, load, fan out, degrade,
           envelope) identical in both apps, and projections app-specific in both. The projections being
@@ -298,7 +300,7 @@
           constraints similar to <code>DeleteUserHandlerBase</code> but not identical: both constrain <code>TUser</code> to
           <code>AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code> and <code>TQuery</code>/<code>TCommand</code> to <code>IUserOwnedRequest</code>
           (<code>ExportUserDataHandlerBase.cs:54-55</code>), and deletion additionally requires <code>TUser : IErasableUser</code>
-          (<code>DeleteUserHandlerBase.cs:62</code>) because it calls <code>Anonymize()</code>. Export never does, so it does not ask
+          (<code>DeleteUserHandlerBase.cs:66</code>) because it calls <code>Anonymize()</code>. Export never does, so it does not ask
           for that interface: a user aggregate can be exportable without being erasable. The base runs the same
           <code>UserOwnershipRule.CheckOwnership</code> gate with the export error code, and exposes a <code>HasDeletePrivilege</code>-style hook so the app supplies its own role
           vocabulary (ADC evaluates <code>UserRole.IsOrganizer</code>, Store evaluates <code>UserRole.IsAdmin</code>). It then loads the
@@ -329,19 +331,19 @@
           <h3 id="the-api-surface-is-a-shipped-controller-base-the-app-subclasses">The API surface is a shipped controller base the app subclasses</h3>
           <p>The endpoint ships from the framework assembly as the abstract
           <code>DataExportControllerBase&lt;TQuery&gt;</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:59</code>),
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Privacy/DataExportControllerBase.cs:61</code>),
           <strong>not</strong> as a concrete controller registered into the MVC application parts. That is a deliberate
           departure from the <code>AddNotificationControllers</code> precedent for package-assembly controllers
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Notifications/DependencyInjection.cs:19-23</code>), and the
           base&#39;s own remarks record why: the query type is app-owned, so &quot;this ships as an abstract base with a
           <code>CreateQuery</code> factory rather than as a concrete controller added through an application part: a
-          concrete controller could not construct a type it cannot see&quot; (<code>DataExportControllerBase.cs:44-47</code>).
+          concrete controller could not construct a type it cannot see&quot; (<code>DataExportControllerBase.cs:46-49</code>).
           There is no <code>AddDsarControllers()</code> registration; the unit of opt-in is the subclass itself. An app
           declares a controller carrying its own <code>[Route]</code>, passes its query type, and implements the abstract
-          <code>CreateQuery(userId, currentUserId, currentUserRole)</code> factory (<code>:119-122</code>); the action template
-          <code>{userId}/export</code> is fixed on the base (<code>:77</code>), so a subclass routed at <code>Users</code> serves the same
+          <code>CreateQuery(userId, currentUserId, currentUserRole)</code> factory (<code>:123-126</code>); the action template
+          <code>{userId}/export</code> is fixed on the base (<code>:79</code>), so a subclass routed at <code>Users</code> serves the same
           <code>/Users/{userId}/export</code> path the apps published before the hoist.</p>
-          <p>The base carries a bare <code>[Authorize]</code> (<code>:57</code>) and <code>[FeatureGate(PrivacyFeatures.DataExport)]</code> (<code>:58</code>),
+          <p>The base carries a bare <code>[Authorize]</code> (<code>:59</code>) and <code>[FeatureGate(PrivacyFeatures.DataExport)]</code> (<code>:60</code>),
           so a host that has not turned the feature on answers 404 rather than 403
           (<a href="031-feature-flag-management.html">ADR-031</a>), and the endpoint does not exist for an app that never
           subclasses. An authenticated caller is all the attribute asks for, and that is the right ask: the
@@ -349,7 +351,7 @@
           (<a href="020-permission-based-authorization.html">ADR-020</a>). Authorization at the edge is defence in depth
           rather than the real gate: the handler independently enforces owner-or-privileged-role. The action
           serializes the package itself and returns <code>File(payload, ExportContentType, BuildFileName(...))</code>
-          (<code>:109</code>) rather than an <code>ObjectResult</code>, because content negotiation would render the document inline
+          (<code>:113</code>) rather than an <code>ObjectResult</code>, because content negotiation would render the document inline
           and the point of the endpoint is a saved file.</p>
           <p><strong>Both consumers have adopted the base, and the subclass is the whole app-side controller.</strong> ADC ships
           <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersDataExportController.cs</code> and
@@ -386,9 +388,11 @@
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/UserEngagementExportDTO.cs:18</code>,
           <code>:24</code>), so it re-registers that projection as an <code>IUserDataExportSection</code> rather than adding data. ADC
           implements two sections
-          (<code>MMCA.ADC/.../Identity.Application/Users/UseCases/ExportUserData/EngagementUserDataExportSection.cs:20</code>,
-          <code>NotificationUserDataExportSection.cs:19</code>) and Store one
-          (<code>MMCA.Store/.../Identity.Application/Users/UseCases/ExportUserData/SalesUserDataExportSection.cs:24</code>).
+          (<code>MMCA.ADC/.../Identity.Application/Users/UseCases/ExportUserData/EngagementUserDataExportSection.cs:19</code>,
+          <code>NotificationUserDataExportSection.cs:18</code>) and Store two, Sales and Catalog
+          (<code>MMCA.Store/.../Identity.Application/Users/UseCases/ExportUserData/SalesUserDataExportSection.cs:22</code>,
+          <code>CatalogUserDataExportSection.cs:22</code>), both registered in
+          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:40</code>, <code>:45</code>.
           MMCA.Helpdesk has no Identity module and does not adopt.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -402,7 +406,8 @@
           not make the peer come back. Best-effort with no signal would be silent data loss, which is why the
           per-section boolean is part of the contract rather than a logging convention.</li>
           <li><strong>Sections generalize a contract both apps already wrote.</strong> ADC&#39;s <code>IUserEngagementExportService</code> and
-          Store&#39;s <code>IUserSalesExportService</code> are the same interface with different nouns. Naming the shape once
+          Store&#39;s <code>IUserSalesExportService</code> and <code>IUserCatalogExportService</code> are the same interface with different
+          nouns. Naming the shape once
           means a new store of personal data is registered rather than wired into a handler, and a peer that gets
           extracted into a service changes only which implementation is registered.</li>
           <li><strong>A format version costs one field and buys the ability to change the envelope.</strong> The envelope now
@@ -439,8 +444,14 @@
           <li><strong>There is no asynchronous or large-export path in v1.</strong> The request is synchronous and holds a
           response open while every section runs, so the slowest section paces the whole export and a subject
           with a large history pays for it in wall-clock time on an HTTP request.</li>
-          <li><strong>No rate limiting and no export audit beyond the ownership gate.</strong> Nothing records that an export was
-          produced, and nothing bounds how often a privileged caller may produce one.</li>
+          <li><strong>No export-specific rate limit and no export audit beyond the ownership gate.</strong> The base exposes a
+          virtual <code>OnExportCompletedAsync</code> tail for an access-log row or a metric
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ExportUserData/ExportUserDataHandlerBase.cs:159</code>),
+          but neither app overrides it, so nothing records that an export was produced. The only bound on how
+          often a privileged caller may produce one is the framework&#39;s global limiter, which both Identity hosts
+          register and which partitions every authenticated request by user id
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:149</code>,
+          <code>:158</code>, <code>:376</code>); nothing limits the export endpoint on its own.</li>
           <li><strong>The envelope now moves on the framework&#39;s schedule.</strong> A consumer&#39;s export document shape is no longer
           the consumer&#39;s to version: a change to <code>UserDataExportDTO</code> reaches every app on the next lockstep bump
           (<a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a>), the cost of not writing the orchestration
@@ -450,6 +461,19 @@
           (<a href="004-authentication-dual-fetch.html">ADR-004</a>), so an export is only as strong as the token that asked
           for it, and the privileged-role bypass is a full read of anyone&#39;s personal data by design.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Store now registers a second export section: alongside Sales it
+          contributes <code>CatalogUserDataExportSection</code> (<code>SectionName</code> &quot;Catalog&quot;,
+          <code>MMCA.Store/.../Identity.Application/Users/UseCases/ExportUserData/CatalogUserDataExportSection.cs:22</code>,
+          <code>:27</code>), backed by <code>IUserCatalogExportService</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Exports/IUserCatalogExportService.cs</code>) and
+          registered at <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:45</code>, so the
+          adoption paragraph and the sections rationale now name it. This is the extension point working as
+          decided: a new store of personal data arrived as a registration. The rate-limit trade-off is narrowed to
+          &quot;no export-specific limit&quot;, since the global per-user limiter applies to the endpoint, and it now names the
+          unused <code>OnExportCompletedAsync</code> hook (<code>ExportUserDataHandlerBase.cs:159</code>). Citations refreshed:
+          <code>DeleteUserHandlerBase.cs</code> (<code>:62</code>, <code>:66</code>, <code>:87</code>), <code>DataExportControllerBase.cs</code> (<code>:46-49</code>, <code>:59</code>, <code>:60</code>,
+          <code>:61</code>, <code>:79</code>, <code>:113</code>, <code>:123-126</code>), and the ADC section classes (<code>:19</code>, <code>:18</code>).</p>
           <h2 id="related">Related</h2>
           <p><a href="005-soft-delete-vs-erasure.html">ADR-005</a> (the erasure half of the same privacy obligation, whose
           <code>IAnonymizable</code> opt-in and <code>[Pii]</code> guard are this contract&#39;s mirror: one erases what the other copies),
@@ -478,6 +502,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

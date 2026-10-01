@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -243,7 +245,7 @@
           <code>ci.yml</code> citations are re-anchored).</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 12 asks for hot-path efficiency that is <strong>measured, not assumed</strong>
-          (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:355</code>). MMCA.Common has a
+          (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:386</code>). MMCA.Common has a
           BenchmarkDotNet harness for its DB-free hot paths, but a harness a maintainer runs by hand proves
           nothing about the pull request in front of them. The first CI wiring only proved the benchmarked
           code paths still compile and execute; it asserted nothing about the numbers they produced.</p>
@@ -255,7 +257,7 @@
           problem this record answers.</p>
           <p>No existing ADR covers it. ADR-015&#39;s fitness functions assert <strong>structure and registration</strong>, and
           say so explicitly: they are &quot;not runtime behavior&quot;
-          (<code>Website/docs-src/adr/015-architecture-fitness-functions.md:68</code>). ADR-038 gates the supply chain
+          (<code>Website/docs-src/adr/015-architecture-fitness-functions.md:83</code>). ADR-038 gates the supply chain
           (SBOM, lock files, vulnerability audit), which is provenance, not cost. ADR-041 instruments
           production, so it observes a regression <strong>after</strong> it deploys rather than failing the PR that
           introduced it. Nothing owned the statement &quot;a performance regression must fail the merge.&quot;</p>
@@ -266,11 +268,11 @@
           <ul>
           <li><p><strong>A dedicated CI job measures, then verifies.</strong> The <code>performance-smoke</code> job, named
           <code>Performance gate (BenchmarkDotNet Short + baseline verify)</code>
-          (<code>MMCA.Common/.github/workflows/ci.yml:352-353</code>), runs the suite with <code>--filter &quot;*&quot; --job Short --exporters json</code> (<code>ci.yml:385</code>) and then runs the verifier over the exported artifacts
-          (<code>ci.yml:394</code>). <code>--job Short</code> (3 warmup plus 3 iterations) is chosen to produce real
-          measurements inside the job&#39;s 15-minute budget (<code>ci.yml:356,383</code>); <code>--filter &quot;*&quot;</code> is required
+          (<code>MMCA.Common/.github/workflows/ci.yml:355-356</code>), runs the suite with <code>--filter &quot;*&quot; --job Short --exporters json</code> (<code>ci.yml:388</code>) and then runs the verifier over the exported artifacts
+          (<code>ci.yml:397</code>). <code>--job Short</code> (3 warmup plus 3 iterations) is chosen to produce real
+          measurements inside the job&#39;s 15-minute budget (<code>ci.yml:359,386</code>); <code>--filter &quot;*&quot;</code> is required
           because BenchmarkDotNet otherwise prompts for a selection and would hang the runner
-          (<code>ci.yml:382-383</code>).</p>
+          (<code>ci.yml:385-386</code>).</p>
           </li>
           <li><p><strong>The baseline is a committed JSON file, not a stored previous run.</strong>
           <code>MMCA.Common/Tests/Performance/perf-baseline.json:1-20</code> holds an <code>allocationCeilingsBytes</code> object
@@ -306,11 +308,11 @@
           (<code>MMCA.Common/build/perfgate/perfgate.csproj:2-21</code>), so the gate itself cannot become a restore or
           supply-chain problem. It reads BenchmarkDotNet&#39;s <code>*-report-full-compressed.json</code> exports from the
           results directory it is handed (<code>Program.cs:26-33</code>), which CI points at
-          <code>BenchmarkDotNet.Artifacts/results</code> (<code>ci.yml:394</code>).</p>
+          <code>BenchmarkDotNet.Artifacts/results</code> (<code>ci.yml:397</code>).</p>
           </li>
           <li><p><strong>The job is a required merge gate, not advisory.</strong> It is listed among the eight required contexts
           in <code>MMCA.Common/CONTRIBUTING.md:68-71</code> and in the reproducible ruleset payload there
-          (<code>CONTRIBUTING.md:179</code>), and the live branch protection on <code>ivanball/MMCA.Common</code> returns the same
+          (<code>CONTRIBUTING.md:203</code>), and the live branch protection on <code>ivanball/MMCA.Common</code> returns the same
           context (read 2026-07-28 via
           <code>gh api repos/ivanball/MMCA.Common/branches/main/protection --jq &#39;.required_status_checks.contexts[]&#39;</code>).
           Moving a number therefore requires editing the baseline in the same PR, and raising a ceiling to
@@ -332,11 +334,15 @@
           on a schedule and on demand, not on a pull request (<code>MMCA.ADC/.github/workflows/load-test.yml:13-23</code>,
           <code>MMCA.Store/.github/workflows/load-test.yml:11-21</code>). Both consumers gate every production deploy on
           that run&#39;s recency: a <code>load-freshness</code> job fails the deploy when the latest successful <code>load-test.yml</code>
-          run is older than 35 days (ADC <code>MMCA.ADC/.github/workflows/deploy.yml:873</code>, window at <code>:881</code>, query
-          at <code>:910</code>; Store <code>MMCA.Store/.github/workflows/deploy.yml:804</code>, <code>:812</code>, <code>:841</code>), and the <code>deploy</code>
-          job lists it in <code>needs</code> (ADC <code>deploy.yml:1310</code>, Store <code>deploy.yml:1229</code>). A break-glass skip
-          exists and refuses to fire without a written justification (ADC <code>deploy.yml:892-905</code>, Store
-          <code>deploy.yml:825-838</code>).
+          run is older than 35 days (ADC <code>MMCA.ADC/.github/workflows/deploy.yml:875</code>, window at <code>:890</code>; Store
+          <code>MMCA.Store/.github/workflows/deploy.yml:848</code>, window at <code>:863</code>). Both jobs call the shared composite
+          action <code>ivanball/MMCA.Common/.github/actions/freshness-gate@main</code> (ADC <code>deploy.yml:886</code>, Store
+          <code>deploy.yml:859</code>), which queries the latest successful run
+          (<code>MMCA.Common/.github/actions/freshness-gate/action.yml:185-187</code>) and fails when its age in whole
+          days exceeds the window (<code>action.yml:134-143</code>), and the <code>deploy</code> job lists it in <code>needs</code> (ADC
+          <code>deploy.yml:1185</code>, Store <code>deploy.yml:1136</code>). A break-glass skip exists and refuses to fire without a
+          written justification (<code>action.yml:93-98</code>; the deploy workflows pass <code>skip</code> and
+          <code>skip-justification</code> at ADC <code>deploy.yml:892-893</code>, Store <code>deploy.yml:865-866</code>).
           That makes the k6 run a standing precondition of shipping, not a per-PR measurement: it proves
           capacity was checked within the window, not that the change being deployed kept it. MMCA.Helpdesk
           has neither. The client-side
@@ -383,9 +389,9 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The Short job cannot see small latency regressions.</strong> Three warmup and three iterations
-          (<code>ci.yml:383</code>) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
+          (<code>ci.yml:386</code>) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
           useless for detecting a 5% slowdown. Detecting that would need a longer job and a dedicated runner,
-          which the 15-minute budget (<code>ci.yml:356</code>) deliberately does not buy.</li>
+          which the 15-minute budget (<code>ci.yml:359</code>) deliberately does not buy.</li>
           <li><strong>Only one ratio floor exists today</strong> (<code>perf-baseline.json:13-19</code>), so the machine-independent
           latency half of the gate protects exactly one invariant. That floor names two of the eight
           benchmarks (<code>perf-baseline.json:14-18</code>), so the remaining six are gated on allocations alone,
@@ -403,15 +409,26 @@
           <li><strong>The gate runs on pull requests only.</strong> CI has no <code>push: main</code> trigger
           (<code>MMCA.Common/.github/workflows/ci.yml:14-16</code>), and <code>release.yml</code> does not run <code>build/perfgate</code> (it
           only mentions the project in a NuGet cache-key comment,
-          <code>MMCA.Common/.github/workflows/release.yml:26,110</code>), so a release tag is not re-verified against
+          <code>MMCA.Common/.github/workflows/release.yml:52,186</code>), so a release tag is not re-verified against
           the baseline.</li>
           <li><strong>A green context does not always mean the benchmarks ran.</strong> On a documentation-only PR the heavy
           steps are skipped by the <code>changes</code> classifier while all required contexts still post green, which
-          is what keeps branch protection satisfiable (<code>ci.yml:41-44,380,388</code>).</li>
+          is what keeps branch protection satisfiable (<code>ci.yml:41-44,383,391</code>).</li>
           <li><strong>Consumers inherit the numbers, not the gate.</strong> MMCA.ADC, MMCA.Store and MMCA.Helpdesk get the
           framework&#39;s bounded hot paths through the released packages, but none of them gates their own
           application code this way.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. The consumer <code>load-freshness</code> jobs no longer carry the recency
+          query and the break-glass check inline: both MMCA.ADC and MMCA.Store now call the shared composite
+          action <code>MMCA.Common/.github/actions/freshness-gate/action.yml</code> (query at <code>:185-187</code>, age check at
+          <code>:134-143</code>, justification check at <code>:93-98</code>) with a 35-day window (ADC
+          <code>MMCA.ADC/.github/workflows/deploy.yml:886,890</code>, Store <code>MMCA.Store/.github/workflows/deploy.yml:859,863</code>),
+          so the Decision paragraph now cites the action. The remaining citations are re-anchored: the rubric
+          (<code>ArchitectureEvaluationCriteria.md:386</code>), ADR-015 (<code>015-architecture-fitness-functions.md:83</code>), the
+          <code>performance-smoke</code> job in <code>ci.yml</code> (<code>:355-356</code>, <code>:359</code>, <code>:383</code>, <code>:385-386</code>, <code>:388</code>, <code>:391</code>, <code>:397</code>),
+          <code>release.yml:52,186</code>, <code>CONTRIBUTING.md:203</code>, and the consumer <code>load-freshness</code> and <code>deploy.needs</code>
+          lines.</p>
           <h2 id="related">Related</h2>
           <p>ADR-015 (structural fitness functions, which explicitly stop at structure and registration; this is
           their runtime-cost counterpart), ADR-038 (the other build-gating control set, applied to supply-chain
@@ -434,6 +451,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

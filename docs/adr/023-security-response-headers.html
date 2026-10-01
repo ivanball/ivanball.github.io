@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -285,7 +287,8 @@
           static responses of API and Gateway hosts are unaffected. A host wanting a stricter or looser policy
           configures the <code>&quot;SecurityHeaders&quot;</code> section or registers its own provider.</li>
           <li><strong>HTML hosts register their own <code>ICspPolicyProvider</code></strong> before calling <code>AddCommonSecurityHeaders</code>
-          (the registration uses <code>TryAddSingleton</code>, so the first-registered provider wins). Both apps register
+          (the default registration uses <code>TryAddSingleton</code>, so it is skipped when a provider is already
+          registered). Both apps register
           one shared <code>BlazorCspPolicyProvider</code> (a single <code>internal sealed</code> class living in
           <code>MMCA.Common.UI.Web</code>) via <code>AddCommonBlazorCsp</code> ahead of <code>AddCommonSecurityHeaders</code>. It pins
           <code>connect-src</code> to <code>&#39;self&#39;</code> plus the configured API/Gateway origin (https + wss, from the shared
@@ -329,9 +332,15 @@
           script/style allowance it does not need. Either host tightens the string in the <code>&quot;SecurityHeaders&quot;</code>
           section or registers its own provider; the <code>{nonce}</code> placeholder is the supported path off
           <code>&#39;unsafe-inline&#39;</code>. The default is documented on <code>SecurityHeadersSettings.ContentSecurityPolicy</code>.</li>
-          <li><strong>Registration order is a foot-gun.</strong> Because the provider is registered with <code>TryAddSingleton</code>, a host
-          must register its custom <code>ICspPolicyProvider</code> <em>before</em> <code>AddCommonSecurityHeaders</code>, or the static
-          default wins silently.</li>
+          <li><strong>Registration order matters only for <code>TryAdd</code>.</strong> The static default is registered with
+          <code>TryAddSingleton</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:263</code>), so a custom
+          <code>ICspPolicyProvider</code> registered <em>before</em> <code>AddCommonSecurityHeaders</code> suppresses it. A custom provider
+          added afterwards with plain <code>AddSingleton</code> (as <code>AddCommonBlazorCsp</code> does,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:62</code>) still wins, because
+          a single-service resolve returns the last registration; the static default wins silently only when
+          the late custom provider is itself added with <code>TryAdd</code>. Registering first remains the documented
+          convention (<code>SecurityHeaders.cs:243-244</code>, <code>DependencyInjection.cs:41-43</code>).</li>
           <li><strong>A shared Blazor CSP provider constrains per-host divergence.</strong> <code>BlazorCspPolicyProvider</code> now lives
           once in <code>MMCA.Common.UI.Web</code>, over the shared <code>ApiSettings</code> type, and both apps register it via
           <code>AddCommonBlazorCsp</code>, so the connect-src/origin logic is no longer copied per app. The remaining
@@ -436,6 +445,37 @@
           2026-09-07 fix inert: <code>Request.IsHttps</code> stays false behind the ingress and no
           <code>Strict-Transport-Security</code> is emitted.</li>
           </ol>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed; one Trade-offs statement was corrected and the current homes of
+          the forwarded-headers posture are recorded.</p>
+          <ol>
+          <li><strong>The registration-order trade-off overstated the risk.</strong> It said a custom provider registered
+          after <code>AddCommonSecurityHeaders</code> loses silently to the static default. Only the default uses
+          <code>TryAddSingleton</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:263</code>);
+          <code>AddCommonBlazorCsp</code> uses plain <code>AddSingleton</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:62</code>), and a
+          single-service resolve returns the last registration, so a late <code>AddSingleton</code> provider still
+          wins. The Decision and Trade-offs bullets now say so.</li>
+          <li><strong>The forwarded-headers posture now lives in the framework.</strong> The ADC Blazor host no longer
+          builds its own <code>ForwardedHeadersOptions</code>, so the <code>Program.cs</code> anchors in the 2026-09-07 and
+          2026-09-19 revisions point at other code today. The host registers <code>AddCommonBlazorCsp</code> and
+          <code>AddCommonSecurityHeaders</code> (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:177-178</code>), calls
+          <code>app.UseCommonUiForwardedHeaders()</code> first (<code>:192</code>), then <code>UseCommonSecurityHeaders()</code> (<code>:198</code>)
+          and later <code>UseHttpsRedirection()</code> (<code>:216</code>); the HSTS and <code>IsHttps</code> rationale is in the comments at
+          <code>:171-176</code>, <code>:182-186</code> and <code>:194-197</code>. The helper wraps <code>UseForwardedHeaders</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeadersExtensions.cs:24-25</code>)
+          over <code>CommonForwardedHeaders.Create</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeaders.cs:42-53</code>), which
+          honors <code>XForwardedFor | XForwardedProto | XForwardedHost</code> (<code>:33-34</code>) and clears <code>KnownProxies</code>
+          and <code>KnownIPNetworks</code> (<code>:49-50</code>, rationale <code>:14-20</code>). Behavior is unchanged. The Gateway carries
+          the same values in its own dependency-free copy (<code>:23-24</code>), so the three hosts agree by value,
+          not through one shared object.</li>
+          <li><strong>Two frame-src anchors in the 2026-09-19 revision resolve against the wrong file.</strong> The
+          <code>frame-src</code> emission is <code>BlazorCspPolicyProvider.cs:85-97</code> and the canonicalize-and-dedupe step
+          is <code>BlazorCspPolicyProvider.cs:92-94</code>, not lines of <code>BlazorCspSettings.cs</code> or
+          <code>DependencyInjection.cs</code>.</li>
+          </ol>
           <h2 id="related">Related</h2>
           <p>ADR-019 (rate limiting, the other always-on edge protection living in the same Aspire layer), ADR-022
           (browser session-cookie auth, the other browser-edge security control), ADR-008 (the gateway topology
@@ -458,6 +498,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -245,13 +247,15 @@
           <p>The expensive half has moved out. Session scoring is scheduled as a durable internal command
           (<a href="114-internal-commands-durable-job-queue.html">ADR-114</a>): the trigger endpoint writes a row through
           <code>IInternalCommandScheduler.ScheduleAsync</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:115-117</code>)
-          and answers <code>202 Accepted</code> unconditionally (<code>:110</code>, <code>:125</code>), and the framework&#39;s leased, retrying,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:132-136</code>)
+          and answers <code>202 Accepted</code> once the row is written (<code>:144</code>), with a failed schedule surfaced through
+          <code>HandleFailure</code> (<code>:138-141</code>) and a <code>[FeatureGate(ConferenceFeatures.SessionScoring)]</code> gate (<code>:125</code>)
+          answering 404 while the flag is off, and the framework&#39;s leased, retrying,
           dead-lettering processor runs the pass. Duplicate runs are held off across replicas by a per-event
           <code>IDistributedLock</code> claim taken inside the handler
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:75-77</code>,
-          <code>ClaimTimeToLive</code> of 15 minutes at <code>:53</code>, <code>ClaimWait</code> of <code>TimeSpan.Zero</code> at <code>:60</code>), and the loser of
-          that claim logs and returns <code>Result.Success()</code> (<code>:79-83</code>). The handler says where its retries come
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:78-80</code>,
+          <code>ClaimTimeToLive</code> of 15 minutes at <code>:56</code>, <code>ClaimWait</code> of <code>TimeSpan.Zero</code> at <code>:63</code>), and the loser of
+          that claim logs and returns <code>Result.Success()</code> (<code>:82-86</code>). The handler says where its retries come
           from: the framework&#39;s backoff and attempt ceiling &quot;replaces the local three-attempt requeue the
           in-process queue carried&quot; (<code>:28</code>).</p>
           <p>What remains is the half that was always a good fit for a channel: ephemeral, best-effort work owned
@@ -266,8 +270,8 @@
           interface both resolving to the <strong>one</strong> instance (<code>TryAddSingleton&lt;LiveChannelPublishQueue&gt;()</code> plus
           <code>TryAddSingleton&lt;ILiveChannelPublishQueue&gt;(sp =&gt; sp.GetRequiredService&lt;LiveChannelPublishQueue&gt;())</code>
           at
-          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:56-57</code>,
-          with the &quot;one concrete singleton, exposed to handlers via the interface&quot; note at <code>:55</code>). Registering
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/DependencyInjection.cs:53-54</code>,
+          with the &quot;one concrete singleton, exposed to handlers via the interface&quot; note at <code>:52</code>). Registering
           the two separately would give producers a queue nobody drains. Capacity is a per-job constant
           (<code>1024</code> at
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/Live/LiveChannelPublishQueue.cs:18</code>,
@@ -308,7 +312,7 @@
           <li><em>From the command handler side of a non-transactional command, once its save has returned.</em>
           <code>TransactionalCommandDecorator</code> wraps only commands implementing <code>ITransactional</code> and passes
           everything else straight through
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:28-29</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:30-31</code>,
           marker at <code>.../UseCases/Markers/ITransactional.cs:6</code>); no Engagement command implements it, so for
           these handlers <code>SaveChangesAsync</code> <strong>is</strong> the commit. Three of the four sites get the ordering
           structurally, because a <code>MutateEntityHandlerBase</code> subclass
@@ -380,6 +384,20 @@
           channel loses it silently, and putting a broadcast through a durable command pays a row, a poll
           interval and a lease for something worth less than the write.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Two Context and Related statements are corrected: the scoring
+          trigger no longer answers <code>202 Accepted</code> unconditionally, because a
+          <code>[FeatureGate(ConferenceFeatures.SessionScoring)]</code> attribute
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:125</code>)
+          answers 404 with the flag off and a failed schedule returns <code>HandleFailure</code> (<code>:138-141</code>), leaving
+          <code>Accepted()</code> (<code>:144</code>) for the success path only; and ADR-025&#39;s warm-up is one of several framework
+          hosted services rather than the only other one (for example <code>OutboxProcessor</code> at
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:209</code>,
+          <code>InternalCommandProcessor</code> at <code>.../DependencyInjection.Jobs.cs:175</code>, <code>WarmupHostedService</code> at
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:102</code>). Citations refreshed: the
+          <code>ScheduleAsync</code> call, the scoring handler&#39;s claim, TTL, wait and loser lines (the cache evict at
+          <code>ScoreEventSessionsInternalCommandHandler.cs:76</code> now precedes the claim), the Engagement queue
+          registrations, and the <code>TransactionalCommandDecorator</code> pass-through.</p>
           <h2 id="related">Related</h2>
           <p><a href="114-internal-commands-durable-job-queue.html">ADR-114</a> (the durable, leased, retrying queue that owns
           expensive and must-run work),
@@ -388,7 +406,8 @@
           ADR-039 (live channel push, the one instance of this pattern),
           ADR-003 (the outbox, and the post-commit domain-event deferral the first enqueue shape relies on),
           ADR-014 (the transactional decorator whose commit boundary post-commit work attaches to),
-          ADR-025 (startup warm-up, the other hosted-service use in the framework),
+          ADR-025 (startup warm-up, one of several framework hosted services alongside the outbox and
+          internal-command processors),
           <a href="052-background-job-execution.html">ADR-052</a> (superseded: the record that covered both halves).</p>
           
         <div class="doc-foot btn-row">
@@ -405,6 +424,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

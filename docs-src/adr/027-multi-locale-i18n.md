@@ -25,8 +25,8 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    `IStringLocalizer<T>`.** `AddLocalization()` is registered with **no `ResourcesPath`** so a type's
    resource base name is its full type name and the `.resx` lives next to it (`Login.razor` →
    `Login.resx` / `Login.es.resx`; a `*.Resources.SharedResource` marker for cross-cutting chrome). Keys
-   are dotted and stable (`Nav.Home`, `Common.Button.Save`). Parameterized text uses **composite format
-   keys** (`"Error loading {0}. {1}"`) consumed as `L["Common.Error.Load", entity, detail]`: never string
+   are dotted and stable (`Nav.Home`, `Common.Button.Cancel`). Parameterized text uses **composite format
+   keys** (`"Error loading {0}."`) consumed as `L["Common.Error.Load", entity]`: never string
    concatenation. The `.resx` compile to **satellite assemblies** that pack into the NuGet packages
    automatically (no `.csproj` change) and flow identically via `local.props` source mode.
 
@@ -46,7 +46,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    `Code`, `Type`, `Source` and `Target` untranslated
    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61-69`,
    localization at `:65`), and `ProblemDetailsResultReader` reads those machine fields back on the
-   client (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:342-354`).
+   client (`MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:344-356`).
    Updated 2026-08-27: the client no longer branches on the ProblemDetails `title` at all. The
    removed `ServiceExceptionHelper` matched three fixed English title strings, which coupled the
    client to wording that could never be translated without breaking it; the reader matches the
@@ -103,8 +103,10 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
 
    **The pseudo pass is also a required CI gate (since 2026-07-03).** The backend-less gallery host
    (test-only, never packaged) enables `qps-Ploc` unconditionally, and `PseudoLocalizationE2ETests`
-   renders `/login`, `/register`, and `/components` under it, asserting (a) the bracket sentinel
-   appears (every displayed string made the resource round-trip) and (b) the page does not overflow
+   renders `/login`, `/register`, `/forgot-password`, `/reset-password`, and `/components` under it
+   (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/PseudoLocalizationE2ETests.cs:31`),
+   asserting (a) the bracket sentinel appears (every displayed string made the resource round-trip;
+   the sentinel check is retried up to three times, `:40`) and (b) the page does not overflow
    horizontally under the ~40% expansion (the layout-tolerance criterion). The gate is **required on
    all three browser engines**, not just one: `ui-e2e` is a `chromium, firefox, webkit` matrix whose
    legs are each a required merge check, and the run step executes the whole E2E project on every leg
@@ -141,7 +143,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    pass-through** so an already-translated server message renders as-is and a client-side message
    that happens to be a key gets translated
    (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:17-23`, the lookup
-   at `:325-334`). `ErrorMessages.LoadError` / `SaveError` / `DeleteError` cover the narrow
+   at `:329-338`). `ErrorMessages.LoadError` / `SaveError` / `DeleteError` cover the narrow
    remainder, and the type says so: they are for the exceptions a page can still raise on its own
    behalf (a JS-interop failure, a mapping bug, a callback the page supplied), never for a server
    answer (`.../MMCA.Common.UI/Pages/Common/ErrorMessages.cs:14-22`). Every one of them renders the
@@ -150,12 +152,12 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    is neither localizable nor safe to surface (`:49-65`).
 
    `NavItem` carries a required `TitleResource` type in positional slot 4
-   (`.../MMCA.Common.UI/Common/NavItem.cs:16`): the shared `NavMenu` treats `Title` and `Group` as
+   (`.../MMCA.Common.UI/Common/NavItem.cs:20`): the shared `NavMenu` treats `Title` and `Group` as
    resource keys resolved against it per circuit at render time, so module nav menus follow the
    active culture, and a key the resource type does not declare renders as the raw string rather
-   than as a blank entry (`:9-14`). MudBlazor's own component chrome localizes through
-   `ResxMudLocalizer` over the `MudTranslations` resource pair (all built-in keys of the pinned
-   MudBlazor version, en + es), registered in `AddUIShared` and covered by the same completeness gate.
+   than as a blank entry (`:13-18`). MudBlazor's own component chrome localizes through
+   `ResxMudLocalizer` over the `MudTranslations` resource pair (MudBlazor's own `LanguageResource`
+   keys as of v9.6.0, en + es, `.../MMCA.Common.UI/Resources/MudTranslations.cs:7-8`), registered in `AddUIShared` and covered by the same completeness gate.
 
 10. **Applying a culture is host-specific, behind `ICultureApplier`; a hybrid head switches in process
     (amended 2026-07-29).** Decisions 5 and 6 are written around a request pipeline: a cookie, request
@@ -212,8 +214,12 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
     Precedence mirrors the web deliberately: the persisted choice (the cookie's analogue), then the
     device locale (`Accept-Language`'s analogue), then `SupportedCultures.Default`. Matching a device
     locale needs the same language fallback request localization does, so
-    `SupportedCultures.ResolveClosest` now owns it for both (`es-MX` resolves to `es`), and it never
-    returns the pseudo locale. The active culture still reaches the services as `Accept-Language`: the
+    `SupportedCultures.ResolveClosest` supplies it for the hybrid head (`es-MX` resolves to `es`), and it
+    never returns the pseudo locale
+    (`MMCA.Common/Source/Core/MMCA.Common.Shared/Globalization/SupportedCultures.cs:51`, called from
+    `.../MMCA.Common.UI.Maui/Globalization/MauiCultureStore.cs:43`); web heads keep the parent-culture
+    matching of ASP.NET request localization (`UseCommonRequestLocalization`,
+    `.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:73-93`). The active culture still reaches the services as `Accept-Language`: the
     hybrid head already shares `CultureDelegatingHandler` through `AddUIShared`, so once
     `CurrentUICulture` is right, localized backend errors follow with no extra wiring.
 
@@ -247,6 +253,20 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
   follow-up rather than blocking. **Closed 2026-07-03:** `ResxMudLocalizer` + the `MudTranslations`
   resource pair now localize the MudBlazor chrome (Decision 9); unknown keys still fall back to
   MudBlazor's built-in English, and `en-US` deliberately keeps the built-ins.
+
+## Revision (2026-10-01)
+No decision or rationale changed; four statements were corrected to match the code and several
+citations were refreshed. Decision 2: the composite-key example now matches the shipped
+`Common.Error.Load` value `"Error loading {0}."` (`.../MMCA.Common.UI/Resources/SharedResource.resx:82-83`),
+which takes the entity noun alone as Decision 9 states, and the example key is `Common.Button.Cancel`
+(`:268`) because no `Common.Button.Save` key exists. Decision 8: the pseudo-locale gate scans five pages,
+not three (`PseudoLocalizationE2ETests.cs:31`), and retries the sentinel check (`:40`). Decision 9: the
+`MudTranslations` pair mirrors MudBlazor `LanguageResource` keys as of v9.6.0 (`MudTranslations.cs:7-8`)
+while the pin is 9.11.0 (`MMCA.Common/Directory.Packages.props:180`), so it is no longer described as
+covering every key of the pinned version. Decision 10: `SupportedCultures.ResolveClosest` is called only by
+the hybrid head (`MauiCultureStore.cs:43`); web heads use request localization's own parent-culture
+fallback (`WebApplicationExtensions.cs:73-93`). Refreshed anchors: `ProblemDetailsResultReader.cs:344-356`
+(was 342-354), `ResultUiExtensions.cs:329-338` (was 325-334), `NavItem.cs:20` and `:13-18` (were 16 and 9-14).
 
 ## Related
 [ADR-011](011-single-locale-i18n.md) (superseded), [ADR-013](013-result-pattern.md) (the `Error.Code`

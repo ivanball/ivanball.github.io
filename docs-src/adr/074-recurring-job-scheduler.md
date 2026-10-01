@@ -29,10 +29,10 @@ scheduling product (Hangfire or Quartz.NET) or to extend the durable polling loo
 ### The scheduler is the outbox claim-lease pattern applied to cron, not Hangfire and not Quartz.NET
 A persistent job store plus a single-runner claim lease, reusing the exact idiom the outbox proved. The
 outbox claims a batch with an `ExecuteUpdateAsync` that sets `LockedUntil` and `LockToken` in one statement
-(`.../Persistence/Outbox/Processing/OutboxProcessor.cs:479-483`, inside `ClaimEligibleAsync`, `:456`) over a shared
+(`.../Persistence/Outbox/Processing/OutboxProcessor.cs:401-405`, inside `ClaimEligibleAsync`, `:378`) over a shared
 `FilterClaimable` predicate that admits only rows whose `LockedUntil` is null or already in the past
-(`:535-537`), then re-reads the claimed
-set by `LockToken` so a partial claim processes only its own rows (`:492-496`). A due job is claimed the same way, so two replicas can
+(`:453-459`), then re-reads the claimed
+set by `LockToken` so a partial claim processes only its own rows (`:413-418`). A due job is claimed the same way, so two replicas can
 never run the same occurrence, and a replica that dies mid-run releases its job when the lease expires.
 
 Hangfire would have brought its own schema, its own storage abstraction, a dashboard surface to authorize
@@ -58,11 +58,11 @@ dependency.
 ### The job store is one row per job, in the Default source only
 `ScheduledJobEntry` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Scheduling/ScheduledJobEntry.cs`)
 carries `JobName` (the primary key), `CronExpression`, `NextRunOn`, `LastRunOn`, `LastOutcome`,
-`LastDurationMs`, `LockedUntil` and `LockToken`. It is deliberately **not** an `IAuditableEntity`: it
+`LastError`, `LastDurationMs`, `LockedUntil` and `LockToken` (`ScheduledJobEntry.cs:26-74`). It is deliberately **not** an `IAuditableEntity`: it
 self-stamps nothing, it is never soft-deleted, and no global query filter reaches it. That falls out of the
 mapping rather than being asserted: the soft-delete filter is applied only to entity types assignable to
-`IAuditableEntity` (`.../Persistence/DbContexts/ApplicationDbContext.cs:370`, `:379`), and
-`ConfigureScheduler` maps the table with no `HasQueryFilter` call of its own (`:594-619`). That is the
+`IAuditableEntity` (`.../Persistence/DbContexts/ApplicationDbContext.cs:457`, `:466`), and
+`ConfigureScheduler` maps the table with no `HasQueryFilter` call of its own (`:805-841`). That is the
 `OutboxMessage` precedent: infrastructure rows are not domain rows.
 
 The table lives in the **Default** source and only there. The outbox exists once per relational database
@@ -111,16 +111,16 @@ queue and a schedule has no queue.
 
 Registration is two calls. `AddScheduledJobs(configuration)` binds the settings and registers the runner;
 `AddScheduledJob<TJob>()` adds one job from any module, using the accumulate-across-modules idiom that
-`AddPermissions` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:47`)
-and its `EnsurePermissionRegistry` helper (`:61`) already establish. That registration takes **no schedule
-argument** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:440`): the schedule is
+`AddPermissions` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:103`)
+and its `EnsurePermissionRegistry` helper (`:117`) already establish. That registration takes **no schedule
+argument** (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:72`): the schedule is
 the job's own `CronExpression` property, and the one way to retime a shipped job without a release is
 configuration, the `Scheduler:Jobs:{Name}:Cron` section bound by `SchedulerSettings.Jobs`
 (`.../Infrastructure/Scheduling/SchedulerSettings.cs:54-60`) into `ScheduledJobOverrideSettings.Cron` (`:74`).
 The runner resolves the two per job on every cycle, the override when it is present and non-blank and the
-compiled-in default otherwise (`ResolveCronExpression`, `.../Infrastructure/Scheduling/ScheduledJobRunner.cs:162`).
+compiled-in default otherwise (`ResolveCronExpression`, `.../Infrastructure/Scheduling/ScheduledJobRunner.cs:170`).
 The table is created only when the settings flag is on, the same gating [ADR-075](075-audit-trail.md) uses.
-Every cycle the registered jobs are **upserted by `JobName`** (`SyncRegistrationsAsync`, `:259`), which is why
+Every cycle the registered jobs are **upserted by `JobName`** (`SyncRegistrationsAsync`, `:267`), which is why
 an override edited on a running host takes effect on the next cycle: the stored expression is rewritten and
 the next occurrence recomputed from the current instant, with a row whose expression is unchanged left alone.
 
@@ -128,7 +128,7 @@ the next occurrence recomputed from the current instant, with a row whose expres
 `DesignTimeDbContextOptions.EnableScheduler`
 (`.../Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:41`) is the design-time mirror of
 `Scheduler:Enabled`, and `DesignTimeDbContextHelper` feeds it to the context as a fixed
-`SchedulerSettings` (`.../Design/DesignTimeDbContextHelper.cs:136-137`). Without that flag the design-time
+`SchedulerSettings` (`.../Design/DesignTimeDbContextHelper.cs:160-161`). Without that flag the design-time
 model diverges from the runtime model and `dotnet ef` breaks for every consumer.
 
 ### The framework dogfoods it
@@ -188,6 +188,17 @@ on its Default source.
   cannot catch `0 3 * * 1` written when `0 3 * * *` was meant.
 - **One runner per host, and it is shared.** A slow job delays the jobs due behind it, exactly as
   [ADR-052](052-background-job-execution.md)'s single-reader drain does for its queue.
+
+## Revision (2026-10-01)
+No decision or rationale changed. The job-store field list now names `LastError`, a nullable string the
+entry already carries (`.../Infrastructure/Scheduling/ScheduledJobEntry.cs:57`) and maps with a 2048-character
+cap (`.../Persistence/DbContexts/ApplicationDbContext.cs:827`). Citations were refreshed to current lines:
+the outbox claim (`OutboxProcessor.cs:378`, `:401-405`, `:413-418`, `FilterClaimable` `:453-459`), the
+soft-delete filter and `ConfigureScheduler` (`ApplicationDbContext.cs:457`, `:466`, `:805-841`),
+`AddPermissions` and `EnsurePermissionRegistry` (`AuthorizationExtensions.cs:103`, `:117`),
+`AddScheduledJob<TJob>()`, which now lives in `DependencyInjection.Jobs.cs:72`, `ResolveCronExpression` and
+`SyncRegistrationsAsync` (`ScheduledJobRunner.cs:170`, `:267`), and the design-time scheduler settings
+(`DesignTimeDbContextHelper.cs:160-161`).
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox whose claim-lease idiom and smart wait this reuses

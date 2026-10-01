@@ -8,15 +8,19 @@ adoption site, so ADC's Domain now holds no primitive email property and matches
 the record also notes why the validator, the length invariant and the column shape were all left
 alone, following the Speaker precedent.
 Revised 2026-09-25 (the shipped `OwnsAddress` helper named beside `OwnsMoney`: Store's `Customer.Address`
-maps through it, so no consumer hand-copies an `Address` owned-type block; the Store, ADC and
-`EntityTypeBuilderExtensions` anchors refreshed).
+maps through it; the Store, ADC and `EntityTypeBuilderExtensions` anchors refreshed). As of
+2026-10-01 Store follows that call with a second `OwnsOne` block that overrides the helper's unicode
+facet, and the `with`-expression path around the `Money` sugar is named (see Revision below).
 
 ## Context
 A domain model has two kinds of small type: the **identity** of a thing, and a **value** the thing
 carries. ADR-048 recorded the identity half: identifiers stay primitives named through a global-using
 alias, and the strongly-typed wrapper struct was considered and rejected because an identifier crosses
 EF keys, JSON payloads, OpenAPI schemas, proto messages and URLs constantly, where a wrapper buys
-converters at every hop and no invariant in return.
+converters at every hop and no invariant in return. ADR-115 later added the wrapper struct as an
+opt-in framework capability (its JSON converter factory is registered in `AddAPI` at
+`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:65`) while keeping the aliases the
+default, so ADR-048's verdict still governs identifiers unless a team opts in.
 
 The value half was never recorded, even though the framework ships a full set of them in
 `Source/Core/MMCA.Common.Shared/ValueObjects/` and both production apps consume them. Left as bare
@@ -50,10 +54,14 @@ Model a domain value that carries an invariant as an **immutable record value ob
   already-valid parts and so skips `Create` entirely, `Money.Zero()` (`Money.cs:142`), `Money.Zero(Currency)`
   (`:147`), `operator *` (`:96`) and `Multiply` (`:124`). The fitness rule below governs the `Create` name
   only and says so in its own contract (`ArchitectureRules.Entities.cs:49-51`), so nothing stops a value
-  object from shipping such a path. What holds it together is that the sugar takes no raw string: a
-  `Currency` argument can only have come from `Currency.FromCode` or `Currency.All`, and the `None`
-  sentinel is `internal` (`Currency.cs:23`), so an external caller still cannot assemble a `Money` whose
-  currency was never checked.
+  object from shipping such a path. The sugar itself takes no raw string, and the `None` sentinel is
+  `internal` (`Currency.cs:23`), but that does not make `Currency` sealed against unchecked values:
+  `Currency.Code` (`Currency.cs:34`) and `Money.Amount`/`Money.Currency` (`Money.cs:31,35`) are public
+  `init` accessors, shipped in the public API with the record clone method
+  (`Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:550,556,558,732,738`), so an external
+  `with` expression (`Currency.Usd with { Code = "XYZ" }`, `Money.Zero() with { Amount = 5m }`)
+  produces a currency `FromCode` never checked or a non-zero `None`-currency `Money` without going
+  through `Create`.
 - **That factory shape is fitness-enforced, not conventional.** `ArchitectureRules.DomainFactoriesReturnResult`
   (`Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Entities.cs:53-79`) walks every
   concrete class in the Domain and Shared layers and fails the build when a public static `Create`
@@ -75,7 +83,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:58`)
   flattens `Money` into a decimal amount column plus a three-character non-unicode ISO 4217 code column
   (`:69-83`) and sets the navigation's requiredness from one parameter (`:85`). Its sibling
-  `OwnsAddress` (`:125`, shipped in v1.192.0, `MMCA.Common/CHANGELOG.md:894`) flattens `Address` into
+  `OwnsAddress` (`:125`, shipped in v1.192.0, `MMCA.Common/CHANGELOG.md:1098`) flattens `Address` into
   six non-unicode columns whose lengths come from `AddressInvariants` and of which only `AddressLine1`
   is required (`:134-166`), names them from an optional prefix (`AddressLine1`, `AddressCity`, and so on
   by default, `:127`, joined at `:185-188`) and defaults the navigation to optional (`:128`, applied at
@@ -100,20 +108,20 @@ Model a domain value that carries an invariant as an **immutable record value ob
   `[JsonConstructor]` round-trip constructor (`Money.cs:51`, `Email.cs:22`, `PhoneNumber.cs:22`,
   `Address.cs:42`) so a materializer rebuilds the value without reopening the factory; `AddAPI`
   registers both the JSON converter and the XML `DataContractSerializer` formatters
-  (`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:53,60`). `Currency` instead serializes
+  (`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:54,67`). `Currency` instead serializes
   as its bare code through a converter attached to the type itself (`Currency.cs:13,73`) with a
   matching API-layer converter (`Source/Presentation/MMCA.Common.API/JsonConverters/CurrencyJsonConverter.cs:12`),
   so non-MVC paths (cache, outbox, integration events, typed clients) fail the same way model binding
   does. `DateRange` and `DateTimeRange` carry no serialization annotations.
 - **gRPC is mapped by hand, not inferred.** `Money` crosses a service boundary as a purpose-built
   `MoneyV1` message with a **string** amount (proto has no decimal) and a currency code
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:81,83,86`),
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:115,117,120`),
   translated by `MoneyFromWire`
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:146`)
-  and `MoneyToWire` (`:177`).
-  `MoneyFromWire` honors the empty-code sentinel only when the amount is also zero (`:155-160`) and
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:190`)
+  and `MoneyToWire` (`:221`).
+  `MoneyFromWire` honors the empty-code sentinel only when the amount is also zero (`:199-204`) and
   returns null for a malformed entry, which the calling loop skips rather than failing the whole batch
-  (`:121-126`).
+  (`:121-125`).
 - **Adoption is real but partial.** Store maps `ProductVariant.Price`
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:26`) with
   `OwnsMoney` (`.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:39`),
@@ -123,8 +131,11 @@ Model a domain value that carries an invariant as an **immutable record value ob
   `OrderLine.UnitPrice` (`OrderLineConfiguration.cs:28`). Store Identity types `Customer.Address` as the
   framework `Address`
   (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:40`) and maps
-  `Customer.Email` through `EmailValueConverter` (`CustomerConfiguration.cs:35`) with `Customer.Address`
-  through the shipped `OwnsAddress` helper under its default prefix (`CustomerConfiguration.cs:44`), and
+  `Customer.Email` through `EmailValueConverter` (`CustomerConfiguration.cs:33`) with `Customer.Address`
+  through the shipped `OwnsAddress` helper under its default prefix (`CustomerConfiguration.cs:42`),
+  followed by a second `OwnsOne` block on the same navigation that marks all six columns `IsUnicode()`
+  and so overrides the helper's non-unicode facet while keeping its names, lengths and requiredness
+  (`:47-55`), and
   `User.Email` the same way as `Customer.Email` (`UserConfiguration.cs:24`).
   ADC types `User.Email` as `Email`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:52`, validated through
@@ -143,7 +154,7 @@ Model a domain value that carries an invariant as an **immutable record value ob
   details are worth recording because they look like leftovers and are not: the column is unchanged
   (`nvarchar(255)`, still nullable) so the conversion needed no migration, and
   `EventOrganizerContactEmailRules`
-  (`.../Conference.Application/Events/Validation/EventValidationRules.cs:57`, included at `:148`) plus
+  (`.../Conference.Application/Events/Validation/EventValidationRules.cs:59`, included at `:182`) plus
   `EventInvariants.OrganizerContactEmailMaxLength`
   (`.../Conference.Domain/Events/EventInvariants.cs:38`) were both kept, exactly as the Speaker
   precedent kept its own: the request-side validator still guards the wire string before it reaches
@@ -178,19 +189,23 @@ Model a domain value that carries an invariant as an **immutable record value ob
 - **Ship the mapping, do not repeat it.** `OwnsMoney`, `OwnsAddress` and the four converters put the
   round-trip contract in one reviewed place, so a new entity configuration is one call rather than a
   copied lambda pair that may or may not carry the sentinel fallback, or a copied six-property block
-  whose lengths may or may not match `AddressInvariants`.
+  whose lengths may or may not match `AddressInvariants`. The helpers extend `EntityTypeBuilder` only,
+  so a value nested inside another owned type still needs the block by hand: Store's
+  `VariantDiscount.SpecialPrice` repeats the `Money` mapping with its own sentinel fallback
+  (`.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:24,60-75`,
+  reason stated at `:56-59`).
 
 ## Trade-offs
 - **The pattern is not uniformly applied.** Only three of the seven types have a companion `*Invariants`
-  class; the rest inline their checks. Only the two multi-field values have a shipped owned-type helper
-  (`OwnsMoney`, `OwnsAddress`); the single-string ones map through converters, and `DateRange` and
-  `DateTimeRange` have neither. Five of the seven carry a serialization attribute, and not the same one: four are
+  class; the rest inline their checks. Only two of the four multi-field values have a shipped
+  owned-type helper (`OwnsMoney`, `OwnsAddress`); the single-string ones map through converters, and
+  `DateRange` and `DateTimeRange` have neither. Five of the seven carry a serialization attribute, and not the same one: four are
   `[DataContract]`/`[DataMember]` (`Money`, `Email`, `PhoneNumber`, `Address`) while `Currency` carries
   `[JsonConverter(typeof(CurrencyJsonConverter))]` (`Currency.cs:13`); only `DateRange` and
   `DateTimeRange` are annotation-free.
-- **Three of the seven have no consumer.** `PhoneNumber`, `DateRange` and `DateTimeRange` ship with
-  invariants, tests and converters but no production usage, so their round-trip behavior is exercised
-  only by the framework's own tests.
+- **Three of the seven have no consumer.** `PhoneNumber` ships with invariants, tests and converters,
+  and `DateRange` and `DateTimeRange` with tests only (no `*Invariants` class, no converter), but none
+  of the three has production usage, so their behavior is exercised only by the framework's own tests.
 - **Nothing gates that a domain value uses a value object.** The `Create`-returns-`Result` rule is
   fitness-enforced, but no rule says a new email field must be `Email` rather than `string`. MMCA.Helpdesk
   is the visible consequence: the reference app models everything on primitives.
@@ -207,8 +222,28 @@ Model a domain value that carries an invariant as an **immutable record value ob
   value object that has to cross a service boundary needs its own wire message and translation pair,
   the same class of friction ADR-048 declined to pay for identifiers.
 
+## Revision (2026-10-01)
+No decision changed; four statements were corrected and anchors refreshed. (1) The `Money` sugar
+paragraph claimed an external caller cannot assemble a `Money` whose currency was never checked.
+`Currency.Code` (`Currency.cs:34`) and `Money.Amount`/`Money.Currency` (`Money.cs:31,35`) are public
+`init` accessors in the shipped API (`PublicAPI.Shipped.txt:550,556,558,732,738`), so a `with`
+expression bypasses `FromCode` and `Create`; the Decision now says so. (2) Store's `Customer.Address`
+maps through `OwnsAddress` (`CustomerConfiguration.cs:42`) and then a second `OwnsOne` block
+(`:47-55`) sets all six columns `IsUnicode()`, so the Status no longer says no consumer hand-writes an
+`Address` block. (3) `OwnsMoney` extends `EntityTypeBuilder` only, so Store hand-maps the nested
+`VariantDiscount.SpecialPrice` (`ProductVariantConfiguration.cs:56-75`); the Rationale records it. (4)
+`DateRange` and `DateTimeRange` have no `*Invariants` class and no converter, so the Trade-offs no
+longer say they ship with both, and "the two multi-field values" became two of four. Context and
+Related now cite ADR-115 (wrapper structs opt-in, aliases default; `DependencyInjection.cs:65`). Not
+yet recorded above and flagged here: a `Money.Zero()` serializes its currency as `""`
+(`Currency.cs:92`) and `CurrencyJsonConverter.Read` throws on it because `FromCode` rejects an empty
+code (`Currency.cs:43-44,83-85`), so a `None`-currency `Money` does not JSON round-trip. Anchors
+refreshed: `CHANGELOG.md:1098`, `DependencyInjection.cs:54,67`, `CustomerConfiguration.cs:33`,
+`EventValidationRules.cs:59,182`, `product_variants.proto:115,117,120` and adapter `:190,221,199-204,121-125`.
+
 ## Related
 ADR-048 (the deliberate opposite call for identifiers: primitives behind aliases, wrapper structs
-rejected, because identifiers cross process boundaries constantly and carry no invariant), ADR-013
+rejected, because identifiers cross process boundaries constantly and carry no invariant), ADR-115
+(the wrapper struct shipped as an opt-in capability, with aliases still the default), ADR-013
 (the `Result` pattern these factories implement below the aggregate level), ADR-015 (the fitness
 function that enforces the `Create`-returns-`Result` shape on value objects too).

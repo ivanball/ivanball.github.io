@@ -37,33 +37,33 @@ host through a single registration call, and keep it exercised by a shared fitne
 proves two live versions coexist.
 
 - **One registration wires the whole policy.** `AddCommonApiVersioning`
-  (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:334`) deliberately
+  (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:37`) deliberately
   does **not** set `DefaultApiVersion`: `1.0` is already the `Asp.Versioning` library default, and the
   API explorer inherits both it and `AssumeDefaultVersionWhenUnspecified` from the versioning options,
   so restating either one trips AV0011/AV0024. The code comment recording that omission is at
-  `WebApplicationBuilderExtensions.cs:336`-`WebApplicationBuilderExtensions.cs:338`. What the registration does set: it assumes the default
+  `WebApplicationBuilderExtensions.cs:39`-`WebApplicationBuilderExtensions.cs:41`. What the registration does set: it assumes the default
   version when a caller sends no header
-  (`AssumeDefaultVersionWhenUnspecified = true`, `WebApplicationBuilderExtensions.cs:341`), reports
+  (`AssumeDefaultVersionWhenUnspecified = true`, `WebApplicationBuilderExtensions.cs:44`), reports
   the supported/deprecated versions on every response (`ReportApiVersions = true`,
-  `WebApplicationBuilderExtensions.cs:342`), and selects the version from an `api-version` request
-  header (`new HeaderApiVersionReader("api-version")`, `WebApplicationBuilderExtensions.cs:343`). The
+  `WebApplicationBuilderExtensions.cs:45`), and selects the version from an `api-version` request
+  header (`new HeaderApiVersionReader("api-version")`, `WebApplicationBuilderExtensions.cs:46`). The
   reader is header-based deliberately: routes and query strings stay version-free, so a caller opts
   into a newer shape by adding one header rather than changing the URL.
 - **The API explorer is wired for versioned OpenAPI.** The same call chains `.AddMvc()` then
-  `.AddApiExplorer` (`WebApplicationBuilderExtensions.cs:344`,
-  `WebApplicationBuilderExtensions.cs:345`), formatting version groups as `'v'VVV`
-  (`WebApplicationBuilderExtensions.cs:347`) and substituting the version into the URL where a host
-  routes one (`SubstituteApiVersionInUrl = true`, `WebApplicationBuilderExtensions.cs:348`). The
+  `.AddApiExplorer` (`WebApplicationBuilderExtensions.cs:47`,
+  `WebApplicationBuilderExtensions.cs:48`), formatting version groups as `'v'VVV`
+  (`WebApplicationBuilderExtensions.cs:50`) and substituting the version into the URL where a host
+  routes one (`SubstituteApiVersionInUrl = true`, `WebApplicationBuilderExtensions.cs:51`). The
   explorer's default-version behavior is inherited rather than configured, exactly as the comment
-  above it records (`WebApplicationBuilderExtensions.cs:336`-`WebApplicationBuilderExtensions.cs:338`). That
+  above it records (`WebApplicationBuilderExtensions.cs:39`-`WebApplicationBuilderExtensions.cs:41`). That
   group format names the OpenAPI documents `AddCommonOpenApi` registers through the versioning
-  builder (`WebApplicationBuilderExtensions.cs:493`, `WebApplicationBuilderExtensions.cs:495`), one
-  per discovered API version (`WebApplicationBuilderExtensions.cs:484`-`WebApplicationBuilderExtensions.cs:486`,
+  builder (`WebApplicationBuilderExtensions.cs:91`, `WebApplicationBuilderExtensions.cs:93`), one
+  per discovered API version (`WebApplicationBuilderExtensions.cs:82`-`WebApplicationBuilderExtensions.cs:84`,
   so `1.0` is the `v1` document). `MapCommonOpenApi` serves them at `/openapi/{documentName}.json`
   outside Production only
-  (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/OpenApiEndpointExtensions.cs:34`, guarded at
-  `OpenApiEndpointExtensions.cs:36`, mapped with `.WithDocumentPerVersion()` at
-  `OpenApiEndpointExtensions.cs:38`).
+  (`Source/Presentation/MMCA.Common.API/Startup/Endpoints/OpenApiEndpointExtensions.cs:42`, guarded at
+  `OpenApiEndpointExtensions.cs:44`, mapped with `.WithDocumentPerVersion()` and `.AllowAnonymous()` at
+  `OpenApiEndpointExtensions.cs:46`).
 - **A shipped exemplar proves two versions coexist.** `ServiceInfoControllerBase`
   (`Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:30`) serves the same
   `/ServiceInfo` route under two versions selected by the header: `GetV1` is mapped to `1.0`
@@ -110,11 +110,11 @@ proves two live versions coexist.
   current host was affected either way, which is precisely why the failure could ship unnoticed.
 - **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
   in their startup: ADC's Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:220`) and Identity
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:152`) hosts, Store's Catalog host
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:142`), and the same call is made
-  by the other extracted hosts (ADC Engagement `Program.cs:148`, ADC Notification `Program.cs:140`,
-  Store Sales `Program.cs:149`, Store Identity `Program.cs:136`) and by the monolith reference host
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:218`) and Identity
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:149`) hosts, Store's Catalog host
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:139`), and the same call is made
+  by the other extracted hosts (ADC Engagement `Program.cs:146`, ADC Notification `Program.cs:138`,
+  Store Sales `Program.cs:146`, Store Identity `Program.cs:133`) and by the monolith reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:35`).
 
 Application controllers beyond `ServiceInfo` declare `[ApiVersion("1.0")]` today: the second version
@@ -150,9 +150,9 @@ resource has yet needed to evolve its shape.
   show up in a copied URL or a browser address bar, so the version in play is only visible to a
   caller that reads request/response headers.
 - **The OpenAPI documents are dev/CI only, and only `v1` is pinned.** `MapCommonOpenApi` is a no-op
-  in Production (`OpenApiEndpointExtensions.cs:36`), so the machine-readable contract is an internal
+  in Production (`OpenApiEndpointExtensions.cs:44`), so the machine-readable contract is an internal
   dev/CI artifact rather than a public production surface. The route resolves one document per
-  discovered API version (`.WithDocumentPerVersion()`, `OpenApiEndpointExtensions.cs:38`), but
+  discovered API version (`.WithDocumentPerVersion()`, `OpenApiEndpointExtensions.cs:46`), but
   nothing asserts the generated document set: the framework baseline fetches only `/openapi/v1.json`
   (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/OpenApi/OpenApiBaselineTests.cs:54`), as does
   each consumer's contract test through the shared default
@@ -205,6 +205,21 @@ when the committed count differs from the host count (Store `:241-243`) or when
 `git diff --exit-code` finds a regenerated document (ADC `:309`, Store `:245`), and uploads the
 regenerated set on a mismatch (ADC `:314`, Store `:250`).
 
+## Revision (2026-10-01)
+
+No decision or rationale changed. Re-anchored the citations in Decision, Trade-offs and Related, which
+had moved: `AddCommonApiVersioning` and its options (`WebApplicationBuilderExtensions.cs:37`-`:51`),
+`AddCommonOpenApi` (`WebApplicationBuilderExtensions.cs:91`, `:93`, doc comment `:82`-`:84`),
+`MapCommonOpenApi` (`OpenApiEndpointExtensions.cs:42`, `:44`, `:46`), the host call sites (ADC
+Conference `:218`, Identity `:149`, Engagement `:146`, Notification `:138`; Store Catalog `:139`, Sales
+`:146`, Identity `:133`) and `EntityControllerBase.cs:31-33`. The Decision now records that the
+document endpoint is mapped `.AllowAnonymous()` (`OpenApiEndpointExtensions.cs:46`). Two details in the
+2026-09-25 revision are left as recorded: the design-time schema-initializer skip now runs through the
+framework helper `InitializeDatabaseUnlessDesignTimeAsync`
+(`Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:144`, check at
+`:151`), which each service `Program.cs` calls, and ADC's `OpenAPI documents are current` step
+(`MMCA.ADC/.github/workflows/deploy.yml:305`) also checks the committed count (`:314`).
+
 ## Related
 ADR-010 (integration-event schema versioning: the asynchronous, `SchemaVersion`-carried,
 consumer-resolved axis this deliberately contrasts with; HTTP versioning here is request-time and
@@ -214,4 +229,4 @@ than asserted), ADR-036 (the other controller-convention decision that records t
 `[ApiVersion]` non-inheritance, handled there by ADC's sealed `OAuthController` subclass), ADR-034
 (the generic entity controller bases, which take the opposite shape: `[ApiController]` /
 `[Route("[controller]")]` / `[ApiVersion("1.0")]` sit on the generic base itself,
-`EntityControllerBase.cs:33-35`).
+`EntityControllerBase.cs:31-33`).

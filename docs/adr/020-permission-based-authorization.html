@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -272,7 +274,7 @@
           one authorization model. Nothing is pre-registered per role name.</p>
           <ul>
           <li><strong>A central registry maps roles to permissions.</strong> <code>IPermissionRegistry</code> / <code>PermissionRegistry</code>
-          (<code>MMCA.Common.Shared.Auth</code>) answer &quot;does any of these roles grant this permission?&quot; from an
+          (<code>MMCA.Common.Shared.Auth.Permissions</code>) answer &quot;does any of these roles grant this permission?&quot; from an
           immutable <code>FrozenDictionary</code> snapshot. It is the single place that knows which roles confer which
           capabilities, so endpoints stay decoupled from role names (role keys compared case-insensitively,
           permission values ordinally).</li>
@@ -293,7 +295,7 @@
           works whether or not inbound-claim mapping is on). Baking permissions into the token is therefore
           optional: role-derived resolution is the default.</li>
           <li><strong>Grants are the host&#39;s to declare.</strong> <code>AddAuthorizationPolicies()</code>
-          (<code>MMCA.Common.API/Authorization/AuthorizationExtensions.cs:23</code>) wires the handler, the policy
+          (<code>MMCA.Common.API/Authorization/AuthorizationExtensions.cs:25</code>) wires the handler, the policy
           provider, and an empty shared registry, so any host that configures authentication gets the
           mechanism for free; it grants nothing beyond explicit claims until a host calls
           <code>AddPermissions(...)</code>.</li>
@@ -334,26 +336,32 @@
           Identity) by dedicated grant tests
           (<code>MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Shared.Tests/Authorization/IdentityPermissionGrantsTests.cs:24</code>,
           <code>:46</code>).</p>
-          <p><strong>Role vocabulary is the app&#39;s, not the framework&#39;s.</strong> MMCA.Common declares no role names at all: the
-          only place a role string appears in framework code is as the key a host hands to
-          <code>AddPermissions(...)</code>, and every framework-owned gate names a capability instead. The framework&#39;s own
+          <p><strong>Role vocabulary is the app&#39;s, not the framework&#39;s.</strong> MMCA.Common declares no role names at all: a
+          role string reaches framework code only when a host supplies it, as the key it hands to
+          <code>AddPermissions(...)</code> or as a role-valued setting on a framework gate. The framework&#39;s own
           navigation entries gate on <code>NavItem.RequiredPermission</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20</code>, matched against the
-          <code>permission</code> claim at <code>.../UI/Layout/NavMenu.razor:223-225</code>), the notification entry on
+          <code>permission</code> claim at <code>.../UI/Layout/NavMenu.razor:256</code>), the notification entry on
           <code>NotificationPermissions.Manage</code>
-          (<code>.../UI/Notifications/NotificationUIModule.cs:20</code>), the owner-or-admin bypass role is required
-          configuration a host supplies (<a href="033-resource-ownership-authorization.html">ADR-033</a>), and the UI test
+          (<code>.../UI/Notifications/NotificationUIModule.cs:20</code>). The role-valued settings are all host-supplied
+          and empty by default: the signed-in-devices entry narrows to <code>LayoutSettings.SessionsNavRequiredRole</code>
+          when one is configured (<code>.../UI/Common/Settings/LayoutSettings.cs:39</code>, checked with <code>IsInRole</code> at
+          <code>.../UI/Layout/NavMenu.razor:249-250</code>), a host&#39;s own <code>NavItem.RequiredRole</code> is honoured (<code>:254</code>), the
+          owner-or-admin bypass role is required configuration a host supplies
+          (<code>OwnerOrAdminFilterOptions.BypassRole</code>, <code>.../API/Authorization/OwnerOrAdminFilterOptions.cs:24</code>;
+          <a href="033-resource-ownership-authorization.html">ADR-033</a>), the public output-cache policy takes its bypass
+          roles as an argument (<code>.../API/Caching/OutputCacheOptionsExtensions.cs:34</code>), and the UI test
           helper takes the role as an argument
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/TestPrincipal.cs:41</code>). So each app
           owns its <code>RoleNames</code> constants in its Identity module&#39;s Shared project and each module&#39;s grants map
           those constants to that module&#39;s permissions.</p>
           <p><strong>Access tokens carry the capabilities, and both gates honour them.</strong> <code>TokenService</code> resolves the
           host&#39;s <code>IPermissionRegistry</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:66</code>) and writes one
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:73</code>) and writes one
           <code>permission</code> claim (<code>AuthClaimTypes.Permission</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:24</code>) per permission granted to the
           token&#39;s role, ordinally ordered and never duplicating a claim the caller already supplied
-          (<code>TokenService.cs:128-131</code>); stored grants (<a href="116-identity-completions-opt-in.html">ADR-116</a>) ride along
+          (<code>TokenService.cs:133-141</code>); stored grants (<a href="116-identity-completions-opt-in.html">ADR-116</a>) ride along
           because the registry it resolves is the layered one. The HTTP policy handler evaluates the same
           capability through the registry, and the CQRS <code>AuthorizationGate</code> passes a request whose permission
           the registry grants to the caller&#39;s roles OR that the principal carries as a claim
@@ -431,6 +439,20 @@
           opt-in is deliberate: a consumer adopting the fallback policy fixes its endpoints first and turns
           the gate on last, and until then the runtime behaviour is already the safe one.</li>
           </ol>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed: the framework still declares no role names and still gates its own
+          endpoints and navigation on capabilities. The role-vocabulary paragraph now records accurately where a
+          host-supplied role string reaches framework code beyond <code>AddPermissions(...)</code>: the optional
+          <code>LayoutSettings.SessionsNavRequiredRole</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/LayoutSettings.cs:39</code>, read at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor:249-250</code>), a host&#39;s
+          <code>NavItem.RequiredRole</code> (<code>NavMenu.razor:254</code>), <code>OwnerOrAdminFilterOptions.BypassRole</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:24</code>) and
+          the output-cache bypass roles
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheOptionsExtensions.cs:34</code>).
+          Citations refreshed: the registry namespace (<code>MMCA.Common.Shared.Auth.Permissions</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/PermissionRegistry.cs:3</code>),
+          <code>AuthorizationExtensions.cs:25</code>, <code>NavMenu.razor:256</code>, and <code>TokenService.cs:73</code> and <code>:133-141</code>.</p>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the authenticated principal and claims this keys on, including the optional <code>permission</code>
           claim), ADR-008 (each extracted service authorizes independently, so the registry is wired per
@@ -451,6 +473,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

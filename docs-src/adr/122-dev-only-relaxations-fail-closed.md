@@ -36,13 +36,13 @@ documentation:
   (`:61-77`, message text at `:85`).
 - **AI prompt and completion telemetry.** `IsDevelopmentHost` scans the service collection for a
   registered `IHostEnvironment` instance and returns false when it finds none
-  (`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:172-176`), documented as "Fails
-  CLOSED ... Mirrors the gate on `Persistence:EnableSensitiveDataLogging`" at `:167-171`.
+  (`MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:262-266`, called at `:177`), documented as "Fails
+  CLOSED ... Mirrors the gate on `Persistence:EnableSensitiveDataLogging`" at `:257-260`.
 
 `RequireHttpsMetadata` on forwarded JWT bearer is the hybrid the SMTP gate was modelled on: explicit
 argument, then configuration, then `!environment.IsDevelopment()`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:557-559`),
-with a startup-warning filter registered when a non-Development host opts out (`:561-566`).
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:63-65`),
+with a startup-warning filter registered when a non-Development host opts out (`:67-71`).
 
 **The remaining environment-conditional relaxations are plain `IsDevelopment()` checks, not
 fail-closed gates**, and this record names them as such: each reads a non-nullable environment the
@@ -50,21 +50,21 @@ host always supplies, so there is no unknown case for them to close against. The
 the inventory is complete, not to claim a guarantee their code does not make.
 
 - CORS: the pipeline selects `CorsPolicyAllowAll` in Development and `CorsPolicyAllowSpecificOrigins`
-  otherwise (`.../Startup/Pipeline/MiddlewarePipelineBuilder.cs:111-113`); the allow-any policy is
-  registered at `.../Startup/WebApplicationBuilderExtensions.cs:694-697` behind an analyzer
-  suppression that states the scope (`:693`). The Aspire gateway takes the same shape on its default
+  otherwise (`.../Startup/Pipeline/MiddlewarePipelineBuilder.cs:99-101`); the allow-any policy is
+  registered at `.../Startup/WebApplicationBuilderExtensions.cs:139-142` behind an analyzer
+  suppression that states the scope (`:138`). The Aspire gateway takes the same shape on its default
   policy (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/GatewayCorsExtensions.cs:34-42`). See
   ADR-082.
 - Cookie `Secure` flag: `Secure = !environment.IsDevelopment()` for the session cookies
   (`.../MMCA.Common.API/SessionCookies/SessionCookieJar.cs:34`) and for the culture cookie
-  (`.../Startup/WebApplicationExtensions.cs:121`).
+  (`.../Startup/WebApplicationExtensions.cs:134`).
 - HSTS: `_enableHsts = options.Value.EnableHsts && !environment.IsDevelopment()`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:170`), so Development
   is the only way to suppress it once a host enables it. CSP is built from the same flag
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:33`). See
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:41`). See
   ADR-023.
 - Pseudo-locale: added to the supported cultures and accepted by `/culture/set` only in Development
-  (`.../Startup/WebApplicationExtensions.cs:80-82`, `:106`).
+  (`.../Startup/WebApplicationExtensions.cs:80-82`, `:119-122`).
 
 The two fail-closed gates that are pure functions are unit-tested on exactly the closing case: the
 EF gate with no environment registered is false
@@ -94,6 +94,15 @@ outside-Development at `:28-33`), and SMTP with no environment enables TLS
   check; this record is the inventory, and the plain checks carry no null guarantee.
 - **The inventory is manual.** Nothing fails a build when a new environment-conditional branch is
   added without following the rule.
+
+## Revision (2026-10-01)
+No decision or rationale changed. Citations were re-anchored to the current source: the AI gate
+(`DependencyInjection.cs:262-266`, remarks `:257-260`), the `RequireHttpsMetadata` resolution and
+warning filter, now in the partial file `WebApplicationBuilderExtensions.Authentication.cs:63-65` and
+`:67-71`, the CORS selection (`MiddlewarePipelineBuilder.cs:99-101`) and allow-any policy
+(`WebApplicationBuilderExtensions.cs:139-142`, suppression `:138`), the culture cookie `Secure` flag
+(`WebApplicationExtensions.cs:134`), the pseudo-locale check (`:119-122`), and the CSP flag
+(`BlazorCspPolicyProvider.cs:41`).
 
 ## Related
 [ADR-070](070-fail-fast-configuration-contract.md) (binds and validates settings at startup; this

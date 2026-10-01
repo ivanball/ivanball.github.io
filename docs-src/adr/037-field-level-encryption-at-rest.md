@@ -18,7 +18,7 @@ never recovered. Erasure (ADR-005) **removes or anonymizes** personal data on a 
 Neither covers the case of a field that must stay **retrievable in plaintext to the application** yet
 be **unreadable in the database itself**: an at-rest, reversible, column-level confidentiality control.
 ADR-005 already names this converter as the mechanism for erasure fields "that must remain retrievable"
-(`ADRs/005-soft-delete-vs-erasure.md:22`), and `SECURITY.md:36` lists it in the security model, so the
+(`Website/docs-src/adr/005-soft-delete-vs-erasure.md:23`), and `SECURITY.md:36` lists it in the security model, so the
 capability is referenced across the docs but was never recorded as a decision.
 
 The framework ships the plumbing for this, an EF Core value converter that encrypts and decrypts string
@@ -177,7 +177,7 @@ rest with authenticated encryption, applied per property in an entity configurat
   no entity configuration wires it, so the encrypt/decrypt round-trip, the tag-validated integrity path, and
   the key-length guard are exercised only by `EncryptedStringConverterTests` and not by any deployed column.
   ADR-005 names this converter as the mechanism for erasure fields that must remain retrievable
-  (`ADRs/005-soft-delete-vs-erasure.md:22`), but that pairing is available, not yet applied. This is the same
+  (`Website/docs-src/adr/005-soft-delete-vs-erasure.md:23`), but that pairing is available, not yet applied. This is the same
   shipped-but-unadopted posture ADR-018 records for polyglot persistence.
 - **Encrypted columns are not queryable.** The random nonce (`EncryptedStringConverter.cs:193`) makes
   ciphertext non-deterministic, so there is no equality filter, index seek, sort, or join on an encrypted
@@ -216,7 +216,7 @@ rest with authenticated encryption, applied per property in an entity configurat
 
 ## Related
 ADR-005 (soft-delete vs erasure: the other sensitive-data control, which names this converter as the
-mechanism for erasure fields that must stay retrievable, `ADRs/005-soft-delete-vs-erasure.md:22`), ADR-032
+mechanism for erasure fields that must stay retrievable, `Website/docs-src/adr/005-soft-delete-vs-erasure.md:23`), ADR-032
 (password hashing: the one-way credential counterpart in the same Infrastructure layer, which already calls
 this converter "the at-rest counterpart to hashing credentials"), ADR-018 (polyglot persistence: the
 shipped, tested, but unadopted precedent this record mirrors). This ADR backs the one-line "Field encryption"
@@ -290,3 +290,11 @@ The work this revision documents landed via MMCA.Common PR #247 and is included 
 rather than featured: the `[1.153.0]` changelog entry (`MMCA.Common/CHANGELOG.md:1425`) does not name
 the converter, which is in the release because it merged to `main` before the tag. Adoption is
 unchanged at zero: no entity configuration in any of the four repositories wires the converter.
+
+## Revision (2026-10-01)
+Anchor-only refresh; no decision, rationale or trade-off changed. The three citations of ADR-005 in
+Context, Trade-offs and Related now point at the record's canonical home and current line,
+`Website/docs-src/adr/005-soft-delete-vs-erasure.md:23`, where it still names `EncryptedStringConverter`
+as the mechanism for erasure fields that must remain retrievable. The changelog anchor inside the
+2026-08-15 revision is left as a historical record: the `[1.153.0]` heading now sits at
+`MMCA.Common/CHANGELOG.md:2978`, and that entry still does not name the converter.

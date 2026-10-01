@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -259,7 +261,9 @@
           Revised 2026-09-25 (ADC&#39;s decorator-order fitness test composes through <code>AddMmcaApplicationPipeline</code>
           and runs <code>VerifyDecoratorPipeline</code>, as Store&#39;s already did; see the Revision (2026-09-25) at the end.
           Citations refreshed: the Common <code>DependencyInjection</code> registration helpers now span
-          <code>DependencyInjection.cs</code>, <code>DependencyInjection.ModuleScanning.cs</code> and <code>DependencyInjection.Crud.cs</code>).</p>
+          <code>DependencyInjection.cs</code>, <code>DependencyInjection.ModuleScanning.cs</code> and <code>DependencyInjection.Crud.cs</code>).
+          Revised 2026-10-01 (the record states where each kind of validation lives: UI form models, the
+          Validating decorator with its coverage fitness gate, and domain factories; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -301,11 +305,22 @@
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132</code>). The seven production service hosts
           compose the same sequence through <code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code> instead, which runs it
           in order and seals it (see the Revision (2026-08-26) below): ADC Identity / Conference / Engagement /
-          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:314</code>, <code>...Conference.Service/Program.cs:407</code>,
-          <code>...Engagement.Service/Program.cs:279</code>, <code>...Notification.Service/Program.cs:223</code>) and Store Identity /
-          Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:237</code>,
-          <code>...Catalog.Service/Program.cs:257</code>, <code>...Sales.Service/Program.cs:237</code>). Only that decorators-last
+          Notification (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:311</code>, <code>...Conference.Service/Program.cs:407</code>,
+          <code>...Engagement.Service/Program.cs:279</code>, <code>...Notification.Service/Program.cs:221</code>) and Store Identity /
+          Catalog / Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:234</code>,
+          <code>...Catalog.Service/Program.cs:254</code>, <code>...Sales.Service/Program.cs:234</code>). Only that decorators-last
           ordering is load-bearing; the relative position of <code>AddInfrastructure</code>/<code>AddAPI</code> is not.</li>
+          <li><strong>Each kind of validation has one home.</strong> UI form models declare DataAnnotations rules once and
+          bridge them onto <code>MudForm</code> through <code>ModelValidation.For(model, validator)</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Validation/ModelValidation.cs:26,43</code>) over a pluggable
+          <code>IModelValidator</code> (<code>.../Validation/IModelValidator.cs:13</code>), so a FluentValidation adapter can supply
+          the rules instead; that is UX feedback, not enforcement. Server-side FluentValidation is the
+          Validating decorator step of this pipeline (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:32</code>),
+          and <code>CommandValidatorCoverageTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CommandValidatorCoverageTestsBase.cs:22</code>)
+          fails the architecture test run when a data-carrying command has no validator, either its own or through the
+          <code>CommandRequestValidator</code> bridge (<code>:9-15</code>, facts at <code>:40-48</code>). Domain invariants stay in the entity
+          factories and value objects, returning <code>Result</code> (ADR-013, ADR-068).</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -639,6 +654,37 @@
           The order base asserts one command and one query; the coverage fact is what catches a handler anywhere
           in the module that escaped the decorators. The expected sequences are still the base&#39;s own, and the
           chain is unchanged.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>The Decision gains one bullet stating where each kind of validation lives, so the Validating
+          decorator&#39;s role is read against its neighbours rather than in isolation. The chain is unchanged.</p>
+          <ul>
+          <li><strong>UI form models.</strong> A page declares DataAnnotations rules once on its form model and bridges them
+          onto <code>MudForm</code> through <code>ModelValidation.For</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Validation/ModelValidation.cs:26,43</code>), whose rule
+          engine is the pluggable <code>IModelValidator</code> (<code>.../Validation/IModelValidator.cs:13</code>). Adoption: 19
+          page code-behind call sites in the MMCA.ADC Conference UI module (for example
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionCreate.razor.cs</code>),
+          plus 2 Engagement UI feedback pages that use the single-field <code>ModelValidation.ForProperty</code>
+          instead, which runs DataAnnotations only and does not go through <code>IModelValidator</code>
+          (<code>.../Validation/ModelValidation.cs:56-58,69-72</code>), 4 page code-behind call sites across the MMCA.Store Catalog, Identity and Sales UI modules on <code>origin/main</code> (for example
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductCreate.razor.cs</code>),
+          and none in MMCA.Helpdesk.</li>
+          <li><strong>Server side.</strong> FluentValidation runs as the Validating decorator step recorded above, and
+          <code>CommandValidatorCoverageTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CommandValidatorCoverageTestsBase.cs:22</code>)
+          is the fitness gate that keeps the step from running empty: every data-carrying command handled in a
+          module Application assembly needs its own <code>IValidator&lt;TCommand&gt;</code> or the <code>CommandRequestValidator</code>
+          bridge (<code>:9-15</code>), with an explicit allow-list and a non-vacuity floor (<code>:31</code>, <code>:38</code>, facts at
+          <code>:40-48</code>). ADC, Store and Helpdesk each subclass it
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/CommandValidatorCoverageTests.cs:18</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/CommandValidatorCoverageTests.cs:17</code>,
+          <code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:163</code>).</li>
+          <li><strong>Domain.</strong> Invariants stay in the entity factories and value objects that return <code>Result</code>
+          (ADR-013, ADR-068), so neither the UI rules nor the decorator is the last line of defence.</li>
+          </ul>
+          <p>Citations refreshed in the Decision: the <code>AddMmcaApplicationPipeline</code> call sites are now ADC Identity
+          <code>:311</code> and Notification <code>:221</code>, and Store Identity <code>:234</code>, Catalog <code>:254</code> and Sales <code>:234</code>. Stale
+          anchors inside the earlier Revision sections are left as historical records.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -662,6 +708,7 @@
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
             <li><a href="#revision-2026-09-25">Revision (2026-09-25)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

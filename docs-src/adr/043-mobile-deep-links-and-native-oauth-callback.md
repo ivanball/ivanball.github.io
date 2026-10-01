@@ -89,13 +89,13 @@ single-use code and the UI exchanges it out-of-band via POST.
   `code` read out of `result.Properties` at `:84`), then
   hands the code to the shared `/auth/oauth-complete` page by navigating to it (`:97-98`). That page
   owns the rest, exactly as it does on web heads:
-  `Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:84` calls
+  `Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:86` calls
   `IAuthUIService.ExchangeOAuthCodeAsync`, which returns `Result<AuthenticationResponse>` so the
-  page branches on `result.IsFailure` (`:85`) rather than on an exception. The service's
+  page branches on `result.IsFailure` (`:87`) rather than on an exception. The service's
   `ExchangeOAuthCodeAsync`
   (`Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:76`) POSTs the existing
   anonymous `auth/oauth/exchange` through the shared `AuthenticateAsync` helper (`:84`, the helper
-  itself at `:272`), which stores the pair via `ITokenStorageService` (`:300`), so the
+  itself at `:266`), which stores the pair via `ITokenStorageService` (`:294`), so the
   single-use-code contract lives in exactly one place. This rides behind the `IExternalAuthBroker`
   contract
   (ADR-042); the default broker is unavailable, which keeps the shared Login page on its anchor
@@ -125,7 +125,7 @@ single-use code and the UI exchanges it out-of-band via POST.
   recreated and would force store resubmissions. Three places in the ADC repo put the host string
   inside the app binary: `PublicSite:BaseUrl` in the MAUI head's
   `appsettings.json` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:23`, compiled in as an
-  `EmbeddedResource` per `MMCA.ADC.UI.csproj:130`), a raw literal in the iOS associated-domains
+  `EmbeddedResource` per `MMCA.ADC.UI.csproj:134`), a raw literal in the iOS associated-domains
   array (`Platforms/iOS/Entitlements.plist:11`), and the `PublicWebHost` compile-time constant that
   feeds the Android intent-filter attribute (`Platforms/Android/MainActivity.cs:39`). Only the first
   is read through configuration; the two native manifests take literals, because neither an
@@ -372,3 +372,16 @@ Anchor pass over the MMCA.ADC citations. No decision and no behavior changed.
 
 Every current-state citation of these anchors is updated above; the dated "moved" entries keep the
 values they recorded.
+
+## Revision (2026-10-01)
+Anchor pass from an ADR audit. No decision and no rationale changed. In the Decision's client-flow
+bullet the completion page now calls the service at
+`Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:86` and branches on
+`result.IsFailure` at `:87`, and in
+`Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs` the private
+`AuthenticateAsync` helper is declared at `:266` with the `ITokenStorageService.SetTokensAsync` call
+at `:294`. In the hostname trade-off the MAUI head's `EmbeddedResource` line is
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:134`. The shared shape rule cited only by
+the earlier revisions has moved too: `DeepLinkDispatcher.IsAppRelativeRoute` is at
+`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs:49`,
+`Publish` at `:104`, and the guard applied inside it at `:108`.

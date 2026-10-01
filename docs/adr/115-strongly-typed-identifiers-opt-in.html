@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -274,7 +276,7 @@
           its identifier only to <code>notnull</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:34-37</code>), and
           <code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code> and <code>IBaseDTO&lt;TIdentifierType&gt;</code> do the
-          same (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:45</code>,
+          same (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:43</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IBaseDTO.cs:9-10</code>). A <code>readonly record struct</code>
           satisfies <code>notnull</code>, so nothing in the entity, DTO or controller hierarchy had to change and no
           shipped signature moved. What was missing was everything around the type: JSON, EF Core mapping,
@@ -335,13 +337,13 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdTypeConverter.cs:21</code>)
           converts to and from both text and the primitive, and delegates its text leg to the same
           <code>IParsable</code> implementation, so both routes parse identically.
-          <code>StronglyTypedIdTypeConverters.Register</code> / <code>.RegisterAll</code> (<code>:89</code>, <code>:108</code>) register it through
+          <code>StronglyTypedIdTypeConverters.Register</code> / <code>.RegisterAll</code> (<code>:89</code>, <code>:119</code>) register it through
           <code>TypeDescriptor.AddAttributes</code>, so no <code>[TypeConverter]</code> attribute is needed on a consumer&#39;s
           wrapper.</p>
           </li>
           <li><p><strong>One call is the whole opt-in.</strong>
           <code>services.AddStronglyTypedIds(typeof(OrderId).Assembly)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:770</code>) scans the named
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:366</code>) scans the named
           assemblies for wrappers, registers the <code>TypeConverter</code> for each, and registers a
           <code>StronglyTypedIdRegistry</code> singleton
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdRegistry.cs:22</code>). A host
@@ -350,7 +352,7 @@
           <li><p><strong>EF Core maps a wrapper as a PRE-CONVENTION type mapping, registered once on the base
           context.</strong> <code>ApplicationDbContext.ConfigureConventions</code> resolves the registry with <code>GetService</code> and
           applies it
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:333-335</code>);
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:407-409</code>);
           <code>StronglyTypedIdModelConfiguration.Apply</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/StronglyTypedIdModelConfiguration.cs:29</code>)
           declares <code>configurationBuilder.Properties(identifierType).HaveConversion(converterType, comparerType)</code>
@@ -381,7 +383,7 @@
           there is no <code>&gt;</code> to build a range predicate from, and an ordering operator on a wrapped column is
           refused by <code>ValidateFilters</code> as a 400 rather than silently widening the result set.
           <code>QueryFilterService.ResolveStrategy</code> builds and memoizes the strategy on first use
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:396-407</code>),
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:399-417</code>),
           so a consumer never calls <code>RegisterStrategy</code> per identifier. Sorting is untouched: an <code>ORDER BY</code>
           over a converted column is the primitive&#39;s ordering
           (<a href="034-generic-entity-query-layer.html">ADR-034</a> sort keys).</p>
@@ -394,7 +396,7 @@
           parameters, which a schema transformer never sees: MVC&#39;s API explorer describes a
           <code>TypeConverter</code>-bound parameter as a plain string. Both are registered by <code>AddCommonOpenApi</code>
           across every versioned document
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:504-505</code>).</p>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:104-105</code>).</p>
           </li>
           <li><p><strong>Mapperly needs nothing in the normal case and one attribute in the other.</strong> A DTO implements
           <code>IBaseDTO&lt;TIdentifierType&gt;</code> over the SAME identifier type its entity uses, so a wrapper maps to
@@ -425,17 +427,17 @@
           </li>
           <li><p><strong>Adoption is zero and this record says so.</strong> No production type in MMCA.Common, MMCA.Store,
           MMCA.ADC, MMCA.Helpdesk or the MMCA.ECommerce sample implements <code>IStronglyTypedId&lt;,&gt;</code>. The only
-          implementations anywhere are the fixtures in six of the framework&#39;s own test files. The 48
+          implementations anywhere are the fixtures in seven of the framework&#39;s own test files. The 48
           aliases in force across the four repositories on 2026-09-19 (46 <code>int</code>, two <code>System.Guid</code>) are
           untouched, and no consumer needs a version-bump behaviour change:
           without a call to <code>AddStronglyTypedIds</code>, every framework site that reads the registry treats its
           absence as &quot;no wrappers in use&quot;.</p>
           </li>
-          <li><p><strong>The contract is pinned by 77 executed tests, not by adoption.</strong> Shared: 33 executed cases
+          <li><p><strong>The contract is pinned by 78 executed tests, not by adoption.</strong> Shared: 34 executed cases
           across <code>StronglyTypedIdTests.cs</code>, <code>StronglyTypedIdSerializationTests.cs</code> and
           <code>StronglyTypedIdTypeConverterTests.cs</code> (equality, the compile-time separation of two
           same-primitive identifiers, parsing, JSON round trips including null, nesting, collections and
-          dictionary keys, and the <code>TypeDescriptor</code> registration). Infrastructure: 21 in
+          dictionary keys, and the <code>TypeDescriptor</code> registration, including the nullable-converter refresh). Infrastructure: 21 in
           <code>StronglyTypedIdPersistenceTests.cs</code> (9 facts plus four theories over the three relational
           engines), including per-engine model assertions for SQLite, SQL Server and PostgreSQL, a SQLite
           round trip that inserts through a real database and reads a generated wrapped <code>int</code> key back, a
@@ -509,11 +511,12 @@
           <li><strong>The ADR-085 transposition risk is only closed for adopters.</strong> <code>CheckIn</code>&#39;s five identifier
           parameters
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:57-64</code>) are
-          still five <code>int</code>s. They are not five in a row, as this record previously said: a <code>CheckInScope</code>
-          parameter sits between <code>userId</code> and the run of four that follows it, which narrows the transposable
-          window without closing it, since four adjacent <code>int</code>-aliased parameters remain. Shipping the capability does not retire the risk; it makes retiring it a choice
+          still three <code>int</code>s and two <code>int?</code>s (<code>sessionId</code> and <code>sponsorId</code>, <code>:61-62</code>). They are not five in a
+          row, as this record previously said: a <code>CheckInScope</code> parameter sits between <code>userId</code> and the run of
+          four that follows it, which narrows the transposable window without closing it, since four adjacent
+          <code>int</code>-aliased parameters remain and an <code>int</code> converts implicitly to <code>int?</code>. Shipping the capability does not retire the risk; it makes retiring it a choice
           someone can now make cheaply for one aggregate at a time.</li>
-          <li><strong>A capability nobody uses is a capability nobody has stress-tested.</strong> 77 tests against fixtures
+          <li><strong>A capability nobody uses is a capability nobody has stress-tested.</strong> 78 tests against fixtures
           are not a production module with real migrations, a real wire history and a real query surface.
           The same honesty ADR-104 applies to <code>Enumeration&lt;T&gt;</code> applies here.</li>
           <li><strong>The <code>IParsable</code> implementations are explicit, so <code>OrderId.Parse(...)</code> does not compile.</strong> That is
@@ -524,8 +527,9 @@
           is a deliberate narrowing, and it is a behaviour difference a client would notice if a column
           changed type.</li>
           <li><strong>Public API surface with no consumer.</strong> The 55 declarations these types add across Shared,
-          Infrastructure, API and Testing.Architecture are now in the unshipped baselines and become frozen
-          at the next release under <a href="015-architecture-fitness-functions.html">ADR-015</a>&#39;s RS0016/RS0017 gate.
+          Infrastructure, API and Testing.Architecture are in the shipped baselines (<code>PublicAPI.Shipped.txt</code>
+          in each of the four packages) and are frozen under
+          <a href="015-architecture-fitness-functions.html">ADR-015</a>&#39;s RS0016/RS0017 gate.
           Removing any of it later is a breaking change to the package surface.</li>
           <li><strong>EF discovery needs the type list up front.</strong> The mapping has to be declared pre-convention, and
           at <code>ConfigureConventions</code> time no entity type exists yet, so the framework cannot discover wrappers
@@ -534,8 +538,15 @@
           model build, which is loud but not self-explanatory.</li>
           <li><strong><code>TypeDescriptor</code> registration is process-global.</strong> <code>StronglyTypedIdTypeConverters.Register</code> calls
           <code>TypeDescriptor.AddAttributes</code>, which is not scoped to a host. In a process running two hosts (an
-          in-memory test server pair) the registration is shared. It is idempotent, so the practical effect
-          is nil, but it is not per-container state.</li>
+          in-memory test server pair) the registration is shared, and sharing is not free: <code>TypeDescriptor</code>
+          caches the <code>Nullable&lt;TId&gt;</code> converter with whatever underlying converter it saw first, so if anything
+          resolved it before registration, MVC treated an optional wrapped query parameter as a complex type
+          and the request answered 500. <code>Register</code> therefore refreshes the nullable type after adding the
+          attribute
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdTypeConverter.cs:102-111</code>),
+          pinned by
+          <code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/StronglyTypedIdTypeConverterTests.cs:60</code>.
+          The registration is idempotent, but it is not per-container state.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p><a href="048-primitive-identifier-type-aliases.html">ADR-048</a> (the primitive alias decision this record leaves
@@ -576,6 +587,32 @@
           MMCA.Store each declare a <code>StronglyTypedIdTestsBase</code> subclass over their own architecture map, and
           all three pass vacuously. MMCA.Helpdesk declares none. Decision point 12 named only MMCA.Common,
           which was true when written and had become incomplete.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>The decision is unchanged: the framework still ships the capability, the aliases are still the
+          default, and adoption is still zero. Three statements were corrected against source and several
+          citations re-anchored.</p>
+          <p><strong><code>TypeDescriptor</code> sharing had a real failure mode, now mitigated.</strong> The trade-off said the
+          process-global registration was idempotent and its practical effect nil. It was not: <code>TypeDescriptor</code>
+          caches the <code>Nullable&lt;TId&gt;</code> converter with the underlying converter it first saw, so a lookup made
+          before registration (another host in the same process, a library scanning types) left an optional
+          wrapped query parameter bound as a complex type and the request answered 500. <code>Register</code> now calls
+          <code>TypeDescriptor.Refresh</code> on the nullable type
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Identifiers/StronglyTypedIdTypeConverter.cs:102-111</code>),
+          pinned by a new fact
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Identifiers/StronglyTypedIdTypeConverterTests.cs:60</code>)
+          whose fixture is a seventh test file declaring a wrapper. The executed-test count is therefore 78
+          (Shared 34), not 77 (Shared 33).</p>
+          <p><strong>The public API surface is shipped, not unshipped.</strong> All 55 declarations sit in the four packages&#39;
+          <code>PublicAPI.Shipped.txt</code> files (Shared 34, Infrastructure 10, API 6, Testing.Architecture 5), and no
+          <code>PublicAPI.Unshipped.txt</code> carries any of them, so the surface is already frozen.</p>
+          <p><strong><code>CheckIn</code>&#39;s identifier parameters are not all <code>int</code>.</strong> <code>sessionId</code> and <code>sponsorId</code> are
+          <code>SessionIdentifierType?</code> and <code>SponsorIdentifierType?</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/CheckIns/CheckIn.cs:61-62</code>), so the
+          five are three <code>int</code>s and two <code>int?</code>s. The transposition risk stands, because an <code>int</code> converts
+          implicitly to <code>int?</code>.</p>
+          <p>Re-anchored: <code>EntityControllerBase.cs:43</code>, <code>StronglyTypedIdTypeConverter.cs:119</code> (<code>RegisterAll</code>),
+          <code>DependencyInjection.cs:366</code>, <code>ApplicationDbContext.cs:407-409</code>, <code>QueryFilterService.cs:399-417</code> and
+          <code>WebApplicationBuilderExtensions.cs:104-105</code>.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -593,6 +630,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

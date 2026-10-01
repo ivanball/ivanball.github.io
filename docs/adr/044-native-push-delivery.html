@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -237,7 +239,8 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-11). Amends ADR-024. The framework pipeline is implemented and inert by
           default; each consumer switches it on by provisioning a notification hub with platform
-          credentials and enabling the <code>NativePush</code> configuration section.</p>
+          credentials and enabling the <code>NativePush</code> configuration section. Revised 2026-10-01 (UI.Maui
+          ships credentialed FCM/APNs token providers and token-rotation re-registration; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>ADR-024 established two notification channels: a durable per-user <code>UserNotification</code> inbox (the
           source of truth) and a transient SignalR push behind <code>IPushNotificationSender</code>. Both stop at the
@@ -279,17 +282,30 @@
           <code>IPushRegistrationService</code> (register after sign-in, unregister BEFORE sign-out - the delete
           call is authenticated) and <code>IPushDeviceTokenProvider</code> (the platform token extension point). UI.Maui
           ships <code>MauiPushRegistrationService</code> (stable installation id in <code>IDevicePreferences</code>, sync
-          over the named API client); the token provider defaults to <code>NullPushDeviceTokenProvider</code>
-          everywhere, so a build WITHOUT push credentials is wired but inert end to end.
+          over the named API client, with a <code>SemaphoreSlim</code> serializing registration passes,
+          <code>MauiPushRegistrationService.cs:24,41</code>). The token provider defaults to
+          <code>NullPushDeviceTokenProvider</code> (TryAdd, <code>MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:62</code>);
+          the opt-in <code>AddMauiPushDeviceTokenProvider()</code> (<code>MMCA.Common.UI.Maui/DependencyInjection.cs:118-126</code>)
+          replaces it with <code>FcmPushDeviceTokenProvider</code> on Android (gated on the <code>Push:Fcm</code> section,
+          <code>FcmPushDeviceTokenProvider.cs:33,43-49</code>) and <code>ApnsPushDeviceTokenProvider</code> on iOS/MacCatalyst
+          (gated on <code>Push:Apns:Enabled</code>, <code>ApnsPushDeviceTokenProvider.cs:30,37</code>), while the windows TFM
+          keeps the Null default. A build WITHOUT push credentials is therefore wired but inert end to end.
           <code>PushRegistrationListener</code> (rendered through the host layout extension point) re-registers on
-          auth-state changes; <code>AuthUIService.LogoutAsync</code> owns the unregister leg.</li>
+          auth-state changes, and on Android <code>MauiFirebaseMessagingService.OnNewToken</code> re-registers when
+          FCM rotates the token (<code>MauiFirebaseMessagingService.cs:26-35</code>). <code>AuthUIService</code> owns the
+          unregister leg: <code>LogoutAsync</code> and <code>RevokeAllSessionsAsync</code> both call <code>UnregisterPushAsync</code>
+          before the local sign-out (<code>AuthUIService.cs:90,134,320</code>).</li>
           </ul>
           <h2 id="consequences">Consequences</h2>
           <ul>
           <li>Sends fan out per 20-user chunk and per platform: an audience of N users costs
           <code>ceil(N/20) * 2</code> hub calls. Acceptable at conference scale; a template-based send can
           consolidate later without touching callers.</li>
-          <li>The handler&#39;s third leg is fire-and-forget: no per-device delivery tracking. The hub&#39;s
+          <li>The handler&#39;s third leg is best-effort: it is awaited inside a non-fatal catch
+          (<code>SendPushNotificationHandler.cs:158-171</code>), with no per-device delivery tracking. Because
+          <code>SendPushNotificationCommand</code> is <code>ITransactional</code>, a transient fault on the final status save
+          re-runs the live legs under the execution strategy, so native delivery is at-least-once and a
+          device can receive the same OS push twice (<code>SendPushNotificationHandler.cs:21-29</code>). The hub&#39;s
           telemetry is the observability surface; the inbox remains the recovery path.</li>
           <li>A delete verifies ownership before it acts: the registrar reads the installation and checks
           the <code>user:{id}</code> tag <code>UpsertAsync</code> stamped on it
@@ -304,6 +320,25 @@
           <li><code>SendPushNotificationHandler</code> gained a constructor parameter (DI-resolved; source-compatible
           for every host, breaking only for code constructing it manually - none known).</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>The client half of the pipeline is no longer Null-only. <code>MMCA.Common.UI.Maui</code> ships credentialed
+          token providers behind the opt-in <code>AddMauiPushDeviceTokenProvider()</code>
+          (<code>MMCA.Common.UI.Maui/DependencyInjection.cs:118-126</code>): <code>FcmPushDeviceTokenProvider</code> on Android,
+          which yields nothing unless the four <code>Push:Fcm</code> values are present
+          (<code>FcmPushDeviceTokenProvider.cs:33,43-49</code>), and <code>ApnsPushDeviceTokenProvider</code> on iOS/MacCatalyst,
+          gated on <code>Push:Apns:Enabled</code> (<code>ApnsPushDeviceTokenProvider.cs:30,37</code>) and fed by <code>ApnsTokenBridge</code>.
+          The windows TFM registers nothing and keeps the <code>NullPushDeviceTokenProvider</code> TryAdd default
+          (<code>MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:62</code>), so the inert-without-credentials
+          property holds. Android also gains a second registration trigger: <code>MauiFirebaseMessagingService</code>
+          re-registers on FCM token rotation (<code>MauiFirebaseMessagingService.cs:26-35</code>), and
+          <code>MauiPushRegistrationService</code> serializes concurrent passes with a <code>SemaphoreSlim</code>
+          (<code>MauiPushRegistrationService.cs:24,41</code>). The unregister leg runs from both <code>LogoutAsync</code> and
+          <code>RevokeAllSessionsAsync</code> (<code>AuthUIService.cs:90,134,320</code>). The Consequences entry on the third leg
+          now reads best-effort rather than fire-and-forget: the native send is awaited inside a non-fatal
+          catch, and because <code>SendPushNotificationCommand</code> is <code>ITransactional</code> a retried final save re-runs
+          the live legs, making native delivery at-least-once (<code>SendPushNotificationHandler.cs:21-29,158-171</code>).
+          The server-side decision (Notification Hubs, <code>user:{id}</code> tags, the Null-by-default sender and
+          registrar) is unchanged.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -318,6 +353,7 @@
             <li><a href="#context">Context</a></li>
             <li><a href="#decision">Decision</a></li>
             <li><a href="#consequences">Consequences</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

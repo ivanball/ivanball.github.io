@@ -59,15 +59,15 @@ the package's own workflow bases, and wire it as a required merge check and a de
 - **The package's Identity workflow bases assert it, so a consumer inherits the scan.** Four bases carry
   the assertion, so a subclass gets a login-page, register-page, profile-page, forgot-password-page, and
   reset-password-page a11y test with no test code of its own:
-  `.../Testing.E2E/Workflows/Identity/UserLoginTestsBase.cs:83`,
-  `UserRegistrationTestsBase.cs:91`, `ProfileManagementTestsBase.cs:180`, and
+  `.../Testing.E2E/Workflows/Identity/UserLoginTestsBase.cs:82`,
+  `UserRegistrationTestsBase.cs:95`, `ProfileManagementTestsBase.cs:191`, and
   `PasswordResetTestsBase.cs` (class at `:17`, the two scans asserting at `:88` and `:99`, added with the
   password-recovery flow of [ADR-091](091-cache-backed-password-reset.md)) each call the assert with
   `AxeOptions.Wcag21Aa`.
 - **Consumer page scans go through two helpers that make strictness explicit.** On
-  `.../Testing.E2E/Infrastructure/E2ETestBase.cs`, `ScanAsync()` (`:334`) waits for any loading bar to
-  clear and asserts the strict options (`:337`); `ScanGridAsync()` (`:324`) additionally waits for a
-  seeded data row before scanning and asserts with the one recorded exception (`:329`). Which helper a
+  `.../Testing.E2E/Infrastructure/E2ETestBase.cs`, `ScanAsync()` (`:365`) waits for any loading bar to
+  clear and asserts the strict options (`:368`); `ScanGridAsync()` (`:355`) additionally waits for a
+  seeded data row before scanning and asserts with the one recorded exception (`:360`). Which helper a
   page uses is the declaration of which rule set applies to it.
 - **Exactly one recorded exception exists, and it is a value, not a switch.**
   `AxeOptions.Wcag21AaExceptMudPagerCombobox` (`AxeOptions.cs:35`) carries the same four WCAG tags
@@ -77,21 +77,21 @@ the package's own workflow bases, and wire it as a required merge check and a de
   `MudTablePager` exposes no `Label`/`aria-label` parameter, so it is not fixable from app markup
   (`:26-33`). Every other WCAG 2.1 AA rule still runs on those pages.
 - **Common gates it cross-browser as a required merge check.** The `ui-e2e` job
-  (`MMCA.Common/.github/workflows/ci.yml:228`) builds the out-of-slnx gallery plus E2E project and runs
-  the axe scans across a `chromium, firefox, webkit` matrix (`:237`), one engine per leg via
-  `E2E_BROWSER` (`:298`), with `fail-fast: false` so each engine reports independently (`:235`). All
+  (`MMCA.Common/.github/workflows/ci.yml:248`) builds the out-of-slnx gallery plus E2E project and runs
+  the axe scans across a `chromium, firefox, webkit` matrix (`:257`), one engine per leg via
+  `E2E_BROWSER` (`:321`), with `fail-fast: false` so each engine reports independently (`:255`). All
   three contexts block merges (`MMCA.Common/CONTRIBUTING.md:63-64`, enumerated in the branch-protection
-  payload at `:174-176`).
-- **Both deployed apps gate the deploy on it.** `MMCA.ADC/.github/workflows/deploy.yml:689` and
-  `MMCA.Store/.github/workflows/deploy.yml:646` call the reusable `e2e.yml` workflow chromium-only
-  (ADC `:691`, Store `:648`) against the full Aspire stack, and the `deploy` job waits on that gate
-  (ADC `:1054`, Store `:999`).
+  payload at `:198-200`).
+- **Both deployed apps gate the deploy on it.** `MMCA.ADC/.github/workflows/deploy.yml:827` and
+  `MMCA.Store/.github/workflows/deploy.yml:799` call the reusable `e2e.yml` workflow chromium-only
+  (ADC `:841`, Store `:813`) against the full Aspire stack, and the `deploy` job waits on that gate
+  (ADC `:1185`, Store `:1136`).
 - **The gate already owns design-token decisions.** Contrast values in the shared theme are set to
   what the scan will accept, with the ratio recorded in place: light-palette `WarningContrastText`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:33`, rationale at `:29-32`,
-  caught by a gated admin-order-list scan on a chip), dark-palette `PrimaryContrastText` (`:58`,
-  rationale at `:55-57`, caught by the gated dark-mode scan), dark `WarningContrastText` (`:67`) and
-  `ErrorContrastText` (`:71`), and the brand secondary itself, moved to Teal 700 for a 5.3:1 light
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:36`, rationale at `:28-34`,
+  caught by a gated admin-order-list scan on a chip), dark-palette `PrimaryContrastText` (`:66`,
+  rationale at `:63-65`, caught by the gated dark-mode scan), dark `WarningContrastText` (`:85`) and
+  `ErrorContrastText` (`:93`), and the brand secondary itself, moved to Teal 700 for a 5.3:1 light
   surface ratio (`.../MMCA.Common.UI/Theme/BrandColors.cs:26`, rationale at `:22-24`).
 
 Adoption differs per repo and is uneven on purpose. **MMCA.Common** scans its own backend-less gallery:
@@ -128,11 +128,11 @@ subclasses three of the four
 `E2ETestBase` directly
 (`ProfileManagementTests.cs:8`) because the ADC profile page supports only password change and account
 deletion, so it does not inherit the base's profile scan. Beyond the Identity bases each app carries a
-dedicated suite: ADC's `Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:27` holds 45 page
+dedicated suite: ADC's `Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:29` holds 45 page
 scans (13 through `ScanGridAsync`, 32 strict) and Store's
-`Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:17` holds 32 (9 grid, 23 strict).
+`Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs:18` holds 32 (9 grid, 23 strict).
 **MMCA.Helpdesk adopts none of it**: it pins the package version
-(`MMCA.Helpdesk/Directory.Packages.props:84`) but no project references it, and the repo has no E2E
+(`MMCA.Helpdesk/Directory.Packages.props:94`) but no project references it, and the repo has no E2E
 test project at all (`Tests/` holds only `Architecture` and `Modules`), so the seed has no browser
 accessibility gate today.
 
@@ -166,7 +166,7 @@ accessibility gate today.
   (`AxeOptions.cs:12-15`).
 - **One accepted exception, with real blast radius.** `Wcag21AaExceptMudPagerCombobox` disables
   `aria-input-field-name` for the whole page scan, not just for the pager node. A grid page that later
-  gains a genuinely unnamed combobox of its own would pass `ScanGridAsync` (`E2ETestBase.cs:329`). The
+  gains a genuinely unnamed combobox of its own would pass `ScanGridAsync` (`E2ETestBase.cs:360`). The
   exception is documented as "use only where the sole combobox is a pager" (`AxeOptions.cs:33`), which is
   a convention the compiler cannot enforce. It is upstream-owned: it stands until MudBlazor labels the
   pager select.
@@ -174,8 +174,8 @@ accessibility gate today.
   not machine-checkable and are covered by the manual screen-reader checklist in
   [common-ACCESSIBILITY.md](../guides/common-ACCESSIBILITY.md), which is a periodic human pass, not a gate.
 - **The deploy gate is ui-scoped and may legitimately skip.** Both apps gate `e2e-gate` on a `ui` change
-  filter (ADC `deploy.yml:688`, Store `deploy.yml:645`), and `deploy` accepts `success` or `skipped` for it
-  (ADC `:1092`, Store `:1038`), so a backend-only or infra-only deploy ships without a browser scan. That
+  filter (ADC `deploy.yml:838`, Store `deploy.yml:810`), and `deploy` accepts `success` or `skipped` for it
+  (ADC `:1230`, Store `:1177`), so a backend-only or infra-only deploy ships without a browser scan. That
   is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
   gate as backstop, but it does mean "deployed" does not always mean "axe ran on this commit".
 - **Consumer breadth is hand-maintained.** Nothing forces a new page into `AccessibilityTests`, so
@@ -183,11 +183,22 @@ accessibility gate today.
 - **MMCA.Helpdesk has no accessibility gate.** The reference app demonstrates the framework's layers but
   not this contract, so a reader following the seed sees no worked example of adopting the scan.
 
+## Revision (2026-10-01)
+No decision or rationale changed. Citations are re-anchored to current source: the Identity base
+assertions (`UserLoginTestsBase.cs:82`, `UserRegistrationTestsBase.cs:95`,
+`ProfileManagementTestsBase.cs:191`), the `E2ETestBase` helpers (`ScanGridAsync` `:355`/`:360`, `ScanAsync`
+`:365`/`:368`), the Common `ui-e2e` job (`ci.yml:248`, `:255`, `:257`, `:321`) and its branch-protection
+payload (`CONTRIBUTING.md:198-200`), the ADC and Store `deploy.yml` gate, filter, needs and acceptance
+lines (ADC `:827`, `:838`, `:841`, `:1185`, `:1230`; Store `:799`, `:810`, `:813`, `:1136`, `:1177`), the
+`MMCATheme.cs` contrast tokens (`:36`, `:66`, `:85`, `:93`), both `AccessibilityTests` class declarations
+(ADC `:29`, Store `:18`), and the MMCA.Helpdesk pin (`Directory.Packages.props:94`). The suite counts
+(ADC 45 scans, 13 grid and 32 strict; Store 32, 9 grid and 23 strict) are re-measured and unchanged.
+
 ## Related
 ADR-015 (architecture fitness functions: the structural tier this parallels at the browser tier, and the
 same invariant-over-discipline posture), ADR-058 (runtime conformance suites shipped as subclassable
 bases in a package: the pattern this record applies to accessibility, one tier further out),
-ADR-028 (dark theme: the dark palette's contrast tokens, `MMCATheme.cs:58,:67,:71`, exist in the form they
+ADR-028 (dark theme: the dark palette's contrast tokens, `MMCATheme.cs:66,:85,:93`, exist in the form they
 do because the gated dark-mode scan rejected the defaults), and the how-to companion
 [common-ACCESSIBILITY.md](../guides/common-ACCESSIBILITY.md) (scanned-state inventory, manual
 screen-reader checklist, and the tracked limitations).

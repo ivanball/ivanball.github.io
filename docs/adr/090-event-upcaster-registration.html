@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -292,7 +294,7 @@
           <code>IntegrationEventConsumer&lt;TEvent&gt;</code> hot path is untouched.</li>
           <li><strong>Registration follows the accumulate-across-modules idiom.</strong>
           <code>services.AddEventUpcaster&lt;TSource, TTarget, TUpcaster&gt;()</code>
-          (<code>Source/Core/MMCA.Common.Application/DependencyInjection.cs</code>) registers the upcaster as a
+          (<code>Source/Core/MMCA.Common.Application/DependencyInjection.Extensibility.cs:81</code>) registers the upcaster as a
           singleton via <code>TryAddEnumerable</code>, the same shape as <code>AddScheduledJob</code> and
           <code>AddUserDataExportSection</code>: each module contributes its own upcasters independently, duplicates
           are idempotent, and the registry is assembled once from the union. The generic source and target
@@ -388,6 +390,16 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
           <code>MMCA.Common.Testing.Architecture/Rules/Contracts/</code>. The Decision section carries the current
           paths; the types and their members are unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision, mechanism, or rationale changed; this revision refreshes citations only.
+          <code>AddEventUpcaster</code> is defined in
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.Extensibility.cs:81</code> (singleton
+          via <code>TryAddEnumerable</code> at <code>:86</code>), while <code>DependencyInjection.cs:40</code> registers only
+          <code>IEventUpcasterRegistry</code>; Decision item 4 now carries that path. The 2026-09-03 revision&#39;s anchors
+          are left as recorded; the current locations are <code>OutboxMessage.cs:139</code> (<code>GetStorageName</code>), <code>:183</code>
+          (<code>ResolveEventType</code>) with the fallback at <code>:189</code>, and in <code>OutboxProcessor.cs</code> the <code>DeserializeEvent</code>
+          call at <code>:533</code>, the <code>HandleUnresolvableType</code> call at <code>:536</code>, the method at <code>:661</code>, and the
+          <code>type_unresolvable</code> reason tag at <code>:681</code>.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -404,6 +416,7 @@ x.RegisterUpcastedIntegrationEventConsumer&lt;ProductVariantChanged&gt;(); <span
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

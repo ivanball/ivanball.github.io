@@ -27,18 +27,18 @@ the generated-app test figure is stated only as unpinned on both sides.
 ## Context
 
 [Build by hand](../guides/common-BUILD-BY-HAND.md) is accurate and complete, and phases 1 through 6
-of it are transcription work (`common-BUILD-BY-HAND.md:96` through `:1238`). Its own instruction for
+of it are transcription work (`common-BUILD-BY-HAND.md:98` through `:1255`). Its own instruction for
 the load-bearing parts is "copy `MMCA.Helpdesk/Directory.Build.props`" (`:170`), "copy MMCA.ADC's
-`.editorconfig` verbatim" (`:114`), "copy the relevant rows from MMCA.ADC/Directory.Packages.props"
-(`:157`). That walkthrough was the whole of
+`.editorconfig` verbatim" (`:116`), "copy the relevant rows from MMCA.ADC/Directory.Packages.props"
+(`:159`). That walkthrough was the whole of
 [Getting Started](../guides/common-GETTING-STARTED.md) when this decision was taken; Getting Started
 is now the six-step `dotnet new install MMCA.Templates` path
 (`common-GETTING-STARTED.md:10-22`) and the by-hand transcription moved to its own guide.
 
 Measured against MMCA.Helpdesk, the deliberately minimal seed, a brand-new app on the framework
-starts by hand-creating **12 projects, 133 files, and 10,662 lines** before a line of its own
-business logic. The method, re-run on 2026-09-11 and stated here so the figures can be reproduced
-rather than trusted: every tracked file under `Source/` and `Tests/` (126 files, 9,524 lines), plus
+starts by hand-creating **12 projects, 136 files, and 11,532 lines** before a line of its own
+business logic. The method, re-run on 2026-10-01 and stated here so the figures can be reproduced
+rather than trusted: every tracked file under `Source/` and `Tests/` (129 files, 10,394 lines), plus
 the seven root build files below (1,138 lines). Those
 seven are an 827-line `.editorconfig`, a 100-line `Directory.Packages.props` carrying 58 pins,
 a 77-line `Directory.Build.props`, the 74-line local-source swap in `Directory.Build.targets`,
@@ -85,11 +85,11 @@ invalidates it and no fixed value is correct for every generated name:
   shape flags rather than the renames: the aggregate's private constructor assigns one property per
   optional axis, so `--no-status --no-description --no-owner` together leave it with a single
   statement, which the baseline then requires as an expression body. Staging appends a scoped delta
-  dropping those three to `suggestion` in the **staged** `.editorconfig` (`stage.ps1:1249-1251`); the
+  dropping those three to `suggestion` in the **staged** `.editorconfig` (`stage.ps1:1250-1252`); the
   seed's own copy, which is the shared analyzer baseline that
   `Tools/Scripts/compare-analyzer-config.ps1` holds identical across the four repos, is untouched,
   and it declares none of the three among its 215 explicit `dotnet_diagnostic.*.severity` lines.
-  Every other analyzer stays at error, as the delta's own header says (`stage.ps1:1246`). The
+  Every other analyzer stays at error, as the delta's own header says (`stage.ps1:1247`). The
   generated README carries
   `dotnet format analyzers MMCA.Helpdesk.slnx --diagnostics SA1210 SA1211 --severity info`
   (`build/templates/overlay/mmca-app/README.md:111`), which restores the two ordering rules.
@@ -98,23 +98,32 @@ invalidates it and no fixed value is correct for every generated name:
 
 **The wire-contract freeze ships, guarded rather than removed.**
 `IntegrationEventContractTestsBase` compares each event's members as a **set** rather than a
-sequence, so the aggregate's own id moving position is not a difference; the namespace and the event
-type name are ordinary symbol substitutions the template already performs everywhere else; and the
+sequence, so the aggregate's own id moving position is not a difference; each line is keyed by the
+event's `[EventName]` value rather than its CLR type name (`IntegrationEventContractTestsBase.cs:29-31`),
+so the seed's literal is `Tickets.TicketOpened.v1 { RequesterUserId:Int32, TicketId:Int32 }`
+(`ArchitectureTests.cs:107`, from `TicketOpenedIntegrationEvent.cs:16`), carries no namespace, and its
+module and aggregate names are ordinary symbol substitutions the template already performs everywhere
+else; and the
 one member a shape flag can remove, `RequesterUserId`, is a comma-separated list element that
 `stage.ps1`'s `$optionalAxisLines` rewrites like any other. The generated app therefore arrives with
 its own contract already frozen, under its own names, green on the first test run. Staging asserts
 exactly one `IntegrationEventContractTests` class in the staged fitness map and throws otherwise
-(`stage.ps1:1309-1320`), because a class the staging pass cannot find is a template about to ship an
+(`stage.ps1:1310-1321`), because a class the staging pass cannot find is a template about to ship an
 unfrozen wire contract behind a README that says it is frozen. That README section tells the adopter
 what the test guards and how to evolve it: an event added or reshaped on purpose is versioned
-(ADR-010) and `ExpectedContract` updated in the same commit, with the failure printing the live value
-to paste (`build/templates/overlay/mmca-app/README.md:122-134`).
+(ADR-010) and `ExpectedContract` updated in the same commit
+(`build/templates/overlay/mmca-app/README.md:122-134`). The failure lists each difference (missing or
+new event, missing, extra or retyped member) and names `MMCA_CONTRACT_SNAPSHOT_OUT`, which, set to a
+file path, writes the live contract as paste-ready literals on the next run
+(`IntegrationEventContractTestsBase.cs:27`, `:40-52`); the README's own line still says the failure
+prints the live value (`README.md:134`).
 
 `mmca-module` additionally prints seven numbered wire-ups `dotnet new` cannot perform
 (`templates/mmca-module/.template.config/template.json:261-277`): the solution entries for the eight
 new projects, the host and architecture-test project references, the identifier-alias
-`<Compile Include ... Link>` block, the five `IArchitectureMap` lines, the host's
-`AddErrorResources<>` call, the module's own database (the AppHost `AddDatabase` /
+`<Compile Include ... Link>` block, the five `IArchitectureMap` lines, two host edits (the module
+assembly joins the list handed to `ModuleLoader.DiscoverAndRegister`, then the
+`AddErrorResources<>` call; step 5 in both entries, `template.json:268`, `:271`), the module's own database (the AppHost `AddDatabase` /
 `WithSQLServerDataSource` pair, the `appsettings.json` `Modules` / `DataSources` / `Outbox` entries,
 and the removal of the now-conflicting top-level `SQLServerMigrationsAssembly`), and the first EF
 migration. That text now opens by telling anyone whose solution came from `mmca-app` to run
@@ -128,9 +137,10 @@ for a hand-built solution.
 choice plus a connection string, so the three shapes are the same application code: a derived
 `engineName` symbol supplies the Pascal spelling that renames the migrations project, the Aspire
 hosting integration package id, and the design-time helper call (`template.json:278-285`). The two
-PostgreSQL EF provider ids share no spelling with their SQL Server peers, so staging swaps them
+PostgreSQL package ids (the EF provider `Npgsql.EntityFrameworkCore.PostgreSQL` and the readiness
+check `AspNetCore.HealthChecks.NpgSql`) share no spelling with their SQL Server peers, so staging swaps them
 through a `sqlserverOrSqlite` marker region conditioned on `!usePostgreSQL` rather than by substring
-(`build/templates/stage.ps1:142`, `:162`).
+(`build/templates/stage.ps1:143`, `:163`).
 
 The printed instructions come in **two** `manualInstructions` entries, split on the solution's
 database engine. The `sqlite` entry is conditioned on `useSqlite` and sits first, since `dotnet new`
@@ -167,7 +177,7 @@ generating with `--database postgresql`, building and testing package-mode, then
 applying the first migration on a real server and asserting the schema it left behind. The smoke
 proves the template's SQL Server and SQLite shapes; the canary is the only path that proves a
 generated PostgreSQL app against the engine rather than against a compiler. Both jobs sit outside the
-required check, which is `build-and-test` (`MMCA.Helpdesk/CLAUDE.md:393-394`); the canary also carries
+required check, which is `build-and-test` (`MMCA.Helpdesk/AGENTS.md:104`); the canary also carries
 `continue-on-error: true` (`ci.yml:155`), so a red canary reports without failing the run.
 
 ## Rationale
@@ -187,7 +197,7 @@ policy. This package ships from a different repo on a different cadence and pins
 version as a `--framework-version` parameter instead. Keeping it outside that family also leaves the
 package count in
 [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) unchanged, since its generator
-counts only packable projects under `MMCA.Common/Source/` (`MMCA.Common/FACTS.md:75`), so the CI
+counts only packable projects under `MMCA.Common/Source/` (`MMCA.Common/FACTS.md:78`), so the CI
 drift gate is unaffected.
 
 **The token sweep is in the gate on purpose.** `sourceName` and the symbol replacements run as
@@ -227,6 +237,23 @@ silently: the output still compiles, it just carries someone else's domain vocab
   app that turns off shape axes runs fewer than the seed, and no gate
   pins the figure on either side: `smoke.ps1:361`, `:487` and `:909` all pass
   `--minimum-expected-tests 1`, as does the seed's own CI (`.github/workflows/ci.yml:104`). The cost
-  of shipping the freeze is that staging has to keep finding the class: `stage.ps1:1318-1319` throws when
+  of shipping the freeze is that staging has to keep finding the class: `stage.ps1:1319-1320` throws when
   the match count is not exactly one, so renaming or reshaping that subclass fails the pack rather
   than shipping an unfrozen contract behind a README that promises a frozen one.
+
+## Revision (2026-10-01)
+
+No decision or rationale changed. The frozen wire contract is now keyed by each event's `[EventName]`
+value rather than its CLR type name (`IntegrationEventContractTestsBase.cs:29-31`), so the seed's
+literal reads `Tickets.TicketOpened.v1 { ... }` (`ArchitectureTests.cs:107`) and holds no namespace;
+it still renames through the module and aggregate symbols, and the Decision text now says so. The
+contract failure lists per-event differences and points at `MMCA_CONTRACT_SNAPSHOT_OUT` for
+paste-ready literals (`IntegrationEventContractTestsBase.cs:40-52`) rather than printing the live
+value itself; the overlay README (`README.md:134`) and the staging comment in `stage.ps1` still carry
+the older wording. The `mmca-module` host wire-up names both of its edits, the `ModuleLoader.DiscoverAndRegister`
+entry and `AddErrorResources<>` (`template.json:268`, `:271`; `build/add-module.ps1:41`), and the
+PostgreSQL pair swapped through the `sqlserverOrSqlite` region is one EF provider and one health-check
+package (`stage.ps1:143-147`). The seed measurements were re-taken at MMCA.Helpdesk `b9c97e9`
+(136 files, 11,532 lines; 129 files, 10,394 lines under `Source/` and `Tests/`), and the
+build-by-hand, staging, FACTS and required-check citations were re-anchored (the required check now
+reads from `MMCA.Helpdesk/AGENTS.md:104`, since that repo's `CLAUDE.md` imports `AGENTS.md`).

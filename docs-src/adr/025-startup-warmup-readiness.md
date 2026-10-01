@@ -45,12 +45,12 @@ gets it.
   `WarmupReadinessHealthCheck` is registered tagged `ready` and reports `Unhealthy` until the gate opens.
   `MapDefaultEndpoints()` maps `/health/ready` through `MapCachedHealthChecks`, under a predicate that
   admits every check tagged neither `live` nor `optional`
-  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:429-431`), so while warm-up is running the replica's
+  (`Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:154-156`), so while warm-up is running the replica's
   readiness endpoint reports not-ready and the platform keeps traffic off it. The endpoint is served from
   a cached health report rather than a probe per request: the helper renders exactly what
   `MapHealthChecks` renders (the status name as `text/plain`, `503` only when unhealthy) but answers from
   `CachedHealthReportProvider`, keyed by path so two endpoints never share a report, and runs the
-  dependency probes at most once per cache window (`Extensions.cs:445`,
+  dependency probes at most once per cache window (`Extensions.Health.cs:170`,
   `Source/Hosting/MMCA.Common.Aspire/Health/CachedHealthReportProvider.cs:52`). The window is
   `HealthChecks:CacheSeconds`, 5 seconds by default and `0` to restore probe-per-request behaviour
   (`Source/Hosting/MMCA.Common.Aspire/Health/HealthReportCacheOptions.cs:38`), and refreshes are
@@ -59,7 +59,7 @@ gets it.
   one window of lag in both directions: readiness can still report not-ready just after the gate opens,
   and a dependency that has just failed stays invisible to the probe for the same window. (`/alive` maps
   only the `live`-tagged self check and is
-  deliberately left uncached, `Extensions.cs:417-420`, so liveness is unaffected and the container is not
+  deliberately left uncached, `Extensions.Health.cs:138-141`, so liveness is unaffected and the container is not
   restarted.) The second exclusion, `optional` (`HealthCheckTags.cs:32`), covers a dependency the app
   degrades gracefully without: a distributed cache sitting behind an in-memory fallback, a broker behind
   a retrying outbox. Those checks are still reported on `/health`, so the degradation stays visible, but
@@ -102,7 +102,7 @@ gets it.
   now-warm connection that fetch completes in single-digit milliseconds.
 - **A shipped base class for warming the host's own request path.** `SelfHttpWarmupTaskBase`
   (`Source/Hosting/MMCA.Common.Aspire/Warmup/SelfHttpWarmupTaskBase.cs:28`, public API at
-  `Source/Hosting/MMCA.Common.Aspire/PublicAPI.Shipped.txt:91-93`) is the second warm-up family: where the
+  `Source/Hosting/MMCA.Common.Aspire/PublicAPI.Shipped.txt:129-131`) is the second warm-up family: where the
   OIDC task warms one outbound connection, this replays a short list of hot read paths against the host's
   own Kestrel endpoint, so the cost paid down is the full inbound path (ingress connection, Kestrel,
   output cache, routing, authentication, handler, EF Core, SQL) rather than a single dependency
@@ -120,13 +120,13 @@ gets it.
   the rest of the subsystem: caught, logged at warning level, never fatal (`:141-146`, `:205-207`). Both
   production apps subclass and register it: ADC in Conference
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22`, registered
-  at `Program.cs:257`), Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23`,
-  `Program.cs:158`) and Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23`,
-  `Program.cs:169`); Store in Catalog
+  at `Program.cs:308`), Engagement (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23`,
+  `Program.cs:156`) and Identity (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23`,
+  `Program.cs:168`); Store in Catalog
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:23`,
-  `Program.cs:163`), Identity (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25`,
+  `Program.cs:183`), Identity (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25`,
   `Program.cs:144`) and Sales (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26`,
-  `Program.cs:158`).
+  `Program.cs:157`).
 - **Extensible per host.** `AddWarmupReadiness()` registers the gate, the runner, the readiness health
   check, and the built-in OIDC task; a host adds its own pre-fetches (output cache, reference data) with
   `AddWarmupTask<T>()`, which is also how a `SelfHttpWarmupTaskBase` subclass enters the run.
@@ -165,7 +165,7 @@ gets it.
   ceiling (`WarmupHostedService.cs:42`, applied at `:69`), and a task that trips it surfaces as a
   `TimeoutException`, is logged, and lets the gate open (`:77-82`). The number deliberately sits above the
   90-second shared Polly total-request timeout that already bounds the built-in OIDC task's HTTP call
-  (`Extensions.cs:61`, `HttpResilienceDefaults.cs:19`), so a host-registered task doing non-HTTP work,
+  (`Extensions.cs:53`, `HttpResilienceDefaults.cs:19`), so a host-registered task doing non-HTTP work,
   which previously had no bound at all, now inherits the same backstop. Two costs follow. A replica whose
   warm-up hangs stays out of rotation for the full two minutes before it is admitted, so the ceiling
   bounds the damage rather than making it cheap. And `WaitAsync` abandons rather than cancels, so the
@@ -191,6 +191,14 @@ gets it.
   remaining fetch is fast is the task's documented intent
   (`Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:14-20`), not a figure
   measured or gated anywhere in the repo.
+
+## Revision (2026-10-01)
+No decision or rationale changed. Citations were refreshed: the `/health/ready` predicate, the
+`MapCachedHealthChecks` helper and the uncached `/alive` mapping now live in
+`Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs` (`:154-156`, `:170`, `:138-141`); the shared
+Polly total-request timeout is assigned at `Extensions.cs:53`; the `SelfHttpWarmupTaskBase` public API
+starts at `PublicAPI.Shipped.txt:129-131`; and the per-host `AddWarmupTask` registrations moved to
+ADC Conference `Program.cs:308`, Engagement `:156`, Identity `:168` and Store Catalog `:183`, Sales `:157`.
 
 ## Related
 ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same

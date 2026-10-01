@@ -22,12 +22,14 @@ proof-of-recency gates rather than three, matching its own 2026-09-11 revision, 
 two `cost-guard.yml` files differ *only* in prefix, tier set, heading and drift wording is dropped,
 because Store's header carries three passages ADC's does not. The gate mechanism, the `2` ceiling and
 the per-repo SQL tier sets are unchanged.
+Revised 2026-10-01 (Store's SQL check now reads the service objective and accepts only Basic or
+Standard S0, closing the S0-to-S3 gap; see Revision below).
 
 ## Context
 Both deployed apps run a deliberately small production footprint: every Container App is declared with
 `maxReplicas: 2` and every SQL database with the `Basic` tier
-(`MMCA.Store/infra/main.bicep:1542,1658,1793,1903,2019` and `:910-913`;
-`MMCA.ADC/infra/main.bicep:1682,1824,1955,2128,2261,2401` and `:878-881`). That
+(`MMCA.Store/infra/main.bicep:1591,1712,1850,1969,2087` and `:957-961`;
+`MMCA.ADC/infra/main.bicep:1843,1994,2127,2302,2444,2586` and `:926-929`). That
 footprint is the cost baseline, and it is what the monthly bill is planned against.
 
 The footprint is also expected to move temporarily. A conference day, a load test, a slow query under
@@ -37,10 +39,10 @@ it is silent: nothing breaks, no alert fires on a healthy oversized system, and 
 traffic perfectly while costing several times its baseline.
 
 The existing control against that was the monthly Azure budget declared in both Bicep templates
-(`MMCA.Store/infra/main.bicep:721-749`, `MMCA.ADC/infra/main.bicep:707-735`), which notifies at 80% of
+(`MMCA.Store/infra/main.bicep:766-794`, `MMCA.ADC/infra/main.bicep:751-778`), which notifies at 80% of
 actual spend and 100% of forecast spend. The Store template names the exact case it is meant to catch
 in its own comment, "a scale-up (manual SQL-tier / replica) silently running for weeks"
-(`MMCA.Store/infra/main.bicep:719`). A spend threshold is a lagging indicator: by the time it
+(`MMCA.Store/infra/main.bicep:764`). A spend threshold is a lagging indicator: by the time it
 trips, weeks of the overspend have already happened, and the notification says a number, not which
 resource is wrong. What was missing was a check on the **configuration** itself, and a moment at which
 someone would have to look at it.
@@ -49,7 +51,7 @@ This is the FinOps sibling of the deploy gates the framework already records: AD
 provenance), ADR-060 (the performance-regression gate against a committed baseline) and ADR-062 (SLO
 alerting as code). ADR-064 decides the four proof-of-recency gates and enumerates `cost-guard`
 in passing among the jobs that "have the change itself as their subject"
-(`Website/docs-src/adr/064-deploy-recency-gates.md:21-22,44`), but it does not decide it. This record
+(`Website/docs-src/adr/064-deploy-recency-gates.md:39-40,76`), but it does not decide it. This record
 does.
 
 ## Decision
@@ -69,26 +71,29 @@ The cost baseline is asserted by a **read-only reusable workflow** that both run
 - **Two dimensions are checked, both by name prefix inside one resource group.** For every Container
   App whose name starts with `mmca-` (Store) or `adc-` (ADC), the job reads
   `properties.template.scale.maxReplicas` and flags a value greater than `BASELINE_MAX_REPLICAS`,
-  which is `"2"` in both repos (`MMCA.Store/.github/workflows/cost-guard.yml:34,67-72`,
+  which is `"2"` in both repos (`MMCA.Store/.github/workflows/cost-guard.yml:34,80-85`,
   `MMCA.ADC/.github/workflows/cost-guard.yml:25,58-63`). For every SQL server under the same prefix it
-  enumerates the databases except `master` and reads `sku.tier`
-  (`MMCA.Store/.github/workflows/cost-guard.yml:81-90`,
+  enumerates the databases except `master` and reads `sku.tier` (ADC) or both `sku.tier` and the
+  service objective `sku.name` (Store)
+  (`MMCA.Store/.github/workflows/cost-guard.yml:94-105`,
   `MMCA.ADC/.github/workflows/cost-guard.yml:72-79`). The resource group comes from the
   `AZURE_RESOURCE_GROUP` repo variable (`MMCA.Store/.github/workflows/cost-guard.yml:33`,
   `MMCA.ADC/.github/workflows/cost-guard.yml:24`).
 
 - **The accepted SQL tier differs per repo, deliberately.** ADC accepts `Basic` and nothing else
-  (`MMCA.ADC/.github/workflows/cost-guard.yml:76`). Store accepts `Basic` **or** `Standard`
-  (`MMCA.Store/.github/workflows/cost-guard.yml:87`). Every Store database is Basic today: the live
-  per-service databases are declared Basic (`MMCA.Store/infra/main.bicep:910-913`) and the legacy
+  (`MMCA.ADC/.github/workflows/cost-guard.yml:76`). Store accepts `Basic` (any objective)
+  **or** `Standard` at objective `S0` only, through the `sql_sku_ok` function
+  (`MMCA.Store/.github/workflows/cost-guard.yml:62-68`, applied at `:102`), so a scaled-up Standard
+  (S1 to S12) reports drift even though its tier reads `Standard`. Every Store database is Basic today: the live
+  per-service databases are declared Basic (`MMCA.Store/infra/main.bicep:957-961`) and the legacy
   `MMCAStore` archive that used to sit beside them at S0 is gone, exported on 2026-09-02 to the
   bacpac blob `sql-archive/MMCAStore-20260902.bacpac` and then dropped
-  (`MMCA.Store/infra/main.bicep:882-889`). The wider window is kept anyway, and the workflow header
+  (`MMCA.Store/infra/main.bicep:927-934`). The wider window is kept anyway, and the workflow header
   states why: so that a **deliberate** bump to S0 (the tier a Store database would be raised to under
   real load, or the tier a bacpac restore would land on) does not fail the gate as if it were an
-  un-reverted surge, while anything above Standard still does
+  un-reverted surge, while anything above Standard S0 still does
   (`MMCA.Store/.github/workflows/cost-guard.yml:9-13`). ADC has no comparable headroom case: its
-  archive was dropped the same day (`MMCA.ADC/infra/main.bicep:844-853`) and its baseline stayed at
+  archive was dropped the same day (`MMCA.ADC/infra/main.bicep:890-899`) and its baseline stayed at
   `Basic` alone. The asymmetry is deliberate in both directions.
 
 - **It never mutates production.** Every Azure call is an `az ... list` or `az ... show`; the one
@@ -102,47 +107,53 @@ The cost baseline is asserted by a **read-only reusable workflow** that both run
 - **The output is a step-summary table, and drift is a non-zero exit.** The job writes a Container Apps
   table and a SQL table with a per-row `ok` or `DRIFT` status into `$GITHUB_STEP_SUMMARY`, then either
   prints the reset instruction and exits 1, or prints the all-clear
-  (`MMCA.Store/.github/workflows/cost-guard.yml:57-97`,
+  (`MMCA.Store/.github/workflows/cost-guard.yml:70-112`,
   `MMCA.ADC/.github/workflows/cost-guard.yml:48-86`). The whole step runs under `set -euo pipefail`
   (`MMCA.Store/.github/workflows/cost-guard.yml:52`, `MMCA.ADC/.github/workflows/cost-guard.yml:43`).
 
 - **`deploy` waits on it by name.** `cost-guard` is listed in `deploy.needs`
-  (`MMCA.Store/.github/workflows/deploy.yml:1200`, `MMCA.ADC/.github/workflows/deploy.yml:1305`), and
+  (`MMCA.Store/.github/workflows/deploy.yml:1136`, `MMCA.ADC/.github/workflows/deploy.yml:1185`), and
   because the deploy condition runs under `always()` with explicit per-need results, the condition
   requires `needs.cost-guard.result == 'success'` literally
-  (`MMCA.Store/.github/workflows/deploy.yml:1228-1242`,
-  `MMCA.ADC/.github/workflows/deploy.yml:1337-1352`). The only needs allowed to be `skipped` there are
+  (`MMCA.Store/.github/workflows/deploy.yml:1164-1178`,
+  `MMCA.ADC/.github/workflows/deploy.yml:1217-1232`). The only needs allowed to be `skipped` there are
   the diff-scoped gates, and the two lists are not symmetric. Store tolerates one pair, `e2e-gate` or
   `backend-test-gate`, whose UI and backend conditions are exact complements, so exactly one of the
-  two runs on every code deploy (`MMCA.Store/.github/workflows/deploy.yml:1241-1242`). ADC tolerates
+  two runs on every code deploy (`MMCA.Store/.github/workflows/deploy.yml:1177-1178`). ADC tolerates
   that same pair plus `ai-eval-gate`
-  (`MMCA.ADC/.github/workflows/deploy.yml:1350-1352`), which runs on any code diff, so its `skipped`
+  (`MMCA.ADC/.github/workflows/deploy.yml:1230-1232`), which runs on any code diff, so its `skipped`
   arm covers only the docs-only path on which `deploy` does not run at all
-  (`MMCA.ADC/.github/workflows/deploy.yml:1329-1336`). Either way a cost-guard that fails, errors or
+  (`MMCA.ADC/.github/workflows/deploy.yml:1209-1216`). Either way a cost-guard that fails, errors or
   is skipped leaves `deploy` unrun.
 
 - **Gate on deploys only, never on pull requests.** The calling job carries
   `if: github.event_name != 'pull_request'` and `secrets: inherit`
-  (`MMCA.Store/.github/workflows/deploy.yml:678-681`,
-  `MMCA.ADC/.github/workflows/deploy.yml:776-779`), because there is no production OIDC on a PR and the
-  deploy is PR-skipped anyway. Both repos' CONTRIBUTING files list `cost-guard` among the push-only
+  (`MMCA.Store/.github/workflows/deploy.yml:785-788`,
+  `MMCA.ADC/.github/workflows/deploy.yml:810-818`), because there is no production OIDC on a PR and the
+  deploy is PR-skipped anyway. ADC's calling job also grants its own `id-token: write` and
+  `contents: read` (`MMCA.ADC/.github/workflows/deploy.yml:814-816`), because ADC's workflow-level
+  permissions deliberately omit `id-token` (`:28-37`); Store's caller relies on its workflow-level
+  `id-token: write` (`MMCA.Store/.github/workflows/deploy.yml:45`). Both repos' CONTRIBUTING files list `cost-guard` among the push-only
   jobs that must **not** be added to branch protection (`MMCA.Store/CONTRIBUTING.md:42,118`,
   `MMCA.ADC/CONTRIBUTING.md:42,111`).
 
 - **Raising the baseline is a reviewed repo change, not a click.** The ceiling lives in the workflow's
   `env` (`MMCA.Store/.github/workflows/cost-guard.yml:34`,
   `MMCA.ADC/.github/workflows/cost-guard.yml:25`) and the tier allow-list lives in the comparison
-  (`MMCA.Store/.github/workflows/cost-guard.yml:87`, `MMCA.ADC/.github/workflows/cost-guard.yml:76`).
+  (`MMCA.Store/.github/workflows/cost-guard.yml:62-68`, `MMCA.ADC/.github/workflows/cost-guard.yml:76`).
   A legitimately larger footprint means editing those **and** the Bicep that declares the footprint,
   in a pull request, together: otherwise the next `main.bicep` run pushes the resource back down to
   the declared value, which is exactly why the drift message points at re-running the deploy as the
-  reset (`MMCA.Store/.github/workflows/cost-guard.yml:94`,
+  reset (`MMCA.Store/.github/workflows/cost-guard.yml:109`,
   `MMCA.ADC/.github/workflows/cost-guard.yml:83`).
 
 **Adoption is the two deployed apps, in near-identical form.** The files differ in the resource name
 prefix, the accepted SQL tier set, the header rationale, the summary heading and the wording of the
-drift message (ADC's names the conference-day surge, Store's does not). The header is where the two
-diverge most: Store's carries three passages ADC's has no counterpart for, the SQL-baseline rationale
+drift message (ADC's names the conference-day surge, Store's does not). The step body diverges too:
+Store's carries an ADR-081 comment block (`MMCA.Store/.github/workflows/cost-guard.yml:57-61`), the
+`sql_sku_ok` tier-plus-objective check (`:62-68`, `:96-97`, `:102`), a `tier / objective` SQL column
+(`:90`), and an S0-specific baseline line (`:73`) and drift message (`:109`). The header is where
+the two also diverge: Store's carries three passages ADC's has no counterpart for, the SQL-baseline rationale
 (`MMCA.Store/.github/workflows/cost-guard.yml:9-13`), a note that the check reads `maxReplicas` only
 and is therefore blind by design to the 2026-09-02 container right-size (`:15-17`), and a
 `(Mirrors MMCA.ADC.)` marker on the `workflow_call` trigger (`:25`). MMCA.Helpdesk and MMCA.Common
@@ -171,7 +182,7 @@ the same two, so neither has a rollout for this gate to block.
   in the repo is reviewed, diffed and dated when it changes; a threshold stored in someone's memory of
   what the footprint should be is not a baseline at all.
 - **Per-repo tier sets, because a baseline should encode the intended footprint, not the narrowest
-  one.** Store's Basic-or-Standard window is not laxity. Basic is a 5-DTU tier with a 2 GB cap, and S0
+  one.** Store's Basic-or-S0 window is not laxity. Basic is a 5-DTU tier with a 2 GB cap, and S0
   is the first step above it, so S0 is where a Store database goes under real load or when a bacpac
   restore lands. Accepting it means an operator making that deliberate, cheap move does not have to
   open a pull request against a CI threshold first, while everything that actually signals an
@@ -184,7 +195,7 @@ the same two, so neither has a rollout for this gate to block.
   `BASELINE_MAX_REPLICAS` first. That is the intended friction, but it is friction at exactly the
   moment (a live event) when nobody wants to be opening a PR against a CI threshold.
 - **The printed remediation is circular on the deploy path.** The drift message suggests resetting
-  "by re-running the deploy workflow" (`MMCA.Store/.github/workflows/cost-guard.yml:94`,
+  "by re-running the deploy workflow" (`MMCA.Store/.github/workflows/cost-guard.yml:109`,
   `MMCA.ADC/.github/workflows/cost-guard.yml:83`), which was accurate while the check was cron-only.
   Now that `cost-guard` sits in `deploy.needs`, any run of `deploy.yml` re-runs the failing gate and
   leaves `deploy` unrun, so the Bicep never re-applies. The reset has to happen out of band (portal or
@@ -200,26 +211,34 @@ the same two, so neither has a rollout for this gate to block.
   `id-token: write` and logs in before it can check anything
   (`MMCA.Store/.github/workflows/cost-guard.yml:43-48`,
   `MMCA.ADC/.github/workflows/cost-guard.yml:34-39`).
-- **Store's tier check is coarser than its own comment claims.** The inline note says a "scaled-up
-  Standard like S3" is drift (`MMCA.Store/.github/workflows/cost-guard.yml:85-86`, and the header at
-  `:12-13` says it flags "S1+"), but the comparison is against `sku.tier`, and every S-series database
-  reports tier `Standard`. A surge from S0 to S3 on Store therefore passes the gate; only Premium,
-  BusinessCritical, Hyperscale and similar are caught. ADC, accepting `Basic` alone, does not have
-  this gap.
 - **An empty reading passes.** A replica count that comes back empty is defaulted to `0` by
   `${max:-0}` and scores `ok` with a `?` in the table
-  (`MMCA.Store/.github/workflows/cost-guard.yml:70-71`,
+  (`MMCA.Store/.github/workflows/cost-guard.yml:83-84`,
   `MMCA.ADC/.github/workflows/cost-guard.yml:61-62`). The gate fails open on an unreadable value rather
   than closed, the opposite of the fail-on-absence posture ADR-064 took for the recency gates.
 - **Only two cost dimensions and one name prefix are covered.** Service Bus, Redis, Log Analytics
   retention and everything else in the resource group are invisible to the gate, as is any resource
   whose name does not start with the app prefix or that lives in another resource group. Store's
-  Service Bus is Standard tier (`MMCA.Store/infra/main.bicep:948-955`) and would go unchecked if it
+  Service Bus is Standard tier (`MMCA.Store/infra/main.bicep:995-1002`) and would go unchecked if it
   were scaled up.
 - **The ceiling is an upper bound, not an equality.** Scaling a resource **below** the baseline is not
   drift, so an accidental `maxReplicas: 1` on a service that needs two, or a downgrade that costs
   availability rather than money, passes silently. This gate is about spend, not about capacity being
   correct.
+
+## Revision (2026-10-01)
+Store's SQL check now matches its own stated window. It reads `[sku.tier, sku.name]`
+(`MMCA.Store/.github/workflows/cost-guard.yml:96-97`) and passes a database only through
+`sql_sku_ok`, which accepts `Basic/*` or `Standard/S0` and nothing else (`:62-68`, applied at `:102`),
+with an ADR-081 comment that the window must not be narrowed to Basic-only (`:57-61`). A scaled-up
+Standard (S1 to S12) therefore fails the gate, so the trade-off recording that an S0-to-S3 surge on
+Store passes is removed, the Decision now describes the Store window as Basic or S0, and the Adoption
+paragraph lists the step-body differences this introduced. ADC is unchanged (tier only, Basic only,
+`MMCA.ADC/.github/workflows/cost-guard.yml:74,76`). ADC's `cost-guard` caller now grants its own
+job-level `id-token: write` (`MMCA.ADC/.github/workflows/deploy.yml:814-816`), which the Decision
+notes. Citations re-anchored throughout (Store's `cost-guard.yml`, both Bicep
+templates, both `deploy.yml` files, ADR-064); the `2` replica ceiling and the gate mechanism are
+unchanged.
 
 ## Related
 [ADR-064](064-deploy-recency-gates.md) (the sibling deploy-precondition record, which decides the

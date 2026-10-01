@@ -4,7 +4,9 @@
 Accepted (2026-08-22). Extends [ADR-029](029-authentication-brute-force-protection.md) (the
 cache-backed login-protection idiom this record reuses) and [ADR-032](032-password-hashing.md) (which
 decided how a password is stored, never how a user who has lost one gets a new one). The existing
-authentication chain is untouched: this is an additive sibling, not a revision.
+authentication chain is untouched: this is an additive sibling, not a revision. Revised 2026-10-01
+(redemption serialized under a distributed lock, a reset revokes refresh sessions,
+and the link carries the token in the URL fragment; see Revision below).
 
 ## Context
 Both consumer apps shipped authenticated password *change* (`PUT /Auth/password`) and nothing for a
@@ -40,9 +42,13 @@ address, and so does a 500 when the SMTP hop is down.
    The implementation (`Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs`)
    writes one `pwdreset:token:{email}` record and one `pwdreset:req:{email}` counter through
    `ICacheService`, deliberately mirroring `LoginProtectionService` down to the address
-   normalization, the key-builder shape, the `IncrementAsync` throttle and the disclosed
-   read-modify-write race. Expiry is the cache TTL: there is no sweeper and no reaper job, because
-   there is no row to reap.
+   normalization, the key-builder shape, and the `IncrementAsync` throttle with its disclosed
+   read-modify-write race (`PasswordResetTokenService.cs:68`). Redemption does not share that race:
+   `ValidateAndConsumeAsync` takes an `IDistributedLock` on `lock:{tokenKey}` (`:36`, `:107`; 10-second
+   TTL and 5-second wait at `:41` and `:43`) and reads through `GetFromSharedStoreAsync` (`:128`), so
+   two concurrent redemptions of one token cannot both succeed, and a redemption that cannot take the
+   lock is answered as an invalid token. Expiry is the cache TTL: there is no sweeper and no reaper
+   job, because there is no row to reap.
 2. **The token's security properties are in the service, not in the caller.** 256 bits from
    `RandomNumberGenerator`, Base64Url-encoded; only its SHA-256 is stored, so a cache dump hands out
    no working links; comparison is `CryptographicOperations.FixedTimeEquals`; issuing overwrites, so
@@ -57,6 +63,10 @@ address, and so does a 500 when the SMTP hop is down.
    account, throttled, and failed send each log a reason and report success. `ResetPasswordHandlerBase`
    collapses every rejection (unknown, expired, mismatched, attempt-capped token, and an account that
    no longer resolves) into one `Auth.InvalidResetToken` error, which the edge maps to 401. A
+   successful reset then revokes every live refresh session on the account
+   ([ADR-097](097-multi-device-refresh-sessions.md);
+   `Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:47`,
+   `:106`) and clears the account's login lockout (`:110`). A
    consumer therefore inherits the property rather than re-deriving it; the only app-specific member
    on the forgot base is `FindUntrackedByEmailAsync`, because each app's `User` stores its address
    differently.
@@ -77,15 +87,19 @@ address, and so does a 500 when the SMTP hop is down.
 6. **Consumers opt in with thin wiring.** Each app adds a `ForgotPasswordCommand` /
    `ResetPasswordCommand` record, a handler that is a constructor call on the base, and a sealed
    `PasswordResetController` supplying the two command factories. Configuration is one key
-   (`PasswordReset:ResetUrl`) in `appsettings.json`, in the Aspire AppHost for local runs, and as
-   `PasswordReset__ResetUrl` in `infra/main.bicep` for production. MMCA.ADC and MMCA.Store both
+   (`PasswordReset:ResetUrl`) in each Identity service's `appsettings.json` (MMCA.ADC
+   `Source/Services/MMCA.ADC.Identity.Service/appsettings.json:108`, MMCA.Store
+   `Source/Services/MMCA.Store.Identity.Service/appsettings.json:105`) and as `PasswordReset__ResetUrl`
+   in `infra/main.bicep` for production (MMCA.ADC `:1763`, MMCA.Store `:1551`). Only MMCA.ADC's Aspire
+   AppHost also sets it for local runs (`Source/Hosting/MMCA.ADC.AppHost/Program.cs:470`); MMCA.Store's
+   local runs use the `appsettings.json` default. MMCA.ADC and MMCA.Store both
    adopted it in v1.160.0.
 
 ## Rationale
 - **No migration is the whole point.** A reset credential is short-lived by nature, and the
   expiry semantics a reset needs (a TTL, a single use, an attempt cap) are native to a cache and
-  bolted on to a relational table. Choosing the cache means the feature ships to two production apps
-  and a reference app without touching a schema, and the "expired token" state is enforced by the
+  bolted on to a relational table. Choosing the cache means the feature ships to both production apps
+  (MMCA.ADC and MMCA.Store) without touching a schema, and the "expired token" state is enforced by the
   store instead of by a query filter someone can forget to write.
 - **Reusing the login-protection idiom is a correctness argument, not a style one.** The address
   normalization in particular is load-bearing and easy to get wrong: keys built from raw request
@@ -112,8 +126,9 @@ address, and so does a 500 when the SMTP hop is down.
   padding or moving the send off the request path onto the outbox. Neither is done, and this is the
   known residual of the always-202 contract rather than a defect in it.
 - **Email delivery has no outbox and no retry.** A send that fails is logged and dropped. The
-  transactional-email posture recorded in [ADR-024](024-push-notifications.md) is app-level and
-  outside the durable notification channel, and the token surviving the failure is what makes a
+  transactional-email posture recorded in [ADR-024](024-push-notifications.md) places `IEmailSender`
+  outside the durable notification channel (this workflow is one of its framework-level consumers),
+  and the token surviving the failure is what makes a
   user-driven retry sufficient. A reset email that must not be lost would need the outbox, which is a
   larger decision than this record makes.
 - **The request throttle undercounts under concurrency.** `IncrementAsync` is a read-modify-write on
@@ -125,3 +140,33 @@ address, and so does a 500 when the SMTP hop is down.
   the token live until the write succeeds, opens a replay window, which is the worse of the two.
 - **Copy is English only.** The composition hooks exist and the localization pass does not, so a
   Spanish-speaking user ([ADR-027](027-multi-locale-i18n.md)) reads an English reset email.
+
+## Revision (2026-10-01)
+Three behaviors changed after acceptance, and four statements are corrected: one was omitted at
+acceptance, two were wrong as written, and one had drifted from a later revision of ADR-024.
+
+- **Redemption is serialized.** `ValidateAndConsumeAsync` now runs its read, compare and remove under
+  an `IDistributedLock` on `lock:{tokenKey}`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:107`, TTL and
+  wait at `:41` and `:43`) and reads through `GetFromSharedStoreAsync` (`:128`), so two concurrent
+  redemptions of one token cannot both succeed; a contended redemption is answered as an invalid
+  token. The constructor requires the lock (`:36`), a breaking change recorded in
+  `MMCA.Common/CHANGELOG.md:86` and `:91`. Only the `IncrementAsync` request throttle (`:68`) keeps the
+  read-modify-write race, so Decision 1 no longer claims the service mirrors that race end to end.
+- **A successful reset revokes refresh sessions.** It also clears the login lockout, which it has
+  done since acceptance and the original record omitted. `ResetPasswordHandlerBase`
+  takes a required `IRefreshSessionStore`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ResetPassword/ResetPasswordHandlerBase.cs:47`)
+  and, after the save, revokes every live session on the account (`:106`, per
+  [ADR-097](097-multi-device-refresh-sessions.md)) and calls `ResetFailedAttemptsAsync` (`:110`).
+  Decision 3 records both.
+- **The reset link carries the address and token in the URL fragment.** The default
+  `ComposeResetLink` builds `{ResetUrl}#email=...&token=...`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ForgotPassword/ForgotPasswordHandlerBase.cs:155`),
+  so the live token is never sent to a server and stays out of ingress logs.
+- **Corrections.** `PasswordReset:ResetUrl` is set by MMCA.ADC's AppHost only
+  (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:470`); MMCA.Store's local runs rely on its
+  `appsettings.json` default. MMCA.Helpdesk has not adopted password reset, so the Rationale names the
+  two production apps only. The Trade-offs line on [ADR-024](024-push-notifications.md) now matches
+  that record's 2026-08-31 revision, which no longer calls `IEmailSender` an app-level-only primitive
+  while keeping it outside the channel model.

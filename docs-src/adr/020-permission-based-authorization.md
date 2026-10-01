@@ -39,7 +39,7 @@ Authorize on **capabilities resolved from roles**: a permission layer over RBAC,
 one authorization model. Nothing is pre-registered per role name.
 
 - **A central registry maps roles to permissions.** `IPermissionRegistry` / `PermissionRegistry`
-  (`MMCA.Common.Shared.Auth`) answer "does any of these roles grant this permission?" from an
+  (`MMCA.Common.Shared.Auth.Permissions`) answer "does any of these roles grant this permission?" from an
   immutable `FrozenDictionary` snapshot. It is the single place that knows which roles confer which
   capabilities, so endpoints stay decoupled from role names (role keys compared case-insensitively,
   permission values ordinally).
@@ -60,7 +60,7 @@ one authorization model. Nothing is pre-registered per role name.
   works whether or not inbound-claim mapping is on). Baking permissions into the token is therefore
   optional: role-derived resolution is the default.
 - **Grants are the host's to declare.** `AddAuthorizationPolicies()`
-  (`MMCA.Common.API/Authorization/AuthorizationExtensions.cs:23`) wires the handler, the policy
+  (`MMCA.Common.API/Authorization/AuthorizationExtensions.cs:25`) wires the handler, the policy
   provider, and an empty shared registry, so any host that configures authentication gets the
   mechanism for free; it grants nothing beyond explicit claims until a host calls
   `AddPermissions(...)`.
@@ -102,15 +102,21 @@ Identity) by dedicated grant tests
 (`MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.Shared.Tests/Authorization/IdentityPermissionGrantsTests.cs:24`,
 `:46`).
 
-**Role vocabulary is the app's, not the framework's.** MMCA.Common declares no role names at all: the
-only place a role string appears in framework code is as the key a host hands to
-`AddPermissions(...)`, and every framework-owned gate names a capability instead. The framework's own
+**Role vocabulary is the app's, not the framework's.** MMCA.Common declares no role names at all: a
+role string reaches framework code only when a host supplies it, as the key it hands to
+`AddPermissions(...)` or as a role-valued setting on a framework gate. The framework's own
 navigation entries gate on `NavItem.RequiredPermission`
 (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20`, matched against the
-`permission` claim at `.../UI/Layout/NavMenu.razor:223-225`), the notification entry on
+`permission` claim at `.../UI/Layout/NavMenu.razor:256`), the notification entry on
 `NotificationPermissions.Manage`
-(`.../UI/Notifications/NotificationUIModule.cs:20`), the owner-or-admin bypass role is required
-configuration a host supplies ([ADR-033](033-resource-ownership-authorization.md)), and the UI test
+(`.../UI/Notifications/NotificationUIModule.cs:20`). The role-valued settings are all host-supplied
+and empty by default: the signed-in-devices entry narrows to `LayoutSettings.SessionsNavRequiredRole`
+when one is configured (`.../UI/Common/Settings/LayoutSettings.cs:39`, checked with `IsInRole` at
+`.../UI/Layout/NavMenu.razor:249-250`), a host's own `NavItem.RequiredRole` is honoured (`:254`), the
+owner-or-admin bypass role is required configuration a host supplies
+(`OwnerOrAdminFilterOptions.BypassRole`, `.../API/Authorization/OwnerOrAdminFilterOptions.cs:24`;
+[ADR-033](033-resource-ownership-authorization.md)), the public output-cache policy takes its bypass
+roles as an argument (`.../API/Caching/OutputCacheOptionsExtensions.cs:34`), and the UI test
 helper takes the role as an argument
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/TestPrincipal.cs:41`). So each app
 owns its `RoleNames` constants in its Identity module's Shared project and each module's grants map
@@ -118,11 +124,11 @@ those constants to that module's permissions.
 
 **Access tokens carry the capabilities, and both gates honour them.** `TokenService` resolves the
 host's `IPermissionRegistry`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:66`) and writes one
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:73`) and writes one
 `permission` claim (`AuthClaimTypes.Permission`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:24`) per permission granted to the
 token's role, ordinally ordered and never duplicating a claim the caller already supplied
-(`TokenService.cs:128-131`); stored grants ([ADR-116](116-identity-completions-opt-in.md)) ride along
+(`TokenService.cs:133-141`); stored grants ([ADR-116](116-identity-completions-opt-in.md)) ride along
 because the registry it resolves is the layered one. The HTTP policy handler evaluates the same
 capability through the registry, and the CQRS `AuthorizationGate` passes a request whose permission
 the registry grants to the caller's roles OR that the principal carries as a claim
@@ -199,6 +205,21 @@ declares nothing** (SEC-Common-16 / SEC-ADC-03).
    the allow-list at `:76` and a staleness check at `:141`. MMCA.Common holds itself to it. The
    opt-in is deliberate: a consumer adopting the fallback policy fixes its endpoints first and turns
    the gate on last, and until then the runtime behaviour is already the safe one.
+
+## Revision (2026-10-01)
+No decision or rationale changed: the framework still declares no role names and still gates its own
+endpoints and navigation on capabilities. The role-vocabulary paragraph now records accurately where a
+host-supplied role string reaches framework code beyond `AddPermissions(...)`: the optional
+`LayoutSettings.SessionsNavRequiredRole`
+(`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Settings/LayoutSettings.cs:39`, read at
+`MMCA.Common/Source/Presentation/MMCA.Common.UI/Layout/NavMenu.razor:249-250`), a host's
+`NavItem.RequiredRole` (`NavMenu.razor:254`), `OwnerOrAdminFilterOptions.BypassRole`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:24`) and
+the output-cache bypass roles
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/OutputCacheOptionsExtensions.cs:34`).
+Citations refreshed: the registry namespace (`MMCA.Common.Shared.Auth.Permissions`,
+`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/PermissionRegistry.cs:3`),
+`AuthorizationExtensions.cs:25`, `NavMenu.razor:256`, and `TokenService.cs:73` and `:133-141`.
 
 ## Related
 ADR-004 (the authenticated principal and claims this keys on, including the optional `permission`

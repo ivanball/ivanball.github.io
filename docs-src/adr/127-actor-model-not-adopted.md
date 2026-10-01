@@ -17,8 +17,8 @@ layer, which sounds like that workload. It is not, and the difference is this re
 
 **The live state is small, and it is database state.** A live poll is an aggregate root with a status
 and a set of options; a vote is a write through the module's unit of work
-(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:19`,
-the repository call at `:30`) and the tallies are a read through the same one
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:20`,
+the repository call at `:33`) and the tallies are a read through the same one
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/GetPollResults/GetPollResultsHandler.cs:23`).
 Bookmark counts are a query behind a cross-module service contract rather than a resident counter
 (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:11`),
@@ -26,7 +26,7 @@ and session state is the caller's own row, read per request. Contention is handl
 rather than by a writer thread: every auditable entity carries a database-managed concurrency token
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11`) configured for every
 context in `OnModelCreating`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:415`).
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417`).
 That is the single-writer guarantee an actor would provide, and it already holds across replicas,
 which an in-process actor would not ([ADR-035](035-optimistic-concurrency.md)).
 
@@ -45,7 +45,7 @@ resolving the publisher per item at `:51`), the one actor-shaped guarantee the l
 
 **Read pressure is absorbed by caching, and the load is small.** Tier 2 is an HTTP output cache in the
 pipeline
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:145`)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:133`)
 backed by Redis when a connection string is present
 (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:91`, registered at
 `:99`), with the Redis resource composed by each app's AppHost
@@ -90,8 +90,9 @@ tiers, and live fan-out stays on the notification hub.
   and its membership store in both production deployments, grain lifetimes and placement to reason
   about, a second serialization contract beside the integration-event schema
   ([ADR-010](010-integration-event-schema-versioning.md)), and a second answer to where state lives.
-- **A hand-rolled in-memory per-entity lock or actor-like queue.** It is per replica, and both apps run
-  more than one, so an in-process writer guarantee is not a guarantee, and it would silently weaken a
+- **A hand-rolled in-memory per-entity lock or actor-like queue.** It is per replica, and both apps scale
+  to more than one (every container app is `minReplicas: 1`, `maxReplicas: 2`,
+  `MMCA.ADC/infra/main.bicep:1843`, `MMCA.Store/infra/main.bicep:1591`), so an in-process writer guarantee is not a guarantee, and it would silently weaken a
   correctness property the concurrency token holds across the fleet.
 - **Adopting actors only for live polls.** The live path is the least durable state in the system and
   the most visible during the event, so its first production exercise would fall on the day itself.
@@ -107,6 +108,15 @@ system-wide runtime**. A module already runs either in process or as its own ser
 ([ADR-008](008-service-extraction-topology.md)) and its callers reach it through an interface its own
 project declares ([ADR-059](059-module-contract-and-composition.md)), so a silo inside one module's
 service is contained. An actor runtime beneath every module is the opposite decision, rejected here.
+
+## Revision (2026-10-01)
+No decision or rationale changed. Citations refreshed: the vote handler's class declaration
+(`CastVoteHandler.cs:20`) and its poll repository call (`:33`), `OnModelCreating`
+(`ApplicationDbContext.cs:417`), and the output-cache pipeline step (`MiddlewarePipelineBuilder.cs:133`).
+One wording correction: both apps scale to more than one replica rather than running more than one at
+baseline, since every container app declares `minReplicas: 1`, `maxReplicas: 2`
+(`MMCA.ADC/infra/main.bicep:1843`, `MMCA.Store/infra/main.bicep:1591`); a per-replica writer guarantee
+still fails at two replicas, so the argument holds.
 
 ## Related
 [ADR-007](007-grpc-extraction.md), [ADR-008](008-service-extraction-topology.md) and

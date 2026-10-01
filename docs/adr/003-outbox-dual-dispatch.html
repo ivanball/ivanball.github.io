@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -249,15 +251,22 @@
           at startup; and the <code>OutboxMessages</code> table stays mapped either way, so the flag is never a migration.
           Everything below describes the outbox a host that runs it gets, unchanged.
           Revised 2026-09-07 (shared broker and cache resources are namespaced per application by default,
-          so an unset <code>MessageBus:EndpointPrefix</code> now yields prefixed queue names).
+          so an unset <code>MessageBus:EndpointPrefix</code> now yields prefixed queue names unless
+          <code>MessageBus:PreserveDefaultEndpointNames</code> is <code>true</code>:
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:75-83</code>).
           <strong>Extended by <a href="114-internal-commands-durable-job-queue.html">ADR-114</a></strong> (2026-09-09): a second
           per-source table, <code>InternalCommands</code>, borrows this record&#39;s claim-lease, jittered-backoff and
           dead-letter idiom to carry instructions rather than events. The outbox itself is unchanged, and the
-          two processors share an idiom rather than an implementation.
+          two processors share one polling core: both delegate the main loop with its smart wait, the
+          per-source drain and the jittered retry backoff to the internal static <code>PollingLoop</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:5-12</code>), while
+          each keeps its own queries, logging, metrics and activities.
           Revised 2026-09-11 (an outbox row now captures the ambient request context when it is written,
           <code>TenantId</code>, <code>UserId</code>, <code>UserRoles</code> and <code>CorrelationId</code>, and the processor restores that context onto
-          the cycle&#39;s scope before each row is dispatched; a consumer with a relational outbox source adds one
-          expand-only migration; see the Revision (2026-09-11) at the end).</p>
+          a fresh per-row scope before each row is dispatched; a consumer with a relational outbox source adds
+          one expand-only migration; see the Revision (2026-09-11) at the end).
+          Revised 2026-10-01 (domain event handlers do not flush a unit of work themselves, enforced by a
+          transitive fitness rule; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:</p>
           <ol>
@@ -270,6 +279,7 @@
           <li><strong>Outbox persistence</strong>: Domain events are serialized into <code>OutboxMessage</code> rows within the same database transaction as the aggregate changes. This guarantees at-least-once persistence.</li>
           <li><strong>In-process dispatch</strong>: After <code>SaveChangesAsync</code>, events are dispatched immediately in-process via <code>DomainEventDispatcher</code> for low-latency handling.</li>
           <li><strong>Background processor</strong>: <code>OutboxProcessor</code> (a <code>BackgroundService</code>) wakes on an in-memory signal when new entries are written, or after a fallback polling interval (<code>Outbox:PollingIntervalSeconds</code>, default 2s; ADC prod sets 300s). Entries become eligible <code>Outbox:ProcessingDelaySeconds</code> after creation (default 5s); when a cycle sees pending-but-not-yet-eligible entries it <strong>smart-waits</strong> only until the earliest becomes eligible instead of sleeping the full interval. Eligible entries that throw during dispatch are retried up to 5 times, then dropped from the eligible set (a message whose event type cannot be resolved is retried once before being dead-lettered; see the Revision (2026-08-26)).</li>
+          <li><strong>Handlers do not save</strong>: by default a domain event handler does not flush a unit of work itself. It mutates state and the owning save persists it; a write that must happen independently goes on the outbox. The transitive IL call-graph fitness rule <code>DomainEventHandlersDoNotSave</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.DomainEventHandlerSaves.cs:76</code>) enforces it, run through <code>DomainEventHandlerSaveTestsBase</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/DomainEventHandlerSaveTestsBase.cs:22</code>); a consumer names each accepted exception in its allowlist (see the Revision (2026-10-01)).</li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -288,8 +298,8 @@
           (2026-08-26)) and then dead-lettered, which requires manual investigation.
           A message that <strong>throws during dispatch</strong> is retried up to <code>Outbox:MaxRetries</code> (default 5) times,
           then dropped from the eligible set (it stops being polled once <code>RetryCount &gt;= MaxRetries</code>).</li>
-          <li>Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> seconds multiplied by a random jitter factor in <code>[0.8, 1.2]</code>, capped at <code>Outbox:LeaseSeconds</code> (the re-lease at <code>MMCA.Common/.../Outbox/OutboxProcessor.cs:644-645</code>, the jitter-then-cap formula in <code>ComputeRetryBackoffSeconds</code> at <code>:734-748</code>). At the shipped defaults (base 10s, <code>MaxRetries</code> 5, lease 300s, batch 50: <code>MMCA.Common/.../Settings/OutboxSettings.cs:17,21,82,99</code>) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends <strong>about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range</strong>, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).</li>
-          <li>That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: <code>OutboxProcessor.cs:150-173</code>), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (<code>HasMoreEligibleWork</code> requires progress: <code>OutboxProcessor.cs:337-339</code>), so a batch of 50 that fails in full cannot hot-spin the processor.</li>
+          <li>Failed-message retries are paced by an explicit exponential backoff, not by the polling interval, and the backoff is randomized. A failure re-leases its own row for <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> seconds multiplied by a random jitter factor in <code>[0.8, 1.2]</code>, capped at <code>Outbox:LeaseSeconds</code> (the re-lease at <code>MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:598-599</code>; <code>ComputeRetryBackoffSeconds</code> at <code>:691-692</code> delegates to the jitter-then-cap formula in <code>PollingLoop.ComputeRetryBackoffSeconds</code> at <code>MMCA.Common/.../Persistence/Polling/PollingLoop.cs:183-197</code>, jitter at <code>:193</code>, cap at <code>:196</code>). At the shipped defaults (base 10s, <code>MaxRetries</code> 5, lease 300s, batch 50: <code>MMCA.Common/.../Outbox/Administration/OutboxSettings.cs:17,21,82,99</code>) the four waits between the five attempts are ranges rather than fixed values: about 8-12s, 16-24s, 32-48s and 64-96s. A persistently failing message therefore spends <strong>about 150 seconds of backoff (2.5 minutes), 120s to 180s across the jitter range</strong>, before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (the longest jittered wait tops out near 96s; only a sixth attempt, nominally 320s, could reach the cap).</li>
+          <li>That backoff total is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (the next-cycle wait is computed only from the not-yet-eligible remainder: <code>OutboxProcessor.cs:210-222</code>), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (<code>HasMoreEligibleWork</code> requires progress: <code>OutboxProcessor.cs:259-265</code>), so a batch of 50 that fails in full cannot hot-spin the processor.</li>
           <li>Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup.</li>
           </ul>
           <h2 id="revision-2026-07-19">Revision (2026-07-19)</h2>
@@ -557,6 +567,86 @@
           <p>The broker half of the same hop is recorded in <a href="021-consumer-inbox-idempotency.html">ADR-021</a>: the same
           four values travel as <code>MMCA-*</code> message headers and are restored on the consuming scope before the
           inbox is touched.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>The dual-dispatch decision is unchanged. One rule is added to it (Decision item 4), and several
+          statements made by earlier revisions no longer describe the code. The current-state sections above
+          are corrected; the earlier Revision sections stay as written and are superseded where noted here.</p>
+          <ol>
+          <li><strong>Domain event handlers do not save.</strong> Dispatch runs after <code>SaveChangesAsync</code> (after commit
+          inside an <code>ITransactional</code> command), so a handler that saves opens a second write in the middle
+          of the first one: it re-enters the change tracker, can raise a fresh event cascade, and persists
+          work the outer transaction may still roll back
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.DomainEventHandlerSaves.cs:23-29</code>).
+          <code>DomainEventHandlersDoNotSave</code> (<code>:76-79</code>) reads IL through Mono.Cecil and walks the call graph
+          breadth-first out of every <code>IDomainEventHandler&lt;T&gt;</code> method, following direct calls, delegate
+          creations, interface and virtual calls expanded to their implementations, and async state
+          machines (<code>:37-49</code>), to a default depth of 6 (<code>:79</code>). An allowlist entry silences a type and stops
+          the walk from descending into it (<code>:51-60</code>); the shared base defaults it to <code>MMCA.Common</code>, because
+          the framework&#39;s outbox event bus persists by design
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/DomainEventHandlerSaveTestsBase.cs:33</code>,
+          the test at <code>:42-44</code>). Its limits are stated in code: a bounded depth, interface dispatch resolved
+          only inside the scanned assemblies, and reflection or DI-resolved delegates invisible (<code>:61-69</code> of
+          the rule file). Adoption: MMCA.ADC subclasses the base
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/DomainEventHandlerSaveTests.cs:11</code>)
+          and allowlists one accepted trade-off, the gamification <code>PointsAwarder</code> (<code>:27</code>). MMCA.Store&#39;s
+          <code>main</code> subclasses it
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/DomainEventHandlerSaveTests.cs:19</code>)
+          and allowlists three handlers that commit an independent, idempotent follow-up write in their own
+          scope: <code>UserRegisteredHandler</code> (<code>:39</code>), <code>OrderCancelledSagaHandler</code> (<code>:53</code>) and
+          <code>ProductReviewChangedHandler</code> (<code>:67</code>). MMCA.Helpdesk has no subclass and does not run the rule.</li>
+          <li><strong>The two polling processors share one implementation of the loop.</strong> The 2026-09-09 Status line
+          said the outbox and internal-command processors shared an idiom rather than an implementation.
+          Both now delegate to the internal static <code>PollingLoop</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:5-12</code>):
+          <code>OutboxProcessor</code> at <code>MMCA.Common/.../Outbox/Processing/OutboxProcessor.cs:113</code>, <code>:163</code> and <code>:692</code>,
+          <code>InternalCommandProcessor</code> at
+          <code>MMCA.Common/.../Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:82</code>, <code>:138</code> and
+          <code>:644</code>. Each passes its own cap to the shared backoff (<code>PollingLoop.cs:181-183</code>): the outbox caps at
+          <code>Outbox:LeaseSeconds</code>.</li>
+          <li><strong>Each row is delivered on its own scope.</strong> The Revision (2026-09-11) restored the captured
+          context onto the cycle&#39;s scope. The processor now creates a fresh scope per row
+          (<code>OutboxProcessor.cs:520</code>) and restores onto it (<code>:525-531</code>); the cycle scope&#39;s context still
+          tracks the rows for the batch save (rationale at <code>:487-497</code>). The consequence for tenants differs
+          from what that revision recorded: because the tenant context refuses a change once resolved, a
+          shared scope ran every later row of a shared-target batch under the first row&#39;s tenant, and the
+          fresh scope is what lets the tenant change between rows (<code>:489-491</code>, <code>:518-519</code>).</li>
+          <li><strong>Shutdown persists the stamps already earned.</strong> The Revision (2026-07-24) item 3 says the batch
+          is left untouched on cancellation. Cancellation still rethrows without counting a retry
+          (<code>OutboxProcessor.cs:579-586</code>), but the cycle first saves the change-tracked stamps of the rows it
+          already handled (<code>:241-251</code>, <code>TryPersistStampsOnCancellationAsync</code> at <code>:312-324</code>), so a message
+          delivered before a graceful shutdown is not redelivered when its lease expires. Rows not yet
+          reached stay untouched.</li>
+          <li><strong>Keeping the old queue names is a flag, not a prefix.</strong> The Revision (2026-09-07) cutover rule
+          says a consumer keeping its names pins <code>Application:Namespace</code> or the prefix keys. No prefix value
+          reproduces the old queue names, because the endpoint formatter changed
+          (<code>MMCA.Common/CHANGELOG.md:1366-1367</code>); the opt-out is <code>MessageBus:PreserveDefaultEndpointNames=true</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:75-83</code>), which
+          skips the prefixed formatter entirely
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:75-86</code>).</li>
+          <li><strong>Two omissions, recorded.</strong> The broker publish runs under a circuit breaker with no retry
+          strategy of its own (<code>OutboxProcessor.cs:96-108</code>, applied at <code>:551-555</code>); an open-circuit
+          rejection follows the normal failure path, incrementing <code>RetryCount</code> and re-leasing the row
+          (<code>:589-599</code>, <code>:603-609</code>), so a broker outage longer than the backoff curve dead-letters messages
+          once <code>MaxRetries</code> is reached (<code>:623</code>). And the poll fetches the oldest <code>BatchSize</code> pending rows
+          with no key awareness, so a key with <code>BatchSize</code> or more pending rows fills the fetch window and
+          delays unrelated newer rows until it drains or its head row dead-letters
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IHasOrderingKey.cs:24-27</code>).</li>
+          <li><strong>Citations refreshed in the current-state sections.</strong> The outbox files now sit under
+          <code>Persistence/Outbox/Administration/</code> (<code>OutboxSettings</code>, <code>OutboxCleanupService</code>) and
+          <code>Persistence/Outbox/Processing/</code> (<code>OutboxProcessor</code>, <code>OutboxMetrics</code>, <code>EventNameResolver</code>). For
+          readers following the older revisions: <code>IHasOrderingKey</code> is at <code>IHasOrderingKey.cs:29-36</code> (member
+          <code>:35</code>); <code>OrderingKey</code> at <code>OutboxMessage.cs:86</code>, copied at <code>:152</code>, the stored event name written at
+          <code>:139</code> and resolved at <code>:183-189</code>; the ordering guard <code>FilterUnblocked</code> at
+          <code>OutboxProcessor.cs:468-478</code> (the <code>RetryCount</code> term <code>:477</code>, the <code>OccurredOn</code> term <code>:478</code>), chosen
+          only for a batch holding a keyed row (<code>:394-399</code>), with the one-row-per-key selection at
+          <code>:431-447</code>; <code>HandleUnresolvableType</code> at <code>:661-684</code>; the dead-letter sweep at
+          <code>OutboxCleanupService.cs:155-171</code>; <code>IOutboxAdministration</code> under
+          <code>MMCA.Common.Application/Interfaces/Infrastructure/Persistence/</code>, registered at
+          <code>DependencyInjection.cs:219-220</code>; <code>EnableInbox</code> at <code>Messaging/MessageBusSettings.cs:133</code>; the
+          consumer&#39;s abandon at <code>Messaging/Consumers/IntegrationEventConsumer.cs:101</code> (rethrow <code>:108</code>); and
+          the endpoint prefix resolved at <code>DependencyInjection.Messaging.cs:80-82</code>, the SignalR channel prefix
+          at <code>DependencyInjection.Notifications.cs:59-61</code>.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -579,6 +669,7 @@
             <li><a href="#revision-2026-08-26">Revision (2026-08-26)</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

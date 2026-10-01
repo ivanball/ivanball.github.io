@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -243,7 +245,8 @@
           Revised 2026-09-07 (a per-user cap on concurrent hub connections, and the notification backplane
           channel is namespaced per application).
           Revised 2026-09-11 (the Store order-email call sites moved onto ADR-114 durable internal commands, so
-          those paths now retry and dead-letter; <code>IEmailSender</code> itself is unchanged).</p>
+          those paths now retry and dead-letter; <code>IEmailSender</code> itself is unchanged).
+          Revised 2026-10-01 (the opt-in dedup key is scoped to the sender; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
           a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -262,19 +265,22 @@
           <code>SendPushNotificationHandler</code> (<code>MMCA.Common.Application</code>) resolves recipients, creates a
           <code>PushNotification</code> aggregate (<code>MMCA.Common.Domain.Notifications.PushNotifications</code>, the audit record of
           what was sent, carrying the caller&#39;s optional <code>ScopeKey</code> alongside the title, body, sender and
-          recipient count, <code>SendPushNotificationHandler.cs:66-72</code>), persists one <code>UserNotification</code> inbox row
+          recipient count, <code>SendPushNotificationHandler.cs:75-81</code>), persists one <code>UserNotification</code> inbox row
           per recipient (<code>MMCA.Common.Domain.Notifications.UserNotifications</code>, carrying <code>IsRead</code> / <code>ReadOn</code> with
           an idempotent <code>MarkAsRead</code>), and only then dispatches the live push. The inbox is the durable source
           of truth; the push is the best-effort live layer over it.</li>
           <li><strong>A send is idempotent only when the caller opts in.</strong> The command may carry a <code>DedupKey</code>; when it is
-          present and not whitespace the handler looks it up before doing anything else and, on a hit, returns
-          the already-sent notification without resolving recipients, writing inbox rows, or pushing
-          (<code>SendPushNotificationHandler.cs:39-50</code>). That lookup is a check-then-act, so two concurrent retries
-          of the same send both pass it and the loser fails on the insert against the filtered unique index on
-          <code>DedupKey</code> (<code>PushNotificationConfiguration.cs:68-70</code>). The handler catches that save failure,
-          requeries the key on <code>CancellationToken.None</code>, and returns the winner&#39;s notification if the key now
-          exists, rethrowing untouched otherwise (<code>SendPushNotificationHandler.cs:81-112</code>). With no key the path
-          is unchanged: nothing is deduplicated by default.</li>
+          present and not whitespace the handler scopes it to the sender (the stored key is the hex SHA-256 of
+          <code>{sentByUserId}:{clientKey}</code>, <code>SendPushNotificationHandler.cs:185-187</code>), so another caller reusing the
+          same client key neither suppresses this send nor is handed this sender&#39;s notification. It looks that
+          scoped key up before doing anything else and, on a hit, returns the already-sent notification without
+          resolving recipients, writing inbox rows, or pushing (<code>SendPushNotificationHandler.cs:45-60</code>). That
+          lookup is a check-then-act, so two concurrent retries of the same send both pass it and the loser
+          fails on the insert against the filtered unique index on <code>DedupKey</code>
+          (<code>PushNotificationConfiguration.cs:69-73</code>). The handler catches that save failure, requeries the key
+          on <code>CancellationToken.None</code>, and returns the winner&#39;s notification if the key now exists, rethrowing
+          untouched otherwise (<code>SendPushNotificationHandler.cs:91-122</code>). With no key the path is unchanged:
+          nothing is deduplicated by default.</li>
           <li><strong>Transient delivery is an abstraction with a no-op default.</strong> <code>IPushNotificationSender</code>
           (<code>MMCA.Common.Application</code>) is registered by default as <code>NullPushNotificationSender</code> (no-op), so a host
           that never calls the opt-in does nothing on send. <code>AddPushNotifications(configuration)</code>
@@ -296,10 +302,10 @@
           the notification on next load. A send is never rolled back because the WebSocket fan-out failed.</li>
           <li><strong>An optional third, native-push leg (ADR-044).</strong> After the inbox write and the SignalR push,
           <code>SendPushNotificationHandler</code> also dispatches through <code>INativePushSender</code>
-          (<code>SendPushNotificationHandler.cs:144-161</code>), an OS-level native-push channel that reaches devices the
+          (<code>SendPushNotificationHandler.cs:154-171</code>), an OS-level native-push channel that reaches devices the
           SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
           push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:729</code>), so it
+          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:320</code>), so it
           stays inert until a native hub is configured. The design of that channel is ADR-044&#39;s scope; this ADR
           keeps its own on the inbox and SignalR channels, so the &quot;Two-Channel&quot; title names the durable and
           transient channels this record governs, not a hard cap on the number of delivery legs.</li>
@@ -310,8 +316,8 @@
           <code>MapNotificationHub()</code> maps <code>NotificationHub</code> at the configured <code>HubPath</code> just when it is true
           (<code>SignalRExtensions.cs:25</code>). <code>AddPushNotifications</code> binds the section but registers SignalR,
           <code>SignalRPushNotificationSender</code> and <code>SignalRLiveChannelPublisher</code> unconditionally
-          (<code>DependencyInjection.cs:809-838</code>, <code>AddSignalR()</code> at <code>:816</code> and the two transient registrations at
-          <code>:833-834</code>), so the opt-in registration, not the flag, is what decides whether
+          (<code>DependencyInjection.Notifications.cs:41-70</code>, <code>AddSignalR()</code> at <code>:48</code> and the two transient
+          registrations at <code>:65-66</code>), so the opt-in registration, not the flag, is what decides whether
           a send goes through SignalR; with <code>Enabled: false</code> the sender is still wired and simply has no hub
           endpoint for clients to connect to.</li>
           </ul>
@@ -446,6 +452,25 @@
           delivery be auditable or retried, is the trigger to give it its own record instead of this
           amendment.</li>
           </ol>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>The opt-in deduplication key is now scoped to the sender. <code>SendPushNotificationHandler</code> no longer
+          stores or looks up the client-supplied <code>DedupKey</code> as-is: it derives the persisted key as the hex
+          SHA-256 of <code>{sentByUserId}:{clientKey}</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:185-187</code>,
+          applied at <code>:49-51</code>), so a second caller reusing the same client key can neither suppress this
+          sender&#39;s send nor be returned this sender&#39;s notification, and the stored key is always 64 characters
+          whatever the client sent. The check-then-act lookup, the filtered unique index and the
+          catch-and-requery race handling are otherwise unchanged. The Decision text above is corrected to say
+          so, and its stale citations are refreshed: the lookup (<code>:45-60</code>), the <code>PushNotification.Create</code> call
+          carrying <code>ScopeKey</code> (<code>:75-81</code>), the race handling (<code>:91-122</code>), the native-push leg (<code>:154-171</code>), the
+          filtered index
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:69-73</code>),
+          the <code>NullNativePushSender</code> default
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:320</code>), and
+          <code>AddPushNotifications</code>, which now lives in the partial file
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:41-70</code>
+          (<code>AddSignalR()</code> at <code>:48</code>, the two transient registrations at <code>:65-66</code>, still unconditional). Anchors
+          inside the earlier Revision sections are left as recorded.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -464,6 +489,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

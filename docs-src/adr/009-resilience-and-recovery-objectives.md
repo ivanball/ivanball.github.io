@@ -9,8 +9,8 @@ below.
 
 Revised 2026-09-11 (two amendments: the standard handler's runtime behaviour is observable for the
 first time, through the `Polly` meter the Aspire defaults now subscribe
-([ADR-041](041-observability-and-telemetry.md)); and `Smtp:TimeoutSeconds` bounds the one framework
-outbound client that is not an `HttpClient`. See the Revision (2026-09-11) at the end.)
+([ADR-041](041-observability-and-telemetry.md)); and `Smtp:TimeoutSeconds` bounds the framework's
+SMTP client, which is not an `HttpClient`. See the Revision (2026-09-11) at the end.)
 
 Revised 2026-09-19 (the consumer-side companion the 2026-09-11 revision described as intended but
 absent is now in MMCA.Store's `main`: the Stripe leg has one retry owner. See the Revision
@@ -31,8 +31,15 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
 ## Decision
 1. **Resilience is a framework invariant, not a per-call choice.** Every outbound `HttpClient` and
    gRPC client registered through the framework's extension methods (`AddTypedGrpcClient`,
-   `AddTypedServiceClient`) wires the **standard resilience handler**, matching the global HTTP
-   defaults in `MMCA.Common.Aspire`. This is enforced by a fitness function
+   `AddTypedServiceClient`) wires the **standard resilience handler**. `AddTypedServiceClient` takes
+   the global HTTP defaults' timeouts, retry budget and sampling window from `HttpResilienceDefaults`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:167-173`).
+   `AddTypedGrpcClient` reads `GrpcResilienceDefaults`
+   (`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:127-142`), which re-exposes
+   those same timeouts and retry budget
+   (`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:15-24`) but states
+   its own breaker shape (`:27-33`) and retries only a failure to reach the peer
+   (`DependencyInjection.cs:137`). This is enforced by a fitness function
    (`ResilienceHandlerTests` in `MMCA.Common.Grpc.Tests`) so the policy cannot silently regress.
 2. **Consumers must declare recovery objectives.** Each consuming app documents, in its own
    `infra/DISASTER-RECOVERY.md`: RTO/RPO per failure scenario, the backup/restore mechanism, and an
@@ -63,13 +70,17 @@ only that the numbers exist and the restore is drilled.
   backups never restored. Forcing a recorded drill closes the §29 gap that documentation alone leaves.
 
 ## Trade-offs
-- The named gate (`ResilienceHandlerTests`, `MMCA.Common.Grpc.Tests`) asserts that the gRPC client path
-  (`AddTypedGrpcClient`) *registers* the standard handler, not the runtime behavior of every policy
-  parameter; parameter tuning is still a review concern. Runtime breaker behavior is no longer wholly
-  untested, though: a separate fault-injection test (`ResilienceCircuitBreakerFaultInjectionTests`, same
-  project) now drives sustained failures and proves the circuit breaker actually trips and short-circuits.
-  `AddTypedServiceClient` wires the same standard handler but is not yet covered by an equivalent
-  registration test.
+- The named gate (`ResilienceHandlerTests`, `MMCA.Common.Grpc.Tests`) asserts every option the gRPC
+  client path (`AddTypedGrpcClient`) configures
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/ResilienceHandlerTests.cs:53-77`), pins the
+  `GrpcResilienceDefaults` values (`:113-123`), ties its timeouts and retry budget to
+  `HttpResilienceDefaults` (`:126-133`), and checks the retry predicate at runtime (`:81-96`). Choosing
+  the values is still a review concern; a silent change to them is not. A separate fault-injection
+  test (`ResilienceCircuitBreakerFaultInjectionTests`, same project) drives sustained failures and
+  proves the circuit breaker actually trips and short-circuits. `AddTypedServiceClient` has its own
+  registration test
+  (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Messaging/TypedServiceClientRegistrationTests.cs:15-28`),
+  asserting one retry and the 30-second attempt, 90-second total and 60-second sampling values.
 - Per-consumer DR docs can drift from reality; the drill-result table is the mitigation (a stale table
   is a visible smell).
 - A gRPC client that needs bespoke timeouts must override the standard handler explicitly rather than
@@ -191,3 +202,28 @@ fails a test. The timeout value itself is not asserted, only bounded by configur
 the Trade-offs entry about parameters being a review concern still holds for it. This revision
 changes nothing else: the Decision's three points, the reference objectives, and the database
 posture recorded on 2026-08-18 all stand as written.
+
+## Revision (2026-10-01)
+No decision or rationale changes; the current-state sections are brought back in line with the code.
+Decision point 1 no longer says the gRPC client matches the global HTTP defaults outright: it reads
+`GrpcResilienceDefaults`
+(`MMCA.Common/Source/Presentation/MMCA.Common.Grpc/DependencyInjection.cs:127-142`), which shares the
+HTTP timeouts and retry budget
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/GrpcResilienceDefaults.cs:15-24`) but sets an
+explicit breaker (a 0.5 failure ratio, a minimum throughput of 10 and a 10-second break, `:27-33`)
+because an east-west call bypasses the Gateway's health checks, and retries only an
+`HttpRequestException` (`DependencyInjection.cs:137`) because every gRPC call is a POST. The
+Trade-offs entry about test coverage is corrected: `ResilienceHandlerTests` now asserts and pins the
+policy values rather than registration alone
+(`MMCA.Common/Tests/Presentation/MMCA.Common.Grpc.Tests/ResilienceHandlerTests.cs:53-133`), and
+`AddTypedServiceClient` has its registration test
+(`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Messaging/TypedServiceClientRegistrationTests.cs:15-28`).
+The broker breaker also has a fault-injection test now, which the 2026-08-18 revision records as
+absent
+(`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/Outbox/Processing/OutboxProcessorTests.cs:667`).
+The Status line about SMTP no longer calls it the one framework outbound client outside the standard
+handler: the optional AI provider adapters build SDK-owned clients, bounded by `Ai` timeout settings
+(`MMCA.Common/Source/Core/MMCA.Common.AI.Anthropic/AnthropicAiProviderFactory.cs:37-48`,
+`MMCA.Common/Source/Core/MMCA.Common.AI.OpenAI/OpenAiProviderFactory.cs:42-49`), with the SDKs' own
+retry counts left at their defaults. Citations inside the earlier Revision sections are left as
+recorded.

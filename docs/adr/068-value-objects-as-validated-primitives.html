@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -242,14 +244,18 @@
           the record also notes why the validator, the length invariant and the column shape were all left
           alone, following the Speaker precedent.
           Revised 2026-09-25 (the shipped <code>OwnsAddress</code> helper named beside <code>OwnsMoney</code>: Store&#39;s <code>Customer.Address</code>
-          maps through it, so no consumer hand-copies an <code>Address</code> owned-type block; the Store, ADC and
-          <code>EntityTypeBuilderExtensions</code> anchors refreshed).</p>
+          maps through it; the Store, ADC and <code>EntityTypeBuilderExtensions</code> anchors refreshed). As of
+          2026-10-01 Store follows that call with a second <code>OwnsOne</code> block that overrides the helper&#39;s unicode
+          facet, and the <code>with</code>-expression path around the <code>Money</code> sugar is named (see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>A domain model has two kinds of small type: the <strong>identity</strong> of a thing, and a <strong>value</strong> the thing
           carries. ADR-048 recorded the identity half: identifiers stay primitives named through a global-using
           alias, and the strongly-typed wrapper struct was considered and rejected because an identifier crosses
           EF keys, JSON payloads, OpenAPI schemas, proto messages and URLs constantly, where a wrapper buys
-          converters at every hop and no invariant in return.</p>
+          converters at every hop and no invariant in return. ADR-115 later added the wrapper struct as an
+          opt-in framework capability (its JSON converter factory is registered in <code>AddAPI</code> at
+          <code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:65</code>) while keeping the aliases the
+          default, so ADR-048&#39;s verdict still governs identifiers unless a team opts in.</p>
           <p>The value half was never recorded, even though the framework ships a full set of them in
           <code>Source/Core/MMCA.Common.Shared/ValueObjects/</code> and both production apps consume them. Left as bare
           primitives, an email is a <code>string</code> that every caller re-validates, a price is a <code>decimal</code> whose
@@ -280,10 +286,14 @@
           already-valid parts and so skips <code>Create</code> entirely, <code>Money.Zero()</code> (<code>Money.cs:142</code>), <code>Money.Zero(Currency)</code>
           (<code>:147</code>), <code>operator *</code> (<code>:96</code>) and <code>Multiply</code> (<code>:124</code>). The fitness rule below governs the <code>Create</code> name
           only and says so in its own contract (<code>ArchitectureRules.Entities.cs:49-51</code>), so nothing stops a value
-          object from shipping such a path. What holds it together is that the sugar takes no raw string: a
-          <code>Currency</code> argument can only have come from <code>Currency.FromCode</code> or <code>Currency.All</code>, and the <code>None</code>
-          sentinel is <code>internal</code> (<code>Currency.cs:23</code>), so an external caller still cannot assemble a <code>Money</code> whose
-          currency was never checked.</li>
+          object from shipping such a path. The sugar itself takes no raw string, and the <code>None</code> sentinel is
+          <code>internal</code> (<code>Currency.cs:23</code>), but that does not make <code>Currency</code> sealed against unchecked values:
+          <code>Currency.Code</code> (<code>Currency.cs:34</code>) and <code>Money.Amount</code>/<code>Money.Currency</code> (<code>Money.cs:31,35</code>) are public
+          <code>init</code> accessors, shipped in the public API with the record clone method
+          (<code>Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:550,556,558,732,738</code>), so an external
+          <code>with</code> expression (<code>Currency.Usd with { Code = &quot;XYZ&quot; }</code>, <code>Money.Zero() with { Amount = 5m }</code>)
+          produces a currency <code>FromCode</code> never checked or a non-zero <code>None</code>-currency <code>Money</code> without going
+          through <code>Create</code>.</li>
           <li><strong>That factory shape is fitness-enforced, not conventional.</strong> <code>ArchitectureRules.DomainFactoriesReturnResult</code>
           (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Entities.cs:53-79</code>) walks every
           concrete class in the Domain and Shared layers and fails the build when a public static <code>Create</code>
@@ -305,7 +315,7 @@
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeBuilderExtensions.cs:58</code>)
           flattens <code>Money</code> into a decimal amount column plus a three-character non-unicode ISO 4217 code column
           (<code>:69-83</code>) and sets the navigation&#39;s requiredness from one parameter (<code>:85</code>). Its sibling
-          <code>OwnsAddress</code> (<code>:125</code>, shipped in v1.192.0, <code>MMCA.Common/CHANGELOG.md:894</code>) flattens <code>Address</code> into
+          <code>OwnsAddress</code> (<code>:125</code>, shipped in v1.192.0, <code>MMCA.Common/CHANGELOG.md:1098</code>) flattens <code>Address</code> into
           six non-unicode columns whose lengths come from <code>AddressInvariants</code> and of which only <code>AddressLine1</code>
           is required (<code>:134-166</code>), names them from an optional prefix (<code>AddressLine1</code>, <code>AddressCity</code>, and so on
           by default, <code>:127</code>, joined at <code>:185-188</code>) and defaults the navigation to optional (<code>:128</code>, applied at
@@ -330,20 +340,20 @@
           <code>[JsonConstructor]</code> round-trip constructor (<code>Money.cs:51</code>, <code>Email.cs:22</code>, <code>PhoneNumber.cs:22</code>,
           <code>Address.cs:42</code>) so a materializer rebuilds the value without reopening the factory; <code>AddAPI</code>
           registers both the JSON converter and the XML <code>DataContractSerializer</code> formatters
-          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:53,60</code>). <code>Currency</code> instead serializes
+          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:54,67</code>). <code>Currency</code> instead serializes
           as its bare code through a converter attached to the type itself (<code>Currency.cs:13,73</code>) with a
           matching API-layer converter (<code>Source/Presentation/MMCA.Common.API/JsonConverters/CurrencyJsonConverter.cs:12</code>),
           so non-MVC paths (cache, outbox, integration events, typed clients) fail the same way model binding
           does. <code>DateRange</code> and <code>DateTimeRange</code> carry no serialization annotations.</li>
           <li><strong>gRPC is mapped by hand, not inferred.</strong> <code>Money</code> crosses a service boundary as a purpose-built
           <code>MoneyV1</code> message with a <strong>string</strong> amount (proto has no decimal) and a currency code
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:81,83,86</code>),
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/Protos/product_variants.proto:115,117,120</code>),
           translated by <code>MoneyFromWire</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:146</code>)
-          and <code>MoneyToWire</code> (<code>:177</code>).
-          <code>MoneyFromWire</code> honors the empty-code sentinel only when the amount is also zero (<code>:155-160</code>) and
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Contracts/ProductVariantServiceGrpcAdapter.cs:190</code>)
+          and <code>MoneyToWire</code> (<code>:221</code>).
+          <code>MoneyFromWire</code> honors the empty-code sentinel only when the amount is also zero (<code>:199-204</code>) and
           returns null for a malformed entry, which the calling loop skips rather than failing the whole batch
-          (<code>:121-126</code>).</li>
+          (<code>:121-125</code>).</li>
           <li><strong>Adoption is real but partial.</strong> Store maps <code>ProductVariant.Price</code>
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs:26</code>) with
           <code>OwnsMoney</code> (<code>.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:39</code>),
@@ -353,8 +363,11 @@
           <code>OrderLine.UnitPrice</code> (<code>OrderLineConfiguration.cs:28</code>). Store Identity types <code>Customer.Address</code> as the
           framework <code>Address</code>
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs:40</code>) and maps
-          <code>Customer.Email</code> through <code>EmailValueConverter</code> (<code>CustomerConfiguration.cs:35</code>) with <code>Customer.Address</code>
-          through the shipped <code>OwnsAddress</code> helper under its default prefix (<code>CustomerConfiguration.cs:44</code>), and
+          <code>Customer.Email</code> through <code>EmailValueConverter</code> (<code>CustomerConfiguration.cs:33</code>) with <code>Customer.Address</code>
+          through the shipped <code>OwnsAddress</code> helper under its default prefix (<code>CustomerConfiguration.cs:42</code>),
+          followed by a second <code>OwnsOne</code> block on the same navigation that marks all six columns <code>IsUnicode()</code>
+          and so overrides the helper&#39;s non-unicode facet while keeping its names, lengths and requiredness
+          (<code>:47-55</code>), and
           <code>User.Email</code> the same way as <code>Customer.Email</code> (<code>UserConfiguration.cs:24</code>).
           ADC types <code>User.Email</code> as <code>Email</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:52</code>, validated through
@@ -373,7 +386,7 @@
           details are worth recording because they look like leftovers and are not: the column is unchanged
           (<code>nvarchar(255)</code>, still nullable) so the conversion needed no migration, and
           <code>EventOrganizerContactEmailRules</code>
-          (<code>.../Conference.Application/Events/Validation/EventValidationRules.cs:57</code>, included at <code>:148</code>) plus
+          (<code>.../Conference.Application/Events/Validation/EventValidationRules.cs:59</code>, included at <code>:182</code>) plus
           <code>EventInvariants.OrganizerContactEmailMaxLength</code>
           (<code>.../Conference.Domain/Events/EventInvariants.cs:38</code>) were both kept, exactly as the Speaker
           precedent kept its own: the request-side validator still guards the wire string before it reaches
@@ -409,20 +422,24 @@
           <li><strong>Ship the mapping, do not repeat it.</strong> <code>OwnsMoney</code>, <code>OwnsAddress</code> and the four converters put the
           round-trip contract in one reviewed place, so a new entity configuration is one call rather than a
           copied lambda pair that may or may not carry the sentinel fallback, or a copied six-property block
-          whose lengths may or may not match <code>AddressInvariants</code>.</li>
+          whose lengths may or may not match <code>AddressInvariants</code>. The helpers extend <code>EntityTypeBuilder</code> only,
+          so a value nested inside another owned type still needs the block by hand: Store&#39;s
+          <code>VariantDiscount.SpecialPrice</code> repeats the <code>Money</code> mapping with its own sentinel fallback
+          (<code>.../Catalog.Infrastructure/Persistence/EntityConfiguration/ProductVariantConfiguration.cs:24,60-75</code>,
+          reason stated at <code>:56-59</code>).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The pattern is not uniformly applied.</strong> Only three of the seven types have a companion <code>*Invariants</code>
-          class; the rest inline their checks. Only the two multi-field values have a shipped owned-type helper
-          (<code>OwnsMoney</code>, <code>OwnsAddress</code>); the single-string ones map through converters, and <code>DateRange</code> and
-          <code>DateTimeRange</code> have neither. Five of the seven carry a serialization attribute, and not the same one: four are
+          class; the rest inline their checks. Only two of the four multi-field values have a shipped
+          owned-type helper (<code>OwnsMoney</code>, <code>OwnsAddress</code>); the single-string ones map through converters, and
+          <code>DateRange</code> and <code>DateTimeRange</code> have neither. Five of the seven carry a serialization attribute, and not the same one: four are
           <code>[DataContract]</code>/<code>[DataMember]</code> (<code>Money</code>, <code>Email</code>, <code>PhoneNumber</code>, <code>Address</code>) while <code>Currency</code> carries
           <code>[JsonConverter(typeof(CurrencyJsonConverter))]</code> (<code>Currency.cs:13</code>); only <code>DateRange</code> and
           <code>DateTimeRange</code> are annotation-free.</li>
-          <li><strong>Three of the seven have no consumer.</strong> <code>PhoneNumber</code>, <code>DateRange</code> and <code>DateTimeRange</code> ship with
-          invariants, tests and converters but no production usage, so their round-trip behavior is exercised
-          only by the framework&#39;s own tests.</li>
+          <li><strong>Three of the seven have no consumer.</strong> <code>PhoneNumber</code> ships with invariants, tests and converters,
+          and <code>DateRange</code> and <code>DateTimeRange</code> with tests only (no <code>*Invariants</code> class, no converter), but none
+          of the three has production usage, so their behavior is exercised only by the framework&#39;s own tests.</li>
           <li><strong>Nothing gates that a domain value uses a value object.</strong> The <code>Create</code>-returns-<code>Result</code> rule is
           fitness-enforced, but no rule says a new email field must be <code>Email</code> rather than <code>string</code>. MMCA.Helpdesk
           is the visible consequence: the reference app models everything on primitives.</li>
@@ -439,9 +456,28 @@
           value object that has to cross a service boundary needs its own wire message and translation pair,
           the same class of friction ADR-048 declined to pay for identifiers.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision changed; four statements were corrected and anchors refreshed. (1) The <code>Money</code> sugar
+          paragraph claimed an external caller cannot assemble a <code>Money</code> whose currency was never checked.
+          <code>Currency.Code</code> (<code>Currency.cs:34</code>) and <code>Money.Amount</code>/<code>Money.Currency</code> (<code>Money.cs:31,35</code>) are public
+          <code>init</code> accessors in the shipped API (<code>PublicAPI.Shipped.txt:550,556,558,732,738</code>), so a <code>with</code>
+          expression bypasses <code>FromCode</code> and <code>Create</code>; the Decision now says so. (2) Store&#39;s <code>Customer.Address</code>
+          maps through <code>OwnsAddress</code> (<code>CustomerConfiguration.cs:42</code>) and then a second <code>OwnsOne</code> block
+          (<code>:47-55</code>) sets all six columns <code>IsUnicode()</code>, so the Status no longer says no consumer hand-writes an
+          <code>Address</code> block. (3) <code>OwnsMoney</code> extends <code>EntityTypeBuilder</code> only, so Store hand-maps the nested
+          <code>VariantDiscount.SpecialPrice</code> (<code>ProductVariantConfiguration.cs:56-75</code>); the Rationale records it. (4)
+          <code>DateRange</code> and <code>DateTimeRange</code> have no <code>*Invariants</code> class and no converter, so the Trade-offs no
+          longer say they ship with both, and &quot;the two multi-field values&quot; became two of four. Context and
+          Related now cite ADR-115 (wrapper structs opt-in, aliases default; <code>DependencyInjection.cs:65</code>). Not
+          yet recorded above and flagged here: a <code>Money.Zero()</code> serializes its currency as <code>&quot;&quot;</code>
+          (<code>Currency.cs:92</code>) and <code>CurrencyJsonConverter.Read</code> throws on it because <code>FromCode</code> rejects an empty
+          code (<code>Currency.cs:43-44,83-85</code>), so a <code>None</code>-currency <code>Money</code> does not JSON round-trip. Anchors
+          refreshed: <code>CHANGELOG.md:1098</code>, <code>DependencyInjection.cs:54,67</code>, <code>CustomerConfiguration.cs:33</code>,
+          <code>EventValidationRules.cs:59,182</code>, <code>product_variants.proto:115,117,120</code> and adapter <code>:190,221,199-204,121-125</code>.</p>
           <h2 id="related">Related</h2>
           <p>ADR-048 (the deliberate opposite call for identifiers: primitives behind aliases, wrapper structs
-          rejected, because identifiers cross process boundaries constantly and carry no invariant), ADR-013
+          rejected, because identifiers cross process boundaries constantly and carry no invariant), ADR-115
+          (the wrapper struct shipped as an opt-in capability, with aliases still the default), ADR-013
           (the <code>Result</code> pattern these factories implement below the aggregate level), ADR-015 (the fitness
           function that enforces the <code>Create</code>-returns-<code>Result</code> shape on value objects too).</p>
           
@@ -459,6 +495,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -245,7 +247,7 @@
           against the released framework v1.154.0: MMCA.Common&#39;s own build then executed <strong>99</strong> of the 104 methods
           and the public-API baselines then held <strong>5,150 declarations</strong>. Revised 2026-08-23: the method and base
           counts moved again and are no longer restated in this record&#39;s live text, since <code>MMCA.Common/FACTS.md</code>
-          owns them (<code>:48</code>, <code>:51</code>) and is drift-gated in CI; the Decision&#39;s <code>--minimum-expected-tests</code> figure is
+          owns them (<code>:51</code>, <code>:54</code>) and is drift-gated in CI; the Decision&#39;s <code>--minimum-expected-tests</code> figure is
           corrected to the floor CI actually applies. See Revision (2026-08-23) at the end. Revised 2026-09-01:
           the public-API gate&#39;s file, declaration and coverage figures are corrected in place (sixteen baseline
           pairs, one per published package except <code>MMCA.Common.UI.Maui</code>, with the package count left to
@@ -258,15 +260,17 @@
           (<code>StronglyTypedIdsAreReadonlyRecordStructs</code>, exposed as <code>StronglyTypedIdTestsBase</code> and vacuously
           satisfied in every repo today). Revised 2026-09-11: the method, base and executed counts that entry
           restated are removed from this record&#39;s live text, because
-          <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> owns them (<code>FACTS.md:48</code>,
-          <code>:51</code>), is generated from source by <code>FactsGenerator</code> and is drift-gated in CI, so a figure transcribed
+          <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> owns them (<code>FACTS.md:51</code>,
+          <code>:54</code>), is generated from source by <code>FactsGenerator</code> and is drift-gated in CI, so a figure transcribed
           here goes stale between audits while the generated one cannot. What this record states instead is the
           structure the figures describe: one shared rule library of abstract <code>*TestsBase</code> classes, subclassed
           per repo. Six citations that moved are re-anchored. See Revision (2026-09-11) at the end.
           Revised 2026-09-19: the public API gate covers two more projects than this record said, so the baseline
           file count, the header-only list and the unshipped declaration figure are corrected in the live text
-          (eighteen baseline pairs, still one per published package except <code>MMCA.Common.UI.Maui</code>). See
-          Revision (2026-09-19) at the end.</p>
+          (eighteen baseline pairs then, twenty-one today, still one per published package except
+          <code>MMCA.Common.UI.Maui</code>). See Revision (2026-09-19) at the end.
+          Revised 2026-10-01 (RS0026 / RS0027 move from off to error, with each already-shipped overload pair
+          suppressed at its own declaration; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>The codebase rests on invariants that are easy to state and easy to erode by accident: clean-
           architecture layer flow (Domain depends on nothing above it), module isolation (no module reaches into
@@ -296,7 +300,7 @@
           </ol>
           <p>These tests run inside the normal <code>dotnet test</code> / CI tier, so a violated invariant fails CI like any
           other test (the whole-solution run that carries them is additionally floored at
-          <code>--minimum-expected-tests 2000</code>, <code>.github/workflows/ci.yml:183</code>, so a discovery or filter regression
+          <code>--minimum-expected-tests 2000</code>, <code>.github/workflows/ci.yml:161</code>, so a discovery or filter regression
           that silently drops the suite fails the job instead of passing green on a handful of tests). Centralizing the rules in a package, rather than copying them per repo, means a new
           invariant is written once and inherited by every consumer.</p>
           <h2 id="rationale">Rationale</h2>
@@ -726,6 +730,60 @@
           like.</p>
           <p><strong>No citation was re-anchored in this entry</strong>, and the dated figures inside the earlier revisions stay
           as they are, under the convention this record has used since 2026-09-01.</p>
+          <h2 id="revision-2026-10-01-rs0026--rs0027-become-errors-the-baselines-roll-over-citations-move">Revision (2026-10-01): RS0026 / RS0027 become errors, the baselines roll over, citations move</h2>
+          <p>No rule family joined or left the library in this entry. One public API gate setting changed, the
+          baseline figures moved with the v1.216.0 release (<code>MMCA.Common/FACTS.md:14</code>), and the citations that
+          drifted are listed here rather than rewritten inside the earlier entries.</p>
+          <p><strong>RS0026 and RS0027 are now errors, not off.</strong> The first 2026-08-18 entry records them as turned off
+          because the already-shipped overload pairs could not change (&quot;off rather than silently baselined as a
+          lie&quot;). The reasoning about the shipped pairs still holds, but the mechanism changed: both rules are set
+          to <code>error</code> (<code>MMCA.Common/.editorconfig:899-900</code>, rationale at <code>:894-898</code>, intent restated at
+          <code>:888-891</code>), so a NEW public overload pair with optional parameters fails the build, and each of the
+          19 shipped members that form those pairs carries a targeted <code>[SuppressMessage]</code> with its justification on the
+          member itself (19 occurrences across 10 <code>Source</code> files). The exception is now visible at each
+          declaration instead of being a repository-wide off switch. RS0041 is the only rule from that block
+          still off (<code>.editorconfig:901-904</code>, plus the global <code>NoWarn</code> at <code>Directory.Build.props:22-27</code>), and
+          RS0051-RS0056 stay off at <code>.editorconfig:905-912</code>. The &quot;three rules from the same analyzer are off&quot;
+          sentence in the first 2026-08-18 entry is therefore superseded: one of the three is off today.</p>
+          <p><strong>The pair count is twenty-one, and the release rolled every unshipped declaration across.</strong>
+          <code>PublicAPI.Shipped.txt</code> / <code>PublicAPI.Unshipped.txt</code> pairs now exist in 21 <code>Source</code> projects, the three
+          new ones being <code>MMCA.Common.AI.Anthropic</code>, <code>MMCA.Common.AI.OpenAI</code> and <code>MMCA.Common.AI.Testing</code>; the
+          exclusion rule is unchanged (<code>Directory.Build.props:86</code>), so the gate still covers every published
+          package except <code>MMCA.Common.UI.Maui</code>, with the package count left to <code>FACTS.md:19</code>. The shipped
+          baselines hold <strong>7,881 declarations</strong> across 7,902 non-empty lines, and only the <code>MMCA.Common</code>
+          metapackage&#39;s shipped file is header-only (<code>MMCA.Common.AI</code>, <code>MMCA.Common.Gateway</code> and
+          <code>MMCA.Common.Testing.Aspire</code> now carry content). All 21 <code>PublicAPI.Unshipped.txt</code> files hold the
+          <code>#nullable enable</code> header and nothing else. This is the roll-over the 2026-09-03 and 2026-09-19 entries
+          described, and it supersedes the 5,034 shipped / 2,710 unshipped figures and the eighteen-pair count in
+          the first 2026-08-18 entry.</p>
+          <p><strong>The hub exemptions are keyed by C# name; the wire names are shorter.</strong> The exemption entries are
+          <code>NotificationHub.JoinChannelAsync</code> and <code>NotificationHub.LeaveChannelAsync</code>
+          (<code>.../Cqrs/CancellationTokenConventionTests.cs:25-26</code>), which is the form the rule matches. The names a
+          client invokes are <code>JoinChannel</code> and <code>LeaveChannel</code>, set through <code>[HubMethodName]</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Notifications/NotificationHub.cs:36</code>, <code>:39</code>,
+          <code>:118</code>, <code>:135</code>) and used by the framework&#39;s own client
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:37-38</code>), which is
+          what the subclass&#39;s XML doc says (<code>.../Cqrs/CancellationTokenConventionTests.cs:14-22</code>).</p>
+          <p><strong>The proto fixtures are three, driven by six cases.</strong> A third fixture,
+          <code>TestData/fitness-catalog-commented.proto</code>, joins the matched pair, and a sixth <code>[Fact]</code>,
+          <code>BuildProtoContract_SurvivesBlockCommentsInEveryPosition</code>, drives it
+          (<code>.../Contracts/ProtoContractFitnessTests.cs:100-110</code>). The existing anchors (<code>:14</code>, <code>:20-22</code>, <code>:44</code>,
+          <code>:52</code>, <code>:66</code>, <code>:76-87</code>, <code>:89-98</code>) still resolve.</p>
+          <p><strong>Current anchors for citations that moved.</strong> The whole-solution test step is
+          <code>.github/workflows/ci.yml:152-161</code> (the <code>--minimum-expected-tests 2000</code> floor on <code>:161</code>, the &quot;~2,254&quot;
+          comment on <code>:158</code>); the build step the public API gate fails is <code>ci.yml:134-136</code>; the docs-only guards
+          on restore, build and test are <code>ci.yml:124</code>, <code>:135</code> and <code>:153</code> (the FACTS gate just above them is
+          deliberately not guarded, <code>:119-121</code>); the <code>ui-e2e</code> project-by-path run is <code>ci.yml:324</code>. The
+          architecture test project&#39;s <code>MMCA.Common.slnx</code> entry is <code>:59</code>. The <code>PublicApiAnalyzers</code> 5.6.0
+          <code>PackageVersion</code> is <code>Directory.Packages.props:232</code>. The v1.153.0 changelog bullet is
+          <code>CHANGELOG.md:3033-3039</code> (analyzer on <code>:3037</code>) under its heading at <code>:2978</code>. In
+          <code>ArchitectureRules.Protos.cs</code> the entry point is <code>:38-41</code>, the not-pinned list <code>:28-31</code>, rpc rendering
+          <code>:199-209</code> with the streaming captures in the <code>RpcLine</code> regex (<code>:321-325</code>) and <code>StreamPrefix</code>
+          (<code>:247-248</code>), fields <code>:220-228</code>, enum values <code>:212-217</code>, the qualified nested name <code>:235-242</code> and the
+          transparent <code>oneof</code> <code>:183-185</code>. The live <code>FACTS.md</code> pointers in the Status block are <code>:51</code> (methods and
+          bases) and <code>:54</code> (executed); the Decision&#39;s floor citation is re-anchored in place. The dated figures
+          and anchors inside the earlier revisions stay as they are, under the convention this record has used
+          since 2026-09-01.</p>
           <h2 id="related">Related</h2>
           <p>ADR-009 (resilience gate), ADR-010 (event-version gate), ADR-016 (MassTransit pin gate, and the
           lockstep release cadence the public API baseline is pinned to), ADR-006/007/008 (the transport and
@@ -758,6 +816,7 @@
             <li><a href="#revision-2026-09-03-the-accepted-cycles-middle-node-the-feature-folder-move-re-anchored-citations">Revision (2026-09-03): the accepted cycle&#39;s middle node, the feature-folder move, re-anchored citations</a></li>
             <li><a href="#revision-2026-09-11-the-restated-counts-come-out-six-citations-move">Revision (2026-09-11): the restated counts come out, six citations move</a></li>
             <li><a href="#revision-2026-09-19-the-gate-covers-eighteen-projects-and-the-unshipped-side-nearly-doubled">Revision (2026-09-19): the gate covers eighteen projects, and the unshipped side nearly doubled</a></li>
+            <li><a href="#revision-2026-10-01-rs0026--rs0027-become-errors-the-baselines-roll-over-citations-move">Revision (2026-10-01): RS0026 / RS0027 become errors, the baselines roll over, citations move</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>
