@@ -35,7 +35,7 @@ window.PLATFORM_FACTS = {
     { name: "Metapackage", note: "MMCA.Common: one reference that bundles the six core packages (Shared, Domain, Application, Infrastructure, API, Aspire) so a standard app starts from a single PackageReference", items: ["MMCA.Common"] },
   ],
   /* FACTS.md "Architecture fitness functions": test methods, not base classes */
-  fitnessTests: 138,
+  fitnessTests: 141,
   /* Store, ADC, Helpdesk */
   referenceApps: 3,
   /* docs-src/governance/ArchitectureEvaluationCriteria.md */

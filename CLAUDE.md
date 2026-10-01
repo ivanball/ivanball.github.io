@@ -94,7 +94,7 @@ The generator writes into **marked regions of the hand-authored root pages** (`<
 | `adr-list`, `adr-count` | `platform.html` | `docs-src/adr/*.md` + `assets/data/adr-cards.js` |
 | `platform-stats`, `library-cards`, `scorecards` | `platform.html` | ADR count, `platform-facts.js`, the four collection sizes, and the index lines in `docs-src/governance/*-ArchitectureScorecard.md` |
 | `home-stats` | `index.html` | ADR count + `platform-facts.js` |
-| `resume-platform-facts` | `resume.html` | ADR count + `platform-facts.js` |
+| `resume-platform-facts`, `resume-package-facts` | `resume.html` | ADR count + `platform-facts.js` |
 
 Generator behaviors worth knowing before touching it or the markdown:
 

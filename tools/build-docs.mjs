@@ -1475,6 +1475,9 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
   const file = "resume.html";
   const abs = path.join(WEBSITE_ROOT, file);
   let html = readFileSync(abs, "utf8");
+  html = replaceRegion(html, "resume-package-facts",
+    `            <li>Authored a ${PLATFORM_FACTS.packages}-package shared framework (DDD, Clean Architecture, CQRS) published to nuget.org and GitHub Packages and consumed by an e-commerce app (Stripe), a conference app, and a minimal reference app.</li>`,
+    file);
   html = replaceRegion(html, "resume-platform-facts",
     `            <li>Built Blazor (MudBlazor) and .NET MAUI clients; enforced quality with xUnit v3, Playwright E2E, ${PLATFORM_FACTS.fitnessTests} architecture-fitness tests, and automated accessibility testing (axe, WCAG 2.1 AA: zero violations).</li>
             <li>Documented decisions with ${adrFiles.length} ADRs and a ${PLATFORM_FACTS.rubricCategories}-category architecture-review rubric; built Roslyn-based code-inventory tooling and AI/multi-agent development workflows.</li>`,
