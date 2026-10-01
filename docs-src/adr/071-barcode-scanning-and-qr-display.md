@@ -74,8 +74,9 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
   `TaskCompletionSource<string?>` (`Capabilities/Media/BarcodeScanPage.cs:23-24`) that four paths can complete
   and only the first wins: a decode, the cancel button, the hardware back gesture, and
   `OnDisappearing`; the caller's `CancellationToken` is bridged to the same `Cancel()`
-  (`MauiBarcodeScannerService.cs:97`). Only 2D formats are read (`BarcodeScanPage.cs:36`), because 1D
-  symbologies multiply false positives on a badge screen.
+  (`MauiBarcodeScannerService.cs:97`). Only 2D formats are read (`BarcodeScanPage.cs:36`), because the
+  affordance is a QR/DataMatrix scan and admitting the 1D formats multiplies false positives on a
+  shaky handheld frame (`:34-35`).
 - **Permission stays with the head, not the framework.** No framework code calls
   `Permissions.RequestAsync<Permissions.Camera>`. An undeclared or denied camera produces a preview that
   never decodes and is cancelled out of, which the contract already renders as `null`
@@ -85,7 +86,7 @@ scanning ships as an ADR-042 capability whose native half is opt-in per head.**
 
 Packaging follows ADR-042 exactly: `QRCoder` 1.8.0 (MIT) is a `MMCA.Common.UI` dependency and
 `ZXing.Net.Maui.Controls` 0.10.4 (MIT) a `MMCA.Common.UI.Maui` one, both pinned in
-`MMCA.Common/Directory.Packages.props` (`:158`, `:192`), and the MAUI package keeps its
+`MMCA.Common/Directory.Packages.props` (`:191`, `:225`), and the MAUI package keeps its
 windows-job build and pack.
 
 ## Rationale
@@ -131,8 +132,9 @@ windows-job build and pack.
 - **A null fallback still masks a missing registration.** This is ADR-042's recorded trade-off, and here
   it is functional rather than decorative: a MAUI head that forgets `UseCommonBarcodeScanner` gets the
   same behavior as a browser head. The mitigation is on the consumer, which is why ADC's check-in page
-  branches on `IsSupported` and renders a manual entry path instead (ADR-072) rather than hiding a
-  button.
+  shows its scan card only when `IsSupported` is true (`CheckInScan.razor:69-93`, `ScannerAvailable`
+  at `CheckInScan.razor.cs:41`) and always renders a manual attendee search beside it on every head
+  (`CheckInScan.razor:113-118`, ADR-072), so the task stays completable when the scanner is absent.
 - **Opt-in means the platform matrix is not uniform.** A Windows or Mac Catalyst MAUI head that calls
   `UseCommonBarcodeScanner` still reports `IsSupported == false`, so "registered" and "usable" are two
   different questions a caller has to ask separately.
@@ -143,6 +145,16 @@ windows-job build and pack.
 - **The decoded payload is input, and the contract can only say so.** Nothing in the framework validates
   what a camera decodes. The security of a scan therefore lives entirely in the consumer's verification
   step, which is exactly why ADR-072's credential is server-verified rather than self-describing.
+
+## Revision (2026-10-01)
+No decision or rationale changed. The package pin citations are re-anchored to
+`MMCA.Common/Directory.Packages.props:191` (QRCoder 1.8.0) and `:225` (ZXing.Net.Maui.Controls 0.10.4).
+The 2D-only reason now quotes the source comment (`BarcodeScanPage.cs:34-35`: the affordance is a
+QR/DataMatrix scan, and 1D formats multiply false positives on a shaky handheld frame). The
+null-fallback trade-off is corrected to describe what ADC's check-in page does: it hides the scan card
+behind `ScannerAvailable => Scanner.IsSupported` (`CheckInScan.razor:69-93`,
+`CheckInScan.razor.cs:41`) and renders the manual search on every head (`CheckInScan.razor:113-118`),
+rather than substituting the manual path for the scanner.
 
 ## Related
 [ADR-042](042-device-capability-abstraction.md) (the capability pattern this extends: contract in

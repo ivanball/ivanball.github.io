@@ -21,15 +21,15 @@ intended end state but is not yet wired for theme (see Decision 3).
    Day/Dark lifecycle in one place. Inside that component `MudThemeProvider` is bound with
    `Theme="@Theme"` and `@bind-IsDarkMode`
    (`MMCA.Common.UI/Theme/MmcaThemeProviders.razor:12`), a two-way binding to that component's own
-   `_isDarkMode` field (`MmcaThemeProviders.razor:25`); no `@ref` is used. `Theme` is a `MudTheme`
+   `_isDarkMode` field (`MmcaThemeProviders.razor:36`); no `@ref` is used. `Theme` is a `MudTheme`
    parameter whose default is the already-complete `MMCATheme.Instance`
-   (`MmcaThemeProviders.razor:23`), so a consuming app that needs its own brand passes a derived
+   (`MmcaThemeProviders.razor:34`), so a consuming app that needs its own brand passes a derived
    `MudTheme` instead of duplicating the provider block. The layout no longer holds the provider
    markup or the `_isDarkMode` field itself. No new palette work.
 
 2. **A `ThemeService` (`MMCA.Common.UI`) owns the preference**, registered in `AddUIShared`. It holds the
    current mode, reads/writes a **non-HttpOnly cookie + localStorage**, and raises a change event that
-   `MmcaThemeProviders` (`MmcaThemeProviders.razor:28`) and every `ThemeToggle` (`ThemeToggle.razor:16`)
+   `MmcaThemeProviders` (`MmcaThemeProviders.razor:39`) and every `ThemeToggle` (`ThemeToggle.razor:16`)
    subscribe to, so the shared providers component and the app-bar toggle stay in sync; the layout
    itself subscribes to nothing. First-visit default is the OS `prefers-color-scheme`, read
    via a small JS interop call (`theme.js` `systemPrefersDark()` →
@@ -54,8 +54,8 @@ intended end state but is not yet wired for theme (see Decision 3).
 
 6. **Helpdesk is brought into line.** Its host's custom `MainLayout` used a bare `<MudThemeProvider />`
    (not even `MMCATheme`); it now renders the framework's `<MmcaThemeProviders />`
-   (`MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:8`) plus `<CultureSwitcher />` and
-   `<ThemeToggle />` in its own `MudAppBar` (`MainLayout.razor:15-16`), so the theme, the bound
+   (`MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:10`) plus `<CultureSwitcher />` and
+   `<ThemeToggle />` in its own `MudAppBar` (`MainLayout.razor:27-28`), so the theme, the bound
    `IsDarkMode` and the whole lifecycle come from the shared component rather than being restated in
    the host. As an `InteractiveServer`-only host it has no WASM boundary, but it still reads the
    cookie for consistency.
@@ -76,11 +76,19 @@ intended end state but is not yet wired for theme (see Decision 3).
 - **Helpdesk's custom layout** is still wired separately because it does not inherit Common's
   `MainLayout`, but the obligation is now two component tags (`<MmcaThemeProviders />` plus
   `<ThemeToggle />`) rather than a provider block and its lifecycle: the layout's own comment
-  (`MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:6-7`) records that the four Mud providers
+  (`MMCA.Helpdesk.UI.Web/Components/Layout/MainLayout.razor:8-9`) records that the four Mud providers
   and the Day/Dark lifecycle belong to `MmcaThemeProviders` and that the layout carries only Helpdesk
   chrome. Future hosts that fork the layout inherit that same two-tag obligation.
 - **Per-user persistence adds a column** to the Identity `User` (folded into the ADR-027 migration, so no
   extra migration), and a profile-edit surface.
+
+## Revision (2026-10-01)
+Anchor refresh only: no decision or rationale changed. The snackbar live-region wrapper above the
+`@code` block moved the `MmcaThemeProviders` members, so the `Theme` parameter, the `_isDarkMode` field
+and the `OnChange` subscription are re-cited at `MmcaThemeProviders.razor:34`, `:36` and `:39`. Helpdesk's
+`MainLayout` gained a skip-nav link and app-bar accessibility comments, so its ownership comment,
+`<MmcaThemeProviders />` and the `<CultureSwitcher />` / `<ThemeToggle />` pair are re-cited at
+`MainLayout.razor:8-9`, `:10` and `:27-28`.
 
 ## Related
 [ADR-027](027-multi-locale-i18n.md) (shares the cookie source-of-truth and the `User` preference migration,

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -294,8 +296,10 @@
           <li><p><strong>A broker with the outbox explicitly disabled fails at startup.</strong>
           <code>EnsureOutboxAvailableForProvider</code> throws when the provider is anything other than <code>InProcess</code> and
           <code>EnableOutbox</code> is explicitly <code>false</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:179</code>, guard at <code>:181</code>,
-          throw at <code>:183-184</code>; called from <code>DependencyInjection.cs:205</code>). The message names the
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:196</code>, guard at <code>:198</code>,
+          throw at <code>:200-201</code>; called from <code>DependencyInjection.cs:205</code> and from <code>AddBrokerMessaging</code> at
+          <code>DependencyInjection.Messaging.cs:59</code>, so a broker host that skips <code>AddInfrastructure</code> still fails
+          at startup). The message names the
           mechanism (<code>BrokerEventBus</code> writes the rows, <code>OutboxProcessor</code> publishes them), the consequence
           (every cross-service event dropped silently) and the fix. Leaving the setting unset under a broker
           resolves to enabled, so only a deliberate <code>false</code> reaches the throw.</p>
@@ -310,8 +314,8 @@
           </li>
           <li><p><strong>The EF model does not change.</strong> <code>OutboxMessage</code> is configured in <code>OnModelCreating</code> for every
           relational provider
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:418</code>,
-          configuration at <code>:658-664</code>),
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417</code>,
+          <code>ConfigureOutbox</code> called at <code>:424</code>, configuration at <code>:664-717</code>),
           independent of the setting. Flipping the flag in either direction is a configuration change and a
           restart, with no migration in any consumer.</p>
           </li>
@@ -360,6 +364,12 @@
           leaves an explicit <code>EnableOutbox=false</code> in place fails at startup, which is the good case; a host
           that sets it <code>true</code> with no broker simply pays for the outbox, and nothing objects.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Re-anchored the startup-guard citations in Decision 4
+          (<code>DependencyInjection.Messaging.cs:196</code>, guard <code>:198</code>, throw <code>:200-201</code>) and the model-configuration
+          citations in Decision 6 (<code>ApplicationDbContext.cs:417</code>, <code>ConfigureOutbox</code> call <code>:424</code>, body
+          <code>:664-717</code>), which moved again. Decision 4 now also names the guard&#39;s second call site,
+          <code>AddBrokerMessaging</code> (<code>DependencyInjection.Messaging.cs:59</code>), which was already in the code.</p>
           <h2 id="related">Related</h2>
           <p><a href="003-outbox-dual-dispatch.html">ADR-003</a> (the outbox itself: the dual-dispatch contract, the processor,
           the retry and dead-letter policy, all unchanged for a host that runs it),
@@ -387,6 +397,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -282,8 +284,8 @@
           <li><strong>Standard .NET library guidance, applied at the boundary where it holds.</strong> The rule is scoped to
           exactly the code that ships in packages; it is not blanket-applied to the apps, where it would be
           360+ sites of pure noise (measured across Store/ADC before this decision, and the current scale is
-          far past that: a raw <code>\bawait\b</code> scan on 2026-09-19 counts 779 occurrences in <code>MMCA.Store/Source</code>
-          and 1,453 in <code>MMCA.ADC/Source</code>, 2,232 combined, which is the upper bound on the CA2007 sites the
+          far past that: a raw <code>\bawait\b</code> scan on 2026-10-01 counts 793 occurrences in <code>MMCA.Store/Source</code>
+          and 1,490 in <code>MMCA.ADC/Source</code>, 2,283 combined, which is the upper bound on the CA2007 sites the
           rule would open there).</li>
           <li><strong>Mechanical, with the enforcement and the remediation at different levels.</strong> The build gate is the
           enforced half: a new context-capturing await in packaged non-UI code fails the build, so it costs no
@@ -293,8 +295,8 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Visual noise in framework source.</strong> Every await in <code>Source/</code> (except UI packages) carries
-          <code>.ConfigureAwait(false)</code> (324 sites at adoption; 1,076 gated sites as of the 2026-09-19 snapshot,
-          out of 1,186 across <code>Source/</code> once the exempt UI packages are counted back in). The gate makes it
+          <code>.ConfigureAwait(false)</code> (324 sites at adoption; 1,115 gated sites as of the 2026-10-01 snapshot,
+          out of 1,234 across <code>Source/</code> once the exempt UI packages are counted back in). The gate makes it
           uniform, so the noise is consistent rather than sporadic.</li>
           <li><strong>A per-repo delta in an otherwise shared analyzer baseline.</strong> The workspace keeps one
           byte-identical <code>.editorconfig</code> baseline across the four repos; this policy lives in the marked
@@ -702,6 +704,35 @@
           combined. <code>MMCA.Store/Source</code> carries no double-await line, so its 779 occurrences and 779
           matching lines are the same number.</li>
           </ol>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>A count and anchor refresh only. No decision or rationale changed: the policy, the gate
+          (<code>MMCA.Common/.editorconfig:833</code>) and the UI exemption (<code>:836</code>) stand as written. The Rationale and
+          Trade-offs figures are refreshed to the measurements below; the earlier revisions keep theirs as
+          history. Framework counts are taken at MMCA.Common <code>main</code> <code>eeb87e6c</code>; Store counts at
+          <code>origin/main</code> <code>53acbe40</code>.</p>
+          <ol>
+          <li><strong>Framework site counts.</strong> <code>MMCA.Common/Source/**/*.cs</code> holds 1,234 <code>ConfigureAwait(false)</code>
+          occurrences across 242 files (1,234 matching lines, so no line carries two), of which 119 sit
+          inside the exempt UI packages across 39 files (<code>MMCA.Common.UI</code> 63 across 19 files,
+          <code>MMCA.Common.UI.Maui</code> 54 across 19 files, <code>MMCA.Common.UI.Web</code> 2 in 1 file), leaving 1,115 under
+          the gate across 203 files. The exempt split moved (<code>MMCA.Common.UI</code> gained 7 occurrences and 2
+          files, <code>MMCA.Common.UI.Maui</code> 2 occurrences), so growth is not confined to gated code this window.</li>
+          <li><strong>Consumer-scale upper bound.</strong> A raw <code>\bawait\b</code> scan gives 793 occurrences across 152 files in
+          <code>MMCA.Store/Source/**/*.cs</code> and 1,490 across 291 files in <code>MMCA.ADC/Source/**/*.cs</code>, 2,283
+          combined. <code>.razor</code> files, still outside the scan, would add 9 occurrences across 2 files in Store
+          and 23 across 9 files in ADC.</li>
+          <li><strong>The occurrence-versus-line delta still turns on two lines.</strong> The
+          <code>await using var claim = await ...</code> pattern sits at
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommandHandler.cs:78</code>
+          (previously <code>:75</code>) and
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:147</code>,
+          so a per-line scan reports 1,488 for ADC and 2,281 combined. Store carries no double-await line
+          (793 both ways).</li>
+          <li><strong>The remediation examples moved.</strong> The two <code>dotnet format analyzers</code> examples that target
+          SA1210/SA1211 now sit at <code>Website/docs-src/guides/common-GETTING-STARTED.md:186</code> and
+          <code>MMCA.Helpdesk/build/templates/stage.ps1:1236</code>, superseding the <code>:162</code> and <code>:1235</code> citations in
+          the 2026-09-11 revision.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -727,6 +758,7 @@
             <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

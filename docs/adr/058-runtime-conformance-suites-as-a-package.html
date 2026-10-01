@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -241,15 +243,15 @@
           <h2 id="context">Context</h2>
           <p>ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
           explicitly: the fitness suite asserts &quot;<strong>structure / registration</strong>, not runtime behavior&quot;
-          (<code>015-architecture-fitness-functions.md:48</code>). NetArchTest can prove a controller lives in the right
+          (<code>015-architecture-fitness-functions.md:83</code>). NetArchTest can prove a controller lives in the right
           assembly and that an outbound client <em>wires</em> resilience. It cannot prove that a booted host answers a
           bad page number with an RFC 9457 problem document, emits HSTS on a liveness probe, drains within a
           bounded stop, serves the OpenAPI document it claims to serve, answers two API versions, or nests the
           ADR-014 decorators in the documented order. Those are runtime contracts of the framework, and every
           one of them is only true if the consuming host wired it correctly: the framework ships the middleware,
           the controller base, and the decorator registrations, but the host composes them.</p>
-          <p>The gap is visible in the ADR set. ADR-046 names exactly one of these checks in passing (a &quot;shared
-          fitness contract&quot; for versioning, <code>046-http-api-versioning.md:78</code>), and ADR-013 defines the RFC 9457
+          <p>The gap is visible in the ADR set. ADR-046 names exactly one of these checks (a &quot;shared
+          fitness contract&quot; for versioning, one Decision bullet at <code>046-http-api-versioning.md:87</code>), and ADR-013 defines the RFC 9457
           edge contract that another one guards, but neither decides the layer itself. The runtime-conformance
           tier has been referenced repeatedly and never recorded on its own.</p>
           <h2 id="decision">Decision</h2>
@@ -280,9 +282,13 @@
           <code>:61</code>). <code>MmcaGatewayHardeningTestsBase&lt;TEntryPoint&gt;</code> (<code>MmcaGatewayHardeningTestsBase.cs:39</code>) drives a
           booted gateway through eight edge gates: the per-client-IP rate limiter and its bypass list, the
           tighter named policy on the credential route, a correlation id generated when the caller supplies
-          none and echoed when it does, one readiness check per downstream service, an active health probe on
-          every cluster, and partitioning by the forwarded client IP rather than the proxy IP
-          (<code>MmcaGatewayHardeningTestsBase.cs:126</code>, <code>:148</code>, <code>:184</code>, <code>:211</code>, <code>:229</code>, <code>:246</code>, <code>:274</code>, <code>:310</code>).
+          none and echoed when it does, one readiness check per downstream service, the active health-probe
+          state of every cluster, and partitioning by the forwarded client IP rather than the proxy IP
+          (<code>MmcaGatewayHardeningTestsBase.cs:136</code>, <code>:158</code>, <code>:194</code>, <code>:221</code>, <code>:239</code>, <code>:256</code>, <code>:284</code>, <code>:327</code>).
+          The probe gate is switchable: by default every cluster must carry an enabled active probe on the
+          liveness path, and a host that overrides <code>ActiveHealthChecksExpected</code> to <code>false</code>
+          (<code>MmcaGatewayHardeningTestsBase.cs:111</code>) gets the inverse assertion, that no cluster carries an
+          enabled active probe (<code>MmcaGatewayHardeningTestsBase.cs:308-313</code>).
           <code>DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;</code>
           (<code>DecoratorPipelineOrderTestsBase.cs:38</code>) asserts the ADR-014 nesting.</li>
           <li><strong>The host is really booted; nothing is inferred from registrations.</strong> Three of the six booted-host
@@ -313,7 +319,8 @@
           (<code>SecurityHeadersTestsBase.cs:42</code>), a service-collection configurator for the decorator pipeline
           (<code>DecoratorPipelineOrderTestsBase.cs:46</code>), the booted factory plus the host&#39;s own route-table facts
           (the permit limit, a limited path, the downstream service names) for gateway hardening
-          (<code>MmcaGatewayHardeningTestsBase.cs:61</code>, <code>:68</code>, <code>:71</code>, <code>:77</code>), and for versioning and graceful
+          (<code>MmcaGatewayHardeningTestsBase.cs:61</code>, <code>:68</code>, <code>:71</code>, <code>:77</code>), plus the optional
+          <code>ActiveHealthChecksExpected</code> switch (<code>MmcaGatewayHardeningTestsBase.cs:111</code>), and for versioning and graceful
           shutdown nothing at all beyond the fixture or entry point. The two shutdown subclasses are one-line declarations with no body
           (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GracefulShutdownTests.cs:9</code>,
           <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GracefulShutdownTests.cs:9</code>), and so is the ADC
@@ -336,11 +343,11 @@
           <li><strong>Hosts extend the base where they have more to prove.</strong> ADC Conference adds a 412
           stale-precondition test on top of the inherited 400/404 facts, driving two editors through the
           same <code>If-Match</code> tag and reusing the inherited shape assertion
-          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:40</code>,
-          <code>:69</code>).</li>
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:42</code>,
+          <code>:70</code>).</li>
           </ul>
-          <p>Adoption today is real but <strong>partial, and uneven per suite</strong>. The OpenAPI guard is the only one with
-          full coverage of the extracted REST hosts: all four ADC services
+          <p>Adoption today is real but <strong>partial, and uneven per suite</strong>. The OpenAPI and problem-details guards are
+          the two with full coverage of the extracted REST hosts. OpenAPI covers all four ADC services
           (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/OpenApiContractTests.cs:14</code>,
           <code>MMCA.ADC.Engagement.IntegrationTests/Contract/OpenApiContractTests.cs:14</code>,
           <code>MMCA.ADC.Identity.IntegrationTests/Contract/OpenApiContractTests.cs:15</code>,
@@ -349,14 +356,14 @@
           <code>MMCA.Store.Identity.IntegrationTests/Contract/OpenApiContractTests.cs:14</code>,
           <code>MMCA.Store.Sales.IntegrationTests/Contract/OpenApiContractTests.cs:14</code>). The problem-details guard
           covers all three Store services
-          (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ProblemDetailsContractTests.cs:19</code>,
-          <code>MMCA.Store.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:15</code>,
-          <code>MMCA.Store.Sales.IntegrationTests/Contract/ProblemDetailsContractTests.cs:15</code>) and, since
+          (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ProblemDetailsContractTests.cs:21</code>,
+          <code>MMCA.Store.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>,
+          <code>MMCA.Store.Sales.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>) and, since
           2026-08-13, all four
-          ADC services (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:19</code>,
-          <code>MMCA.ADC.Engagement.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>,
-          <code>MMCA.ADC.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>,
-          <code>MMCA.ADC.Notification.IntegrationTests/Contract/ProblemDetailsContractTests.cs:15</code>): <strong>ADC
+          ADC services (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:21</code>,
+          <code>MMCA.ADC.Engagement.IntegrationTests/Contract/ProblemDetailsContractTests.cs:17</code>,
+          <code>MMCA.ADC.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:17</code>,
+          <code>MMCA.ADC.Notification.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>): <strong>ADC
           Notification gained the missing subclass</strong>, merged to <code>main</code> on 2026-08-13, so every REST host in
           both consumers is now guarded for this one contract. The versioning contract is subclassed once per
           repo, on ADC Conference (<code>ApiVersioningTests.cs:14</code>) and Store Catalog
@@ -373,16 +380,19 @@
           today. The gateway-hardening suite is
           subclassed on both Gateway hosts and nowhere else, which is its whole addressable surface: it asserts
           the shared gateway kit&#39;s edge behavior, and only a gateway adopts that kit
-          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:30</code>,
-          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:35</code>). Each subclass states
-          only its own route-table facts and supplies a Production-pinned factory with a recording forwarder
-          standing in for <code>IHttpForwarder</code>
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:29</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:34</code>). Each subclass states
+          its own route-table facts, turns the active-probe expectation off
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:89</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:93</code>), so on both gateways
+          the probe gate asserts that no cluster carries an enabled active probe, and supplies a
+          Production-pinned factory with a recording forwarder standing in for <code>IHttpForwarder</code>
           (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:103</code>,
-          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:117</code>). The decorator suite is
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:128</code>). The decorator suite is
           subclassed once per consumer repo and is the one base all three of them run: ADC and Store both
           against the Identity module&#39;s <code>ChangePreferencesCommand</code> / <code>GetUserPreferencesQuery</code> pair
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:27</code>,
-          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:26</code>),
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:29</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/DecoratorPipelineOrderTests.cs:29</code>),
           and MMCA.Helpdesk against a real Tickets pair, described below.
           MMCA.Common dogfoods the only base it can, since it ships no host of its own: a synthetic
           <code>PingCommand</code>/<code>PingQuery</code> pair driven through the framework&#39;s own registration sequence
@@ -439,11 +449,12 @@
           once someone writes the subclass. That is the same audit-the-inventory caveat, and the adoption
           inventory above is the current answer to it, not a claim of completeness.</li>
           <li><strong>Coverage is uneven by suite.</strong> Graceful shutdown is Gateway-only, versioning
-          is one host per repo, and Helpdesk has only the decorator suite. Problem details is the one suite
-          subclassed on every REST host in both consumers (ADC Notification closed the last gap on 2026-08-13).
+          is one host per repo, and Helpdesk has only the decorator suite. Problem details and OpenAPI are the two
+          suites subclassed on every REST host in both consumers (ADC Notification closed the last
+          problem-details gap on 2026-08-13).
           Security headers is complete over the hosts it addresses rather than over all of them: both Gateway
-          hosts and both UI web hosts subclass it, which is every host that serves a browser, and the four
-          extracted REST services are reached through a gateway that stamps the headers for them.
+          hosts and both UI web hosts subclass it, which is every host that serves a browser, and the seven
+          extracted REST services (four ADC, three Store) are reached through a gateway that stamps the headers for them.
           Gateway hardening is Gateway-only by construction rather than by omission: it asserts the shared
           gateway kit, so a service host has nothing for it to check. Every remaining hole is an unguarded host
           for that contract, not a decision that the contract does not apply.</li>
@@ -525,6 +536,29 @@
           (<code>MMCA.Store/Tests/Modules/Identity/MMCA.Store.Identity.UI.Tests/Pages/Users/ConfirmEmail/ConfirmEmailTests.cs:14</code>,
           <code>Pages/Roles/RoleListTests.cs:13</code>, <code>Pages/Roles/RoleEditTests.cs:13</code>). Base and test counts for the
           package are owned by <code>MMCA.Common/FACTS.md</code>.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed; the seven bases still ship in <code>MMCA.Common.Testing</code> and are
+          subclassed as inventoried above. Three statements are corrected. <strong>The gateway probe gate is
+          switchable.</strong> <code>MmcaGatewayHardeningTestsBase</code> exposes <code>ActiveHealthChecksExpected</code>
+          (<code>MmcaGatewayHardeningTestsBase.cs:111</code>, default <code>true</code>); when a host sets it to <code>false</code> the gate
+          asserts that no cluster carries an enabled active probe (<code>MmcaGatewayHardeningTestsBase.cs:308-313</code>).
+          Both gateway subclasses set it to <code>false</code>
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:89</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:93</code>), so the Decision bullet
+          now describes the gate as the probe state of every cluster rather than an active probe on every
+          cluster. <strong>Two suites, not one, cover every REST host:</strong> OpenAPI and problem details are both
+          subclassed on all seven extracted REST services (four ADC, three Store), which the Context adoption
+          paragraph and the Trade-offs now say consistently. <strong>The page-test subclasses recorded in the
+          2026-09-25 Revision are not all one-line:</strong> only Store&#39;s <code>ConfirmEmailTests.cs:14</code> has no body; ADC&#39;s
+          <code>ConfirmEmailTests.cs:11</code> and <code>RoleListTests.cs:14</code> carry a constructor plus overrides, and Store&#39;s
+          <code>RoleListTests.cs:13</code> and <code>RoleEditTests.cs:13</code> carry the overrides the role-admin bases require.
+          The layer targets recorded in the 2026-09-22 Revision are already in every consumer: MMCA.ADC,
+          MMCA.Store and MMCA.Helpdesk all pin <code>MMCA.Common.Shared</code> 1.216.0
+          (<code>MMCA.ADC/Directory.Packages.props:105</code>, <code>MMCA.Store/Directory.Packages.props:8</code>,
+          <code>MMCA.Helpdesk/Directory.Packages.props:84</code>). Citations refreshed: the gateway-hardening test methods,
+          the ADC Conference 412 test, the seven problem-details subclasses, the gateway subclasses and the
+          Store recording forwarder, the decorator subclasses (now under <code>Cqrs/</code>), and the ADR-015 and ADR-046
+          cross-references.</p>
           <h2 id="related">Related</h2>
           <p>ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, &quot;not
           runtime behavior&quot;, is exactly this ADR&#39;s scope, and the two tiers ship as two separate packages),
@@ -554,6 +588,7 @@
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#revision-2026-09-22-the-layer-rules-also-ship-as-compile-time-targets">Revision (2026-09-22): the layer rules also ship as compile-time targets</a></li>
             <li><a href="#revision-2026-09-25-committed-openapi-documents-and-page-test-bases-in-testingui">Revision (2026-09-25): committed OpenAPI documents, and page-test bases in Testing.UI</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

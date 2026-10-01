@@ -1,14 +1,14 @@
 # ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)
 
 ## Status
-Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31).
+Accepted (2026-07-02, revised 2026-07-25, 2026-08-01, 2026-08-31). Revised 2026-10-01 (the fail-closed owner gate and the per-record ownership check are now framework code in `OwnershipHelper`; see Revision below).
 
 ## Context
 ADR-020 added a permission (capability) layer over RBAC: it answers "what may this **role** do",
 resolving a role to a permission so an endpoint can require a capability instead of a role name. It
 explicitly scoped out the orthogonal question, "is this **my** order", recording that "per-resource
 ownership (a customer may read only their own data) stays a separate concern (`OwnerOrAdminFilter`),
-and a route needing both composes the two" (`020-permission-based-authorization.md:92-93`).
+and a route needing both composes the two" (`020-permission-based-authorization.md:159-160`).
 
 That carve-out names a mechanism that already ships in framework code but had no decision record of
 its own. RBAC and permissions are principal-scoped: a customer with the Customer role may read orders,
@@ -50,22 +50,31 @@ bypass role (`Admin` by default).
   (`/customers/{id}`) or, when the route lacks it, from a **model-bound query/body argument**
   (`?userId=42`), so the guard also covers list/query routes that carry the owner as a bound
   argument, not only route ids. It is registered scoped by `AddAPI`
-  (`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:78`) and applied per controller as
-  `[ServiceFilter(typeof(OwnerOrAdminFilter))]`.
+  (`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:85`) and applied as
+  `[ServiceFilter(typeof(OwnerOrAdminFilter))]`, at class level (Store) or per action (ADC's
+  `BookmarksController.cs:85`, `:106`).
 - **Collection ownership specification.** `OwnershipHelper`
-  (`Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10`) is a static helper.
-  `GetOwnershipSpecification<TSpec, TId>` returns `null` for the bypass role (`OwnershipHelper.cs:47`),
-  and otherwise reads the caller's id claim (`GetClaimValue<TId>(claimType)`, `OwnershipHelper.cs:50`)
-  and builds a `Specification` via the supplied factory (`OwnershipHelper.cs:51`); a convenience
-  overload defaults the claim to `"customer_id"` (`OwnershipHelper.cs:63`, `OwnershipHelper.cs:67`). The
+  (`Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:11`) is a static helper.
+  `GetOwnershipSpecification<TSpec, TId>` returns `null` for the bypass role (`OwnershipHelper.cs:48`),
+  and otherwise reads the caller's id claim (`GetClaimValue<TId>(claimType)`, `OwnershipHelper.cs:51`)
+  and builds a `Specification` via the supplied factory (`OwnershipHelper.cs:52`); a convenience
+  overload defaults the claim to `"customer_id"` (`OwnershipHelper.cs:65`, `OwnershipHelper.cs:70`). The
   returned spec is a `Specification<TEntity, TId>` (`Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:15`)
   whose `Criteria` expression (`Specification.cs:23`) the existing query pipeline (`IEntityQueryService`)
   translates to SQL, so a non-admin list query returns only the caller's rows. A `null` spec (bypass
   role) applies no filter.
+- **Framework gates for the ambiguous `null` and for one record.** The same helper ships
+  `RequireResolvableOwner<TId>` (`OwnershipHelper.cs:91-104`), which succeeds for the bypass role or a
+  parsable owner claim and otherwise returns `Error.Forbidden` (a 403, `OwnershipHelper.cs:174-175`),
+  and `ValidateOwnershipAsync<TId>` (`OwnershipHelper.cs:133-157`), the per-mutation check: the bypass
+  role passes without a lookup (`OwnershipHelper.cs:146`), a missing owner claim is refused with
+  `Error.Forbidden` before any lookup (`OwnershipHelper.cs:151-153`), and a caller who does not own the
+  record gets `Error.NotFound`, a 404 (`OwnershipHelper.cs:167-171`), supplied by a caller-provided
+  existence predicate.
 - **The bypass role is the single override on both.** `OwnershipHelper.IsAdmin`
-  (`Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:17`) compares
+  (`Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:18`) compares
   `ICurrentUserService.Role` (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ICurrentUserService.cs:22`)
-  to its `bypassRole` argument (`"Admin"` by default) case-insensitively (`OwnershipHelper.cs:20`). Both
+  to its `bypassRole` argument (`"Admin"` by default) case-insensitively (`OwnershipHelper.cs:21`). Both
   enforcement points consult it, so a caller in the bypass role sees and touches any resource through
   either path.
 - **The filter denies by default.** When the owner parameter cannot be resolved (absent, non-int, or
@@ -89,46 +98,49 @@ inherited from `EntityControllerBase` / `AggregateRootEntityControllerBase`. Add
 audit of the whole controller, not just of the routes that motivated it.
 
 **Adoption.** MMCA.Store wires both in production. The filter guards
-`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:49` and
+`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:50` and
 `MMCA.Store/.../Identity.API/Controllers/CustomersController.cs:35` as a `[ServiceFilter]`. The
 ownership specification scopes list/get queries:
 `ShoppingCartsController` builds a `ShoppingCartByCustomerSpecification`
-(`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:66`,
+(`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:65-67`,
 `MMCA.Store/.../Sales.Application/ShoppingCarts/Specifications/ShoppingCartByCustomerSpecification.cs:19`,
 which filters by `Id` because a cart is keyed by customer, `ShoppingCartByCustomerSpecification.cs:24`)
 and hands it to every read through one `GetReadSpecificationAsync` override
-(`ShoppingCartsController.cs:206`), so the list, the paged list, the by-id read and every page the CSV
+(`ShoppingCartsController.cs:200-202`), so the list, the paged list, the by-id read and every page the CSV
 export streams are narrowed by the same expression rather than by a copy per action.
 `OrdersController` builds an `OrdersByCustomerSpecification` through a private
 `GetOwnershipSpecification()` method
-(`MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:64-66`,
+(`MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:66-68`,
 `MMCA.Store/.../Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13`, filtering
 by `CustomerId`, `OrdersByCustomerSpecification.cs:18`), passed as `specification:
-GetOwnershipSpecification()` into each query (`OrdersController.cs:105`, `OrdersController.cs:143`,
-`OrdersController.cs:177`) and into its CSV export through a `GetExportSpecification` override
-(`OrdersController.cs:244-245`). `OrdersController` does not use the class-level filter for its
-mutating routes; it runs an explicit per-mutation ownership check, `ValidateOwnershipAsync`
-(`OrdersController.cs:414`), that reuses `OwnershipHelper.IsAdmin` through its `IsAdmin` property
-(`OrdersController.cs:62`) to let the bypass role through. Its two denial branches return different
-statuses on purpose:
+GetOwnershipSpecification()` into each query (`OrdersController.cs:102`, `OrdersController.cs:140`,
+`OrdersController.cs:174`) and into its CSV export through a `GetExportSpecification` override
+(`OrdersController.cs:241-242`). `OrdersController` does not use the class-level filter for its
+mutating routes; it runs an explicit per-mutation ownership check, a private `ValidateOwnershipAsync`
+(`OrdersController.cs:379-395`) that delegates to `OwnershipHelper.ValidateOwnershipAsync`
+(`OrdersController.cs:383`), which lets the bypass role through via `IsAdmin`
+(`OwnershipHelper.cs:146`). The only ownership logic the controller supplies is the existence predicate
+(`OrdersController.cs:387-389`). Its two denial branches return different statuses on purpose:
 
-- **Missing owner claim** (the caller carries no `customer_id`, checked at `OrdersController.cs:422`):
-  `Error.Forbidden`, a 403 (`OrdersController.cs:424-428`). Nothing was looked up, so there is no
+- **Missing owner claim** (the caller carries no `customer_id`, checked at `OwnershipHelper.cs:151-153`):
+  `Error.Forbidden`, a 403 (`OwnershipHelper.cs:174-175`). Nothing was looked up, so there is no
   resource whose existence a 403 could leak; this matches the filter's own missing-claim `ForbidResult`.
 - **Owner mismatch** (the claim is present but the order is someone else's, the existence check at
-  `OrdersController.cs:431-433`): `Error.NotFound`, a 404 rather than a 403
-  (`OrdersController.cs:437-439`), so the response does not reveal that another customer's order exists.
+  `OrdersController.cs:387-389`): `Error.NotFound`, a 404 rather than a 403
+  (`OwnershipHelper.cs:167-171`), so the response does not reveal that another customer's order exists.
 
 **A `null` specification means two different things, so the collection reads gate on it.** Store's two
-row-scoped controllers each carry a private `RequireResolvableOwner()`
-(`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:80`, `OrdersController.cs:78-88`).
+row-scoped controllers each carry a private `RequireResolvableOwner()` wrapper
+(`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:79-84`, `OrdersController.cs:80-85`)
+that delegates to the shared `OwnershipHelper.RequireResolvableOwner` (`OwnershipHelper.cs:91-104`) and
+maps a failure through `HandleFailure`.
 `OwnershipHelper.GetOwnershipSpecification` returns `null` both for an admin (scoping deliberately
 skipped) and for a non-admin whose `customer_id` claim cannot be resolved, and only the first may query
 unscoped. The gate lets the bypass role and any caller with a resolvable claim through, and answers
 everyone else with `Error.Forbidden`, a 403 through the same `Result`/HTTP edge as the rest
-(`ShoppingCartsController.cs:82-89`, `OrdersController.cs:80-87`). It runs on every collection read and
-on the CSV export (`ShoppingCartsController.cs:106`, `:126`, `:188`; `OrdersController.cs:98`, `:132`,
-`:169`, `:232`). This is the concrete mitigation for the "claim-based ownership trusts the token"
+(`OwnershipHelper.cs:101-103`, `:174-175`). It runs on every collection read and
+on the CSV export (`ShoppingCartsController.cs:100`, `:120`, `:182`; `OrdersController.cs:95`, `:129`,
+`:166`, `:229`). This is the concrete mitigation for the "claim-based ownership trusts the token"
 trade-off below: claim-less Customer tokens are issuable in practice, because customer linking on
 registration can fail without failing the registration itself, so "no claim" is treated as deny rather
 than as no scoping.
@@ -155,11 +167,12 @@ guard that replaces the check named at each site:
 
 | Action | Guard that replaces the parameter check |
 | --- | --- |
-| `ShoppingCartsController.GetAllAsync` (both overloads, `:98`, `:113`) | `ShoppingCartByCustomerSpecification` through `GetReadSpecificationAsync` already narrows the rows to the caller, plus the `RequireResolvableOwner()` gate (`:106`, `:126`) |
-| `ShoppingCartsController.GetAllForLookupAsync` (`:142`) | `[HasPermission(SalesPermissions.ShoppingCartsManage)]` (`:144`) |
-| `ShoppingCartsController.ExportAsync` (`:178`) | the same `GetReadSpecificationAsync` scoping the list endpoints read, plus the `RequireResolvableOwner()` gate (`:188`) |
-| `CustomersController.GetAllAsync` (both overloads, `:49`, `:61`), `GetAllForLookupAsync` (`:78`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:52`, `:64`, `:81`) |
-| `CustomersController.ExportAsync` (`:110`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:113`) |
+| `ShoppingCartsController.GetAllAsync` (both overloads, `:94`, `:109`) | `ShoppingCartByCustomerSpecification` through `GetReadSpecificationAsync` already narrows the rows to the caller, plus the `RequireResolvableOwner()` gate (`:100`, `:120`) |
+| `ShoppingCartsController.GetAllForLookupAsync` (`:139`) | `[HasPermission(SalesPermissions.ShoppingCartsManage)]` (`:138`) |
+| `ShoppingCartsController.ExportAsync` (`:174`) | the same `GetReadSpecificationAsync` scoping the list endpoints read, plus the `RequireResolvableOwner()` gate (`:182`) |
+| `CustomersController.GetAllAsync` (both overloads, `:53`, `:65`), `GetAllForLookupAsync` (`:82`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:52`, `:64`, `:81`) |
+| `CustomersController.ExportAsync` (`:114`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:113`) |
+| `CustomersController.DeleteAsync` (`:148`) | `[HasPermission(IdentityPermissions.CustomersManage)]` (`:146`, `[AllowMissingOwner]` at `:147`), so an owner cannot plain soft-delete their Customer row and skip the anonymizing erasure (ADR-005, `:140-143`) |
 
 Store states each of those guards as a capability, never as a role name: an endpoint requires what it
 does and the module's grant table decides who holds it (ADR-020).
@@ -187,7 +200,8 @@ value before the filter runs.
   `Specification<TEntity, TId>` whose `Criteria` is an EF-translatable expression
   (`Specification.cs:9`, `Specification.cs:23`), so it slots into `IEntityQueryService` alongside
   filtering, sorting, paging, and projection (and can be `And`-composed with other specs,
-  `Specification.cs:62`) rather than introducing a parallel query path.
+  `SpecificationExtensions.cs:48`, building an `AndSpecification`, `Specification.cs:81`) rather than
+  introducing a parallel query path.
 
 ## Trade-offs
 - **Opt-in per controller/handler.** Neither point is automatic: a controller that forgets the
@@ -199,8 +213,10 @@ value before the filter runs.
   upstream token validation (ADR-004); a missing claim 403s (filter) or yields a `null` spec (helper,
   which for a non-admin returns `null` and therefore no scoping, so callers must not treat a missing
   claim as "admin"). Store's two row-scoped controllers close that with the `RequireResolvableOwner()`
-  gate recorded in Adoption, but the helper's return value is still ambiguous by itself, so every new
-  collection read has to add the same gate rather than inherit it.
+  gate recorded in Adoption, but the helper's return value is still ambiguous by itself
+  (`OwnershipHelper.cs:46-52`), so every new collection read still opts in to the gate rather than
+  inheriting it; the opt-in is one call to the shared `OwnershipHelper.RequireResolvableOwner`, not a
+  copy kept per controller.
 - **The filter assumes the owner parameter equals the owning id.** `OwnerOrAdminFilter` compares its
   configured owner parameter, resolved from either a route value or a model-bound argument, against the
   configured owner claim (`OwnerOrAdminFilter.cs:73`). That holds where the resource is keyed by the
@@ -212,7 +228,7 @@ value before the filter runs.
 
 ## Related
 ADR-020 (the role/permission RBAC layer this complements, and whose explicit
-`020-permission-based-authorization.md:92-93` scope-out this fills), ADR-034 (the generic entity query
+`020-permission-based-authorization.md:159-160` scope-out this fills), ADR-034 (the generic entity query
 pipeline / `IEntityQueryService` the collection-scoping `Specification` slots into), ADR-013 (failures
 surface as `Result`/HTTP at the edge, the filter as a 403 `ForbidResult`), ADR-004 (the validated
 principal and owner claim both enforcement points trust), ADR-078 (the CSV export endpoint, whose
@@ -310,3 +326,29 @@ variant of it.
    `OwnershipHelper.IsAdmin` (`MMCA.Store/.../ReviewsController.cs:72`) and scopes through its own
    `ResolveOwner()` (`:373-374`) rather than through `GetOwnershipSpecification`, so it belongs to the
    helper's audience without being an instance of the row-level pattern this record describes.
+
+## Revision (2026-10-01)
+The fail-closed gate this record named as a candidate for extraction (Revision 2026-09-10, item 3) is
+now framework code. MMCA.Common v1.216.0 (`MMCA.Common/CHANGELOG.md:26`) adds two members to
+`OwnershipHelper`: `RequireResolvableOwner<TId>` (`OwnershipHelper.cs:91-104`), the "bypass role or
+resolvable owner claim" gate that answers the ambiguous `null` with a 403, and
+`ValidateOwnershipAsync<TId>` (`OwnershipHelper.cs:133-157`), the per-record check (bypass role passes,
+missing claim 403 at `:151-153`, non-owner 404 at `:167-171`). The four row-scoped controllers keep a
+private `RequireResolvableOwner()` only as a thin wrapper that delegates to the helper
+(`ShoppingCartsController.cs:79-84`, `OrdersController.cs:80-85`, and ADC's
+`EventQuestionAnswersController.cs:128-136` and `SessionQuestionAnswersController.cs:128-136`, called at
+`:145`, `:163`, `:174`, `:188` in each), and Store's `OrdersController.ValidateOwnershipAsync` and
+Catalog's `ReviewsController` (`ReviewsController.cs:290`) delegate to the helper's per-record check,
+so the `IsAdmin` property on `OrdersController` no longer exists. This supersedes Revision 2026-09-10,
+item 4: `ReviewsController` no longer calls `OwnershipHelper.IsAdmin` directly (its only helper use is
+`ReviewsController.cs:290`), and its `ResolveOwner()` is now declared at `ReviewsController.cs:246`
+(called at `:142`), so the `:72` and `:373-374` anchors there are historical. The statuses (403 for a missing claim,
+404 for a non-owner) are unchanged. Decision, Adoption and the claim-based-ownership trade-off now
+describe the helper. Also refreshed: the `OwnershipHelper` anchors, the `AddAPI` registration
+(`DependencyInjection.cs:85`), the filter's application sites (class level in Store, per action on
+ADC's `BookmarksController.cs:85`, `:106`), the Store controller anchors, the `And` composition
+(`SpecificationExtensions.cs:48`), and the ADR-020 carve-out quote
+(`020-permission-based-authorization.md:159-160`). The deny-by-default table gains
+`CustomersController.DeleteAsync` (`CustomersController.cs:145-148`), which carries
+`[HasPermission(IdentityPermissions.CustomersManage)]` and `[AllowMissingOwner]` so an owner cannot
+soft-delete their Customer row without the anonymizing erasure (ADR-005).

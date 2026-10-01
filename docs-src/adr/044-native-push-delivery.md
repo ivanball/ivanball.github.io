@@ -3,7 +3,8 @@
 ## Status
 Accepted (2026-07-11). Amends ADR-024. The framework pipeline is implemented and inert by
 default; each consumer switches it on by provisioning a notification hub with platform
-credentials and enabling the `NativePush` configuration section.
+credentials and enabling the `NativePush` configuration section. Revised 2026-10-01 (UI.Maui
+ships credentialed FCM/APNs token providers and token-rotation re-registration; see Revision below).
 
 ## Context
 ADR-024 established two notification channels: a durable per-user `UserNotification` inbox (the
@@ -47,16 +48,29 @@ may not exist when the code ships.
   `IPushRegistrationService` (register after sign-in, unregister BEFORE sign-out - the delete
   call is authenticated) and `IPushDeviceTokenProvider` (the platform token extension point). UI.Maui
   ships `MauiPushRegistrationService` (stable installation id in `IDevicePreferences`, sync
-  over the named API client); the token provider defaults to `NullPushDeviceTokenProvider`
-  everywhere, so a build WITHOUT push credentials is wired but inert end to end.
+  over the named API client, with a `SemaphoreSlim` serializing registration passes,
+  `MauiPushRegistrationService.cs:24,41`). The token provider defaults to
+  `NullPushDeviceTokenProvider` (TryAdd, `MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:62`);
+  the opt-in `AddMauiPushDeviceTokenProvider()` (`MMCA.Common.UI.Maui/DependencyInjection.cs:118-126`)
+  replaces it with `FcmPushDeviceTokenProvider` on Android (gated on the `Push:Fcm` section,
+  `FcmPushDeviceTokenProvider.cs:33,43-49`) and `ApnsPushDeviceTokenProvider` on iOS/MacCatalyst
+  (gated on `Push:Apns:Enabled`, `ApnsPushDeviceTokenProvider.cs:30,37`), while the windows TFM
+  keeps the Null default. A build WITHOUT push credentials is therefore wired but inert end to end.
   `PushRegistrationListener` (rendered through the host layout extension point) re-registers on
-  auth-state changes; `AuthUIService.LogoutAsync` owns the unregister leg.
+  auth-state changes, and on Android `MauiFirebaseMessagingService.OnNewToken` re-registers when
+  FCM rotates the token (`MauiFirebaseMessagingService.cs:26-35`). `AuthUIService` owns the
+  unregister leg: `LogoutAsync` and `RevokeAllSessionsAsync` both call `UnregisterPushAsync`
+  before the local sign-out (`AuthUIService.cs:90,134,320`).
 
 ## Consequences
 - Sends fan out per 20-user chunk and per platform: an audience of N users costs
   `ceil(N/20) * 2` hub calls. Acceptable at conference scale; a template-based send can
   consolidate later without touching callers.
-- The handler's third leg is fire-and-forget: no per-device delivery tracking. The hub's
+- The handler's third leg is best-effort: it is awaited inside a non-fatal catch
+  (`SendPushNotificationHandler.cs:158-171`), with no per-device delivery tracking. Because
+  `SendPushNotificationCommand` is `ITransactional`, a transient fault on the final status save
+  re-runs the live legs under the execution strategy, so native delivery is at-least-once and a
+  device can receive the same OS push twice (`SendPushNotificationHandler.cs:21-29`). The hub's
   telemetry is the observability surface; the inbox remains the recovery path.
 - A delete verifies ownership before it acts: the registrar reads the installation and checks
   the `user:{id}` tag `UpsertAsync` stamped on it
@@ -70,3 +84,23 @@ may not exist when the code ships.
   token provider yields nothing - both by design.
 - `SendPushNotificationHandler` gained a constructor parameter (DI-resolved; source-compatible
   for every host, breaking only for code constructing it manually - none known).
+
+## Revision (2026-10-01)
+The client half of the pipeline is no longer Null-only. `MMCA.Common.UI.Maui` ships credentialed
+token providers behind the opt-in `AddMauiPushDeviceTokenProvider()`
+(`MMCA.Common.UI.Maui/DependencyInjection.cs:118-126`): `FcmPushDeviceTokenProvider` on Android,
+which yields nothing unless the four `Push:Fcm` values are present
+(`FcmPushDeviceTokenProvider.cs:33,43-49`), and `ApnsPushDeviceTokenProvider` on iOS/MacCatalyst,
+gated on `Push:Apns:Enabled` (`ApnsPushDeviceTokenProvider.cs:30,37`) and fed by `ApnsTokenBridge`.
+The windows TFM registers nothing and keeps the `NullPushDeviceTokenProvider` TryAdd default
+(`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:62`), so the inert-without-credentials
+property holds. Android also gains a second registration trigger: `MauiFirebaseMessagingService`
+re-registers on FCM token rotation (`MauiFirebaseMessagingService.cs:26-35`), and
+`MauiPushRegistrationService` serializes concurrent passes with a `SemaphoreSlim`
+(`MauiPushRegistrationService.cs:24,41`). The unregister leg runs from both `LogoutAsync` and
+`RevokeAllSessionsAsync` (`AuthUIService.cs:90,134,320`). The Consequences entry on the third leg
+now reads best-effort rather than fire-and-forget: the native send is awaited inside a non-fatal
+catch, and because `SendPushNotificationCommand` is `ITransactional` a retried final save re-runs
+the live legs, making native delivery at-least-once (`SendPushNotificationHandler.cs:21-29,158-171`).
+The server-side decision (Notification Hubs, `user:{id}` tags, the Null-by-default sender and
+registrar) is unchanged.

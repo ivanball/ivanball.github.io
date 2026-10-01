@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -238,7 +240,7 @@
           <p>Accepted (2026-09-12). Extends <a href="045-managed-file-storage-and-avatars.html">ADR-045</a> from images to
           documents: the framework gains a document content sniffer, a blob-name sanitizer and stored response
           headers, and ADC gains a <code>SessionAsset</code> aggregate that uses them. ADR-045&#39;s avatar-only scope
-          statement (&quot;no other managed uploads exist&quot;) is superseded by this record.</p>
+          statement (&quot;no other managed uploads exist&quot;) is superseded by this record. Revised 2026-10-01 (the upload-options overload is abstract and the template enables on-upload malware scanning by default; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>A speaker finishes a talk and forty people want the deck. Until now ADC&#39;s only answer was
           <code>Session.ResourceLinks</code>, a free-text field imported from Sessionize: the speaker types URLs into
@@ -279,17 +281,19 @@
           columns carry a value; the pairing rule (a file must carry a blob name, a link must not) is a domain
           invariant (<code>.../SessionAssetInvariants.cs:62-83</code>). The identifier is a <strong>server-minted GUID</strong> rather
           than the module&#39;s usual database integer
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:16</code>,
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17</code>,
           minted at <code>SessionAsset.cs:301</code>), because the id is a path segment of a public blob name and a
           sequential one would let anyone who downloaded a single asset walk the container. The asset URL is
           validated as an absolute <code>http</code> or <code>https</code> URL in the domain (<code>SessionAssetInvariants.cs:128-147</code>), so a
           <code>javascript:</code> or <code>data:</code> value is refused once rather than sanitized at each render site.</p>
           <p><strong>2. Authorization is capability OR ownership, decided in the handlers.</strong> A caller may manage a
           session&#39;s materials if they hold <code>conference:session-assets:manage</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:44</code>,
-          granted to Organizer through the full Conference set at <code>:58</code> and to ContentEditor through
-          the ContentManagement set at <code>:73</code>; the grants are wired at
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43-44</code> and <code>:54</code>)
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:47</code>,
+          granted to Organizer through the full Conference set at <code>:50-63</code> (<code>:62</code>) and to ContentEditor through
+          the ContentManagement set at <code>:70-79</code> (<code>:78</code>); the grants are declared once in
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissionGrants.cs:47-48</code>,
+          applied by the service at <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43</code>
+          and by the token-minting Identity host, per <code>ConferencePermissionGrants.cs:12-17</code>)
           <strong>or</strong> if
           their token&#39;s <code>speaker_id</code> claim is among the session&#39;s current, non-deleted speakers. The second
           leg is data, not a capability, so no attribute can express it: the controller&#39;s write actions carry a
@@ -331,49 +335,51 @@
           <li><strong><code>FileUploadOptions</code></strong> (<code>FileUploadOptions.cs:13</code>) carries the <code>Content-Disposition</code> and
           <code>Cache-Control</code> headers stored <strong>with the blob</strong>, built by <code>Attachment</code> (<code>:48</code>) or <code>Inline</code> (<code>:59</code>)
           with RFC 6266 / RFC 5987 encoding of the user-facing file name. They are delivered through a new
-          <code>UploadAsync</code> overload that is a <strong>default interface member</strong>
-          (<code>IFileStorageService.cs:42-43</code>), forwarding to the three-argument contract, so the addition breaks
-          no existing implementation; <code>AzureBlobFileStorageService</code> overrides it and writes the headers onto
-          <code>BlobHttpHeaders</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs:27</code>,
-          <code>:38-43</code>).</li>
+          <code>UploadAsync</code> overload that is <strong>abstract</strong> (<code>IFileStorageService.cs:37</code>), so every implementation
+          must declare it rather than inherit a default that dropped the options (the null default declares it and
+          fails with not-configured, <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/NullFileStorageService.cs:22-23</code>); <code>AzureBlobFileStorageService</code> implements it and writes the headers onto
+          <code>BlobHttpHeaders</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Storage/AzureBlobFileStorageService.cs:28</code>,
+          <code>:39-43</code>), and its three-argument overload forwards to it with <code>FileUploadOptions.None</code> (<code>:23-24</code>).</li>
           </ul>
           <p>ADC&#39;s upload handler sniffs first and stores the canonical type
-          (<code>.../SessionAssets/UseCases/UploadFile/UploadSessionAssetHandler.cs:64-71</code>), and picks the
+          (<code>.../SessionAssets/UseCases/UploadFile/UploadSessionAssetHandler.cs:66-73</code>), and picks the
           disposition by format: a PDF is <code>inline</code>, so it opens in the browser&#39;s own viewer, and everything
-          else is <code>attachment</code> (<code>:151-153</code>), both with an immutable one-year <code>Cache-Control</code> (<code>:45</code>) that is
+          else is <code>attachment</code> (<code>:153-155</code>), both with an immutable one-year <code>Cache-Control</code> (<code>:47</code>) that is
           safe precisely because a blob name carries a fresh asset id and therefore never changes content.</p>
           <p><strong>5. Storage reuses ADR-045 with its own container, and downloads go straight to the blob.</strong> The
           Conference service registers the same <code>AddAzureBlobFileStorage</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:330</code>) against a new <strong>public-read
-          <code>session-assets</code> container</strong> on the existing storage account (<code>MMCA.ADC/infra/main.bicep:1182-1188</code>,
-          container name injected at <code>:1852</code>); the account-scoped data-plane grant already covers it, so no
-          second role assignment (<code>:1205-1210</code>). The blob name is
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:353</code>) against a new <strong>public-read
+          <code>session-assets</code> container</strong> on the existing storage account (<code>MMCA.ADC/infra/main.bicep:1281-1287</code>,
+          container name injected at <code>:1956</code>); the account-scoped data-plane grant already covers it, so no
+          second role assignment (<code>:1314-1322</code>, comment at <code>:1307-1309</code>). The blob name is
           <code>{eventId}/{sessionId}/{assetId}/{sanitized-file-name}</code>
-          (<code>UploadSessionAssetHandler.cs:88-92</code>), which is what makes a public container acceptable: the GUID
+          (<code>UploadSessionAssetHandler.cs:90-94</code>), which is what makes a public container acceptable: the GUID
           segment is unguessable, so holding one asset URL reveals nothing about any other. Attendees download
           from blob storage directly, as they already do for avatars, with no API proxy and no CDN in front.
           Where storage is not configured, the null default stands and an upload fails with
-          <code>SessionAsset.StorageNotConfigured</code> while links keep working (<code>:54-60</code>), which is the local-dev
+          <code>SessionAsset.StorageNotConfigured</code> while links keep working (<code>:56-62</code>), which is the local-dev
           posture. Optional on-upload malware scanning (Microsoft Defender for Storage) is available behind the
-          bicep parameter <code>enableSessionAssetMalwareScanning</code>, <strong>defaulting to false</strong>
-          (<code>MMCA.ADC/infra/main.bicep:136</code>, resource at <code>:1234-1250</code>), for the same two reasons
-          <code>grantAvatarStorageRole</code> is guarded: the write may exceed what the deploy identity is permitted to
-          do, and it is billed per GB scanned. It is defence in depth behind the content gate, not the primary
+          bicep parameter <code>enableSessionAssetMalwareScanning</code>, <strong>defaulting to true</strong>
+          (<code>MMCA.ADC/infra/main.bicep:136</code>, resource at <code>:1334-1350</code>): the deploy identity&#39;s Contributor role covers
+          the settings write (comment at <code>:1324-1333</code>), and the per-GB scanning cost is bounded by a
+          50 GB monthly cap (<code>:1342</code>). Production diverges from the template: an <code>az rest</code> read of the
+          account&#39;s <code>defenderForStorageSettings/current</code> on 2026-10-01 returned Defender for Storage enabled
+          but <code>malwareScanning.onUpload.isEnabled=false</code> (<code>capGBPerMonth=-1</code>). It is defence in depth behind the content gate, not the primary
           control.</p>
           <p><strong>6. Blob removal is a post-commit internal command.</strong> Deleting the row and deleting the bytes are
           two different systems, so the second is scheduled as the durable internal command
           <code>Conference.DeleteSessionAssetBlob.v1</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/UseCases/DeleteSessionAssetBlob/DeleteSessionAssetBlobInternalCommand.cs:16-17</code>)
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/SessionAssets/UseCases/DeleteSessionAssetBlob/DeleteSessionAssetBlobInternalCommand.cs:28-29</code>)
           on <a href="114-internal-commands-durable-job-queue.html">ADR-114</a>&#39;s queue, mirroring what Identity already
           does for avatars. Four paths schedule it: an asset delete
           (<code>.../SessionAssets/UseCases/Delete/DeleteSessionAssetHandler.cs:63-73</code>), a session delete
           (<code>.../Sessions/UseCases/Delete/DeleteSessionHandler.cs:71-95</code> soft-deletes the assets in the same
           save, <code>:41-62</code> schedules the blobs after it commits), an event delete
-          (<code>.../Events/UseCases/Delete/DeleteEventHandler.cs:72-87</code>, cascading through
+          (<code>.../Events/UseCases/Delete/DeleteEventHandler.cs:77-90</code>, blobs scheduled after the commit at <code>:96</code>, cascading through
           <code>EventCascadeDeletionDomainService.CascadeDelete</code> which now takes the event&#39;s assets as a fifth
-          collection, <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventCascadeDeletionDomainService.cs:18-23</code>),
-          and an upload whose row failed to commit after the bytes had already landed
-          (<code>UploadSessionAssetHandler.cs:112</code>, <code>:129</code>). Every one of them schedules <strong>after</strong> the commit, so a
+          collection, <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventCascadeDeletionDomainService.cs:31-37</code>),
+          and an upload whose row could not be created or failed to commit after the bytes had already landed
+          (<code>UploadSessionAssetHandler.cs:114</code>, <code>:131</code>). The three delete paths schedule <strong>after</strong> the commit, so a
           rolled-back delete never removes a file its row still points at, and a storage outage or a crash in
           that tail defers the cleanup instead of losing it.</p>
           <p><strong>Limits.</strong> 50 MB per file and at most 10 live assets per session, both stated once on
@@ -389,14 +395,12 @@
           body-size raise there is <strong>path-scoped to <code>/SessionAssets/file</code> alone</strong>
           (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:194-213</code>), not global: every other route keeps
           its default budget. The gateway&#39;s forwarding route itself is anonymous, as every gateway route is
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:211-215</code>).</p>
-          <p><strong>UI (UI slice).</strong> Speakers and organizers manage a session&#39;s materials through
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:219-223</code>).</p>
+          <p><strong>UI.</strong> Speakers and organizers manage a session&#39;s materials through
           <code>Conference.UI/Pages/SessionAssets/SessionAssetsPanel.razor</code>, hosted on both the speaker dashboard
           and the organizer session detail page; attendees see them through
           <code>SessionAssetsDownloadList.razor</code>, rendered on
-          <code>Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor</code> beneath the existing resource links.
-          Both components are marked as a UI slice here because they land separately from the API and domain
-          work this record describes.</p>
+          <code>Conference.UI/Pages/Public/Sessions/PublicSessionDetail.razor</code> beneath the existing resource links.</p>
           <p><strong>Visibility is immediate.</strong> An asset appears as soon as its session is publicly visible; there is no
           embargo, no separate publish step and no &quot;materials posted&quot; notification. A speaker who uploads
           early is publishing early, which is the behaviour speakers asked for and the one that needs no state
@@ -426,9 +430,10 @@
           <strong>security gate</strong>, and a security gate that lives in one consumer is a security gate the next
           consumer writes again, slightly differently. Store has document-shaped uploads ahead of it (invoices,
           product manuals) and MMCA.Helpdesk&#39;s ticket attachments are the same problem verbatim. One sniffer,
-          one test suite, one place to fix a format quirk, and the extension cost is bounded: the sniffer,
-          <code>BlobNames</code> and <code>FileUploadOptions</code> are dependency-free static types, and the <code>UploadAsync</code> overload
-          is a default interface member so no existing implementation breaks.</p>
+          one test suite, one place to fix a format quirk, and the extension cost is bounded: the sniffer and
+          <code>BlobNames</code> are dependency-free static classes, <code>FileUploadOptions</code> is a dependency-free sealed record
+          (<code>FileUploadOptions.cs:13</code>), and the <code>UploadAsync</code> overload is abstract, so every implementation must
+          declare it rather than inherit a default that silently dropped the headers (<code>IFileStorageService.cs:37</code>).</p>
           <p><strong>Embargo until the session ends (deferred, not rejected).</strong> Holding materials back until a talk
           finishes is a real request from organizers who do not want the deck read instead of the talk
           attended. It is deferred rather than decided: it needs a per-event policy, a clock the public read
@@ -448,8 +453,9 @@
           <li><strong>Bytes are stored as uploaded, so the gate is the only defence.</strong> Unlike an avatar, nothing about
           a stored deck has been transformed, so a payload the sniffer&#39;s format rules admit is a payload the
           container serves. The sniffer bounds the format, not the content; Defender for Storage exists for
-          exactly that residue and is off by default, which means the shipped posture is format-checked but
-          not malware-scanned.</li>
+          exactly that residue and the template turns on-upload scanning on by default, capped at 50 GB a
+          month; production read scanning off on 2026-10-01, so the deployed posture is format-checked but
+          not malware-scanned until the deployed setting matches the template.</li>
           <li><strong>Blob cleanup is eventually consistent.</strong> Every delete path schedules the blob removal after its
           commit, so between the commit and the queue&#39;s next tick the file is still fetchable by anyone
           holding its URL. A row that fails to schedule is logged as an orphan that needs a manual sweep;
@@ -468,6 +474,26 @@
           the format gate, the size and count caps, and soft-delete, which lets an organizer take material
           down without losing the record that it existed.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>Two parts of the decision changed and the rest of the record was re-anchored. The options-carrying
+          <code>IFileStorageService.UploadAsync</code> overload is no longer a default interface member: it is abstract
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Storage/IFileStorageService.cs:37</code>),
+          recorded as a breaking change in MMCA.Common v1.210.0 (<code>MMCA.Common/CHANGELOG.md:331-332</code>) because
+          the default implementation dropped the options, and <code>AzureBlobFileStorageService</code> now forwards its
+          three-argument overload to the options overload (<code>AzureBlobFileStorageService.cs:23-24</code>). The
+          Rationale sentence on the extension cost now says so, and describes <code>FileUploadOptions</code> as a sealed
+          record (<code>FileUploadOptions.cs:13</code>). On-upload malware scanning now defaults to on in the template
+          (<code>MMCA.ADC/infra/main.bicep:136</code>, resource <code>:1334-1350</code>, cap <code>:1342</code>), because the deploy identity&#39;s
+          Contributor role was verified to cover the settings write (<code>:1324-1333</code>); only the cost reason
+          remains and the cap bounds it. Production does not match the template: an <code>az rest</code> GET of the
+          storage account&#39;s <code>defenderForStorageSettings/current</code> (api-version 2022-12-01-preview) on 2026-10-01
+          returned <code>isEnabled=true</code> and <code>overrideSubscriptionLevelSettings=true</code> but
+          <code>malwareScanning.onUpload.isEnabled=false</code> with <code>capGBPerMonth=-1</code>; that read is the evidence for the
+          deployed state. The grants are now declared in the Shared project (<code>ConferencePermissionGrants.cs:47-48</code>)
+          and applied by both the Conference service and the Identity host. The &quot;UI slice&quot; note is removed
+          because both components are wired into three pages (<code>SpeakerDashboard.razor:223</code>,
+          <code>SessionDetail.razor:179</code>, <code>PublicSessionDetail.razor:114</code>). Every other citation was refreshed to
+          current line numbers.</p>
           <h2 id="related">Related</h2>
           <p><a href="045-managed-file-storage-and-avatars.html">ADR-045</a> (the storage abstraction, the image path this
           record is the document sibling of, and the avatar-only scope statement this supersedes),
@@ -493,6 +519,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -250,7 +252,7 @@
           point (<code>AddMmcaGateway</code>) joins the Decision, and the declines gain a companion list of
           <strong>delegations</strong>, behaviors the gateway deliberately leaves to a layer better placed to perform them,
           recorded so an audit reads them as decisions rather than as gaps. Both consumer gateways reference
-          the package in package mode (<code>MMCA.ADC/Directory.Packages.props:115</code>,
+          the package in package mode (<code>MMCA.ADC/Directory.Packages.props:125</code>,
           <code>MMCA.Store/Directory.Packages.props:14</code>).</p>
           <p><strong>Revised 2026-08-31:</strong> both consumers pin <code>MMCA.Common.Gateway</code> in lockstep with the rest of the
           framework rather than on a version of its own (1.185.0 today, at the two lines cited above), and the
@@ -265,16 +267,17 @@
           a trusted-internal-caller exemption beside the synthetic-traffic one, recorded as a second amendment
           below. Every rate-limiting citation is refreshed against current line numbers, which moved when that
           code landed. Nothing else in the decision changes.</p>
-          <p><strong>Revised 2026-09-19:</strong> both consumers now pin <code>MMCA.Common.Gateway</code> at 1.205.0, still in lockstep
-          with the rest of the framework rather than on a version of its own
-          (<code>MMCA.ADC/Directory.Packages.props:118</code>, <code>MMCA.Store/Directory.Packages.props:14</code>); the 1.185.0
-          figure above is the 2026-08-31 snapshot, not the current pin. Nothing in the decision changes.</p>
+          <p><strong>Revised 2026-09-19:</strong> both consumers pinned <code>MMCA.Common.Gateway</code> at 1.205.0 on that date, still in
+          lockstep with the rest of the framework rather than on a version of its own; the current pin is
+          1.216.0 in both (<code>MMCA.ADC/Directory.Packages.props:125</code>, <code>MMCA.Store/Directory.Packages.props:14</code>),
+          and the 1.185.0 figure above is the 2026-08-31 snapshot. Nothing in the decision changes.</p>
           <p><strong>Revised 2026-09-25:</strong> the bearer-delegation paragraph now records the one edge-authorization
           difference between the two gateways: ADC&#39;s host evaluates the <code>anonymous</code> policy each route declares
           through an authorization middleware pair, while Store&#39;s routes declare the same policy and its host
           registers no authorization middleware, by design. Neither authenticates anyone. The ADC gateway
           citations in the load-balancing delegation and the adoption trade-off are refreshed against current
           line numbers. Nothing in the decision changes.</p>
+          <p><strong>Revised 2026-10-01:</strong> both consumers now turn active destination probing off; see the Revision (2026-10-01) below.</p>
           <h2 id="context">Context</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> made the Gateway the only client entry point and gave it
           three jobs: the route-to-service map, CORS, and forwarding the caller&#39;s <code>Authorization</code> header. Nothing
@@ -289,7 +292,8 @@
           security headers, default endpoints, CORS, static files and a privacy endpoint around its forwarders
           (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:77</code>, <code>:117</code>, <code>:119</code>, <code>:120</code>, <code>:129</code>, <code>:134-135</code>),
           and Store registered security headers, default endpoints and CORS
-          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:58</code>, <code>:64</code>, <code>:140</code>, <code>:142</code>, <code>:143</code>). Neither
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:58</code>, <code>:64</code>, <code>:140</code>, <code>:142</code>, <code>:143</code>; both sets
+          of line numbers are as of the original 2026-08-18 record, before the edge kit landed). Neither
           had a rate limiter or a correlation id of any kind.</p>
           <p><strong>A correlation id minted per service is not a correlation id.</strong> <code>CorrelationIdMiddleware</code> (ADR-041)
           runs inside each service host and falls back to the W3C trace id when the client sends no
@@ -320,7 +324,12 @@
           real boundary rather than a packaging convenience: the Aspire kit registers <strong>host</strong> middleware and
           health checks that any ASP.NET Core process could use, while the Gateway package registers YARP&#39;s own
           extension points (config filters, transforms, per-route limiter policies) and therefore has to
-          reference YARP, which a service host has no reason to carry.</p>
+          reference YARP, which a service host has no reason to carry. The Gateway package also carries one
+          piece of host middleware, <code>UseCommonForwardedHeaders()</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/ForwardedHeadersExtensions.cs:36</code>), which both
+          gateway hosts call first so the per-client-IP window sees the real caller behind the ingress
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:158</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:150</code>).</p>
           <h2 id="decision">Decision</h2>
           <p>Ship a <strong>gateway edge kit</strong> in a <code>Gateway</code> namespace inside <code>MMCA.Common.Aspire</code>, owning exactly three
           responsibilities, and record three more as deliberately declined. A fourth section, added 2026-08-27
@@ -346,10 +355,10 @@
           <p><strong>2. Rate limiting at the edge counts anonymous callers, and chains a global concurrency cap behind
           it.</strong> <code>AddGatewayRateLimiting</code> installs a per-client-IP fixed window partitioned on
           <code>Connection.RemoteIpAddress</code> with <strong>no authentication exemption of any kind</strong>
-          (<code>ClientIpPartition</code>, <code>.../Gateway/GatewayRateLimitingExtensions.cs:185</code>, the address read at <code>:197</code>,
-          limiter at <code>:205</code>), chained through <code>PartitionedRateLimiter.CreateChained</code> (<code>:288</code>) with a
-          process-wide concurrency limiter (<code>ConcurrencyPartition</code>, <code>:223-238</code>, the limiter at <code>:232</code>),
-          rejecting overage with 429 (<code>:283</code>). The two answer different failures: the window answers one noisy
+          (<code>ClientIpPartition</code>, <code>.../Gateway/GatewayRateLimitingExtensions.cs:195</code>, the address read at <code>:215</code>,
+          limiter at <code>:223</code>), chained through <code>PartitionedRateLimiter.CreateChained</code> (<code>:306</code>) with a
+          process-wide concurrency limiter (<code>ConcurrencyPartition</code>, <code>:241-256</code>, the limiter at <code>:250</code>),
+          rejecting overage with 429 (<code>:301</code>). The two answer different failures: the window answers one noisy
           source, and the concurrency cap answers total in-flight work regardless of how many sources produced
           it, which is the failure a per-IP window structurally cannot see. Defaults live in
           <code>GatewayRateLimitingSettings</code> (section <code>&quot;GatewayRateLimiting&quot;</code>,
@@ -357,21 +366,21 @@
           (<code>:63</code>), <code>GlobalConcurrencyLimit</code> 200 (<code>:73</code>).</p>
           <p><strong>The settings are validated twice, because there are two ways in.</strong> The configuration overload binds
           through <code>AddOptions().Bind(section).ValidateDataAnnotations().ValidateOnStart()</code>
-          (<code>GatewayRateLimitingExtensions.cs:255-258</code>), so a host with an out-of-range value refuses to boot,
+          (<code>GatewayRateLimitingExtensions.cs:273-276</code>), so a host with an out-of-range value refuses to boot,
           which is <a href="070-fail-fast-configuration-contract.html">ADR-070</a>&#39;s contract exactly. That alone would not be
           enough here: the limiter closes over an eagerly-bound copy rather than resolving <code>IOptions</code> per
           request, and a caller can hand settings straight to the object overload without passing through the
           options pipeline at all. So the overload every path funnels into runs
-          <code>Validator.ValidateObject(settings, ..., validateAllProperties: true)</code> at registration (<code>:279</code>, with
-          the reasoning stated inline at <code>:276-278</code>). The <code>[Range]</code> bounds on the three numeric settings
+          <code>Validator.ValidateObject(settings, ..., validateAllProperties: true)</code> at registration (<code>:297</code>, with
+          the reasoning stated inline at <code>:294-296</code>). The <code>[Range]</code> bounds on the three numeric settings
           (<code>GatewayRateLimitingSettings.cs:58</code>, <code>:62</code>, <code>:72</code>) are therefore load-bearing on both paths: an
           invalid <code>PermitLimit</code> throws where it is configured, not at the first throttled request.</p>
           <p>Bypasses are two-tier as first recorded, and two secret-gated tiers joined them in the amendments
           below (synthetic traffic on 2026-09-01, a trusted internal caller on 2026-09-07), so four exist
           today. The tiers are different kinds of thing. <strong>Infrastructure bypasses are
           unconditional</strong>: <code>/health</code>, <code>/alive</code> and <code>/.well-known</code> are hard-coded
-          (<code>GatewayRateLimitingExtensions.cs:59</code>, matched by path segment, case-insensitively, <code>IsBypassed</code> at
-          <code>:71-80</code>, the comparison at <code>:79</code>), because
+          (<code>GatewayRateLimitingExtensions.cs:69</code>, matched by path segment, case-insensitively, <code>IsBypassed</code> at
+          <code>:81-90</code>, the comparison at <code>:89</code>), because
           throttling them takes down probes and token validation (ADR-004&#39;s JWKS discovery) as a side effect of
           throttling traffic. <strong>Application bypasses are configuration</strong>, through <code>BypassPathPrefixes</code>
           (<code>GatewayRateLimitingSettings.cs:82</code>, empty by default), and each consumer sets its own list in the
@@ -379,16 +388,16 @@
           (<a href="089-gateway-topology-owned-by-configuration.html">ADR-089</a>). The two entries are recorded here so they
           are not rediscovered as incidents: Store&#39;s Stripe webhook route (<code>/Payments/{**catch-all}</code>, bypassed
           by the <code>&quot;/Payments&quot;</code> prefix at
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:17</code>, route at <code>:77-80</code>), because a 429
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:20</code>, route at <code>:139-143</code>), because a 429
           to Stripe is a retry and eventually a disabled endpoint, which silently stops every payment update
           (<a href="084-stripe-webhook-ingress.html">ADR-084</a>); and ADC&#39;s SignalR hub route (<code>/hubs/{**catch-all}</code>,
           bypassed by the <code>&quot;/hubs&quot;</code> prefix at
-          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:17</code>, route at <code>:156-159</code>), because a
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:25</code>, route at <code>:254-258</code>), because a
           negotiate-plus-reconnect storm from one office&#39;s shared address is exactly the pattern a per-IP window
           misreads as abuse (<a href="039-live-channel-push.html">ADR-039</a>).</p>
           <p><strong>A request with no attributable client IP is not limited.</strong> It gets
-          <code>RateLimitPartition.GetNoLimiter</code> (<code>GatewayRateLimitingExtensions.cs:202</code>, the reasoning inline at
-          <code>:200-201</code>) rather than sharing one
+          <code>RateLimitPartition.GetNoLimiter</code> (<code>GatewayRateLimitingExtensions.cs:220</code>, the reasoning inline at
+          <code>:218-219</code>) rather than sharing one
           bucket with every other unattributable request, which is the same fail-open posture ADR-019 chose for
           <code>auth-ip</code> and for the global limiter&#39;s fallback key, for the same reason: a shared &quot;unknown&quot; bucket is
           a single tripwire that one misbehaving caller pulls for everyone behind it.</p>
@@ -408,10 +417,10 @@
           configured header (<code>SyntheticTrafficHeaderName</code>, default <code>X-Synthetic-Traffic-Key</code>,
           <code>GatewayRateLimitingSettings.cs:91</code>) whose single value matches the configured secret
           (<code>SyntheticTrafficSecret</code>, <code>:115</code>) takes the same no-limiter partition as the two tiers above on BOTH
-          chained limiters: <code>IsSyntheticTraffic</code> (<code>GatewayRateLimitingExtensions.cs:98</code>) feeds the one
-          <code>IsExemptFromLimiters</code> predicate (<code>:172-175</code>) that each partition consults (<code>:192</code> and <code>:230</code>). It is
-          off by default (a null or blank secret disables it, <code>:148-151</code>), the comparison is constant-time
-          (<code>CryptographicOperations.FixedTimeEquals</code>, <code>:162</code>), exactly one header value is accepted (<code>:154</code>),
+          chained limiters: <code>IsSyntheticTraffic</code> (<code>GatewayRateLimitingExtensions.cs:108</code>) feeds the one
+          <code>IsExemptFromLimiters</code> predicate (<code>:182-185</code>) that each partition consults (<code>:210</code> and <code>:248</code>). It is
+          off by default (a null or blank secret disables it, <code>:158-161</code>), the comparison is constant-time
+          (<code>CryptographicOperations.FixedTimeEquals</code>, <code>:172</code>), exactly one header value is accepted (<code>:164</code>),
           and a configured secret shorter than 32 characters fails at registration under the ADR-070 contract
           (<code>[StringLength(int.MaxValue, MinimumLength = 32)]</code>, <code>GatewayRateLimitingSettings.cs:114</code>). The secret
           is a deployment concern, never a checked-in setting: each consumer injects
@@ -428,17 +437,22 @@
           (<code>GatewayRateLimitingSettings.cs:151</code>) with <code>TrustedCallerHeaderName</code> (default
           <code>X-Internal-Caller-Key</code>, <code>:123</code>) generalizes the tier above from a load-test runner to any internal
           caller the deployment trusts. The two share one implementation, so the guarantees are identical
-          rather than merely similar: <code>IsTrustedInternalCaller</code> (<code>GatewayRateLimitingExtensions.cs:131</code>) and
-          <code>IsSyntheticTraffic</code> (<code>:98</code>) both call <code>PresentsSecret</code> (<code>:146</code>), which is off when no secret is
-          configured (<code>:148-151</code>), rejects a multi-valued header (<code>:154</code>) and compares in constant time
-          (<code>:162</code>), and both reach the limiters through the same <code>IsExemptFromLimiters</code> predicate (<code>:172-175</code>).
+          rather than merely similar: <code>IsTrustedInternalCaller</code> (<code>GatewayRateLimitingExtensions.cs:141</code>) and
+          <code>IsSyntheticTraffic</code> (<code>:108</code>) both call <code>PresentsSecret</code> (<code>:156</code>), which is off when no secret is
+          configured (<code>:158-161</code>), rejects a multi-valued header (<code>:164</code>) and compares in constant time
+          (<code>:172</code>). The per-IP partition tests <code>IsTrustedInternalCaller</code> first (<code>:202-208</code>) and stamps
+          the request&#39;s <code>HttpContext.Items</code> under <code>TrustedInternalCallerItemKey</code> (<code>:62</code>, set at <code>:206</code>), so the
+          named per-route policies of <code>MMCA.Common.Gateway</code> exempt the trusted caller too (<code>auth-tight</code>
+          included; <code>RateLimiting/GatewayRoutePolicyExtensions.cs:38</code>, read at <code>:99</code>). Synthetic traffic, and
+          every request on the concurrency partition, go through the shared <code>IsExemptFromLimiters</code> predicate
+          (<code>:182-185</code>).
           A configured secret shorter than 32 characters fails at registration
           (<code>GatewayRateLimitingSettings.cs:150</code>). The secret is deployment data on both sides of the boundary:
           each consumer injects <code>GatewayRateLimiting__TrustedCallerSecret</code> into gateway and UI container alike
-          from Key Vault (<code>MMCA.ADC/infra/main.bicep:2227</code> and <code>:2367</code>, <code>MMCA.Store/infra/main.bicep:1889</code> and
-          <code>:2006</code>), and the client half is framework code, <code>AddTrustedCallerHeader</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:87</code>, attaching
-          <code>TrustedCallerHandler</code>, <code>Security/TrustedCallerHandler.cs:35</code>, at <code>:122</code>). It exempts a component you
+          from Key Vault (<code>MMCA.ADC/infra/main.bicep:2404</code> and <code>:2552</code>, <code>MMCA.Store/infra/main.bicep:1949</code> and
+          <code>:2074</code>), and the client half is framework code, <code>AddTrustedCallerHeader</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:106</code>, attaching
+          <code>TrustedCallerHandler</code>, <code>Security/TrustedCallerHandler.cs:35</code>, at <code>:141</code>). It exempts a component you
           deployed, never a browser, so it must never reach client-side code.
           <a href="019-rate-limiting.html">ADR-019</a> records the same tier from the limiter-policy side.</p>
           <p><strong>3. Readiness reflects the downstreams; liveness does not.</strong>
@@ -450,8 +464,8 @@
           (<code>GatewayHealthCheckExtensions.cs:84</code>) applied at both the client (<code>:195</code>) and the registration
           (<code>:212</code>), reports <code>Unhealthy</code> on failure (<code>:210</code>) and carries the <code>Ready</code> tag (<code>:211</code>).</p>
           <p>The tag is the whole design. The Aspire defaults map <code>/alive</code> to checks tagged <code>Live</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:334-337</code>) and <code>/health/ready</code> to
-          everything not tagged <code>Live</code> or <code>Optional</code> (<code>:350-353</code>), so a <code>Ready</code>-tagged downstream check reaches
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:138-141</code>) and <code>/health/ready</code> to
+          everything not tagged <code>Live</code> or <code>Optional</code> (<code>:154-156</code>), so a <code>Ready</code>-tagged downstream check reaches
           readiness and never reaches liveness. Liveness must stay process-local, or a downstream outage restarts
           a perfectly healthy Gateway and makes the outage worse. <code>/alive</code> answers &quot;is this process wedged&quot;,
           <code>/health/ready</code> answers &quot;can this process do useful work&quot;, and only the second depends on anything
@@ -469,8 +483,9 @@
           <code>ValidateDataAnnotations().ValidateOnStart()</code> (<code>GatewayReverseProxyExtensions.cs:54-57</code>), the same
           ADR-070 contract the rate-limit settings honor, and the per-route policies are additionally validated
           at registration with <code>Validator.ValidateObject</code>
-          (<code>RateLimiting/GatewayRoutePolicyExtensions.cs:51</code>, reasoning at <code>:33-36</code>), for the same
-          closed-over-copy reason recorded below.</p>
+          (<code>RateLimiting/GatewayRoutePolicyExtensions.cs:62</code>, reasoning at <code>:45-46</code>), because the limiter
+          factory closes over each policy object (<code>:76</code>), so a bad value would otherwise surface only at the
+          first throttled request.</p>
           <p><strong>It registers services and maps nothing, and it does not load the route table.</strong> The host still
           calls <code>MapReverseProxy()</code> and <code>UseRateLimiter()</code> itself (<code>GatewayReverseProxyExtensions.cs:42-45</code>),
           and <code>LoadFromConfig</code> stays the host&#39;s call because which section owns the routes, and whether they
@@ -529,7 +544,7 @@
           declared policy is read rather than implied, with the framework fallback policy deliberately not
           adopted, because it ships in <code>MMCA.Common.API</code> and would pull the MVC stack into a pure YARP host
           (<code>:108-111</code>). Store&#39;s routes declare <code>anonymous</code> as well, but its host registers no authorization
-          middleware, by design (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:41-45</code>). With no
+          middleware, by design (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:45-49</code>). With no
           authentication scheme on either host, an evaluated <code>anonymous</code> policy admits every request, so both
           gateways still forward every bearer untouched to the service that validates it. The <code>Authorization</code> header travels on
           YARP&#39;s default request-header copy rather than through a transform of its own: the one transform the
@@ -540,9 +555,9 @@
           the gateway just forwards the Authorization header transparently&quot;) and again in its project file
           (<code>MMCA.Store.Gateway.csproj:6-7</code>, &quot;no JWT middleware&quot;). The backends validate through JWKS discovery
           against the authority (<code>AddForwardedJwtBearer</code>,
-          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:445</code>,
-          the single <code>AddJwtBearer</code> at <code>:475-476</code>, <code>Authority</code> at <code>:478</code>), served by <code>MapJwksEndpoint</code>
-          (<code>.../MMCA.Common.API/Startup/JwksEndpointExtensions.cs:31</code>). Adding validation at the edge would
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:51</code>,
+          its <code>AddJwtBearer</code> at <code>:81-82</code> inside <code>AddForwardedJwtBearerCore</code> (<code>:76</code>), <code>Authority</code> at <code>:84</code>), served by <code>MapJwksEndpoint</code>
+          (<code>.../MMCA.Common.API/Startup/Endpoints/JwksEndpointExtensions.cs:31</code>). Adding validation at the edge would
           give the gateway issuer and key-discovery configuration it does not have, which is the coupling the
           decline above rejects: an Identity outage would become a Gateway outage.</p>
           <p><strong>Load balancing is delegated to Azure Container Apps ingress.</strong> No <code>LoadBalancingPolicy</code> appears
@@ -550,29 +565,30 @@
           bicep. It is not needed, because <strong>every cluster fronts exactly one destination</strong>: an Aspire
           service-discovery name (<code>http://identity</code>, <code>http://conference</code>) that ACA ingress resolves and
           balances across the replicas behind it. ADC declares five clusters with one destination each
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:163-166</code>, <code>:172-175</code>, <code>:181-184</code>,
-          <code>:190-193</code>, <code>:195-198</code>) and Store three (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:84-92</code>,
-          <code>:93-101</code>, <code>:102-106</code>), resolved through <code>AddServiceDiscoveryDestinationResolver</code>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:261-269</code>, <code>:270-278</code>, <code>:279-287</code>,
+          <code>:288-292</code>, <code>:293-297</code>) and Store three (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:146-154</code>,
+          <code>:155-163</code>, <code>:164-168</code>), resolved through <code>AddServiceDiscoveryDestinationResolver</code>
           (ADC <code>Program.cs:149</code>, Store <code>Program.cs:141</code>) against the bicep address book
-          (<code>MMCA.ADC/infra/main.bicep:1652-1655</code>). The shape is not incidental: both repositories <strong>pin it as
+          (<code>MMCA.ADC/infra/main.bicep:2381-2384</code>). The shape is not incidental: both repositories <strong>pin it as
           an invariant</strong>, asserting that each cluster contains a single destination
-          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:229-231</code>,
-          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:270-272</code>). A second destination in
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:251-253</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/RouteMapTests.cs:315-317</code>). A second destination in
           a cluster would be the gateway balancing across replicas the platform is already balancing across,
           with two schedulers holding different opinions about which instance is healthy.</p>
           <p><strong>Proxy-hop retries are delegated to client-side resilience.</strong> The gateway retries nothing: no retry
           configuration, no Polly pipeline and no <code>IForwarderHttpClientFactory</code> appears in the package or in
           either host. Retries live in the client the user is waiting on, where
-          <code>EntityServiceBase</code> runs a Polly exponential-backoff-with-jitter policy
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:15-16</code>, executed at
-          <code>:229</code> and <code>:255</code>), while the server-to-server budget is deliberately one attempt
-          (<code>.../MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:28</code>, the up-to-16x storm argument at
-          <code>:21-27</code>). The decisive reason is <a href="017-request-idempotency.html">ADR-017</a>: the <code>Idempotency-Key</code> is
+          <code>EntityServiceBase</code> runs a Polly exponential-backoff-with-jitter policy declared on its base
+          <code>AuthenticatedServiceBase</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Api/AuthenticatedServiceBase.cs:25</code>,
+          built at <code>:140</code>; executed in <code>EntityServiceBase.cs</code> at
+          <code>:342</code> and <code>:370</code>), while the server-to-server budget is deliberately one retry beyond the initial attempt
+          (<code>.../MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:30</code>, the up-to-16x storm argument at
+          <code>:22-28</code>). The decisive reason is <a href="017-request-idempotency.html">ADR-017</a>: the <code>Idempotency-Key</code> is
           minted client-side and held constant across that client&#39;s own attempts, and it appears nowhere in
           the gateway package or either gateway host. A proxy-hop retry would therefore be a replay with
           nothing attached to make it safe, on a write the proxy cannot inspect to know whether replaying it
           is harmless. Retrying where the key is is the only version that is correct.</p>
-          <p><strong>Active destination probing is available and off by default, and both consumers turn it on.</strong> The
+          <p><strong>Active destination probing is available and off by default, and both consumers leave it off.</strong> The
           package can apply YARP health-check defaults to any cluster that declares none
           (<code>Configuration/GatewayHealthCheckDefaultsConfigFilter.cs</code>, additive-only: an existing block is kept
           verbatim, <code>:30-31</code>, class doc at <code>:9-14</code>). <strong>Passive</strong> checking is the default that is on
@@ -585,12 +601,14 @@
           (<code>:160</code>) under a 5 second budget (<code>:163</code>). <code>/alive</code> rather than <code>/health</code> is its own decision:
           readiness on a downstream flips during that downstream&#39;s rolling deployment, and ejecting a
           destination for that is the gateway reacting to a healthy deployment as if it were an outage
-          (<code>:165-169</code>). Both consumers enable it at a 30 second interval
-          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:35-40</code>,
-          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:24-29</code>) and both pin the effective
-          result (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:229</code>,
-          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/MmcaGatewayTests.cs:121-142</code>), so the default is
-          off and the deployed answer is on.</p>
+          (<code>:165-169</code>). Both consumers set <code>HealthCheckDefaults:Active:Enabled</code> to <code>false</code> explicitly: every
+          cluster fronts one Container Apps address that the platform already routes only to ready replicas, so
+          an active probe could only eject the sole destination, and each probe bills an otherwise idle
+          downstream replica at the active rate (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:52-61</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:26-35</code>). Both pin the effective result
+          (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:85-89</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/MmcaGatewayTests.cs:136-140</code>), so the default is
+          off, the deployed answer is off, and passive checking stays on in both.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>The edge is the only place that sees a request exactly once.</strong> That is what makes ensure-at-the-edge
@@ -617,7 +635,7 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The limiter closes over an eagerly-bound copy of the settings</strong>
-          (<code>GatewayRateLimitingExtensions.cs:260-261</code>, consumed at <code>:290</code> and <code>:292</code>), so an
+          (<code>GatewayRateLimitingExtensions.cs:278-279</code>, consumed at <code>:308</code> and <code>:310</code>), so an
           <code>IOptionsMonitor</code> reload never reaches it. Validation is not the gap (both paths validate, see the
           Decision), but liveness of the value is: changing a limit is a restart, not a config push, which is
           the opposite of what &quot;it is
@@ -645,7 +663,8 @@
           <li><strong>Two different <code>/alive</code> probes now exist, and they answer different questions.</strong> The Aspire kit&#39;s
           <code>AddGatewayDownstreamHealthChecks</code> probes <code>/alive</code> under a 2 second budget and feeds the
           <strong>Gateway&#39;s own readiness</strong>, so a downstream outage takes the Gateway out of ACA&#39;s rotation. The
-          Gateway package&#39;s active health check probes the same path under a 5 second default and feeds
+          Gateway package&#39;s active health check, when a host enables it (neither consumer does), probes the
+          same path under a 5 second default and feeds
           <strong>YARP destination ejection</strong>, so a failing destination stops receiving forwards. Same path, same
           word &quot;health&quot;, different mechanism and different consequence, and a reader who conflates them will
           misdiagnose the next incident. They are also tuned differently on purpose: the readiness probe is
@@ -665,7 +684,7 @@
           recorded decision without failing a build.</li>
           <li><strong>Nothing gates adoption.</strong> A gateway that never calls the three registrations behaves exactly as
           before, and no fitness function names a gateway host. Both consumer gateways do call all three
-          today (ADC <code>Program.cs:74</code>, <code>:88</code>, <code>:148</code>; Store <code>Program.cs:87</code>, <code>:112</code>, <code>:140</code>), but that is a
+          today (ADC <code>Program.cs:74</code>, <code>:88</code>, <code>:163</code>; Store <code>Program.cs:87</code>, <code>:112</code>, <code>:155</code>), but that is a
           wiring habit rather than an enforced invariant, which is the audit-the-inventory caveat ADR-005 and
           ADR-017 both record, now applied to the edge.</li>
           </ul>
@@ -915,6 +934,58 @@
           <p>This closes item 2 of the 2026-09-10 revision as a remediation: the hardening is no longer a thing each
           public UI host has to remember to write, and a third Blazor host gets it with one <code>using</code> and two
           registrations.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p><strong>Both consumers now turn active destination probing off.</strong> The framework half of the delegation is
+          unchanged: active checks stay opt-in (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/GatewaySettings.cs:153</code>)
+          and passive checks stay on. What changed is each consumer&#39;s choice. Both gateways set
+          <code>MmcaGateway:HealthCheckDefaults:Active:Enabled</code> to <code>false</code>
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:52-61</code>,
+          <code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/appsettings.json:26-35</code>), for the reason the configuration
+          states inline: every cluster fronts one Container Apps address the platform already routes only to
+          ready replicas, so an active probe could only eject the sole destination (turning a slow request into
+          a 503), and each probe bills an otherwise idle downstream replica at the active rate. The tests now pin
+          the OFF answer (<code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:85-89</code>,
+          <code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/MmcaGatewayTests.cs:136-140</code>). The delegation
+          paragraph and the two-probes trade-off are corrected to match. Store&#39;s gateway host still describes
+          an active <code>/alive</code> probe every 30 seconds in its comments
+          (<code>MMCA.Store/Source/Hosts/MMCA.Store.Gateway/Program.cs:40</code>, <code>:133</code>); the configuration and its test
+          are what run.</p>
+          <p><strong>Corrections that change no decision.</strong> The trusted internal caller now also bypasses the named
+          per-route policies: the per-IP partition stamps <code>TrustedInternalCallerItemKey</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Gateway/GatewayRateLimitingExtensions.cs:62</code>, set at
+          <code>:206</code>) and <code>auth-tight</code> reads it
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/RateLimiting/GatewayRoutePolicyExtensions.cs:99</code>).
+          The Gateway package carries one piece of host middleware, <code>UseCommonForwardedHeaders()</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Gateway/ForwardedHeadersExtensions.cs:36</code>), now recorded in
+          the Context. The server-to-server budget is one retry beyond the initial attempt, not one attempt
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:30</code>). Every other
+          citation in the current-state sections is refreshed against current line numbers (the rate-limiting
+          kit, the health mapping now in <code>Extensions.Health.cs</code>, the forwarded-JWT registration now in
+          <code>WebApplicationBuilderExtensions.Authentication.cs</code>, <code>EntityServiceBase</code> now under <code>Services/Api/</code>,
+          the route and cluster tables, both bicep files, the route-map tests and the package pins).</p>
+          <p><strong>Two statements are flagged rather than changed.</strong> <code>AddServiceDefaults</code> attaches the standard Polly
+          resilience handler to every <code>IHttpClientFactory</code> client in both gateway hosts
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:39</code>, <code>:49</code>), so &quot;no Polly pipeline
+          appears in either host&quot; reads more broadly than the code. The comment above that registration says
+          the defaults also reach the YARP forwarder (<code>:37-38</code>), but no code in the gateway package or either
+          gateway host replaces YARP&#39;s forwarder client factory to route the proxy hop through
+          <code>IHttpClientFactory</code>, so this record does not adopt the comment&#39;s claim; whether the handler reaches
+          the proxy hop is left for review. ADC&#39;s route-table comment says the
+          framework fallback policy is registered and that an undeclared route fails closed
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:72-77</code>), while the host registers plain
+          <code>AddAuthorization()</code> with no fallback (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:108-112</code>);
+          this record follows <code>Program.cs</code>.</p>
+          <p><strong>Superseded statements in earlier revisions.</strong> Those sections stay as written. ADC&#39;s app-side
+          <code>DownstreamReadinessCache</code> (2026-09-07 item 1) is deleted; the gateway relies on the framework
+          <code>CachedHealthReportProvider</code> with <code>HealthChecks:CacheSeconds</code> pinned to 10
+          (<code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/appsettings.json:40-42</code>,
+          <code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Program.cs:90-96</code>). The 2026-09-20 consumer changes are
+          merged, so neither consumer has a <code>Hardening/</code> folder and every per-app <code>Hardening/</code> anchor in the
+          2026-09-07 and 2026-09-10 revisions no longer resolves. The framework UI kit keeps <code>/_blazor</code> inside
+          the per-IP window but exempts it from the concurrency ceiling, because the same prefix carries the
+          circuit WebSocket
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:140</code>,
+          reasoning at <code>:63-67</code>), and it also exempts any path with a file extension (<code>:80-81</code>).</p>
           <h2 id="related">Related</h2>
           <p><a href="008-service-extraction-topology.html">ADR-008</a> (the record that made the Gateway the only entry point
           and gave it routing, CORS and auth forwarding; this is the first record to add cross-cutting behavior
@@ -953,6 +1024,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-10">Revision (2026-09-10)</a></li>
             <li><a href="#revision-2026-09-20">Revision (2026-09-20)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -238,7 +240,8 @@
           <p>Accepted (2026-09-09; revised 2026-09-19: item 10 now scopes the &quot;no <code>@page</code> directive&quot; claim to what
           this decision ships, because <code>MMCA.Common.UI</code> itself ships 13 of them in the credential and
           notification pages, and it now names <code>UserAdminList&lt;TUser&gt;</code> as the third routeless administration
-          component). Layers stored permission grants over
+          component). Revised 2026-10-01 (item 10 now records that <code>MMCA.Common.UI</code> ships the email
+          confirmation page; see Revision below). Layers stored permission grants over
           <a href="020-permission-based-authorization.html">ADR-020</a>&#39;s compiled registry and extends the shared sign-in
           workflow of <a href="050-jwt-refresh-token-rotation.html">ADR-050</a> with optional collaborators.</p>
           <h2 id="context">Context</h2>
@@ -248,10 +251,10 @@
           subclass it and supply hooks for the pieces that are genuinely theirs (their <code>User</code> factory, their
           claim set, their lookups). Password reset ships the same way: a cache-backed, hashed-at-rest,
           single-use token service
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:26</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordResetTokenService.cs:33</code>,
           <a href="091-cache-backed-password-reset.html">ADR-091</a>) plus two handler bases the apps derive from.
           Authorization is a compiled role-to-permission map behind <code>IPermissionRegistry</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/IPermissionRegistry.cs:13</code>,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/IPermissionRegistry.cs:14</code>,
           <a href="020-permission-based-authorization.html">ADR-020</a>), consulted by the CQRS authorization decorators and
           by the <code>[HasPermission]</code> policy handler.</p>
           <p>Four things that a production identity module needs were still missing, and every consumer either
@@ -270,7 +273,7 @@
           <p><strong>Sign-in is a chain no consumer can afford to have changed under it.</strong> ADC and Store both run their
           production sign-in through the shared base. A new mandatory step in that chain is a behaviour change
           in a deployed system, and the framework&#39;s own history says so: the 1.188.0 release needed an
-          <code>UPGRADING.md</code> section with eight items (<code>MMCA.Common/UPGRADING.md:35</code>), one of which (the fallback
+          <code>UPGRADING.md</code> section with eight items (<code>MMCA.Common/UPGRADING.md:532</code>), one of which (the fallback
           authorization policy) broke unannotated endpoints.</p>
           <p><strong>Pages are where apps diverge most.</strong> The framework ships credential pages in <code>MMCA.Common.UI</code>, and
           their existence is already the exception rather than the rule. A two-factor enrollment page has to
@@ -286,7 +289,7 @@
           <li><p><strong>Two-factor is a contract plus a challenge, not a feature.</strong> <code>ITwoFactorService</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/TwoFactor/ITwoFactorService.cs:16</code>) is
           stateless cryptography: secrets, provisioning URIs, code verification inside a configured skew
-          window, and recovery codes returned as a <code>RecoveryCodeSet</code> of plaintext plus hashes (<code>:84</code>).
+          window, and recovery codes returned as a <code>RecoveryCodeSet</code> of plaintext plus hashes (<code>:97</code>).
           <code>ITwoFactorStore</code> (<code>.../Auth/TwoFactor/ITwoFactorStore.cs:24</code>) is the persistence the consumer
           implements over its own <code>User</code>, which exposes <code>ITwoFactorUserState</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/ITwoFactorUserState.cs:27</code>). The framework ships
@@ -295,20 +298,21 @@
           <li><p><strong>The sign-in hook is an optional constructor argument, and its absence is a no-op.</strong>
           <code>AuthenticationServiceBase</code> gained <code>ITwoFactorAuthenticator? twoFactor = null</code> and
           <code>IOptions&lt;EmailConfirmationSettings&gt;? emailConfirmationSettings = null</code>
-          (<code>.../Auth/AuthenticationServiceBase.cs:83-84</code>), the shape <code>ChangePasswordHandlerBase</code> established
-          for <code>IRefreshSessionStore</code>. <code>ChallengeSecondFactorAsync</code> answers <code>NotEnrolled</code> outright when no
+          (<code>.../Auth/AuthenticationServiceBase.cs:83-84</code>), the optional trailing-parameter shape
+          <code>ChangePasswordHandlerBase</code> uses for its <code>TimeProvider? timeProvider = null</code>
+          (<code>.../Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:48</code>). <code>ChallengeSecondFactorAsync</code> answers <code>NotEnrolled</code> outright when no
           authenticator was supplied (<code>:665</code>), so an unadopted consumer pays not even a query, and every
           existing subclass keeps compiling because it simply passes fewer arguments.</p>
           </li>
           <li><p><strong>The step-up assertion is a claim, and presence is the whole test.</strong> A verified challenge stamps
-          the <code>amr</code>-style <code>mfa</code> claim (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:55</code>)
-          with the method that satisfied it (<code>:58</code>, <code>:61</code>), through the same pass-through token service that
-          already stamps <code>sid</code> (<code>.../Auth/AuthenticationServiceBase.cs:621</code>), so the app&#39;s
+          the <code>amr</code>-style <code>mfa</code> claim (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:62</code>)
+          with the method that satisfied it (<code>:65</code>, <code>:68</code>), through the same pass-through token service that
+          already stamps <code>sid</code> (<code>.../Auth/AuthenticationServiceBase.cs:620</code>), so the app&#39;s
           <code>CreateAccessToken</code> hook keeps its signature. <code>IRequiresMfa</code>
           (<code>.../UseCases/Markers/IRequiresMfa.cs:28</code>) is checked by the decorators through the shared
-          <code>AuthorizationGate</code> (<code>.../UseCases/Decorators/AuthorizationGate.cs:52</code>), which reads the claim via
+          <code>AuthorizationGate</code> (<code>.../UseCases/Decorators/AuthorizationGate.cs:60</code>), which reads the claim via
           <code>ClaimsPrincipalExtensions.HasMultiFactor</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:107</code>) rather than
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ClaimsPrincipalExtensions.cs:127</code>) rather than
           widening <code>ICurrentUserService</code>. Absence denies; there is no &quot;this account has no second factor so
           let it through&quot; branch.</p>
           </li>
@@ -316,7 +320,7 @@
           <code>IEmailConfirmationTokenService</code>
           (<code>.../Auth/EmailConfirmation/IEmailConfirmationTokenService.cs:15</code>) mirrors
           <code>IPasswordResetTokenService</code> member for member, and the implementation
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/EmailConfirmationTokenService.cs:35</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/EmailConfirmationTokenService.cs:36</code>)
           mirrors its record shape, hashing, attempt cap and throttle, under its own <code>emailconfirm:</code> key
           prefix so issuing a confirmation link cannot invalidate an outstanding reset link.
           <code>RequireConfirmedEmail</code> defaults to false
@@ -332,10 +336,10 @@
           the whole opt-in: <code>AddStoredPermissionGrants(configuration)</code> registers the marker
           <code>PermissionGrantModelGate</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Auth/PermissionGrantModelGate.cs:19</code>,
-          <code>.../Infrastructure/DependencyInjection.cs:543</code>), and <code>ApplicationDbContext</code> resolves that marker
+          <code>.../Infrastructure/DependencyInjection.Auth.cs:116</code>), and <code>ApplicationDbContext</code> resolves that marker
           with <code>GetService</code> and maps the table only when it is present AND this context instance targets the
           physical source named by <code>Authentication:PermissionGrants:DataSourceName</code>
-          (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:910-915</code>). No consumer calls the model-builder
+          (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:916-921</code>, applied at <code>:939-947</code>). No consumer calls the model-builder
           extension by hand, a host that never opts in keeps a byte-identical model, and the other databases
           in an opted-in host stay unchanged because one database owns the rows (the refresh-session
           precedent).
@@ -350,7 +354,7 @@
           Rather than block on I/O there, the grants are held as a per-role <code>IMemoryCache</code> snapshot behind
           <code>IPermissionGrantCache</code> (<code>.../Auth/Permissions/IPermissionGrantCache.cs:21</code>), rebuilt by a hosted
           service on <code>Authentication:PermissionGrants:CacheSeconds</code>
-          (<code>.../Auth/Permissions/PermissionGrantSettings.cs:12</code>, <code>:23</code>) and immediately by
+          (<code>.../Auth/Permissions/PermissionGrantSettings.cs:12</code>, <code>:25</code>) and immediately by
           <code>IPermissionGrantCacheInvalidator</code> (<code>.../Auth/Permissions/IPermissionGrantCache.cs:51</code>) after an
           edit. A cold cache grants nothing, which is the safe direction, and the compiled layer answers
           from the first request either way.</p>
@@ -361,11 +365,11 @@
           takes a consumer-implemented <code>IUserAdministrationService&lt;TUserDto&gt;</code>
           (<code>.../Auth/Administration/IUserAdministrationService.cs:24</code>), because only the app knows its user
           table. <code>RolesAdminControllerBase</code> takes <code>IRoleAdministrationService</code>
-          (<code>.../Auth/Administration/IRoleAdministrationService.cs:23</code>), which the framework CAN implement in
+          (<code>.../Auth/Administration/IRoleAdministrationService.cs:29</code>), which the framework CAN implement in
           full because both halves are framework-owned, so <code>AddStoredPermissionGrants</code> registers a default.
           Both bases are gated on capabilities, not role names
           (<code>.../Controllers/Administration/UsersAdminControllerBase.cs:48</code>,
-          <code>.../Controllers/Administration/RolesAdminControllerBase.cs:43</code>), against
+          <code>.../Controllers/Administration/RolesAdminControllerBase.cs:60</code>), against
           <code>AdministrationPermissions.ManageUsers</code> / <code>ManageRoles</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Permissions/AdministrationPermissions.cs:18</code>,
           <code>:21</code>). The roles base serves three reads and one write, the third read being the catalog an editor
@@ -380,8 +384,8 @@
           </li>
           <li><p><strong>Three separate DI calls, none of them in <code>AddInfrastructure</code>.</strong>
           <code>AddTwoFactorAuthentication(config)</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:465</code>),
-          <code>AddEmailConfirmation(config)</code> (<code>:493</code>) and <code>AddStoredPermissionGrants(config)</code> (<code>:527</code>) are opted
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Auth.cs:39</code>),
+          <code>AddEmailConfirmation(config)</code> (<code>:67</code>) and <code>AddStoredPermissionGrants(config)</code> (<code>:108</code>) are opted
           into one at a time. Registering a service is still not the same as changing behaviour: two-factor
           only reaches sign-in once the app passes the resolved authenticator to its base constructor, and
           confirmation only gates sign-in once <code>RequireConfirmedEmail</code> is set AND the app&#39;s <code>User</code> implements
@@ -391,16 +395,20 @@
           <li><p><strong>One new package, in Infrastructure only.</strong> <code>Otp.NET</code> (MIT, netstandard2.0, no transitive graph)
           supplies the RFC 6238 grammar and the Base32 alphabet, which the BCL has no primitive for. It is
           referenced by <code>MMCA.Common.Infrastructure</code> alone
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:69</code>, used by
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:77</code>, used by
           <code>.../Auth/TwoFactor/TotpTwoFactorService.cs:35</code>); Application, Domain and Shared stay
           dependency-free, matching the <code>Cronos</code> precedent.</p>
           </li>
           <li><p><strong>Pages stay with the consumers; the administration surface ships as routeless components.</strong> No
-          enrollment page and no confirmation page ships in <code>MMCA.Common.UI</code>, and nothing this decision
-          ships carries an <code>@page</code> directive. (The package itself does ship routable pages, the credential
-          and notification screens of the Context above: 13 <code>@page</code> directives across 12 components, from
+          two-factor enrollment page ships in <code>MMCA.Common.UI</code>, and nothing this decision ships carries an
+          <code>@page</code> directive. The email confirmation landing page is the one page since promoted:
+          <code>MMCA.Common.UI</code> ships it anonymous at <code>/confirm-email</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ConfirmEmail.razor:1-3</code>). (The package
+          itself does ship routable pages: the credential and notification screens of the Context above, that
+          confirmation page, and the <code>Home</code>, <code>Forbidden</code> and <code>NotFound</code> shell pages, 14 <code>@page</code> directives
+          across 13 components, from
           <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/Login.razor:1</code> to
-          <code>.../Pages/Notifications/NotificationInbox.razor:1-2</code>. None of them is one of these.)
+          <code>.../Pages/Notifications/NotificationInbox.razor:1-2</code>. Apart from that confirmation page, none of them belongs to this decision.)
           <code>RoleAdminList</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Administration/RoleAdminList.razor.cs:27</code>),
           <code>RoleAdminEdit</code> (<code>.../Pages/Administration/RoleAdminEdit.razor.cs:35</code>) and <code>UserAdminList&lt;TUser&gt;</code>
@@ -409,15 +417,15 @@
           framework already applies to shared components, two consumers wanting the same one. The two role
           components are non-generic because roles and permissions are strings the framework already owns,
           so there is no app DTO to name
-          (<code>.../Presentation/MMCA.Common.UI/DependencyInjection.cs:227-228</code>); the roster is generic instead,
+          (<code>.../Presentation/MMCA.Common.UI/DependencyInjection.cs:241-242</code>); the roster is generic instead,
           over an app-owned DTO that only has to implement <code>IUserAdminDTO</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/Administration/IUserAdminDTO.cs:15</code>), which is
           the one place a routeless component still names app shape. The role pair talks to the controller
           base through <code>IRoleAdminUIService</code>
           (<code>.../UI/Services/Administration/IRoleAdminUIService.cs:41</code>) and its typed-client implementation
           <code>RoleAdminService</code> (<code>.../UI/Services/Administration/RoleAdminService.cs:50-51</code>), registered by
-          <code>AddRoleAdministrationUI()</code> (<code>.../UI/DependencyInjection.cs:234</code>); the roster registers through
-          <code>AddUserAdministrationUI&lt;TUserDto&gt;()</code> (<code>.../UI/DependencyInjection.cs:218</code>). An app that serves no
+          <code>AddRoleAdministrationUI()</code> (<code>.../UI/DependencyInjection.cs:248</code>); the roster registers through
+          <code>AddUserAdministrationUI&lt;TUserDto&gt;()</code> (<code>.../UI/DependencyInjection.cs:222</code>). An app that serves no
           role-administration endpoints registers nothing and renders neither role component, and an app
           that serves no <code>Admin/Users</code> endpoints never renders the roster.</p>
           </li>
@@ -433,7 +441,7 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:134</code>),
           and an unconfigured host falls back to <code>UnconfiguredPermissionRegistry</code>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/UnconfiguredPermissionRegistry.cs:21</code>,
-          registered at <code>.../Application/DependencyInjection.cs:132</code>). <code>SetStoredPermissionsAsync</code> refuses
+          registered at <code>.../Application/DependencyInjection.cs:123</code>, <code>:129</code>). <code>SetStoredPermissionsAsync</code> refuses
           two things against that list
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/Administration/StoredPermissionRoleAdministrationService.cs:139-143</code>,
           <code>:149-157</code>): <code>AdministrationPermissions.ManageRoles</code>, outright, because granting the key to this
@@ -443,11 +451,11 @@
           </li>
           <li><p><strong>The token carries the permissions, so a service that never sees the grants still honours them.</strong>
           <code>TokenService</code> takes the host&#39;s <code>IPermissionRegistry</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:66</code>) and emits one
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/TokenService.cs:73</code>) and emits one
           <code>AuthClaimTypes.Permission</code> claim (<code>permission</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:24</code>) per permission granted to
           the token&#39;s role, ordinally ordered and de-duplicated against claims the caller already supplied
-          (<code>TokenService.cs:128-131</code>); because the registry it resolves is the layered one, stored grants are
+          (<code>TokenService.cs:133-141</code>); because the registry it resolves is the layered one, stored grants are
           baked in alongside the compiled ones. Both authorization paths accept that claim: the CQRS
           <code>AuthorizationGate</code> passes a request whose permission the registry grants to the caller&#39;s roles OR
           that the principal carries as a claim
@@ -456,7 +464,7 @@
           <code>.../Shared/Auth/ClaimsPrincipalExtensions.cs:94</code>), and the UI gates a navigation entry on
           <code>NavItem.RequiredPermission</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/NavItem.cs:20</code>,
-          <code>.../UI/Layout/NavMenu.razor:223-225</code>). The deployment consequence is a design rule, not framework
+          <code>.../UI/Layout/NavMenu.razor:256</code>). The deployment consequence is a design rule, not framework
           code: where modules run as separate services, the host that mints tokens (the Identity service)
           registers every module&#39;s compiled grants so a token carries the full permission set, and the
           stored grants live only in that host, reaching the other services through the claims alone.
@@ -514,13 +522,26 @@
           <li>Adopting the <code>PermissionGrants</code> table is a migration in the consumer&#39;s Identity database, as
           <code>RefreshSessions</code> was. <code>AddStoredPermissionGrants(configuration)</code> is what maps it, and only in the
           context whose physical source <code>Authentication:PermissionGrants:DataSourceName</code> names
-          (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:910-915</code>), so a host that never opts in gets no
+          (<code>.../Persistence/DbContexts/ApplicationDbContext.cs:916-921</code>), so a host that never opts in gets no
           table in any of its databases and an opted-in host gets it in exactly one.</li>
           <li>A permission granted by a stored row reaches another service only through a token claim, so it lands
           on the holder&#39;s next sign-in rather than within <code>CacheSeconds</code>. That is the same latency a role
           change has always had, and it is the price of keeping the grant table in one host instead of
           replicating it.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>Item 10 said no confirmation page ships in <code>MMCA.Common.UI</code>. One now does: <code>ConfirmEmail.razor</code>
+          carries <code>@page &quot;/confirm-email&quot;</code> and <code>[AllowAnonymous]</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Auth/ConfirmEmail.razor:1-3</code>), added by
+          MMCA.Common #443 (1.211.0), so the package carries 14 <code>@page</code> directives across 13 components, and
+          item 10 and Status now say so. No two-factor enrollment page ships, and the opt-in posture of the
+          four completions is unchanged. Item 2 named <code>IRefreshSessionStore</code> on <code>ChangePasswordHandlerBase</code>
+          as the optional-argument precedent; that parameter is now required
+          (<code>.../Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:46</code>), so item 2 now cites the
+          optional <code>TimeProvider</code> at <code>:48</code>. Citations refreshed: the three <code>Add*</code> calls and the grant-model gate
+          registration now live in <code>DependencyInjection.Auth.cs</code> (<code>:39</code>, <code>:67</code>, <code>:108</code>, <code>:116</code>), the gate logic
+          is <code>ApplicationDbContext.cs:916-921</code>, the 1.188.0 section is <code>UPGRADING.md:532</code>, and the remaining
+          anchors in the Context and items 1 to 12 point at their current lines.</p>
           <h2 id="related">Related</h2>
           <p><a href="020-permission-based-authorization.html">ADR-020</a> (the compiled role-to-permission registry stored
           grants layer over),
@@ -545,6 +566,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -69,7 +69,7 @@ not as a wrapper struct.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
   ADC Conference with nineteen aliases
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21`),
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:7-25`),
   and Store Catalog with six
   (`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8`).
 - **The alias is the type; there is no wrapping struct.** The right-hand side is a bare primitive.
@@ -83,7 +83,7 @@ not as a wrapper struct.
   pulled into every project with a `<Compile Include ... Link=... />` block, so the alias is visible
   everywhere without a project reference: Common
   (`MMCA.Common/Directory.Build.props:128-138`), ADC
-  (`MMCA.ADC/Directory.Build.props:92-106`), Store (`MMCA.Store/Directory.Build.props:78-89`). Adding a
+  (`MMCA.ADC/Directory.Build.props:125-139`), Store (`MMCA.Store/Directory.Build.props:129-140`). Adding a
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain
   entity is `User : AuditableAggregateRootEntity<UserIdentifierType>`
@@ -126,9 +126,11 @@ not as a wrapper struct.
 ## Trade-offs
 - **No compile-time protection against swapping same-typed identifiers.** An alias is a type synonym,
   not a distinct type. Because most aliases resolve to `int`, the compiler will not stop code from
-  passing a `SessionIdentifierType` where a `UserIdentifierType` is expected. The `Guid`-backed
-  `SpeakerIdentifierType` is guarded only incidentally, because its underlying type differs, not by
-  design. This is the exact safety a wrapper struct would buy and that this decision forgoes.
+  passing a `SessionIdentifierType` where a `UserIdentifierType` is expected. The two `Guid`-backed
+  aliases, `SessionAssetIdentifierType` and `SpeakerIdentifierType`
+  (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17,23`), are guarded against the `int` aliases
+  only incidentally, because their underlying type differs, not by design, and nothing stops one being
+  passed for the other. This is the exact safety a wrapper struct would buy and that this decision forgoes.
 - **The alias is documentation-strength, erased at compile time.** Reflection, tooling, serialized
   payloads, and the OpenAPI document all see `int`/`Guid`; the alias name never survives the build.
 - **Convention, not a build-gated invariant.** Unlike many framework rules that are enforced by
@@ -277,3 +279,18 @@ architecture-rule fixtures
 What is zero is adoption: no entity in any of the four `Source` trees is identified by a wrapper struct,
 and no `Source` type in ADC, Store or Helpdesk references `IStronglyTypedId` at all. The decision this
 record makes is unchanged by that.
+
+## Revision (2026-10-01)
+No decision and no rationale changed. One Trade-offs statement and three Decision citations did.
+
+The Trade-offs entry on identifier swapping still treated `SpeakerIdentifierType` as the only
+`Guid`-backed alias. Conference declares two, `SessionAssetIdentifierType` and `SpeakerIdentifierType`
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17,23`),
+so the incidental guard holds only against the `int` aliases and the two `Guid` aliases can be
+transposed silently; the entry now says so.
+
+The Decision's Conference citation is re-anchored to the alias lines
+(`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:7-25`, the nineteen aliases below a six-line header
+comment), which the Revision (2026-09-19) reported but had not applied. The `Directory.Build.props` alias
+link blocks moved without their content changing: ADC is at `MMCA.ADC/Directory.Build.props:125-139` and
+Store at `MMCA.Store/Directory.Build.props:129-140`.

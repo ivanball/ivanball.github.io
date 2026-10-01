@@ -60,7 +60,7 @@ support and no fitness function watching it.
    `IntegrationEventConsumer<TEvent>` hot path is untouched.
 4. **Registration follows the accumulate-across-modules idiom.**
    `services.AddEventUpcaster<TSource, TTarget, TUpcaster>()`
-   (`Source/Core/MMCA.Common.Application/DependencyInjection.cs`) registers the upcaster as a
+   (`Source/Core/MMCA.Common.Application/DependencyInjection.Extensibility.cs:81`) registers the upcaster as a
    singleton via `TryAddEnumerable`, the same shape as `AddScheduledJob` and
    `AddUserDataExportSection`: each module contributes its own upcasters independently, duplicates
    are idempotent, and the registry is assembled once from the union. The generic source and target
@@ -157,3 +157,14 @@ trade-off's premise and three file locations.
    `MMCA.Common.Infrastructure/Messaging/Consumers/`, and `ArchitectureRules.Upcasters.cs` under
    `MMCA.Common.Testing.Architecture/Rules/Contracts/`. The Decision section carries the current
    paths; the types and their members are unchanged.
+
+## Revision (2026-10-01)
+No decision, mechanism, or rationale changed; this revision refreshes citations only.
+`AddEventUpcaster` is defined in
+`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.Extensibility.cs:81` (singleton
+via `TryAddEnumerable` at `:86`), while `DependencyInjection.cs:40` registers only
+`IEventUpcasterRegistry`; Decision item 4 now carries that path. The 2026-09-03 revision's anchors
+are left as recorded; the current locations are `OutboxMessage.cs:139` (`GetStorageName`), `:183`
+(`ResolveEventType`) with the fallback at `:189`, and in `OutboxProcessor.cs` the `DeserializeEvent`
+call at `:533`, the `HandleUnresolvableType` call at `:536`, the method at `:661`, and the
+`type_unresolvable` reason tag at `:681`.

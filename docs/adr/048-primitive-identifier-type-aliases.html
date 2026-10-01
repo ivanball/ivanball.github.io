@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -301,7 +303,7 @@
           Consumers follow the same pattern: ADC Identity
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2</code>),
           ADC Conference with nineteen aliases
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:5-21</code>),
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:7-25</code>),
           and Store Catalog with six
           (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/MMCA.Store.Catalog.GlobalUsings.IdentifierType.cs:3-8</code>).</li>
           <li><strong>The alias is the type; there is no wrapping struct.</strong> The right-hand side is a bare primitive.
@@ -315,7 +317,7 @@
           pulled into every project with a <code>&lt;Compile Include ... Link=... /&gt;</code> block, so the alias is visible
           everywhere without a project reference: Common
           (<code>MMCA.Common/Directory.Build.props:128-138</code>), ADC
-          (<code>MMCA.ADC/Directory.Build.props:92-106</code>), Store (<code>MMCA.Store/Directory.Build.props:78-89</code>). Adding a
+          (<code>MMCA.ADC/Directory.Build.props:125-139</code>), Store (<code>MMCA.Store/Directory.Build.props:129-140</code>). Adding a
           solution-wide alias is a new <code>GlobalUsings.*.cs</code> plus a matching <code>&lt;Compile Include&gt;</code> line, nothing more.</li>
           <li><strong>The alias flows unchanged through every layer.</strong> Tracing the ADC <code>User</code> aggregate: the domain
           entity is <code>User : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code>
@@ -360,9 +362,11 @@
           <ul>
           <li><strong>No compile-time protection against swapping same-typed identifiers.</strong> An alias is a type synonym,
           not a distinct type. Because most aliases resolve to <code>int</code>, the compiler will not stop code from
-          passing a <code>SessionIdentifierType</code> where a <code>UserIdentifierType</code> is expected. The <code>Guid</code>-backed
-          <code>SpeakerIdentifierType</code> is guarded only incidentally, because its underlying type differs, not by
-          design. This is the exact safety a wrapper struct would buy and that this decision forgoes.</li>
+          passing a <code>SessionIdentifierType</code> where a <code>UserIdentifierType</code> is expected. The two <code>Guid</code>-backed
+          aliases, <code>SessionAssetIdentifierType</code> and <code>SpeakerIdentifierType</code>
+          (<code>MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17,23</code>), are guarded against the <code>int</code> aliases
+          only incidentally, because their underlying type differs, not by design, and nothing stops one being
+          passed for the other. This is the exact safety a wrapper struct would buy and that this decision forgoes.</li>
           <li><strong>The alias is documentation-strength, erased at compile time.</strong> Reflection, tooling, serialized
           payloads, and the OpenAPI document all see <code>int</code>/<code>Guid</code>; the alias name never survives the build.</li>
           <li><strong>Convention, not a build-gated invariant.</strong> Unlike many framework rules that are enforced by
@@ -497,6 +501,18 @@
           What is zero is adoption: no entity in any of the four <code>Source</code> trees is identified by a wrapper struct,
           and no <code>Source</code> type in ADC, Store or Helpdesk references <code>IStronglyTypedId</code> at all. The decision this
           record makes is unchanged by that.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision and no rationale changed. One Trade-offs statement and three Decision citations did.</p>
+          <p>The Trade-offs entry on identifier swapping still treated <code>SpeakerIdentifierType</code> as the only
+          <code>Guid</code>-backed alias. Conference declares two, <code>SessionAssetIdentifierType</code> and <code>SpeakerIdentifierType</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:17,23</code>),
+          so the incidental guard holds only against the <code>int</code> aliases and the two <code>Guid</code> aliases can be
+          transposed silently; the entry now says so.</p>
+          <p>The Decision&#39;s Conference citation is re-anchored to the alias lines
+          (<code>MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:7-25</code>, the nineteen aliases below a six-line header
+          comment), which the Revision (2026-09-19) reported but had not applied. The <code>Directory.Build.props</code> alias
+          link blocks moved without their content changing: ADC is at <code>MMCA.ADC/Directory.Build.props:125-139</code> and
+          Store at <code>MMCA.Store/Directory.Build.props:129-140</code>.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -517,6 +533,7 @@
             <li><a href="#revision-2026-08-23">Revision (2026-08-23)</a></li>
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

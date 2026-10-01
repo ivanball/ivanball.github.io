@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-011: Single-Locale by Design (No Internationalization) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Superseded by ADR-027 (2026-06-27). Originally Accepted (2026-06-19). The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/011-single-locale-i18n.html">
+  <title>ADR-128: Time as an Input (No Ambient Clock Reads in Domain and Application) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-10-01).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/128-time-as-an-input.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-011: Single-Locale by Design (No Internationalization)">
-  <meta property="og:description" content="Superseded by ADR-027 (2026-06-27). Originally Accepted (2026-06-19). The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/011-single-locale-i18n.html">
+  <meta property="og:title" content="ADR-128: Time as an Input (No Ambient Clock Reads in Domain and Application)">
+  <meta property="og:description" content="Accepted (2026-10-01).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/128-time-as-an-input.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-011: Single-Locale by Design (No Internationalization)">
-  <meta name="twitter:description" content="Superseded by ADR-027 (2026-06-27). Originally Accepted (2026-06-19). The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027…">
+  <meta name="twitter:title" content="ADR-128: Time as an Input (No Ambient Clock Reads in Domain and Application)">
+  <meta name="twitter:description" content="Accepted (2026-10-01).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"011 · Single-Locale by Design (No Internationalization)","item":"https://ivanball.github.io/docs/adr/011-single-locale-i18n.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"128 · Time as an Input (No Ambient Clock Reads in Domain and Application)","item":"https://ivanball.github.io/docs/adr/128-time-as-an-input.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">011 · Single-Locale by Design (No Internationalization)</span>
+        <span class="current">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -110,7 +110,7 @@
         <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
         <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
         <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
-        <li><a href="011-single-locale-i18n.html" aria-current="page">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
         <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
         <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
         <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
@@ -227,7 +227,7 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
-        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="128-time-as-an-input.html" aria-current="page">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
         <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
@@ -235,46 +235,141 @@
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-011-single-locale-by-design-no-internationalization">ADR-011: Single-Locale by Design (No Internationalization)</h1>
+          <h1 id="adr-128-time-as-an-input-no-ambient-clock-reads-in-domain-and-application">ADR-128: Time as an Input (No Ambient Clock Reads in Domain and Application)</h1>
           <h2 id="status">Status</h2>
-          <p><strong>Superseded by <a href="027-multi-locale-i18n.html">ADR-027</a> (2026-06-27).</strong> Originally Accepted (2026-06-19).
-          The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027 implements; this record is
-          retained for history.</p>
+          <p>Accepted (2026-10-01).</p>
           <h2 id="context">Context</h2>
-          <p>The MMCA applications (the ADC conference app, the Store) and the <code>MMCA.Common.UI</code> library currently ship
-          a single locale (en-US). The architecture rubric scores Internationalization (§27); rather than leave it
-          at an implicit zero, this ADR records that single-locale is a <strong>deliberate, scoped decision</strong> (not an
-          oversight) and states what re-introducing i18n would entail.</p>
+          <p>Expiry windows, payment deadlines, discount windows, overdue checks and cutoffs are business rules,
+          and every one of them branches on &quot;now&quot;. When the rule reads <code>DateTime.UtcNow</code> itself, a test cannot
+          choose which side of the branch it lands on: the branch is either untested or tested by sleeping
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.ClockReads.cs:30-36</code>).
+          .NET already ships the input that removes the problem, <code>TimeProvider</code>, which a handler can take by
+          injection and a test can replace with a fake clock.</p>
+          <p>The convention existed before it was enforced, and a convention that lives only in prose is followed
+          until someone is in a hurry. It also has one place where reading the clock is the correct model:
+          a domain event&#39;s occurrence instant is, by definition, the moment the aggregate raises it, so
+          <code>BaseDomainEvent.DateOccurred</code> defaults to <code>DateTime.UtcNow</code> at construction
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:28</code>, with the reasoning in
+          the type&#39;s remarks at <code>:18-25</code>). Any enforcement has to accept that one stamp without turning into a
+          list every consumer has to repeat.</p>
+          <p>The rule shipped as a fitness base in MMCA.Common v1.210.0 (<code>MMCA.Common/CHANGELOG.md:269</code>, the entry
+          at <code>:282-285</code>), and v1.213.0 extended it to <code>DateTime.Today</code> (<code>MMCA.Common/CHANGELOG.md:82</code>, the entry
+          at <code>:173</code>). <a href="015-architecture-fitness-functions.html">ADR-015</a> sets the fitness-function style it is
+          written in but does not list this rule, so this record states it.</p>
           <h2 id="decision">Decision</h2>
-          <ol>
-          <li><strong>Single-locale (en-US) is an explicit non-goal for now.</strong> User-facing strings are inline in markup;
-          dates/numbers use invariant or fixed formatting where appropriate.</li>
-          <li><strong>The audience is single-locale.</strong> The Atlanta Developers Conference and the Store target a US/English
-          audience; the cost of full i18n (resource extraction, culture-aware formatting, RTL, locale selection)
-          is not justified by current demand.</li>
-          <li><strong>If multi-locale is ever required, it is greenfield work</strong>, scoped as: externalize strings to resource
-          files; culture-aware formatting (dates/numbers/currency/time zones); <code>RequestLocalization</code> middleware +
-          discoverable, persisted locale selection with server/client culture aligned; layout tolerance for text
-          expansion (and RTL where required); and pluralization/interpolation via the i18n mechanism rather than
-          string concatenation.</li>
-          </ol>
+          <p>Domain and Application code takes time as an input and never reads the ambient clock. A handler
+          injects <code>TimeProvider</code> and passes the instant into the domain method; an aggregate method receives the
+          instant as a parameter. The rule is an IL-scanning fitness test, shipped once in
+          <code>MMCA.Common.Testing.Architecture</code> and subclassed by each adopting repo.</p>
+          <ul>
+          <li><strong>Five getters are banned.</strong> <code>DateTime.UtcNow</code>, <code>DateTime.Now</code>, <code>DateTime.Today</code>,
+          <code>DateTimeOffset.UtcNow</code> and <code>DateTimeOffset.Now</code>, matched as (declaring type, getter) pairs
+          (<code>ArchitectureRules.ClockReads.cs:20-27</code>) by ordinal comparison of the callee name and declaring
+          type full name (<code>:120-127</code>).</li>
+          <li><strong>Scope is the map&#39;s Domain and Application layers.</strong> <code>DomainAndApplicationDoNotReadTheClock</code>
+          (<code>ArchitectureRules.ClockReads.cs:56</code>) collects the assemblies the repo&#39;s <code>IArchitectureMap</code>
+          registers under <code>Layer.Domain</code> and <code>Layer.Application</code> (<code>:65-70</code>). Infrastructure, API and UI code
+          is outside the rule.</li>
+          <li><strong>The scan reads IL, not source.</strong> Each assembly is opened with Mono.Cecil (<code>:78</code>) and every method
+          body of every type is searched (<code>:80</code>, <code>:104</code>), which includes lambdas and async or iterator state
+          machines whether the compiler emits them as nested types or as methods on the declaring type. A read
+          in a lambda or in an async or iterator method is attributed back to the member the developer wrote,
+          recovered from the text inside the first angle brackets of the generated name (<code>:129-160</code>), so the
+          report reads <code>Type.Member reads DateTime.UtcNow</code> (<code>:114</code>). The name is cut at the first <code>&gt;</code>
+          (<code>:158-159</code>), so the doubly bracketed state machine of an async lambda or async local function
+          reports a member name that keeps a leading <code>&lt;</code>.</li>
+          <li><strong>A vacuous scan is a failure.</strong> A map that yields no Domain or Application assembly fails with that
+          explanation rather than passing (<code>:72-73</code>).</li>
+          <li><strong>The failure message is the instruction.</strong> It names the fix (inject <code>TimeProvider</code>, pass the instant
+          into the domain method) and the escape hatch (allowlist the type or <code>Type.Member</code>) (<code>:85-88</code>).</li>
+          <li><strong>The framework exemption is exactly one type, built into the rule.</strong> The constant
+          <code>DomainEventOccurrenceStamp</code> is the type full name <code>MMCA.Common.Domain.DomainEvents.BaseDomainEvent</code>
+          (<code>ArchitectureRules.ClockReads.cs:14</code>), prepended to every caller&#39;s allowlist (<code>:63</code>), so no map has
+          to repeat it. Because the exemption is keyed on the owning type (<code>:98-102</code>), it covers the
+          <code>DateOccurred</code> initializer compiled into <code>BaseDomainEvent</code> and nothing declared on a derived event.</li>
+          <li><strong>The allowlist is an adoption ratchet.</strong> Entries are a type full name, a namespace prefix, or one
+          member written <code>Namespace.Type.Member</code> (<code>:45-48</code>); a member entry is matched by ordinal equality on
+          <code>{owner}.{member}</code> (<code>:107</code>) and exempts that member&#39;s lambda and async-method bodies with it (not the state machine of an
+          async lambda inside it, whose recovered name keeps a leading <code>&lt;</code>). The base
+          exposes it as <code>AllowedClockReaders</code>, empty by default
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/ClockReadTestsBase.cs:24</code>),
+          and its documentation asks for a comment saying why each entry is right (<code>:10-12</code>).</li>
+          <li><strong>The base is one fact over one map.</strong> <code>ClockReadTestsBase</code> (<code>ClockReadTestsBase.cs:15</code>) declares an
+          abstract <code>Map</code> (<code>:17</code>) and one <code>[Fact]</code>, <code>DomainAndApplication_ShouldNotReadTheAmbientClock</code>, that
+          calls the rule (<code>:26-28</code>).</li>
+          <li><strong>MMCA.Common adopts it over its own code and self-tests the rule.</strong> Its subclass
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/ClockReadTests.cs:14</code>) maps the
+          framework through <code>CommonArchitectureMap</code> (<code>:20</code>) with no allowlist, and runs the rule against
+          compiled fixtures through a map whose Domain layer is the test assembly (<code>:84-92</code>): direct reads of
+          both clock types are flagged (<code>:22-29</code>), <code>DateTime.Today</code> is flagged (<code>:31-35</code>), lambda and async
+          reads are attributed to their source member (<code>:37-48</code>), an injected <code>TimeProvider</code> is not flagged
+          (<code>:50-54</code>), a member entry exempts only that member (<code>:56-63</code>), and a namespace entry exempts every
+          type under it (<code>:65-67</code>).</li>
+          <li><strong>MMCA.ADC adopts it with no exemptions.</strong> Its subclass
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/ClockReadTests.cs:8</code>) supplies
+          <code>AdcArchitectureMap</code> (<code>:10</code>) and does not override <code>AllowedClockReaders</code>.</li>
+          <li><strong>MMCA.Store adopts it with one reviewed exemption.</strong> Its subclass
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/ClockReadTests.cs:9</code>) supplies
+          <code>StoreArchitectureMap</code> (<code>:11</code>) and allowlists the single member
+          <code>MMCA.Store.Sales.Domain.Orders.Order.RepublishFulfillment</code> (<code>:18-21</code>), documented as backfill-only:
+          its one caller, the one-shot <code>OrderFulfilledBackfillService</code>, supplies no clock, and the member is
+          removed with the backfill services (<code>:13-17</code>).</li>
+          <li><strong>MMCA.Helpdesk does not adopt it.</strong> Helpdesk has an architecture test project
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/</code>), but no type in the repo
+          subclasses <code>ClockReadTestsBase</code> or calls the rule, so its Domain and Application code is not checked.</li>
+          </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li>Recording the decision converts an implicit rubric-zero into a conscious, revisitable choice: the same
-          posture as the single-region DR acceptance in ADR-009.</li>
-          <li>Premature i18n infrastructure adds complexity (resource indirection, culture bugs, layout churn) with no
-          current user to benefit.</li>
+          <li><strong>A test can only drive what it can supply.</strong> Passing the instant in makes every time-dependent
+          branch a plain input, so an expiry, a cutoff or an overdue state is one argument away in a unit test
+          instead of a <code>Task.Delay</code> or an untested path (<code>ArchitectureRules.ClockReads.cs:33-35</code>).</li>
+          <li><strong>Executable beats documented.</strong> This is the enforcement style
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> sets and
+          <a href="125-parameterized-sql-only.html">ADR-125</a> applies to raw SQL: a failing test whose message names the
+          fix needs nobody to remember the convention.</li>
+          <li><strong>IL is the only layer that sees the whole shape.</strong> A reflection-only rule cannot see calls inside
+          method bodies, and a text scan would miss a read hidden behind a <code>using static</code> or flag one inside a
+          comment. Mono.Cecil reads what the compiler actually emitted, including lambda and state-machine
+          bodies, at the cost of a dependency NetArchTest already carries (<code>:40-43</code>).</li>
+          <li><strong>The one framework exemption belongs to the framework.</strong> <code>DateOccurred</code> is a deliberate modelling
+          choice (<code>BaseDomainEvent.cs:18-25</code>), and every repo whose map registers the framework Domain assembly
+          would otherwise need the same entry (<code>ArchitectureRules.ClockReads.cs:7-13</code>). Building it into the
+          rule keeps every consumer allowlist to its own decisions.</li>
+          <li><strong>An allowlist lets a repo adopt the day the rule ships.</strong> A repo with existing reads subclasses, runs
+          once, and either threads the instant through or parks the reported member with a reason
+          (<code>ClockReadTestsBase.cs:10-12</code>). Store&#39;s single entry is the result of that pass.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li>Adding a locale later touches every view plus the formatting paths: a real but bounded effort, accepted.</li>
-          <li>Hard-coded strings make a future extraction larger; mitigated by the component-based UI (strings are
-          localized to components/pages, so extraction is mechanical rather than archaeological).</li>
+          <li><strong>The rule bans five getters, not the idea of a clock.</strong> A read through any other path (a static
+          <code>TimeProvider.System.GetUtcNow()</code>, <code>Environment.TickCount</code>, <code>Stopwatch</code>) is not matched
+          (<code>ArchitectureRules.ClockReads.cs:20-27</code>), so the rule stops the common accident rather than proving
+          the code is clock-free.</li>
+          <li><strong>Infrastructure, API and UI are not scanned</strong> (<code>:65-66</code>). Audit stamping and other infrastructure
+          timestamps are expected to use an injected <code>TimeProvider</code> (<code>BaseDomainEvent.cs:22-23</code>), but this rule
+          does not check that.</li>
+          <li><strong><code>DateOccurred</code> stays non-deterministic in tests.</strong> Because the stamp is taken at construction, a test
+          asserting an exact occurrence instant has to set it through the <code>init</code> accessor
+          (<code>BaseDomainEvent.cs:28</code>) rather than through a fake clock.</li>
+          <li><strong>The scan only covers assemblies present on disk.</strong> Assemblies whose location is empty or missing
+          are dropped before the scan (<code>ArchitectureRules.ClockReads.cs:68</code>); the vacuous-scan check fires only
+          when none remain (<code>:72-73</code>).</li>
+          <li><strong>A type or namespace entry exempts more than one read.</strong> A type entry exempts every member of that
+          type and a namespace entry every type under it (<code>:45-48</code>, <code>:98-102</code>), which is wider than a member
+          entry; Store uses the narrow form.</li>
+          <li><strong>MMCA.Helpdesk is unguarded.</strong> As the reference app and template source, it hands an adopter no
+          clock-read test until it subclasses the base.</li>
           </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function style and the shared
+          <code>*TestsBase</code> package this rule is shipped in),
+          <a href="125-parameterized-sql-only.html">ADR-125</a> (the precedent for a fitness-gated convention with its own
+          record and an allowlist used as an adoption ratchet). Framework version and package figures live in
+          <code>MMCA.Common/FACTS.md</code>.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/011-single-locale-i18n.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/128-time-as-an-input.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">
@@ -286,6 +381,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
             </ul>
           </nav>
         </aside>

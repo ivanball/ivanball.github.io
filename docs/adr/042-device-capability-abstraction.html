@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -294,7 +296,8 @@
           </li>
           <li><p><strong>Safe defaults for every contract, TryAdd-registered by <code>AddUIShared</code>.</strong>
           <code>AddDeviceCapabilityDefaults</code> (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs</code>)
-          registers a null or neutral implementation per contract (<code>Fallbacks/</code>), so shared components
+          registers a null or neutral implementation per contract, kept beside its contract in the concern
+          sub-folder (for example <code>Services/Capabilities/Interop/NullShareService.cs</code>), so shared components
           resolve every capability on every head with zero host changes. Three fallback flavors:
           browser-equivalent (JS interop), null-object exposing <code>IsSupported == false</code> (components hide the
           affordance), and constant stubs (Blazor Server connectivity is always online: a dead circuit
@@ -390,6 +393,12 @@
           until the head supplies <code>OAuth:MobileRedirectScheme</code>, so a misconfigured head quietly keeps the web
           anchor flow rather than failing fast.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. The Decision bullet on safe defaults no longer points at a
+          <code>Fallbacks/</code> folder, which does not exist: each null fallback sits beside its contract in a concern
+          sub-folder of <code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/</code> (Accessibility, Auth,
+          DeviceStatus, DeviceStorage, Geo, Interop, Media, Notifications), for example
+          <code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/Interop/NullShareService.cs</code>.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -405,6 +414,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

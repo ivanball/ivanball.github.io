@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -256,8 +258,8 @@
           <code>IStringLocalizer&lt;T&gt;</code>.</strong> <code>AddLocalization()</code> is registered with <strong>no <code>ResourcesPath</code></strong> so a type&#39;s
           resource base name is its full type name and the <code>.resx</code> lives next to it (<code>Login.razor</code> →
           <code>Login.resx</code> / <code>Login.es.resx</code>; a <code>*.Resources.SharedResource</code> marker for cross-cutting chrome). Keys
-          are dotted and stable (<code>Nav.Home</code>, <code>Common.Button.Save</code>). Parameterized text uses <strong>composite format
-          keys</strong> (<code>&quot;Error loading {0}. {1}&quot;</code>) consumed as <code>L[&quot;Common.Error.Load&quot;, entity, detail]</code>: never string
+          are dotted and stable (<code>Nav.Home</code>, <code>Common.Button.Cancel</code>). Parameterized text uses <strong>composite format
+          keys</strong> (<code>&quot;Error loading {0}.&quot;</code>) consumed as <code>L[&quot;Common.Error.Load&quot;, entity]</code>: never string
           concatenation. The <code>.resx</code> compile to <strong>satellite assemblies</strong> that pack into the NuGet packages
           automatically (no <code>.csproj</code> change) and flow identically via <code>local.props</code> source mode.</p>
           </li>
@@ -277,7 +279,7 @@
           <code>Code</code>, <code>Type</code>, <code>Source</code> and <code>Target</code> untranslated
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61-69</code>,
           localization at <code>:65</code>), and <code>ProblemDetailsResultReader</code> reads those machine fields back on the
-          client (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:342-354</code>).
+          client (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Http/ProblemDetailsResultReader.cs:344-356</code>).
           Updated 2026-08-27: the client no longer branches on the ProblemDetails <code>title</code> at all. The
           removed <code>ServiceExceptionHelper</code> matched three fixed English title strings, which coupled the
           client to wording that could never be translated without breaking it; the reader matches the
@@ -331,8 +333,10 @@
           decorator stays inert, so it is a build-and-test aid, not a production culture.</p>
           <p><strong>The pseudo pass is also a required CI gate (since 2026-07-03).</strong> The backend-less gallery host
           (test-only, never packaged) enables <code>qps-Ploc</code> unconditionally, and <code>PseudoLocalizationE2ETests</code>
-          renders <code>/login</code>, <code>/register</code>, and <code>/components</code> under it, asserting (a) the bracket sentinel
-          appears (every displayed string made the resource round-trip) and (b) the page does not overflow
+          renders <code>/login</code>, <code>/register</code>, <code>/forgot-password</code>, <code>/reset-password</code>, and <code>/components</code> under it
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.E2E.Tests/PseudoLocalizationE2ETests.cs:31</code>),
+          asserting (a) the bracket sentinel appears (every displayed string made the resource round-trip;
+          the sentinel check is retried up to three times, <code>:40</code>) and (b) the page does not overflow
           horizontally under the ~40% expansion (the layout-tolerance criterion). The gate is <strong>required on
           all three browser engines</strong>, not just one: <code>ui-e2e</code> is a <code>chromium, firefox, webkit</code> matrix whose
           legs are each a required merge check, and the run step executes the whole E2E project on every leg
@@ -367,7 +371,7 @@
           pass-through</strong> so an already-translated server message renders as-is and a client-side message
           that happens to be a key gets translated
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/ResultUiExtensions.cs:17-23</code>, the lookup
-          at <code>:325-334</code>). <code>ErrorMessages.LoadError</code> / <code>SaveError</code> / <code>DeleteError</code> cover the narrow
+          at <code>:329-338</code>). <code>ErrorMessages.LoadError</code> / <code>SaveError</code> / <code>DeleteError</code> cover the narrow
           remainder, and the type says so: they are for the exceptions a page can still raise on its own
           behalf (a JS-interop failure, a mapping bug, a callback the page supplied), never for a server
           answer (<code>.../MMCA.Common.UI/Pages/Common/ErrorMessages.cs:14-22</code>). Every one of them renders the
@@ -375,12 +379,12 @@
           second format argument that the shipped templates deliberately ignore, because raw exception text
           is neither localizable nor safe to surface (<code>:49-65</code>).</p>
           <p><code>NavItem</code> carries a required <code>TitleResource</code> type in positional slot 4
-          (<code>.../MMCA.Common.UI/Common/NavItem.cs:16</code>): the shared <code>NavMenu</code> treats <code>Title</code> and <code>Group</code> as
+          (<code>.../MMCA.Common.UI/Common/NavItem.cs:20</code>): the shared <code>NavMenu</code> treats <code>Title</code> and <code>Group</code> as
           resource keys resolved against it per circuit at render time, so module nav menus follow the
           active culture, and a key the resource type does not declare renders as the raw string rather
-          than as a blank entry (<code>:9-14</code>). MudBlazor&#39;s own component chrome localizes through
-          <code>ResxMudLocalizer</code> over the <code>MudTranslations</code> resource pair (all built-in keys of the pinned
-          MudBlazor version, en + es), registered in <code>AddUIShared</code> and covered by the same completeness gate.</p>
+          than as a blank entry (<code>:13-18</code>). MudBlazor&#39;s own component chrome localizes through
+          <code>ResxMudLocalizer</code> over the <code>MudTranslations</code> resource pair (MudBlazor&#39;s own <code>LanguageResource</code>
+          keys as of v9.6.0, en + es, <code>.../MMCA.Common.UI/Resources/MudTranslations.cs:7-8</code>), registered in <code>AddUIShared</code> and covered by the same completeness gate.</p>
           </li>
           <li><p><strong>Applying a culture is host-specific, behind <code>ICultureApplier</code>; a hybrid head switches in process
           (amended 2026-07-29).</strong> Decisions 5 and 6 are written around a request pipeline: a cookie, request
@@ -434,8 +438,12 @@
           <p>Precedence mirrors the web deliberately: the persisted choice (the cookie&#39;s analogue), then the
           device locale (<code>Accept-Language</code>&#39;s analogue), then <code>SupportedCultures.Default</code>. Matching a device
           locale needs the same language fallback request localization does, so
-          <code>SupportedCultures.ResolveClosest</code> now owns it for both (<code>es-MX</code> resolves to <code>es</code>), and it never
-          returns the pseudo locale. The active culture still reaches the services as <code>Accept-Language</code>: the
+          <code>SupportedCultures.ResolveClosest</code> supplies it for the hybrid head (<code>es-MX</code> resolves to <code>es</code>), and it
+          never returns the pseudo locale
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Globalization/SupportedCultures.cs:51</code>, called from
+          <code>.../MMCA.Common.UI.Maui/Globalization/MauiCultureStore.cs:43</code>); web heads keep the parent-culture
+          matching of ASP.NET request localization (<code>UseCommonRequestLocalization</code>,
+          <code>.../MMCA.Common.API/Startup/WebApplicationExtensions.cs:73-93</code>). The active culture still reaches the services as <code>Accept-Language</code>: the
           hybrid head already shares <code>CultureDelegatingHandler</code> through <code>AddUIShared</code>, so once
           <code>CurrentUICulture</code> is right, localized backend errors follow with no extra wiring.</p>
           </li>
@@ -473,6 +481,19 @@
           resource pair now localize the MudBlazor chrome (Decision 9); unknown keys still fall back to
           MudBlazor&#39;s built-in English, and <code>en-US</code> deliberately keeps the built-ins.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed; four statements were corrected to match the code and several
+          citations were refreshed. Decision 2: the composite-key example now matches the shipped
+          <code>Common.Error.Load</code> value <code>&quot;Error loading {0}.&quot;</code> (<code>.../MMCA.Common.UI/Resources/SharedResource.resx:82-83</code>),
+          which takes the entity noun alone as Decision 9 states, and the example key is <code>Common.Button.Cancel</code>
+          (<code>:268</code>) because no <code>Common.Button.Save</code> key exists. Decision 8: the pseudo-locale gate scans five pages,
+          not three (<code>PseudoLocalizationE2ETests.cs:31</code>), and retries the sentinel check (<code>:40</code>). Decision 9: the
+          <code>MudTranslations</code> pair mirrors MudBlazor <code>LanguageResource</code> keys as of v9.6.0 (<code>MudTranslations.cs:7-8</code>)
+          while the pin is 9.11.0 (<code>MMCA.Common/Directory.Packages.props:180</code>), so it is no longer described as
+          covering every key of the pinned version. Decision 10: <code>SupportedCultures.ResolveClosest</code> is called only by
+          the hybrid head (<code>MauiCultureStore.cs:43</code>); web heads use request localization&#39;s own parent-culture
+          fallback (<code>WebApplicationExtensions.cs:73-93</code>). Refreshed anchors: <code>ProblemDetailsResultReader.cs:344-356</code>
+          (was 342-354), <code>ResultUiExtensions.cs:329-338</code> (was 325-334), <code>NavItem.cs:20</code> and <code>:13-18</code> (were 16 and 9-14).</p>
           <h2 id="related">Related</h2>
           <p><a href="011-single-locale-i18n.html">ADR-011</a> (superseded), <a href="013-result-pattern.html">ADR-013</a> (the <code>Error.Code</code>
           this localizes on), <a href="015-architecture-fitness-functions.html">ADR-015</a> (the i18n gates now live here: the <code>MA0076</code> culture-less
@@ -499,6 +520,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

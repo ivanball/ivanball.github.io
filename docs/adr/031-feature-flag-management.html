@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -256,21 +258,24 @@
           <h2 id="decision">Decision</h2>
           <p>Standardize on <strong><code>Microsoft.FeatureManagement</code></strong>, configured from the <code>&quot;FeatureManagement&quot;</code> configuration
           section and registered once in <code>AddAPI</code>
-          (<code>services.AddFeatureManagement()</code> + <code>services.AddSingleton&lt;IDisabledFeaturesHandler, DisabledFeatureHandler&gt;()</code>, <code>MMCA.Common.API/DependencyInjection.cs:91-93</code>), with the built-in
+          (<code>services.AddFeatureManagement()</code> + <code>services.AddSingleton&lt;IDisabledFeaturesHandler, DisabledFeatureHandler&gt;()</code>, <code>MMCA.Common.API/DependencyInjection.cs:105-107</code>), with the built-in
           <strong>Percentage / TimeWindow / Targeting</strong> filters available for progressive rollout. The same flag <em>name</em>
           is enforced at two independent surfaces:</p>
           <ul>
           <li><strong>HTTP edge:</strong> <code>[FeatureGate(&quot;X&quot;)]</code> (<code>Microsoft.FeatureManagement.Mvc</code>) on a controller or action. When
           <code>X</code> is off, <code>DisabledFeatureHandler</code> returns an <strong>RFC 9457 ProblemDetails <code>404</code></strong> (&quot;Feature not
-          available&quot;), matching the standard <code>ApiControllerBase.HandleFailure</code> error shape.</li>
+          available&quot;, <code>MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:18-26</code>). The body is built by
+          hand, so it does not carry the <code>ApiControllerBase.HandleFailure</code> shape (title &quot;Operation failed&quot; plus
+          an <code>errors</code> extension, <code>MMCA.Common.API/Controllers/ApiControllerBase.cs:50-58</code>).</li>
           <li><strong>CQRS pipeline:</strong> a command/query implements <code>IFeatureGated</code> (exposing <code>FeatureName</code>). The
           <code>FeatureGateCommandDecorator</code> / <code>FeatureGateQueryDecorator</code> (the <strong>outermost</strong> decorator (ADR-014))
           checks <code>IFeatureManager.IsEnabledAsync(FeatureName)</code> and, when off, short-circuits with
           <code>Error.NotFoundError(&quot;Feature.Disabled&quot;, …)</code> (<code>ErrorType.NotFound</code>) <strong>before</strong> any logging, caching,
           validation, or transaction work.</li>
-          <li><strong>Disabled = <code>404</code> (NotFound), never <code>403</code>.</strong> Both surfaces return not-found, so a disabled feature is
-          indistinguishable from a nonexistent one: it hides the feature&#39;s existence rather than advertising a
-          forbidden capability.</li>
+          <li><strong>Disabled = <code>404</code> (NotFound), never <code>403</code>.</strong> Both surfaces return not-found rather than advertising a
+          forbidden capability. The bodies still say a feature is off: the edge title reads &quot;Feature not
+          available&quot;, and the CQRS failure carries code <code>Feature.Disabled</code> with a message naming the flag
+          (<code>MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:57-59</code>).</li>
           <li><strong>Flag names are module constants</strong> (<code>CatalogFeatures</code> / <code>SalesFeatures</code> in Store,
           <code>ConferenceFeatures</code> / <code>EngagementFeatures</code> in ADC) that match keys in each service&#39;s
           <code>&quot;FeatureManagement&quot;</code> config, so a flag flips at config + restart, not at deploy. The framework itself
@@ -283,9 +288,11 @@
           <li><strong>Two surfaces because the enforcement points see different request shapes.</strong> Gating both the edge
           <em>and</em> the handler with one flag name keeps controller and use case in agreement, so a disabled feature
           is unreachable from either entry instead of leaking through the one that was missed.</li>
-          <li><strong>The <code>404</code> convention reuses the existing edge.</strong> Both surfaces emit the same Result→ProblemDetails
-          not-found shape (ADR-013), so a disabled feature looks like any other not-found and leaks nothing about
-          hidden functionality.</li>
+          <li><strong>The <code>404</code> convention reuses the not-found status.</strong> The CQRS surface goes through the
+          Result to ProblemDetails edge (ADR-013), whose <code>errors</code> extension serializes each error&#39;s <code>Code</code> and
+          <code>Message</code> (<code>MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61-69</code>); the MVC edge writes its own
+          ProblemDetails. Both answer <code>404</code> rather than <code>403</code>, so neither reveals a guarded capability, but
+          neither body is identical to an ordinary not-found: each states that a feature is unavailable.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -379,6 +386,21 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Notifications/NotificationFeatures.cs:11</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/PrivacyFeatures.cs:11</code>). The fix for a flag that
           goes red is to delete the flag and the branch it no longer chooses between, not to push the date out.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p><strong>The disabled response is not-found, but not anonymous.</strong> The Decision and Rationale said both surfaces
+          emit the <code>HandleFailure</code> not-found shape, so a disabled feature is indistinguishable from a nonexistent
+          one. The code does not do that. <code>DisabledFeatureHandler</code> writes its own ProblemDetails with title
+          &quot;Feature not available&quot; and no <code>errors</code> extension
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:18-26</code>),
+          unlike <code>HandleFailure</code>&#39;s &quot;Operation failed&quot; body
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:50-58</code>). The CQRS
+          surface does go through <code>HandleFailure</code>, and <code>BuildErrorsExtension</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61-69</code>) serializes the
+          <code>Feature.Disabled</code> code and the message &quot;Feature &#39;{FeatureName}&#39; is not currently available.&quot;
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:57-59</code>),
+          so that response names the flag. The decision itself (<code>404</code>, never <code>403</code>, at both surfaces) is
+          unchanged; the Decision and Rationale bullets now describe the bodies as they are. The <code>AddAPI</code>
+          registration anchor in the Decision is refreshed to <code>DependencyInjection.cs:105-107</code>.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -397,6 +419,7 @@
             <li><a href="#revision-2026-08-18">Revision (2026-08-18)</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-011: Single-Locale by Design (No Internationalization) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Superseded by ADR-027 (2026-06-27). Originally Accepted (2026-06-19). The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/011-single-locale-i18n.html">
+  <title>ADR-129: The Tactical Aggregate Contract · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-10-01).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/129-tactical-aggregate-contract.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-011: Single-Locale by Design (No Internationalization)">
-  <meta property="og:description" content="Superseded by ADR-027 (2026-06-27). Originally Accepted (2026-06-19). The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/011-single-locale-i18n.html">
+  <meta property="og:title" content="ADR-129: The Tactical Aggregate Contract">
+  <meta property="og:description" content="Accepted (2026-10-01).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/129-tactical-aggregate-contract.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-011: Single-Locale by Design (No Internationalization)">
-  <meta name="twitter:description" content="Superseded by ADR-027 (2026-06-27). Originally Accepted (2026-06-19). The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027…">
+  <meta name="twitter:title" content="ADR-129: The Tactical Aggregate Contract">
+  <meta name="twitter:description" content="Accepted (2026-10-01).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"011 · Single-Locale by Design (No Internationalization)","item":"https://ivanball.github.io/docs/adr/011-single-locale-i18n.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"129 · The Tactical Aggregate Contract","item":"https://ivanball.github.io/docs/adr/129-tactical-aggregate-contract.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">011 · Single-Locale by Design (No Internationalization)</span>
+        <span class="current">129 · The Tactical Aggregate Contract</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -110,7 +110,7 @@
         <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
         <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
         <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
-        <li><a href="011-single-locale-i18n.html" aria-current="page">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
         <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
         <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
         <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
@@ -228,53 +228,176 @@
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
         <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
-        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
+        <li><a href="129-tactical-aggregate-contract.html" aria-current="page">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-011-single-locale-by-design-no-internationalization">ADR-011: Single-Locale by Design (No Internationalization)</h1>
+          <h1 id="adr-129-the-tactical-aggregate-contract">ADR-129: The Tactical Aggregate Contract</h1>
           <h2 id="status">Status</h2>
-          <p><strong>Superseded by <a href="027-multi-locale-i18n.html">ADR-027</a> (2026-06-27).</strong> Originally Accepted (2026-06-19).
-          The &quot;if multi-locale is ever required&quot; scope below is the blueprint ADR-027 implements; this record is
-          retained for history.</p>
+          <p>Accepted (2026-10-01).</p>
           <h2 id="context">Context</h2>
-          <p>The MMCA applications (the ADC conference app, the Store) and the <code>MMCA.Common.UI</code> library currently ship
-          a single locale (en-US). The architecture rubric scores Internationalization (§27); rather than leave it
-          at an implicit zero, this ADR records that single-locale is a <strong>deliberate, scoped decision</strong> (not an
-          oversight) and states what re-introducing i18n would entail.</p>
+          <p>Every entity in the four repos is written the same way: a sealed class over a framework base, a
+          private constructor, a static <code>Create(...)</code> returning <code>Result&lt;T&gt;</code>, private setters, named mutation
+          methods, child lookups through the root and invariants held in a static class. Agents and people copy
+          that shape from the nearest entity, which is why it is consistent today, but the contract itself is
+          recorded only in fragments. <a href="013-result-pattern.html">ADR-013</a> makes factories return <code>Result&lt;T&gt;</code>,
+          <a href="068-value-objects-as-validated-primitives.html">ADR-068</a> puts value-object invariants in a static
+          <code>*Invariants</code> class, and <a href="126-event-sourcing-not-adopted.html">ADR-126</a> says an aggregate is a
+          current-state row. None of them states the whole entity contract, and none says which parts a build
+          enforces and which parts only exist because the next entity copied the last one.</p>
+          <p>A pattern that forty files copy needs one place that says what the pattern is, where its boundary
+          sits, and which half a fitness test holds. This record is that place, in the same way
+          <a href="125-parameterized-sql-only.html">ADR-125</a> is for raw SQL.</p>
           <h2 id="decision">Decision</h2>
-          <ol>
-          <li><strong>Single-locale (en-US) is an explicit non-goal for now.</strong> User-facing strings are inline in markup;
-          dates/numbers use invariant or fixed formatting where appropriate.</li>
-          <li><strong>The audience is single-locale.</strong> The Atlanta Developers Conference and the Store target a US/English
-          audience; the cost of full i18n (resource extraction, culture-aware formatting, RTL, locale selection)
-          is not justified by current demand.</li>
-          <li><strong>If multi-locale is ever required, it is greenfield work</strong>, scoped as: externalize strings to resource
-          files; culture-aware formatting (dates/numbers/currency/time zones); <code>RequestLocalization</code> middleware +
-          discoverable, persisted locale selection with server/client culture aligned; layout tolerance for text
-          expansion (and RTL where required); and pluralization/interpolation via the i18n mechanism rather than
-          string concatenation.</li>
-          </ol>
+          <p>Entities follow one tactical contract. The construction, encapsulation and placement parts are
+          fitness-gated by <code>EntityConventionTestsBase</code>; the child-access part and the use of <code>Result.Combine</code> are framework members and a convention
+          every repo follows, not a test.</p>
+          <ul>
+          <li><strong>One hierarchy, three abstract levels.</strong> <code>BaseEntity&lt;TIdentifierType&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:34</code>) carries identity;
+          <code>AuditableBaseEntity&lt;TIdentifierType&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13</code>) adds soft delete,
+          the audit fields and the row version, all with private setters (<code>:20-53</code>): <code>IsDeleted</code> is set by
+          the domain methods <code>Delete()</code> and <code>Undelete()</code> (<code>:67-80</code>, <code>:89-104</code>), while the audit fields are
+          stamped at save time; and
+          <code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:13</code>) adds the
+          domain event list (<code>:16-50</code>) and the child-access members below. The fitness rules recognize an
+          aggregate root by a base type whose name starts with <code>AuditableAggregateRootEntity</code>, and an entity
+          by any of the three bases
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/RuleHelpers.cs:109-119</code>).</li>
+          <li><strong>The gate is one shared base with eight facts.</strong> <code>EntityConventionTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/EntityConventionTestsBase.cs:10</code>)
+          declares the facts at <code>:14-36</code>; each body lives once in
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Entities.cs</code>.</li>
+          <li><strong>The suite refuses to pass vacuously.</strong> The Domain layer must expose at least one aggregate root
+          (<code>ArchitectureRules.Entities.cs:8-16</code>), so a broken filter fails instead of checking nothing.</li>
+          <li><strong>Construction is factory-only.</strong> Every aggregate root needs a public static <code>Create</code> with at least
+          one overload returning <code>Result&lt;TSelf&gt;</code> (<code>ArchitectureRules.Entities.cs:19-41</code>), and no public
+          instance constructor (<code>:167-177</code>). The <code>Result&lt;T&gt;</code> rule also reaches every concrete type in Domain
+          and Shared that exposes a <code>Create</code> (<code>:53-80</code>); a type with no <code>Create</code> is unaffected, and other
+          construction sugar such as <code>Money.Zero()</code> is out of scope because only the <code>Create</code> name is governed
+          (<code>:49-51</code>).</li>
+          <li><strong>Entities are sealed.</strong> Any concrete module-domain type inheriting one of the three bases must be
+          sealed (<code>ArchitectureRules.Entities.cs:103-112</code>); the rule checks concrete classes only (<code>:105-107</code>), so an abstract module-domain class over an entity base is not caught.</li>
+          <li><strong>Entities live in Domain.</strong> No concrete type inheriting an entity base may sit in an Application or
+          Infrastructure layer assembly (<code>ArchitectureRules.Entities.cs:180-191</code>).</li>
+          <li><strong>No public setters; mutation goes through named domain methods.</strong> Every public instance property
+          of a module-domain entity must have no setter, an <code>init</code>-only setter, or a non-public one
+          (<code>ArchitectureRules.Entities.cs:149-164</code>, compliance stated at <code>:129-136</code>). Navigation properties are
+          included rather than exempted, so a collection is replaced through a <code>SetXxx</code> method (<code>:133-136</code>).
+          An <code>init</code> setter is detected by its <code>IsExternalInit</code> modreq and counts as compliant
+          (<code>RuleHelpers.cs:129-143</code>). Fields are not inspected (<code>ArchitectureRules.Entities.cs:144-145</code>).</li>
+          <li><strong>DTOs and requests stay out of the model.</strong> A type ending in <code>DTO</code> or <code>Request</code>, or implementing
+          <code>IBaseDTO</code>, fails in Domain; a DTO fails in Infrastructure, while a <code>*Request</code> is allowed there as an
+          outbound HTTP payload (<code>ArchitectureRules.Entities.cs:193-217</code>).</li>
+          <li><strong>Child access goes through the root.</strong> <code>GetChildOrNotFound&lt;TChild, TChildId&gt;</code> is a protected static
+          member of the aggregate base that returns the active child by id or a <code>NotFound</code> failure carrying
+          the caller as source and the child type as target, skipping soft-deleted children
+          (<code>AuditableAggregateRootEntity.cs:105-122</code>). <code>SetItems&lt;TChildEntity&gt;</code> is the protected collection
+          replacement: it copies the incoming items, calls the overridable <code>ValidateSetItems</code> hook (a no-op by
+          default) and only then replaces the backing list (<code>:60-76</code>, hook at <code>:87-92</code>). Three more protected
+          static helpers build on the lookup: <code>RemoveChildOrNotFound</code> (lookup then the child&#39;s <code>Delete()</code>,
+          <code>:158</code>), <code>RestoreChild</code> (reactivates a soft-deleted child, <code>:214</code>) and <code>DeleteChildren</code> (soft-deletes
+          every active child for a cascading <code>Delete()</code>, <code>:275</code>). All five are protected, so only the aggregate
+          calls them directly; aggregates still expose <code>internal</code> <code>SetXxx</code> wrappers over <code>SetItems</code> for
+          manual navigation loading (for example
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:413-414</code>), which
+          Application-layer navigation populators call
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Application/Products/ProductNavigationPopulator.cs:28</code>).
+          No fitness rule requires the use of any of these helpers.</li>
+          <li><strong>Invariants are static classes composed with <code>Result.Combine</code>.</strong> <code>Result.Combine(params ReadOnlySpan&lt;Result&gt;)</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:124</code>)
+          throws on an empty argument list (<code>:126-129</code>) and otherwise returns success or one failure holding
+          every error from every failed input (<code>:131-144</code>). Its arguments are evaluated before the call, so
+          every invariant runs and every violation is reported; it does not short-circuit. That an <code>*Invariants</code> class is static is fitness-gated
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Governance/ArchitectureRules.Naming.cs:78-88</code>,
+          run as <code>InvariantClasses_ShouldBe_Static</code> at <code>.../Bases/Governance/NamingConventionTestsBase.cs:31</code>, subclassed by
+          MMCA.ADC, MMCA.Store and MMCA.Helpdesk); that one exists and that it uses <code>Result.Combine</code> is convention.</li>
+          <li><strong>The reference shape is Helpdesk&#39;s <code>Ticket</code>.</strong> It is sealed over the aggregate base
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs:26</code>), has a
+          private constructor (<code>:52</code>) and <code>Create</code> returning <code>Result&lt;Ticket&gt;</code> (<code>:66</code>), composes
+          <code>TicketInvariants</code> through <code>Result.Combine</code> in <code>Create</code> and <code>UpdateDetails</code> (<code>:68</code>, <code>:118</code>), and
+          finds a comment through <code>GetChildOrNotFound</code> (<code>:144</code>). <code>TicketInvariants</code> is the static class
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/TicketInvariants.cs:16</code>,
+          <code>Result.Combine</code> at <code>:27</code>, <code>:33</code>, <code>:40</code>). The ADC and Store aggregates use the same members, for
+          example <code>Speaker</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:392</code>,
+          <code>:452</code>, <code>:472</code>) and <code>Product</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs:407</code>, <code>:455</code>, <code>:474</code>).</li>
+          <li><strong>Adoption: the three application repos subclass the full base unchanged.</strong> MMCA.ADC
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Domain/EntityConventionTests.cs:3-6</code>),
+          MMCA.Store
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Domain/EntityConventionTests.cs:3-6</code>)
+          and MMCA.Helpdesk
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:89-92</code>)
+          each supply only their architecture map.</li>
+          <li><strong>MMCA.Common does not subclass <code>EntityConventionTestsBase</code>.</strong> It has no business modules, and the
+          sealed, setter and module-scoped constructor rules scope to module domains, so those three would be
+          vacuous there (<code>ArchitectureRules.Entities.cs:141-144</code>, <code>:86</code>). The layer-placement and DTO/request
+          rules do not scope to module domains (<code>ArchitectureRules.Entities.cs:180-217</code>), but Common does not
+          call them either. It subclasses the smaller
+          <code>AggregateConventionTestsBase</code> instead
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Domain/AggregateConventionTests.cs:9</code>),
+          which runs the vacuity, <code>Create</code> factory and Domain-wide <code>Result&lt;T&gt;</code> facts plus a no-public-constructor
+          rule scoped to the whole Domain layer rather than module domains
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/AggregateConventionTestsBase.cs:14-24</code>,
+          rule at <code>ArchitectureRules.Entities.cs:90-100</code>). The framework&#39;s own types are therefore not checked
+          for sealing, setters, layer placement or DTO/request placement by this suite.</li>
+          </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li>Recording the decision converts an implicit rubric-zero into a conscious, revisitable choice: the same
-          posture as the single-region DR acceptance in ADR-009.</li>
-          <li>Premature i18n infrastructure adds complexity (resource indirection, culture bugs, layout churn) with no
-          current user to benefit.</li>
+          <li><strong>One contract, one record.</strong> The pieces were each correct in their own ADR, but an agent writing a
+          new entity needs the whole shape at once, and a reviewer needs to know which deviations a build
+          catches. Naming the gated and ungated halves separately is the point of the record.</li>
+          <li><strong>The factory is where invariants run.</strong> A <code>Create</code> returning <code>Result&lt;T&gt;</code> lets construction fail
+          as a value (<a href="013-result-pattern.html">ADR-013</a>), and the no-public-constructor rule removes the path
+          around it.</li>
+          <li><strong>A public setter makes every invariant optional.</strong> The factory can only guarantee the state it
+          builds; a public setter lets any caller reach a state no invariant saw, and putting mutation behind
+          a named method is also what keeps the state change and its domain event together
+          (<code>ArchitectureRules.Entities.cs:120-126</code>).</li>
+          <li><strong>Sealing keeps the boundary closed.</strong> Inheriting a concrete aggregate would let a subclass bypass
+          the factory and the named methods; only the abstract framework bases are meant to be extended.</li>
+          <li><strong>Combine reports everything.</strong> Because <code>Result.Combine</code> aggregates every failed input, a caller
+          sees all broken invariants in one response rather than fixing them one round trip at a time.</li>
+          <li><strong>Executable beats documented.</strong> The gated parts follow the fitness-function style of
+          <a href="015-architecture-fitness-functions.html">ADR-015</a>: the failure message names the fix, so nobody has
+          to remember the rule.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li>Adding a locale later touches every view plus the formatting paths: a real but bounded effort, accepted.</li>
-          <li>Hard-coded strings make a future extraction larger; mitigated by the component-based UI (strings are
-          localized to components/pages, so extraction is mechanical rather than archaeological).</li>
+          <li><strong>Part of the contract is not enforced.</strong> Child access through <code>GetChildOrNotFound</code>, <code>SetItems</code> and
+          the remove, restore and cascade-delete helpers, the existence of an <code>*Invariants</code> class and the use of <code>Result.Combine</code> hold by copying, not by a test; an abstract module-domain class over an entity base also escapes the sealed rule. An
+          aggregate that reaches into a child list directly or validates inline still builds.</li>
+          <li><strong>Eager evaluation has a cost.</strong> Every argument to <code>Result.Combine</code> runs before the call, so an
+          invariant that depends on an earlier one passing must guard itself or run in a separate step.</li>
+          <li><strong>The setter rule sees accessibility, not intent.</strong> A public setter called only from inside the
+          aggregate still fails (<code>ArchitectureRules.Entities.cs:139-141</code>), and a public mutable field is left
+          to the analyzers rather than this rule (<code>:144-145</code>).</li>
+          <li><strong>Layer placement covers two layers.</strong> The rule scans Application and Infrastructure assemblies only
+          (<code>ArchitectureRules.Entities.cs:182</code>); an entity declared in an API or UI assembly is not caught by
+          it.</li>
+          <li><strong>The <code>Create</code> check is by name.</strong> A type with no <code>Create</code> method is outside the <code>Result&lt;T&gt;</code> rule
+          entirely (<code>ArchitectureRules.Entities.cs:67-70</code>), so a factory under another name is unchecked.</li>
+          <li><strong>The framework&#39;s own model is gated more lightly.</strong> MMCA.Common runs the smaller base, so sealing,
+          setter, layer-placement and DTO/request rules do not apply to its own concrete Domain types.</li>
           </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="013-result-pattern.html">ADR-013</a> (the <code>Result&lt;T&gt;</code> factories this contract requires),
+          <a href="068-value-objects-as-validated-primitives.html">ADR-068</a> (value-object factories and the static
+          <code>*Invariants</code> class this contract reuses for entities),
+          <a href="126-event-sourcing-not-adopted.html">ADR-126</a> (an aggregate is a current-state row that raises domain
+          events, which is the row this contract shapes),
+          <a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function style and the shared
+          <code>*TestsBase</code> package all four repos subclass),
+          <a href="125-parameterized-sql-only.html">ADR-125</a> (the precedent for a fitness-gated convention getting its own
+          record). Framework version and package figures live in <code>MMCA.Common/FACTS.md</code>.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/011-single-locale-i18n.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/129-tactical-aggregate-contract.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">
@@ -286,6 +409,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
             </ul>
           </nav>
         </aside>

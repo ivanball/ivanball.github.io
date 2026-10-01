@@ -3,13 +3,15 @@
 ## Status
 Accepted (2026-08-13; corrected 2026-08-14: the adoption sweep and the `ApplicationDbContext` line
 citations). The implementation lands in the MMCA.Common "enterprise capability wave" release
-and is opt-in twice over: `AddAuditTrail(configuration)` registers the interceptor and the settings, and
+and is opt-in at three gates: `AddAuditTrail(configuration)` registers the interceptor, the settings, the
+reader and the retention job, `AuditTrail:Enabled` (default false) maps the table and turns capture on, and
 an entity is audited only when it carries the `IAuditedEntity` marker. Absent registration the interceptor
 is not resolved and the whole feature is a no-op.
 Revised 2026-09-07 (Store pins the reverse `[Pii]` convention with a fitness test, and deployed SQL
 auditing backstops the in-database trail).
 Revised 2026-09-25 (both apps' SQL auditing now records UPDATE and DELETE statements against the trail
 table, by different means, and the code anchors are refreshed).
+Revised 2026-10-01 (retention has no fallback: without the scheduler nothing is purged; see Revision below).
 ## Context
 The framework already answers "who touched this row last". Every `AuditableBaseEntity` carries
 `CreatedOn/By` and `LastModifiedOn/By`, stamped by `AuditSaveChangesInterceptor` on the way into
@@ -40,10 +42,10 @@ Several questions had no recorded answer:
 ### A fourth `SaveChangesInterceptor`, resolved optionally, running last
 `AuditTrailSaveChangesInterceptor` (Infrastructure `Persistence/AuditTrail/`) joins the interceptors
 `ApplicationDbContext.OnConfiguring` already passes to `optionsBuilder.AddInterceptors`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:292-316`,
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:298-323`,
 where `AuditSaveChangesInterceptor` and `DomainEventSaveChangesInterceptor` are resolved with
-`GetRequiredService` (`:292-293`) and the tenant and audit-trail interceptors with `GetService`). The new
-one is resolved with `GetService`, not `GetRequiredService` (`:314`): a host that never calls `AddAuditTrail`
+`GetRequiredService` (`:298-299`) and the tenant and audit-trail interceptors with `GetService`). The new
+one is resolved with `GetService`, not `GetRequiredService` (`:320`): a host that never calls `AddAuditTrail`
 resolves null, nothing is added to the pipeline, and the feature costs nothing.
 
 **Registration order is execution order and it is load-bearing.** After the wave the sequence is
@@ -85,24 +87,29 @@ construction survives the erasure of the row it describes.
 `IAuditedEntity` (Domain) is an empty marker. An entity is audited because someone wrote the interface on
 it, which is what keeps volume a deliberate decision rather than a framework-imposed tax.
 `AuditTrailSettings` binds section `AuditTrail` (`Enabled`, `RetentionDays` default 90) through the
-ADR-070 fail-fast chain, and `AddAuditTrail(configuration)` in Infrastructure's `DependencyInjection.cs`
-registers the interceptor and the settings together.
+ADR-070 fail-fast chain, and `AddAuditTrail(configuration)`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:108`) registers the
+interceptor and the settings together, plus `IAuditTrailReader` (`:119`) and `AuditTrailCleanupJob` (`:124`).
 
 ### The table lives in every relational source that adopts it
-`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:411`) calls
-`ConfigureAuditTrail(modelBuilder)` (`:430`, the method itself at `:844`), gated on the settings flag
-resolved from the root provider the way the interceptors are, creating an `AuditTrailEntries` table with
-an index on
-`(EntityType, EntityKey, ChangedOn)`. A same-transaction write requires the table in the same database as
+`ApplicationDbContext.OnModelCreating` (`.../ApplicationDbContext.cs:417`) calls
+`ConfigureAuditTrail(modelBuilder)` (`:436`, the method itself at `:850`), gated on the settings flag
+resolved from the root provider the way the interceptors are (`:333`, checked at `:852`), creating an
+`AuditTrailEntries` table with two indexes: `IX_AuditTrailEntries_Entity` on
+`(EntityType, EntityKey, ChangedOn)` for the read path (`:870-871`) and `IX_AuditTrailEntries_ChangedOn`
+for the retention sweep (`:876-877`). A same-transaction write requires the table in the same database as
 the data, which is the outbox precedent (ADR-006) and the reason the trail is not one central store.
 Cosmos skips it, the way `CosmosDbContext` reports `SupportsOutbox => false`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:69`).
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:121`), and its `OnModelCreating` override (`:124`) never reaches
+`ConfigureAuditTrail`.
 
 ### Retention is the framework's first scheduled job
 `AuditTrailCleanupJob` ships as the first `IScheduledJob` (ADR-074), purging rows older than
 `RetentionDays`. The framework dogfoods its own scheduler rather than shipping a second periodic
-mechanism; a `PeriodicBackgroundService` subclass is the fallback for a host that does not enable the
-scheduler.
+mechanism. There is no fallback: the job runs only when the host also calls `AddScheduledJobs` and sets
+`Scheduler:Enabled`, and without that the trail still records but nothing is purged, `RetentionDays` is
+inert and pruning is the operator's job
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:97-101`).
 
 ### The read surface is one interface
 `IAuditTrailReader` (Application) with an Infrastructure implementation querying by
@@ -130,9 +137,9 @@ adopts separately rather than sharing one database), and Helpdesk's Tickets.
   lost by a crash in the window, and a trail that can be lost is one nobody can rely on in the argument it
   exists to settle. The outbox has run this exact mechanic in production for the whole life of the
   framework, so this is a proven path rather than a new one.
-- **Running last is what makes the captured values final.** Capturing before the tenant and stamp
-  interceptors would record a `TenantId` of null and a stale `LastModifiedBy` on rows the same save is
-  about to correct, which is worse than not capturing at all: a wrong history reads exactly like a right
+- **Running last is what makes the captured values final.** Capturing before the stamp interceptor
+  would record a stale `LastModifiedBy` on rows the same save is about to correct (the trail's own
+  `TenantId` comes from the context's current tenant, so it does not depend on order), which is worse than not capturing at all: a wrong history reads exactly like a right
   one.
 - **Redacting at capture is the only version that survives erasure.** ADR-005 anonymizes a row in place on
   a data-subject request. If the trail held the old clear-text value, erasure would delete the data from
@@ -156,8 +163,9 @@ adopts separately rather than sharing one database), and Helpdesk's Tickets.
 - **Redact-at-capture is irreversible, which is the point and also a limit.** A `[Pii]` field's old value
   is gone from the trail forever, so the trail can never answer "what was this email address before it
   changed".
-- **The marker is per entity, not per property.** Opting an entity in captures every non-PII property it
-  has, including the ones nobody wanted a history of.
+- **The marker is per entity, not per property.** Opting an entity in captures every changed property it
+  has, including the ones nobody wanted a history of; a `[Pii]` property still gets a row, with the
+  redacted token in both value columns.
 - **Nothing enforces the interceptor ordering.** It is registration order held by review, with no fitness
   test asserting it, and a fifth interceptor inserted in the wrong position silently changes what the
   trail sees rather than failing anything.
@@ -211,6 +219,32 @@ now record trail DML, each shaped by its own volume decision.
   is unchanged. `SqlAuditConventionTests`
   (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/SqlAuditConventionTests.cs:12`)
   pins both actions in `main.bicep` (`:17`) and the database list (`:36`).
+
+## Revision (2026-10-01): retention has no fallback, and the current-state text matches the code
+- **Retention runs on the scheduler or not at all.** The Decision previously named a
+  `PeriodicBackgroundService` subclass as the fallback for a host without the scheduler. No such class
+  exists: `AddAuditTrail` registers `AuditTrailCleanupJob` as a scheduled job
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Jobs.cs:124`), and without
+  `AddScheduledJobs` plus `Scheduler:Enabled` nothing is purged and `RetentionDays` is inert (`:97-101`).
+- **Opt-in is three gates, not two.** `AuditTrail:Enabled` defaults to false
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSettings.cs:26`)
+  and gates both the table (`.../ApplicationDbContext.cs:333`, `:852`) and capture, since the interceptor
+  returns when the model has no `AuditTrailEntry`
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs:183`).
+  `AddAuditTrail` also registers `IAuditTrailReader` (`DependencyInjection.Jobs.cs:119`).
+- **The table carries a second index**, `IX_AuditTrailEntries_ChangedOn`, for the retention sweep
+  (`.../ApplicationDbContext.cs:876-877`).
+- **The ordering rationale no longer claims a null `TenantId`.** The trail row's `TenantId` is read from
+  the context's current tenant (`AuditTrailSaveChangesInterceptor.cs:194`), not from the stamped entity,
+  so only the stale `LastModifiedBy` half depends on running last.
+- **A `[Pii]` property is captured, redacted.** The Trade-offs entry previously said only non-PII
+  properties are captured; every changed property gets a row, a personal one with the redacted token on
+  both sides (`AuditTrailSaveChangesInterceptor.cs:303`).
+- Anchors refreshed: `ApplicationDbContext.cs` interceptor block `:298-323`, `OnModelCreating` `:417`,
+  `ConfigureAuditTrail` `:436` / `:850`; `CosmosDbContext.cs` `SupportsOutbox` `:121`; `AddAuditTrail` now
+  cited in `DependencyInjection.Jobs.cs:108`. The bicep anchors in the 2026-09-25 revision have since moved
+  (Store `MMCA.Store/infra/main.bicep:885`, ADC `MMCA.ADC/infra/main.bicep:846` and `:1003`) and are left
+  as recorded there; the auditing content is unchanged.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the same-transaction write this copies wholesale, including the

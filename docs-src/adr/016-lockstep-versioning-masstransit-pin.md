@@ -69,10 +69,10 @@ Two related governance questions had no recorded answer:
    to local-source mode, keeps no lock files. What makes the one-pass sweep safe is not that
    framework-to-app (`[C->A]`) changes are non-breaking: breaking changes ship deliberately, as
    MINOR bumps, and the version number is therefore not a breakage signal on its own
-   (`Website/docs-src/guides/common-VERSIONING.md:43-50`). It is safe because every first-party
+   (`Website/docs-src/guides/common-VERSIONING.md:44-50`). It is safe because every first-party
    caller moves in the same change set, an API removal is proven against Helpdesk's source build
-   first (`common-VERSIONING.md:67-68`), and there is no `[Obsolete]` grace period to keep in step
-   (`common-VERSIONING.md:66-72`).
+   first (`common-VERSIONING.md:69-70`), and there is no `[Obsolete]` grace period to keep in step
+   (`common-VERSIONING.md:72-78`).
 3. **Pin a commercial-license dependency below its paid major, enforced by a fitness function.**
    `DependencyVersionTestsBase` parses `Directory.Packages.props` and fails the build when a pinned
    package reaches the major where its licensing changes (ADR-015). Two are gated today: MassTransit
@@ -81,20 +81,22 @@ Two related governance questions had no recorded answer:
    MSBuild targets fail outright), each mirrored as a dependabot major-update ignore so the bump is
    never even proposed
    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:17-60`,
-   `MMCA.Common/Directory.Packages.props:90-97`, `MMCA.Common/.github/dependabot.yml:57-60`).
+   `MMCA.Common/Directory.Packages.props:122-130`, `:138-148`, `MMCA.Common/.github/dependabot.yml:57-65`).
    MassTransit is the original instance; ImageSharp is what showed the rule generalizes.
 
    The assertions run in MMCA.Common only, the one repo that subclasses the base
    (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/DependencyVersionTests.cs:9`).
-   Helpdesk declares neither package. Store and ADC take `MassTransit` and `MassTransit.RabbitMQ`
-   transitively through `MMCA.Common.Infrastructure`
-   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:34-36`),
+   Helpdesk declares neither package. Store and ADC take `MassTransit`, `MassTransit.RabbitMQ` and
+   `MassTransit.Azure.ServiceBus.Core` transitively through `MMCA.Common.Infrastructure`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:50-52`),
    but each **does** declare one MassTransit entry of its own: `MassTransit.Azure.ServiceBus.Core`
-   8.5.10 for the Service Bus emulator test tier, carrying a comment that names Common's lockstep v8
-   pin (`MMCA.ADC/Directory.Packages.props:60-65`, `MMCA.Store/Directory.Packages.props:83-88`).
-   Common's own three MassTransit entries are on that same 8.5.10
-   (`MMCA.Common/Directory.Packages.props:95-97`), so all three repos sit on one patch version.
-   Alignment there is a convention the app-side comments carry, not something the gate enforces:
+   8.5.11 for the Service Bus emulator test tier, carrying a comment that names Common's lockstep v8
+   pin (`MMCA.ADC/Directory.Packages.props:60-65`, `MMCA.Store/Directory.Packages.props:88-93`).
+   Common's own three MassTransit entries are on that same 8.5.11
+   (`MMCA.Common/Directory.Packages.props:128-130`), so all three repos sit on one patch version.
+   Alignment there is a convention the app-side comments carry, not something the gate enforces
+   (Store's comment still names an 8.5.10 pin while its entry is 8.5.11,
+   `MMCA.Store/Directory.Packages.props:89-90`, `:93`):
    what the pin governs, and what the fitness function reads, is the major, so an app-side entry on
    a different v8 patch would still be inside the decision.
    They still do not subclass the test: its default list also names the two package ids they do not
@@ -122,10 +124,11 @@ Two related governance questions had no recorded answer:
 - The gate reads MMCA.Common's `Directory.Packages.props` and nothing else, so the
   `MassTransit.Azure.ServiceBus.Core` entry Store and ADC each declare for their emulator tier sits
   outside its reach. What holds those two at v8 is that neither repo lets dependabot touch NuGet at
-  all: each carries a `dependabot.yml` scoped to github-actions only, whose own comment says NuGet is
-  deliberately excluded because `MMCA.Common.*` bumps happen solely through this ADR's lockstep sweep
-  and MassTransit must stay v8 (`MMCA.ADC/.github/dependabot.yml:1-4`,
-  `MMCA.Store/.github/dependabot.yml:1-8`, the latter added 2026-07-29), plus review.
+  all: each carries a `dependabot.yml` scoped to the github-actions and docker ecosystems only
+  (`MMCA.ADC/.github/dependabot.yml:7`, `:28`, `MMCA.Store/.github/dependabot.yml:15`, `:32`), whose
+  own comment says NuGet is deliberately excluded because `MMCA.Common.*` bumps happen solely through
+  this ADR's lockstep sweep and MassTransit must stay v8 (`MMCA.ADC/.github/dependabot.yml:1-4`,
+  `MMCA.Store/.github/dependabot.yml:6-8`, the latter added 2026-07-29), plus review.
 
 ## Transport exit options
 The pin has a horizon. MassTransit v8 is the free major and its community support ends at the end of
@@ -135,8 +138,8 @@ candidates are recorded now so the eventual move is a comparison and not a scram
 
 What makes any of them a bounded change is where MassTransit actually sits. The whole
 `using MassTransit` surface is **nine files across two packages**. Eight are in
-`MMCA.Common.Infrastructure`: `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:3`,
-`Messaging/BrokerMessageBus.cs:1`, `Messaging/Consumers/IntegrationEventConsumer.cs:1`,
+`MMCA.Common.Infrastructure`: `Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:2`,
+`Messaging/BrokerMessageBus.cs:2`, `Messaging/Consumers/IntegrationEventConsumer.cs:1`,
 `Messaging/Consumers/IntegrationEventConsumerExtensions.cs:1`,
 `Messaging/Consumers/UpcastingIntegrationEventConsumer.cs:3`,
 `Messaging/Consumers/FaultIntegrationEventConsumer.cs:1`,
@@ -155,7 +158,7 @@ so none of them is an unused import: `IConsumer<T>`, `ConsumeContext<T>`, `IPubl
 Application, Domain and Shared never reference it:
 `IMessageBus` is the Application-layer abstraction
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28`) and
-`BrokerMessageBus` is its only broker implementation (`BrokerMessageBus.cs:24`), which is the
+`BrokerMessageBus` is its only broker implementation (`BrokerMessageBus.cs:43`), which is the
 boundary ADR-008's `MicroserviceExtractionTests` already keep enforced.
 
 Three candidates, **none adopted and none evaluated against a running broker here**:
@@ -163,28 +166,29 @@ Three candidates, **none adopted and none evaluated against a running broker her
 1. **The OpenTransit community fork of MassTransit v8.** Cheapest on paper, a package id swap under
    the same API. No repo in this workspace references it, and the part that would decide it is Azure
    Service Bus parity, since production runs Service Bus while local runs RabbitMQ
-   (`DependencyInjection.cs:926`, `:956`). Its release status and its parity are external facts this
+   (`DependencyInjection.Messaging.cs:266`, `:297`). Its release status and its parity are external facts this
    record cannot verify and does not assert.
 2. **A commercial MassTransit v9 license.** The straight-line option: the pin exists only because v9
    demands `MT_LICENSE` at startup and every broker-enabled host crashes without it
-   (`MMCA.Common/Directory.Packages.props:90-94`). A license retires the gate rather than routing
+   (`MMCA.Common/Directory.Packages.props:122-127`). A license retires the gate rather than routing
    around it, at a recurring cost.
 3. **A direct `Azure.Messaging.ServiceBus` implementation of `IMessageBus`.** The largest and the
-   most owned. Publishing is one class (`BrokerMessageBus.cs:24`), but the consume side is where the
-   library earns its keep: three consumers ride `IConsumer<T>` (`IntegrationEventConsumer.cs:30`,
-   `UpcastingIntegrationEventConsumer.cs:36`, `FaultIntegrationEventConsumer.cs:28`) and the
+   most owned. Publishing is one class (`BrokerMessageBus.cs:43`), but the consume side is where the
+   library earns its keep: three consumers ride `IConsumer<T>` (`IntegrationEventConsumer.cs:42`,
+   `UpcastingIntegrationEventConsumer.cs:36`, `FaultIntegrationEventConsumer.cs:27`) and the
    transport wiring supplies exponential in-process retry plus second-level delayed redelivery
-   (`DependencyInjection.cs:938-951` on RabbitMQ, `:980-990` on Service Bus, the two-level argument
-   at `:899-913`), all of which would be hand-written. It also drops RabbitMQ, which the local
+   (`DependencyInjection.Messaging.cs:277-290` on RabbitMQ, where the redelivery half is opt-in
+   behind `EnableDelayedRedelivery` and off by default, `:320-330` on Service Bus, where it is
+   unconditional, the two-level argument at `:239-252`), all of which would be hand-written. It also drops RabbitMQ, which the local
    Aspire stack provisions.
 
 The trial point is the same for all three and it is additive: a new case in the `MessageBusProvider`
 switch inside `ConfigureBrokerTransport`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:933`, switch at `:938`,
-enum at `Settings/MessageBusSettings.cs:199`), so a candidate ships **beside** RabbitMQ and Service
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:258`, switch at `:263`,
+enum at `Messaging/MessageBusSettings.cs:236`), so a candidate ships **beside** RabbitMQ and Service
 Bus instead of replacing either, and a consumer opts in by configuration. The two artifacts that move
 with a decision are the pin
-(`MMCA.Common/Directory.Packages.props:90-94`, the three entries at `:95-97`) and the fitness
+(`MMCA.Common/Directory.Packages.props:122-127`, the three entries at `:128-130`) and the fitness
 function that reads it
 (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/DependencyVersionTestsBase.cs:17-22`,
 the major ceiling at `:24-37`), plus the dependabot ignore they are paired with.
@@ -192,9 +196,9 @@ the major ceiling at `:24-37`), plus the dependabot ignore they are paired with.
 A proving ground already exists: both consumers' nightlies run an Azure Service Bus emulator smoke
 against their real integration-event contracts, and the tier is authoritative rather than advisory,
 so a transport regression blocks the next deploy
-(`MMCA.ADC/.github/workflows/cross-service-tests.yml:153-157`, the gating rationale at `:126-137`,
+(`MMCA.ADC/.github/workflows/cross-service-tests.yml:159`, the gating rationale at `:132-143`,
 and the equivalent `servicebus-emulator-smoke` job in
-`MMCA.Store/.github/workflows/cross-service-tests.yml`; the deploy-side halves are recorded in
+`MMCA.Store/.github/workflows/cross-service-tests.yml:160`, rationale at `:140-154`; the deploy-side halves are recorded in
 ADR-066 and ADR-064). Any transport candidate has somewhere to be exercised that is not production.
 
 ## Alternatives rejected
@@ -207,6 +211,24 @@ ADR-066 and ADR-064). Any transport candidate has somewhere to be exercised that
   source-mapping path, which makes a lockstep cross-repo change practical without a NuGet publish
   round trip. A half-upgraded codebase is the cost this record is spending lockstep releases to
   avoid, so re-introducing one per feature would defeat the decision above.
+
+## Revision (2026-10-01)
+No decision, pin, gate or rationale changed: MassTransit stays below major 9 and ImageSharp below
+major 4, and every repo still sits on one MassTransit patch. The current-state text is refreshed to
+match source. The shared patch is now 8.5.11 in all three repos
+(`MMCA.Common/Directory.Packages.props:128-130`, `MMCA.ADC/Directory.Packages.props:65`,
+`MMCA.Store/Directory.Packages.props:93`), and Store's emulator-tier comment still names 8.5.10
+(`MMCA.Store/Directory.Packages.props:89-90`). `MMCA.Common.Infrastructure` references all three
+MassTransit packages, so `MassTransit.Azure.ServiceBus.Core` also flows transitively
+(`MMCA.Common.Infrastructure.csproj:50-52`). The Store and ADC `dependabot.yml` files now also
+manage the docker ecosystem, still excluding NuGet (`MMCA.ADC/.github/dependabot.yml:28`,
+`MMCA.Store/.github/dependabot.yml:32`). The transport wiring lives in
+`DependencyInjection.Messaging.cs`, and RabbitMQ second-level redelivery is opt-in behind
+`EnableDelayedRedelivery` (default false), while Service Bus applies it unconditionally
+(`DependencyInjection.Messaging.cs:246-251`, `:277`). The `Directory.Packages.props`,
+`dependabot.yml`, `MMCA.Common.Infrastructure.csproj`, `BrokerMessageBus.cs`, consumer,
+`MessageBusSettings.cs`, `cross-service-tests.yml` and `common-VERSIONING.md` citations are
+rebased onto their current lines; the nine-file `using MassTransit` count is unchanged.
 
 ## Related
 ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker

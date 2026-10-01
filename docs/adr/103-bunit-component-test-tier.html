@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -238,16 +240,17 @@
           <p>Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the <code>AngleSharp</code> advisory
           pin travels. See Revision (2026-09-03) at the end. Revised 2026-09-19: four drifted facts refreshed
           (the <code>bunit</code> pin, the <code>TestPrincipal</code> role shorthand, the helper&#39;s call-site count, and the lockstep
-          package count). See Revision (2026-09-19) at the end.</p>
+          package count). See Revision (2026-09-19) at the end. Revised 2026-10-01 (the base now registers the
+          real authorization service, so a component test can assert a role denial; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>Three test tiers in this workspace are decided in writing and one is not. ADR-015 gates <strong>structure</strong>
           with NetArchTest. ADR-058 ships the <strong>runtime conformance</strong> suites as abstract bases in
           <code>MMCA.Common.Testing</code> and scopes itself explicitly to contracts that only a booted host can prove
-          (<code>058-runtime-conformance-suites-as-a-package.md:22-25</code>). ADR-063 and ADR-092 ship the <strong>browser</strong>
+          (<code>058-runtime-conformance-suites-as-a-package.md:12-16,24-27</code>). ADR-063 and ADR-092 ship the <strong>browser</strong>
           tier as Playwright contracts and deploy gates (WCAG 2.1 AA scans, Core Web Vitals budgets). Between a
           plain unit test over a handler and a Playwright run against a live stack sits the <strong>component</strong> tier:
           render one Blazor page or component in process, drive it, assert on its markup. That tier exists in
-          all three code repos with a UI and was recorded nowhere. ADR-101 names the <code>Testing.*</code> packages only
+          three of the four code repos with a Blazor UI and was recorded nowhere. ADR-101 names the <code>Testing.*</code> packages only
           to keep them out of the metapackage (<code>101-common-metapackage.md:55</code>), which decides their packaging
           and nothing about the tier itself.</p>
           <p>A component test is cheap to write and expensive to set up, and the expensive part is not per test.
@@ -262,7 +265,7 @@
           <h2 id="decision">Decision</h2>
           <p>Ship the component-test tier as a package. <code>MMCA.Common.Testing.UI</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/MMCA.Common.Testing.UI.csproj:3-4</code>) is one of the
-          <code>MMCA.Common.*</code> packages released in lockstep (<code>MMCA.Common/FACTS.md:19,37</code>), and its <code>BunitComponentTestBase</code>
+          <code>MMCA.Common.*</code> packages released in lockstep (<code>MMCA.Common/FACTS.md:19,42</code>), and its <code>BunitComponentTestBase</code>
           fixes every choice above once, in one file.</p>
           <ul>
           <li><strong>bUnit v2, with the version-specific symbols isolated to this base.</strong> The base derives from bUnit
@@ -272,58 +275,63 @@
           and derived test classes call <code>RenderUnderTest</code> / <code>RenderAs</code> and never touch the version-specific
           symbols, so a move off that line changes this file and no other
           (<code>BunitComponentTestBase.cs:29-34</code>). The line is pinned at <code>bunit</code> 2.11.3 in each repo&#39;s central
-          package file (<code>MMCA.Common/Directory.Packages.props:232-233</code>,
-          <code>MMCA.ADC/Directory.Packages.props:30-31</code>, <code>MMCA.Store/Directory.Packages.props:54-55</code>), and the
+          package file (<code>MMCA.Common/Directory.Packages.props:238-239</code>,
+          <code>MMCA.ADC/Directory.Packages.props:31-32</code>, <code>MMCA.Store/Directory.Packages.props:57-58</code>), and the
           package carries a direct <code>AngleSharp</code> pin because central package management does not pin
           transitives (<code>MMCA.Common.Testing.UI.csproj:13-15</code>).</li>
           <li><strong>MudBlazor services plus the ADR-067 facades, registered once.</strong> The constructor calls
           <code>Services.AddMudServices()</code> (<code>BunitComponentTestBase.cs:46</code>) and then
           <code>Services.AddCommonUiFacades()</code> (<code>:53</code>), which is the same call the production shell makes from
-          <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:110</code>). That
+          <code>AddUIShared</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:121</code>). That
           call registers <code>IToastService</code> -&gt; <code>MudToastService</code> and <code>IAppDialogService</code> -&gt; <code>MudAppDialogService</code>
-          with <code>TryAdd</code> (<code>DependencyInjection.cs:162-167</code>), so a component test resolves the vendor-neutral
+          with <code>TryAdd</code> (<code>DependencyInjection.cs:181-184</code>), so a component test resolves the vendor-neutral
           facades and exercises the real Mud-backed path, and a test that wants a recording double registers
           one afterwards (last registration wins, <code>BunitComponentTestBase.cs:48-52</code>).</li>
           <li><strong>Loose JSInterop.</strong> <code>JSInterop.Mode = JSRuntimeMode.Loose</code> (<code>:55</code>) so MudBlazor components that
           probe JS during render return default values instead of throwing (<code>:17-19</code>).</li>
           <li><strong>A mutable <code>AuthenticationStateProvider</code> that serves both consumption paths.</strong> One
           <code>MutableAuthenticationStateProvider</code> instance is held by the base (<code>:42</code>), registered as the
-          <code>AuthenticationStateProvider</code> singleton (<code>:58</code>), and implemented over a settable principal that
-          notifies listeners (<code>:162-174</code>). <code>RenderAs</code> sets the principal and also adds the cascading
-          <code>AuthenticationState</code>, so <code>&lt;AuthorizeView&gt;</code> and a directly injecting page agree (<code>:130-141</code>);
-          <code>SetUser</code> changes it mid-test without a new render root (<code>:120-121</code>); the default is anonymous
-          (<code>:39-40</code>, <code>:123-127</code>). Authorization is permissive but real: <code>IsAuthenticatedAuthorizationService</code>
-          succeeds for an authenticated identity and fails otherwise (<code>:57</code>, <code>:176-186</code>). Principals come from
+          <code>AuthenticationStateProvider</code> singleton (<code>:63</code>), and implemented over a settable principal that
+          notifies listeners (<code>:167-179</code>). <code>RenderAs</code> sets the principal and also adds the cascading
+          <code>AuthenticationState</code>, so <code>&lt;AuthorizeView&gt;</code> and a directly injecting page agree (<code>:135-146</code>);
+          <code>SetUser</code> changes it mid-test without a new render root (<code>:125-126</code>); the default is anonymous
+          (<code>:39-40</code>, <code>:128-132</code>). Authorization is the real service: after <code>AddAuthorizationCore</code> (<code>:56</code>) the
+          base registers <code>DefaultAuthorizationService</code> explicitly, because bUnit pre-registers a placeholder
+          that throws and <code>AddAuthorizationCore</code> only TryAdds (<code>:58-62</code>). It evaluates what a view builds (its
+          <code>Roles</code> and the default deny-anonymous policy), so a component test can assert a role denial
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Infrastructure/BunitComponentTestBaseAuthorizationTests.cs:16</code>).
+          Principals come from
           the shipped <code>TestPrincipal</code> factory, which writes the user id under both <code>sub</code> and
           <code>ClaimTypes.NameIdentifier</code> because a real principal reaches a page under either name
           (<code>Infrastructure/TestPrincipal.cs:7,22-32</code>), plus an <code>InRole(role, userId)</code> shorthand for a
           single-role principal. The framework declares no role vocabulary of its own, so a test names the
           role its app uses (<code>TestPrincipal.cs:41</code>).</li>
           <li><strong>Open-generic <code>IStringLocalizer</code> for ADR-027 markup.</strong> <code>Services.AddLogging()</code> and
-          <code>Services.AddLocalization()</code> (<code>BunitComponentTestBase.cs:63-64</code>) let every component test render
+          <code>Services.AddLocalization()</code> (<code>BunitComponentTestBase.cs:68-69</code>) let every component test render
           localized markup against the neutral resources in the component&#39;s own assembly with no per-test
-          setup (<code>:60-62</code>).</li>
+          setup (<code>:65-67</code>). The base also registers <code>TimeProvider.System</code> with <code>TryAdd</code>, so a test that drives
+          time registers its own clock (<code>:71-75</code>).</li>
           <li><strong><code>SetRendererInfo</code> behind one helper, because its call ordering is load-bearing.</strong>
-          <code>ConfigureDataGridListPageHost</code> (<code>:100-118</code>) registers the list-page state services (<code>:105-106</code>),
+          <code>ConfigureDataGridListPageHost</code> (<code>:105-123</code>) registers the list-page state services (<code>:110-111</code>),
           substitutes MudBlazor&#39;s <code>IBrowserViewportService</code> with an inert double so <code>IsMobile</code> stays
-          deterministically false (<code>:110</code>, which is why <code>Moq</code> is a package dependency rather than a
+          deterministically false (<code>:115</code>, which is why <code>Moq</code> is a package dependency rather than a
           hand-written stub, <code>MMCA.Common.Testing.UI.csproj:17-21</code>), adds bUnit&#39;s persistent component state
-          for the prerender boundary (<code>:114</code>), and calls <code>SetRendererInfo</code> <strong>last</strong> (<code>:117</code>). The rule is
+          for the prerender boundary (<code>:119</code>), and calls <code>SetRendererInfo</code> <strong>last</strong> (<code>:122</code>). The rule is
           written where the helper is: <code>SetRendererInfo</code> builds and freezes the bUnit service provider, so any
           registration made after it is silently ignored and the page resolves the framework default instead
-          of the test&#39;s double (<code>:78-82</code>). Twenty-two test files across MMCA.Common, MMCA.ADC and MMCA.Store
-          call the helper today; its comment records the fifteen hand-rolled copies of the block that the
-          extraction replaced (<code>:81-82</code>).</li>
+          of the test&#39;s double (<code>:83-87</code>). Twenty-five test files across MMCA.Common, MMCA.ADC and MMCA.Store
+          call the helper today (two in MMCA.Common, fifteen in MMCA.ADC, eight in MMCA.Store); its comment
+          records the fifteen hand-rolled copies of the block that the extraction replaced (<code>:86-87</code>).</li>
           <li><strong>The rest of the harness ships with it.</strong> <code>RenderMudProviders</code> renders the popover, dialog and
-          snackbar providers into the test&#39;s render root and returns handles (<code>:148-154</code>, <code>:157-160</code>);
+          snackbar providers into the test&#39;s render root and returns handles (<code>:148-159</code>, <code>:161-165</code>);
           <code>BunitInteractionExtensions</code> expresses clicks and text reads over accessible text rather than CSS
           paths (<code>Infrastructure/BunitInteractionExtensions.cs:12-34</code>); <code>MarkupSnapshot</code> is a dependency-free
           golden-markup comparison that normalizes MudBlazor&#39;s per-render GUIDs
           (<code>Infrastructure/MarkupSnapshot.cs:21</code>); and the HTTP-facing doubles cover the UI service layer
-          (<code>Infrastructure/UiHttpServiceHarness.cs:12</code>, <code>Infrastructure/CapturingHttpMessageHandler.cs:19</code>,
+          (<code>Infrastructure/UiHttpServiceHarness.cs:12</code>, <code>Infrastructure/CapturingHttpMessageHandler.cs:20</code>,
           <code>Infrastructure/StubTokenStorageService.cs:13</code>, <code>Infrastructure/HttpTestDoubles.cs:12</code>,
           <code>Infrastructure/ErrorSummaryExtensions.cs:10</code>).</li>
-          <li><strong>Adoption is one thin repo-local subclass per test project.</strong> Six consumer test projects take the
+          <li><strong>Adoption is a thin repo-local subclass, or the shipped base directly.</strong> Six consumer test projects take the
           package reference: ADC Conference, Identity and Engagement
           (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:12</code>,
           <code>.../Identity/MMCA.ADC.Identity.UI.Tests/MMCA.ADC.Identity.UI.Tests.csproj:12</code>,
@@ -336,16 +344,21 @@
           (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/MMCA.Common.UI.Tests.csproj:25</code>). Each repo&#39;s
           subclass carries only what its head owns and nothing shared: Store Catalog&#39;s is an empty declaration
           (<code>MMCA.Store/Tests/Modules/Catalog/MMCA.Store.Catalog.UI.Tests/BunitTestBase.cs:11</code>), ADC
-          Conference&#39;s adds the ADR-042 device-capability defaults and inert configuration
-          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:19-46</code>), and
+          Conference&#39;s adds the ADR-042 device-capability defaults, inert configuration and the services its
+          pages inject (public link builder, session schedule, HTTP client settings, an inert session-asset
+          service), plus a <code>TimeProvider.System</code> registration (<code>:44</code>) that repeats the base&#39;s own TryAdd default
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:25-61</code>), and
           MMCA.Common&#39;s adds the layout-chrome services only its own tests render
-          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:25-42</code>).</li>
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/BunitTestBase.cs:25-42</code>). ADC Engagement has
+          no subclass: its test classes derive from <code>BunitComponentTestBase</code> directly
+          (<code>MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Pages/SessionLive/SessionLiveQuestionPanelTests.cs:20</code>).</li>
           </ul>
           <p>All six consumer projects sit in the gating CI subset, so the tier runs on every pull request rather
-          than on a schedule (<code>MMCA.ADC/MMCA.ADC.CI.slnf:43,49,55</code>,
-          <code>MMCA.Store/MMCA.Store.CI.slnf:40,46,52</code>). MMCA.Helpdesk has no UI test project (its three test
-          projects are Tickets domain, Tickets application, and architecture), so the tier is adopted exactly
-          where a Blazor UI exists.</p>
+          than on a schedule (<code>MMCA.ADC/MMCA.ADC.CI.slnf:43,50,56</code>,
+          <code>MMCA.Store/MMCA.Store.CI.slnf:40,46,52</code>). MMCA.Helpdesk has a Blazor UI host on MudBlazor and
+          <code>MMCA.Common.UI</code> (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/MMCA.Helpdesk.UI.Web.csproj:1,3,11</code>)
+          but no UI test project (its three test projects are Tickets domain, Tickets application, and
+          architecture), so the tier is adopted in three of the four repos with a Blazor UI.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>The setup is what a component test gets wrong, so the setup is what the framework should own.</strong>
@@ -355,13 +368,13 @@
           structure and ADR-058 takes for runtime contracts.</li>
           <li><strong>One freeze rule, one call site.</strong> The <code>SetRendererInfo</code> ordering constraint cannot be enforced by
           the compiler, so the next best thing is to have exactly one place that gets it right and a helper
-          name that says when to call it (<code>BunitComponentTestBase.cs:74-82</code>).</li>
+          name that says when to call it (<code>BunitComponentTestBase.cs:78-87</code>).</li>
           <li><strong>The version boundary is a single file.</strong> Isolating <code>BunitContext</code> and <code>Render&lt;T&gt;</code> behind
           <code>RenderUnderTest</code> / <code>RenderAs</code> means a bUnit line change is a framework edit, not a sweep across
           every UI test class in three repos (<code>:29-34</code>).</li>
           <li><strong>Test-time and run-time resolve the same facades.</strong> Because the base calls the production
           <code>AddCommonUiFacades</code> rather than registering its own doubles (<code>:53</code>,
-          <code>MMCA.Common.UI/DependencyInjection.cs:110,162-167</code>), a component test asserts against the real
+          <code>MMCA.Common.UI/DependencyInjection.cs:121,181-184</code>), a component test asserts against the real
           toast and dialog implementations ADR-067 put behind those interfaces, and a test that wants to
           assert on a toast opts into a double explicitly.</li>
           <li><strong>A package matches how every other shipped test tier is delivered.</strong> Runtime conformance
@@ -374,12 +387,13 @@
           <li><strong>Loose JSInterop proves nothing about JS.</strong> A component test can render a component that calls a
           JS module which does not exist, because the loose mode answers with defaults
           (<code>BunitComponentTestBase.cs:55</code>). Only the browser tier (ADR-063, ADR-092) catches that.</li>
-          <li><strong>Authorization in this tier answers on authentication, not on policy.</strong> The shipped double succeeds
-          for any authenticated principal (<code>:176-186</code>), so a component test cannot assert a permission
-          denial; permission behavior belongs to the handler and API tiers.</li>
+          <li><strong>Authorization in this tier answers on what the view declares, not on the permission registry.</strong>
+          The real <code>DefaultAuthorizationService</code> evaluates a view&#39;s <code>Roles</code> and the default deny-anonymous
+          policy (<code>:58-62</code>), so a component test can assert a role denial, but a render never runs the
+          application&#39;s permission checks; permission behavior belongs to the handler and API tiers.</li>
           <li><strong>The frozen-provider rule is a convention, not a compiler error.</strong> Nothing fails a test that
           registers a service after <code>SetRendererInfo</code>; the symptom is the framework default resolving quietly
-          in place of the double (<code>:78-82</code>), which is exactly the failure the helper exists to prevent and
+          in place of the double (<code>:83-87</code>), which is exactly the failure the helper exists to prevent and
           cannot prevent for a test that bypasses it.</li>
           <li><strong>Nothing enforces adoption.</strong> No fitness rule requires a UI test project to subclass the shared
           base, so a new project can still re-derive the block; the only inventory is a search.</li>
@@ -391,9 +405,9 @@
           directly as well
           (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.UI.Tests/MMCA.ADC.Conference.UI.Tests.csproj:10</code>),
           so each repo&#39;s central package file names the number
-          (<code>MMCA.Common/Directory.Packages.props:206</code>, <code>MMCA.ADC/Directory.Packages.props:31</code>,
-          <code>MMCA.Store/Directory.Packages.props:51</code>) and three files have to agree. The <code>AngleSharp</code> advisory
-          pin does not spread that way: it is named once, in <code>MMCA.Common/Directory.Packages.props:237</code>, and
+          (<code>MMCA.Common/Directory.Packages.props:239</code>, <code>MMCA.ADC/Directory.Packages.props:32</code>,
+          <code>MMCA.Store/Directory.Packages.props:58</code>) and three files have to agree. The <code>AngleSharp</code> advisory
+          pin does not spread that way: it is named once, in <code>MMCA.Common/Directory.Packages.props:243</code>, and
           reaches consumers transitively through the package&#39;s own direct reference
           (<code>MMCA.Common.Testing.UI.csproj:15</code>).</li>
           </ul>
@@ -437,6 +451,32 @@
           restated here at all, because <code>MMCA.Common/FACTS.md</code> owns it and the number moves with every new
           package. The <code>AngleSharp</code> claim from the 2026-09-03 revision was re-checked and still holds: the pin
           is named only in MMCA.Common&#39;s central package file and in no consumer repo&#39;s.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p><strong>The authorization mechanism changed; the rest of the decision is unchanged.</strong> The base no longer
+          registers a permissive <code>IsAuthenticatedAuthorizationService</code>. After <code>AddAuthorizationCore</code> it registers
+          the real <code>DefaultAuthorizationService</code>, because bUnit pre-registers a throwing placeholder and
+          <code>AddAuthorizationCore</code> only TryAdds; the real service evaluates a view&#39;s <code>Roles</code> and the default
+          deny-anonymous policy, where a permissive double authorized every authenticated principal
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:56-62</code>).
+          A shipped test pins it: a principal outside an <code>&lt;AuthorizeView&gt;</code>&#39;s role is denied
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Infrastructure/BunitComponentTestBaseAuthorizationTests.cs:16</code>).
+          The Decision bullet and the authorization trade-off now say so: a component test can assert a role
+          denial, and only the application&#39;s permission checks stay with the handler and API tiers.</p>
+          <p>Four facts were also corrected. The base registers <code>TimeProvider.System</code> with <code>TryAdd</code>
+          (<code>BunitComponentTestBase.cs:71-75</code>). <code>ConfigureDataGridListPageHost</code> has twenty-five calling test files,
+          not twenty-two (two in MMCA.Common, fifteen in MMCA.ADC, eight in MMCA.Store). ADC Engagement has no
+          repo-local subclass; its test classes derive from the shipped base directly
+          (<code>MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.UI.Tests/Pages/SessionLive/SessionLiveQuestionPanelTests.cs:20</code>).
+          MMCA.Helpdesk does have a Blazor UI host
+          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/MMCA.Helpdesk.UI.Web.csproj:1,3,11</code>) with no
+          component tests, so the tier is in three of the four repos with a Blazor UI, not in every one. Two
+          omissions are recorded here rather than added to the inventory: the package also ships shared
+          page-test bases under <code>Pages/</code> (<code>ConfirmEmailPageTestsBase</code>, <code>RoleAdminEditPageTestsBase</code>,
+          <code>RoleAdminListPageTestsBase</code>), and for them it carries <code>AwesomeAssertions</code> and <code>xunit.v3.extensibility.core</code>
+          into every consuming test project alongside MudBlazor and Moq (<code>MMCA.Common.Testing.UI.csproj:22-25</code>). Citation anchors in the current-state sections were
+          refreshed (<code>BunitComponentTestBase.cs</code>, <code>DependencyInjection.cs:121,181-184</code>, the three central
+          package files, <code>FACTS.md:42</code>, <code>MMCA.ADC.CI.slnf:43,50,56</code>, the ADC Conference subclass at
+          <code>BunitTestBase.cs:25-61</code>, ADR-058).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -455,6 +495,7 @@
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-09-03">Revision (2026-09-03)</a></li>
             <li><a href="#revision-2026-09-19">Revision (2026-09-19)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

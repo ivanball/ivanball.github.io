@@ -23,7 +23,7 @@ concurrency token on the row itself
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13`, `IsDeleted` at `:20`,
 `CreatedOn` at `:25`). Deletion is a flag rather than a fact appended to a log: `Delete()` sets
 `IsDeleted = true` at `:77`, and a global query filter hides the row from every normal read
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:413`).
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:454`, the filter applied at `:466`).
 The audit fields are stamped by the save itself, from the identity the caller passed in
 (`.../DbContexts/ApplicationDbContext.cs:189`). ADC's `LivePoll` is representative, an aggregate root
 holding its own current status
@@ -42,7 +42,7 @@ identity at `:38`), the table is mapped on every relational source
 (`.../DbContexts/ApplicationDbContext.cs:664`, and per service database in ADC at
 `MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs:1589`),
 the processor drains it
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56`),
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:57`),
 and the consume edge de-duplicates it
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:38`). A
 processed outbox row is a delivered message; nothing reads it back and no code path rebuilds state
@@ -106,6 +106,11 @@ When the trigger is met, **adopt event sourcing for that one module only, never 
 module already owns its own database and outbox ([ADR-006](006-database-per-service.md)), so an
 event-sourced module is contained behind the same module contract rather than a persistence migration
 for the workspace. Every other module keeps the current-state row.
+
+## Revision (2026-10-01)
+No decision or rationale changed. Two citations were re-anchored: the soft-delete global query filter
+now points at `ApplySoftDeleteFilters` (`.../DbContexts/ApplicationDbContext.cs:454`, the filter at
+`:466`), and the outbox processor at its class declaration (`.../Outbox/Processing/OutboxProcessor.cs:57`).
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (at-least-once delivery of domain events, the mechanism a

@@ -9,6 +9,8 @@ any frame buffer is allocated, beside the existing compressed-size cap).
 Revised 2026-09-12 (the extension points here carry DOCUMENT uploads as well as images; the
 avatar-only scope statement below is superseded by
 [ADR-123](123-speaker-session-assets.md)).
+Revised 2026-10-01 (avatar blob deletion is a durable internal command rather than an inline
+storage call; see Revision below).
 ## Context
 The MAUI capability program (ADR-042) brought MediaPicker/camera within reach, and ADC amended
 BR-116 to include user avatar photos. That needs binary blob storage (the databases store
@@ -40,16 +42,18 @@ directly against the Azure SDK inside a module, unusable by the next consumer an
   up to 2 MB; server re-encodes to 256x256 JPEG via `IImageProcessor` (client-declared content
   types are advisory only); blob name `{userId}-{random8}.jpg` in the infrastructure-provisioned
   public-read `avatars` container (so the URL path reads `avatars/{userId}-{random8}.jpg`);
-  upload deletes the previous blob; the URL lives on the user entity as `[Pii]`,
-  nulled on anonymize with the blob deleted; exported in the GDPR data export.
+  replacing, removing or erasing an avatar schedules a durable `DeleteAvatarBlobInternalCommand`
+  ([ADR-114](114-internal-commands-durable-job-queue.md)) rather than deleting the blob inline; the
+  URL lives on the user entity as `[Pii]`, nulled on anonymize with the blob delete scheduled in
+  the same transaction; exported in the GDPR data export.
 
 ## Consequences
 - The avatars container is public-read by design: avatar URLs render in `<img>` tags on
   anonymous-visible surfaces without SAS plumbing. The random blob suffix prevents enumeration;
   the trade-off (anyone with the URL can fetch the image) is accepted and documented in the
   consumer's privacy policy.
-- A replaced or deleted avatar deletes its blob, but CDN/browser caches may serve the old URL
-  briefly; the random suffix means the new upload never reuses the old URL, so staleness is
+- A replaced or deleted avatar has its blob deleted eventually (at-least-once, through the
+  internal-command processor, within its retry budget), and CDN/browser caches may serve the old URL briefly; the random suffix means the new upload never reuses the old URL, so staleness is
   bounded by cache TTLs.
 - `DefaultAzureCredential` in production means the storage account needs a data-plane role
   (Storage Blob Data Contributor) for the app identity - a bicep-level grant, not a secret.
@@ -103,3 +107,28 @@ The public-read container trade-off recorded above for avatars is taken again fo
 same terms and for the same reason, with unguessability supplied by a server-minted GUID inside the
 blob path instead of a random suffix. See ADR-123 for the aggregate, the authorization rule and the
 per-consumer contract (ADC BR-116b).
+
+## Revision (2026-10-01)
+Avatar blob deletion no longer happens as an inline storage call. Every path that retires an avatar
+schedules a `DeleteAvatarBlobInternalCommand`
+(`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/DeleteAvatarBlob/DeleteAvatarBlobInternalCommand.cs:17`,
+named `Identity.DeleteAvatarBlob.v1` at `:16`) through the internal-command queue of
+[ADR-114](114-internal-commands-durable-job-queue.md). Replacing an avatar schedules the previous
+blob post-commit
+(`.../Users/UseCases/SetUserAvatar/SetUserAvatarHandler.cs:156-160`), removing one does the same
+(`.../Users/UseCases/RemoveUserAvatar/RemoveUserAvatarHandler.cs:74-76`), and deleting the user
+schedules it inside the erasure transaction so the row commits or rolls back with the anonymized
+aggregate (`.../Users/UseCases/DeleteUser/DeleteUserHandler.cs:61-71`). The reason is durability: a
+best-effort call lost the instruction whenever storage was unreachable, while a queued row is
+retried up to `InternalCommands:MaxAttempts` (default 5,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:39`)
+and then dead-lettered for operator action
+(`.../Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:461-467`), so an outage longer
+than the retry budget still needs a manual replay. Only the erasure path is fully transactional:
+replace and remove schedule after `SaveChangesAsync` has committed
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Crud/MutateEntityHandlerBase.cs:316-319`),
+so a host death between commit and scheduling, or a failed schedule, leaves an orphaned blob that
+is only logged for manual removal (`.../Users/UseCases/SetUserAvatar/SetUserAvatarHandler.cs:162-165`,
+`.../Users/UseCases/RemoveUserAvatar/RemoveUserAvatarHandler.cs:78-81`). Deletion is therefore eventual
+and at-least-once once scheduled, not synchronous; the Decision and Consequences bullets above are corrected to say so. The public-read
+container, the random suffix and the cache-TTL bound on staleness are unchanged.

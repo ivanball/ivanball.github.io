@@ -54,9 +54,10 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
      one-minute window, partitioned by the subject (`sub`) claim, then identity name, then remote IP,
      rejecting overage with `429 Too Many Requests`.
 2. **Anonymous abuse is handled by the right-shaped control, not the global limiter.** Public reads
-   are served from the output cache (`UseOutputCache`; ADC's Conference service defines
-   `EventsCache` / `CategoriesCache` / `QuestionsCache` / `RoomsCache` policies on its public
-   controllers), and login/registration brute-force is handled by `LoginProtectionService`
+   are served from the output cache (`UseOutputCache`; ADC's Conference service defines one
+   public-endpoint policy per public aggregate, among them `EventsCache` / `CategoriesCache` /
+   `QuestionsCache` / `RoomsCache`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:266-295`), and login/registration brute-force is handled by `LoginProtectionService`
    (exponential-backoff account lockout after `MaxFailedAttempts` failed logins, plus per-IP
    registration throttling).
 3. **A per-IP cap on the anonymous authentication endpoints, on by default.** `AddCommonRateLimiting`
@@ -85,8 +86,11 @@ Rate limiting is **layered**, and the always-on global limiter is **authenticate
    (one password, many emails) from a single source was otherwise unthrottled. Three details are deliberate:
    `RefreshAsync` is **not** throttled (renewal is automatic and periodic, and Blazor Server circuits
    issue it server-side from the UI host's IP); a request with no attributable IP gets `NoLimiter`
-   rather than sharing one bucket with every other such request, mirroring the global limiter's
-   fail-open posture; and the default is 30 rather than a tighter 10 for the same shared-IP reason,
+   rather than sharing one bucket with every other such request (a deliberate difference from the
+   global limiter, which puts an unattributable authenticated request in one shared `"authenticated"`
+   bucket and an unattributable anonymous hub request in one shared `"anonymous-hub"` bucket,
+   `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:62`,
+   `:152`, `:284-285`); and the default is 30 rather than a tighter 10 for the same shared-IP reason,
    since every Server-circuit user's login leaves from the UI host's address.
 4. **The remaining named policies are opt-in, per-endpoint tightening.** `AddCommonRateLimiting` also
    registers `FixedPolicy` and `UserPolicy`, which a specific action can apply with
@@ -275,6 +279,20 @@ ships in the framework.** Two items, both landed.
    (`MMCA.Store/infra/main.bicep:1889` and `:2006`, `MMCA.ADC/infra/main.bicep:2223` and `:2363`).
    One name on both sides of the boundary is the point: a client sending under one key while the
    gateway reads another fails open silently, as a plain throttled caller.
+
+## Revision (2026-10-01)
+No decision or rationale changed. Two current-state statements in the Decision were corrected. The
+ADC Conference output-cache list now reads as a sample of a larger per-aggregate set
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:266-295`) rather than as the
+complete set. The `auth-ip` no-IP rule (`NoLimiter`,
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.RateLimiting.cs:284-285`)
+no longer claims to mirror the global limiter, because the global limiter does not fail open for
+unattributable traffic: an authenticated request with no subject, name or IP shares the
+`"authenticated"` bucket (`:149-152`) and an anonymous hub request with no IP shares the
+`"anonymous-hub"` bucket (`:62`); only anonymous non-hub traffic gets `NoLimiter` (`:68`), and that
+is the anonymous exemption, not a no-IP rule. The rate-limiting registration now lives in the
+partial `WebApplicationBuilderExtensions.RateLimiting.cs`, so the `WebApplicationBuilderExtensions.cs`
+anchors in the Revisions above are historical and are not rewritten.
 
 ## Related
 ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),

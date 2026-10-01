@@ -10,6 +10,7 @@ Revised 2026-09-07 (a per-user cap on concurrent hub connections, and the notifi
 channel is namespaced per application).
 Revised 2026-09-11 (the Store order-email call sites moved onto ADR-114 durable internal commands, so
 those paths now retry and dead-letter; `IEmailSender` itself is unchanged).
+Revised 2026-10-01 (the opt-in dedup key is scoped to the sender; see Revision below).
 ## Context
 The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
 a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -29,19 +30,22 @@ recipient policy both behind abstractions.
   `SendPushNotificationHandler` (`MMCA.Common.Application`) resolves recipients, creates a
   `PushNotification` aggregate (`MMCA.Common.Domain.Notifications.PushNotifications`, the audit record of
   what was sent, carrying the caller's optional `ScopeKey` alongside the title, body, sender and
-  recipient count, `SendPushNotificationHandler.cs:66-72`), persists one `UserNotification` inbox row
+  recipient count, `SendPushNotificationHandler.cs:75-81`), persists one `UserNotification` inbox row
   per recipient (`MMCA.Common.Domain.Notifications.UserNotifications`, carrying `IsRead` / `ReadOn` with
   an idempotent `MarkAsRead`), and only then dispatches the live push. The inbox is the durable source
   of truth; the push is the best-effort live layer over it.
 - **A send is idempotent only when the caller opts in.** The command may carry a `DedupKey`; when it is
-  present and not whitespace the handler looks it up before doing anything else and, on a hit, returns
-  the already-sent notification without resolving recipients, writing inbox rows, or pushing
-  (`SendPushNotificationHandler.cs:39-50`). That lookup is a check-then-act, so two concurrent retries
-  of the same send both pass it and the loser fails on the insert against the filtered unique index on
-  `DedupKey` (`PushNotificationConfiguration.cs:68-70`). The handler catches that save failure,
-  requeries the key on `CancellationToken.None`, and returns the winner's notification if the key now
-  exists, rethrowing untouched otherwise (`SendPushNotificationHandler.cs:81-112`). With no key the path
-  is unchanged: nothing is deduplicated by default.
+  present and not whitespace the handler scopes it to the sender (the stored key is the hex SHA-256 of
+  `{sentByUserId}:{clientKey}`, `SendPushNotificationHandler.cs:185-187`), so another caller reusing the
+  same client key neither suppresses this send nor is handed this sender's notification. It looks that
+  scoped key up before doing anything else and, on a hit, returns the already-sent notification without
+  resolving recipients, writing inbox rows, or pushing (`SendPushNotificationHandler.cs:45-60`). That
+  lookup is a check-then-act, so two concurrent retries of the same send both pass it and the loser
+  fails on the insert against the filtered unique index on `DedupKey`
+  (`PushNotificationConfiguration.cs:69-73`). The handler catches that save failure, requeries the key
+  on `CancellationToken.None`, and returns the winner's notification if the key now exists, rethrowing
+  untouched otherwise (`SendPushNotificationHandler.cs:91-122`). With no key the path is unchanged:
+  nothing is deduplicated by default.
 - **Transient delivery is an abstraction with a no-op default.** `IPushNotificationSender`
   (`MMCA.Common.Application`) is registered by default as `NullPushNotificationSender` (no-op), so a host
   that never calls the opt-in does nothing on send. `AddPushNotifications(configuration)`
@@ -63,10 +67,10 @@ recipient policy both behind abstractions.
   the notification on next load. A send is never rolled back because the WebSocket fan-out failed.
 - **An optional third, native-push leg (ADR-044).** After the inbox write and the SignalR push,
   `SendPushNotificationHandler` also dispatches through `INativePushSender`
-  (`SendPushNotificationHandler.cs:144-161`), an OS-level native-push channel that reaches devices the
+  (`SendPushNotificationHandler.cs:154-171`), an OS-level native-push channel that reaches devices the
   SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
   push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:729`), so it
+  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:320`), so it
   stays inert until a native hub is configured. The design of that channel is ADR-044's scope; this ADR
   keeps its own on the inbox and SignalR channels, so the "Two-Channel" title names the durable and
   transient channels this record governs, not a hard cap on the number of delivery legs.
@@ -77,8 +81,8 @@ recipient policy both behind abstractions.
   `MapNotificationHub()` maps `NotificationHub` at the configured `HubPath` just when it is true
   (`SignalRExtensions.cs:25`). `AddPushNotifications` binds the section but registers SignalR,
   `SignalRPushNotificationSender` and `SignalRLiveChannelPublisher` unconditionally
-  (`DependencyInjection.cs:809-838`, `AddSignalR()` at `:816` and the two transient registrations at
-  `:833-834`), so the opt-in registration, not the flag, is what decides whether
+  (`DependencyInjection.Notifications.cs:41-70`, `AddSignalR()` at `:48` and the two transient
+  registrations at `:65-66`), so the opt-in registration, not the flag, is what decides whether
   a send goes through SignalR; with `Enabled: false` the sender is still wired and simply has no hub
   endpoint for clients to connect to.
 
@@ -211,3 +215,23 @@ unchanged: this closes a documentation gap so the asymmetry reads as deliberate 
    legs are the only delivery paths in the platform. Wider adoption, or a requirement that email
    delivery be auditable or retried, is the trigger to give it its own record instead of this
    amendment.
+
+## Revision (2026-10-01)
+The opt-in deduplication key is now scoped to the sender. `SendPushNotificationHandler` no longer
+stores or looks up the client-supplied `DedupKey` as-is: it derives the persisted key as the hex
+SHA-256 of `{sentByUserId}:{clientKey}`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:185-187`,
+applied at `:49-51`), so a second caller reusing the same client key can neither suppress this
+sender's send nor be returned this sender's notification, and the stored key is always 64 characters
+whatever the client sent. The check-then-act lookup, the filtered unique index and the
+catch-and-requery race handling are otherwise unchanged. The Decision text above is corrected to say
+so, and its stale citations are refreshed: the lookup (`:45-60`), the `PushNotification.Create` call
+carrying `ScopeKey` (`:75-81`), the race handling (`:91-122`), the native-push leg (`:154-171`), the
+filtered index
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:69-73`),
+the `NullNativePushSender` default
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:320`), and
+`AddPushNotifications`, which now lives in the partial file
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Notifications.cs:41-70`
+(`AddSignalR()` at `:48`, the two transient registrations at `:65-66`, still unconditional). Anchors
+inside the earlier Revision sections are left as recorded.

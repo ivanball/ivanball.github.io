@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -238,7 +240,9 @@
           <p>Accepted (2026-09-19). Revised 2026-09-25 (the hardening kit is one framework copy in
           <code>MMCA.Common.UI.Web/Hardening/</code>, first shipped in v1.206.0, which both UI hosts consume; the <code>/hubs</code>
           exemption is a framework default; both hosts adopt forwarded headers through Common&#39;s
-          <code>UseCommonUiForwardedHeaders</code>; every anchor repointed; see the Revision below).</p>
+          <code>UseCommonUiForwardedHeaders</code>; every anchor repointed; see the Revision below). Revised 2026-10-01 (the
+          <code>/_blazor</code> circuit transport is held to the per-IP window only and kept out of the concurrency ceiling, and the
+          circuit count releases a permit only for a circuit it admitted; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p><a href="019-rate-limiting.html">ADR-019</a> layers rate limiting, and <a href="088-gateway-edge-responsibilities.html">ADR-088</a>
           makes the Gateway the layer that carries the outermost one. Both records describe traffic that arrives
@@ -252,7 +256,7 @@
           <p><strong>A page load here is not a cheap request.</strong> Under <a href="056-blazor-render-mode-strategy.html">ADR-056</a>&#39;s
           Interactive Auto strategy the first render is always a Server circuit, so every page load opens one and
           each open circuit holds live render state for as long as the connection lives
-          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:14-20</code>).
+          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:15-21</code>).
           An unauthenticated loop over the page and negotiate endpoints therefore accumulates server memory, not
           just request volume, and the container it accumulates in is 0.25 vCPU / 0.5 GiB
           (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:27-28</code>).</p>
@@ -260,7 +264,7 @@
           <code>DisconnectedCircuitMaxRetained</code> and <code>DisconnectedCircuitRetentionPeriod</code>, and both bound only circuits
           that have already DROPPED their connection and are being held for reconnect; nothing in <code>CircuitOptions</code>
           bounds circuits that are open and connected (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:13-15</code>,
-          <code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:14-16</code>). A rate limiter does not close the gap either,
+          <code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:15-17</code>). A rate limiter does not close the gap either,
           from the other direction: it bounds how fast requests ARRIVE, while a caller who opens circuits slowly
           enough to stay inside the window still accumulates them
           (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:10-13</code>).</p>
@@ -270,36 +274,38 @@
           <ul>
           <li><p><strong>A ceiling on concurrently ACTIVE circuits, held by a singleton <code>CircuitHandler</code>.</strong>
           <code>BoundedCircuitHandler</code> counts opens and closes and refuses the ones past <code>MaxActiveCircuits</code>
-          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:39-43,58-76</code>). It is registered as a <strong>singleton</strong>
+          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:43-49,64-85,88-109</code>). It is registered as a <strong>singleton</strong>
           so one count spans the replica: circuit handlers are resolved from each circuit&#39;s own scope, so a scoped
           registration would count to one and cap nothing
           (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:46-48,60</code>). It runs last among the
           registered handlers (<code>Order =&gt; int.MaxValue</code>), so a refusal happens after cheaper handlers have done their
-          work rather than in the middle of it (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:51-55</code>).</p>
+          work rather than in the middle of it (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:57-61</code>).</p>
           </li>
           <li><p><strong>The refusal is a thrown exception, and that is the one place the <code>Result</code> pattern does not apply.</strong>
           <code>CircuitHandler.OnCircuitOpenedAsync</code> returns <code>Task</code> and has no &quot;refuse&quot; return value, so a faulted task
           is the only way to stop a circuit from starting; the code says so where it does it
-          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:23-28</code>, the <code>Task.FromException</code> at <code>:70-72</code>). The
+          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:24-29</code>, the <code>Task.FromException</code> at <code>:78-80</code>). The
           contract being implemented belongs to the framework, so the framework&#39;s refusal vocabulary wins over the
-          codebase&#39;s. Refusal is observable: one Warning per refusal naming the ceiling (<code>:93-96</code>).</p>
+          codebase&#39;s. Refusal is observable: one Warning per refusal naming the ceiling (<code>:111-114</code>).</p>
           </li>
           <li><p><strong>The count is race-safe by construction and cannot leak permits in either direction.</strong> The open path
           increments first and rolls back on refusal, because reading and then incrementing would let two
           simultaneous opens both observe the last free slot and both take it
-          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:62-67</code>). The close path floors at zero rather than
-          trusting the pairing, because a close without a counted open would otherwise drive the count negative and
-          hand out permits forever (<code>:81-88</code>).</p>
+          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:70-75</code>). The close path releases a permit only for
+          a circuit the open path admitted, tracked in a set keyed by reference, because the framework also closes a
+          refused circuit and that close would otherwise release a permit another circuit holds (<code>:32-39</code>, the set at
+          <code>:47</code>, filled at <code>:83</code>, checked at <code>:92-98</code>). It then floors at zero rather than trusting the pairing, as a
+          last line of defence against a count driven negative handing out permits forever (<code>:100-106</code>).</p>
           </li>
           <li><p><strong>Disconnected-circuit retention is tightened from the same section, as defence in depth.</strong>
           <code>DisconnectedCircuitMaxRetained</code> drops from the framework&#39;s 100 to <strong>25</strong> by default, because a retained
           circuit holds the same state an active one does while serving nobody
           (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:40-46</code>), and both hosts keep 25
-          (<code>MMCA.ADC.UI.Web/appsettings.json:30</code>, <code>MMCA.Store.UI.Web/appsettings.json:37</code>). The retention <strong>period</strong> is
+          (<code>MMCA.ADC.UI.Web/appsettings.json:30</code>, <code>MMCA.Store.UI.Web/appsettings.json:40</code>). The retention <strong>period</strong> is
           where the two apps deliberately differ. The kit defaults it to 60 seconds, because a visitor who really did
           drop off wifi reconnects within seconds, and its own documentation names the exception
           (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:48-57</code>): Store keeps 60
-          (<code>MMCA.Store.UI.Web/appsettings.json:38</code>), while ADC raises it back to the ASP.NET Core default of 180
+          (<code>MMCA.Store.UI.Web/appsettings.json:41</code>), while ADC raises it back to the ASP.NET Core default of 180
           (<code>MMCA.ADC.UI.Web/appsettings.json:31</code>) because a conference venue&#39;s shared wifi drops connections for far
           longer than a home network does and an attendee walking between rooms should come back to the session state
           they left.</p>
@@ -307,28 +313,34 @@
           <li><p><strong>A UI-host-local per-IP fixed window CHAINED with a replica-wide concurrency ceiling, both rejecting 429.</strong>
           The two limiters answer different questions, so a request must satisfy both:
           <code>PartitionedRateLimiter.CreateChained</code> over a per-client-IP fixed window and a single-partition concurrency
-          limiter (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:170-176</code>). The rejection status is 429
-          (<code>:163</code>). The concurrency half queues nothing (<code>QueueLimit = 0</code>), so a saturated host sheds load instead of
-          growing latency (<code>:128-133</code>, rationale at <code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:64-72</code>).</p>
+          limiter (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:186-190</code>). The rejection status is 429
+          (<code>:177</code>). The concurrency half queues nothing (<code>QueueLimit = 0</code>), so a saturated host sheds load instead of
+          growing latency (<code>:142-147</code>, rationale at <code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:64-74</code>).
+          The Blazor circuit transport (<code>/_blazor</code>: negotiate, the circuit WebSocket and its long-polling fallback) is
+          the one path held to the per-IP window alone: a circuit WebSocket would hold a concurrency permit for the
+          circuit&#39;s whole lifetime and starve page loads, so the concurrency half gives that prefix the no-limiter
+          partition and open circuits are bounded by <code>MaxActiveCircuits</code> instead
+          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:33-39,122-147</code>).</p>
           </li>
           <li><p><strong>Exemptions are what keep the limiter off the first real visitor rather than off the attacker.</strong> Health and
           liveness probes are exempt, because throttling them turns a traffic spike into a failed probe and a container
           restart; so are the two framework asset roots and any path whose last segment carries a file extension, since
           a single page load pulls dozens of static files served from disk with an ETag
-          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:33-42,49-56,62-71</code>). The default exempt list also
+          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:41-50,57-63,73-82</code>). The default exempt list also
           carries <code>/hubs</code>, mirroring the Gateway&#39;s own bypass list, so a host that ever fronts a SignalR hub on this
-          origin is covered by declaration rather than by accident (<code>:37-42</code>); because it is the kit&#39;s default, both
+          origin is covered by declaration rather than by accident (<code>:41-50</code>); because it is the kit&#39;s default, both
           hosts exempt it, and Store&#39;s use-site comment names it (<code>MMCA.Store.UI.Web/Program.cs:213-216</code>, ADC&#39;s at
-          <code>MMCA.ADC.UI.Web/Program.cs:200-202</code>). <code>/_blazor</code> deliberately has no extension and no exemption, because
-          the negotiate endpoint is exactly what opens a circuit (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:55-56</code>).
+          <code>MMCA.ADC.UI.Web/Program.cs:200-202</code>). <code>/_blazor</code> deliberately has no extension and no exemption from
+          the per-IP window, because the negotiate endpoint is exactly what opens a circuit; it is kept out of the
+          concurrency ceiling only, as above (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:63-67</code>).
           An unresolvable client IP <strong>fails open</strong> rather than collapsing every unattributable request into one shared
-          bucket, which would throttle an in-process <code>TestServer</code> to a standstill (<code>:93-99</code>).</p>
+          bucket, which would throttle an in-process <code>TestServer</code> to a standstill (<code>:104-110</code>).</p>
           </li>
           <li><p><strong>Forwarded headers come first, with one framework posture shared by every host.</strong> Both UI hosts open their
           pipeline with <code>UseCommonUiForwardedHeaders()</code> (<code>MMCA.ADC.UI.Web/Program.cs:192</code>,
           <code>MMCA.Store.UI.Web/Program.cs:188</code>), defined in <code>MMCA.Common.API</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/CommonForwardedHeadersExtensions.cs:24-25</code>, shipped in
-          v1.211.0, <code>MMCA.Common/CHANGELOG.md:32-35</code>). It applies <code>CommonForwardedHeaders.Create()</code>: <code>X-Forwarded-For</code>,
+          v1.211.0, <code>MMCA.Common/CHANGELOG.md:236-239</code>). It applies <code>CommonForwardedHeaders.Create()</code>: <code>X-Forwarded-For</code>,
           <code>X-Forwarded-Proto</code> and <code>X-Forwarded-Host</code> by default, with the known-proxy and known-network allow-lists
           cleared because cloud ingress reaches the container from addresses in neither default list
           (<code>.../MMCA.Common.API/Startup/CommonForwardedHeaders.cs:14-20,33-34,42-53</code>). The service pipeline&#39;s
@@ -349,13 +361,13 @@
           <code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:28-41,51-61</code>).</p>
           </li>
           <li><p><strong>One framework kit, consumed by both hosts, with the same section names and the same shape.</strong> The kit
-          ships in <code>MMCA.Common.UI.Web</code> from v1.206.0 (<code>MMCA.Common/CHANGELOG.md:270-282</code>) and binds
+          ships in <code>MMCA.Common.UI.Web</code> from v1.206.0 (<code>MMCA.Common/CHANGELOG.md:474-486</code>) and binds
           <code>UiRateLimiting</code> (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:36</code>) and <code>BlazorCircuitLimits</code>
           (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:20</code>). It ships the limiter <strong>enabled</strong> by
           default with one escape hatch for a load or capacity proof driven from a single runner IP
           (<code>UiRateLimitingSettings.cs:38-43</code>; the early return that honours it at
-          <code>UiRateLimitingExtensions.cs:165-168</code>), and defaults <code>MaxActiveCircuits = 200</code>
-          (<code>BlazorCircuitLimitSettings.cs:38</code>) and <code>GlobalConcurrencyLimit = 200</code> (<code>UiRateLimitingSettings.cs:74</code>).
+          <code>UiRateLimitingExtensions.cs:179-182</code>), and defaults <code>MaxActiveCircuits = 200</code>
+          (<code>BlazorCircuitLimitSettings.cs:38</code>) and <code>GlobalConcurrencyLimit = 200</code> (<code>UiRateLimitingSettings.cs:76</code>).
           The kit is deliberately separate from the Gateway&#39;s limiter even though it is shaped like it, <strong>because
           <code>MMCA.Common.Gateway</code> is the reverse-proxy kit and a UI host is not a reverse proxy</strong>
           (<code>UiRateLimitingSettings.cs:18-25</code>).</p>
@@ -364,12 +376,12 @@
           per-IP window defaults to <strong>300 per minute</strong>, set well above a single visitor because an office or
           mobile-carrier NAT presents many visitors as one IP, and its documentation tells a host whose audience sits
           behind one address to raise it (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:45-58</code>, window at
-          <code>:60-62</code>). Store keeps 300 (<code>MMCA.Store.UI.Web/appsettings.json:22</code>). ADC sets <strong>1200 per minute</strong>, four
+          <code>:60-62</code>). Store keeps 300 (<code>MMCA.Store.UI.Web/appsettings.json:25</code>). ADC sets <strong>1200 per minute</strong>, four
           times the storefront&#39;s, because on conference day the attendees are physically in one venue behind one NAT
           and present to this limiter as a SINGLE client IP (<code>MMCA.ADC.UI.Web/appsettings.json:15-21</code>, restated at
           <code>MMCA.ADC.UI.Web/Program.cs:140-141</code>). Every value is also written out explicitly in each host&#39;s
           <code>appsettings.json</code>, so the deployed posture is stated rather than inherited
-          (<code>MMCA.ADC.UI.Web/appsettings.json:19-24,28-32</code>, <code>MMCA.Store.UI.Web/appsettings.json:20-25,35-39</code>).</p>
+          (<code>MMCA.ADC.UI.Web/appsettings.json:19-24,28-32</code>, <code>MMCA.Store.UI.Web/appsettings.json:23-28,38-42</code>).</p>
           </li>
           </ul>
           <h2 id="rationale">Rationale</h2>
@@ -383,10 +395,10 @@
           one (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:9-16</code>).</li>
           <li><strong><code>CircuitHandler</code> is the documented extension point that sees a circuit open and close</strong>, which is why the
           count lives there rather than in middleware or in <code>CircuitOptions</code>
-          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:19-20</code>).</li>
+          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:20-21</code>).</li>
           <li><strong>Throwing is the framework&#39;s own refusal vocabulary here.</strong> The client sees the standard Blazor reconnect UI
           rather than a crashed page, and the count is decremented before the throw so a refusal never leaks a permit
-          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:26-28,64-72</code>).</li>
+          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:27-29,70-80</code>).</li>
           <li><strong>The ceilings are abuse ceilings, not capacity plans.</strong> 200 active circuits per replica is derived from the
           container the host runs in (0.25 vCPU / 0.5 GiB, roughly 300 MiB left for circuit state against a MudBlazor
           render tree of a few hundred kilobytes up to about a megabyte), and it sits far above real demand because
@@ -394,11 +406,11 @@
           that follows from that framing is written next to the number: raise it only together with the container&#39;s
           memory (<code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitSettings.cs:26-38</code>). ADC&#39;s busiest measured
           conference day peaked near 67 concurrent users, and its UI container scales to at most two replicas
-          (<code>MMCA.ADC.UI.Web/appsettings.json:25-27</code>, <code>MMCA.ADC/infra/main.bicep:1270</code>).</li>
+          (<code>MMCA.ADC.UI.Web/appsettings.json:25-27</code>, <code>MMCA.ADC/infra/main.bicep:2586</code>, the <code>uiApp</code> container app at <code>:2466</code>).</li>
           <li><strong>Binding is validated at startup, and the hot path does not pay for it.</strong> Both sections go through
           <code>ValidateDataAnnotations().ValidateOnStart()</code>, and the limiter then closes over the already-bound instance
           rather than resolving <code>IOptions</code> on every request, precisely because an out-of-range value has already failed
-          the start-up validation (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:150-159</code>,
+          the start-up validation (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:164-173</code>,
           <code>MMCA.Common.UI.Web/Hardening/BlazorCircuitLimitExtensions.cs:55-58</code>).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
@@ -417,14 +429,14 @@
           and must change the framework.</li>
           <li><strong>A refusal is an exception on a framework contract</strong>, so the diagnostic is a Warning log rather than a typed
           result a caller can branch on, and the user-facing signal is the standard Blazor reconnect UI rather than a
-          message the app controls (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:23-28,93-96</code>).</li>
+          message the app controls (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:24-29,111-114</code>).</li>
           <li><strong>Fail-open on an unresolvable client IP is a deliberate hole.</strong> A caller the host cannot attribute takes the
           no-limiter partition, which is the right call for an in-process <code>TestServer</code> and is a gap if anything else ever
-          reaches this host without a remote address (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:93-99</code>).</li>
+          reaches this host without a remote address (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:104-110</code>).</li>
           <li><strong>The extension-bearing-path rule is a heuristic.</strong> Anything whose last segment has a file extension is exempt
           from both limiters, which is how a static asset is told apart from a page route without depending on middleware
           ordering; a page route that ever ends in a dotted segment would inherit that exemption silently
-          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:49-56,62-71</code>).</li>
+          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:57-63,73-82</code>).</li>
           <li><strong>A per-IP window is the wrong shape for a venue, and is widened rather than replaced.</strong> ADC&#39;s fourfold
           widening buys a margin over one NAT&#39;d venue at the cost of letting a single scripted client burn four times as
           many requests before it is shed (<code>MMCA.ADC.UI.Web/appsettings.json:15-21</code>,
@@ -441,6 +453,20 @@
           cleared, the same posture as the service pipeline and the Gateway, where Store&#39;s host previously honoured For
           and Proto only. Every anchor in this record was repointed to the framework files and to the hosts&#39; current
           call sites.</p>
+          <h2 id="revision-2026-10-01-the-circuit-transport-and-the-circuit-count">Revision (2026-10-01): the circuit transport and the circuit count</h2>
+          <p>Two behaviours of the kit changed in v1.213.0 (<code>MMCA.Common/CHANGELOG.md:82,145,148</code>), and the Decision above
+          now states both. First, the chained limiter no longer applies the replica-wide concurrency ceiling to the Blazor
+          circuit transport: a circuit WebSocket held its concurrency permit for the circuit&#39;s whole lifetime, so open
+          circuits could starve page loads of permits. <code>/_blazor</code> now takes the no-limiter partition of the concurrency
+          half while staying inside the per-IP window, and open circuits are bounded by <code>MaxActiveCircuits</code> alone
+          (<code>MMCA.Common.UI.Web/Hardening/UiRateLimitingExtensions.cs:33-39,132-147</code>,
+          <code>MMCA.Common.UI.Web/Hardening/UiRateLimitingSettings.cs:64-76</code>). Second, <code>BoundedCircuitHandler</code> tracks the
+          circuits it admitted and releases a permit only when one of those closes, because the framework also runs the
+          close callback for a refused circuit, which used to release a permit another circuit held
+          (<code>MMCA.Common.UI.Web/Hardening/BoundedCircuitHandler.cs:32-39,47,83,92-98</code>). The rest of the decision and its
+          rationale stand. The <code>UiRateLimitingExtensions.cs</code>, <code>BoundedCircuitHandler.cs</code>, <code>UiRateLimitingSettings.cs</code>,
+          Store <code>appsettings.json</code>, CHANGELOG and <code>main.bicep</code> citations in the Context, Decision, Rationale and Trade-offs sections were refreshed to current
+          lines.</p>
           <h2 id="related">Related</h2>
           <p><a href="019-rate-limiting.html">ADR-019</a> (the layered rate-limiting posture this adds a layer to),
           <a href="088-gateway-edge-responsibilities.html">ADR-088</a> (the Gateway edge whose limiter this host is outside of, and
@@ -466,6 +492,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-25-one-framework-kit-one-forwarded-header-posture">Revision (2026-09-25): one framework kit, one forwarded-header posture</a></li>
+            <li><a href="#revision-2026-10-01-the-circuit-transport-and-the-circuit-count">Revision (2026-10-01): the circuit transport and the circuit count</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

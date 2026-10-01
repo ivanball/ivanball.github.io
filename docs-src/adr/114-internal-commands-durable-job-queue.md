@@ -6,6 +6,8 @@ Accepted (2026-09-09). Rides the outbox machinery of
 to match the code: a schedule outside a transaction signals the processor only when the row is
 already due, context restoration moved to the shared `AmbientOrigin` helper, and the queue's polling
 interval matches the outbox default, with the difference coming from deployed configuration).
+Revised 2026-10-01 (a schedule outside a transaction now signals the processor whether or not the row
+is due, and the two processors share one polling implementation; see Revision below).
 
 ## Context
 The framework has had two ways to move work off the request thread and neither of them is a job
@@ -16,7 +18,7 @@ The **transactional outbox** ([ADR-003](003-outbox-dual-dispatch.md)) carries *e
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:15`) is
 written by the domain-event interceptor inside the same transaction as the aggregate change, and
 `OutboxProcessor`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:56`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Processing/OutboxProcessor.cs:57`)
 drains one table per relational source with a claim lease, exponential backoff, dead-lettering and
 OpenTelemetry instrumentation. It answers "this happened, tell whoever cares". It does not answer
 "do this later", and bending it to do so means expressing an instruction as an event, which is
@@ -63,31 +65,35 @@ invalidation, validation, the timeout budget and the transaction
 (`MMCA.Common/Source/Core/MMCA.Common.Application/InternalCommands/IInternalCommandScheduler.cs:16`)
 exposes `ScheduleAsync(command, runAt)` and a `TimeSpan delay` overload, both returning
 `Result<Guid>`. The implementation
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:69`)
-adds the row to the context handed back by the scope's own `IDbContextFactory`, which is the same
-instance the calling handler's repositories use. With a transaction active it enrolls the row and
-stops, so the caller's commit persists it and a rollback erases it; with no transaction active it
-saves immediately, and signals the processor only when the row is already due
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:124`),
-so a future-dated row is persisted without a wake-up and waits for the poll loop. That is the
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:74`)
+adds the row to the context handed back by the scope's own `IDbContextFactory` (`:104`, `:108`),
+which is the same instance the calling handler's repositories use. With a transaction active it
+enrolls the row and stops (`:111`), so the caller's commit persists it and a rollback erases it; with
+no transaction active it saves immediately (`:123`) and signals the processor whether or not the row
+is due yet
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:128`):
+a due row runs on the wake, and a future-dated row re-arms the processor's smart wait on its
+`ScheduledOn` plus `ProcessingDelaySeconds`, floored at one second and capped at the polling
+interval (`InternalCommandProcessor.cs:107`, delegating to `PollingLoop.ComputeWaitTime` at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:104`). That is the
 outbox's atomicity guarantee applied to an instruction instead of an event: a transaction that
 aborts schedules nothing.
 
 **3. One table per relational source, mapped unconditionally.** `InternalCommandMessage`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs:21`)
 is configured in `ApplicationDbContext.ConfigureInternalCommands`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:673`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:754`)
 alongside the outbox and inbox, with three filtered indexes for the poll, the retention sweep and the
 dead-letter view. It takes the engine the model is being built for and runs its partial-index
 predicates through the same `QuoteColumn`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:548`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:619`)
 and `IncludeColumns`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:574`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:645`)
 helpers [ADR-113](113-postgresql-as-a-first-class-engine.md) introduced for the outbox, so PostgreSQL
 gets double-quoted identifiers while every other engine keeps the bracketed literal it has always
 produced. `PostgreSQLDbContext` calls `base.OnModelCreating`, so the fourth engine needs no
 registration of its own. Cosmos ignores the entity, exactly as it ignores the outbox
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:81`).
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:132`).
 The mapping is NOT gated on `InternalCommands:Enabled`, unlike the scheduler's job table: a row must
 be able to commit in the same transaction as the aggregate change, a transaction does not span
 databases, and a flag that changed the schema would make enabling the queue a migration rather than a
@@ -100,22 +106,26 @@ runs it calls the shared `AmbientOrigin.Restore`
 the other background hops use, so every hop restores the same shape. `Restore` sets the tenant
 first, then rebuilds a `ClaimsPrincipal` carrying the `sub` claim and one role claim per stored role
 (`AmbientOrigin.BuildPrincipal`, same file `:73`) and hands it to `ScopedUserOverride`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ScopedUserOverride.cs:23`), a scoped
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ScopedUserOverride.cs:24`), a scoped
 carrier read by `ImpersonatingCurrentUserService`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Context/ImpersonatingCurrentUserService.cs:20`),
 which decorates whatever `ICurrentUserService` the host registered
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:243`). With no override
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:232`). With no override
 set every member reads straight through, so an HTTP request behaves exactly as before.
 
 **5. Failure policy: the outbox's, with one deliberate divergence.** `InternalCommandProcessor`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:50`)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Processing/InternalCommandProcessor.cs:47`)
 claims the due prefix of each batch with a lease token
-(`ClaimDueAsync`, `:366`), executes each row in a fresh DI scope, and stamps the outcome through a
-set-based update guarded by that token (`StampAsync`, `:686`) so a replica whose lease expired
+(`ClaimDueAsync`, `:297`), executes each row in a fresh DI scope, and stamps the outcome through a
+set-based update guarded by that token (`StampAsync`, `:617`) so a replica whose lease expired
 mid-execution silently drops its stale outcome. A `Result.Failure` and a thrown exception are the
 same operational fact and both consume an attempt; the backoff is
 `RetryBackoffBaseSeconds * 2^(attempts-1)` with jitter in `[0.8, 1.2]`, capped at
-`MaxRetryBackoffSeconds` (`ComputeRetryBackoffSeconds`, `:712`). The divergence: an unresolvable
+`MaxRetryBackoffSeconds` (`ComputeRetryBackoffSeconds`, `:643`, delegating to the shared
+`PollingLoop.ComputeRetryBackoffSeconds` at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:183`). A
+payload that no longer deserializes is dead-lettered on the first attempt as `payload_invalid`
+(`:385`), because retrying cannot change the stored bytes. The divergence: an unresolvable
 command type and a missing handler registration are terminal on the FIRST attempt, where the outbox
 retries an unresolvable type once. An outbox row's type may live in an assembly that has simply not
 loaded yet; a queue row can only run on a host that registers a handler for it, and a host that
@@ -125,11 +135,11 @@ fact that will not change.
 Settings live under `InternalCommands`
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/Administration/InternalCommandsSettings.cs:15`)
 and mirror `OutboxSettings` where the semantics match: `BatchSize` 50 (`:31`), `MaxAttempts` 5
-(`:39`), `LeaseSeconds` 300 (`:68`), `RetryBackoffBaseSeconds` 10 (`:77`), `RetentionDays` 7 (`:93`),
-`CleanupIntervalHours` 6 (`:108`). Two values deliberately differ. `ProcessingDelaySeconds` defaults
+(`:39`), `LeaseSeconds` 300 (`:69`), `RetryBackoffBaseSeconds` 10 (`:78`), `RetentionDays` 7 (`:94`),
+`CleanupIntervalHours` 6 (`:109`). Two values deliberately differ. `ProcessingDelaySeconds` defaults
 to `0` rather than the outbox's 5 (`:58`), because that delay exists to bound a race with the
 in-process fast path that dispatches an event before the processor can, and the queue has no such
-fast path. `MaxRetryBackoffSeconds` (600, `:86`) is a separate ceiling rather than the lease, because
+fast path. `MaxRetryBackoffSeconds` (600, `:87`) is a separate ceiling rather than the lease, because
 a job queue wants a long lease for slow handlers and a short ceiling on how long a transient failure
 parks a command, where the outbox caps its backoff at `LeaseSeconds` and gets one number for both.
 
@@ -171,8 +181,11 @@ Rejected because the two rows want different columns (a scheduled instant, an at
 captured principal), different indexes, different retention and different terminal semantics for an
 unresolvable type, and because the outbox's poll predicate is the hottest query the framework issues.
 Widening it to serve a second workload would have made every outbox change a job-queue change. The
-duplication is bounded and deliberate: the two processors share an idiom, not an implementation, the
-same way `ScheduledJobRunner` already borrows the claim-lease idiom without borrowing the code.
+duplication is bounded and deliberate: the two processors share the loop mechanics (the main loop
+with its smart wait, the per-source drain and the retry backoff) through the internal `PollingLoop`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:12`), while
+each keeps its own tables, queries, logging, metrics and activities, and `ScheduledJobRunner` still
+borrows the claim-lease idiom without borrowing the code.
 
 ## Trade-offs
 
@@ -203,7 +216,7 @@ not committed. `InternalCommands:PollingIntervalSeconds` ships at 2
 which is the same default `OutboxSettings` ships
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/Administration/OutboxSettings.cs:31`),
 so the divergence is a deployment decision rather than a framework one: ADC and Store both run the
-queue at 60 seconds while pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1591` and `:1597`).
+queue at 60 seconds (`MMCA.ADC/infra/main.bicep:1699`) while pushing the outbox to 300 (`:1693`).
 A host that raises the interval to cut idle polling accepts that much latency on
 transaction-scheduled work.
 
@@ -218,6 +231,24 @@ queue's metrics land on their own `MMCA.Common.InternalCommands` meter
 timeouts and an operations console over deferred work now share one durable substrate with one
 retry policy, one dead-letter story and one operator surface, instead of a table and a poll loop per
 feature.
+
+## Revision (2026-10-01)
+Two statements no longer matched the code. First, a schedule made outside a transaction now saves
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/InternalCommandScheduler.cs:123`)
+and then signals the processor whether or not the row is due
+(`InternalCommandScheduler.cs:128`); the earlier due-only guard is gone, so a future-dated row
+re-arms the processor's smart wait on its `ScheduledOn` instead of being learned only at the next
+polling interval. Rows enrolled in a transaction still raise no signal (`:111`). Second, the outbox
+and queue processors now share an implementation of their loop mechanics, the internal `PollingLoop`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Polling/PollingLoop.cs:12`), used at
+`OutboxProcessor.cs:113` and `InternalCommandProcessor.cs:82`; the queries, telemetry names and
+failure policy stay per-processor, so the decision to keep the two tables separate is unchanged.
+Decision 5 also now names the third first-attempt terminal case, an undeserializable payload
+(`InternalCommandProcessor.cs:385`). Stale citations were re-anchored in place: `OutboxProcessor`,
+`ConfigureInternalCommands`, `QuoteColumn`, `IncludeColumns`, the Cosmos `Ignore`, `ScopedUserOverride`,
+the `ICurrentUserService` decoration, `InternalCommandProcessor` and its members, the
+`InternalCommandsSettings` defaults, and the ADC polling settings (`MMCA.ADC/infra/main.bicep:1693`
+and `:1699`).
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the claim-lease, backoff and dead-letter machinery this

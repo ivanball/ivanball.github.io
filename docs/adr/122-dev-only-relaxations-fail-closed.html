@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -267,34 +269,34 @@
           (<code>:61-77</code>, message text at <code>:85</code>).</li>
           <li><strong>AI prompt and completion telemetry.</strong> <code>IsDevelopmentHost</code> scans the service collection for a
           registered <code>IHostEnvironment</code> instance and returns false when it finds none
-          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:172-176</code>), documented as &quot;Fails
-          CLOSED ... Mirrors the gate on <code>Persistence:EnableSensitiveDataLogging</code>&quot; at <code>:167-171</code>.</li>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.AI/DependencyInjection.cs:262-266</code>, called at <code>:177</code>), documented as &quot;Fails
+          CLOSED ... Mirrors the gate on <code>Persistence:EnableSensitiveDataLogging</code>&quot; at <code>:257-260</code>.</li>
           </ul>
           <p><code>RequireHttpsMetadata</code> on forwarded JWT bearer is the hybrid the SMTP gate was modelled on: explicit
           argument, then configuration, then <code>!environment.IsDevelopment()</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:557-559</code>),
-          with a startup-warning filter registered when a non-Development host opts out (<code>:561-566</code>).</p>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:63-65</code>),
+          with a startup-warning filter registered when a non-Development host opts out (<code>:67-71</code>).</p>
           <p><strong>The remaining environment-conditional relaxations are plain <code>IsDevelopment()</code> checks, not
           fail-closed gates</strong>, and this record names them as such: each reads a non-nullable environment the
           host always supplies, so there is no unknown case for them to close against. They are listed here so
           the inventory is complete, not to claim a guarantee their code does not make.</p>
           <ul>
           <li>CORS: the pipeline selects <code>CorsPolicyAllowAll</code> in Development and <code>CorsPolicyAllowSpecificOrigins</code>
-          otherwise (<code>.../Startup/Pipeline/MiddlewarePipelineBuilder.cs:111-113</code>); the allow-any policy is
-          registered at <code>.../Startup/WebApplicationBuilderExtensions.cs:694-697</code> behind an analyzer
-          suppression that states the scope (<code>:693</code>). The Aspire gateway takes the same shape on its default
+          otherwise (<code>.../Startup/Pipeline/MiddlewarePipelineBuilder.cs:99-101</code>); the allow-any policy is
+          registered at <code>.../Startup/WebApplicationBuilderExtensions.cs:139-142</code> behind an analyzer
+          suppression that states the scope (<code>:138</code>). The Aspire gateway takes the same shape on its default
           policy (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/GatewayCorsExtensions.cs:34-42</code>). See
           ADR-082.</li>
           <li>Cookie <code>Secure</code> flag: <code>Secure = !environment.IsDevelopment()</code> for the session cookies
           (<code>.../MMCA.Common.API/SessionCookies/SessionCookieJar.cs:34</code>) and for the culture cookie
-          (<code>.../Startup/WebApplicationExtensions.cs:121</code>).</li>
+          (<code>.../Startup/WebApplicationExtensions.cs:134</code>).</li>
           <li>HSTS: <code>_enableHsts = options.Value.EnableHsts &amp;&amp; !environment.IsDevelopment()</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs:170</code>), so Development
           is the only way to suppress it once a host enables it. CSP is built from the same flag
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:33</code>). See
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs:41</code>). See
           ADR-023.</li>
           <li>Pseudo-locale: added to the supported cultures and accepted by <code>/culture/set</code> only in Development
-          (<code>.../Startup/WebApplicationExtensions.cs:80-82</code>, <code>:106</code>).</li>
+          (<code>.../Startup/WebApplicationExtensions.cs:80-82</code>, <code>:119-122</code>).</li>
           </ul>
           <p>The two fail-closed gates that are pure functions are unit-tested on exactly the closing case: the
           EF gate with no environment registered is false
@@ -326,6 +328,14 @@
           <li><strong>The inventory is manual.</strong> Nothing fails a build when a new environment-conditional branch is
           added without following the rule.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Citations were re-anchored to the current source: the AI gate
+          (<code>DependencyInjection.cs:262-266</code>, remarks <code>:257-260</code>), the <code>RequireHttpsMetadata</code> resolution and
+          warning filter, now in the partial file <code>WebApplicationBuilderExtensions.Authentication.cs:63-65</code> and
+          <code>:67-71</code>, the CORS selection (<code>MiddlewarePipelineBuilder.cs:99-101</code>) and allow-any policy
+          (<code>WebApplicationBuilderExtensions.cs:139-142</code>, suppression <code>:138</code>), the culture cookie <code>Secure</code> flag
+          (<code>WebApplicationExtensions.cs:134</code>), the pseudo-locale check (<code>:119-122</code>), and the CSP flag
+          (<code>BlazorCspPolicyProvider.cs:41</code>).</p>
           <h2 id="related">Related</h2>
           <p><a href="070-fail-fast-configuration-contract.html">ADR-070</a> (binds and validates settings at startup; this
           record governs when a validated setting may be honored),
@@ -350,6 +360,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

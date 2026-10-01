@@ -37,8 +37,8 @@ path through it, in both directions.
   has the single implementation `PasswordHasher`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:12`), registered
   with `TryAddSingleton`
-  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:713`) inside the
-  `AddServices` helper (`:693`) that `AddInfrastructure` (`:72`) calls unconditionally (`:240`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:304`) inside the
+  `AddServices` helper (`:284`) that `AddInfrastructure` (`:56`) calls unconditionally (`:224`).
   `TryAdd` semantics keep a host's own prior registration, so the framework supplies the default
   rather than forcing it, and the type is stateless (three private `const` fields and no instance
   state, `PasswordHasher.cs:15`, `:18`, `:24`), which is what makes the singleton lifetime safe.
@@ -93,21 +93,21 @@ path through it, in both directions.
   (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:194`) and
   registration hashing (`:280`) live in the shared base (`:74`, hasher parameter at `:77`), which
   also equalizes timing for an unknown account by burning a verification against canonical-shaped
-  dummy material, `VerifyPassword(password, new byte[64], new byte[32])` (`:907`, in
-  `BurnPasswordVerificationCost` at `:898`): that call depends on the guard admitting exactly the
+  dummy material, `VerifyPassword(password, new byte[64], new byte[32])` (`:932`, in
+  `BurnPasswordVerificationCost` at `:923`): that call depends on the guard admitting exactly the
   64/32 shape, so the burn still costs a full derivation rather than short-circuiting;
   change-password verifies then hashes in `ChangePasswordHandlerBase<TUser, TCommand>`
-  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:36`,
-  hasher parameter at `:38`, verify at `:79`, hash at `:85`); reset-password hashes in
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:42`,
+  hasher parameter at `:44`, verify at `:95`, hash at `:104`); reset-password hashes in
   `ResetPasswordHandlerBase<TUser, TCommand>`
-  (`.../UseCases/ResetPassword/ResetPasswordHandlerBase.cs:43`, hasher parameter at `:45`, hashing at
+  (`.../UseCases/ResetPassword/ResetPasswordHandlerBase.cs:41`, hasher parameter at `:43`, hashing at
   `:94`); and seeding hashes
   in `IdentityModuleDbSeederBase<TUser>`
   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeederBase.cs:39`,
   `:104`). No file under either app's `Source/` invokes the hasher: ADC and Store only declare the
   parameter and forward it to a Common base
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:49,59`,
-  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:25,34`).
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:51,62`,
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:28,38`).
 - **The security model summary states the same rule.** `MMCA.Common/SECURITY.md:29-35` documents
   PBKDF2-SHA512 with a high iteration count and constant-time comparison as build-failing invariants
   and says outright that PBKDF2 is the only verification path with no legacy HMAC fallback (`:34-35`).
@@ -159,6 +159,15 @@ path through it, in both directions.
   stops every stored credential from verifying, and any account legitimately holding no credential
   material (an external-OAuth row under [ADR-036](036-external-oauth-login.md)) must be routed away
   from password login by the caller, since the hasher answers it with an unexplained `false`.
+
+## Revision (2026-10-01)
+Anchor refresh only; no decision or rationale changed. The Decision's citations are re-anchored to
+current source: the `TryAddSingleton` registration (`DependencyInjection.cs:304`), `AddServices`
+(`:284`), `AddInfrastructure` (`:56`) and its `AddServices()` call (`:224`); the timing burn in
+`AuthenticationServiceBase.cs` (`BurnPasswordVerificationCost` at `:923`, dummy verify at `:932`);
+`ChangePasswordHandlerBase.cs` (`:42`, `:44`, `:95`, `:104`); `ResetPasswordHandlerBase.cs` (`:41`,
+`:43`); and the ADC and Store `AuthenticationService.cs` parameter and forward lines (`:51,62` and
+`:28,38`), which still only forward the hasher to the Common base.
 
 ## Related
 [ADR-032](032-password-hashing.md) (the superseded record: the same hasher, its parameters and its

@@ -17,7 +17,7 @@ the Revision at the end.
 Revised 2026-09-09: a fourth engine, PostgreSQL, joins the set
 ([ADR-113](113-postgresql-as-a-first-class-engine.md)). It takes the same switch arm as SQL Server in
 the engine-aware configuration base
-(`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:72-73`),
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:84-85`),
 so the `[UseDataSource]` axis grows by one member.
 Revised 2026-09-11: the Decision below now reads four engines throughout. The 2026-09-09 note also
 claimed no Decision item changed, which was wrong: the engine enum, the context list, the
@@ -74,10 +74,12 @@ per entity configuration.
 4. **Configuration drives routing.** `DataSourceResolver` builds a per-engine logical-to-physical map
    from the engine-specific connection strings (`SQLServerConnectionString` /
    `PostgreSQLConnectionString` / `CosmosConnectionString` / `SqliteConnectionString`, one switch arm
-   each at `DataSourceResolver.cs:483-499`, plus `CosmosDatabaseName` and a migrations assembly for the
+   each at `DataSourceResolver.cs:478-485` for the top-level section and `:487-494` for a named entry,
+   plus `CosmosDatabaseName` and a migrations assembly for the
    two server engines, `SQLServerMigrationsAssembly` and `PostgreSQLMigrationsAssembly`, which SQLite
    and Cosmos leave empty at the top level (`:247-254`) and which a named entry can override per source
-   (`DataSourceEntrySettings.cs:35`)), read from either
+   (`DataSourceEntrySettings.cs:35`, `:62`); a named entry also carries a `SqliteMigrationsAssembly`
+   (`DataSourceEntrySettings.cs:53`, read at `DataSourceResolver.cs:428`)), read from either
    configuration shape: the top-level `ConnectionStrings` section, or a named entry under `DataSources`.
    Either shape supplies an engine's `Default` source on its own. The top-level value is the first
    answer; where it names nothing for that engine and the named entries declare exactly one distinct
@@ -89,27 +91,37 @@ per entity configuration.
    answer: a genuinely multi-database host names the one it wants shared by adding a
    `DataSources:Default` entry. Logical names with no entry for an engine collapse onto that engine's
    `Default`; engines never collapse into each other. `EntityDataSourceRegistry` (and the
-   `DataSourceService` facade) eagerly map every entity to its physical source up front, so routing
-   never depends on a model already being built.
+   `DataSourceService` facade) map every entity to its physical source in one reflection pass, built
+   lazily on first access and rescanned once on a lookup miss
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:16-18`,
+   `:54-63`), so routing never depends on a model already being built.
 5. **Cross-engine relationships auto-degrade.** `CrossDataSourceDegradeConvention` removes FK constraints
    and navigations whose ends live in different physical sources (which now includes different engines);
    scalar FK columns plus a compensating index survive. Runtime joins flow through `INavigationPopulator`
-   (ADR-002); cross-source consistency flows through the outbox (ADR-003).
+   (ADR-002); cross-source consistency flows through the outbox (ADR-003) for every relational engine.
+   A Cosmos-backed aggregate has no outbox (see item 6).
 6. **Cosmos specifics.** All of a module's entities share one container (so intra-module relationships
    and the navigation populators work), the entity Id is the partition key, Ids are generated client-side
    (`CosmosIntIdValueGenerator`, since a document store has no server identity), and relational-only
-   constructs (indexes) are stripped at model-build time.
+   constructs (indexes) are stripped at model-build time. Cosmos has no outbox table: `CosmosDbContext`
+   reports `SupportsOutbox => false` and dispatches its events in-process only
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:119-121`, `:128-129`),
+   the save interceptor skips the outbox for it
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:236`),
+   and `BrokerEventBus` throws when the outbox target lacks outbox support
+   (`Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70-77`).
 7. **The host surface reads the same two shapes.** The Aspire AppHost helpers
    `With{SQLServer,PostgreSQL,Cosmos,Sqlite}DataSource` inject the `DataSources__{logicalName}__*`
    environment variables for the source they attach
    (`Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs:493`, `:523`, `:552-553`, `:577`). The
    database health checks enumerate the top-level section and every named
-   entry, deduplicated by connection string, so each physical database contributes exactly one readiness
-   check and the entries that collapse onto one database contribute one between them
-   (the per-engine enumeration at `Source/Hosting/MMCA.Common.Aspire/Extensions.cs:606-643`,
-   registered at `:556-587`). The requirement that a host have a
+   entry, deduplicated by connection string, so each physical relational database (SQL Server,
+   PostgreSQL or SQLite) contributes exactly one readiness check and the entries that collapse onto one
+   database contribute one between them; a Cosmos database contributes none
+   (the per-engine enumeration at `Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:258-295`,
+   registered at `:208-239`). The requirement that a host have a
    database at all is engine-agnostic: `AddInfrastructureHealthChecks(requireDatabase)` is satisfied by
-   SQL Server, PostgreSQL or SQLite, declared in either shape (`:305-309`, the rule at `:565-571`).
+   SQL Server, PostgreSQL or SQLite, declared in either shape (`:69-73`, the rule at `:217-223`).
 
 ## Rationale
 - **Right store per access pattern, as a configuration decision.** The engine becomes an attribute on a
@@ -126,16 +138,20 @@ per entity configuration.
 - **No cross-engine JOINs, FKs, or transactions.** This is the ADR-006 cost made sharper: across engines
   it is a hard limit, not a deployment choice. A query spanning engines (for example a public-session
   read that needs published-event Ids from a relational source) must be split into per-engine steps
-  rather than one LINQ query, and consistency across engines is eventual via the outbox. The
+  rather than one LINQ query, and consistency across relational engines is eventual via the outbox. The
   `CrossSourceSpecification` helper makes that split engine-portable (resolve principal keys, then filter
   by `FK IN (keys)` with no navigation), and the `SpecificationsDoNotNavigateToOtherEntities` fitness
-  rule (the `specifications` category in ADR-015) fails the build if a specification silently embeds a
-  cross-engine navigation.
+  rule (the `specifications` category in ADR-015) fails the build if a parameterless specification's
+  criteria navigates to another entity at all; the rule is opt-in, and specifications with constructor
+  dependencies are skipped
+  (`Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Specifications.cs:17-20`,
+  `:38-41`).
 - **Each engine carries its own operational model.** Separate EF provider, separate migration story
   (Cosmos has no relational migrations), separate backup/restore and cost profile. Adding an engine to a
   deployment is a real operational commitment, not just a connection string.
 - **Cosmos constraints leak into modeling.** Container-per-module, Id-as-partition-key, and client-side
-  Id generation are not the relational defaults; an aggregate moved to Cosmos must tolerate them.
+  Id generation are not the relational defaults; an aggregate moved to Cosmos must tolerate them. It
+  also gives up the outbox: its events dispatch in-process only, and broker mode cannot target it.
 - **Latent today.** The plumbing is complete, tested, and in production, but no production entity uses a
   non-SQL engine, so the cross-engine paths (degrade across engines, the `CrossSourceSpecification`
   helper, Cosmos client-side Id generation) are proven by tests and a reverted local trial rather than by
@@ -144,7 +160,8 @@ per entity configuration.
 ## Related
 ADR-006 (database-per-service: the **Name** axis this ADR's **Engine** axis is orthogonal to; they share
 `DataSourceKey`), ADR-002 (navigation populators bridge the relationships the degrade convention strips
-across sources), ADR-003 (the outbox is the cross-source, and now cross-engine, consistency mechanism),
+across sources), ADR-003 (the outbox is the cross-source, and cross-relational-engine, consistency
+mechanism; Cosmos has none),
 ADR-113 (PostgreSQL as the fourth engine: provider, naming conventions, and migrations).
 
 ## Revision (2026-08-29): engine substitution for a single-engine host
@@ -196,3 +213,22 @@ either top-level or on a named `DataSources` entry (`:51-53`, the two checks at 
 that do run on SQL Server: a host with no connection string anywhere still fails to start, with a
 message naming both configuration shapes and every engine key (`:38-44`), because silently booting one trades a clear
 startup failure for a failure on the first query.
+
+## Revision (2026-10-01)
+
+No decision changed; this pass corrects statements that overreached the code and refreshes stale
+citations. Decision items 5 and 6, the Trade-offs and Related now say that the outbox carries
+cross-source consistency only for the relational engines: a Cosmos-backed aggregate has no outbox
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/CosmosDbContext.cs:119-121`), so its
+events dispatch in-process only and `BrokerEventBus` refuses it as an outbox target
+(`Source/Core/MMCA.Common.Infrastructure/Messaging/BrokerEventBus.cs:70-77`). Item 7 now says a Cosmos
+database contributes no readiness check, since only the three relational engines are enumerated
+(`Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:213-238`). Item 4 now describes
+`EntityDataSourceRegistry` as built lazily on first access with one rescan on a miss
+(`EntityDataSourceRegistry.cs:16-18`), and names the per-entry `SqliteMigrationsAssembly`
+(`DataSourceEntrySettings.cs:53`). The `SpecificationsDoNotNavigateToOtherEntities` trade-off now
+states that the rule is opt-in, inspects only parameterless specifications, and flags any navigation
+(`ArchitectureRules.Specifications.cs:17-20`). Re-anchored: the shared SQL Server and PostgreSQL
+switch arm (`EntityTypeConfiguration.cs:84-85`), the connection-string switches
+(`DataSourceResolver.cs:478-485`, `:487-494`), and the health-check code, which moved from
+`Extensions.cs` into the partial `Extensions.Health.cs`.

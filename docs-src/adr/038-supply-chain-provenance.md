@@ -7,23 +7,24 @@ restores in locked mode, fails the vulnerability gate closed, and gates the rele
 protected environment plus a merged-main assertion).
 Revised 2026-09-19 (locked-mode restore described at its actual scope: the two explicit restore steps,
 CI `build-and-test` and release `publish`, not every job in either workflow).
-Revised 2026-09-22 (build-provenance attestations on every released nupkg; the audit and SBOM gates are shared composite actions consumed by ADC; see the Revision below).
+Revised 2026-09-22 (build-provenance attestations on every released nupkg; the audit and SBOM gates are shared composite actions consumed by ADC and Store; see the Revision below).
 ## Context
-MMCA.Common is a published framework: it packs its NuGet packages and pushes them to GitHub Packages
-on every `v*` tag (release.yml:3-5), where the two production apps and the reference seed consume
+MMCA.Common is a published framework: on every `v*` tag (release.yml:3-5) it packs its NuGet packages
+and pushes them to both GitHub Packages (release.yml:117-118) and nuget.org through OIDC trusted
+publishing (release.yml:129-138), where the two production apps and the reference seed consume
 them. A published framework is a supply-chain amplifier: a vulnerable, substituted, or unreproducible
 dependency does not stay in one repo, it ships downstream to every consumer. Rubric §32 (Dependency &
 Supply-Chain Management) is weighted higher for exactly this reason: its default weight rises to 3 for
-a published framework such as MMCA.Common (ArchitectureEvaluationCriteria.md:817), and it asks for
+a published framework such as MMCA.Common (ArchitectureEvaluationCriteria.md:861), and it asks for
 provenance and integrity (SBOM, lock files, trusted sources only) on top of the versioning hygiene
-§15 covers (ArchitectureEvaluationCriteria.md:808).
+§15 covers (ArchitectureEvaluationCriteria.md:852).
 
 ADR-016 answers two dependency-governance questions (how the packages version and roll out, and the
 MassTransit-v8 license pin), but it deliberately stops there. The four controls that actually
 establish provenance and integrity, an SBOM release gate, committed lock files, a CI vulnerability
 audit, and package source mapping, already live in the release and CI workflows,
 `Directory.Build.props`, and `nuget.config`, and are summarized for consumers in SECURITY.md
-(SECURITY.md:42-51). No ADR owned them as a single coherent posture. This record does, and it exceeds
+(SECURITY.md:43-52). No ADR owned them as a single coherent posture. This record does, and it exceeds
 ADR-016's scope: ADR-016 gestures at lock files as sweep mechanics, this ADR owns supply-chain
 integrity as the decision.
 
@@ -31,32 +32,38 @@ integrity as the decision.
 Treat supply-chain integrity as a set of build-gating controls, the same invariant-over-discipline
 posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
 
-1. **A CycloneDX SBOM is a hard release gate.** The release workflow installs the CycloneDX tool and
-   generates a JSON software bill of materials for the whole solution into `./sbom` (release.yml:53-56).
-   It then fails the release (`exit 1`) when generation produced no output
-   (`test -n "$(ls -A ./sbom ...)"`, release.yml:58), and the upload step sets `if-no-files-found:
-   error` (release.yml:60-65). This step was promoted from `continue-on-error` (its tooling-validation
-   phase) to a blocking gate (release.yml:49-52), so every published version ships a verifiable SBOM or
-   no packages are pushed.
+1. **A CycloneDX SBOM is a hard release gate.** The release workflow calls the shared
+   `cyclonedx-sbom` composite action with output directory `./sbom` (release.yml:104-108), which
+   installs the CycloneDX tool (.github/actions/cyclonedx-sbom/action.yml:51-52) and generates a JSON
+   software bill of materials for the whole solution (action.yml:66). It then fails the release
+   (`exit 1`) when the BOM file is missing or empty (`test -s "$bom"`, action.yml:68) or lists zero
+   components (action.yml:69-71), and the upload step sets `if-no-files-found: error`
+   (release.yml:110-115, and release.yml:226-231 in `publish-maui`). The step runs as a blocking gate
+   (release.yml:100-103), so every published version ships a verifiable SBOM or no packages are pushed.
 
 2. **NuGet lock files are committed for reproducible restores.** `RestorePackagesWithLockFile` is set
    repo-wide (Directory.Build.props:8), so each project records its full resolved transitive graph in a
    committed `packages.lock.json` (for example Source/Core/MMCA.Common.Domain/packages.lock.json).
-   Restore in CI and in release runs against that committed graph (ci.yml:102-104, release.yml:33-34), so
+   Restore in CI and in release runs against that committed graph (ci.yml:132, release.yml:66), so
    the versions CI vets and the release packs are the ones on record.
 
-3. **CI fails on any non-suppressed vulnerable package.** The audit step runs
-   `dotnet list MMCA.Common.slnx package --vulnerable --include-transitive` (ci.yml:110-113) and fails the
-   build (`exit 1`) on any vulnerable-package row (ci.yml:122-127). Accepted advisories are the sole
+3. **CI fails on any non-suppressed vulnerable package.** The audit step calls the shared
+   `nuget-vulnerability-audit` composite action (ci.yml:138-146; skipped with the rest of the code jobs
+   on a docs-only change, ci.yml:139), and the release `publish` job runs the same action before Test
+   and Pack (release.yml:75-82), so an advisory published between the PR run and the tag also stops the
+   push. The action runs `dotnet list <solution> package --vulnerable --include-transitive`
+   (.github/actions/nuget-vulnerability-audit/action.yml:54) and fails the build (`exit 1`) on any
+   vulnerable-package row (action.yml:85-91). Accepted advisories are the sole
    exception, and their single source of truth is the `NuGetAuditSuppress` list in
-   `Directory.Build.props`. Because `dotnet list --vulnerable` ignores `NuGetAuditSuppress`, the step
-   re-derives that accept-list itself by reading the `GHSA-*` ids out of `Directory.Build.props`
-   (ci.yml:115-120). The accepted-advisory list is currently empty: the one prior entry, the SQLite
+   `Directory.Build.props`. Because `dotnet list --vulnerable` ignores `NuGetAuditSuppress`, the action
+   re-derives that accept-list itself by reading only the `Include` value of each
+   `<NuGetAuditSuppress>` element in `Directory.Build.props`, so a `GHSA-*` id mentioned in a comment
+   does not silence anything (action.yml:74-83). The accepted-advisory list is currently empty: the one prior entry, the SQLite
    advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965), was suppressed from 2026-06-19 while SQLitePCLRaw
    shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) delivered the patched build, so
    the suppression was removed on 2026-07-20 and replaced with a direct fix: a
    `SQLitePCLRaw.bundle_e_sqlite3` pin tracked in `Directory.Packages.props` (Directory.Packages.props:58-62),
-   referenced directly by `MMCA.Common.Infrastructure` (MMCA.Common.Infrastructure.csproj:26-28) so the
+   referenced directly by `MMCA.Common.Infrastructure` (MMCA.Common.Infrastructure.csproj:38-40) so the
    patched version flows to consumers through the published package graph, the same pattern used for
    the MessagePack pin. This complements the build-time audit: `NuGetAudit` with `NuGetAuditMode=all`
    (Directory.Build.props:9-10)
@@ -75,11 +82,11 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
 ## Rationale
 - **Provenance is a gate, not a document.** A hard-failing SBOM step means the bill of materials
   cannot silently go missing on a release: the artifact is produced or the release stops
-  (release.yml:58, release.yml:65). That is the §32 provenance criterion enforced, not merely asserted
-  (ArchitectureEvaluationCriteria.md:808).
+  (.github/actions/cyclonedx-sbom/action.yml:68-71, release.yml:115). That is the §32 provenance criterion enforced, not merely asserted
+  (ArchitectureEvaluationCriteria.md:852).
 - **One accept-list, re-applied where the tool ignores it.** The audit keeps `Directory.Build.props`
   as the only place an advisory is accepted, and re-reads that file in CI precisely because
-  `dotnet list --vulnerable` does not honor `NuGetAuditSuppress` (ci.yml:115-117). A `NuGetAuditSuppress`
+  `dotnet list --vulnerable` does not honor `NuGetAuditSuppress` (.github/actions/nuget-vulnerability-audit/action.yml:74-78). A `NuGetAuditSuppress`
   item is the sanctioned way to accept an advisory, paired with a dated rationale in an adjacent
   comment, so a reviewer sees every accepted advisory in one place rather than a blanket suppression.
   No suppressions are active today: the accept-list is empty after the 2026-07-20/21 SQLite fix.
@@ -92,14 +99,14 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
 
 ## Trade-offs
 - **The SBOM is generated and archived, not yet signed or attested** (superseded 2026-09-22; see the Revision below). The gate proves a bill of
-  materials exists for each release (release.yml:58); it does not add cryptographic attestation or
+  materials exists for each release (.github/actions/cyclonedx-sbom/action.yml:68-71); it does not add cryptographic attestation or
   signature verification of the pushed packages. That is a possible follow-up, not a claim made here.
 - **Accept-list drift is possible.** A `NuGetAuditSuppress` entry silences the audit for that id until
   someone removes it, and its accompanying rationale comment is a review reminder, not an automated
   expiry. No entries are active today, but the mechanism carries this cost whenever an advisory is
   accepted.
-- **Audit granularity is text-matched.** The CI step matches vulnerable rows and `GHSA-*` ids by
-  parsing tool output (ci.yml:120-125). It is deliberately simple and depends on the `dotnet list`
+- **Audit granularity is text-matched.** The audit action matches vulnerable rows and `GHSA-*` ids by
+  parsing tool output (.github/actions/nuget-vulnerability-audit/action.yml:85-91). It is deliberately simple and depends on the `dotnet list`
   output shape rather than a structured feed.
 - **Source mapping constrains where packages come from.** Restricting to nuget.org (nuget.config:15)
   is the point, but it means adding a dependency from any other feed is a deliberate `nuget.config`
@@ -169,11 +176,31 @@ makes a fix to the gate reach every consumer without a per-repository bump. The 
 both report headers the SDK has printed and fails closed on any other output, exactly as the inline
 block did; the SBOM action fails on a zero-component bill of materials and normalises a `.slnf` itself.
 
+## Revision (2026-10-01)
+No decision or rationale changed; the current-state sections now describe the gates where they live
+today. Context names both registries a tag publishes to: GitHub Packages (`release.yml:117-118`) and
+nuget.org through OIDC trusted publishing (`release.yml:129-138`). Decision 1 describes the SBOM gate
+as the `cyclonedx-sbom` composite action (`release.yml:104-108`), which fails on a missing or empty
+file (`.github/actions/cyclonedx-sbom/action.yml:68`) or a zero-component BOM (`action.yml:69-71`)
+rather than on an empty directory; the earlier `continue-on-error` history is no longer anchored in
+the workflow. Decision 3 records that the release `publish` job re-runs the same audit action before
+Test and Pack (`release.yml:75-82`) and that the accept-list reads only `<NuGetAuditSuppress>`
+`Include` values (`.github/actions/nuget-vulnerability-audit/action.yml:74-83`). Two statements in the
+2026-09-22 Revision are now incomplete and are corrected here rather than in place: MMCA.Store's
+`deploy.yml` consumes both actions too (`MMCA.Store/.github/workflows/deploy.yml:580`, `:605`), and a
+third Common action, `freshness-gate`, is also referenced `@main` by both consumers
+(`MMCA.ADC/.github/workflows/deploy.yml:861`, `MMCA.Store/.github/workflows/deploy.yml:834`), so the
+audit and SBOM pair is not the only first-party action referenced by branch. Refreshed citations:
+`ArchitectureEvaluationCriteria.md` (section 32 at `:843-861`), `SECURITY.md:43-52`, the locked
+restores (`ci.yml:132`, `release.yml:66`), the upload step (`release.yml:110-115`, `:226-231`) and
+`MMCA.Common.Infrastructure.csproj:38-40`. Anchors inside the earlier Revision sections are left as
+recorded.
+
 ## Related
 ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency
 governance from versioning and licensing into supply-chain provenance and integrity), ADR-015
 (architecture invariants enforced as build-gating fitness functions; the same gate-the-build posture
 applied here to dependencies), ADR-010 (integration-event schema versioning; another release-discipline
 control that turns a contract into an enforced signal). See SECURITY.md ("Dependency & supply-chain
-security", SECURITY.md:42-51) for the consumer-facing summary and rubric §32
-(ArchitectureEvaluationCriteria.md:799-817) for the evaluation criteria.
+security", SECURITY.md:43-52) for the consumer-facing summary and rubric §32
+(ArchitectureEvaluationCriteria.md:843-861) for the evaluation criteria.

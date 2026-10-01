@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -249,7 +251,8 @@
           paths counted per client IP, and the <code>auth-ip</code> window&#39;s algorithm is configurable with fixed as the
           default; a third <code>ICacheService</code> implementation, the opt-in <code>HybridCacheService</code>, also overrides
           <code>IncrementAsync</code>; and <code>ResetPasswordHandlerBase</code> is a second framework call site, clearing the
-          failed-attempt counter after a password reset).</p>
+          failed-attempt counter after a password reset).
+          Revised 2026-10-01 (change-password is a third framework call site, with a principal-keyed counter; every ADC and Store service host calls <code>AddCommonHybridCacheWhenRedisConfigured</code>, so with Redis configured the counters run through <code>HybridCacheService.IncrementAsync</code>; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>ADR-019&#39;s global rate limiter is <strong>principal-keyed</strong>: it caps requests per authenticated principal,
           and anonymous traffic is exempt with one metered exception, the configured real-time hub path
@@ -290,7 +293,11 @@
           <code>IncrementRegistrationCountAsync(ip)</code> bumps the per-IP counter. A missing/empty IP is a deliberate
           <strong>no-op (fail-open)</strong>.</li>
           <li><strong>Keyed by submitted email / client IP, not by principal</strong>, so it works before authentication: the
-          gap a per-principal limiter cannot fill.</li>
+          gap a per-principal limiter cannot fill. The one principal-keyed use is the authenticated
+          change-password flow, which keys its counter on <code>password-change:{userId}</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:128-129</code>)
+          because the user has no address to key on there, and a separate key keeps a change-password lockout
+          from locking the owner out of sign-in.</li>
           <li><strong>The email key is the normalized address, not the raw request string.</strong> Keys route through the same
           <code>Email</code> value-object normalization (trim, lowercase) the user lookup uses, so every spelling that
           resolves to one account shares one counter and one lockout. Building keys from raw input made the
@@ -306,7 +313,10 @@
           surfaces as a 500 on the login and registration endpoints that own it. A readable counter was worth
           more than an atomic one. <code>MemoryCacheService</code> does not override the member either, so memory mode runs
           the same default. <code>HybridCacheService</code>, the opt-in two-level implementation a host selects by calling
-          <code>AddCommonHybridCache</code> (which replaces whatever <code>ICacheService</code> was registered), overrides it with the
+          <code>AddCommonHybridCache</code> (which replaces whatever <code>ICacheService</code> was registered) or its guarded form
+          <code>AddCommonHybridCacheWhenRedisConfigured</code>, which registers it only when the Redis connection string
+          is set (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:200-212</code>),
+          overrides it (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:253</code>) with the
           same read-modify-write shape and additionally forces both legs past the in-process L1: an L1 hit would
           let a replica read a stale counter and write it back near its starting value, which is a security
           control quietly weakened by a cache optimization. The accepted cost, in the code&#39;s own words: parallel attempts can overwrite each
@@ -324,10 +334,15 @@
           lives in <code>AuthenticationServiceBase&lt;TUser&gt;</code> (<code>MMCA.Common.Application.Auth</code>): <code>CheckLockoutAsync</code>
           before credential validation, <code>IncrementFailedAttemptsAsync</code> on each failed attempt,
           <code>ResetFailedAttemptsAsync</code> on a successful login, and <code>CheckRegistrationRateLimitAsync</code> /
-          <code>IncrementRegistrationCountAsync</code> around sign-up. One further framework call site sits outside that
-          base: <code>ResetPasswordHandlerBase</code> takes <code>ILoginProtectionService</code> as a constructor dependency and
+          <code>IncrementRegistrationCountAsync</code> around sign-up. Two further framework call sites sit outside that
+          base. <code>ResetPasswordHandlerBase</code> takes <code>ILoginProtectionService</code> as a constructor dependency and
           calls <code>ResetFailedAttemptsAsync(request.Email)</code> once the new credential is persisted, so a user who
-          reset the password <em>because</em> of a lockout is not left locked out by it. Store and ADC
+          reset the password <em>because</em> of a lockout is not left locked out by it. <code>ChangePasswordHandlerBase</code>
+          takes it as well (<code>ChangePasswordHandlerBase.cs:47</code>) and runs the full sequence on its own key:
+          <code>CheckLockoutAsync</code> before the current-password verify (<code>:89</code>), <code>IncrementFailedAttemptsAsync</code> on a
+          wrong current password (<code>:97</code>) and <code>ResetFailedAttemptsAsync</code> on a correct one (<code>:102</code>), so the
+          endpoint is not an unthrottled password oracle for anyone holding a session. Store and ADC
+          <code>ChangePasswordHandler</code> subclass it and inject the service. Store and ADC
           <code>AuthenticationService</code> are sealed
           subclasses that inject <code>ILoginProtectionService</code> into the base constructor and inherit those calls;
           neither app invokes the protection methods directly. Settings bind from the <code>&quot;LoginProtection&quot;</code>
@@ -354,7 +369,11 @@
           <li><strong>Cache-scoped state weakens under scale-out without Redis.</strong> In memory mode the counters are
           per-replica and evaporate on restart, so a multi-replica deployment that did not wire a distributed
           cache does not aggregate an attacker hitting different replicas. The answer is the same as ADR-026:
-          register a distributed cache once scaled out (both apps do).</li>
+          register a distributed cache once scaled out. Both apps do: every ADC and Store service host calls
+          <code>AddCommonHybridCacheWhenRedisConfigured</code> (for example
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:133</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:101</code>), so with Redis configured
+          the counters run through <code>HybridCacheService.IncrementAsync</code>.</li>
           <li><strong>Normalization widens the DoS lever slightly.</strong> Collapsing every spelling onto one counter is what
           makes the lockout enforceable, and it also means an attacker no longer needs to guess the exact
           spelling the victim uses to lock them out. That is the same targeted-DoS trade below, not a new one:
@@ -400,6 +419,22 @@
           is a membership oracle that no amount of response-body sameness closes. The generic
           <code>Auth.InvalidCredentials</code> answer (<code>:156</code>, <code>:163</code>) is unchanged.</li>
           </ol>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>The login lockout and registration throttle are unchanged. Two current-state statements were
+          corrected. First, <code>ResetPasswordHandlerBase</code> is no longer the only framework call site outside
+          <code>AuthenticationServiceBase&lt;TUser&gt;</code>: <code>ChangePasswordHandlerBase</code> injects <code>ILoginProtectionService</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/ChangePassword/ChangePasswordHandlerBase.cs:47</code>)
+          and runs check, increment and reset around the current-password verify (<code>:89</code>, <code>:97</code>, <code>:102</code>), so a
+          signed-in session cannot guess the current password without hitting the same exponential lockout.
+          Its counter is keyed <code>password-change:{userId}</code> (<code>:128-129</code>), a principal key rather than an email,
+          so the &quot;keyed by submitted email / client IP&quot; bullet now names this one exception. Second, the
+          scale-out path is the hybrid cache rather than <code>DistributedCacheService</code> alone: every ADC and Store
+          service host calls the guarded <code>AddCommonHybridCacheWhenRedisConfigured</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Caching.cs:200-212</code>), so with
+          Redis configured the counters run through <code>HybridCacheService.IncrementAsync</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/HybridCacheService.cs:253</code>), the same
+          non-atomic read-modify-write with L1 bypassed. The line anchors inside the 2026-09-07 Revision record
+          the code as it stood then and are left as written.</p>
           <h2 id="alternatives-rejected">Alternatives rejected</h2>
           <ul>
           <li><strong>Making the failed-attempt and registration counters atomic.</strong> The increment in
@@ -438,6 +473,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#related">Related</a></li>
             </ul>

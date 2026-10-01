@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -244,19 +246,18 @@
           set published to both registries from the same tag, with no workflow change; it shortens the install
           line this record made credential-free from six references to one. Revised (2026-08-31): the
           per-package counts this record used to spell out are replaced by a pointer to
-          <code>MMCA.Common/FACTS.md:19-38</code> (generated and CI-gated, so it cannot drift), and the fork behavior is
+          <code>MMCA.Common/FACTS.md:19-43</code> (generated and CI-gated, so it cannot drift), and the fork behavior is
           corrected to what <code>release.yml</code> actually does. Revised (2026-09-01): the two build comments this
-          record used to quote no longer carry a package count of their own (<code>release.yml:90</code>,
-          <code>Directory.Build.props:68</code>), so that note is dropped and <code>MMCA.Common/FACTS.md:19-38</code> is the single
+          record used to quote no longer carry a package count of their own (<code>release.yml:140-143</code>,
+          <code>Directory.Build.props:68</code>), so that note is dropped and <code>MMCA.Common/FACTS.md:19-43</code> is the single
           place the published set is enumerated; the <code>release.yml</code> line anchors are re-pinned to the current
-          file. Revised (2026-09-19): that re-pin no longer holds. <code>release.yml</code> has since gained a
-          deployment-environment gate, a merged-main ancestry assertion and a locked-mode restore, so every
-          <code>release.yml</code> line number quoted below points at the file as it stood on 2026-09-01 rather than at
-          the current one; the step names and the behavior described are still accurate, and the Trade-offs
-          section now enumerates the added gates.</p>
+          file. Revised (2026-09-19): <code>release.yml</code> has since gained a deployment-environment gate, a
+          merged-main ancestry assertion and a locked-mode restore, and the Trade-offs section now enumerates
+          the added gates. Revised (2026-10-01): every <code>release.yml</code> line number quoted below is re-pinned to
+          the current file (see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>The <code>MMCA.Common.*</code> packages have shipped to GitHub Packages since the first release (the package
-          list and its count are generated and CI-gated in <code>MMCA.Common/FACTS.md:19-38</code>, so this record links
+          list and its count are generated and CI-gated in <code>MMCA.Common/FACTS.md:19-43</code>, so this record links
           to them rather than restating them). That was the right default while the framework had exactly one consumer group (this account&#39;s own
           repositories), which already authenticate to GitHub for other reasons.</p>
           <p>It stopped being right the moment the framework was documented publicly. GitHub Packages&#39; <strong>NuGet</strong>
@@ -282,13 +283,13 @@
           <p>Every release publishes to <strong>both</strong> registries, from the same tag, in the same workflow run.</p>
           <ul>
           <li><code>release.yml</code> keeps its existing <code>dotnet nuget push</code> to <code>https://nuget.pkg.github.com/ivanball/index.json</code>
-          unchanged (<code>release.yml:68</code>, <code>:150</code>), and gains a second push to <code>https://api.nuget.org/v3/index.json</code>
-          with <code>--skip-duplicate</code> (<code>release.yml:88</code>, <code>:166</code>). Both the main (ubuntu) job and the MAUI (windows)
+          unchanged (<code>release.yml:118</code>, <code>:237</code>), and gains a second push to <code>https://api.nuget.org/v3/index.json</code>
+          with <code>--skip-duplicate</code> (<code>release.yml:138</code>, <code>:253</code>). Both the main (ubuntu) job and the MAUI (windows)
           job push to both registries, so the lockstep release stays whole across every published id: the
-          packable projects in <code>MMCA.Common.slnx</code> (<code>MMCA.Common.slnx:8-29</code>) ship from the ubuntu job, and
+          packable projects in <code>MMCA.Common.slnx</code> (<code>MMCA.Common.slnx:8-34</code>) ship from the ubuntu job, and
           <code>MMCA.Common.UI.Maui</code> ships from the windows job (ADR-042 splits the MAUI package into its own
-          job). <code>MMCA.Common/FACTS.md:19-38</code> is the source of truth for that set, and the workflow comment
-          that introduces the MAUI job points at it rather than restating a count (<code>release.yml:90</code>).</li>
+          job). <code>MMCA.Common/FACTS.md:19-43</code> is the source of truth for that set, and the workflow comment
+          that introduces the MAUI job points at it rather than restating a count (<code>release.yml:140-143</code>).</li>
           <li><strong>Authentication to nuget.org is trusted publishing, not a stored API key.</strong> Each publishing job
           requests a GitHub OIDC token (<code>permissions: id-token: write</code>) and exchanges it through
           <code>NuGet/login@v1</code> for an API key valid for one hour, immediately before the push. No long-lived
@@ -301,10 +302,10 @@
           <li><strong>One policy covers both jobs</strong>, because it keys on the workflow file rather than the job. Each
           job still needs its own <code>id-token: write</code> permission and its own exchange: a short-lived key is
           single-use and cannot cross a job boundary.</li>
-          <li>The nuget.org steps are guarded by <code>github.repository_owner == &#39;ivanball&#39;</code> (<code>release.yml:80</code>,
-          <code>:87</code>, <code>:157</code>, <code>:164</code>), so a fork skips the trusted-publishing exchange it can never satisfy
+          <li>The nuget.org steps are guarded by <code>github.repository_owner == &#39;ivanball&#39;</code> (<code>release.yml:130</code>,
+          <code>:137</code>, <code>:244</code>, <code>:251</code>), so a fork skips the trusted-publishing exchange it can never satisfy
           instead of failing on it. The guard covers the nuget.org steps only. The GitHub Packages push
-          target is hardcoded to the <code>ivanball</code> namespace (<code>release.yml:68</code>, <code>:150</code>), which a fork&#39;s own
+          target is hardcoded to the <code>ivanball</code> namespace (<code>release.yml:118</code>, <code>:237</code>), which a fork&#39;s own
           <code>GITHUB_TOKEN</code> has no write scope for, so a fork&#39;s run reaches that push and fails there. Releasing
           from a fork is therefore not a path this workflow supports on either registry.</li>
           <li><strong>The <code>MMCA.</code> ID prefix reservation has been granted</strong> (2026-07-28), so the ids are protected from
@@ -349,18 +350,22 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>A published version can never be withdrawn.</strong> nuget.org allows unlisting, not deletion. A bad
-          release is now permanent public history, which raises the stakes on the release gates. Six stand
-          between a tag and a push. Four run inside <code>release.yml</code>: both publishing jobs declare
-          <code>environment: release</code> (<code>release.yml:16</code>, <code>:127</code>), so each waits on that environment&#39;s protection
-          rules, which are configured in repository settings and are therefore not reviewable from this
-          repository; both jobs refuse to publish unless the tagged commit is an ancestor of <code>origin/main</code>
-          (<code>release.yml:34-42</code>, <code>:145-154</code>), because a <code>v*</code> tag is the one ref pushed outside the
-          branch-protection flow; and the ubuntu job restores <code>--locked-mode</code> (<code>release.yml:62</code>, the MAUI
-          job has no restore step of its own), so an irreversible push cannot carry a transitive version
-          nobody reviewed. The fourth is the SBOM hard gate, which runs in both jobs (<code>release.yml:81-86</code>,
-          <code>:183-189</code>). The remaining two, the package-consumption job (<code>ci.yml:694</code>) and the Helpdesk
-          source-build canary (<code>ci.yml:495</code>), run on the merged pull request rather than on the tag, and the
-          ancestry assertion is what makes them cover the tagged tree.</li>
+          release is now permanent public history, which raises the stakes on the release gates. Inside
+          <code>release.yml</code>, both publishing jobs declare <code>environment: release</code> (<code>release.yml:19</code>, <code>:152</code>), so
+          each waits on that environment&#39;s protection rules, which are configured in repository settings
+          and are therefore not reviewable from this repository; both jobs refuse to publish unless the
+          tagged commit is an ancestor of <code>origin/main</code> (<code>release.yml:38-46</code>, <code>:171-180</code>), because a <code>v*</code> tag
+          is the one ref pushed outside the branch-protection flow; and both run the SBOM hard gate
+          (<code>release.yml:104-108</code>, <code>:217-224</code>). The ubuntu job adds three more: it restores <code>--locked-mode</code>
+          (<code>release.yml:66</code>), so its irreversible push cannot carry a transitive version nobody reviewed; it
+          runs a fail-closed vulnerability audit (<code>release.yml:79-82</code>); and it enforces a test floor of
+          <code>--minimum-expected-tests 2000</code> (<code>release.yml:84-87</code>). The MAUI job has none of those three: it has
+          no restore step of its own, and its build restores implicitly without <code>--locked-mode</code>
+          (<code>release.yml:203-204</code>). Both jobs also attest build provenance (<code>release.yml:95-98</code>, <code>:212-215</code>).
+          The rest run on the merged pull request rather than on the tag, and the ancestry assertion is what
+          makes them cover the tagged tree: its comment names the FACTS drift gate, the vulnerability audit,
+          the Helpdesk consumer canary (<code>ci.yml:475</code>), the package-consumption canary (<code>ci.yml:693</code>), ui-e2e
+          and the perf gate (<code>release.yml:31-35</code>).</li>
           <li><strong>Two registries can report different availability.</strong> nuget.org indexing lags a push by minutes,
           so immediately after a release the two feeds disagree briefly. Consumers pinned to exact versions
           are unaffected; anyone restoring the newest version within that window may not see it yet.</li>
@@ -376,16 +381,33 @@
           invisible secret for an invisible policy, and gains a policy that cannot be exfiltrated.</li>
           <li><strong>The policy is scoped to an owner, not to a package glob.</strong> It authorizes publishing for every
           package owned by <code>ivanball</code>, which is broader than a glob-limited key would have been. Acceptable
-          because the counterweight is far tighter: the exchange only happens from one repository&#39;s one
-          workflow file.</li>
+          because the counterweight is far tighter: this policy&#39;s exchange only happens from one
+          repository&#39;s one workflow file. It is not the account&#39;s only exchange: MMCA.Helpdesk&#39;s
+          <code>release-templates.yml:61-70</code> runs a second one as <code>ivanball</code> to publish <code>MMCA.Templates</code>, through
+          the unpinned tag <code>NuGet/login@v1</code> (<code>release-templates.yml:63</code>). If its policy is owner-scoped too,
+          it can also authorize pushes of the <code>MMCA.Common.*</code> ids; the policies themselves live on nuget.org
+          and are not determinable from source.</li>
           <li><strong>Prefix reservation is a manual, account-level action</strong> that cannot be expressed in this
           repository, so that half of the decision is not enforceable by code review.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision changed; the record is re-pinned to <code>release.yml</code> as of MMCA.Common v1.216.0 and two
+          statements are corrected. Re-pinned: the GitHub Packages pushes (<code>release.yml:118</code>, <code>:237</code>), the
+          nuget.org pushes (<code>:138</code>, <code>:253</code>), the owner guards (<code>:130</code>, <code>:137</code>, <code>:244</code>, <code>:251</code>), the MAUI job
+          comment (<code>:140-143</code>), the environment declarations (<code>:19</code>, <code>:152</code>), the ancestry assertions
+          (<code>:38-46</code>, <code>:171-180</code>), the locked-mode restore (<code>:66</code>), the SBOM gates (<code>:104-108</code>, <code>:217-224</code>),
+          <code>MMCA.Common.slnx:8-34</code>, <code>MMCA.Common/FACTS.md:19-43</code>, and the CI jobs (<code>ci.yml:475</code>, <code>:693</code>).
+          Corrected: the gate list is no longer &quot;six, four inside <code>release.yml</code>&quot;, because the ubuntu job also
+          runs a fail-closed vulnerability audit (<code>release.yml:79-82</code>) and a test floor (<code>:84-87</code>), and the
+          locked-mode restore and the audit cover the ubuntu job only (the MAUI build restores implicitly,
+          <code>release.yml:203-204</code>), so the ADR-038 cross-reference no longer claims all three run before either
+          push. The owner-scope trade-off now notes the second trusted-publishing exchange in MMCA.Helpdesk
+          (<code>release-templates.yml:61-70</code>).</p>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning: every package ships at one version, so both registries receive the
-          same set of ids per release, enumerated in <code>MMCA.Common/FACTS.md:19-38</code>),
-          ADR-038 (supply-chain provenance: the SBOM hard gate, lock files, and vulnerability audit that all
-          run before either push; keyless publishing extends that posture to the credential itself),
+          same set of ids per release, enumerated in <code>MMCA.Common/FACTS.md:19-43</code>),
+          ADR-038 (supply-chain provenance: the SBOM hard gate runs before both jobs&#39; pushes, while the
+          locked-mode restore and the vulnerability audit run in the ubuntu job only; keyless publishing extends that posture to the credential itself),
           ADR-042 (the MAUI package&#39;s separate windows job, which needs the same dual push to keep the
           release whole).</p>
           
@@ -403,6 +425,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

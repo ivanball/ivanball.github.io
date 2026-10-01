@@ -1,7 +1,7 @@
 # ADR-021: Consumer-Side Inbox for Integration-Event Idempotency
 
 ## Status
-Accepted (2026-06-09; adoption reviewed 2026-07-15, inventory refreshed 2026-09-19). Revised 2026-08-18 (the inbox stays opt-in, but
+Accepted (2026-06-09; adoption reviewed 2026-07-15, inventory refreshed 2026-10-01). Revised 2026-08-18 (the inbox stays opt-in, but
 being off is no longer silent: a broker-connected host running `NoOpInboxStore` logs a startup
 warning, `MessageBus:EnableInbox=true` becomes the stated recommendation for any such host, and the
 `InboxMessages` entity is confirmed to be part of the relational model unconditionally. See the
@@ -17,7 +17,7 @@ broker transport `EnableInbox=false` is honoured (the host gets `NoOpInboxStore`
 warning), whereas `EnableOutbox=false` is refused at registration, because a broker deployment
 publishes exclusively through the outbox and has no other path
 (`EnsureOutboxAvailableForProvider` throws in
-`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:1138-1145`, stated on the
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:196-203`, stated on the
 setting itself at `.../Messaging/MessageBusSettings.cs:161-164`). Nothing about the inbox contract
 changes.
 Revised 2026-09-07 (queue and endpoint names are prefixed per application by default, so a
@@ -79,11 +79,11 @@ window is closed for it; it remains open for a handler that writes nothing or wr
 source, and handlers must still be idempotent.)
 
 In production `EnableInbox: true` is set explicitly on all four ADC service hosts
-(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:34`,
-`MMCA.ADC.Conference.Service/appsettings.json:31`, `MMCA.ADC.Engagement.Service/appsettings.json:52`,
-`MMCA.ADC.Notification.Service/appsettings.json:50`) and on all three Store service hosts
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:40`,
-`MMCA.Store.Catalog.Service/appsettings.json:30`, `MMCA.Store.Identity.Service/appsettings.json:30`),
+(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:50`,
+`MMCA.ADC.Conference.Service/appsettings.json:48`, `MMCA.ADC.Engagement.Service/appsettings.json:68`,
+`MMCA.ADC.Notification.Service/appsettings.json:82`) and on all three Store service hosts
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:58`,
+`MMCA.Store.Catalog.Service/appsettings.json:54`, `MMCA.Store.Identity.Service/appsettings.json:48`),
 so every deployed service host states its posture rather than resting on the transport default the
 Revision (2026-08-26) introduced. Where the `InboxMessages` table comes from differs by repo: each of
 the four ADC per-service migration projects carries a dedicated `AddInboxMessages` migration, whereas
@@ -93,22 +93,22 @@ inside its single `InitialCreate` migration
 `MMCA.Store.Migrations.SqlServer.Catalog/Migrations/20260621192800_InitialCreate.cs:48,213`,
 `MMCA.Store.Migrations.SqlServer.Identity/Migrations/20260621192816_InitialCreate.cs:49,119`),
 because those per-service projects postdate the frozen combined-archive lineage that added the ADC
-migration. Adoption inventory as of 2026-09-19: **five of the seven service hosts consume from the
+migration. Adoption inventory as of 2026-10-01: **five of the seven service hosts consume from the
 broker** and so use their inbox for real, three in ADC and two in Store. ADC Identity consumes
 `SpeakerLinkedToUser` and
-`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:294-295`),
-ADC Conference consumes `UserRegistered` (`MMCA.ADC.Conference.Service/Program.cs:352`) and chains a
-second broker consumer beside it, `RegisterOutputCacheEvictionConsumer()`
-(`MMCA.ADC.Conference.Service/Program.cs:395`), and ADC
+`SpeakerUnlinkedFromUser` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:317-318`),
+ADC Conference consumes `UserRegistered` and `UserDeleted`
+(`MMCA.ADC.Conference.Service/Program.cs:411-412`) and chains a third broker consumer beside them,
+`RegisterOutputCacheEvictionConsumer()` (`MMCA.ADC.Conference.Service/Program.cs:413`), and ADC
 Engagement consumes four events, `AttendeeCheckedIn`, `SessionFeedbackSubmitted`,
 `EventFeedbackSubmitted` and `UserDeleted` (`MMCA.ADC.Engagement.Service/Program.cs:286-289`), the
 first of which is ADC's first **self-consumption** over the broker: Engagement publishes
 `AttendeeCheckedIn` and consumes it back, which is precisely the shape a redelivery would double-count,
 so the inbox is load-bearing there rather than decorative. Store Sales consumes three events,
 `ProductVariantChanged`, `ProductInfoChanged` and `CustomerErased`
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:261`, `:266`, `:271`), and Store
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:259`, `:264`, `:269`), and Store
 Catalog consumes `OrderFulfilled` and `CustomerErased` plus the output-cache eviction event
-(`MMCA.Store.Catalog.Service/Program.cs:269`, `:274`, `:280`), which makes Catalog both publisher and
+(`MMCA.Store.Catalog.Service/Program.cs:272`, `:277`, `:283`), which makes Catalog both publisher and
 consumer of that eviction event and therefore exactly the redelivery-doubles-work shape the inbox
 guards. The remaining two hosts (**ADC
 Notification** and **Store Identity**) carry `EnableInbox: true` and the table while
@@ -128,9 +128,13 @@ default.
 - **Physical isolation reuses database-per-service.** Putting the inbox in the consumer's own outbox
   database needs no new infrastructure and keeps each service self-contained, with no shared dedup
   store to race on.
-- **Opt-in keeps the monolith simple.** In-process dispatch (ADR-003) never redelivers, so a
-  single-process or broker-less deployment needs no inbox; `NoOpInboxStore` is the default and costs
-  nothing.
+- **Off for in-process keeps the monolith simple.** In-process dispatch (ADR-003) never redelivers,
+  so a single-process or broker-less deployment needs no inbox: `IsInboxEnabled` resolves OFF for it
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:141`) and
+  `AddBrokerMessaging` returns before registering any inbox store
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:51-54`), so
+  it costs nothing. `NoOpInboxStore` is registered only for a broker host that explicitly opts out
+  (`:117`).
 
 ## Trade-offs
 - **Not exactly-once.** The crash-after-handler-before-inbox window reprocesses once, so handlers must
@@ -354,3 +358,22 @@ the consumers the normal way. `UpcastingIntegrationEventConsumer<TEvent>` takes 
 because it already needed one before this revision: handler resolution there is non-generic, since
 the terminal contract type is only known once the upcasters have run, so it resolves handlers through
 the provider at `:108`. There is nothing to omit on that type, and its restore always runs.
+
+## Revision (2026-10-01)
+No decision changed. The consumer inventory did: ADC Conference now consumes `UserDeleted` beside
+`UserRegistered` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:411-412`), so the
+Decision lists it; the count of broker-consuming hosts (five of seven) is unchanged. The Rationale
+bullet that still called `NoOpInboxStore` the default is corrected to the resolution the Revision
+(2026-08-26) introduced: an in-process host registers no inbox store at all
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:51-54`), and a
+broker host gets `EfInboxStore` unless it opts out (`:107-117`). The messaging registration now lives
+in `DependencyInjection.Messaging.cs`, so the Status anchor for `EnsureOutboxAvailableForProvider`
+moves to `:196-203`, and the per-host `EnableInbox` and consumer-registration citations for ADC and
+Store are refreshed. Two notes on the Revision (2026-09-07), whose text is left as recorded: the
+inbox is keyed on `MessageId` alone (unique `IX_InboxMessages_MessageId`,
+`.../Persistence/DbContexts/ApplicationDbContext.cs:730-732`), not per consumer endpoint; and the
+opt-out that keeps the pre-upgrade, unprefixed endpoint names is
+`MessageBus:PreserveDefaultEndpointNames=true`
+(`.../Messaging/MessageBusSettings.cs:75-83`, read at `DependencyInjection.Messaging.cs:78`), because
+an unset or blank `EndpointPrefix` resolves to the application namespace (`:80-82`) and so cannot
+express "no prefix". Older Revision sections keep their original anchors.

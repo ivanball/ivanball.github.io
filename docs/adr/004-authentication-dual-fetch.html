@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -277,18 +279,18 @@
           points the JWT bearer middleware at an <code>Authority</code>, so it fetches
           <code>{authority}/.well-known/openid-configuration</code>, follows <code>jwks_uri</code>, and validates the token
           signature against the published key
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:446</code>).
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:51-56</code>).
           No service except Identity holds key material. ADC&#39;s Conference, Engagement, and Notification
           services all use this path, passing the host&#39;s <code>IConfiguration</code> and <code>IHostEnvironment</code> and leaving
           <code>requireHttpsMetadata</code> at its default.</li>
           <li>The metadata fetch is HTTPS-only by default, and the caller supplies configuration and environment
           so the framework can resolve that: the explicit <code>requireHttpsMetadata</code> argument when it is not
           null, then the <code>Authentication:JwtBearer:RequireHttpsMetadata</code> configuration key, then <code>true</code>
-          everywhere except Development (<code>.../WebApplicationBuilderExtensions.cs:458-460</code>, key declared at
-          <code>:56</code>). Resolving to <code>false</code> outside Development stays legal, because an internal-ingress h2c
+          everywhere except Development (<code>.../WebApplicationBuilderExtensions.Authentication.cs:63-65</code>, key
+          declared at <code>:24</code>). Resolving to <code>false</code> outside Development stays legal, because an internal-ingress h2c
           authority is a real deployment shape, but it registers <code>InsecureJwtMetadataWarningStartupFilter</code>
           so the host logs one startup warning naming the key
-          (<code>.../WebApplicationBuilderExtensions.cs:462-466</code>).</li>
+          (<code>.../WebApplicationBuilderExtensions.Authentication.cs:67-71</code>).</li>
           <li><code>ValidIssuer</code> is deliberately <strong>not</strong> pinned: the middleware takes the issuer from the discovery
           document, because the <code>authority</code> is the Aspire service-discovery URL (e.g. <code>http://identity</code>)
           while the token&#39;s <code>iss</code> claim is the public gateway origin (e.g. <code>https://localhost:6001</code>).</li>
@@ -349,6 +351,13 @@
           doc returns <code>404</code> on non-issuer hosts and the JWKS provider returns an empty set when unconfigured,
           so only the real issuer advertises a key.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>Anchor-only refresh; no decision or rationale changed. The <code>AddForwardedJwtBearer</code> registration
+          lives in the partial file
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs</code>,
+          so its citations are re-anchored there: the signature at <code>:51-56</code>, the <code>RequireHttpsMetadata</code>
+          resolution at <code>:63-65</code>, the config key at <code>:24</code>, and the <code>InsecureJwtMetadataWarningStartupFilter</code>
+          registration at <code>:67-71</code>.</p>
           <h2 id="related">Related</h2>
           <p>ADR-007 (gRPC calls forward the validated JWT downstream via <code>JwtForwardingClientInterceptor</code>),
           ADR-008 (the extraction that split issuer and validator into separate processes), ADR-012 (the
@@ -369,6 +378,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

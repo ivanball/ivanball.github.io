@@ -44,18 +44,18 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
   points the JWT bearer middleware at an `Authority`, so it fetches
   `{authority}/.well-known/openid-configuration`, follows `jwks_uri`, and validates the token
   signature against the published key
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:446`).
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs:51-56`).
   No service except Identity holds key material. ADC's Conference, Engagement, and Notification
   services all use this path, passing the host's `IConfiguration` and `IHostEnvironment` and leaving
   `requireHttpsMetadata` at its default.
 - The metadata fetch is HTTPS-only by default, and the caller supplies configuration and environment
   so the framework can resolve that: the explicit `requireHttpsMetadata` argument when it is not
   null, then the `Authentication:JwtBearer:RequireHttpsMetadata` configuration key, then `true`
-  everywhere except Development (`.../WebApplicationBuilderExtensions.cs:458-460`, key declared at
-  `:56`). Resolving to `false` outside Development stays legal, because an internal-ingress h2c
+  everywhere except Development (`.../WebApplicationBuilderExtensions.Authentication.cs:63-65`, key
+  declared at `:24`). Resolving to `false` outside Development stays legal, because an internal-ingress h2c
   authority is a real deployment shape, but it registers `InsecureJwtMetadataWarningStartupFilter`
   so the host logs one startup warning naming the key
-  (`.../WebApplicationBuilderExtensions.cs:462-466`).
+  (`.../WebApplicationBuilderExtensions.Authentication.cs:67-71`).
 - `ValidIssuer` is deliberately **not** pinned: the middleware takes the issuer from the discovery
   document, because the `authority` is the Aspire service-discovery URL (e.g. `http://identity`)
   while the token's `iss` claim is the public gateway origin (e.g. `https://localhost:6001`).
@@ -112,6 +112,14 @@ opts into HS256 explicitly, alongside the `Jwt:SecretForKey` that choice require
 - **Endpoint hygiene is on the issuer.** JWKS and discovery are anonymous by definition; the discovery
   doc returns `404` on non-issuer hosts and the JWKS provider returns an empty set when unconfigured,
   so only the real issuer advertises a key.
+
+## Revision (2026-10-01)
+Anchor-only refresh; no decision or rationale changed. The `AddForwardedJwtBearer` registration
+lives in the partial file
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs`,
+so its citations are re-anchored there: the signature at `:51-56`, the `RequireHttpsMetadata`
+resolution at `:63-65`, the config key at `:24`, and the `InsecureJwtMetadataWarningStartupFilter`
+registration at `:67-71`.
 
 ## Related
 ADR-007 (gRPC calls forward the validated JWT downstream via `JwtForwardingClientInterceptor`),

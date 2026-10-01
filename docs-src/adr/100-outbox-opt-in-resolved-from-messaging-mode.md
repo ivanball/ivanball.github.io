@@ -65,8 +65,10 @@ something, keep the schema, and refuse the one combination that cannot work.
 4. **A broker with the outbox explicitly disabled fails at startup.**
    `EnsureOutboxAvailableForProvider` throws when the provider is anything other than `InProcess` and
    `EnableOutbox` is explicitly `false`
-   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:179`, guard at `:181`,
-   throw at `:183-184`; called from `DependencyInjection.cs:205`). The message names the
+   (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.Messaging.cs:196`, guard at `:198`,
+   throw at `:200-201`; called from `DependencyInjection.cs:205` and from `AddBrokerMessaging` at
+   `DependencyInjection.Messaging.cs:59`, so a broker host that skips `AddInfrastructure` still fails
+   at startup). The message names the
    mechanism (`BrokerEventBus` writes the rows, `OutboxProcessor` publishes them), the consequence
    (every cross-service event dropped silently) and the fix. Leaving the setting unset under a broker
    resolves to enabled, so only a deliberate `false` reaches the throw.
@@ -81,8 +83,8 @@ something, keep the schema, and refuse the one combination that cannot work.
 
 6. **The EF model does not change.** `OutboxMessage` is configured in `OnModelCreating` for every
    relational provider
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:418`,
-   configuration at `:658-664`),
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417`,
+   `ConfigureOutbox` called at `:424`, configuration at `:664-717`),
    independent of the setting. Flipping the flag in either direction is a configuration change and a
    restart, with no migration in any consumer.
 
@@ -127,6 +129,13 @@ something, keep the schema, and refuse the one combination that cannot work.
 - **Nothing gates the setting against deployment topology.** A host that adds a broker later and
   leaves an explicit `EnableOutbox=false` in place fails at startup, which is the good case; a host
   that sets it `true` with no broker simply pays for the outbox, and nothing objects.
+
+## Revision (2026-10-01)
+No decision or rationale changed. Re-anchored the startup-guard citations in Decision 4
+(`DependencyInjection.Messaging.cs:196`, guard `:198`, throw `:200-201`) and the model-configuration
+citations in Decision 6 (`ApplicationDbContext.cs:417`, `ConfigureOutbox` call `:424`, body
+`:664-717`), which moved again. Decision 4 now also names the guard's second call site,
+`AddBrokerMessaging` (`DependencyInjection.Messaging.cs:59`), which was already in the code.
 
 ## Related
 [ADR-003](003-outbox-dual-dispatch.md) (the outbox itself: the dual-dispatch contract, the processor,

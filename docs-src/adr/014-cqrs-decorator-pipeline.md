@@ -26,6 +26,8 @@ Revised 2026-09-25 (ADC's decorator-order fitness test composes through `AddMmca
 and runs `VerifyDecoratorPipeline`, as Store's already did; see the Revision (2026-09-25) at the end.
 Citations refreshed: the Common `DependencyInjection` registration helpers now span
 `DependencyInjection.cs`, `DependencyInjection.ModuleScanning.cs` and `DependencyInjection.Crud.cs`).
+Revised 2026-10-01 (the record states where each kind of validation lives: UI form models, the
+Validating decorator with its coverage fitness gate, and domain factories; see Revision below).
 
 ## Context
 Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
@@ -67,11 +69,22 @@ Use single-responsibility handlers behind a Scrutor-composed decorator pipeline.
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:132`). The seven production service hosts
   compose the same sequence through `AddMmcaApplicationPipeline(pipeline => ...)` instead, which runs it
   in order and seals it (see the Revision (2026-08-26) below): ADC Identity / Conference / Engagement /
-  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:314`, `...Conference.Service/Program.cs:407`,
-  `...Engagement.Service/Program.cs:279`, `...Notification.Service/Program.cs:223`) and Store Identity /
-  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:237`,
-  `...Catalog.Service/Program.cs:257`, `...Sales.Service/Program.cs:237`). Only that decorators-last
+  Notification (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:311`, `...Conference.Service/Program.cs:407`,
+  `...Engagement.Service/Program.cs:279`, `...Notification.Service/Program.cs:221`) and Store Identity /
+  Catalog / Sales (`MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:234`,
+  `...Catalog.Service/Program.cs:254`, `...Sales.Service/Program.cs:234`). Only that decorators-last
   ordering is load-bearing; the relative position of `AddInfrastructure`/`AddAPI` is not.
+- **Each kind of validation has one home.** UI form models declare DataAnnotations rules once and
+  bridge them onto `MudForm` through `ModelValidation.For(model, validator)`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Validation/ModelValidation.cs:26,43`) over a pluggable
+  `IModelValidator` (`.../Validation/IModelValidator.cs:13`), so a FluentValidation adapter can supply
+  the rules instead; that is UX feedback, not enforcement. Server-side FluentValidation is the
+  Validating decorator step of this pipeline (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:32`),
+  and `CommandValidatorCoverageTestsBase`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CommandValidatorCoverageTestsBase.cs:22`)
+  fails the architecture test run when a data-carrying command has no validator, either its own or through the
+  `CommandRequestValidator` bridge (`:9-15`, facts at `:40-48`). Domain invariants stay in the entity
+  factories and value objects, returning `Result` (ADR-013, ADR-068).
 
 ## Rationale
 - **Thin, testable handlers.** A handler has no transaction, logging, or caching plumbing, so it is
@@ -421,3 +434,35 @@ shape Store already had
 The order base asserts one command and one query; the coverage fact is what catches a handler anywhere
 in the module that escaped the decorators. The expected sequences are still the base's own, and the
 chain is unchanged.
+
+## Revision (2026-10-01)
+The Decision gains one bullet stating where each kind of validation lives, so the Validating
+decorator's role is read against its neighbours rather than in isolation. The chain is unchanged.
+
+- **UI form models.** A page declares DataAnnotations rules once on its form model and bridges them
+  onto `MudForm` through `ModelValidation.For`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Validation/ModelValidation.cs:26,43`), whose rule
+  engine is the pluggable `IModelValidator` (`.../Validation/IModelValidator.cs:13`). Adoption: 19
+  page code-behind call sites in the MMCA.ADC Conference UI module (for example
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Sessions/SessionCreate.razor.cs`),
+  plus 2 Engagement UI feedback pages that use the single-field `ModelValidation.ForProperty`
+  instead, which runs DataAnnotations only and does not go through `IModelValidator`
+  (`.../Validation/ModelValidation.cs:56-58,69-72`), 4 page code-behind call sites across the MMCA.Store Catalog, Identity and Sales UI modules on `origin/main` (for example
+  `MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Products/ProductCreate.razor.cs`),
+  and none in MMCA.Helpdesk.
+- **Server side.** FluentValidation runs as the Validating decorator step recorded above, and
+  `CommandValidatorCoverageTestsBase`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/CommandValidatorCoverageTestsBase.cs:22`)
+  is the fitness gate that keeps the step from running empty: every data-carrying command handled in a
+  module Application assembly needs its own `IValidator<TCommand>` or the `CommandRequestValidator`
+  bridge (`:9-15`), with an explicit allow-list and a non-vacuity floor (`:31`, `:38`, facts at
+  `:40-48`). ADC, Store and Helpdesk each subclass it
+  (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/CommandValidatorCoverageTests.cs:18`,
+  `MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/CommandValidatorCoverageTests.cs:17`,
+  `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs:163`).
+- **Domain.** Invariants stay in the entity factories and value objects that return `Result`
+  (ADR-013, ADR-068), so neither the UI rules nor the decorator is the last line of defence.
+
+Citations refreshed in the Decision: the `AddMmcaApplicationPipeline` call sites are now ADC Identity
+`:311` and Notification `:221`, and Store Identity `:234`, Catalog `:254` and Sales `:234`. Stale
+anchors inside the earlier Revision sections are left as historical records.

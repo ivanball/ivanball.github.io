@@ -42,7 +42,9 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
   rules, the MassTransit-v8 pin, and ADR-009's resilience gate.
 - **Non-breaking by construction.** A `virtual` get-only default (`=> 1`) means no existing event
   changes and no outbox row migrates: System.Text.Json tolerates the missing field on old payloads and
-  the type supplies the default; new rows simply gain `"schemaVersion":1`.
+  the type supplies the default; new rows simply gain `"SchemaVersion":1` (the outbox serializer
+  options set no naming policy, so outbox payloads keep PascalCase:
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20`, `:140`).
 - **New-type-for-breaking-change** is the only safe option when transport binds by type (MassTransit)
   and consumers are independently deployed: an in-place reshape has no compatibility window.
 
@@ -120,10 +122,13 @@ exposes the two rules as `IntegrationEvents_ShouldShipFrom_SharedAssemblies` (`:
 entity one level down hides the leak without removing it; it stops at framework and BCL types, which
 are not the repo's to police, and it unwraps arrays, nullables and generic collection arguments, so
 `IReadOnlyList<OrderLine>` is judged on `OrderLine`
-(`.../ArchitectureRules.IntegrationEventPurity.cs:89`). Recursion is bounded by a visited set, so a
-payload record that refers back to itself terminates. Both rules are vacuous for a module-less map:
-MMCA.Common is the framework rather than a module, and its own shipped event is governed by the
-public API baseline instead.
+(`UnwrapTypeArguments` at `.../ArchitectureRules.IntegrationEventPurity.cs:133-148`, called from the
+walk at `:101`). Recursion is bounded by a visited set (`:94`), so a
+payload record that refers back to itself terminates. Only the residency rule is vacuous for a
+module-less map (`:22-25`): MMCA.Common is the framework rather than a module, so its own shipped
+event answers to the public API baseline rather than to a module's Shared assembly. The payload rule
+has no such guard and walks `OutputCacheEvictionRequested` in Common's own build
+(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Contracts/IntegrationEventPayloadPurityTests.cs:11-15`, `:72-75`).
 
 **Why the type system alone was not enough.** `BaseIntegrationEvent` still derives from
 `BaseDomainEvent` (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:11`),
@@ -140,3 +145,15 @@ a property onto a contract type, it does not rename the event carrying it. A ren
 new-type-plus-upcaster migration this record already governs
 ([ADR-090](090-event-upcaster-registration.md)), which is a far larger act than the one this
 amendment asks for.
+
+## Revision (2026-10-01)
+
+No decision or rationale changed; two statements and one citation were corrected against source.
+The amendment claimed both purity rules are vacuous for a module-less map; only the residency rule
+returns early when `map.ModuleNames.Count == 0`
+(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.IntegrationEventPurity.cs:22-25`),
+while `IntegrationEventPayloadsAreDomainFree` (`:56-78`) walks the framework's own event. The
+unwrapping citation moved from `:89` (the recursive walk) to `UnwrapTypeArguments` (`:133-148`). The
+Rationale's outbox example now shows `"SchemaVersion":1`, because the outbox serializer options set
+only `ReferenceHandler.IgnoreCycles` and no naming policy
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:17-20`, `:140`).

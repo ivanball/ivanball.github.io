@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -276,12 +278,12 @@
           <code>WarmupReadinessHealthCheck</code> is registered tagged <code>ready</code> and reports <code>Unhealthy</code> until the gate opens.
           <code>MapDefaultEndpoints()</code> maps <code>/health/ready</code> through <code>MapCachedHealthChecks</code>, under a predicate that
           admits every check tagged neither <code>live</code> nor <code>optional</code>
-          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:429-431</code>), so while warm-up is running the replica&#39;s
+          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs:154-156</code>), so while warm-up is running the replica&#39;s
           readiness endpoint reports not-ready and the platform keeps traffic off it. The endpoint is served from
           a cached health report rather than a probe per request: the helper renders exactly what
           <code>MapHealthChecks</code> renders (the status name as <code>text/plain</code>, <code>503</code> only when unhealthy) but answers from
           <code>CachedHealthReportProvider</code>, keyed by path so two endpoints never share a report, and runs the
-          dependency probes at most once per cache window (<code>Extensions.cs:445</code>,
+          dependency probes at most once per cache window (<code>Extensions.Health.cs:170</code>,
           <code>Source/Hosting/MMCA.Common.Aspire/Health/CachedHealthReportProvider.cs:52</code>). The window is
           <code>HealthChecks:CacheSeconds</code>, 5 seconds by default and <code>0</code> to restore probe-per-request behaviour
           (<code>Source/Hosting/MMCA.Common.Aspire/Health/HealthReportCacheOptions.cs:38</code>), and refreshes are
@@ -290,7 +292,7 @@
           one window of lag in both directions: readiness can still report not-ready just after the gate opens,
           and a dependency that has just failed stays invisible to the probe for the same window. (<code>/alive</code> maps
           only the <code>live</code>-tagged self check and is
-          deliberately left uncached, <code>Extensions.cs:417-420</code>, so liveness is unaffected and the container is not
+          deliberately left uncached, <code>Extensions.Health.cs:138-141</code>, so liveness is unaffected and the container is not
           restarted.) The second exclusion, <code>optional</code> (<code>HealthCheckTags.cs:32</code>), covers a dependency the app
           degrades gracefully without: a distributed cache sitting behind an in-memory fallback, a broker behind
           a retrying outbox. Those checks are still reported on <code>/health</code>, so the degradation stays visible, but
@@ -333,7 +335,7 @@
           now-warm connection that fetch completes in single-digit milliseconds.</li>
           <li><strong>A shipped base class for warming the host&#39;s own request path.</strong> <code>SelfHttpWarmupTaskBase</code>
           (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/SelfHttpWarmupTaskBase.cs:28</code>, public API at
-          <code>Source/Hosting/MMCA.Common.Aspire/PublicAPI.Shipped.txt:91-93</code>) is the second warm-up family: where the
+          <code>Source/Hosting/MMCA.Common.Aspire/PublicAPI.Shipped.txt:129-131</code>) is the second warm-up family: where the
           OIDC task warms one outbound connection, this replays a short list of hot read paths against the host&#39;s
           own Kestrel endpoint, so the cost paid down is the full inbound path (ingress connection, Kestrel,
           output cache, routing, authentication, handler, EF Core, SQL) rather than a single dependency
@@ -351,13 +353,13 @@
           the rest of the subsystem: caught, logged at warning level, never fatal (<code>:141-146</code>, <code>:205-207</code>). Both
           production apps subclass and register it: ADC in Conference
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:22</code>, registered
-          at <code>Program.cs:257</code>), Engagement (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code>,
-          <code>Program.cs:158</code>) and Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23</code>,
-          <code>Program.cs:169</code>); Store in Catalog
+          at <code>Program.cs:308</code>), Engagement (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:23</code>,
+          <code>Program.cs:156</code>) and Identity (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:23</code>,
+          <code>Program.cs:168</code>); Store in Catalog
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/SelfHttpOutputCacheWarmupTask.cs:23</code>,
-          <code>Program.cs:163</code>), Identity (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25</code>,
+          <code>Program.cs:183</code>), Identity (<code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/SelfHttpOutputCacheWarmupTask.cs:25</code>,
           <code>Program.cs:144</code>) and Sales (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/SelfHttpOutputCacheWarmupTask.cs:26</code>,
-          <code>Program.cs:158</code>).</li>
+          <code>Program.cs:157</code>).</li>
           <li><strong>Extensible per host.</strong> <code>AddWarmupReadiness()</code> registers the gate, the runner, the readiness health
           check, and the built-in OIDC task; a host adds its own pre-fetches (output cache, reference data) with
           <code>AddWarmupTask&lt;T&gt;()</code>, which is also how a <code>SelfHttpWarmupTaskBase</code> subclass enters the run.</li>
@@ -398,7 +400,7 @@
           ceiling (<code>WarmupHostedService.cs:42</code>, applied at <code>:69</code>), and a task that trips it surfaces as a
           <code>TimeoutException</code>, is logged, and lets the gate open (<code>:77-82</code>). The number deliberately sits above the
           90-second shared Polly total-request timeout that already bounds the built-in OIDC task&#39;s HTTP call
-          (<code>Extensions.cs:61</code>, <code>HttpResilienceDefaults.cs:19</code>), so a host-registered task doing non-HTTP work,
+          (<code>Extensions.cs:53</code>, <code>HttpResilienceDefaults.cs:19</code>), so a host-registered task doing non-HTTP work,
           which previously had no bound at all, now inherits the same backstop. Two costs follow. A replica whose
           warm-up hangs stays out of rotation for the full two minutes before it is admitted, so the ceiling
           bounds the damage rather than making it cheap. And <code>WaitAsync</code> abandons rather than cancels, so the
@@ -425,6 +427,13 @@
           (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:14-20</code>), not a figure
           measured or gated anywhere in the repo.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Citations were refreshed: the <code>/health/ready</code> predicate, the
+          <code>MapCachedHealthChecks</code> helper and the uncached <code>/alive</code> mapping now live in
+          <code>Source/Hosting/MMCA.Common.Aspire/Extensions.Health.cs</code> (<code>:154-156</code>, <code>:170</code>, <code>:138-141</code>); the shared
+          Polly total-request timeout is assigned at <code>Extensions.cs:53</code>; the <code>SelfHttpWarmupTaskBase</code> public API
+          starts at <code>PublicAPI.Shipped.txt:129-131</code>; and the per-host <code>AddWarmupTask</code> registrations moved to
+          ADC Conference <code>Program.cs:308</code>, Engagement <code>:156</code>, Identity <code>:168</code> and Store Catalog <code>:183</code>, Sales <code>:157</code>.</p>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same
           cold-start), ADR-009 (the Polly resilience pipeline that absorbs the lazy retry when the gate opens
@@ -446,6 +455,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

@@ -120,7 +120,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">22</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">127</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">129</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">138</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -422,7 +422,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>127 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>129 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -531,15 +531,15 @@
           <a class="adr" href="docs/adr/102-pbkdf2-only-password-hashing.html"><span class="adr-num">102</span><span><span class="adr-title">PBKDF2-Only Password Hashing</span><span class="adr-sum">Accepted (2026-08-31). Supersedes ADR-032. Revised 2026-09-11: verification now carries a canonical-material length guard (it rejects any stored hash…</span></span></a>
           <a class="adr" href="docs/adr/103-bunit-component-test-tier.html"><span class="adr-num">103</span><span><span class="adr-title">bUnit Component-Test Tier as a Shipped Package</span><span class="adr-sum">Accepted (2026-08-31). Revised 2026-09-03: one trade-off overstated how far the AngleSharp advisory pin travels. See Revision (2026-09-03) at the end.…</span></span></a>
           <a class="adr" href="docs/adr/104-smart-enums-as-opt-in-capability.html"><span class="adr-num">104</span><span><span class="adr-title">Plain Enums by Default, Enumeration&lt;T&gt; as the Opt-In Smart-Enum Base</span><span class="adr-sum">Accepted (2026-08-31). Revised 2026-09-09: ADR-115 copies this record&#39;s posture verbatim for strongly typed identifiers: shipped, tested, wired into…</span></span></a>
-          <a class="adr" href="docs/adr/105-data-residency-build-gate.html"><span class="adr-num">105</span><span><span class="adr-title">The Published Data-Residency Claim as a Build Gate</span><span class="adr-sum">Accepted (2026-09-01).</span></span></a>
-          <a class="adr" href="docs/adr/106-extension-members-as-public-di-surface.html"><span class="adr-num">106</span><span><span class="adr-title">C# Extension Members as the Public DI Registration Surface</span><span class="adr-sum">Accepted (2026-09-01; counts re-measured 2026-09-19).</span></span></a>
+          <a class="adr" href="docs/adr/105-data-residency-build-gate.html"><span class="adr-num">105</span><span><span class="adr-title">The Published Data-Residency Claim as a Build Gate</span><span class="adr-sum">Accepted (2026-09-01). Revised 2026-10-01 (region matching is a whole-token comparison rather than plain containment; see Revision below).</span></span></a>
+          <a class="adr" href="docs/adr/106-extension-members-as-public-di-surface.html"><span class="adr-num">106</span><span><span class="adr-title">C# Extension Members as the Public DI Registration Surface</span><span class="adr-sum">Accepted (2026-09-01; counts re-measured 2026-10-01).</span></span></a>
           <a class="adr" href="docs/adr/107-transaction-execution-contract.html"><span class="adr-num">107</span><span><span class="adr-title">Transaction Execution and Commit-Ambiguity Contract</span><span class="adr-sum">Accepted (2026-09-03; adoption counts and consumer state re-measured 2026-09-19). Revised 2026-09-25 (MMCA.ADC&#39;s ITransactional count corrected to six,…</span></span></a>
           <a class="adr" href="docs/adr/108-distributed-lock-primitive.html"><span class="adr-num">108</span><span><span class="adr-title">Cross-Replica Mutual Exclusion via IDistributedLock</span><span class="adr-sum">Accepted (2026-09-03). Revised 2026-09-19 (the second consumer moved: ADC&#39;s AI scoring pass now runs as the internal command…</span></span></a>
           <a class="adr" href="docs/adr/109-feature-by-folder-convention.html"><span class="adr-num">109</span><span><span class="adr-title">Feature-by-Folder Layout as an Enforced Convention</span><span class="adr-sum">Accepted (2026-09-03; folder inventory and IDE0130 exception list refreshed 2026-09-19).</span></span></a>
           <a class="adr" href="docs/adr/110-rubric-v2-category-realignment.html"><span class="adr-num">110</span><span><span class="adr-title">Rubric Version 2, Category Realignment at 34</span><span class="adr-sum">Accepted (2026-09-04; section 16 scope corrected 2026-09-04: MMCA.ADC scores the category, recorded in ADR-111; content refreshed 2026-09-19:…</span></span></a>
           <a class="adr" href="docs/adr/111-ai-session-scoring-governance.html"><span class="adr-num">111</span><span><span class="adr-title">AI Session Scoring Governance</span><span class="adr-sum">Accepted (2026-09-04). Extended by ADR-120 (2026-09-11): the rules here that belong to calling a model rather than to scoring a session (a bounded…</span></span></a>
           <a class="adr" href="docs/adr/112-catalog-owned-effective-pricing.html"><span class="adr-num">112</span><span><span class="adr-title">Catalog Owns Effective Pricing; Sales Snapshots It at Checkout</span><span class="adr-sum">Accepted (2026-09-07).</span></span></a>
-          <a class="adr" href="docs/adr/113-postgresql-as-a-first-class-engine.html"><span class="adr-num">113</span><span><span class="adr-title">PostgreSQL as a First-Class Engine</span><span class="adr-sum">Accepted (2026-09-09). Extends ADR-006 (one sealed context class per engine) and ADR-018 (engine as a routing decision) with a fourth engine.</span></span></a>
+          <a class="adr" href="docs/adr/113-postgresql-as-a-first-class-engine.html"><span class="adr-num">113</span><span><span class="adr-title">PostgreSQL as a First-Class Engine</span><span class="adr-sum">Accepted (2026-09-09). Extends ADR-006 (one sealed context class per engine) and ADR-018 (engine as a routing decision) with a fourth engine. Revised…</span></span></a>
           <a class="adr" href="docs/adr/114-internal-commands-durable-job-queue.html"><span class="adr-num">114</span><span><span class="adr-title">Internal Commands, a Job Queue Built on the Outbox&#39;s Machinery</span><span class="adr-sum">Accepted (2026-09-09). Rides the outbox machinery of ADR-003 without extending it. Revised 2026-09-19 (three corrections to match the code: a schedule…</span></span></a>
           <a class="adr" href="docs/adr/115-strongly-typed-identifiers-opt-in.html"><span class="adr-num">115</span><span><span class="adr-title">Strongly Typed Identifiers as an Opt-In Capability, Aliases Still the Default</span><span class="adr-sum">Accepted (2026-09-09). Revised 2026-09-19 (the alias count and the migration-surface census this record quotes were re-measured, the CheckIn parameter…</span></span></a>
           <a class="adr" href="docs/adr/116-identity-completions-opt-in.html"><span class="adr-num">116</span><span><span class="adr-title">Identity Completions Ship as Opt-In Base Classes, Not as Framework Features</span><span class="adr-sum">Accepted (2026-09-09; revised 2026-09-19: item 10 now scopes the &quot;no @page directive&quot; claim to what this decision ships, because MMCA.Common.UI itself…</span></span></a>
@@ -554,6 +554,8 @@
           <a class="adr" href="docs/adr/125-parameterized-sql-only.html"><span class="adr-num">125</span><span><span class="adr-title">Parameterized SQL Only, Enforced by a Fitness Gate</span><span class="adr-sum">Accepted (2026-09-19).</span></span></a>
           <a class="adr" href="docs/adr/126-event-sourcing-not-adopted.html"><span class="adr-num">126</span><span><span class="adr-title">Event Sourcing Is Not Adopted</span><span class="adr-sum">Accepted (2026-09-22) as a documented rejection. Nothing ships with this record: no event store, no stream table, no projection host, no new package.…</span></span></a>
           <a class="adr" href="docs/adr/127-actor-model-not-adopted.html"><span class="adr-num">127</span><span><span class="adr-title">The Actor Model Is Not Adopted</span><span class="adr-sum">Accepted (2026-09-22) as a documented rejection. Nothing ships with this record: no grain interface, no silo, no placement configuration, no new…</span></span></a>
+          <a class="adr" href="docs/adr/128-time-as-an-input.html"><span class="adr-num">128</span><span><span class="adr-title">Time as an Input (No Ambient Clock Reads in Domain and Application)</span><span class="adr-sum">Accepted (2026-10-01).</span></span></a>
+          <a class="adr" href="docs/adr/129-tactical-aggregate-contract.html"><span class="adr-num">129</span><span><span class="adr-title">The Tactical Aggregate Contract</span><span class="adr-sum">Accepted (2026-10-01).</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -579,9 +581,9 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/index.html">
-            <span class="kicker kicker--accent">192 documents</span>
+            <span class="kicker kicker--accent">194 documents</span>
             <h3>Open the reference library</h3>
-            <p>Every collection indexed in one place: 127 Architecture Decision Records, the 39-document onboarding guide, 7 governance artifacts, and 19 guides and specifications.</p>
+            <p>Every collection indexed in one place: 129 Architecture Decision Records, the 39-document onboarding guide, 7 governance artifacts, and 19 guides and specifications.</p>
             <div class="card-foot"><span class="go">Browse the collections →</span></div>
           </a>
           <!-- END library-cards -->

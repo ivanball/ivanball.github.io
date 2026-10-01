@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -253,7 +255,7 @@
           home to hang a policy, a rate or a display rule on. The classic answer is the smart enumeration: a
           sealed class whose members are <code>public static readonly</code> fields, so each member is a real object.</p>
           <p>The framework ships that base. <code>Enumeration&lt;TEnumeration&gt;</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:71-72</code>) is complete rather
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Enumeration.cs:76-77</code>) is complete rather
           than sketched: reflection-based member discovery, <code>Result</code>-returning lookups, type-guarded equality,
           a System.Text.Json converter factory, <code>DataContract</code> attribution for the XML formatter, and a pair
           of EF Core value converters in Infrastructure. Thirty-three test methods across three files pin its
@@ -263,15 +265,15 @@
           (<code>ArchitectureRules.Immutability.cs:64</code>), its assembly sits in the Shared layer (<code>:67</code>), and it
           declares no public property with a public mutable setter (<code>:70</code>, <code>:76-79</code>). Deriving would therefore
           pin every concrete enumeration to the Shared layer and to <code>sealed</code>, which is not where a consumer
-          declares a per-module set. The remark on the type states the reason as a sealed-record requirement
-          (<code>Enumeration.cs:26-29</code>); the rule as implemented names no <code>record</code>, and nothing in it forbids the
-          <code>public static readonly</code> field idiom the type exists for.</p>
+          declares a per-module set. The remark on the type states the same three assertions and notes that
+          the rule names no <code>record</code> and inspects no fields (<code>Enumeration.cs:26-34</code>), so nothing in it forbids
+          the <code>public static readonly</code> field idiom the type exists for.</p>
           <p><strong>Adoption is zero.</strong> A search of all four repos plus the samples finds no production type deriving
           from <code>Enumeration&lt;T&gt;</code>: the only derivations anywhere are five private fixtures inside the three test
           files. The bounded sets the framework and its consumers actually declare are plain C# enums. The
-          string-keyed sibling <code>RoleValue</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:25</code>),
+          string-keyed sibling <code>RoleValue</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:26</code>),
           which takes the same not-a-<code>ValueObject</code> trade-off for a closed string set, does have a production
-          derivation in ADC (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:17</code>),
+          derivation in ADC (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:18</code>),
           so the idiom is not foreign here; the integer-keyed base is simply not the shape any set has needed
           yet.</p>
           <p>That leaves two readings of the same code, and this record picks one. Either the choice between a
@@ -291,49 +293,49 @@
           </li>
           <li><p><strong>The smart-enum base is a real closed type per enumeration.</strong>
           <code>Enumeration&lt;TEnumeration&gt; where TEnumeration : Enumeration&lt;TEnumeration&gt;</code>
-          (<code>Enumeration.cs:71-72</code>) is self-referencing, so <code>All</code>, <code>FromValue</code> and <code>FromName</code> are per-type
+          (<code>Enumeration.cs:76-77</code>) is self-referencing, so <code>All</code>, <code>FromValue</code> and <code>FromName</code> are per-type
           lookups with no type argument at the call site. A member carries a canonical <code>Name</code>
-          (<code>:95</code>) and a stable integer <code>Value</code> (<code>:99</code>), set through the protected constructor (<code>:87</code>).</p>
+          (<code>:100</code>) and a stable integer <code>Value</code> (<code>:104</code>), set through the protected constructor (<code>:92</code>).</p>
           </li>
           <li><p><strong>Members are discovered by reflection, once, then frozen.</strong> <code>DiscoverMembers</code> reads the
           <code>public static readonly</code> fields declared <strong>directly</strong> on the closed type
-          (<code>BindingFlags.Public | Static | DeclaredOnly</code>, <code>:165-174</code>, filter at <code>:167-169</code>), ordered by
-          <code>Value</code> (<code>:172</code>). Three <code>Lazy&lt;&gt;</code> caches back it: the member list (<code>:74</code>), a
-          <code>FrozenDictionary&lt;int, TEnumeration&gt;</code> by value (<code>:76-77</code>) and a case-insensitive
-          <code>FrozenDictionary&lt;string, TEnumeration&gt;</code> by name (<code>:79-82</code>). Two members sharing a value or a
+          (<code>BindingFlags.Public | Static | DeclaredOnly</code>, <code>:170-179</code>, filter at <code>:172-174</code>), ordered by
+          <code>Value</code> (<code>:177</code>). Three <code>Lazy&lt;&gt;</code> caches back it: the member list (<code>:79</code>), a
+          <code>FrozenDictionary&lt;int, TEnumeration&gt;</code> by value (<code>:81-82</code>) and a case-insensitive
+          <code>FrozenDictionary&lt;string, TEnumeration&gt;</code> by name (<code>:84-87</code>). Two members sharing a value or a
           name therefore fail when the lookup is first built rather than silently shadowing each other
-          (documented at <code>:31-34</code>).</p>
+          (documented at <code>:36-39</code>).</p>
           </li>
           <li><p><strong>Lookups return <code>Result</code>, not exceptions, matching ADR-013.</strong> <code>FromValue</code> fails with code
-          <code>Enumeration.UnknownValue</code> (<code>:115-125</code>, code at <code>:121</code>) and <code>FromName</code> with
-          <code>Enumeration.UnknownName</code> (<code>:136-146</code>, code at <code>:142</code>); <code>FromName</code> treats a null name as a lookup
-          miss rather than throwing (<code>:138</code>).</p>
+          <code>Enumeration.UnknownValue</code> (<code>:120-130</code>, code at <code>:126</code>) and <code>FromName</code> with
+          <code>Enumeration.UnknownName</code> (<code>:141-151</code>, code at <code>:147</code>); <code>FromName</code> treats a null name as a lookup
+          miss rather than throwing (<code>:143</code>).</p>
           </li>
           <li><p><strong>Equality is type-guarded and deliberately not <code>IEquatable&lt;T&gt;</code>.</strong> <code>Equals</code> compares the concrete
-          type and the value (<code>:152-155</code>), <code>GetHashCode</code> combines both (<code>:158</code>), so two enumerations that
+          type and the value (<code>:157-160</code>), <code>GetHashCode</code> combines both (<code>:163</code>), so two enumerations that
           happen to share an integer are never equal. The base declines <code>IEquatable&lt;T&gt;</code> because an unsealed
           implementation breaks the equality contract for subclasses (S4035), leaving a sealed derived type
-          free to add its own (<code>:37-41</code>). <code>ToString</code> returns the name (<code>:149</code>).</p>
+          free to add its own (<code>:41-47</code>). <code>ToString</code> returns the name (<code>:154</code>).</p>
           </li>
           <li><p><strong>JSON is the member name, through a converter factory.</strong> <code>EnumerationJsonConverterFactory</code>
-          (<code>:195</code>) converts only the self-referencing closed type, by walking the base chain and comparing
-          the generic argument with the type itself (<code>:198-199</code>, <code>:213-222</code>). Its nested converter writes
-          <code>value.Name</code> (<code>:241-242</code>) and reads a string back through <code>FromName</code>, throwing <code>JsonException</code>
-          for a non-string token and for an unknown name (<code>:227-238</code>). <code>HandleNull</code> stays at its default,
-          so a JSON null short-circuits before the converter runs (<code>:189-193</code>).</p>
+          (<code>:200</code>) converts only the self-referencing closed type, by walking the base chain and comparing
+          the generic argument with the type itself (<code>:203-204</code>, <code>:218-227</code>). Its nested converter writes
+          <code>value.Name</code> (<code>:246-247</code>) and reads a string back through <code>FromName</code>, throwing <code>JsonException</code>
+          for a non-string token and for an unknown name (<code>:232-244</code>). <code>HandleNull</code> stays at its default,
+          so a JSON null short-circuits before the converter runs (<code>:194-198</code>).</p>
           </li>
           <li><p><strong>The factory is registered once for the whole API surface.</strong> System.Text.Json resolves
           <code>[JsonConverter]</code> off the type being converted without walking base types, so the attribute on
-          the base (<code>:66</code>) covers only a member typed as the base. <code>AddAPI</code> adds the factory to
+          the base (<code>:71</code>) covers only a member typed as the base. <code>AddAPI</code> adds the factory to
           <code>JsonSerializerOptions.Converters</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:58</code>, rationale at
-          <code>:55-57</code>), beside the <code>CurrencyJsonConverter</code> precedent (<code>:53</code>), so a concrete enumeration
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:59</code>, rationale at
+          <code>:56-58</code>), beside the <code>CurrencyJsonConverter</code> precedent (<code>:54</code>), so a concrete enumeration
           serializes by name across every host that calls <code>AddAPI</code> with no per-type attribute.</p>
           </li>
           <li><p><strong>XML rides the DataContract attributes already on the type.</strong> The base is <code>[DataContract]</code>
-          (<code>Enumeration.cs:65</code>) with <code>[DataMember(Order = 1)] Name</code> (<code>:94</code>) and
-          <code>[DataMember(Order = 2)] Value</code> (<code>:98</code>), and <code>AddAPI</code> registers
-          <code>AddXmlDataContractSerializerFormatters()</code> (<code>DependencyInjection.cs:60</code>).</p>
+          (<code>Enumeration.cs:70</code>) with <code>[DataMember(Order = 1)] Name</code> (<code>:99</code>) and
+          <code>[DataMember(Order = 2)] Value</code> (<code>:103</code>), and <code>AddAPI</code> registers
+          <code>AddXmlDataContractSerializerFormatters()</code> (<code>DependencyInjection.cs:67</code>).</p>
           </li>
           <li><p><strong>Persistence is a plain <code>int</code> column, through a shipped value-converter pair.</strong>
           <code>EnumerationValueConverter&lt;TEnumeration&gt;</code> is a <code>ValueConverter&lt;TEnumeration, int&gt;</code> writing
@@ -369,9 +371,9 @@
           </li>
           <li><p><strong>The surface is frozen public API.</strong> Every member of the base and the factory is in
           <code>MMCA.Common.Shared</code>&#39;s shipped baseline
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:381-386</code>, <code>:504-508</code>,
-          <code>:633-635</code>), and both converters are in Infrastructure&#39;s
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:109-110</code>, <code>:113-114</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Shared/PublicAPI.Shipped.txt:542-547</code>, <code>:727-731</code>,
+          <code>:943-945</code>), and both converters are in Infrastructure&#39;s
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/PublicAPI.Shipped.txt:355-356</code>, <code>:359-360</code>).
           Under
           ADR-015&#39;s RS0016/RS0017 gate, removing or reshaping any of it is a reviewable text diff and a
           breaking change to the package surface, which is precisely why leaving an unadopted capability
@@ -401,9 +403,9 @@
           (<code>EnumerationValueConverter.cs:9-11</code>).</li>
           <li><strong>A converter factory beats per-type attributes.</strong> Registering the factory once in <code>AddAPI</code> means
           a consumer&#39;s concrete enumeration is correct by default across every endpoint, instead of being
-          correct only where someone remembered the attribute (<code>DependencyInjection.cs:55-58</code>).</li>
+          correct only where someone remembered the attribute (<code>DependencyInjection.cs:56-59</code>).</li>
           <li><strong><code>Result</code> lookups match the rest of the framework.</strong> <code>FromValue</code>/<code>FromName</code> returning
-          <code>Result&lt;TEnumeration&gt;</code> (<code>Enumeration.cs:115</code>, <code>:136</code>) keeps parsing a value rather than an
+          <code>Result&lt;TEnumeration&gt;</code> (<code>Enumeration.cs:120</code>, <code>:141</code>) keeps parsing a value rather than an
           exception, which is ADR-013&#39;s posture and what every <code>Create</code> factory on a value object already
           does (ADR-068).</li>
           <li><strong>Recording an unadopted capability is cheaper than discovering it twice.</strong> ADR-037 made the same
@@ -423,31 +425,42 @@
           fails a build when a set that would benefit from behavior stays a <code>switch</code>, and nothing fails when
           a trivial set is declared as a smart enumeration.</li>
           <li><strong>Public API surface with no consumer.</strong> Eighteen shipped declarations across two packages
-          (<code>Shared/PublicAPI.Shipped.txt:381-386</code>, <code>:504-508</code>, <code>:633-635</code>;
-          <code>Infrastructure/PublicAPI.Shipped.txt:109-110</code>, <code>:113-114</code>) are frozen under ADR-015 and can only
+          (<code>Shared/PublicAPI.Shipped.txt:542-547</code>, <code>:727-731</code>, <code>:943-945</code>;
+          <code>Infrastructure/PublicAPI.Shipped.txt:355-356</code>, <code>:359-360</code>) are frozen under ADR-015 and can only
           be removed as a breaking change.</li>
           <li><strong>The JSON attribute does not inherit.</strong> A concrete enumeration serialized outside <code>AddAPI</code>&#39;s
           options (a hand-built <code>JsonSerializerOptions</code>, a <code>System.Text.Json</code> call in a test or a tool)
           falls back to the default object shape unless it repeats <code>[JsonConverter]</code> or registers the
           factory. That is a documented, tested limitation
-          (<code>Enumeration.cs:185-188</code>, <code>EnumerationSerializationTests.cs:68-75</code>), not a defect, but it is a
+          (<code>Enumeration.cs:190-193</code>, <code>EnumerationSerializationTests.cs:68-75</code>), not a defect, but it is a
           trap for the first adopter.</li>
           <li><strong>The EF read leg trusts the column.</strong> A row carrying a value no member declares materializes a
           null reference rather than failing loudly (<code>EnumerationValueConverter.cs:23-30</code>, <code>:42</code>). The write
           leg cannot produce such a row, so this is reachable only through a manual script, a data fix, or a
           member deleted from the enumeration after rows were written.</li>
           <li><strong>Member discovery is reflection over declared fields.</strong> Members declared on an intermediate base
-          are invisible by design (<code>DeclaredOnly</code>, <code>Enumeration.cs:167</code>), and a duplicate value or name is
+          are invisible by design (<code>DeclaredOnly</code>, <code>Enumeration.cs:172</code>), and a duplicate value or name is
           caught when the lookup is first built rather than at compile time, so a declaration bug surfaces
           at first use instead of in the editor.</li>
           <li><strong>The type sits in <code>ValueObjects</code> without being one.</strong> It lives in the
           <code>MMCA.Common.Shared.ValueObjects</code> namespace (<code>Enumeration.cs:11</code>) but is out of scope for
           <code>ValueObjectsAreImmutableSealedInShared</code>, which only inspects types deriving from <code>ValueObject</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Domain/ArchitectureRules.Immutability.cs:56-74</code>,
-          base-type filter at <code>:61</code>). The reason is documented on the type (<code>Enumeration.cs:26-29</code>), and
+          base-type filter at <code>:61</code>). The reason is documented on the type (<code>Enumeration.cs:26-34</code>), and
           <code>RoleValue</code> takes the same trade-off, but a reader scanning the namespace sees a type the value
           object rules do not cover.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. The remark on <code>Enumeration&lt;TEnumeration&gt;</code> now states the same
+          three assertions the Context lists and says the fitness rule names no <code>record</code> and inspects no
+          fields (<code>Enumeration.cs:26-34</code>), so the Context no longer contrasts a sealed-record remark with the
+          rule. The remark rewrite moved every later line in <code>Enumeration.cs</code> by five, and the anchors in
+          Context, Decision, Rationale and Trade-offs are refreshed accordingly (declaration <code>:76-77</code>, member
+          discovery <code>:170-179</code>, lookups <code>:120-130</code> and <code>:141-151</code>, converter factory <code>:200</code>). Also refreshed:
+          <code>DependencyInjection.cs:54-67</code> (the <code>StronglyTypedIdJsonConverterFactory</code> registration now sits
+          between the enumeration factory and the XML formatters), <code>RoleValue.cs:26</code>, <code>UserRole.cs:18</code>, and
+          the <code>PublicAPI.Shipped.txt</code> ranges (Shared <code>:542-547</code>, <code>:727-731</code>, <code>:943-945</code>; Infrastructure
+          <code>:355-356</code>, <code>:359-360</code>), which still hold eighteen declarations.</p>
           <h2 id="related">Related</h2>
           <p><a href="037-field-level-encryption-at-rest.html">ADR-037</a> (the precedent for recording a shipped, tested and
           unadopted framework capability as a decision rather than leaving it to read as unfinished adoption),
@@ -476,6 +489,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

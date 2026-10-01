@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -239,17 +241,17 @@
           <h2 id="context">Context</h2>
           <p>The rubric&#39;s section 5 asks that &quot;code is organized by feature/capability, so a change touches one
           cohesive slice&quot;, with features &quot;grouped by use case ..., not by horizontal technical folders&quot;
-          (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:195</code>, <code>:197</code>, <code>:200</code>). ADR-015
+          (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:211</code>, <code>:214</code>). ADR-015
           already gates the <em>contents</em> of a slice: <code>SliceCohesionTestsBase</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/SliceCohesionTestsBase.cs</code>)
           fails a build when a handler is stranded from its command or query contract.</p>
           <p>Nothing gated the <em>shape of the tree</em> until 2026-09-02, when a folder-width fitness function and a
-          repo-wide reorganization shipped together (<code>MMCA.Common/CHANGELOG.md:88-93</code>, <code>:123-127</code>). That
-          reorganization, and a second pass the next day (<code>:29-37</code>), were both marked <strong>Breaking</strong>, because in
+          repo-wide reorganization shipped together (<code>MMCA.Common/CHANGELOG.md:1649-1652</code>, <code>:1682-1686</code>). That
+          reorganization, and a second pass the next day (<code>:1590-1596</code>), were both marked <strong>Breaking</strong>, because in
           this workspace namespaces follow folders: moving a file renames a namespace, and a namespace is
-          public API on a package family released in lockstep (ADR-016). Two of the last three MMCA.Common
-          releases were therefore layout releases, and they are what forced <code>UPGRADING.md</code> into existence
-          (<code>MMCA.Common/CHANGELOG.md:78-79</code>).</p>
+          public API on a package family released in lockstep (ADR-016). Two consecutive MMCA.Common
+          releases (v1.183.0 and v1.184.0) were therefore layout releases, and they are what forced
+          <code>UPGRADING.md</code> into existence (<code>MMCA.Common/CHANGELOG.md:1637-1638</code>).</p>
           <p>The convention itself is written down only in the workspace <code>CLAUDE.md</code> and in the rubric text
           above. The bill it produces (public namespace renames, a scripted consumer sweep, an UPGRADING
           protocol, and doc citations that rot underneath it) is recorded nowhere as a decision. This record
@@ -280,7 +282,7 @@
           exception: beside <code>Persistence/</code>, its first level also carries aggregate names for external
           adapters, <code>Events/Sessionize/</code> and <code>Sessions/Scoring/</code>. MMCA.ADC&#39;s own <code>CLAUDE.md</code> states that
           shape as the rule for the repo, &quot;external adapters sitting under their aggregate&quot;
-          (<code>MMCA.ADC/CLAUDE.md:99</code>).</p>
+          (<code>MMCA.ADC/AGENTS.md:99</code>, which <code>MMCA.ADC/CLAUDE.md</code> imports).</p>
           </li>
           <li><p><strong>The aggregate carries the same plural name in every project of the module.</strong> <code>Speakers</code> appears
           in the Conference module&#39;s Domain, Application, Shared, <code>UI/Pages</code>, <code>UI/Services</code>,
@@ -315,7 +317,8 @@
           one-concept folders: <code>MMCA.Common.Application/UseCases/Decorators</code>, its test twin, and
           <code>MMCA.Common.Domain/Interfaces</code> (<code>FolderWidthTests.cs:28-33</code>). ADC, Store and Helpdesk run
           against the empty default (<code>FolderWidthTestsBase.cs:29</code>). The base is public API and is baselined
-          under the ADR-015 gate (<code>Testing.Architecture/PublicAPI.Unshipped.txt:94-100</code>).</p>
+          under the ADR-015 gate (<code>Testing.Architecture/PublicAPI.Shipped.txt:120-122</code>, <code>:336</code>, <code>:436</code>,
+          <code>:531-532</code>).</p>
           </li>
           <li><p><strong>Namespaces follow folders, so a folder move is a compile error until every namespace moves with
           it.</strong> The shared analyzer baseline sets <code>dotnet_style_namespace_match_folder = true:warning</code>
@@ -337,28 +340,29 @@
           <code>Domain</code> matches at any index from 1 up (<code>:41-43</code>) and the other four match only at index 3 or
           later (<code>:17</code>, <code>:48-50</code>). A sub-folder carrying one of those names therefore shifts the derived
           module. That name is load-bearing: it is the SQL Server schema
-          (<code>Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:66</code>),
-          the Cosmos container (<code>:87</code>), the logical data-source name for unit-of-work routing
-          (<code>Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:181</code>) and the module tag on
-          every CQRS log line (<code>Application/UseCases/Decorators/LoggingCommandDecorator.cs:77</code>,
-          <code>LoggingQueryDecorator.cs:75</code>). The derivation is locked by
+          (<code>Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:86</code>),
+          the Cosmos container (<code>:107</code>), the logical data-source name for unit-of-work routing
+          (<code>Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:181</code>), all three through the
+          internal <code>Infrastructure/Persistence/NamespaceConventions.cs:20-21</code> wrapper, and the module tag on
+          every CQRS log line (<code>Application/UseCases/Decorators/LoggingCommandDecorator.cs:95</code>,
+          <code>LoggingQueryDecorator.cs:89</code>). The derivation is locked by
           <code>Tests/Core/MMCA.Common.Shared.Tests/Conventions/ModuleNameConventionsTests.cs</code>. This half of the
           convention is enforced by review only: no fitness rule checks folder names.</p>
           </li>
           <li><p><strong>The move is scripted, not hand-edited.</strong> <code>Tools/Scripts/move-namespace.ps1</code> rewrites namespaces
           and usings repo-wide and across the consumers, and <code>Tools/Scripts/auto-add-usings.py</code> plus
           <code>Tools/Scripts/fix-build-usings.py</code> settle the usings the compiler then reports. The framework&#39;s
-          own changelog names the script as the consumer sweep (<code>MMCA.Common/CHANGELOG.md:34-36</code>,
-          <code>:92-93</code>).</p>
+          own changelog names the script as the consumer sweep (<code>MMCA.Common/CHANGELOG.md:1593-1595</code>,
+          <code>:1651-1652</code>).</p>
           </li>
           <li><p><strong>A layout change ships as a breaking minor release with an old-to-new map.</strong> v1.183.0 dissolved
           <code>MMCA.Common.Infrastructure.Services</code> and <code>.Settings</code> into the features they implement and split
-          the UI capability, service and component grab-bags (<code>CHANGELOG.md:88-114</code>), and added the
-          folder-width rule (<code>:123-127</code>). v1.184.0 split the eight remaining flat public namespaces
-          (<code>:29-37</code>, <code>:41-74</code>) and added <code>UPGRADING.md</code> (<code>:78-79</code>). There is no dual-namespace grace
+          the UI capability, service and component grab-bags (<code>CHANGELOG.md:1656-1679</code>), and added the
+          folder-width rule (<code>:1682-1686</code>). v1.184.0 split the eight remaining flat public namespaces
+          (<code>:1590-1596</code>, <code>:1600-1633</code>) and added <code>UPGRADING.md</code> (<code>:1637-1638</code>). There is no dual-namespace grace
           release and no <code>[Obsolete]</code> shim, because C# cannot forward a type across namespaces inside one
-          assembly (<code>MMCA.Common/UPGRADING.md:9-11</code>); the first-party consumers are swept in the same
-          release (<code>UPGRADING.md:34-36</code>).</p>
+          assembly (<code>MMCA.Common/UPGRADING.md:10-12</code>); the first-party consumers are swept in the same
+          release (<code>UPGRADING.md:32-33</code>).</p>
           </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
@@ -386,7 +390,7 @@
           <li><strong>Layout changes are public API breaks on a lockstep package family.</strong> Because the namespace is
           the folder, a reorganization is a breaking release for every consumer (ADR-016), with no
           deprecation window: the old namespaces stop existing in the release that introduces the new ones
-          (<code>UPGRADING.md:9-11</code>). Two consecutive framework releases, v1.183.0 and v1.184.0, were exactly
+          (<code>UPGRADING.md:10-12</code>). Two consecutive framework releases, v1.183.0 and v1.184.0, were exactly
           that.</li>
           <li><strong>Documentation citations rot underneath the moves, and they did.</strong> The 2026-09-03 ADR audit
           classified 56 of its 84 needs-edit records as citation-only drift, almost all of it a folder segment
@@ -394,7 +398,7 @@
           <code>Services/Api/</code>, <code>Startup/Pipeline/</code>) that the cited path no longer carried. The MMCA.Common
           scorecard&#39;s section 5 row was one of those, and it has since been repaired: it now cites the
           post-move <code>Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.Slices.cs</code>
-          (<code>governance/common-ArchitectureScorecard.md:85</code>). Every one of those is a path-only break with
+          (<code>governance/common-ArchitectureScorecard.md:69</code>). Every one of those is a path-only break with
           the behavior unchanged, which is precisely what makes it easy to miss, and repairing them is a
           pass of its own, separate from the move that caused them.</li>
           <li><strong>The gate counts; it does not read names.</strong> Nothing verifies that a folder is named after an
@@ -418,6 +422,17 @@
           <code>MMCA.Store/.editorconfig:845-846</code>) mean that in those trees a folder move renames nothing, so the
           property a reader relies on holds almost everywhere rather than everywhere.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Citations were re-anchored: the rubric section 5 text
+          (<code>ArchitectureEvaluationCriteria.md:211</code>, <code>:214</code>), the v1.183.0 and v1.184.0 changelog entries
+          (<code>MMCA.Common/CHANGELOG.md:1588-1691</code>), <code>UPGRADING.md:10-12</code> and <code>:32-33</code>, the module-name consumers
+          (<code>EntityTypeConfiguration.cs:86</code>, <code>:107</code>; <code>LoggingCommandDecorator.cs:95</code>;
+          <code>LoggingQueryDecorator.cs:89</code>), the MMCA.Common scorecard section 5 row
+          (<code>common-ArchitectureScorecard.md:69</code>), and MMCA.ADC&#39;s rule text, which now lives in
+          <code>MMCA.ADC/AGENTS.md:99</code>. The folder-width public API entries have been promoted to
+          <code>Testing.Architecture/PublicAPI.Shipped.txt:120-122</code>, <code>:336</code>, <code>:436</code>, <code>:531-532</code>. The Context
+          sentence about &quot;the last three releases&quot; was a point-in-time statement and now names the two
+          consecutive layout releases, v1.183.0 and v1.184.0.</p>
           <h2 id="related">Related</h2>
           <p><a href="015-architecture-fitness-functions.html">ADR-015</a> (the fitness-function tier this rule joins, and the
           public-API baseline that records <code>FolderWidthTestsBase</code>),
@@ -444,6 +459,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

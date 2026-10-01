@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -323,13 +325,13 @@
           <code>code</code> read out of <code>result.Properties</code> at <code>:84</code>), then
           hands the code to the shared <code>/auth/oauth-complete</code> page by navigating to it (<code>:97-98</code>). That page
           owns the rest, exactly as it does on web heads:
-          <code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:84</code> calls
+          <code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:86</code> calls
           <code>IAuthUIService.ExchangeOAuthCodeAsync</code>, which returns <code>Result&lt;AuthenticationResponse&gt;</code> so the
-          page branches on <code>result.IsFailure</code> (<code>:85</code>) rather than on an exception. The service&#39;s
+          page branches on <code>result.IsFailure</code> (<code>:87</code>) rather than on an exception. The service&#39;s
           <code>ExchangeOAuthCodeAsync</code>
           (<code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:76</code>) POSTs the existing
           anonymous <code>auth/oauth/exchange</code> through the shared <code>AuthenticateAsync</code> helper (<code>:84</code>, the helper
-          itself at <code>:272</code>), which stores the pair via <code>ITokenStorageService</code> (<code>:300</code>), so the
+          itself at <code>:266</code>), which stores the pair via <code>ITokenStorageService</code> (<code>:294</code>), so the
           single-use-code contract lives in exactly one place. This rides behind the <code>IExternalAuthBroker</code>
           contract
           (ADR-042); the default broker is unavailable, which keeps the shared Login page on its anchor
@@ -361,7 +363,7 @@
           recreated and would force store resubmissions. Three places in the ADC repo put the host string
           inside the app binary: <code>PublicSite:BaseUrl</code> in the MAUI head&#39;s
           <code>appsettings.json</code> (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:23</code>, compiled in as an
-          <code>EmbeddedResource</code> per <code>MMCA.ADC.UI.csproj:130</code>), a raw literal in the iOS associated-domains
+          <code>EmbeddedResource</code> per <code>MMCA.ADC.UI.csproj:134</code>), a raw literal in the iOS associated-domains
           array (<code>Platforms/iOS/Entitlements.plist:11</code>), and the <code>PublicWebHost</code> compile-time constant that
           feeds the Android intent-filter attribute (<code>Platforms/Android/MainActivity.cs:39</code>). Only the first
           is read through configuration; the two native manifests take literals, because neither an
@@ -604,6 +606,18 @@
           </ol>
           <p>Every current-state citation of these anchors is updated above; the dated &quot;moved&quot; entries keep the
           values they recorded.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>Anchor pass from an ADR audit. No decision and no rationale changed. In the Decision&#39;s client-flow
+          bullet the completion page now calls the service at
+          <code>Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:86</code> and branches on
+          <code>result.IsFailure</code> at <code>:87</code>, and in
+          <code>Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs</code> the private
+          <code>AuthenticateAsync</code> helper is declared at <code>:266</code> with the <code>ITokenStorageService.SetTokensAsync</code> call
+          at <code>:294</code>. In the hostname trade-off the MAUI head&#39;s <code>EmbeddedResource</code> line is
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MMCA.ADC.UI.csproj:134</code>. The shared shape rule cited only by
+          the earlier revisions has moved too: <code>DeepLinkDispatcher.IsAppRelativeRoute</code> is at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/Navigation/DeepLinkDispatcher.cs:49</code>,
+          <code>Publish</code> at <code>:104</code>, and the guard applied inside it at <code>:108</code>.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -626,6 +640,7 @@
             <li><a href="#revision-2026-09-07">Revision (2026-09-07)</a></li>
             <li><a href="#revision-2026-09-11">Revision (2026-09-11)</a></li>
             <li><a href="#revision-2026-09-25">Revision (2026-09-25)</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             </ul>
           </nav>
         </aside>

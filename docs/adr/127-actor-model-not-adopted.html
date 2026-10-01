@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html" aria-current="page">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -249,8 +251,8 @@
           layer, which sounds like that workload. It is not, and the difference is this record.</p>
           <p><strong>The live state is small, and it is database state.</strong> A live poll is an aggregate root with a status
           and a set of options; a vote is a write through the module&#39;s unit of work
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:19</code>,
-          the repository call at <code>:30</code>) and the tallies are a read through the same one
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:20</code>,
+          the repository call at <code>:33</code>) and the tallies are a read through the same one
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/GetPollResults/GetPollResultsHandler.cs:23</code>).
           Bookmark counts are a query behind a cross-module service contract rather than a resident counter
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/IBookmarkCountService.cs:11</code>),
@@ -258,7 +260,7 @@
           rather than by a writer thread: every auditable entity carries a database-managed concurrency token
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11</code>) configured for every
           context in <code>OnModelCreating</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:415</code>).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:417</code>).
           That is the single-writer guarantee an actor would provide, and it already holds across replicas,
           which an in-process actor would not (<a href="035-optimistic-concurrency.html">ADR-035</a>).</p>
           <p><strong>Fan-out is a push channel, not an actor mailbox.</strong> <code>ILiveChannelPublisher</code> is the port
@@ -275,7 +277,7 @@
           resolving the publisher per item at <code>:51</code>), the one actor-shaped guarantee the live layer needs.</p>
           <p><strong>Read pressure is absorbed by caching, and the load is small.</strong> Tier 2 is an HTTP output cache in the
           pipeline
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:145</code>)
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/Pipeline/MiddlewarePipelineBuilder.cs:133</code>)
           backed by Redis when a connection string is present
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Caching/RedisCachingExtensions.cs:91</code>, registered at
           <code>:99</code>), with the Redis resource composed by each app&#39;s AppHost
@@ -321,8 +323,9 @@
           and its membership store in both production deployments, grain lifetimes and placement to reason
           about, a second serialization contract beside the integration-event schema
           (<a href="010-integration-event-schema-versioning.html">ADR-010</a>), and a second answer to where state lives.</li>
-          <li><strong>A hand-rolled in-memory per-entity lock or actor-like queue.</strong> It is per replica, and both apps run
-          more than one, so an in-process writer guarantee is not a guarantee, and it would silently weaken a
+          <li><strong>A hand-rolled in-memory per-entity lock or actor-like queue.</strong> It is per replica, and both apps scale
+          to more than one (every container app is <code>minReplicas: 1</code>, <code>maxReplicas: 2</code>,
+          <code>MMCA.ADC/infra/main.bicep:1843</code>, <code>MMCA.Store/infra/main.bicep:1591</code>), so an in-process writer guarantee is not a guarantee, and it would silently weaken a
           correctness property the concurrency token holds across the fleet.</li>
           <li><strong>Adopting actors only for live polls.</strong> The live path is the least durable state in the system and
           the most visible during the event, so its first production exercise would fall on the day itself.</li>
@@ -337,6 +340,14 @@
           (<a href="008-service-extraction-topology.html">ADR-008</a>) and its callers reach it through an interface its own
           project declares (<a href="059-module-contract-and-composition.html">ADR-059</a>), so a silo inside one module&#39;s
           service is contained. An actor runtime beneath every module is the opposite decision, rejected here.</p>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>No decision or rationale changed. Citations refreshed: the vote handler&#39;s class declaration
+          (<code>CastVoteHandler.cs:20</code>) and its poll repository call (<code>:33</code>), <code>OnModelCreating</code>
+          (<code>ApplicationDbContext.cs:417</code>), and the output-cache pipeline step (<code>MiddlewarePipelineBuilder.cs:133</code>).
+          One wording correction: both apps scale to more than one replica rather than running more than one at
+          baseline, since every container app declares <code>minReplicas: 1</code>, <code>maxReplicas: 2</code>
+          (<code>MMCA.ADC/infra/main.bicep:1843</code>, <code>MMCA.Store/infra/main.bicep:1591</code>); a per-replica writer guarantee
+          still fails at two replicas, so the argument holds.</p>
           <h2 id="related">Related</h2>
           <p><a href="007-grpc-extraction.html">ADR-007</a>, <a href="008-service-extraction-topology.html">ADR-008</a> and
           <a href="059-module-contract-and-composition.html">ADR-059</a> (the boundary a future silo would live behind),
@@ -364,6 +375,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#alternatives-rejected">Alternatives rejected</a></li>
             <li><a href="#when-to-revisit">When to revisit</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

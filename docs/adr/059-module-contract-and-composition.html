@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 127 ADRs</summary>
+        <summary>All 129 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -227,6 +227,8 @@
         <li><a href="125-parameterized-sql-only.html">125 · Parameterized SQL Only, Enforced by a Fitness Gate</a></li>
         <li><a href="126-event-sourcing-not-adopted.html">126 · Event Sourcing Is Not Adopted</a></li>
         <li><a href="127-actor-model-not-adopted.html">127 · The Actor Model Is Not Adopted</a></li>
+        <li><a href="128-time-as-an-input.html">128 · Time as an Input (No Ambient Clock Reads in Domain and Application)</a></li>
+        <li><a href="129-tactical-aggregate-contract.html">129 · The Tactical Aggregate Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -241,7 +243,7 @@
           extracted into services without rewriting business logic. ADR-008 states the extracted shape in one
           sentence, &quot;Each service is the monolith with one module enabled&quot;, and it treats <code>ModuleLoader</code> and
           the <code>Disabled*</code> stubs as <strong>pre-existing context</strong> before deciding the extraction topology
-          (<code>Website/docs-src/adr/008-service-extraction-topology.md:35-37</code>). ADR-006 decides the database axis
+          (<code>Website/docs-src/adr/008-service-extraction-topology.md:23,44,52-53</code>). ADR-006 decides the database axis
           of the same split. Neither records the composition model itself: how a module declares itself, how a
           host finds it, in what order registrations run, what &quot;disabled&quot; does to the container, and what a
           dependent resolves when its peer is not in the process. That mechanism is what makes the ADR-008
@@ -264,38 +266,41 @@
           (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/TicketsModule.cs:13-19</code>).</li>
           <li><strong>Discovery is a reflection scan over the assemblies the host names.</strong> <code>moduleAssemblies</code> is a
           required parameter of <code>DiscoverAndRegister</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:58-64</code>), with the reason
-          written onto the parameter itself (<code>:48-53</code>): an ambient scan sees only assemblies already loaded,
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:59-65</code>), with the reason
+          written onto the parameter itself (<code>:49-54</code>): an ambient scan sees only assemblies already loaded,
           so a module assembly that is referenced but not yet touched by any code path would be silently
-          absent from discovery. <code>ModuleLoader</code> scans what it is given (<code>ModuleLoader.cs:71-84</code>), keeps every
+          absent from discovery. <code>ModuleLoader</code> scans what it is given (<code>ModuleLoader.cs:74-95</code>), keeps every
           concrete non-abstract, non-interface <code>IModule</code> type and instantiates each through
-          <code>Activator.CreateInstance</code> (<code>ModuleLoader.cs:86-89</code>), and does the same for <code>IModuleSeeder</code>,
-          keyed case-insensitively by <code>ModuleName</code> (<code>ModuleLoader.cs:91-94</code>,
-          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModuleSeeder.cs:8-19</code>). An assembly that
-          throws from <code>GetTypes()</code> is logged and skipped, not fatal (<code>ModuleLoader.cs:74-83,338-339</code>).</li>
+          <code>Activator.CreateInstance</code> (<code>ModuleLoader.cs:97-100</code>), and does the same for <code>IModuleSeeder</code>,
+          keyed case-insensitively by <code>ModuleName</code> (<code>ModuleLoader.cs:102-105</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModuleSeeder.cs:8-19</code>). A scan failure is
+          not fatal but logs at Error: a <code>ReflectionTypeLoadException</code> from <code>GetTypes()</code> keeps the types that
+          did load, so the assembly&#39;s loadable modules still register (<code>ModuleLoader.cs:81-88,352-353</code>), and
+          any other exception drops that assembly (<code>ModuleLoader.cs:89-93,349-350</code>); both paths are pinned by
+          <code>ModuleLoaderTests.cs:223-255</code>.</li>
           <li><strong>A host names one marker assembly per module it runs.</strong> <code>AddModuleHost</code> takes that list as its
           first parameter and hands it to the loader it builds
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/ModuleHostExtensions.cs:51-53,84-90</code>),
           which is how the service hosts pass it: Store
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114-116</code>,
-          <code>MMCA.Store.Identity.Service/Program.cs:109-111</code>, <code>MMCA.Store.Sales.Service/Program.cs:122-124</code>) and
-          ADC (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:244-246</code>,
-          <code>MMCA.ADC.Conference.Service/Program.cs:306-308</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:205-207</code>,
-          <code>MMCA.ADC.Notification.Service/Program.cs:183-185</code>) each name the single assembly of the one module
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:124-126</code>,
+          <code>MMCA.Store.Identity.Service/Program.cs:118-120</code>, <code>MMCA.Store.Sales.Service/Program.cs:131-133</code>) and
+          ADC (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:252-254</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:365-367</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:208-210</code>,
+          <code>MMCA.ADC.Notification.Service/Program.cs:189-191</code>) each name the single assembly of the one module
           that host enables, so an extracted service&#39;s scan surface equals its own module. Helpdesk calls
           <code>DiscoverAndRegister</code> directly with its one module assembly
-          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:104-112</code>), and the unit tests name their
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:116-124</code>), and the unit tests name their
           own assembly the same way
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:41-48</code>).</li>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:42-49</code>).</li>
           <li><strong>Registration order is a Kahn topological sort over the declared names.</strong> The loader sorts before
-          it registers anything (<code>ModuleLoader.cs:97</code>); the sort builds an in-degree map plus a reverse
+          it registers anything (<code>ModuleLoader.cs:108</code>); the sort builds an in-degree map plus a reverse
           adjacency list, seeds a queue with the zero-in-degree modules, and drains it
-          (<code>ModuleLoader.cs:271-321</code>), so a dependency&#39;s DI registrations are always in the container before
+          (<code>ModuleLoader.cs:282-332</code>), so a dependency&#39;s DI registrations are always in the container before
           a dependent&#39;s <code>Register</code> runs. A declared name that no discovered module supplies is skipped while
-          building the graph and never blocks the sort (<code>ModuleLoader.cs:286-287</code>).</li>
+          building the graph and never blocks the sort (<code>ModuleLoader.cs:297-298</code>).</li>
           <li><strong>A cycle is a startup failure that names the cycle.</strong> If fewer modules come out of the sort than
           went in, the remainder is circular and the loader throws <code>InvalidOperationException</code> listing them
-          (<code>ModuleLoader.cs:313-317</code>); <code>ModuleLoaderTests.cs:71-83</code> asserts both the message and the member
+          (<code>ModuleLoader.cs:323-329</code>); <code>ModuleLoaderTests.cs:71-83</code> asserts both the message and the member
           names.</li>
           <li><strong>Enablement is configuration, and absence means off.</strong> <code>ModulesSettings</code> binds the <code>Modules</code>
           section as a name-to-<code>ModuleSettings</code> dictionary
@@ -303,15 +308,16 @@
           <code>IsModuleEnabled</code> returns true only when the key exists <strong>and</strong> <code>Enabled</code> is true
           (<code>ModulesSettings.cs:18-19</code>). A module missing from configuration is therefore treated as disabled,
           even though <code>ModuleSettings.Enabled</code> itself defaults to <code>true</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ModuleSettings.cs:9</code>); <code>ModuleLoaderTests.cs:238-244</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ModuleSettings.cs:9</code>); <code>ModuleLoaderTests.cs:300-306</code>
           pins that behavior.</li>
           <li><strong>Disabled means stubs, not absence.</strong> For a disabled module the loader calls
           <code>RegisterDisabledStubs</code> and never calls <code>Register</code>, snapshots the descriptors that call appended so
-          they can be validated later, and records the name (<code>ModuleLoader.cs:101-113</code>). The stubs are
+          they can be validated later, and records the name (<code>ModuleLoader.cs:112-123</code>). The stubs are
           null-object implementations of the owning module&#39;s cross-module contracts, shipped in that module&#39;s
           <code>*.Shared</code> project: <code>DisabledProductVariantService</code> answers <code>false</code> for existence checks, <code>null</code> for
-          the SKU lookup and an empty dictionary for the batch price query
-          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/DisabledProductVariantService.cs:10-45</code>);
+          the SKU lookup, an empty collection for the batch existence query and an empty dictionary for the
+          batch price and catalog-info queries
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/DisabledProductVariantService.cs:10-50</code>);
           <code>DisabledCustomerService</code> returns <code>null</code>
           (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/Customers/DisabledCustomerService.cs:8-15</code>);
           <code>DisabledSessionBookmarkValidationService</code> returns <code>Result.Success()</code> plus an empty session-id
@@ -328,11 +334,11 @@
           <li><strong><code>Dependencies</code> declares the graph; <code>RequiresDependencies</code> decides whether a gap is fatal.</strong> The
           loader computes the module&#39;s disabled dependencies, then narrows them to &quot;unsatisfied&quot; by removing
           any name the consumer listed under <code>Modules:{Module}:RemoteDependencies</code>
-          (<code>ModuleLoader.cs:131-137</code>, <code>ModulesSettings.cs:30-32</code>,
+          (<code>ModuleLoader.cs:142-148</code>, <code>ModulesSettings.cs:30-32</code>,
           <code>ModuleSettings.cs:38</code>). With <code>RequiresDependencies = true</code> an unsatisfied dependency throws at
-          startup with remediation text naming the three options (<code>ModuleLoader.cs:139-147</code>); with the
+          startup with remediation text naming the three options (<code>ModuleLoader.cs:150-158</code>); with the
           default <code>false</code> the loader logs a warning and the module runs against the stub
-          (<code>ModuleLoader.cs:149-152,332-333</code>). Only the strict branch is under test:
+          (<code>ModuleLoader.cs:160-163,343-344</code>). Only the strict branch is under test:
           <code>ModuleLoaderTests.cs:87-97</code> asserts that a <code>RequiresDependencies = true</code> module with an
           unsatisfied disabled dependency throws, and <code>ModuleLoaderTests.cs:118-128</code> asserts that the same
           strictness passes once that dependency is declared under <code>RemoteDependencies</code>. The default <code>false</code>
@@ -340,39 +346,41 @@
           <li><strong>Per-module configuration arrives by naming convention.</strong> Immediately before <code>Register</code>, the
           loader adds <code>modules.{name}.json</code> and, when the host passes an environment name,
           <code>modules.{name}.{environment}.json</code>, both optional and reload-on-change
-          (<code>ModuleLoader.cs:171-178</code>), so a module can carry its own configuration file without a host edit.</li>
+          (<code>ModuleLoader.cs:182-189</code>), so a module can carry its own configuration file without a host edit.</li>
           <li><strong>Composition also shapes the HTTP surface, seeding and health.</strong> <code>AddAPI(modulesSettings)</code>
           installs <code>ModuleControllerFeatureProvider</code>
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:44,62-66</code>), which removes
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:45,69-73</code>), which removes
           from MVC discovery any controller whose assembly name or namespace contains a <code>.{ModuleName}.</code>
           token for a disabled module, so those endpoints are never mapped instead of mapping and then
           failing with a 500
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:33-53,60-82</code>).
-          Seeders run only for enabled modules and in registration order (<code>ModuleLoader.cs:118-121,255-261</code>),
+          Seeders run only for enabled modules and in registration order (<code>ModuleLoader.cs:129-132,266-272</code>),
           invoked from startup database initialization
-          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:35-38,111</code>).
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:45-48,122</code>).
           <code>AddModuleHealthChecks</code> publishes one <code>module-{Name}</code> check per module, Healthy when enabled and
-          Degraded when disabled (<code>DependencyInjection.cs:179-207</code>).</li>
+          Degraded when disabled (<code>DependencyInjection.cs:195-229</code>).</li>
           <li><strong>A remote-dependency validator exists but is not wired.</strong> <code>ValidateRemoteDependencies</code> re-resolves
           every service type a disabled dependency&#39;s stub registered, throwing when it no longer resolves and
-          warning when it still resolves to the stub type (<code>ModuleLoader.cs:201-246</code>). It is exercised only by
-          unit tests (<code>ModuleLoaderTests.cs:132-177</code>); <strong>no host calls it today</strong>, so a forgotten gRPC client
+          warning when it still resolves to the stub type (<code>ModuleLoader.cs:212-257</code>). It is exercised only by
+          unit tests (<code>ModuleLoaderTests.cs:132-178</code>); <strong>no host calls it today</strong>, so a forgotten gRPC client
           registration is still a silent stub at the first request rather than a startup failure.</li>
           </ul>
           <p>The module inventory is small and explicit. <strong>MMCA.Store has three:</strong> <code>CatalogModule</code> (leaf, stubs
-          <code>IProductVariantService</code>,
-          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/CatalogModule.cs:13-30</code>), <code>IdentityModule</code>
+          <code>IProductVariantService</code> and <code>IUserCatalogExportService</code>,
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/CatalogModule.cs:15-48</code>, the stubs at
+          <code>:31-32</code>), <code>IdentityModule</code>
           (leaf, stubs <code>ICustomerService</code>,
-          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:16-42</code>, the stub at
+          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:16-47</code>, the stub at
           <code>:27-28</code>) and <code>SalesModule</code>, which declares <code>[&quot;Catalog&quot;, &quot;Identity&quot;]</code> with
           <code>RequiresDependencies = true</code> and publishes one cross-module contract of its own,
           <code>IUserSalesExportService</code> stubbed by <code>DisabledUserSalesExportService</code>
-          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:19-63</code>, the stub registration at
-          <code>:41-42</code>,
-          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Exports/DisabledUserSalesExportService.cs:7-12</code>):
-          the data-subject export edge Identity consumes, which is why Store&#39;s <code>IdentityModule.Register</code> also
-          adds <code>AddUserDataExportSection&lt;SalesUserDataExportSection&gt;()</code>
-          (<code>MMCA.Store.Identity.API/IdentityModule.cs:40</code>). <strong>MMCA.ADC has four:</strong>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:23-88</code>, the stub registration at
+          <code>:45-46</code>,
+          <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Exports/DisabledUserSalesExportService.cs:7-12</code>).
+          Store has two data-subject export edges into Identity, Sales and Catalog, which is why Store&#39;s
+          <code>IdentityModule.Register</code> adds both <code>AddUserDataExportSection&lt;SalesUserDataExportSection&gt;()</code> and
+          <code>AddUserDataExportSection&lt;CatalogUserDataExportSection&gt;()</code>
+          (<code>MMCA.Store.Identity.API/IdentityModule.cs:40,45</code>). <strong>MMCA.ADC has four:</strong>
           <code>IdentityModule</code> (leaf, stubs <code>IAttendeeQueryService</code>,
           <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModule.cs:13-25</code>), <code>ConferenceModule</code>
           (no declared dependencies, two stubs,
@@ -390,40 +398,43 @@
           Catalog enables <code>Catalog</code> and disables both peers with no remote declarations
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/appsettings.json:20-24</code>); Store Sales enables
           <code>Sales</code> and declares <code>[&quot;Catalog&quot;, &quot;Identity&quot;]</code> as <code>RemoteDependencies</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34</code>), then replaces the two
-          stubs with typed gRPC clients after the loader returns
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:235-236</code>). ADC Engagement declares
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:27-34</code>), then registers typed
+          gRPC clients for the two contracts after the loader returns
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:244-245</code>); because the host names
+          only its own module assembly, the peer modules are never discovered there and their stubs are never
+          registered. ADC Engagement declares
           <code>[&quot;Conference&quot;]</code> remote (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:38-46</code>)
           and ADC Notification declares <code>[&quot;Identity&quot;]</code> remote
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:27-35</code>), while ADC
           Conference enables one module and declares nothing remote
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25</code>) even though it wires
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:21-26</code>) even though it wires
           Engagement&#39;s <code>IBookmarkCountService</code> as a gRPC client
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:350</code>), because
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:409</code>), because
           <code>ConferenceModule</code> never declares Engagement in <code>Dependencies</code>.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Reflection discovery keeps hosts out of the module registration business.</strong> A host names the
           assemblies and gets whatever <code>IModule</code> types they contain: no per-module registration call, no
           ordering to get right, and no hand-maintained handler list to keep in step with the module
-          (<code>ModuleLoader.cs:86-89</code>). Naming the assemblies is what makes the set discovery sees a property of
-          the composition root rather than of whatever the runtime happened to load (<code>ModuleLoader.cs:48-53</code>).</li>
+          (<code>ModuleLoader.cs:97-100</code>). Naming the assemblies is what makes the set discovery sees a property of
+          the composition root rather than of whatever the runtime happened to load (<code>ModuleLoader.cs:49-54</code>).</li>
           <li><strong>Topological order replaces registration luck.</strong> Cross-module registration depends on ordering,
           and declaring <code>Dependencies</code> makes that ordering explicit and machine-checked instead of implicit
-          in the order the host happens to call things (<code>ModuleLoader.cs:97,271-321</code>).</li>
+          in the order the host happens to call things (<code>ModuleLoader.cs:108,282-332</code>).</li>
           <li><strong>Null-object stubs are what make extraction a hosting change.</strong> Because a disabled module still
           puts its contract type in the container, the dependent module&#39;s Application and Domain code has no
           branch for &quot;peer not present&quot;, which is precisely why a module&#39;s non-hosting layers are identical
-          in-process and extracted (<code>ModuleLoader.cs:108</code>, <code>CatalogModule.cs:24-25</code>). The host then
-          overwrites the stub with a real cross-process adapter (<code>Sales.Service/Program.cs:235-236</code>).</li>
+          in-process and extracted (<code>ModuleLoader.cs:119</code>, <code>CatalogModule.cs:31-32</code>). An extracted host,
+          which never discovers its peers, registers a real cross-process adapter for the same contract
+          instead (<code>Sales.Service/Program.cs:244-245</code>).</li>
           <li><strong>Two strictness levels, chosen per module.</strong> A module that genuinely cannot function without a
-          peer opts into <code>RequiresDependencies = true</code> and fails fast (<code>SalesModule.cs:32</code>,
+          peer opts into <code>RequiresDependencies = true</code> and fails fast (<code>SalesModule.cs:36</code>,
           <code>EngagementModule.cs:23</code>, <code>NotificationModule.cs:24</code>); everything else tolerates a missing peer and
           degrades, which is the safer default for a module whose cross-module call is advisory.</li>
           <li><strong><code>RemoteDependencies</code> keeps strictness usable after extraction.</strong> Without it, every strict module
           would have to be relaxed to run in its own service, losing the check in the very topology that
           needs it most; instead the operator states the dependency is satisfied out of process
-          (<code>ModuleSettings.cs:11-38</code>, <code>ModuleLoader.cs:135-136</code>).</li>
+          (<code>ModuleSettings.cs:11-38</code>, <code>ModuleLoader.cs:146-147</code>).</li>
           <li><strong>Composition lives in configuration, so one build serves N deployments.</strong> The same assemblies run
           as a combined host or as a set of single-module services with no code change; the only difference
           is the <code>Modules</code> section each host reads (<code>ModulesSettings.cs:10</code>, plus the per-service
@@ -432,21 +443,22 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The composition root has to name every module assembly.</strong> Discovery scans exactly the list it is
-          handed (<code>ModuleLoader.cs:58-64</code>), so adding a module to a host is a third edit beside the project
+          handed (<code>ModuleLoader.cs:59-65</code>), so adding a module to a host is a third edit beside the project
           reference and the <code>Modules</code> configuration entry: the assembly list in that host&#39;s <code>Program.cs</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114-116</code>). An assembly left out
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:124-126</code>). An assembly left out
           of the list contributes nothing, and the module surfaces as &quot;disabled&quot; (absence equals disabled,
           <code>ModulesSettings.cs:18-19</code>), not as an error. The trade is deliberate: an ambient scan would make
           the same omission depend on whether some code path happened to load the assembly first
-          (<code>ModuleLoader.cs:48-53</code>).</li>
+          (<code>ModuleLoader.cs:49-54</code>).</li>
           <li><strong>Stubs degrade silently by design.</strong> A stub answers success-shaped defaults: an always-open live
           window (<code>DisabledEventLiveValidationService.cs:26,35-42</code>), a passing bookmark validation
           (<code>DisabledSessionBookmarkValidationService.cs:33-34</code>), zero counts
-          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/DisabledBookmarkCountService.cs:7-18</code>),
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/DisabledBookmarkCountService.cs:7-23</code>),
+          an empty attendee list
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/DisabledAttendeeQueryService.cs:7-12</code>),
           empty exports
           (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/DisabledUserEngagementExportService.cs:7-12</code>,
           <code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/UserNotifications/DisabledUserNotificationExportService.cs:7-12</code>,
-          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/DisabledAttendeeQueryService.cs:7-12</code>,
           <code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Shared/Exports/DisabledUserSalesExportService.cs:10-11</code>).
           The export stubs are the sharpest case: because the stub answers successfully, the consuming
           section reports itself <code>Complete</code> with nothing in it rather than unavailable
@@ -454,11 +466,14 @@
           so a data-subject export assembled while a module is disabled reads as a complete document.
           A wrongly disabled module therefore produces plausible wrong answers rather than an error, and the
           only startup signal is a Degraded <code>module-{Name}</code> health check plus a log line
-          (<code>DependencyInjection.cs:200-207</code>, <code>ModuleLoader.cs:323-324,332-333</code>).</li>
+          (<code>DependencyInjection.cs:219-226</code>, <code>ModuleLoader.cs:334-335,343-344</code>).</li>
           <li><strong>The dependency graph is a hand-written declaration, not a derived fact.</strong> ADC Conference consumes
           Engagement&#39;s <code>IBookmarkCountService</code> over gRPC without listing Engagement in <code>Dependencies</code>
-          (<code>ConferenceModule.cs:15-30</code> versus <code>Conference.Service/Program.cs:350</code>), so neither the
-          topological sort nor the <code>RequiresDependencies</code> check knows about that edge. Nothing derives
+          (<code>ConferenceModule.cs:15-30</code> versus <code>Conference.Service/Program.cs:409</code>), and Store Identity
+          consumes the Sales and Catalog export services over gRPC while <code>IdentityModule</code> declares no
+          <code>Dependencies</code> at all (<code>MMCA.Store.Identity.API/IdentityModule.cs:16-47</code> versus
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:263,274</code>), so neither the
+          topological sort nor the <code>RequiresDependencies</code> check knows about those edges. Nothing derives
           <code>Dependencies</code> from the interfaces a module actually resolves. What is pinned is the declaration
           against a written expectation: <code>ModuleConformanceTestsBase&lt;TModule&gt;</code> asserts <code>Name</code>, <code>Dependencies</code>,
           <code>RequiresDependencies</code> (read through the <code>IModule</code> interface, so a leaf module is checked against
@@ -470,13 +485,16 @@
           declaration is still unchecked.</li>
           <li><strong>The one guard against a forgotten cross-process rewire is unadopted.</strong> <code>ValidateRemoteDependencies</code>
           was written for exactly the &quot;typo&#39;d or forgotten <code>AddTypedGrpcClient</code>&quot; failure
-          (<code>ModuleLoader.cs:187-200</code>), and no host calls it, so that failure still shows up as a stub no-op at
-          request time.</li>
-          <li><strong>Names are strings, matched case-insensitively across three places.</strong> The module dictionary, the
-          configuration lookup and the seeder lookup all key on <code>Name</code>
-          (<code>ModuleLoader.cs:20,94,273-279</code>), so renaming a module without updating every dependent&#39;s
-          <code>Dependencies</code> list and every host&#39;s <code>Modules</code> section yields a module treated as disabled with, at
-          worst, a warning.</li>
+          (<code>ModuleLoader.cs:198-211</code>, the text at <code>:203</code>), and no host calls it, so that failure still shows
+          up as a stub no-op at request time.</li>
+          <li><strong>Names are strings, and they are not all matched the same way.</strong> The loader&#39;s own maps key on
+          <code>Name</code> case-insensitively: the stub snapshot, the seeder lookup and the sort graph
+          (<code>ModuleLoader.cs:21,105,284-290</code>). The configuration lookup is ordinal and case-sensitive:
+          <code>ModulesSettings</code> is a <code>Dictionary&lt;string, ModuleSettings&gt;</code> with no comparer and <code>IsModuleEnabled</code>
+          is a plain <code>TryGetValue</code> (<code>ModulesSettings.cs:7,18-19</code>), so a <code>Modules</code> key whose casing differs
+          from <code>Name</code> reads as absent and therefore disabled. Renaming a module without updating every
+          dependent&#39;s <code>Dependencies</code> list and every host&#39;s <code>Modules</code> section likewise yields a module treated
+          as disabled with, at worst, a warning.</li>
           <li><strong>Controller filtering does not read &quot;disabled&quot; the way the loader does.</strong> The provider builds its
           disabled set from the entries <strong>present</strong> in the <code>Modules</code> section whose <code>Enabled</code> is false
           (<code>ModuleControllerFeatureProvider.cs:36-39</code>), while the loader treats a module missing from that
@@ -486,7 +504,7 @@
           (<code>ModuleControllerFeatureProvider.cs:19-25</code>). Every host today enumerates its whole module set and
           pins each disabled peer to <code>&quot;Enabled&quot;: false</code>
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/appsettings.json:20-24</code>,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25</code>; the Helpdesk seed has
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:21-26</code>; the Helpdesk seed has
           only the one module to list, <code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:13-15</code>),
           so the divergence is latent rather than live. The accepted position is that a host enumerates its
           modules rather than leaning on the absence rule.</li>
@@ -494,10 +512,26 @@
           controllers are found by a <code>.{ModuleName}.</code> substring test on the assembly name or namespace
           (<code>ModuleControllerFeatureProvider.cs:60-82</code>), so a project that does not follow the
           <code>MMCA.{Repo}.{Module}.{Layer}</code> convention keeps its endpoints mapped while its services are absent.</li>
-          <li><strong>Every module is constructed by <code>Activator.CreateInstance</code></strong> (<code>ModuleLoader.cs:88</code>), so a module
+          <li><strong>Every module is constructed by <code>Activator.CreateInstance</code></strong> (<code>ModuleLoader.cs:99</code>), so a module
           type needs a public parameterless constructor and cannot take injected dependencies; anything a
           module needs at registration time has to arrive through the <code>Register</code> parameters.</li>
           </ul>
+          <h2 id="revision-2026-10-01">Revision (2026-10-01)</h2>
+          <p>The decision is unchanged; four statements are corrected against the code and the citations are
+          re-anchored. A <code>GetTypes()</code> failure is no longer a skip: a <code>ReflectionTypeLoadException</code> keeps the
+          types that did load and logs at Error, and only any other exception drops the assembly
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:81-93,349-353</code>,
+          <code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:223-255</code>). Module
+          names are not matched case-insensitively everywhere: the <code>Modules</code> configuration lookup is an
+          ordinal <code>TryGetValue</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ModulesSettings.cs:7,18-19</code>).
+          An extracted host never discovers its peers, so it registers gRPC clients rather than replacing peer
+          stubs (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:131-133,244-245</code>). Store&#39;s
+          inventory grew a Catalog export contract: <code>CatalogModule</code> stubs <code>IUserCatalogExportService</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/CatalogModule.cs:31-32</code>) and Identity adds
+          a Catalog export section (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:45</code>),
+          an undeclared edge now named beside the ADC one. <code>DisabledAttendeeQueryService</code> is listed as an
+          empty attendee list rather than an export, and the ADR-015 isolation base is cited at its new
+          <code>Bases/Layering/</code> path.</p>
           <h2 id="related">Related</h2>
           <p>ADR-008 (the extraction topology that consumes this model: &quot;a service is the monolith with one module
           enabled&quot; is a statement about <code>ModuleLoader</code> plus the <code>Disabled*</code> stubs, cited there as pre-existing
@@ -506,7 +540,7 @@
           level), ADR-014 (<code>AddApplicationDecorators()</code> must run after every module&#39;s handler scan, which is why
           module registration is a distinct, ordered startup step), ADR-015 (the module-isolation fitness
           functions that keep cross-module traffic on the <code>*.Shared</code> contracts this model registers,
-          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ModuleIsolationTestsBase.cs:8-16</code>).</p>
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Layering/ModuleIsolationTestsBase.cs:8-36</code>).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -522,6 +556,7 @@
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#revision-2026-10-01">Revision (2026-10-01)</a></li>
             <li><a href="#related">Related</a></li>
             </ul>
           </nav>

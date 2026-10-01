@@ -26,21 +26,24 @@ filters. This ADR records those.
 Standardize on **`Microsoft.FeatureManagement`**, configured from the `"FeatureManagement"` configuration
 section and registered once in `AddAPI`
 (`services.AddFeatureManagement()` + `services.AddSingleton<IDisabledFeaturesHandler,
-DisabledFeatureHandler>()`, `MMCA.Common.API/DependencyInjection.cs:91-93`), with the built-in
+DisabledFeatureHandler>()`, `MMCA.Common.API/DependencyInjection.cs:105-107`), with the built-in
 **Percentage / TimeWindow / Targeting** filters available for progressive rollout. The same flag *name*
 is enforced at two independent surfaces:
 
 - **HTTP edge:** `[FeatureGate("X")]` (`Microsoft.FeatureManagement.Mvc`) on a controller or action. When
   `X` is off, `DisabledFeatureHandler` returns an **RFC 9457 ProblemDetails `404`** ("Feature not
-  available"), matching the standard `ApiControllerBase.HandleFailure` error shape.
+  available", `MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:18-26`). The body is built by
+  hand, so it does not carry the `ApiControllerBase.HandleFailure` shape (title "Operation failed" plus
+  an `errors` extension, `MMCA.Common.API/Controllers/ApiControllerBase.cs:50-58`).
 - **CQRS pipeline:** a command/query implements `IFeatureGated` (exposing `FeatureName`). The
   `FeatureGateCommandDecorator` / `FeatureGateQueryDecorator` (the **outermost** decorator (ADR-014))
   checks `IFeatureManager.IsEnabledAsync(FeatureName)` and, when off, short-circuits with
   `Error.NotFoundError("Feature.Disabled", …)` (`ErrorType.NotFound`) **before** any logging, caching,
   validation, or transaction work.
-- **Disabled = `404` (NotFound), never `403`.** Both surfaces return not-found, so a disabled feature is
-  indistinguishable from a nonexistent one: it hides the feature's existence rather than advertising a
-  forbidden capability.
+- **Disabled = `404` (NotFound), never `403`.** Both surfaces return not-found rather than advertising a
+  forbidden capability. The bodies still say a feature is off: the edge title reads "Feature not
+  available", and the CQRS failure carries code `Feature.Disabled` with a message naming the flag
+  (`MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:57-59`).
 - **Flag names are module constants** (`CatalogFeatures` / `SalesFeatures` in Store,
   `ConferenceFeatures` / `EngagementFeatures` in ADC) that match keys in each service's
   `"FeatureManagement"` config, so a flag flips at config + restart, not at deploy. The framework itself
@@ -52,9 +55,11 @@ is enforced at two independent surfaces:
 - **Two surfaces because the enforcement points see different request shapes.** Gating both the edge
   *and* the handler with one flag name keeps controller and use case in agreement, so a disabled feature
   is unreachable from either entry instead of leaking through the one that was missed.
-- **The `404` convention reuses the existing edge.** Both surfaces emit the same Result→ProblemDetails
-  not-found shape (ADR-013), so a disabled feature looks like any other not-found and leaks nothing about
-  hidden functionality.
+- **The `404` convention reuses the not-found status.** The CQRS surface goes through the
+  Result to ProblemDetails edge (ADR-013), whose `errors` extension serializes each error's `Code` and
+  `Message` (`MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61-69`); the MVC edge writes its own
+  ProblemDetails. Both answer `404` rather than `403`, so neither reveals a guarded capability, but
+  neither body is identical to an ordinary not-found: each states that a feature is unavailable.
 
 ## Trade-offs
 - **The two enforcement points must agree.** A flag gated on the controller but not the handler (or vice
@@ -156,3 +161,19 @@ own two flags are annotated `Permanent`
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Notifications/NotificationFeatures.cs:11`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Privacy/PrivacyFeatures.cs:11`). The fix for a flag that
 goes red is to delete the flag and the branch it no longer chooses between, not to push the date out.
+
+## Revision (2026-10-01)
+**The disabled response is not-found, but not anonymous.** The Decision and Rationale said both surfaces
+emit the `HandleFailure` not-found shape, so a disabled feature is indistinguishable from a nonexistent
+one. The code does not do that. `DisabledFeatureHandler` writes its own ProblemDetails with title
+"Feature not available" and no `errors` extension
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:18-26`),
+unlike `HandleFailure`'s "Operation failed" body
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:50-58`). The CQRS
+surface does go through `HandleFailure`, and `BuildErrorsExtension`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:61-69`) serializes the
+`Feature.Disabled` code and the message "Feature '{FeatureName}' is not currently available."
+(`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:57-59`),
+so that response names the flag. The decision itself (`404`, never `403`, at both surfaces) is
+unchanged; the Decision and Rationale bullets now describe the bodies as they are. The `AddAPI`
+registration anchor in the Decision is refreshed to `DependencyInjection.cs:105-107`.
