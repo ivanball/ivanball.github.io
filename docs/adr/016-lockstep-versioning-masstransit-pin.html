@@ -332,8 +332,8 @@
           Common&#39;s own three MassTransit entries are on that same 8.5.11
           (<code>MMCA.Common/Directory.Packages.props:128-130</code>), so all three repos sit on one patch version.
           Alignment there is a convention the app-side comments carry, not something the gate enforces
-          (Store&#39;s comment still names an 8.5.10 pin while its entry is 8.5.11,
-          <code>MMCA.Store/Directory.Packages.props:89-90</code>, <code>:93</code>):
+          (Store&#39;s comment names the lockstep pin without a patch number,
+          <code>MMCA.Store/Directory.Packages.props:89-90</code>, so it holds across patch bumps):
           what the pin governs, and what the fitness function reads, is the major, so an app-side entry on
           a different v8 patch would still be inside the decision.
           They still do not subclass the test: its default list also names the two package ids they do not
@@ -454,8 +454,8 @@
           major 4, and every repo still sits on one MassTransit patch. The current-state text is refreshed to
           match source. The shared patch is now 8.5.11 in all three repos
           (<code>MMCA.Common/Directory.Packages.props:128-130</code>, <code>MMCA.ADC/Directory.Packages.props:65</code>,
-          <code>MMCA.Store/Directory.Packages.props:93</code>), and Store&#39;s emulator-tier comment still names 8.5.10
-          (<code>MMCA.Store/Directory.Packages.props:89-90</code>). <code>MMCA.Common.Infrastructure</code> references all three
+          <code>MMCA.Store/Directory.Packages.props:93</code>), and Store&#39;s emulator-tier comment, which named 8.5.10, now names the pin
+          without a patch number (<code>MMCA.Store/Directory.Packages.props:89-90</code>). <code>MMCA.Common.Infrastructure</code> references all three
           MassTransit packages, so <code>MassTransit.Azure.ServiceBus.Core</code> also flows transitively
           (<code>MMCA.Common.Infrastructure.csproj:50-52</code>). The Store and ADC <code>dependabot.yml</code> files now also
           manage the docker ecosystem, still excluding NuGet (<code>MMCA.ADC/.github/dependabot.yml:28</code>,

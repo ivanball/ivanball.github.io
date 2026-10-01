@@ -95,8 +95,8 @@ Two related governance questions had no recorded answer:
    Common's own three MassTransit entries are on that same 8.5.11
    (`MMCA.Common/Directory.Packages.props:128-130`), so all three repos sit on one patch version.
    Alignment there is a convention the app-side comments carry, not something the gate enforces
-   (Store's comment still names an 8.5.10 pin while its entry is 8.5.11,
-   `MMCA.Store/Directory.Packages.props:89-90`, `:93`):
+   (Store's comment names the lockstep pin without a patch number,
+   `MMCA.Store/Directory.Packages.props:89-90`, so it holds across patch bumps):
    what the pin governs, and what the fitness function reads, is the major, so an app-side entry on
    a different v8 patch would still be inside the decision.
    They still do not subclass the test: its default list also names the two package ids they do not
@@ -217,8 +217,8 @@ No decision, pin, gate or rationale changed: MassTransit stays below major 9 and
 major 4, and every repo still sits on one MassTransit patch. The current-state text is refreshed to
 match source. The shared patch is now 8.5.11 in all three repos
 (`MMCA.Common/Directory.Packages.props:128-130`, `MMCA.ADC/Directory.Packages.props:65`,
-`MMCA.Store/Directory.Packages.props:93`), and Store's emulator-tier comment still names 8.5.10
-(`MMCA.Store/Directory.Packages.props:89-90`). `MMCA.Common.Infrastructure` references all three
+`MMCA.Store/Directory.Packages.props:93`), and Store's emulator-tier comment, which named 8.5.10, now names the pin
+without a patch number (`MMCA.Store/Directory.Packages.props:89-90`). `MMCA.Common.Infrastructure` references all three
 MassTransit packages, so `MassTransit.Azure.ServiceBus.Core` also flows transitively
 (`MMCA.Common.Infrastructure.csproj:50-52`). The Store and ADC `dependabot.yml` files now also
 manage the docker ecosystem, still excluding NuGet (`MMCA.ADC/.github/dependabot.yml:28`,
