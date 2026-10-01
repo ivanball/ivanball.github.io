@@ -166,7 +166,8 @@ the framework pushes a consumer toward a wrapper.**
     `value` member. `StronglyTypedIdParameterTransformer` (`:74`) does the same for route and query
     parameters, which a schema transformer never sees: MVC's API explorer describes a
     `TypeConverter`-bound parameter as a plain string. Both are registered by `AddCommonOpenApi`
-    across every versioned document
+    on every document the host registers with its own `services.AddOpenApi()` (since v1.217.0 the
+    framework registers no document of its own; see ADR-046)
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:104-105`).
 
 11. **Mapperly needs nothing in the normal case and one attribute in the other.** A DTO implements
