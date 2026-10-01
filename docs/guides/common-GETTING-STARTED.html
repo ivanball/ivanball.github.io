@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Getting Started: Build a New App on MMCA.Common · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="As of: 2026-09-20 (MMCA.Templates 1.11.0, framework v1.206.0).">
+  <meta name="description" content="As of: 2026-10-01 (MMCA.Templates 1.12.0, framework v1.218.0).">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Getting Started: Build a New App on MMCA.Common">
-  <meta property="og:description" content="As of: 2026-09-20 (MMCA.Templates 1.11.0, framework v1.206.0).">
+  <meta property="og:description" content="As of: 2026-10-01 (MMCA.Templates 1.12.0, framework v1.218.0).">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Getting Started: Build a New App on MMCA.Common">
-  <meta name="twitter:description" content="As of: 2026-09-20 (MMCA.Templates 1.11.0, framework v1.206.0).">
+  <meta name="twitter:description" content="As of: 2026-10-01 (MMCA.Templates 1.12.0, framework v1.218.0).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Getting Started: Build a New App on MMCA.Common","item":"https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');if(localStorage.getItem('mmca-cites')==='shown')document.documentElement.setAttribute('data-cites','shown');}catch(e){}})();</script>
@@ -126,7 +126,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="getting-started-build-a-new-app-on-mmcacommon">Getting Started: Build a New App on MMCA.Common</h1>
-          <p><em>As of: 2026-09-20 (MMCA.Templates 1.11.0, framework v1.206.0).</em></p>
+          <p><em>As of: 2026-10-01 (MMCA.Templates 1.12.0, framework v1.218.0).</em></p>
           <p>MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set of
           lockstep-versioned NuGet packages (the authoritative list and count live in
           <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a>). Its core promise: <strong>build a
@@ -215,8 +215,12 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           <code>dotnet ef migrations add InitialCreate</code> here fails with
           <code>The name &#39;InitialCreate&#39; is used by an existing migration</code>. Move on to step 5.</li>
           <li><strong>Only <code>.editorconfig</code>.</strong> You passed a shape flag (<code>--flat</code>, <code>--no-status</code>, <code>--no-description</code>,
-          <code>--no-owner</code>) or <code>--database sqlite</code>, and the sample migrations were dropped because they would
-          describe a schema you did not ask for. Create your own before the first run:</li>
+          <code>--no-owner</code>) or <code>--database sqlite</code> / <code>--database postgresql</code>, and the sample migrations were
+          dropped because they would describe a schema you did not ask for. Create your own before the
+          first run. The command below is the SQL Server one; on the other engines the project is
+          <code>Contoso.Support.Migrations.Sqlite.Orders</code> or <code>Contoso.Support.Migrations.PostgreSQL.Orders</code> and
+          the context <code>SqliteDbContext</code> or <code>PostgreSQLDbContext</code>, and the generated <code>README.md</code> prints the
+          exact command for the engine you picked:</li>
           </ul>
           <pre class="doc-pre" tabindex="0" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
   <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
@@ -493,7 +497,7 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
         <span class="hljs-keyword">async</span> () =&gt;
         {
             <span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> response = <span class="hljs-keyword">await</span> httpClient
-                .GetAsync(<span class="hljs-keyword">new</span> Uri(<span class="hljs-built_in">string</span>.Create(CultureInfo.InvariantCulture, <span class="hljs-string">$&quot;Orders/<span class="hljs-subst">{id}</span>&quot;</span>), UriKind.Relative), cancellationToken)
+                .GetAsync(<span class="hljs-keyword">new</span> Uri(<span class="hljs-built_in">string</span>.Create(CultureInfo.InvariantCulture, <span class="hljs-string">$&quot;Orders/<span class="hljs-subst">{id}</span>/details&quot;</span>), UriKind.Relative), cancellationToken)
                 .ConfigureAwait(<span class="hljs-literal">false</span>);
 
             <span class="hljs-keyword">return</span> <span class="hljs-keyword">await</span> ProblemDetailsResultReader.ReadAsync&lt;OrderDTO&gt;(response, cancellationToken: cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);

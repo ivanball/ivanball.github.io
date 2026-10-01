@@ -1,6 +1,6 @@
 # Getting Started: Build a New App on MMCA.Common
 
-_As of: 2026-09-20 (MMCA.Templates 1.11.0, framework v1.206.0)._
+_As of: 2026-10-01 (MMCA.Templates 1.12.0, framework v1.218.0)._
 
 MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set of
 lockstep-versioned NuGet packages (the authoritative list and count live in
@@ -114,8 +114,12 @@ sample's migrations already renamed for your aggregate. Look inside
   `dotnet ef migrations add InitialCreate` here fails with
   `The name 'InitialCreate' is used by an existing migration`. Move on to step 5.
 - **Only `.editorconfig`.** You passed a shape flag (`--flat`, `--no-status`, `--no-description`,
-  `--no-owner`) or `--database sqlite`, and the sample migrations were dropped because they would
-  describe a schema you did not ask for. Create your own before the first run:
+  `--no-owner`) or `--database sqlite` / `--database postgresql`, and the sample migrations were
+  dropped because they would describe a schema you did not ask for. Create your own before the
+  first run. The command below is the SQL Server one; on the other engines the project is
+  `Contoso.Support.Migrations.Sqlite.Orders` or `Contoso.Support.Migrations.PostgreSQL.Orders` and
+  the context `SqliteDbContext` or `PostgreSQLDbContext`, and the generated `README.md` prints the
+  exact command for the engine you picked:
 
 ```powershell
 dotnet ef migrations add InitialCreate `
@@ -434,7 +438,7 @@ public Task<Result<OrderDTO>> GetOrderAsync(int id, CancellationToken cancellati
         async () =>
         {
             using var response = await httpClient
-                .GetAsync(new Uri(string.Create(CultureInfo.InvariantCulture, $"Orders/{id}"), UriKind.Relative), cancellationToken)
+                .GetAsync(new Uri(string.Create(CultureInfo.InvariantCulture, $"Orders/{id}/details"), UriKind.Relative), cancellationToken)
                 .ConfigureAwait(false);
 
             return await ProblemDetailsResultReader.ReadAsync<OrderDTO>(response, cancellationToken: cancellationToken).ConfigureAwait(false);
