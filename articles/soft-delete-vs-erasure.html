@@ -171,9 +171,9 @@
           deleted records vanish from the app, but the data stays in the table. This is exactly what you want for
           audit (you can prove what existed and when), referential integrity (a deleted parent does not orphan
           its children), and undelete (a fat-fingered delete is recoverable). MMCA.Common does the same, with one
-          refinement: <code>AuditableBaseEntity.Delete()</code> flips <code>IsDeleted</code> and returns a <code>Result</code> (idempotent, so a
-          double delete fails cleanly instead of silently), EF Core global query filters exclude the row, and the
-          documented invariant is &quot;entities are never hard-deleted.&quot;</p>
+          refinement: <code>AuditableBaseEntity.Delete()</code> flips <code>IsDeleted</code> and returns a <code>Result</code> (guarded, so a
+          double delete fails cleanly with an <code>AlreadyDeleted</code> error instead of silently succeeding), EF Core
+          global query filters exclude the row, and the documented invariant is &quot;entities are never hard-deleted.&quot;</p>
           <p>Now read that same model through a privacy lawyer&#39;s eyes. A user invokes their <strong>right to erasure</strong>
           (GDPR Article 17, the right to be forgotten; CCPA deletion). They want their personal data <em>gone</em>. You
           run your delete. The row, including their name, their email, every personal field, stays in the
@@ -245,7 +245,7 @@
           <code>[Pii]</code>-marked member with a <code>[REDACTED]</code> token before an entity that holds personal data is written to
           a structured log, and a <code>PiiErasureContractFitnessTests</code> build gate runs a <code>[Pii]</code>-bearing sample
           through both the redactor and <code>Anonymize()</code> end to end, so neither half of the <code>[Pii]</code> contract can be
-          advertised without being exercised. The framework now wires the redactor into one production path of
+          advertised without being exercised. The framework wires the redactor into one production path of
           its own: the opt-in field-level audit trail, whose save-changes interceptor asks the redactor whether a
           type carries personal data and, for the properties that do, writes the redaction token in place of both
           the old and the new value of the recorded change. One honest caveat for logging: <code>PiiRedactor</code> is still
@@ -261,10 +261,10 @@
           the rest of the system reacts to. That is a destructive default nobody wrote down, and it sits
           underneath every privacy story above.</p>
           <p>ADR-119 inverts it. <code>RestrictDeleteByDefaultConvention</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/RestrictDeleteByDefaultConvention.cs:41</code>)
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/RestrictDeleteByDefaultConvention.cs:42</code>)
           is an <code>IModelFinalizingConvention</code> that makes <code>DeleteBehavior.Restrict</code> the default for every
           relationship nobody configured, registered per engine by the shared <code>ApplicationDbContext</code> at model
-          finalization (<code>Persistence/DbContexts/ApplicationDbContext.cs:394</code>). A delete that would orphan rows
+          finalization (<code>Persistence/DbContexts/ApplicationDbContext.cs:399</code>). A delete that would orphan rows
           fails loudly instead of quietly taking the children with it, and a genuine cascade becomes a decision
           somebody recorded with <code>.OnDelete(DeleteBehavior.Cascade)</code> in an entity configuration. Two things are
           deliberately left alone: an ownership foreign key keeps the cascade EF requires, and any behavior a
@@ -277,8 +277,8 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
 <span class="hljs-comment">//   &quot;Convention&quot; = this convention restricted it</span>
 <span class="hljs-comment">//   &quot;Ownership&quot;  = an owned type&#x27;s cascade, which EF owns</span></code></pre>
           <p>That stamp is the point as much as the restrict is. Each foreign key carries a
-          <code>MMCA:DeleteBehaviorSource</code> annotation (<code>:47</code>) holding <code>Explicit</code> (<code>:50</code>), <code>Convention</code> (<code>:53</code>) or
-          <code>Ownership</code> (<code>:56</code>), and <code>DeleteBehaviorConventionTestsBase</code>
+          <code>MMCA:DeleteBehaviorSource</code> annotation (<code>:48</code>) holding <code>Explicit</code> (<code>:51</code>), <code>Convention</code> (<code>:54</code>) or
+          <code>Ownership</code> (<code>:57</code>), and <code>DeleteBehaviorConventionTestsBase</code>
           (<code>Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Domain/DeleteBehaviorConventionTestsBase.cs:21</code>)
           reads exactly that annotation to assert every cascading relationship was opted into on purpose. The
           convention is a no-op on Cosmos, which has no foreign key constraints to restrict.</p>
@@ -287,13 +287,37 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
           effect of a required foreign key. Erasure stays a deliberate operation (<code>Anonymize()</code>), lifecycle
           stays a deliberate operation (<code>Delete()</code>), and row removal is the third deliberate operation rather
           than the one the ORM chose for you.</p>
+          <h2 id="the-row-that-still-holds-its-slot-filtered-unique-indexes">The row that still holds its slot: filtered unique indexes</h2>
+          <p>Soft-delete has one more leak, and it is the database disagreeing with the application. The global
+          query filter says a deleted row does not exist; a unique index still counts it. Delete a speaker and
+          the email&#39;s unique index keeps refusing a new speaker with that email, with an error the user cannot
+          act on, because the conflicting row is invisible to them.</p>
+          <p>ADR-095 makes the fix a convention rather than a per-index habit. <code>SoftDeleteUniqueIndexConvention</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:34</code>)
+          is a model-finalizing convention registered once by the shared <code>ApplicationDbContext</code>
+          (<code>Persistence/DbContexts/ApplicationDbContext.cs:392</code>), so it reaches every module, every database and
+          every consumer with nothing to opt into. At finalization it walks every non-owned <code>IAuditableEntity</code>
+          type (<code>:46-47</code>) and filters every unique index on it (<code>:61-64</code>) on that engine&#39;s soft-delete
+          predicate (<code>= false</code> on PostgreSQL, <code>= 0</code> on the other relational engines), built by the same
+          <code>SoftDeleteFilterSql.Build</code> that the opt-in <code>HasSoftDeleteFilter</code> uses (<code>:55-57</code>), so the automatic
+          and the manual path cannot disagree about quoting or column name. An index that already declares its
+          own filter keeps it and gains the soft-delete clause with <code>AND</code> (<code>:80</code>); a filter that already
+          constrains the soft-delete column is left exactly as it is (<code>:73-76</code>), so a second model build never
+          appends the clause twice. SQL Server, PostgreSQL and SQLite are covered, and Cosmos is a no-op
+          (<code>:29-30</code>, the relational check at <code>:43-44</code>).</p>
+          <p>Privacy and uniqueness meet here. An erased <code>User</code> already frees its real address, because
+          <code>Anonymize()</code> rewrites the email to a per-row <code>deleted-{Id}@anonymized.invalid</code> placeholder; for every
+          other soft-deleted record that keeps its values, it is the filter that frees the slot. ADR-095 states
+          the cost plainly: any number of deleted rows may share a &quot;unique&quot; value, so an undelete path has to
+          handle a collision with the live row that took the slot, and the filter is invisible where the index
+          is declared (it first appears in a generated migration).</p>
           <h2 id="the-second-hiding-place-the-outbox">The second hiding place: the outbox</h2>
-          <p>There was a second source of retained personal data, and it is the kind of thing you only find when you
+          <p>There is a second source of retained personal data, and it is the kind of thing you only find when you
           go looking honestly. The <strong>transactional outbox</strong> (ADR-003) writes an event row in the same transaction
-          as the state change, and those serialized event payloads can contain personal data. The outbox
-          processor only set <code>ProcessedOn</code>; nothing ever purged processed rows. ADR-003 itself admitted the table
-          &quot;grows until cleaned up.&quot; So even after you anonymized a user&#39;s aggregate, their personal data could
-          still be sitting in old, processed outbox payloads forever.</p>
+          as the state change, and those serialized event payloads can contain personal data. Marking a row
+          processed does not remove it, and ADR-003 records the consequence: the outbox table grows until
+          processed entries are cleaned up. So without a purge, even after you anonymized a user&#39;s aggregate,
+          their personal data could still be sitting in old, processed outbox payloads forever.</p>
           <p>ADR-005 closes that too: <code>OutboxCleanupService</code> purges processed outbox rows older than
           <code>Outbox:RetentionDays</code> (default 7, set 0 to disable) across every relational data source. Bounded
           retention without changing delivery semantics. It is worth flagging as a deliberate <strong>behavior change</strong>:
@@ -304,36 +328,49 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
           <p>Anonymizing the aggregate and committing the soft-delete shuts two doors: no future logins, and no
           silent re-mint of a fresh access token, because the refresh flow re-fetches the account through the
           same soft-delete query filter
-          (<code>Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:103-107</code>).
+          (<code>Source/Core/MMCA.Common.Application/Users/UseCases/DeleteUser/DeleteUserHandlerBase.cs:107-111</code>).
           There is a third door, though, and stateless auth
           holds it open by design. Authentication is stateless JWT (ADR-004): every service validates an access
           token by signature and expiry, with no per-request lookup against the account store. That is exactly
           what makes it scale, and it is also why soft-deleting a user does not, on its own, stop a token that was
           already issued. A bearer credential keeps passing validation until it expires on its own clock, which
           can be minutes after the account was deactivated.</p>
-          <p>ADR-047 bounds that window. <code>SoftDeletedUserMiddleware</code>
-          (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:31</code>, business rule
+          <p>ADR-047 closes that door. <code>SoftDeletedUserMiddleware</code>
+          (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:33</code>, business rule
           BR-133 named in its class doc at <code>:11</code>) runs in the shared pipeline <strong>after authentication and before authorization</strong>.
           That ordering is a declarative step list (ADR-079):
-          <code>Startup/Pipeline/MiddlewarePipelineBuilder.cs</code> registers <code>UseAuthentication()</code> at <code>:117</code>, the
-          <code>SoftDeletedUserFilter</code> step that adds the middleware at <code>:137</code>, and <code>UseAuthorization()</code> at <code>:141</code>.
+          <code>Startup/Pipeline/MiddlewarePipelineBuilder.cs</code> registers <code>UseAuthentication()</code> at <code>:105</code>, the
+          <code>SoftDeletedUserFilter</code> step that adds the middleware at <code>:124-125</code>, and <code>UseAuthorization()</code> at <code>:129</code>.
           So <code>HttpContext.User</code> is already populated and the check
           gates every downstream endpoint. For an authenticated caller whose account has been soft-deleted, it
-          returns HTTP 401 mid-flight, before the endpoint runs. The account-status lookup goes through
-          <code>ISoftDeletedUserValidator</code>
+          returns HTTP 401 mid-flight, before the endpoint runs.</p>
+          <p>The check reads a shared deleted-user marker first. The erasure handler writes that marker itself,
+          right after the erasure is saved (<code>SoftDeletedUserCache.MarkDeletedAsync</code>,
+          <code>DeleteUserHandlerBase.cs:146-148</code>), and the marker lasts 15 minutes
+          (<code>SoftDeletedUserCache.MarkerDuration</code>, <code>Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:32</code>),
+          the default access-token lifetime, because it has to outlive every token issued before the delete.
+          Every host honors it (<code>SoftDeletedUserMiddleware.cs:102-109</code>), so on any host that shares that cache
+          the deleted user&#39;s token is refused on its next request, not at its own expiry. On a cache miss, a
+          host that runs Identity falls back to <code>ISoftDeletedUserValidator</code>
           (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/ISoftDeletedUserValidator.cs:7</code>,
-          one <code>IsUserSoftDeletedAsync</code> method at <code>:15</code>), which each Identity module implements with a single
-          filter-bypassing existence query, and the boolean result is cached for roughly 30 seconds
-          (<code>SoftDeletedUserCache.MarkerDuration</code>, <code>Source/Core/MMCA.Common.Application/Auth/SoftDeletedUserCache.cs:29</code>,
-          consumed by the middleware at <code>SoftDeletedUserMiddleware.cs:132</code>). So a given user costs at most one status query per cache window per
-          cache scope, not one per request. The effect is a <strong>bounded revocation window</strong>, not instant
-          revocation: a deactivated user&#39;s still-valid access token stops working within about the cache duration
-          instead of at the token&#39;s own expiry.</p>
+          one <code>IsUserSoftDeletedAsync</code> method at <code>:15</code>), which the framework implements once as
+          <code>SoftDeletedUserValidator&lt;TUser&gt;</code> (<code>Source/Core/MMCA.Common.Application/Users/SoftDeletedUserValidator.cs:20</code>),
+          a single filter-bypassing existence query that an Identity module closes over its own <code>User</code> at
+          registration. The middleware caches that answer asymmetrically: &quot;deleted&quot; as the 15-minute marker,
+          &quot;not deleted&quot; for only 30 seconds (<code>NotDeletedLookupDuration</code>, <code>SoftDeletedUserMiddleware.cs:39</code>,
+          chosen at <code>:147</code>). So a live user costs at most one status query per 30 seconds per cache scope, not
+          one per request.</p>
+          <p>The marker write is best effort: a failure is logged and the erasure still succeeds
+          (<code>DeleteUserHandlerBase.cs:150-153</code>). That failure is the one case with a residual window. An
+          Identity host still catches the deleted account once any cached &quot;not deleted&quot; answer lapses, within
+          30 seconds; a host with no validator has nothing to fall back to, so the existing access token stays
+          usable until it expires, which is exactly what the logged warning says (<code>DeleteUserHandlerBase.cs:199-200</code>).</p>
           <p>Two honest edges. Anonymous requests pass straight through with no lookup
-          (<code>SoftDeletedUserMiddleware.cs:65-73</code>), so unauthenticated traffic pays nothing. And the validator is
-          resolved lazily (<code>SoftDeletedUserMiddleware.cs:75</code>) rather than injected as a parameter, so a host that
-          does not register one (a non-Identity extracted service, or MMCA.Helpdesk&#39;s single Tickets host) simply
-          no-ops on that check: Identity is the source of truth and already validated the token upstream. Lazy
+          (<code>SoftDeletedUserMiddleware.cs:74-82</code>), so unauthenticated traffic pays nothing. And the validator is
+          resolved lazily (<code>SoftDeletedUserMiddleware.cs:111</code>) rather than injected as a parameter, so a host that
+          does not register one (a non-Identity extracted service, or MMCA.Helpdesk&#39;s single Tickets host) still
+          honors the marker and passes only a cache miss through (<code>:112-119</code>): Identity is the source of truth,
+          and the marker carries what it decided. Lazy
           resolution is what keeps one pipeline correct in both Identity-hosting and non-Identity hosts without a
           per-host variant.</p>
           <h2 id="the-other-right-portability-and-why-it-degrades-instead-of-failing">The other right: portability, and why it degrades instead of failing</h2>
@@ -354,7 +391,7 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
     <span class="hljs-comment">// Best-effort: the contributor failed after whatever resilience pipeline it uses.</span>
     <span class="hljs-comment">// Degrade the section instead of failing the whole export. The reason handed back is</span>
     <span class="hljs-comment">// deliberately generic; the exception detail goes to the log, never to the subject.</span>
-    UserUseCaseLog.ExportSectionUnavailable(logger, ex, sectionName, userId);
+    ExportSectionUnavailable(logger, ex, sectionName, userId);
 
     <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> UserDataExportSectionDTO
     {
@@ -364,7 +401,7 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
     };
 }</code></pre>
           <p>A section degrades to <code>Available = false</code> and the export completes. One peer outage never fails the
-          whole export. That catch now lives once, in the base, wrapping every registered section, so a section a
+          whole export. That catch lives once, in the base, wrapping every registered section, so a section a
           consumer adds tomorrow inherits the behavior instead of re-implementing it (and the section
           contributors deliberately catch nothing themselves).</p>
           <p>That is worth sitting with, because the instinct runs the other way. A partial export feels wrong,
@@ -427,8 +464,8 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
           separating the concerns: an <code>IAnonymizable</code> anonymize-in-place hook
           that preserves the audit trail, plus an <code>OutboxCleanupService</code> that bounds retention of PII-bearing
           outbox payloads, with the consumer owning the policy. And how ADR-047&#39;s <code>SoftDeletedUserMiddleware</code>
-          closes the third door, cutting off an already-issued access token mid-flight within roughly a 30-second
-          cache window instead of letting it live to its own expiry.</p>
+          closes the third door, cutting off an already-issued access token mid-flight through a shared
+          deleted-user marker the erasure writes as it saves, instead of letting the token live to its own expiry.</p>
           <p><strong>Next in the series:</strong> the reusable Blazor UI framework that brings the same backend discipline to
           the front end, a server-paged list page in a few lines.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the 2-minute ADR-005 behind this
@@ -454,6 +491,7 @@ configurationBuilder.Conventions.Add(_ =&gt; <span class="hljs-keyword">new</spa
             <li><a href="#why-it-matters-and-why-i-am-telling-on-myself">Why it matters, and why I am telling on myself</a></li>
             <li><a href="#the-mmca-answer-separate-the-two-concerns-give-each-a-mechanism">The MMCA answer: separate the two concerns, give each a mechanism</a></li>
             <li><a href="#the-delete-that-really-removes-rows-restrict-by-default">The delete that really removes rows: restrict by default</a></li>
+            <li><a href="#the-row-that-still-holds-its-slot-filtered-unique-indexes">The row that still holds its slot: filtered unique indexes</a></li>
             <li><a href="#the-second-hiding-place-the-outbox">The second hiding place: the outbox</a></li>
             <li><a href="#the-live-session-cutting-off-a-token-mid-flight">The live session: cutting off a token mid-flight</a></li>
             <li><a href="#the-other-right-portability-and-why-it-degrades-instead-of-failing">The other right: portability, and why it degrades instead of failing</a></li>

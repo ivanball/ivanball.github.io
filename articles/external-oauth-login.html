@@ -252,20 +252,24 @@
 <span class="hljs-comment">// Stash the minted token pair server-side under a short TTL; the redirect carries only the opaque</span>
 <span class="hljs-comment">// code plus the client&#x27;s own state, so the client can prove the code belongs to the flow it started.</span>
 <span class="hljs-keyword">var</span> exchangeCode = Convert.ToHexString(RandomNumberGenerator.GetBytes(<span class="hljs-number">32</span>));
-<span class="hljs-keyword">await</span> cacheService.SetAsync(
-    <span class="hljs-string">&quot;oauth-exchange:&quot;</span> + exchangeCode, response, TimeSpan.FromMinutes(<span class="hljs-number">2</span>), HttpContext.RequestAborted);
+<span class="hljs-keyword">await</span> cacheService.SetAsync(                                  <span class="hljs-comment">// prefix &quot;oauth-exchange:&quot;, lifetime 2 minutes</span>
+    OAuthExchangeCodePrefix + exchangeCode, response, OAuthExchangeCodeLifetime, HttpContext.RequestAborted);
 <span class="hljs-comment">// Web target normally; the allow-listed native scheme when mobileReturnUrl is non-null (ADR-043).</span>
 <span class="hljs-keyword">return</span> Redirect(BuildSuccessRedirectUrl(uiBaseUrl, mobileReturnUrl, exchangeCode, returnUrl, clientState));
 
 <span class="hljs-comment">// OAuthControllerBase.ExchangeAsync (POST, [NonIdempotent], out of band): burn the code on first use.</span>
 <span class="hljs-keyword">if</span> (<span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(request.Code)) { <span class="hljs-keyword">return</span> InvalidCode(); }
-<span class="hljs-keyword">var</span> response = <span class="hljs-keyword">await</span> cacheService.GetAsync&lt;AuthenticationResponse&gt;(<span class="hljs-string">&quot;oauth-exchange:&quot;</span> + request.Code, ct);
+<span class="hljs-keyword">var</span> cacheKey = OAuthExchangeCodePrefix + request.Code;
+<span class="hljs-comment">// The shared store, not a local copy: a code burned on another replica must be a miss here.</span>
+<span class="hljs-keyword">var</span> response = <span class="hljs-keyword">await</span> cacheService.GetFromSharedStoreAsync&lt;AuthenticationResponse&gt;(cacheKey, cancellationToken);
 <span class="hljs-keyword">if</span> (<span class="hljs-built_in">string</span>.IsNullOrEmpty(response.AccessToken)) { <span class="hljs-keyword">return</span> InvalidCode(); }  <span class="hljs-comment">// missing/replayed/expired =&gt; 400</span>
-<span class="hljs-keyword">await</span> cacheService.RemoveAsync(<span class="hljs-string">&quot;oauth-exchange:&quot;</span> + request.Code, ct);      <span class="hljs-comment">// single-use</span>
+<span class="hljs-keyword">await</span> cacheService.RemoveAsync(cacheKey, cancellationToken);              <span class="hljs-comment">// single-use</span>
 <span class="hljs-keyword">return</span> Ok(response);</code></pre>
           <p>Read the redirect line again: it carries <code>code=...</code>, not <code>access_token=...</code>. The access and refresh
           tokens sit in the server-side cache the whole time. They reach the browser only through a same-origin
           POST response body, which history, the <code>Referer</code> header, and upstream access logs do not record. The
+          exchange reads the code from the shared cache store rather than a per-replica copy, so a code already
+          burned on one replica is a miss on every other. The
           code is burned on first read, so a leaked or replayed code buys nothing, and a blank, missing,
           replayed, or expired code returns HTTP 400. The exchange is marked <code>[NonIdempotent]</code>, because
           replaying a stored response would defeat the burn.</p>
@@ -322,7 +326,9 @@
           complementary question the third guard asks. The linkage is two nullable columns
           (<code>LoginProvider varchar(50)</code>, <code>ProviderKey varchar(256)</code>) plus a unique index over the pair filtered
           to non-null rows, so two external identities cannot collide onto one account while local (null, null)
-          accounts stay unconstrained. Whichever of the three paths runs, the exchange finishes through the
+          accounts stay unconstrained. An existing account, whether matched by provider key or linked by email,
+          is refused before anything is saved when an administrator has locked it; a brand-new account cannot
+          be locked. Whichever of the three paths runs, the exchange finishes through the
           shared <code>IssueTokensAsync</code> workflow, which opens a refresh <em>session</em> for the device (hashed at rest, a
           per-user cap, a rotation chain) rather than stamping a plaintext refresh token on the aggregate, and
           hands back the same <code>AuthenticationResponse</code> shape a password login returns. A brand-new external user

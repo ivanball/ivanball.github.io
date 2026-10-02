@@ -163,7 +163,7 @@
           <figure class="article-hero"><img src="../assets/img/articles/article-04.webp" alt="" width="800" height="420" decoding="async"></figure>
           <p class="article-subtitle">&quot;This order ID does not exist&quot; is not an exceptional event, it is a routine branch of
           normal control flow. Here is the <code>Result&lt;T&gt;</code> railway that models it as a value, and why the domain in
-          MMCA.Common throws zero exceptions.</p>
+          MMCA.Common throws zero exceptions for business outcomes.</p>
           <hr>
           <p>Here is a method signature you have written a hundred times:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> Order <span class="hljs-title">GetOrder</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> id</span>)</span>;</code></pre>
@@ -201,21 +201,23 @@
           <p>The pattern is factored into three dependency-free pieces, all living in <code>MMCA.Common.Shared</code>, the
           innermost layer (the Blazor WebAssembly UI can reference it without dragging in EF Core or ASP.NET):</p>
           <ul>
-          <li><strong><code>ErrorType</code></strong> is the classification axis: a nine-value enum. <code>Validation</code>, <code>Invariant</code>,
-          <code>NotFound</code>, <code>Conflict</code>, <code>Unauthorized</code>, <code>Forbidden</code>, <code>UnprocessableEntity</code>, <code>Failure</code>, and
-          <code>Unexpected</code> for a genuine server-side fault the caller cannot fix by changing the request.
-          Critically, this is a pure enum with no reference to ASP.NET. The domain never names an HTTP
-          status code.</li>
+          <li><strong><code>ErrorType</code></strong> is the classification axis: a ten-value enum. <code>Validation</code>, <code>Invariant</code>,
+          <code>NotFound</code>, <code>Conflict</code>, <code>Unauthorized</code>, <code>Forbidden</code>, <code>UnprocessableEntity</code>, <code>Failure</code>,
+          <code>Unexpected</code> for a genuine server-side fault the caller cannot fix by changing the request, and
+          <code>TooManyRequests</code> for a temporary refusal after too many attempts (a login lockout, say), where
+          retrying later rather than changing the request is the fix. Critically, this is a pure enum with
+          no reference to ASP.NET. The domain never names an HTTP status code.</li>
           <li><strong><code>Error</code></strong> is the carrier: an immutable positional <code>record</code> with a machine-readable <code>Code</code> (e.g.
           <code>&quot;Order.NotFound&quot;</code>, for programmatic branching), a human-readable <code>Message</code>, an <code>ErrorType</code>, and
-          optional <code>Source</code> / <code>Target</code> context. Nine factory methods (one per <code>ErrorType</code>) each hard-code the
+          optional <code>Source</code> / <code>Target</code> context. Ten factory methods (one per <code>ErrorType</code>) each hard-code the
           correct type, so a caller can never pair <code>Error.NotFoundError(...)</code> with the wrong classification.</li>
           <li><strong><code>Result</code></strong> (and the generic <code>Result&lt;T&gt;</code>) is the outcome envelope: either a success, or a failure
           carrying one or more <code>Error</code>s.</li>
           </ul>
-          <p>You cannot <code>new</code> a <code>Result&lt;T&gt;</code>. Its constructors are <code>internal</code>; the only way in is through the static
-          factories (<code>Result.Success</code>, <code>Result.Failure</code>). That discipline guarantees the invariant the rest of
-          the codebase relies on: a result is always either a clean success or a non-empty failure, never a
+          <p>You cannot <code>new</code> a <code>Result&lt;T&gt;</code>. Its constructors are <code>internal</code>, so a result comes from the static
+          factories (<code>Result.Success</code>, <code>Result.Failure</code>) or from the implicit conversions that let a method write
+          <code>return error;</code> or <code>return value;</code>, and those conversions delegate to the same factories. That
+          discipline guarantees the invariant the rest of the codebase relies on: a result is always either a clean success or a non-empty failure, never a
           half-built object.</p>
           <h3 id="the-railway-in-one-picture">The railway, in one picture</h3>
           <p>&quot;Railway-oriented programming&quot; is the mental model. Picture two parallel tracks, a success track and a
@@ -238,26 +240,40 @@
           handed when the result is already a failure. A separate <code>ResultExtensions</code> class lifts <code>BindAsync</code>,
           <code>MapAsync</code>, <code>TapAsync</code> and <code>MatchAsync</code> onto a pending <code>Task&lt;Result&lt;T&gt;&gt;</code>, so an asynchronous pipeline
           composes end to end without an <code>await</code> and a temporary local between every step.</p>
-          <p>The non-generic base carries four members of its own, and <strong><code>Result.Combine(params ReadOnlySpan&lt;Result&gt;)</code></strong>
+          <p>The non-generic base carries four combinators of its own, and <strong><code>Result.Combine(params ReadOnlySpan&lt;Result&gt;)</code></strong>
           is the one that earns its keep: the aggregate-all-failures combinator. It runs several invariant checks and
           returns <em>all</em> their errors at once rather than failing on the first. This is the workhorse of domain factory
           methods. The <code>ReadOnlySpan</code> parameter avoids a heap allocation in the common case. <code>Match</code>, <code>Bind</code> and
           <code>OnFailure</code> round out the base, so a valueless step composes the same way instead of forcing an
           <code>if (result.IsFailure)</code> check.</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// A domain factory: invalidity is unrepresentable, and every broken rule is reported at once.</span>
-<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Speaker&gt; <span class="hljs-title">Create</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> name, Email email, DateOnly availableFrom</span>)</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// A domain factory (condensed): invalidity is unrepresentable, and Combine reports every broken rule at once.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Speaker&gt; <span class="hljs-title">Create</span>(<span class="hljs-params">
+    SpeakerIdentifierType? id,
+    <span class="hljs-built_in">string</span> firstName,
+    <span class="hljs-built_in">string</span> lastName,
+    <span class="hljs-built_in">string</span>? email,
+    <span class="hljs-comment">/* bio, tagLine, profilePicture, isTopSpeaker, optional social links */</span></span>)</span>
 {
-    <span class="hljs-keyword">var</span> validation = Result.Combine(
-        CheckName(name),
-        EmailInvariants.EnsureEmailIsValid(email, <span class="hljs-keyword">nameof</span>(Create)),
-        CheckAvailability(availableFrom));
-
-    <span class="hljs-keyword">if</span> (validation.IsFailure)
+    Email? emailVO = <span class="hljs-literal">null</span>;
+    <span class="hljs-keyword">if</span> (!<span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(email))
     {
-        <span class="hljs-keyword">return</span> Result.Failure&lt;Speaker&gt;(validation.Errors);
+        <span class="hljs-keyword">var</span> emailResult = Email.Create(email);
+        <span class="hljs-keyword">if</span> (emailResult.IsFailure)
+            <span class="hljs-keyword">return</span> Result.Failure&lt;Speaker&gt;(emailResult.Errors);
+        emailVO = emailResult.Value;
     }
 
-    <span class="hljs-keyword">return</span> Result.Success(<span class="hljs-keyword">new</span> Speaker { Id = <span class="hljs-literal">default</span>, Name = name, Email = email });
+    <span class="hljs-keyword">var</span> result = Result.Combine(
+        SpeakerInvariants.EnsureFirstNameIsValid(firstName, <span class="hljs-keyword">nameof</span>(Create)),
+        SpeakerInvariants.EnsureLastNameIsValid(lastName, <span class="hljs-keyword">nameof</span>(Create)),
+        SpeakerInvariants.EnsureOptionalFieldsAreValid(<span class="hljs-comment">/* tagLine, links, */</span> <span class="hljs-keyword">nameof</span>(Create)));
+    <span class="hljs-keyword">if</span> (result.IsFailure)
+        <span class="hljs-keyword">return</span> Result.Failure&lt;Speaker&gt;(result.Errors);
+
+    <span class="hljs-keyword">var</span> speaker = <span class="hljs-keyword">new</span> Speaker(firstName, lastName, emailVO <span class="hljs-comment">/* , ... */</span>) { <span class="hljs-comment">/* Id, links */</span> };
+    speaker.AddDomainEvent(<span class="hljs-keyword">new</span> SpeakerChanged(DomainEntityState.Added, speaker.Id, speaker.FullName));
+
+    <span class="hljs-keyword">return</span> Result.Success(speaker);
 }
 
 <span class="hljs-comment">// The shared create pipeline propagates the failure and stops; the success path continues.</span>
@@ -279,6 +295,9 @@
 
     <span class="hljs-keyword">await</span> PersistAsync(attemptUnitOfWork, repository, entity, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
 
+    LogCreated(entity);
+    <span class="hljs-keyword">await</span> OnCreatedAsync(entity, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
+
     <span class="hljs-keyword">return</span> Result.Success(dtoMapper.MapToDTO(entity));
 }</code></pre>
           <p>No <code>try</code>, no <code>catch</code>, no <code>throw</code>. The factory refuses to build an invalid <code>Speaker</code>, the handler
@@ -287,8 +306,8 @@
           <p>Because <code>ErrorType</code> is transport-agnostic, the translation to an HTTP status code is centralized in a
           single shared internal class, <code>ErrorHttpMapping</code>. It owns the <code>FrozenDictionary</code> that maps each
           <code>ErrorType</code> to a status (<code>Validation</code>, <code>Invariant</code> and <code>Failure</code> to 400, <code>NotFound</code> to 404, <code>Conflict</code>
-          to 409, <code>Unauthorized</code> to 401, <code>Forbidden</code> to 403, <code>UnprocessableEntity</code> to 422, <code>Unexpected</code> to 500,
-          anything unmapped falling back to 400) and the <code>GetStatusCode</code> lookups over it. Two consumers share the
+          to 409, <code>Unauthorized</code> to 401, <code>Forbidden</code> to 403, <code>UnprocessableEntity</code> to 422, <code>TooManyRequests</code> to
+          429, <code>Unexpected</code> to 500, anything unmapped falling back to 400) and the <code>GetStatusCode</code> lookups over it. Two consumers share the
           status lookup. <code>ApiControllerBase.HandleFailure()</code> is the normal path: a controller action resolves the
           status from the <em>most severe</em> error present through <code>ErrorHttpMapping</code> and renders an RFC 9457
           ProblemDetails body carrying <em>all</em> the errors. <code>UnhandledResultFailureFilter</code> is the safety net: a global
@@ -297,7 +316,8 @@
           attribute, reuses the same class for the errors projection alone. Because the dictionary lives in one
           place, the controller base and the filter can never drift apart.</p>
           <p>The gRPC layer does the equivalent over the wire (<code>GrpcResultExceptionInterceptor</code>, ADR-007), so a remote
-          call looks like a local <code>Result&lt;T&gt;</code> to application code. One enum drives both transports, so every
+          call looks like a local <code>Result&lt;T&gt;</code> to application code (<code>TooManyRequests</code>, for instance, travels as
+          <code>ResourceExhausted</code>). One enum drives both transports, so every
           endpoint and every extracted service produces the same error shape. There is one source of truth for
           &quot;what does a not-found look like.&quot;</p>
           <p>The payoff at the framework level: the domain layer throws zero exceptions for business outcomes. The
@@ -336,12 +356,12 @@
           framework-owned. That is not the only exception the framework catches, though. An ordered
           <code>IExceptionHandler</code> chain converges every escaped exception onto the same RFC 9457 ProblemDetails
           contract: a cancellation handler (499), a domain-exception handler (400), a <code>DbUpdate</code> handler (409),
-          a validation handler (400), and a catch-all (500), registered in that load-bearing order. So the
+          a validation handler (400), and a catch-all (500, or 400 for a refused cross-tenant write), registered in that load-bearing order. So the
           failure shape stays identical whether it arrived as a <code>Result</code> or as a throw.</li>
           <li><strong>One status has to stand for a whole list of errors.</strong> Every error serializes into the
           ProblemDetails body, but the status code can only be one number, so it is resolved by ranking: the
           most severe <code>ErrorType</code> present wins (<code>Unexpected</code> over <code>Unauthorized</code> over <code>Forbidden</code> over
-          <code>Conflict</code> over <code>NotFound</code> over <code>UnprocessableEntity</code> over the shared bottom rank of <code>Invariant</code>,
+          <code>TooManyRequests</code> over <code>Conflict</code> over <code>NotFound</code> over <code>UnprocessableEntity</code> over the shared bottom rank of <code>Invariant</code>,
           <code>Validation</code> and <code>Failure</code>), and equal ranks keep the earliest error. A result carrying both a
           <code>Validation</code> and a <code>Conflict</code> answers 409, and the validation detail is readable only in the body.</li>
           </ul>

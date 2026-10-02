@@ -170,7 +170,7 @@
           Clean enough. You add <code>RequireAttendee</code>, <code>RequireAdmin</code>, <code>RequireAuthenticated</code>, and for a while the
           mapping from &quot;who is allowed&quot; to &quot;which attribute&quot; is obvious.</p>
           <p>Then the requirement arrives that role checks cannot express cleanly. You need a <em>content editor</em>: someone
-          who may curate the session catalog but must not manage events, rooms, the question queue, or the organizer
+          who may curate the session catalog but must not manage events, rooms, feedback questions, or the organizer
           session-selection workflow. An organizer can do all of those. The new role can do exactly one slice of them.</p>
           <p>Now look at your options with role-name checks. You can add <code>ContentEditor</code> to every
           <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> on the endpoints they <em>should</em> reach, and remember to leave it off the
@@ -204,9 +204,8 @@
           <code>FrozenDictionary&lt;string, FrozenSet&lt;string&gt;&gt;</code> from role name to its granted permissions. Role keys are
           compared case-insensitively (<code>OrdinalIgnoreCase</code>); permission values are compared ordinally. The same
           class is also the host&#39;s <code>IPermissionCatalog</code>, exposing the closed set of roles and permissions the code
-          compiled in, so an administration screen enumerates a projection of the map that authorizes rather than a
-          second list that can drift from it. It is the one place that knows the role-to-capability mapping, so
-          endpoints never name a role.</p>
+          compiled in, so an administration screen enumerates the compiled map itself rather than a hand-kept second
+          list. It is the one place that knows the role-to-capability mapping, so endpoints never name a role.</p>
           <p><strong>Modules declare grants additively.</strong> <code>AddPermissions(...)</code> accumulates into a shared
           <code>PermissionRegistryBuilder</code>. Each <code>Grant(string role, params string[] permissions)</code> unions the new
           permissions into that role&#39;s set (<code>HashSet.UnionWith</code>), so grants from different modules combine and each
@@ -246,11 +245,14 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
     context.Succeed(requirement);
 }</code></pre>
           <p>Both reads are framework-wide definitions rather than local helpers. <code>GetRoleValues()</code> gathers roles from
-          <code>ClaimTypes.Role</code>, <code>&quot;role&quot;</code>, and <code>&quot;roles&quot;</code>, so it works whether or not inbound-claim mapping is on, and it
-          is the framework&#39;s single definition of &quot;the caller&#39;s roles&quot;, so no other reader can disagree with the
-          handler about who is privileged. <code>HasPermissionClaim(...)</code> is the single definition of &quot;the token itself
-          grants this&quot;. Baking a <code>permission</code> claim into the token is therefore optional: role-derived resolution is
-          the default, and a token that already carries explicit permissions short-circuits the registry lookup.</p>
+          <code>ClaimTypes.Role</code>, <code>&quot;role&quot;</code>, and <code>&quot;roles&quot;</code>, so it works whether or not inbound-claim mapping is on; the
+          CQRS gate reads the same three claim types through <code>ICurrentUserService.Roles</code>. <code>HasPermissionClaim(...)</code>
+          is the single definition of &quot;the token itself grants this&quot;, and both gates call it. The framework&#39;s
+          <code>TokenService</code> writes that claim at sign-in: every access token carries one <code>permission</code> claim for each
+          permission the minting host&#39;s registry grants the account&#39;s role. Both apps&#39; Identity hosts apply every
+          module&#39;s grant map before minting (<code>AddTokenPermissionGrants()</code>), so a service that does not own a
+          module&#39;s grant map, the CQRS gate in that service, and the Blazor navigation all read the capability from
+          the token rather than from a registry they do not hold.</p>
           <p><strong>The same registry gates use cases, not just routes.</strong> A command or query that implements
           <code>IRequiresPermission</code> is checked by <code>AuthorizationGate.Evaluate</code> inside the CQRS decorator pipeline,
           against that same registry and that same claim read, returning a <code>Forbidden</code> error rather than throwing.
@@ -259,8 +261,8 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
           <h2 id="inert-until-adopted">Inert until adopted</h2>
           <p>The piece that makes this safe to add to a framework everyone consumes is that wiring it confers nothing
           until a host grants something. <code>AddAuthorizationPolicies()</code> always registers the handler (via
-          <code>TryAddEnumerable</code>), the policy provider (via <code>Replace</code>), and an empty registry, which is bound as both
-          <code>IPermissionRegistry</code> and <code>IPermissionCatalog</code> so the two contracts can never answer from different maps.
+          <code>TryAddEnumerable</code>), the policy provider (via <code>Replace</code>), and an empty registry, with <code>IPermissionRegistry</code>
+          and <code>IPermissionCatalog</code> both forwarding to that one built instance.
           The same call also installs a fail-closed fallback policy, so an endpoint that declares no authorization
           metadata at all requires an authenticated caller and a deliberate anonymous route says so with
           <code>[AllowAnonymous]</code>. The capability mechanism itself still confers nothing beyond explicit claims until a
@@ -273,8 +275,10 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
           alias the framework-owned <code>users:manage</code> and <code>roles:manage</code> from <code>AdministrationPermissions</code> so the shared
           administration controller bases can carry their own <code>[HasPermission]</code>. MMCA.Store defines eleven of its own
           across Catalog, Sales and Identity, each module granting its whole set to its own <code>Admin</code> role from its own
-          <code>AddPermissions(...)</code> call. The role vocabulary stays the application&#39;s throughout: MMCA.Common declares no
-          role names at all. The registry, the catalog, the handler and the policy provider carry nineteen unit tests
+          <code>AddPermissions(...)</code> call. Both apps&#39; Identity hosts also call <code>AddStoredPermissionGrants(...)</code>, which
+          decorates <code>IPermissionRegistry</code> with a <code>LayeredPermissionRegistry</code> (the compiled grants plus stored ones,
+          union only) while <code>IPermissionCatalog</code> keeps enumerating the compiled set. The role vocabulary stays the
+          application&#39;s throughout: MMCA.Common declares no role names at all. The registry, the catalog, the handler and the policy provider carry nineteen unit tests
           between them (<code>PermissionRegistryTests</code>, <code>PermissionCatalogTests</code>, <code>PermissionAuthorizationHandlerTests</code>,
           <code>PermissionPolicyProviderTests</code>), and the ADC grant maps carry dedicated grant tests of their own.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
@@ -314,8 +318,9 @@ services.AddPermissions(ConferencePermissionGrants.Apply);
           <code>perm:{name}</code> policy lazily means you never hand-register one policy per permission, and it can fall
           through to the default provider so any policy you do register by hand survives.</li>
           <li><strong>Accept two grant sources.</strong> Honor an explicit permission claim if the token carries one, and fall
-          back to role-derived resolution if it does not. That keeps tokens small by default and lets you push
-          permissions into the token later without changing endpoints.</li>
+          back to role-derived resolution if it does not. Whether you emit permission claims at sign-in is then a
+          minting decision, not an endpoint change, and emitting them lets a service that holds no grant table
+          still answer the question.</li>
           <li><strong>Make it inert until used.</strong> Register the mechanism with an empty registry so the feature is free to
           ship and confers nothing until a module actually grants a capability.</li>
           </ol>

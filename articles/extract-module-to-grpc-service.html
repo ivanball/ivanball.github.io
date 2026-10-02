@@ -228,9 +228,13 @@ app.MapGrpcService&lt;BookmarkCountGrpcService&gt;();</code></pre>
           server call shapes, logs it, and rethrows <code>errors.ToRpcException()</code>, an <code>RpcException</code> whose
           <code>StatusCode</code> comes from a <code>FrozenDictionary&lt;ErrorType, StatusCode&gt;</code> mapping that mirrors the HTTP
           <code>ErrorType</code>-to-status table in <code>ErrorHttpMapping</code>, the internal type <code>ApiControllerBase</code> reads on the
-          REST side (the unhandled-failure filter reads the same one). The trailers carry every error as
-          structured metadata. The client adapter reads those trailers back and reconstructs
-          <code>Result.Failure(errors)</code>. One error model, two transports, written once in the interceptor.</p>
+          REST side (the unhandled-failure filter reads the same one). The status comes from the most severe
+          error in the list, and the trailers carry every error as structured metadata. On the calling side,
+          <code>RpcException.ToResult()</code> reads those trailers back and reconstructs <code>Result.Failure(errors)</code>, degrading
+          a transport fault that carries no trailers to a single <code>Grpc.{StatusCode}</code> error. An adapter whose
+          interface returns a <code>Result</code> closes the round trip with it; one whose interface returns a plain value
+          (<code>IBookmarkCountService</code> returns a count) lets the <code>RpcException</code> propagate instead. One error model,
+          two transports, written once in the interceptor.</p>
           <h2 id="step-3-client-side-addtypedgrpcclienttclientservicename">Step 3: client side, AddTypedGrpcClient&lt;TClient&gt;(serviceName)</h2>
           <p>On the calling side (Conference&#39;s host), wire the typed gRPC client and replace the local interface
           registration with the adapter:</p>
@@ -246,15 +250,20 @@ services.AddEngagementBookmarkCountClient();   <span class="hljs-comment">// shi
           <code>HttpContext</code> onto the outgoing call&#39;s metadata, so the caller&#39;s JWT rides along downstream and
           distributed authorization works without each handler threading a token (it is a no-op outside an HTTP
           request, for example in a background processor).</li>
-          <li><code>AddStandardResilienceHandler()</code> gives every gRPC client the same Polly retry, timeout, and
-          circuit-breaker pipeline as the HTTP clients. A deliberate <code>SocketsHttpHandler</code> override forces
+          <li><code>AddStandardResilienceHandler()</code> gives every gRPC client a Polly retry, timeout, and
+          circuit-breaker pipeline whose values come from <code>GrpcResilienceDefaults</code>. The timeouts and the retry
+          budget are the HTTP clients&#39; own. The retry fires only on a failure to reach the peer (an
+          <code>HttpRequestException</code>), because every gRPC call is a POST and replaying one that reached the handler
+          could run it twice. The circuit breaker carries explicit gRPC values. A deliberate <code>SocketsHttpHandler</code> override forces
           explicit HTTP/2 so the resilience handler cannot defeat the h2c negotiation.</li>
           </ul>
           <p>The <code>services.Replace(...)</code> is deliberate and uses <code>Replace</code>, not <code>TryAdd</code>. By the time this runs (after
-          <code>ModuleLoader</code>), the container already holds either the real in-process <code>IBookmarkCountService</code> (if
-          Engagement is enabled in this host) or a <code>Disabled*</code> stub (registered by the module&#39;s
-          <code>RegisterDisabledStubs()</code> when the peer is disabled). <code>Replace</code> wins over both, so after the call the
-          resolved interface is always the gRPC adapter pointing at the extracted peer. That is why the call comes
+          <code>ModuleLoader</code>), the container holds one of three things: the real in-process <code>IBookmarkCountService</code>
+          (if Engagement is enabled in this host), a <code>Disabled*</code> stub (registered by the module&#39;s
+          <code>RegisterDisabledStubs()</code> when the peer is disabled in configuration), or nothing at all (a dedicated
+          service host names only its own module to <code>ModuleLoader</code>, so the peer is never discovered and no stub
+          is registered). <code>Replace</code> covers all three, so after the call the resolved interface is always the gRPC
+          adapter pointing at the extracted peer. That is why the call comes
           after module discovery.</p>
           <h2 id="step-4-flip-the-message-bus-from-in-process-to-broker">Step 4: flip the message bus from in-process to broker</h2>
           <p>Synchronous calls now cross the wire. The asynchronous, fire-and-forget flows (domain and integration
@@ -269,16 +278,19 @@ services.AddEngagementBookmarkCountClient();   <span class="hljs-comment">// shi
 builder.Services.AddBrokerMessaging(builder.Configuration);
 <span class="hljs-comment">// MessageBus__Provider=RabbitMq (injected by the AppHost&#x27;s WithBroker) selects BrokerMessageBus.</span></code></pre>
           <p>Your aggregate code, which does <code>AddDomainEvent(new BookmarkAdded(...))</code>, does not change. The
-          transactional outbox is what makes the switch safe: the same durable outbox row is drained to an
-          in-process handler today and published to the broker tomorrow. The reliability pattern and the
-          extraction boundary are the same mechanism (ADR-003).</p>
+          transactional outbox follows the same setting. With a broker selected it resolves on: the event is
+          written as a durable outbox row in the same transaction as the aggregate change and published to the
+          broker after commit. With <code>InProcess</code> it resolves off and events dispatch inside the process that
+          raised them, unless the host opts in with <code>MessageBus:EnableOutbox=true</code>. The <code>OutboxMessages</code> table
+          stays mapped either way, so the switch is never a migration (ADR-003, as amended by ADR-100).</p>
           <h2 id="step-5-jwks-so-the-new-service-validates-tokens">Step 5: JWKS so the new service validates tokens</h2>
           <p>The extracted Engagement service now receives forwarded JWTs from Conference and must validate them. It
           does so against the issuer&#39;s <strong>JWKS</strong>, the public signing keys, not a shared secret. <code>IJwksProvider</code>
           (implemented by <code>RsaJwksProvider</code> in Infrastructure) exposes the signing keys, and
           <code>JwksEndpointExtensions</code> in the API layer serves <code>/.well-known/jwks.json</code> so any extracted service can
-          fetch the issuer&#39;s public keys and validate independently. JWKS discovery is routed through the gateway
-          (ADR-004). No service ever needs to share a symmetric secret with another, which is what makes the fleet
+          fetch the issuer&#39;s public keys and validate independently. Under local Aspire the JWKS backchannel is routed
+          through the gateway; in Azure Container Apps each service points straight at the identity app&#39;s
+          in-cluster address (ADR-004, ADR-012). No service ever needs to share a symmetric secret with another, which is what makes the fleet
           safe to grow.</p>
           <h2 id="step-6-wire-it-in-the-apphost-with-mmcacommonaspirehosting">Step 6: wire it in the AppHost with MMCA.Common.Aspire.Hosting</h2>
           <p>Local orchestration is where the topology becomes runnable. <code>MMCA.Common.Aspire.Hosting</code> provides
@@ -309,8 +321,8 @@ engagementService.WithReference(conferenceService).WaitFor(conferenceService);</
           <p>Clients never address a service directly. A single YARP reverse-proxy gateway owns the
           route-to-service map and is the only entry point. It has no DbContext and no controllers; it is CORS,
           static files, the route table, and the edge concerns in step 8. You add the service&#39;s routes to the
-          gateway&#39;s table and reference it for discovery, and you wire JWKS discovery so the new service
-          resolves keys through that same gateway:</p>
+          gateway&#39;s table and reference it for discovery, and in the local AppHost you wire JWKS discovery so
+          the new service resolves keys through that same gateway:</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> gateway = builder.AddProject&lt;Projects.MMCA_App_Gateway&gt;(<span class="hljs-string">&quot;gateway&quot;</span>)
     .WithReference(engagementService)
     .WithReference(conferenceService)
@@ -370,8 +382,8 @@ app.MapReverseProxy();</code></pre>
           server-rendered UI host whose every back-end call leaves from one address that the per-IP window
           would otherwise collapse into a single partition. ADC&#39;s gateway names the trusted-caller header in
           configuration and takes the secret itself from Key Vault. A request with no attributable client IP
-          is not limited at all: that is
-          fail-open, chosen over collapsing every unattributable caller into one shared bucket. The settings
+          skips the per-IP window (fail-open, chosen over collapsing every unattributable caller into one shared
+          bucket) but still counts against the concurrency cap. The settings
           validate on both construction paths, the options pipeline (<code>ValidateOnStart</code>) and a
           <code>Validator.ValidateObject</code> call at registration, because the limiter closes over an eagerly bound
           copy and a caller can hand it settings without passing through options at all.</li>
@@ -407,21 +419,25 @@ app.MapReverseProxy();</code></pre>
           <ul>
           <li><strong>Profile A (serves inbound cleartext gRPC, including any bidirectional pair).</strong> Kestrel is
           <code>Http2</code>-only on cleartext (h2c prior knowledge), so peer gRPC clients negotiate without TLS. The
-          gateway must forward HTTP/2 (<code>ForwardHttp2=true</code>, and <code>transport: http2</code> on the container ingress).
-          JWKS uses the two-argument <code>WithJwksDiscovery(identity, gateway)</code>, because the HTTP/1.1 JwtBearer
-          backchannel cannot reach an Http2-only endpoint directly, so it goes through the gateway, which
-          terminates TLS and routes <code>/.well-known/*</code> on. Any service that <strong>serves</strong> gRPC over cleartext needs
+          gateway cluster fronting the host declares <code>Version</code> 2 with <code>VersionPolicy</code> <code>RequestVersionExact</code> in
+          its <code>ReverseProxy</code> configuration (a policy that allows a lower version would downgrade to HTTP/1.1,
+          which the backend rejects), and the container ingress is <code>transport: http2</code>. Locally, JWKS uses the
+          two-argument <code>WithJwksDiscovery(identity, gateway)</code>, because the HTTP/1.1 JwtBearer backchannel
+          cannot reach an Http2-only endpoint directly, so it goes through the gateway, which terminates TLS
+          and routes <code>/.well-known/*</code> on. In Azure Container Apps each service sets the direct in-cluster
+          authority <code>http://&lt;identity app&gt;</code> instead, and the <code>http2</code> ingress carries the metadata fetch. Any service that <strong>serves</strong> gRPC over cleartext needs
           Profile A. ADC uses it.</li>
           <li><strong>Profile B (consumer-only, one-directional gRPC, gRPC rides the HTTPS/ALPN endpoint).</strong> Kestrel is
-          <code>Http1AndHttp2</code>; gRPC clients use the HTTPS endpoint where ALPN negotiates HTTP/2. The gateway forwards
-          HTTP/1.1 (<code>ForwardHttp2=false</code>), and JWKS uses the single-argument <code>WithJwksDiscovery(identity)</code>.</li>
+          <code>Http1AndHttp2</code>; gRPC clients use the HTTPS endpoint where ALPN negotiates HTTP/2. The gateway cluster
+          declares no version pair, so YARP&#39;s negotiating default resolves to HTTP/1.1 against the cleartext
+          endpoint, and JWKS uses the single-argument <code>WithJwksDiscovery(identity)</code>.</li>
           </ul>
           <p>A 2026 update is the cautionary tale here: Store originally chose Profile B because its gRPC edges looked
           &quot;consumer-only,&quot; but a one-directional topology still has services that <strong>serve</strong> inbound cleartext
           gRPC, and Azure Container Apps cleartext ingress cannot deliver HTTP/2 to them under Profile B. The
           result was <code>HTTP_1_1_REQUIRED</code> 500s in production. Store converged to Profile A. The lesson: if any
           service in your fleet hosts an inbound gRPC server over cleartext, you are on Profile A, and you must
-          flip Kestrel, <code>ForwardHttp2</code>, the ingress transport, and the JWKS form together.</p>
+          flip Kestrel, the gateway cluster&#39;s version policy, the ingress transport, and the JWKS form together.</p>
           <p>There is a sharper case the two-profile framing does not cover on its own: a host that needs both.
           ADC&#39;s Notification service serves a SignalR hub (whose WebSocket transport needs the HTTP/1.1 Upgrade
           handshake) AND an inbound live-channel gRPC ingress, and Store&#39;s Sales service runs the same
@@ -440,8 +456,8 @@ app.MapReverseProxy();</code></pre>
           <p>Walk the steps back and you see why this is not a one-way door. Because transport lives at the edge and
           the core talks to abstractions, a service can be re-collapsed into a combined host by changing
           configuration, not code. Enable the peer module in the same host, drop the <code>services.Replace(...)</code> that
-          swapped in the gRPC adapter, and the in-process implementation resolves again. Flip <code>MessageBusSettings</code>
-          back to <code>InProcessMessageBus</code> and events dispatch in-process. The <code>ModuleLoader</code> boots the same module
+          swapped in the gRPC adapter, and the in-process implementation resolves again. Set <code>MessageBus:Provider</code>
+          back to <code>InProcess</code> and <code>InProcessMessageBus</code> dispatches events in-process. The <code>ModuleLoader</code> boots the same module
           code either way. That reversibility is insurance: a small team can adopt microservices without betting
           that the split was correct on the first try.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>

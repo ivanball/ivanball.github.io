@@ -219,7 +219,7 @@
           once, never reassigned, on both the application path and the persistence path.</p>
           <p><strong><code>AuditableBaseEntity&lt;TId&gt;</code></strong> adds the cross-cutting facts every persisted row needs. Soft-delete
           (<code>IsDeleted</code>, plus a <code>Delete()</code> / <code>Undelete()</code> pair that return <code>Result</code> and refuse to double-delete),
-          audit fields (<code>CreatedOn/By</code>, <code>LastModifiedOn/By</code>) with <em>private</em> setters, and a <code>RowVersion</code>
+          audit fields (<code>CreatedOn/By</code>, <code>LastModifiedOn/By</code>, <code>DeletedOn/By</code>) with <em>private</em> setters, and a <code>RowVersion</code>
           optimistic-concurrency token. The domain never writes the audit fields; they are stamped centrally
           by the <code>AuditSaveChangesInterceptor</code> that EF Core runs inside <code>SaveChangesAsync</code>. Three concerns
           that would otherwise be copy-pasted into every entity are inherited once and enforced in one place.</p>
@@ -292,7 +292,8 @@
           inside MMCA.Common: <code>AddressValidationRules</code> reads them for FluentValidation, and the <code>OwnsAddress</code>
           mapping extension reads the same six constants for <code>HasMaxLength</code> on the owned <code>Address</code> columns, so a
           consuming app (Store&#39;s <code>CustomerConfiguration</code>) gets the field-length rule from one source of truth
-          through a single <code>builder.OwnsAddress(p =&gt; p.Address);</code> call. <code>EmailInvariants.MaxLength</code> does not get
+          through a single <code>builder.OwnsAddress(p =&gt; p.Address);</code> call (a second <code>OwnsOne</code> there overrides only
+          the unicode facet, never a length). <code>EmailInvariants.MaxLength</code> does not get
           the same treatment: each consumer declares its own, separate email length limit instead (Store&#39;s
           <code>CustomerInvariants.EmailMaxLength</code> is 100, ADC&#39;s <code>UserInvariants.EmailMaxLength</code> is 100, and ADC&#39;s
           <code>SpeakerInvariants.EmailMaxLength</code> aliases the 255 its own DTO declares), none derived from the 256
@@ -301,8 +302,9 @@
           <p>There is one more piece that is easy to miss but does heavy lifting against bugs. Look back at the
           factory signature: <code>Create(CustomerIdentifierType customerId, Money total)</code>, not
           <code>Create(int customerId, decimal total)</code>.</p>
-          <p>MMCA.Common defines per-entity identifier aliases, for example a solution-wide
-          <code>global using UserIdentifierType = int;</code> linked into every project via <code>Directory.Build.props</code>. The
+          <p>MMCA.Common defines per-entity identifier aliases, for example
+          <code>global using UserIdentifierType = int;</code>, declared once in <code>MMCA.Common.Domain</code> and linked into every
+          other <code>MMCA.Common.*</code> project via <code>Directory.Build.props</code>. The
           underlying type is still <code>int</code>, but the name carries meaning. A method that takes a
           <code>UserIdentifierType</code> and an <code>OrderIdentifierType</code> reads unambiguously at every call site, the way two
           bare <code>int</code>s never do. The id is also strongly named at the entity level (<code>BaseEntity&lt;TId&gt;</code> is generic
@@ -356,6 +358,32 @@
           hides the row; the data and its foreign-key relationships stay intact. <code>Delete()</code> returns <code>Result</code> and
           guards against double-deletion (returning <code>Error.AlreadyDeleted</code>), so even &quot;remove this&quot; flows through
           the same error railway as everything else.</p>
+          <h3 id="one-contract-and-which-half-the-build-holds">One contract, and which half the build holds</h3>
+          <p>Everything above is one tactical contract, recorded as ADR-129, and that record is explicit about a
+          split: part of the contract is a fitness test, and part is a convention that holds because each new
+          entity copies the nearest one.</p>
+          <p>The test half is <code>EntityConventionTestsBase</code>, a shared base in <code>MMCA.Common.Testing.Architecture</code> with
+          eight facts. <strong>Construction:</strong> the Domain layer must expose at least one aggregate root (so a broken
+          filter fails instead of checking nothing), every root needs a public static <code>Create</code> returning
+          <code>Result&lt;TSelf&gt;</code> and no public instance constructor, and any concrete Domain or Shared type that
+          exposes a <code>Create</code> must return <code>Result&lt;T&gt;</code> from it. <strong>Encapsulation:</strong> every concrete module-domain
+          entity is sealed, and none of its public instance properties has a public setter (<code>init</code> and
+          non-public setters pass; navigation properties are included, so a child collection is replaced
+          through a <code>SetXxx</code> method). <strong>Placement:</strong> no entity sits in an Application or Infrastructure
+          assembly, no DTO or request type sits in Domain, and no DTO sits in Infrastructure. MMCA.ADC,
+          MMCA.Store and MMCA.Helpdesk each subclass the base unchanged and supply only their architecture map.
+          MMCA.Common runs the smaller <code>AggregateConventionTestsBase</code> instead: it has no business modules, so
+          the module-scoped rules would check nothing there.</p>
+          <p>The convention half is the rest. <code>GetChildOrNotFound</code>, <code>SetItems</code> and the remove, restore and
+          cascade-delete helpers are protected members of <code>AuditableAggregateRootEntity</code>, and no fitness rule
+          requires an aggregate to use them. <code>Result.Combine</code> is a framework member too: its arguments are
+          evaluated before the call, so every invariant runs and the one failure it returns carries every error.
+          Whether an aggregate composes its invariants that way is convention; the single gated piece is a
+          naming rule, separate from the entity base, that a class named <code>*Invariants</code> must be static.
+          Helpdesk&#39;s <code>Ticket</code> is the reference shape: sealed over the aggregate base, a private constructor,
+          <code>Create</code> returning <code>Result&lt;Ticket&gt;</code>, <code>TicketInvariants</code> composed through <code>Result.Combine</code>, and a
+          comment found through <code>GetChildOrNotFound</code>. The practical reading: an aggregate that reaches into its
+          child list directly, or validates inline, still builds. Review and the nearest example hold that half.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>Rich aggregates are the right default, but they are not free, and the scorecard&#39;s §4 review names the
           gaps:</p>
@@ -373,7 +401,8 @@
           &quot;private constructor plus a <code>Create</code> factory&quot; is an executable check, not a convention held by
           review. What no base class can give you is the strategic half of DDD: bounded contexts and a
           ubiquitous language are realized in the apps that build modules on these classes, not in the
-          framework itself, and the scorecard&#39;s §4 names that as the remaining gap.</li>
+          framework itself, and the scorecard&#39;s §4 names that as one of its two open criteria (the other is
+          the tenant identifier, a plain string by deliberate decision rather than a strong type).</li>
           <li><strong>Aggregate boundaries are a judgment call.</strong> Deciding what belongs inside a root and what is its own
           aggregate is genuine modeling work that no base class makes for you.</li>
           </ul>
@@ -396,8 +425,8 @@
           <code>BaseEntity</code> to <code>AuditableBaseEntity</code> to <code>AuditableAggregateRootEntity</code> hierarchy (identity, then
           audit/soft-delete, then domain events), the private-constructor-plus-<code>Create</code>-returning-<code>Result</code> idiom
           that makes invalidity unconstructable, value objects and identifier aliases against primitive
-          obsession (with the strongly typed identifier struct as the opt-in alternative), and domain events
-          raised on the aggregate root.</p>
+          obsession (with the strongly typed identifier struct as the opt-in alternative), domain events
+          raised on the aggregate root, and which half of the entity contract the fitness tests enforce.</p>
           <p><strong>Next in the series:</strong> specifications over LINQ spaghetti, the composable, reusable query intent that
           keeps read logic out of your controllers.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, skim the domain building-blocks chapter,

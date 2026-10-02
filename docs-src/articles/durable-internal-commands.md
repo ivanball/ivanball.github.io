@@ -7,9 +7,10 @@
 > `.../IInternalCommandScheduler.cs`, `.../IInternalCommandAdministration.cs`,
 > `.../InternalCommandNameAttribute.cs`,
 > `MMCA.Common/.../Infrastructure/Persistence/InternalCommands/InternalCommandMessage.cs`,
+> `.../InternalCommandScheduler.cs`, `.../EnrolledCommandWake.cs`,
 > `.../Processing/InternalCommandProcessor.cs`, `.../Processing/InternalCommandMetrics.cs`,
 > `.../Processing/InternalCommandDispatcher.cs`,
-> `.../Administration/InternalCommandsSettings.cs`,
+> `.../Administration/InternalCommandsSettings.cs`, `.../Persistence/Polling/PollingLoop.cs`,
 > `MMCA.Store/.../Sales.Application/Orders/InternalCommands/SendOrderPaymentFailedEmailInternalCommand.cs`
 > and its handler and saga scheduling site,
 > `MMCA.ADC/.../Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/*`,
@@ -47,13 +48,13 @@ The rubric asks for this twice, from two directions.
 §6 (CQRS and Event-Driven Design) wants reads and writes separated through a dispatcher with a real
 decorator pipeline, an outbox for atomic persist-then-publish rather than "save then publish and hope",
 and idempotent consumers, with "consumers that aren't idempotent and break on redelivery" listed as a red
-flag (`ArchitectureEvaluationCriteria.md:229-247`). §10 (Messaging and Integration Architecture) is a
-weight-3 category (`:352`) scoring what happens once work leaves the request. It wants delivery semantics
+flag (`ArchitectureEvaluationCriteria.md:229-249`). §10 (Messaging and Integration Architecture) is a
+weight-3 category (`:349`) scoring what happens once work leaves the request. It wants delivery semantics
 stated per consumer, dead-letter and poison-message handling with "retries with backoff and a bounded
 attempt count, then a dead-letter path with an operational procedure", bounded and documented retention,
-and long-running work with persisted state and defined timeouts (`:329-348`). Its red flags name
+and long-running work with persisted state and defined timeouts (`:329-341`). Its red flags name
 "retries without idempotency (duplicate side effects) or without backoff (retry storms)" and "no
-dead-letter story: a poison message blocks the queue or is silently dropped" (`:344-348`).
+dead-letter story: a poison message blocks the queue or is silently dropped" (`:342-347`).
 
 Read those two lists and notice what they describe: not an event bus, a **job queue**. Backoff, an
 attempt ceiling, a dead-letter path, an operator procedure, retention. Every single one of those
@@ -61,7 +62,7 @@ properties has to exist somewhere, and the choice is only whether you build them
 per feature that needed to do something later.
 
 MMCA.Common scores §6 at Maturity 4 / Implementation 9 and §10 at Maturity 4 / Implementation 9
-(`common-ArchitectureScorecard.md:86` and `:90`). Both rows are earned by machinery that was already
+(`common-ArchitectureScorecard.md:70` and `:74`). Both rows are earned by machinery that was already
 there for events. ADR-114 is the record of pointing that same machinery at instructions.
 
 ## Four mechanisms, one question
@@ -71,17 +72,17 @@ The framework has four ways to do work later, and they are not interchangeable.
 **The bounded channel** (ADR-121) is a `Channel<T>` singleton with a `SingleReader` `BackgroundService`
 drain, one per job kind. Its full mode is `DropOldest`, so under pressure it evicts the oldest item and
 `TryWrite` always returns true, which means the producer cannot learn that anything was discarded
-(`ADR-121:45-56`). It is in-process only: it does not survive a restart and does not span replicas
-(`:133-135`). That is not a defect, it is the specification. Article 22 in this series covers it in full,
+(`ADR-121:37-56`). It is in-process only: it does not survive a restart and does not span replicas
+(`:135-137`). That is not a defect, it is the specification. Article 22 in this series covers it in full,
 along with the live-channel case it exists for.
 
 **The recurring scheduler** (ADR-074) carries cron occurrences: one row per registered job, and a missed
-occurrence is deliberately not replayed (`ADR-114:26-33`). It answers "sweep the audit trail nightly".
+occurrence is deliberately not replayed (`ADR-114:28-36`). It answers "sweep the audit trail nightly".
 Article 22 covers this one too, as the sibling contract for work a clock owns.
 
 **The transactional outbox** (ADR-003) carries *events*. A row is written by the domain-event interceptor
 inside the same transaction as the aggregate change, and a processor drains it with a claim lease,
-exponential backoff, dead-lettering and OpenTelemetry instrumentation (`ADR-114:14-24`). It answers "this
+exponential backoff, dead-lettering and OpenTelemetry instrumentation (`ADR-114:16-26`). It answers "this
 happened, tell whoever cares". It does not answer "do this later", and bending it to do so means
 expressing an instruction as an event, which is the modelling mistake ADR-007 and ADR-008 spend their
 length avoiding.
@@ -91,10 +92,10 @@ specific gap: a single unit of work, bound to a single aggregate, that must not 
 fire until the aggregate change actually commits.
 
 ADR-121 states the deciding question in one line: "would losing this item be noticed as anything more
-than a missed UI refresh?" If yes, it is an internal command; if no, it is a channel item (`:128-131`).
+than a missed UI refresh?" If yes, it is an internal command; if no, it is a channel item (`:130-133`).
 The record is blunt about the symmetry of the mistake: putting must-run work on a `DropOldest` channel
 loses it silently, and putting a broadcast through a durable command pays a row, a poll interval and a
-lease for something worth less than the write (`:146-149`).
+lease for something worth less than the write (`:148-151`).
 
 ## The MMCA answer: a deferred execution IS the inline execution
 
@@ -110,7 +111,7 @@ Here is the decision that makes the rest of it cheap.
 execution scope (`InternalCommandDispatcher.cs:75`), so what comes back from the container is already
 wrapped by Scrutor in the whole ADR-014 chain: the feature gate, the authorization check, logging, cache
 invalidation, validation, the timeout budget and the transaction, in that order, unchanged
-(`ADR-114:51-61`).
+(`ADR-114:53-62`).
 
 That one decision is what the rest of this article is really about. It means a deferred command gets
 validated. It means a deferred command can require a permission. It means the logging decorator writes
@@ -118,35 +119,40 @@ the same line it always wrote. None of that is job-queue code, because none of i
 anywhere else either.
 
 Compare that to what a general-purpose job library executes: a serialized method invocation, which passes
-through none of your pipeline until you teach it to (`ADR-114:146-154`).
+through none of your pipeline until you teach it to (`ADR-114:156-163`).
 
 ## Scheduling rides the caller's unit of work
 
 `IInternalCommandScheduler` exposes `ScheduleAsync(command, runAt)` and a `TimeSpan delay` overload, both
-returning `Result<Guid>` (`IInternalCommandScheduler.cs:41-57`). `runAt` is "the earliest instant the
+returning `Result<Guid>` (`IInternalCommandScheduler.cs:45-62`). `runAt` is "the earliest instant the
 command may run, converted to UTC", with `null` meaning as soon as possible, and the contract is explicit
 that the processor never runs a row before that instant and makes no promise about how long after it a
 busy queue takes to get there (`:23-27`).
 
 The write goes to the context handed back by the scope's own `IDbContextFactory`, which is the same
 instance the calling handler's repositories are using. From there the behavior splits, and the split is
-the whole reason this mechanism exists (`ADR-114:62-75`):
+the whole reason this mechanism exists (`ADR-114:64-80`):
 
-- **With a transaction active**, the row is only enrolled. The caller's commit persists it, and the
-  caller's rollback erases it.
+- **With a transaction active**, the row is only enrolled. The caller's next save writes it, or the
+  transactional pipeline saves it just before the commit when no save follows, so the caller's commit
+  persists it and the caller's rollback erases it (`IInternalCommandScheduler.cs:34-43`). The processor
+  wake is owed rather than raised: the scheduler records it against the context, and the unit of work
+  releases it once after the commit succeeds and drops it on rollback (`InternalCommandScheduler.cs:108-113`,
+  `EnrolledCommandWake.cs:7-13`).
 - **With no transaction active**, the row is saved immediately, which flushes anything else pending on
-  that context exactly as calling the unit of work's own save would
-  (`IInternalCommandScheduler.cs:34-40`). The processor is signalled only when the row is already due, so
-  a future-dated row is persisted without a wake-up and waits for the poll loop.
+  that context exactly as calling the unit of work's own save would (`IInternalCommandScheduler.cs:39-41`).
+  The processor is then signalled whether or not the row is due: a due row runs on the wake, and a
+  future-dated row re-arms the processor's smart wait on its scheduled instant
+  (`InternalCommandScheduler.cs:120-125`).
 
 That first bullet is the outbox's atomicity guarantee applied to an instruction instead of an event: a
 transaction that aborts schedules nothing. It is also precisely what a separate job store cannot give
 you, and it is the single reason ADR-114 rejects Hangfire, Quartz.NET and a cloud queue. All three keep
 their state somewhere your transaction does not reach, so an enqueue beside a rollback is a job with no
-justification (`ADR-114:146-168`). The cloud-queue rejection is the interesting one, because it is
+justification (`ADR-114:156-177`). The cloud-queue rejection is the interesting one, because it is
 conditional: a broker queue is the right answer once the work must cross a process boundary or survive
 the database being unavailable, and the standard way to enqueue it safely is to write an outbox row that
-a processor forwards, which is this design plus one hop (`:161-168`).
+a processor forwards, which is this design plus one hop (`:171-177`).
 
 ## The row, and what it remembers
 
@@ -173,13 +179,13 @@ width) and `DeadLetteredOn` (`:77`), plus the lease pair `ClaimedBy` (`:84`) and
 
 That fourth group is the one people forget to build, and it is what turns a deferred command from a
 system call into a continuation of a user's request. Before the dispatcher runs, the processor calls the
-shared `AmbientOrigin.Restore` (`InternalCommandProcessor.cs:530`), the same helper every other
+shared `AmbientOrigin.Restore` (`InternalCommandProcessor.cs:483`), the same helper every other
 background hop uses, so every hop restores the same shape. It sets the tenant first, then rebuilds a
 `ClaimsPrincipal` carrying the `sub` claim and one role claim per stored role, and hands it to
 `ScopedUserOverride`, a scoped carrier read by `ImpersonatingCurrentUserService`, which decorates whatever
-`ICurrentUserService` the host registered (`ADR-114:96-109`). With no override set every member reads
+`ICurrentUserService` the host registered (`ADR-114:102-114`). With no override set every member reads
 straight through, so an HTTP request behaves exactly as it did before the queue existed. The identity is
-stamped with an authentication type of `InternalCommand` (`InternalCommandProcessor.cs:72`), which is what
+stamped with an authentication type of `InternalCommand` (`InternalCommandProcessor.cs:66`), which is what
 makes `IsAuthenticated` true and names the hop the identity came back from.
 
 Restore the principal and an `IRequiresPermission` command becomes schedulable, because the authorization
@@ -205,37 +211,43 @@ difference is whether you find out.
 
 ## The drain: claim, execute, stamp
 
-`InternalCommandProcessor` is a `BackgroundService` (`InternalCommandProcessor.cs:47`). Its cycle is the
-outbox's idiom, borrowed rather than shared.
+`InternalCommandProcessor` is a `BackgroundService` (`InternalCommandProcessor.cs:43`). Its loop
+mechanics (the startup delay, the smart wait, the per-source drain and the retry backoff) are the
+internal `PollingLoop` the outbox processor also runs (`PollingLoop.cs:12`, called from
+`InternalCommandProcessor.cs:75-79`); the claim, the execution and the stamping are its own
+(`ADR-114:179-188`).
 
-It waits a five-second startup delay so the host finishes module registration and migration before the
-first cycle touches the table (`:81`), and returns immediately if the host owns no relational sources
-(`:89-97`). Each cycle fetches the due candidates per source, claims the due prefix of the batch with a
-lease token (`ClaimDueAsync`, `:369`), executes each row in a **fresh DI scope**, and stamps the outcome
-through a set-based update guarded by that token (`StampAsync`, `:653`). That guard is what makes a
+It waits a five-second startup delay before the first cycle (`PollingLoop.cs:18`, applied at `:51`), and
+returns immediately if the host owns no relational sources (`:53-57`). Each cycle fetches the due
+candidates per source, claims the due prefix of the batch with a lease token (`ClaimDueAsync`,
+`InternalCommandProcessor.cs:286`), executes each row in a **fresh DI scope**, and stamps the outcome
+through a set-based update guarded by that token (`StampAsync`, `:606`). That guard is what makes a
 scaled-out host safe: a replica whose lease expired mid-execution silently drops its stale outcome rather
 than overwriting whatever the new claimant did.
 
-A `Result.Failure` and a thrown exception are the same operational fact, and both consume an attempt. The
-backoff is `RetryBackoffBaseSeconds * 2^(attempts-1)` with jitter in `[0.8, 1.2]`, capped at
-`MaxRetryBackoffSeconds` (`ComputeRetryBackoffSeconds`, `:679`).
+A `Result.Failure` and a thrown exception are the same operational fact, and both consume an attempt
+(`RecordFailedAttemptAsync`, `:428-462`). The backoff is `RetryBackoffBaseSeconds * 2^(attempts-1)` with
+jitter in `[0.8, 1.2]`, capped at `MaxRetryBackoffSeconds` (`ComputeRetryBackoffSeconds`, `:632`,
+delegating to `PollingLoop.cs:183`, jitter at `:193`).
 
-Two failures are terminal on the **first** attempt rather than consuming the budget: an unresolvable
-command type (`:434`) and a missing handler registration (`:456`). The outbox retries an unresolvable
-type once, and the divergence is reasoned rather than accidental: an outbox row's type may live in an
-assembly that has simply not loaded yet, while a queue row can only ever run on a host that registers a
-handler for it, so a host that cannot name the type has no such handler and retrying would burn the
-budget waiting for a fact that will not change (`ADR-114:110-141`).
+Three failures are terminal on the **first** attempt rather than consuming the budget: a payload that no
+longer deserializes against its type (`payload_invalid`, `InternalCommandProcessor.cs:369-377`), because
+retrying cannot change the stored bytes; an unresolvable command type (`:387`); and a missing handler
+registration (`:409`). The outbox retries an unresolvable type once, and the divergence is reasoned
+rather than accidental: an outbox row's type may live in an assembly that has simply not loaded yet,
+while a queue row can only ever run on a host that registers a handler for it, so a host that cannot name
+the type has no such handler and retrying would burn the budget waiting for a fact that will not change
+(`ADR-114:116-133`).
 
 The settings mirror `OutboxSettings` where the semantics match (`InternalCommandsSettings.cs`):
 `BatchSize` 50 (`:31`), `MaxAttempts` 5 (`:39`), `PollingIntervalSeconds` 2 (`:49`), `LeaseSeconds` 300
-(`:68`), `RetryBackoffBaseSeconds` 10 (`:77`), `RetentionDays` 7 (`:93`), `CleanupIntervalHours` 6
-(`:108`). Two deliberately differ. `ProcessingDelaySeconds` defaults to `0` rather than the outbox's 5
+(`:69`), `RetryBackoffBaseSeconds` 10 (`:78`), `RetentionDays` 7 (`:94`), `CleanupIntervalHours` 6
+(`:109`). Two deliberately differ. `ProcessingDelaySeconds` defaults to `0` rather than the outbox's 5
 (`:58`), because that delay exists to bound a race with the in-process fast path that dispatches an event
 before the processor can, and a job queue has no such fast path. `MaxRetryBackoffSeconds` is its own
-ceiling of 600 (`:86`) rather than reusing the lease, because a job queue wants a long lease for slow
+ceiling of 600 (`:87`) rather than reusing the lease, because a job queue wants a long lease for slow
 handlers and a short ceiling on how long a transient failure parks a command, where the outbox gets one
-number for both (`ADR-114:133-141`).
+number for both (`ADR-114:135-144`).
 
 ## The worked example: an email that must survive a deploy
 
@@ -246,8 +258,7 @@ of them are documentation:
 // MMCA.Store.Sales.Application/Orders/InternalCommands/SendOrderPaymentFailedEmailInternalCommand.cs
 // (XML doc comments trimmed; the attribute, the record and the marker are verbatim.)
 [InternalCommandName("Sales.SendOrderPaymentFailedEmail")]
-public sealed record SendOrderPaymentFailedEmailInternalCommand(OrderIdentifierType OrderId)
-    : IInternalCommand;
+public sealed record SendOrderPaymentFailedEmailInternalCommand(OrderIdentifierType OrderId) : IInternalCommand;
 ```
 
 One identifier as the payload, a stable name, and the marker. That is the entire contract.
@@ -256,7 +267,7 @@ The scheduling site is `OrderPaymentFailedSagaHandler`, the domain-event handler
 compensating saga step. It opens its own scope, resolves `IInternalCommandScheduler`, and calls
 `ScheduleAsync(new SendOrderPaymentFailedEmailInternalCommand(domainEvent.OrderId), runAt: null, ...)`
 (`OrderPaymentFailedSagaHandler.cs:32,35`). The same handler also schedules
-`ExpireUnpaidOrderInternalCommand` (`:79-82`), which is the `runAt` case: a command that should run at a
+`ExpireUnpaidOrderInternalCommand` (`:81-83`), which is the `runAt` case: a command that should run at a
 specific future instant rather than as soon as possible.
 
 The handler on the other side is an ordinary command handler with no queue awareness at all:
@@ -300,11 +311,11 @@ public sealed partial class SendOrderPaymentFailedEmailInternalCommandHandler(
 
 Two lines of judgement carry the whole failure policy, and both are written down in the source rather
 than inferred. A missing order or customer returns success with a log line, because redelivery would
-reach the same conclusion (`SendOrderPaymentFailedEmailInternalCommandHandler.cs:15-18,36-50`). The SMTP
-call is not wrapped, so a transport fault fails the row and is retried by the framework (`:17-18,59`).
+reach the same conclusion (`SendOrderPaymentFailedEmailInternalCommandHandler.cs:17-18,37-50`). The SMTP
+call is not wrapped, so a transport fault fails the row and is retried by the framework (`:17-18,60`).
 And the command's own documentation states the honest cost: delivery is at-least-once with no sent
 marker kept, so a host that dies after the SMTP call re-sends once the claim lease expires
-(`SendOrderPaymentFailedEmailInternalCommand.cs:9-12`).
+(`SendOrderPaymentFailedEmailInternalCommand.cs:10-11`).
 
 ## The expensive case: permission, timeout and a cross-replica claim
 
@@ -312,15 +323,19 @@ MMCA.ADC's AI session scoring is the other end of the range, and it is the case 
 in-process channel. One pass issues one paid Anthropic call per session, so losing it is expensive and
 running it twice is worse.
 
-The command declares three interfaces rather than one (`ScoreEventSessionsInternalCommand.cs:26-27`):
+The command declares four interfaces rather than one (`ScoreEventSessionsInternalCommand.cs:38-39`):
 
 ```csharp
 // MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/
 // ScoreEventSessionsInternalCommand.cs (doc comments trimmed).
 [InternalCommandName("Conference.ScoreEventSessions.v1")]
-public sealed record ScoreEventSessionsInternalCommand(EventIdentifierType EventId)
-    : IInternalCommand, IRequiresPermission, IHasTimeout
+public sealed record ScoreEventSessionsInternalCommand(EventIdentifierType EventId, DateTime? RequestedAtUtc = null)
+    : IInternalCommand, IRequiresPermission, IHasTimeout, IFeatureGated
 {
+    // The kill switch over the paid pass: with the flag off, the FeatureGate decorator
+    // short-circuits before the handler runs.
+    public string FeatureName => ConferenceFeatures.SessionScoring;
+
     // Safe on a deferred command because the row carries the scheduling organizer: the processor
     // restores that principal, so the gate evaluates the operator who asked, not a system principal.
     public string Permission => ConferencePermissions.SessionSelectionManage;
@@ -331,32 +346,43 @@ public sealed record ScoreEventSessionsInternalCommand(EventIdentifierType Event
 }
 ```
 
-That is the payoff of resolving the closed handler through the container. `IRequiresPermission` and
-`IHasTimeout` are the ordinary markers every synchronous command uses, and they work here because the
-decorator chain is the same chain.
+That is the payoff of resolving the closed handler through the container. `IFeatureGated`,
+`IRequiresPermission` and `IHasTimeout` are the ordinary markers every synchronous command uses, and they
+work here because the decorator chain is the same chain. A gate refusal on the processor is a `Result`
+failure like any other, so it consumes an attempt (`InternalCommandProcessor.cs:428-462`).
 
-The trigger endpoint schedules and answers `202 Accepted` unconditionally
-(`SessionSelectionController.cs:108,115-117,126`), and its `[NonIdempotent]` attribute records why
-caching the 202 would be wrong: it would report acceptance for a request that never reached the queue,
-hiding a schedule failure the caller has to act on (`:109`).
+The second positional member, `RequestedAtUtc`, is the request instant, and it makes a pass resumable:
+the pass skips every session whose score was written at or after that instant, so a duplicate queued
+behind a running pass completes without a paid call, and a retry after a timeout or a killed replica
+resumes where the attempt stopped (`ScoreEventSessionsInternalCommand.cs:25-33`).
+
+The trigger endpoint carries the same gate (`SessionSelectionController.cs:125`), because it only
+schedules: the decorator fires minutes later on the processor, and without the attribute an organizer who
+switched the pass off would still be told `202 Accepted` for work that is about to be refused
+(`:115-121`). It schedules the command with the service clock's current instant as `RequestedAtUtc`
+(`:132-136`), returns the failure when the schedule write fails (`:138-141`), and answers `202 Accepted`
+otherwise (`:144`). Its `[NonIdempotent]` attribute records why caching the 202 would be wrong: it would
+report acceptance for a request that never reached the queue, hiding a schedule failure the caller has to
+act on (`:126`).
 
 Three pieces of handler discipline are worth copying (`ScoreEventSessionsInternalCommandHandler.cs`):
 
 - **Lock and skip, not lock and wait.** The handler takes a per-event `IDistributedLock` claim with a
-  15-minute time-to-live (`:53`) and a wait of `TimeSpan.Zero` (`:60`), and the loser logs and returns
-  `Result.Success()` (`:79-83`). Queueing behind a pass already covering the same work would only pay for
+  15-minute time-to-live (`:56`) and a wait of `TimeSpan.Zero` (`:63`), and the loser logs and returns
+  `Result.Success()` (`:82-86`). Queueing behind a pass already covering the same work would only pay for
   it twice.
 - **A refusal is not retried, a fault is.** A `Result` failure from the pass is a business outcome (no
   sessions to score, the event is not scorable) and replaying it would pay for the same refusal again, so
   it is logged and reported as success. An exception propagates instead, and the framework's backoff and
-  attempt ceiling decide how often it is replayed and when it is dead-lettered (`:22-29,87-90`).
+  attempt ceiling decide how often it is replayed and when it is dead-lettered (`:22-29,90-94`).
 - **Idempotent as required.** Re-running a pass rewrites the same per-session score rows rather than
-  accumulating them (`:30-33`).
+  accumulating them, and the pass receives the command's `RequestedAtUtc` so it skips sessions already
+  scored for this request (`:30-36,88`).
 
 The command's own remarks record what it replaced and why: an in-process channel plus a five-minute
 recovery sweep, where the channel was exactly as durable as the replica holding it, so a deploy or a
 crash between the trigger and the last session's score left the event half scored with nothing that would
-ever pick it up again (`ScoreEventSessionsInternalCommand.cs:13-19`).
+ever pick it up again (`ScoreEventSessionsInternalCommand.cs:15-19`).
 
 ## Operating it
 
@@ -388,46 +414,50 @@ much is waiting; lag and age tell you how late it already is.
 
 - **One migration per relational data source.** The table is in the model of every relational source
   (SQL Server, PostgreSQL and SQLite after ADR-113), so adopting the queue means
-  `dotnet ef migrations add AddInternalCommands` per source, applied before deploying (`ADR-114:179-183`).
+  `dotnet ef migrations add AddInternalCommands` per source, applied before deploying (`ADR-114:192-196`).
   The mapping is deliberately **not** gated on `InternalCommands:Enabled`, unlike the cron scheduler's job
   table, because a row must be able to commit in the same transaction as the aggregate change, a
   transaction does not span databases, and a flag that changed the schema would make enabling the queue a
-  migration rather than a deployment decision (`:88-95`).
+  migration rather than a deployment decision (`:97-100`).
 - **Execution is at-least-once, and it is a new obligation on ordinary commands.** A replica that dies
   after its handler committed and before the row was stamped releases the row when its lease expires, and
   the command runs again. That is the same contract the outbox already places on event handlers, so it is
   not new for anyone using the framework, but a command handler previously only ever ran once per request
-  (`ADR-114:185-189`).
+  (`ADR-114:198-202`).
 - **A scheduled command runs with the scheduling user's authority, not the executing host's.** That is
   what makes an `IRequiresPermission` command schedulable at all, and it means the row is a durable record
   of an authorization decision. If the user's roles change between scheduling and execution, the stored
   roles win. The record files that as deliberate (the decision was taken when the work was requested) and
   as the reason the row is under the same retention discipline as the outbox, because the payload can
-  carry personal data (`ADR-114:191-197`).
-- **A command scheduled inside a transaction waits up to one polling interval.** The enrolled row raises
-  no signal, because a signal before the commit only buys a poll against a transaction that has not
-  committed. `PollingIntervalSeconds` ships at 2, the same default the outbox ships, so the divergence is
-  a deployment decision rather than a framework one: ADC and Store both run the queue at 60 seconds while
-  pushing the outbox to 300 (`ADR-114:199-209`). A host that raises the interval to cut idle polling
-  accepts that much latency on transaction-scheduled work.
+  carry personal data (`ADR-114:204-210`).
+- **The polling interval is the fallback, and production stretches it.** A schedule does not wait for the
+  poll to be noticed: a row saved outright signals the processor, and a row enrolled in a transaction owes
+  a wake that the unit of work releases once the commit succeeds (`DbContextFactory.cs:472-474`). What the
+  interval bounds is how long an idle processor sleeps without a wake, because the smart wait is capped at
+  it (`PollingLoop.cs:104`, `ADR-114:75-78`). `PollingIntervalSeconds` ships at 2, the same default the
+  outbox ships, so the divergence is a deployment decision rather than a framework one: ADC and Store both
+  run the queue at 60 seconds while pushing the outbox to 300 (`MMCA.ADC/infra/main.bicep:1700,1706`,
+  `MMCA.Store/infra/main.bicep:1493,1500`). A host that raises the interval accepts that much latency on
+  any row whose wake never reaches an idle processor.
 - **Two poll loops, not one.** A host runs the outbox processor and the queue processor side by side,
   each with its own signal instance so a burst of schedules cannot consume the outbox's single pending
   wake-up. Both poll spans are suppressed from telemetry export by the same Aspire processor
-  (`ADR-114:210-216`). Two loops is two idle query streams against every source, which is exactly the
+  (`ADR-114:223-228`). Two loops is two idle query streams against every source, which is exactly the
   cost the 60-second production interval is paying down.
 - **The duplication with the outbox is deliberate and bounded.** Extending the outbox to carry commands
   was the tempting option and it is rejected on four counts: the two rows want different columns (a
   scheduled instant, an attempt budget, a captured principal), different indexes, different retention and
   different terminal semantics for an unresolvable type, and the outbox's poll predicate is the hottest
   query the framework issues, so widening it would make every outbox change a job-queue change
-  (`ADR-114:169-176`). The two processors share an idiom, not an implementation.
+  (`ADR-114:179-188`). The two processors share the loop mechanics through `PollingLoop` and nothing
+  else: each keeps its own tables, queries, logging, metrics and activities.
 - **The payload is JSON, which is a real constraint on what a command can carry.** Identifiers and
   scalars round-trip; a loaded aggregate does not, and should not be attempted (`IInternalCommand.cs:19-24`).
   Everything a handler needs beyond an identifier it re-reads at execution time, which is correct anyway,
   because the world moved on between the schedule and the run.
 - **Choosing between this and a channel is a per-job judgement no test enforces.** ADR-121's question
   ("would losing this item be noticed as anything more than a missed UI refresh?") is a rule a human
-  applies, and getting it wrong in either direction is silent (`ADR-121:128-131,146-149`).
+  applies, and getting it wrong in either direction is silent (`ADR-121:130-133,148-151`).
 
 ## Apply this even without MMCA
 
@@ -490,98 +520,125 @@ stored permission grants."*
 
 *Tags: .NET, C Sharp, Distributed Systems, Microservices, Software Architecture*
 
-*Notes: verified type/behavior names with path:line (all re-read this run, 2026-09-19). The three code
-blocks are illustrative of the documented shape: the `SendOrderPaymentFailedEmailInternalCommand` block is
-the source record with its XML doc comments removed (attribute, record and marker verbatim, from
+*Notes: verified type/behavior names with path:line (all re-read this run, 2026-10-02, framework
+v1.221.0). Changes this run: the drain section re-grounded on the shared `PollingLoop` (startup delay,
+no-relational-sources exit and backoff math live there now); the first-attempt terminal cases went from two
+to three (`payload_invalid` added); the scheduling section and the polling trade-off rewritten because an
+enrolled row now owes a post-commit wake and an outright save signals whether or not the row is due; the
+ADC command gained `RequestedAtUtc` and `IFeatureGated` and its trigger endpoint is feature-gated and
+surfaces a failed schedule; every processor, settings, handler, ADR, rubric and scorecard anchor
+re-anchored. The three code blocks are illustrative of the documented shape: the
+`SendOrderPaymentFailedEmailInternalCommand` block is the source record with its XML doc comments removed
+(attribute, record and marker verbatim, from
 `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/InternalCommands/SendOrderPaymentFailedEmailInternalCommand.cs:14-15`);
-the handler block is condensed from that command's handler `:19-64` (the `LoggerMessage` calls and their
+the handler block is condensed from that command's handler `:20-64` (the `LoggerMessage` calls and their
 declarations trimmed, `ConfigureAwait(false)` and the `string.Create(CultureInfo.InvariantCulture, ...)`
-wrappers elided for width, the two rationale comments shortened from `:15-18`, control flow and API calls
+wrappers elided for width, the two rationale comments shortened from `:17-18`, control flow and API calls
 faithful); the `ScoreEventSessionsInternalCommand` block is condensed from
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:25-45`
-with the two XML doc blocks shortened to one-line comments.*
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:37-66`
+with the three XML doc blocks shortened to one-line comments. The `FeatureName` comment deliberately omits
+the source summary's claim that a gate failure "completes the row rather than retrying it"
+(`:44-46`): the processor records every `Result` failure as a consumed attempt
+(`InternalCommandProcessor.cs:428-462`), and the article follows the processor.*
 - *ADR-114 (`Website/docs-src/adr/114-internal-commands-durable-job-queue.md`), Accepted 2026-09-09 (`:4`),
-  revised 2026-09-19 with three corrections to match the code (`:5-9`): the two existing mechanisms and
-  the gap between them (outbox `:14-24`, recurring scheduler `:26-33`, the gap `:35-43`); the five parts
-  of the decision (marker plus closed-handler dispatch `:51-61`, scheduling on the caller's unit of work
-  `:62-75`, one unconditionally mapped table per relational source `:76-95`, context restoration
-  `:96-109`, failure policy and its one divergence `:110-141`); the four rejected alternatives (Hangfire
-  `:146-154`, Quartz.NET `:155-160`, a cloud queue `:161-168`, extending the outbox `:169-176`); and the
-  trade-offs restated here (`:179-183`, `:185-189`, `:191-197`, `:199-209`, `:210-216`). ADR-114's own
-  anchors for `InternalCommandProcessor` members sit above this run's readings (the record cites the class
-  at `:50`, `ClaimDueAsync` at `:366`, `StampAsync` at `:686` and `ComputeRetryBackoffSeconds` at `:712`);
-  this article cites the lines read this run.*
+  revised 2026-09-19 (`:5-8`) and 2026-10-01 (`:9-10`, Revision section `:235-251`): the two existing
+  mechanisms and the gap between them (outbox `:16-26`, recurring scheduler `:28-36`, the gap `:38-43`);
+  the five parts of the decision (marker plus closed-handler dispatch `:53-62`, scheduling on the
+  caller's unit of work `:64-80` with the smart-wait cap `:75-78`, one unconditionally mapped table per
+  relational source `:82-100`, context restoration `:102-114`, failure policy and its one divergence
+  `:116-133`, settings `:135-144`); the four rejected alternatives (Hangfire `:156-163`, Quartz.NET
+  `:165-169`, a cloud queue `:171-177`, extending the outbox with the shared `PollingLoop` `:179-188`);
+  and the trade-offs restated here (`:192-196`, `:198-202`, `:204-210`, `:212-221`, `:223-228`).
+  ADR-114's own anchors for `InternalCommandProcessor` members sit above this run's readings (the record
+  cites the class at `:47`, `ClaimDueAsync` at `:297`, `StampAsync` at `:617`,
+  `ComputeRetryBackoffSeconds` at `:643` and `payload_invalid` at `:385`), and its trade-off
+  "The enrolled row raises no signal" (`:212-213`, restated in the Revision at `:241`) predates
+  `EnrolledCommandWake`; this article cites the source read this run.*
 - *ADR-121 (`Website/docs-src/adr/121-ephemeral-in-process-work-queue.md`), Accepted 2026-09-11,
-  supersedes ADR-052 (`:4`): the bounded-channel decision (`:35-44`), the `DropOldest` full mode and the
-  invisible drop (`:45-56`), "work that must run does not go here" (`:105-114`), the one-question split
-  with ADR-114 (`:128-131`), in-process-only (`:133-135`) and the per-job judgement (`:146-149`).*
+  supersedes ADR-052 (`:4`), revised 2026-10-01 (`:152`): the bounded-channel decision (`:37-46`), the
+  `DropOldest` full mode and the invisible drop (`:47-54`), the `SingleReader` drain (`:55`), "work that
+  must run does not go here" (`:107-117`), the one-question split with ADR-114 (`:130-133`),
+  in-process-only (`:135-137`) and the per-job judgement (`:148-151`).*
 - *Framework contracts (paths rooted at `MMCA.Common/Source/Core/MMCA.Common.Application/InternalCommands/`):
   `IInternalCommand.cs:38` (marker over `ICommand<Result>`), the no-second-handler-contract rationale
   `:11-16`, the JSON payload requirement `:19-24`, the at-least-once statement `:25-29` and the
   rename-is-visible statement `:30-36`. `IInternalCommandScheduler.cs:16` with `ScheduleAsync(command,
-  runAt)` `:41-44` and the `TimeSpan delay` overload `:54-57`, the `runAt` contract `:23-27`, the
-  unit-of-work paragraph `:9-14`, and the enrolled-versus-saved remark `:34-40`.
+  runAt)` `:45-48` and the `TimeSpan delay` overload `:59-62`, the `runAt` contract `:23-27`, the
+  unit-of-work paragraph `:10-13`, and the enrolled-versus-saved remark `:34-43`.
   `InternalCommandNameAttribute.cs:25` (declaration), orphaning rationale `:7-10`, new-rows-only and
   uniqueness remark `:13-17`, sample `:18-21`. `IInternalCommandAdministration.cs:17` with
   `CountPendingAsync` `:28` (future rows counted, `:19-23`), `ListDeadLettersAsync` `:42`, `RequeueAsync`
   `:63` (`LastError` kept on purpose `:48-52`), `PurgeProcessedAsync` `:80`, the `Result<T>` rationale
   `:11-15`, and the `InternalCommandDeadLetter` record `:99` with its payload-omitted rationale `:86-89`.*
 - *Framework infrastructure (paths rooted at
-  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/InternalCommands/`):
-  `InternalCommandMessage.cs:21` (not an auditable entity, `:14-19`), columns `Id` `:36`, `CommandType`
-  `:43`, `Payload` `:46`, `ScheduledOn` `:52`, `CreatedOn` `:55`, `ProcessedOn` `:61`, `Attempts` `:64`,
-  `LastError` `:70`, `DeadLetteredOn` `:77`, `ClaimedBy` `:84`, `ClaimedUntil` `:92`, `CorrelationId`
-  `:98`, `TraceId` `:101`, `SpanId` `:104`, `UserId` `:111`, `UserRoles` `:118`, `TenantId` `:124`.
-  `Processing/InternalCommandProcessor.cs:47` (`BackgroundService` declaration), `PollActivityName` `:63`,
-  `MaxErrorLength` 4000 `:66`, `PrincipalAuthenticationType` `:72`, `MinimumWait` 1s `:75`, `StartupDelay`
-  5s `:81`, `ExecuteAsync` `:89` with the no-relational-sources exit `:93-97`, `ClaimDueAsync` `:369`,
-  `ExecuteClaimedAsync` `:417` with the terminal type-unresolvable `:434` and handler-missing `:456`
-  branches, `AmbientOrigin.Restore` call `:530`, `StampAsync` `:653`, `ComputeRetryBackoffSeconds` `:679`.
-  `Processing/InternalCommandDispatcher.cs:21` resolving the closed handler `:75`.
-  `Processing/InternalCommandMetrics.cs:20` (`MeterName` = `MMCA.Common.InternalCommands`),
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/`):
+  `InternalCommands/InternalCommandMessage.cs:21` (not an auditable entity, `:14-19`), columns `Id` `:36`,
+  `CommandType` `:43`, `Payload` `:46`, `ScheduledOn` `:52`, `CreatedOn` `:55`, `ProcessedOn` `:61`,
+  `Attempts` `:64`, `LastError` `:70`, `DeadLetteredOn` `:77`, `ClaimedBy` `:84`, `ClaimedUntil` `:92`,
+  `CorrelationId` `:98`, `TraceId` `:101`, `SpanId` `:104`, `UserId` `:111`, `UserRoles` `:118`,
+  `TenantId` `:124`. `InternalCommands/InternalCommandScheduler.cs` enrolled branch deferring the wake
+  `:108-113`, outright save `:120` and unconditional signal `:122-125`.
+  `InternalCommands/EnrolledCommandWake.cs:14` (owed-wake rationale `:7-13`), released after commit at
+  `DbContexts/Factory/DbContextFactory.cs:472-474` and dropped on rollback at `:843-846`.
+  `InternalCommands/Processing/InternalCommandProcessor.cs:43` (`BackgroundService` at `:49`),
+  `PollActivityName` `:57`, `MaxErrorLength` 4000 `:60`, `PrincipalAuthenticationType` `:66`,
+  `ExecuteAsync` delegating to `PollingLoop.RunAsync` `:75-79`, `ClaimDueAsync` `:286`,
+  `ExecuteClaimedAsync` `:355` with the terminal `payload_invalid` `:369-377`, `type_unresolvable` `:387`
+  and `handler_missing` `:409` branches, `RecordFailedAttemptAsync` `:428-462` (both failure kinds consume
+  an attempt), `AmbientOrigin.Restore` call `:483`, `StampAsync` `:606`, `ComputeRetryBackoffSeconds`
+  `:632-633`. `Polling/PollingLoop.cs:12`, `StartupDelay` 5s `:18`, `MinimumWait` 1s `:21`, `RunAsync`
+  `:40` with the delay applied `:51` and the no-targets exit `:53-57`, `ComputeWaitTime` `:104`,
+  `ComputeRetryBackoffSeconds` `:183` with jitter `[0.8, 1.2]` `:193`.
+  `InternalCommands/Processing/InternalCommandDispatcher.cs:21` resolving the closed handler `:75`.
+  `InternalCommands/Processing/InternalCommandMetrics.cs:20` (`MeterName` = `MMCA.Common.InternalCommands`),
   `internal_commands.processed.count` `:38-39`, `.failed.count` `:48-49`, `.dead_letter.count` `:57-58`,
   `.execution.duration` `:66-67`, `.execution.lag` `:75-76`, `.pending.depth` `:92-93`,
-  `.oldest_due.age` `:104-105`. `Administration/InternalCommandsSettings.cs:15` with `SectionName` `:18`,
-  `Enabled` `:27`, `BatchSize` 50 `:31`, `MaxAttempts` 5 `:39`, `PollingIntervalSeconds` 2 `:49`,
-  `ProcessingDelaySeconds` 0 `:58`, `LeaseSeconds` 300 `:68`, `RetryBackoffBaseSeconds` 10 `:77`,
-  `MaxRetryBackoffSeconds` 600 `:86`, `RetentionDays` 7 `:93`, `CleanupIntervalHours` 6 `:108`.*
+  `.oldest_due.age` `:104-105`. `InternalCommands/Administration/InternalCommandsSettings.cs:15` with
+  `SectionName` `:18`, `Enabled` `:27`, `BatchSize` 50 `:31`, `MaxAttempts` 5 `:39`,
+  `PollingIntervalSeconds` 2 `:49`, `ProcessingDelaySeconds` 0 `:58`, `LeaseSeconds` 300 `:69`,
+  `RetryBackoffBaseSeconds` 10 `:78`, `MaxRetryBackoffSeconds` 600 `:87`, `RetentionDays` 7 `:94`,
+  `CleanupIntervalHours` 6 `:109`.*
 - *MMCA.Store adoption (paths rooted at `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/`):
   `Orders/InternalCommands/SendOrderPaymentFailedEmailInternalCommand.cs:15` with
   `[InternalCommandName("Sales.SendOrderPaymentFailedEmail")]` `:14` and the at-least-once, no-sent-marker
-  remark `:9-12`; its handler `Orders/InternalCommands/SendOrderPaymentFailedEmailInternalCommandHandler.cs:19`
-  implementing `ICommandHandler<SendOrderPaymentFailedEmailInternalCommand, Result>` `:24`, the
-  return-success-on-missing-order branch `:36-40` and missing-customer branch `:46-50`, the unwrapped
-  `emailSender.SendAsync` `:59`, and the remarks stating both policies `:15-18`. Scheduled from
+  remark `:10-11`; its handler `Orders/InternalCommands/SendOrderPaymentFailedEmailInternalCommandHandler.cs:20`
+  implementing `ICommandHandler<SendOrderPaymentFailedEmailInternalCommand, Result>` `:25`, the
+  return-success-on-missing-order branch `:37-40` and missing-customer branch `:47-50`, the unwrapped
+  `emailSender.SendAsync` `:60`, and the remarks stating both policies `:17-18`. Scheduled from
   `Orders/Saga/OrderPaymentFailedSagaHandler.cs:32,35` (`IInternalCommandScheduler` resolved from the
-  handler's own scope, `runAt: null`), which also schedules `ExpireUnpaidOrderInternalCommand` `:79-82`.
-  Other Store internal commands read this run: `Orders/InternalCommands/SendOrderShippedEmailInternalCommand.cs`,
-  `Orders/InternalCommands/ExpireUnpaidOrderInternalCommand.cs` and
-  `MMCA.Store.Catalog.Application/Products/InternalCommands/PublishProductVariantChangedInternalCommand.cs`.*
+  handler's own scope, `runAt: null`), which also schedules `ExpireUnpaidOrderInternalCommand` `:81-83`.
+  Deployed polling: `MMCA.Store/infra/main.bicep:1493` (outbox 300) and `:1500` (queue 60).*
 - *MMCA.ADC adoption (paths rooted at `MMCA.ADC/Source/Modules/Conference/`):
-  `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:26-27`
-  implementing `IInternalCommand, IRequiresPermission, IHasTimeout`, `[InternalCommandName("Conference.ScoreEventSessions.v1")]`
-  `:25`, `Permission` `:35` with the restored-principal rationale `:29-34`, `Timeout` 12 minutes `:44` with
-  the must-stay-below-the-lock-TTL rationale `:37-43`, and the what-it-replaced remark `:13-19`. Its
-  handler `.../ScoreEventSessionsInternalCommandHandler.cs:39` implementing
-  `ICommandHandler<ScoreEventSessionsInternalCommand, Result>` `:44`, `ClaimTimeToLive` 15 minutes `:53`,
-  `ClaimWait` `TimeSpan.Zero` `:60`, the claim `:75-77`, the claim-loser success `:79-83`, the refusal
-  branch `:87-90`, and the three remarks paragraphs `:14-21` (lock and skip), `:22-29` (refusal versus
-  fault) and `:30-33` (idempotent as required). Trigger endpoint
-  `MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:108` (`[HttpPost("score/{eventId}")]`),
-  `[NonIdempotent(...)]` `:109`, the schedule call `:115-117` and `return Accepted()` `:126`.*
+  `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsInternalCommand.cs:38-39`
+  declaring `(EventIdentifierType EventId, DateTime? RequestedAtUtc = null)` and implementing
+  `IInternalCommand, IRequiresPermission, IHasTimeout, IFeatureGated`,
+  `[InternalCommandName("Conference.ScoreEventSessions.v1")]` `:37`, `FeatureName` `:48`, `Permission`
+  `:56` with the restored-principal rationale `:50-55`, `Timeout` 12 minutes `:65` with the
+  must-stay-below-the-lock-TTL rationale `:58-64`, the what-it-replaced remark `:15-19`, and the
+  request-instant resumability remark `:25-33`. Its handler `.../ScoreEventSessionsInternalCommandHandler.cs:42`
+  implementing `ICommandHandler<ScoreEventSessionsInternalCommand, Result>` `:47`, `ClaimTimeToLive` 15
+  minutes `:56`, `ClaimWait` `TimeSpan.Zero` `:63`, the claim `:78-80`, the claim-loser success `:82-86`,
+  the pass receiving `RequestedAtUtc` `:88`, the refusal branch `:90-94`, and the three remarks paragraphs
+  `:14-21` (lock and skip), `:22-29` (refusal versus fault) and `:30-36` (idempotent as required). Trigger
+  endpoint `MMCA.ADC.Conference.API/Controllers/Sessions/SessionSelectionController.cs:124`
+  (`[HttpPost("score/{eventId}")]`), `[FeatureGate(ConferenceFeatures.SessionScoring)]` `:125` with its
+  rationale `:115-121`, `[NonIdempotent(...)]` `:126`, the schedule call `:132-136`, the failure return
+  `:138-141` and `return Accepted()` `:144`. Deployed polling: `MMCA.ADC/infra/main.bicep:1700` (outbox
+  300) and `:1706` (queue 60), repeated per service at `:1923-1924`, `:2063-2064` and `:2217-2218`.*
 - *Rubric and scorecard: §6 CQRS and Event-Driven Design criteria and red flags
-  (`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:229-247`); §10 Messaging and Integration
-  Architecture intent, criteria and red flags (`:329-348`) at default weight 3 (`:352`). Scores:
-  `Website/docs-src/governance/common-ArchitectureScorecard.md:86` (§6 at weight 2, Maturity 4,
-  Implementation 9) and `:90` (§10 at weight 3, Maturity 4, Implementation 9), both from the 2026-09-19
-  thirty-sixth-wave re-score at framework v1.205.0 (`:5`). Group G04 Domain and Integration Events +
-  Outbox Dual-Dispatch (`Website/docs-src/onboarding/00-group-taxonomy.md:59`). Framework v1.205.0
-  (`MMCA.Common/FACTS.md:14`) / 19 published packages (`FACTS.md:19`) / 136 fitness test methods across 53
-  abstract bases (`FACTS.md:48`) this run; ADR index rows for ADR-114 and ADR-121 at
-  `Website/docs-src/adr/README.md:126` and `:133`.*
-- *Article 22 (`Article-22-live-channel-push.md`) already teaches the two lighter mechanisms this article
-  frames against: the bounded channel and its drain (its "The queue is where you say what the work is
-  worth" section, `:184`) and the cron scheduler (its "The sibling contract: work a clock owns" section,
-  `:256`). Read only, not edited by this run.*
+  (`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:229-249`, the non-idempotent-consumer red
+  flag `:245`); §10 Messaging and Integration Architecture intent and criteria (`:329-341`) and red flags
+  (`:342-347`) at default weight 3 (`:349`). Scores:
+  `Website/docs-src/governance/common-ArchitectureScorecard.md:70` (§6 at weight 2, Maturity 4,
+  Implementation 9) and `:74` (§10 at weight 3, Maturity 4, Implementation 9), from the 2026-10-01
+  re-score at framework v1.218.0 (`:5`). Group G04 Domain and Integration Events + Outbox Dual-Dispatch
+  (`Website/docs-src/onboarding/00-group-taxonomy.md:59`). Framework v1.221.0 (`MMCA.Common/FACTS.md:14`)
+  / 22 published packages (`FACTS.md:19`) / 141 fitness test methods across 55 abstract bases
+  (`FACTS.md:51`) this run; ADR index rows for ADR-114 and ADR-121 at `Website/docs-src/adr/README.md:127`
+  and `:134`.*
+- *Article 22 (`live-channel-push.md`) already teaches the two lighter mechanisms this article frames
+  against: the bounded channel and its drain (its "The queue is where you say what the work is worth"
+  section, `:196`) and the cron scheduler (its "The sibling contract: work a clock owns" section, `:250`).
+  Read only, not edited by this run.*
 
 - Full series index: https://ivanball.github.io/writing.html

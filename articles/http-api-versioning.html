@@ -201,7 +201,7 @@
           host through one call, and keeps it exercised by a shared contract test that proves two live versions
           coexist.</p>
           <p><strong>One registration wires the whole policy.</strong> <code>AddCommonApiVersioning</code>
-          (<code>WebApplicationBuilderExtensions.cs:334</code>) is the entire decision, in one place: the reader, the
+          (<code>WebApplicationBuilderExtensions.cs:37</code>) is the entire decision, in one place: the reader, the
           default behavior, the reporting, and the one guard that keeps document generation from tripping over
           any of it.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> IServiceCollection <span class="hljs-title">AddCommonApiVersioning</span>()</span>
@@ -216,7 +216,7 @@
     }).AddMvc()
     .AddApiExplorer(options =&gt;
     {
-        options.GroupNameFormat = <span class="hljs-string">&quot;&#x27;v&#x27;VVV&quot;</span>;                      <span class="hljs-comment">// feeds the versioned OpenAPI group</span>
+        options.GroupNameFormat = <span class="hljs-string">&quot;&#x27;v&#x27;VVV&quot;</span>;                      <span class="hljs-comment">// names each version&#x27;s explorer group</span>
         options.SubstituteApiVersionInUrl = <span class="hljs-literal">true</span>;
     });
 
@@ -225,27 +225,30 @@
     <span class="hljs-keyword">return</span> services;
 }</code></pre>
           <p>Three of those lines carry the design. The reader is a <code>HeaderApiVersionReader(&quot;api-version&quot;)</code>
-          (<code>WebApplicationBuilderExtensions.cs:343</code>), so routes and query strings stay version-free: a caller
+          (<code>WebApplicationBuilderExtensions.cs:46</code>), so routes and query strings stay version-free: a caller
           opts into a newer shape by adding one header, not by rewriting the URL. <code>AssumeDefaultVersionWhenUnspecified</code>
-          (<code>WebApplicationBuilderExtensions.cs:341</code>) means a client that never sends the header keeps getting
+          (<code>WebApplicationBuilderExtensions.cs:44</code>) means a client that never sends the header keeps getting
           <code>1.0</code>, so introducing versioning was not a breaking change for any existing caller. And
-          <code>ReportApiVersions</code> (<code>WebApplicationBuilderExtensions.cs:342</code>) means every response carries the
+          <code>ReportApiVersions</code> (<code>WebApplicationBuilderExtensions.cs:45</code>) means every response carries the
           supported and deprecated version lists in its headers, so a client can see which versions a service
           still honors and which are on the way out without reading a changelog.</p>
           <p>Two more details in that block carry less design and more hard-won experience, and the first of them is
           a line that is not there. <code>1.0</code> is the default because the <code>Asp.Versioning</code> library already defaults to
           it, so the registration says nothing at all: setting <code>DefaultApiVersion</code> explicitly, in either the
           versioning options or the explorer options that inherit them, trips the library&#39;s own analyzers
-          (AV0011/AV0024), and the comment standing in its place (<code>WebApplicationBuilderExtensions.cs:336-338</code>)
+          (AV0011/AV0024), and the comment standing in its place (<code>WebApplicationBuilderExtensions.cs:39-41</code>)
           exists so the next reader does not &quot;fix&quot; the omission. And <code>AddApiParameterDescriptorBackfill</code>
-          (<code>WebApplicationBuilderExtensions.cs:351</code>) installs <code>ApiParameterDescriptorBackfillProvider</code>, added in
+          (<code>WebApplicationBuilderExtensions.cs:54</code>) installs <code>ApiParameterDescriptorBackfillProvider</code>, added in
           v1.146.0 after a real failure: MVC leaves <code>ApiParameterDescription.ParameterDescriptor</code> null for a route
-          token with no matching action parameter, and <code>Asp.Versioning.OpenApi</code> dereferences it without a null
-          check, so a host that routes <code>api/v{version:apiVersion}/...</code> returned a <code>500</code> from
-          <code>GET /openapi/{documentName}.json</code>. The guard fills a placeholder only where one is missing and never
-          replaces a descriptor MVC supplied (<code>ApiParameterDescriptorBackfillProvider.cs:65</code>). Because this
-          framework&#39;s reader is the header, no current host was hit either way, which is exactly why that failure
-          could ship unnoticed (ADR-046).</p>
+          token with no matching action parameter, and <code>Asp.Versioning.OpenApi</code>, the document pipeline in use when
+          the guard shipped, dereferenced it without a null check, so a host that routed <code>api/v{version:apiVersion}/...</code>
+          got a <code>500</code> from <code>GET /openapi/{documentName}.json</code>. The guard fills a placeholder only where one is
+          missing and never replaces a descriptor MVC supplied (<code>ApiParameterDescriptorBackfillProvider.cs:65</code>).
+          Because this framework&#39;s reader is the header, no host was hit either way, which is exactly why that
+          failure could ship unnoticed. MMCA.Common references only <code>Asp.Versioning.Mvc</code> and
+          <code>Asp.Versioning.Mvc.ApiExplorer</code> (<code>MMCA.Common/Directory.Packages.props:14</code>, <code>:20</code>), not
+          <code>Asp.Versioning.OpenApi</code>; the guard stays because it costs nothing and protects any other consumer of
+          the API descriptions from the same null (ADR-046).</p>
           <p><strong>A shipped exemplar proves two versions coexist.</strong> This is the part most &quot;we support versioning&quot;
           stories skip. <code>ServiceInfoControllerBase</code> (<code>ServiceInfoControllerBase.cs:30</code>) serves the same
           <code>/ServiceInfo</code> route under two versions selected by the header. <code>GetV1</code> is mapped to <code>1.0</code>
@@ -281,9 +284,9 @@
           check, and the same invariant-over-discipline posture the framework prefers (ADR-015): without a second
           working version, everything above would be asserted rather than proven.</p>
           <p><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code> in
-          their startup: ADC&#39;s Conference (<code>MMCA.ADC.Conference.Service/Program.cs:203</code>), Identity (<code>:152</code>),
-          Engagement (<code>:148</code>), and Notification (<code>:140</code>) hosts, Store&#39;s Catalog (<code>:141</code>), Sales (<code>:148</code>), and
-          Identity (<code>:135</code>) hosts, and the monolith reference host
+          their startup: ADC&#39;s Conference (<code>MMCA.ADC.Conference.Service/Program.cs:217</code>), Identity (<code>:150</code>),
+          Engagement (<code>:147</code>), and Notification (<code>:136</code>) hosts, Store&#39;s Catalog (<code>:140</code>), Sales (<code>:147</code>), and
+          Identity (<code>:134</code>) hosts, and the monolith reference host
           (<code>MMCA.Helpdesk.Web/Program.cs:35</code>). One call per host, and the reader, default, and reporting choices
           cannot drift apart between services. The discovery exemplar is narrower than the registration: only ADC&#39;s
           Conference and Store&#39;s Catalog hosts ship a <code>ServiceInfoController</code> subclass today.</p>
@@ -303,17 +306,24 @@
           <code>/ServiceInfo</code> discovery endpoint to keep the versioning path honest, not because any business
           resource has yet needed to evolve its shape. The point of the exemplar is that when a real resource
           does need a <code>2.0</code>, the machinery it plugs into has been proven to work, not merely configured.</li>
-          <li><strong>Header versioning is less discoverable than a URL segment, and the OpenAPI documents are dev/CI
-          only.</strong> A version chosen by header does not show up in a copied URL or a browser address bar, so the
-          version in play is only visible to a caller that reads request and response headers. The generated
-          contract does follow the versioning axis: <code>MapCommonOpenApi</code> applies
-          <code>MapOpenApi().WithDocumentPerVersion()</code> (<code>Startup/Endpoints/OpenApiEndpointExtensions.cs:38</code>), so the
-          route resolves one document per discovered API version, named by the explorer&#39;s <code>GroupNameFormat</code>
-          (<code>v1.0</code> is the <code>v1</code> document). But the whole endpoint is a no-op in Production
-          (<code>Startup/Endpoints/OpenApiEndpointExtensions.cs:36</code>), and the only document any host&#39;s contract test
-          pins is <code>/openapi/v1.json</code> (<code>Conformance/OpenApiContractTestsBase.cs:31</code>), so the machine-readable
-          surface is a development and CI artifact, not something a client can browse in production and not a
-          place the <code>2.0</code> shape is currently asserted.</li>
+          <li><strong>Header versioning is less discoverable than a URL segment, and the OpenAPI document is one
+          dev/CI-only <code>v1</code>.</strong> A version chosen by header does not show up in a copied URL or a browser address
+          bar, so the version in play is only visible to a caller that reads request and response headers. The
+          generated contract does not follow the versioning axis either. Each host registers the plain <code>v1</code>
+          document itself with <code>services.AddOpenApi()</code>, next to <code>AddCommonOpenApi</code>, which registers no document
+          and only configures the ones present (<code>WebApplicationBuilderExtensions.cs:95</code>). <code>MapCommonOpenApi</code>
+          then maps that single document with <code>app.MapOpenApi().AllowAnonymous()</code>
+          (<code>Startup/Endpoints/OpenApiEndpointExtensions.cs:74</code>, document name <code>v1</code> at <code>:28</code>), throws at startup
+          when no <code>v1</code> document was registered (<code>:65-71</code>), and is a no-op in Production (<code>:62</code>). So the <code>2.0</code>
+          <code>ServiceInfo</code> action is served and exercised by the fitness contract above but appears in no
+          generated document, and the only document any host&#39;s contract test pins is <code>/openapi/v1.json</code>
+          (<code>Conformance/OpenApiContractTestsBase.cs:31</code>). ADC and Store also write that document to disk at
+          build time and commit it per service host (four in ADC, three in Store, for example
+          <code>MMCA.ADC.Conference.Service/openapi/MMCA.ADC.Conference.Service.json</code>), and an &quot;OpenAPI documents are
+          current&quot; CI step fails a PR whose document changed without being committed (<code>MMCA.ADC/.github/workflows/deploy.yml:305</code>,
+          <code>MMCA.Store/.github/workflows/deploy.yml:287</code>). That makes the contract diffable in review, but it
+          stays a development and CI artifact: never served in production, and not a place the <code>2.0</code> shape is
+          asserted (the committed Conference document carries <code>/ServiceInfo</code> and no <code>ServiceInfoV2Response</code>).</li>
           </ul>
           <p>The trade the framework makes is clear: stable, version-free URLs and a non-breaking rollout, paid for
           with a version that lives in headers rather than the path, and a proof-of-life second version on the
@@ -344,8 +354,8 @@
           backfill that keeps OpenAPI generation from failing) in one call, how <code>ServiceInfoControllerBase</code> ships a
           real deprecated <code>1.0</code> alongside a <code>2.0</code> so <code>ServiceInfoVersioningContractTestsBase</code> can prove two versions
           coexist rather than assert it, and the honest current-reality caveats (only the discovery endpoint has
-          a <code>2.0</code>, adoption is per host, the attributes are repeated per subclass, and the OpenAPI documents are
-          dev/CI only).</p>
+          a <code>2.0</code>, adoption is per host, the attributes are repeated per subclass, and the OpenAPI contract is a
+          single dev/CI-only <code>v1</code> document that does not show the <code>2.0</code> shape).</p>
           <p><strong>Next in the series:</strong> Article 45, &quot;Feature Flags in the CQRS Pipeline: Gate Commands, Not Code,&quot; on
           gating a command in the pipeline instead of branching the code that runs it.</p>
           <p><em>MMCA.Common is open source. Star the repo, read the 2-minute ADR-046 behind this pattern, or

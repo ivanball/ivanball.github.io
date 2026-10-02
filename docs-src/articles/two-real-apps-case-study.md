@@ -1,8 +1,8 @@
 # Two real apps on one framework: a conference platform and a store
 
 > Series: MMCA.Common · Article #41 (case study) · Pillar P6 · Rubric: §4, §5, §7, §10, §32 · ADR-016 ·
-> Status: grounded in `MMCA.ADC/README.md`, `MMCA.ADC/CLAUDE.md`, `MMCA.Store/README.md`,
-> `MMCA.Store/CLAUDE.md`, and `Website/docs-src/governance/common-ArchitectureScorecard.md` (the §4/§5 downstream-evidence rows).
+> Status: grounded in `MMCA.ADC/README.md`, `MMCA.ADC/AGENTS.md`, `MMCA.Store/README.md`,
+> `MMCA.Store/AGENTS.md`, `MMCA.Common/FACTS.md`, both consumers' `Directory.Packages.props`, and `Website/docs-src/governance/common-ArchitectureScorecard.md` (the §4/§5 downstream-evidence rows).
 > No em dashes.
 
 **Subtitle:** A framework's README can claim anything. The real test is whether two unrelated
@@ -32,7 +32,7 @@ sessions, speakers, rooms, categories, and the questions attendees ask. It carri
 
 - **Identity** (the `User` aggregate, JWT auth, plus social login via Google and GitHub),
 - **Conference** (events, sessions, speakers, rooms, categories, questions and answers, social
-  activities, partners and session assets, across eighteen domain REST controllers),
+  activities, partners and session assets, across twenty-two domain REST controllers),
 - **Engagement** (session bookmarks, event and session feedback, and the conference-day live layer:
   the `LivePolls` and `SessionQuestions` aggregates behind Happening Now, the session Live view, and
   the presenter UI),
@@ -68,11 +68,12 @@ signed with RS256 and validated through JWKS discovery, with no shared secret.
 
 None of that topology is hand-rolled per app. It comes from the framework:
 
-- **The same packages, at the same number.** MMCA.Common publishes nineteen packages, and each app pins
-  the subset it uses at one identical version literal: ADC pins eighteen `MMCA.Common.*` entries
-  (`.Shared`, `.Domain`, `.Application`, `.Infrastructure`, `.AI`, `.API`, `.Grpc`, `.Gateway`, `.UI`,
-  `.UI.Maui`, `.UI.Web`, `.Aspire`, `.Aspire.Hosting`, `.Testing`, `.Testing.Architecture`,
-  `.Testing.Aspire`, `.Testing.E2E`, `.Testing.UI`), Store pins seventeen of those, taking no `.AI`.
+- **The same packages, at the same number.** MMCA.Common publishes twenty-two packages, and each app pins
+  the subset it uses at one identical version literal: ADC pins twenty `MMCA.Common.*` entries
+  (`.Shared`, `.Domain`, `.Application`, `.Infrastructure`, `.AI`, `.AI.Anthropic`, `.AI.Testing`,
+  `.API`, `.Grpc`, `.Gateway`, `.UI`, `.UI.Maui`, `.UI.Web`, `.Aspire`, `.Aspire.Hosting`, `.Testing`,
+  `.Testing.Architecture`, `.Testing.Aspire`, `.Testing.E2E`, `.Testing.UI`), Store pins seventeen of
+  those, taking none of the `.AI` packages.
 - **The same patterns.** `Result<T>` for error flow, the CQRS command/query split with the same
   decorator order (commands run FeatureGate then Authorization then Logging then Caching then
   Validating then Timeout then Transactional then the handler; queries run FeatureGate then
@@ -101,10 +102,10 @@ code reaches them.** There is no phased rollout, no opt-in flag, no per-consumer
 
 The release is a lockstep sweep:
 
-1. Tag a new MMCA.Common version (the version comes from the git tag via MinVer). All nineteen packages
+1. Tag a new MMCA.Common version (the version comes from the git tag via MinVer). All twenty-two packages
    publish at that same version.
 2. In each consumer, bump every `MMCA.Common.*` entry in `Directory.Packages.props` to the new version
-   in one pass. ADC keeps its eighteen entries and Store its seventeen on the same number.
+   in one pass. ADC keeps its twenty entries and Store its seventeen on the same number.
 3. Build, run the fitness tests and the rest of the suite, deploy.
 
 The framework's versioning policy doc (`common-VERSIONING.md`, canonical in the published docs
@@ -126,8 +127,9 @@ real domain and a real deployment. That is the division of labor between MMCA.Co
 
 **ADC proves real bounded contexts and real eventing.** Identity publishing `UserRegistered` so
 Conference can auto-link a speaker by email match is a genuine cross-context workflow, not a contrived
-one. Conference calling Engagement's bookmark-count service over gRPC, with a disabled-module stub
-standing in when Engagement is not co-hosted, is the extraction boundary working in a running system
+one. Conference calling Engagement's bookmark-count service over gRPC, through an adapter that implements
+the same `IBookmarkCountService` interface the in-process call uses (each service host loads only its
+own module, so the gRPC client is what answers), is the extraction boundary working in a running system
 rather than in a unit test. And the deployment is the operability proof: four services plus a gateway
 and a web UI, each
 service owning its own database and its own `OutboxMessages` table, rolled to Azure Container Apps.
@@ -150,13 +152,14 @@ forced them to be identical would be wrong; the framework lets each app make the
 Here is the caveat the framework writes about itself. It is not a preamble or a methodology section:
 it is written into the category rows. Because the framework is a library and not a runnable app, a
 few categories can only be judged on the substrate it provides, not on realized behavior. The §4
-Domain-Driven Design row holds its implementation score at 8 because strategic DDD is "still realized
-downstream (only Notifications lives here)", and the §5 Vertical Slice Architecture row holds at 8
-because "the enforced in-repo slicing surface is still the Notifications family": the framework ships
-a second sliced family (the `Users` use cases, thirteen abstract handler bases across nine folders) and
-the slice gate does reach abstract bases, but twelve of the thirteen declare their handler contract over
-a generic parameter and are exempt by design, and every one of them logs through the shared
-`UserUseCaseLog` switchboard, so the family deepens the pattern without widening the enforced surface.
+Domain-Driven Design row holds its implementation score at 8 on two open criteria, the first being that
+strategic DDD "is realized downstream, since the Domain layer holds one aggregate family
+(Notifications) plus auth support types". The §5 Vertical Slice Architecture row holds at 8 because
+Common "is an SDK with no business use-case slices of its own", so "slice cohesion is proven in the
+consumer repos": the framework ships a second sliced family (the `Users` use cases, thirteen abstract
+handler bases across nine folders) and the slice gate does reach abstract bases, but twelve of the
+thirteen declare their handler contract over a generic parameter and are exempt by design, so the
+family deepens the pattern without widening the enforced surface.
 **For both, the real surface lives in MMCA.Store and MMCA.ADC.** For performance and
 cost, the framework ships an in-repo BenchmarkDotNet hot-path harness (§12) and a released cost guide
 (§31); only full load/stress data lives in the consumer apps.
@@ -164,7 +167,7 @@ cost, the framework ships an in-repo BenchmarkDotNet hot-path harness (§12) and
 That is not a weakness to hide; it is the reason the two apps exist. The framework supplies the base
 classes, the enforced layering, and the extraction points. The apps supply the proof that those things
 hold up against two different real domains and two different production deployments. The
-framework's two-axis evaluation scores it at roughly 97% maturity and 86% implementation (97.0% and 86.0%
+framework's two-axis evaluation scores it at roughly 97% maturity and 86% implementation (96.6% and 86.0%
 exactly), with implementation
 the weaker axis precisely because some of the most important "does this actually model a domain well"
 evidence lives downstream, in the consumers, where it should.
@@ -194,84 +197,108 @@ honest part), or `dotnet add package MMCA.Common.API` and build your own third a
 
 *Tags: .NET, Software Architecture, Microservices, DDD, Open Source*
 
-*Notes: ADC/Store claims are limited to what `MMCA.ADC/README.md`, `MMCA.ADC/CLAUDE.md`,
-`MMCA.Store/README.md`, and `MMCA.Store/CLAUDE.md` support (modules, topology, the lockstep package
-pins, the two divergent eventing flows). Removed in an earlier pass and still out: the "was used to run
-an actual live event" and "real attendees used it" framing, which no repo document supports. What the
-tree does state, re-read this run: deploy to Azure Container Apps on a push to `main`
-(`MMCA.ADC/CLAUDE.md:83`), one Dockerfile per deployable across the four services plus the Gateway and
-UI.Web (`:68`), and each service owning its own database and its own `dbo.OutboxMessages` (`:62`).
-Packages and versions verified this run: the framework publishes nineteen packages
-(`MMCA.Common/FACTS.md:19`, enumerated at `:22-40`) at v1.205.0 (`:14`, snapshot dated 2026-09-17 at
-`:4`), and the changelog's newest dated entry is `## [1.205.0] - 2026-09-17`
-(`MMCA.Common/CHANGELOG.md:9`, with 1.204.0 at `:15`). The consumers pin subsets, not the whole set, and
-each subset is in lockstep: ADC carries eighteen `MMCA.Common.*` entries, all at 1.205.0
-(`MMCA.ADC/Directory.Packages.props:102-132`, `.Grpc` at `:102`, `.AI` at `:110`, `.Gateway` at `:118`,
-`.UI.Maui` at `:132`), and Store carries seventeen, also all at 1.205.0 and with no `.AI` entry
-(`MMCA.Store/Directory.Packages.props:8-26`, `.Grpc` at `:73`, `.Aspire.Hosting` at `:111`), including
-the one MAUI-TFM package `MMCA.Common.UI.Maui` in both. Corrected this run: the previous ledger recorded
-fifteen packages at v1.154.0 and a "same fifteen entries" claim for both consumers; both the count and
-the equality were wrong. Corrected this run: the query chain is six decorators, not five. Execution
-order is FeatureGate then Authorization then Logging then Caching then Validating then Timeout then
-Transactional then the handler for commands, and FeatureGate then Authorization then Logging then
-Caching then Validating then Timeout then the handler for queries (`MMCA.Common/CLAUDE.md:80`), read off
-the Scrutor `TryDecorate` registration order (innermost first) at
-`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:137-143` for commands and
-`:146-151` for queries, where `ValidatingQueryDecorator` sits at `:147`. The scorecard's §1 SOLID
-evidence column (`Website/docs-src/governance/common-ArchitectureScorecard.md:81`) still carries the
-older decorator string and a stale `Application/DependencyInjection.cs:94-103` range, so that row is
-itself drifted and is not the anchor for this claim: source plus `MMCA.Common/CLAUDE.md` are. Counted
+*Notes: refreshed 2026-10-02 against framework v1.221.0. ADC/Store claims are limited to what
+`MMCA.ADC/README.md`, `MMCA.ADC/AGENTS.md`, `MMCA.Store/README.md`, and `MMCA.Store/AGENTS.md` support
+(modules, topology, the lockstep package pins, the two divergent eventing flows). Both repos'
+`CLAUDE.md` files are six-line stubs that import `AGENTS.md`, so every former `CLAUDE.md:N` anchor is
+re-pointed at `AGENTS.md` this run. Removed in an earlier pass and still out: the "was used to run an
+actual live event" and "real attendees used it" framing, which no repo document supports. Topology
+re-read this run: each app's modules run as separate service hosts behind a YARP Gateway pinned to
+`https://localhost:6001`, with gRPC via `*.Contracts` and the outbox to a broker
+(`MMCA.ADC/AGENTS.md:7`, `MMCA.Store/AGENTS.md:7`); RS256 plus JWKS discovery with no shared secret
+(`MMCA.ADC/AGENTS.md:58`, `MMCA.Store/AGENTS.md:59`); deploy to Azure Container Apps on a push to
+`main` (`MMCA.ADC/AGENTS.md:83`); one Dockerfile per deployable across the four services plus the
+Gateway and UI.Web (`:68`); each service owning its own database and its own `dbo.OutboxMessages`
+(`:62`, databases named at `:26`; Store's at `MMCA.Store/AGENTS.md:26`). Packages and versions
+verified this run: the framework publishes twenty-two packages (`MMCA.Common/FACTS.md:19`, enumerated
+at `:22-43`) at v1.221.0 (`:14`, snapshot dated 2026-10-02 at `:4`), and the changelog's newest entry
+is `## [1.221.0] - 2026-10-02` (`MMCA.Common/CHANGELOG.md:7`, with 1.220.0 at `:15`). The consumers pin
+subsets, each in lockstep: ADC carries twenty `MMCA.Common.*` entries, all at 1.221.0
+(`MMCA.ADC/Directory.Packages.props:103-139`, `.Grpc` at `:103`, `.AI` at `:111`, `.AI.Anthropic` at
+`:114`, `.AI.Testing` at `:117`, `.Gateway` at `:125`, `.UI.Maui` at `:139`; it does not pin
+`.AI.OpenAI` or the `MMCA.Common` package), and Store carries seventeen, also all at 1.221.0 and with
+no `.AI` entry (`MMCA.Store/Directory.Packages.props:8-26`, `.Grpc` at `:76`, `.Aspire.Hosting` at
+`:113`), including `MMCA.Common.UI.Maui` in both. Corrected this run: the package count (`.AI.Anthropic`,
+`.AI.OpenAI`, `.AI.Testing` are new) and ADC's entry count, both of which trailed the current release. Decorator order is FeatureGate then Authorization then Logging then Caching then Validating
+then Timeout then Transactional then the handler for commands, and the same minus Transactional for
+queries (`MMCA.Common/AGENTS.md:81-82`), read off the Scrutor `TryDecorate` registration order
+(innermost first) at `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:134-140`
+for commands and `:143-148` for queries, where `ValidatingQueryDecorator` sits at `:144` (re-anchored
+this run from `:137-143`, `:146-151`, `:147`, and from the retired `MMCA.Common/CLAUDE.md:80`). Counted
 this run rather than quoted: the Conference module's
-`Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/` folder holds eighteen domain REST
-controllers (Activities, CategoryItems, ConferenceCategories, EventQuestionAnswers, Events,
-EventSpeakers, Partners, Questions, Rooms, SessionAssets, SessionCategoryItems, SessionQuestionAnswers,
-SessionSelection, SessionSpeakers, Sessions, SpeakerCategoryItems, Speakers, Sponsors) plus the shared
-`ServiceInfoController`; `MMCA.ADC/CLAUDE.md:50` states seventeen and owns the domain list (events,
-sessions, speakers, rooms, categories, questions/answers, social activities, partners, session assets),
-so the article states the counted figure and that doc line is itself one behind. Store module contents
-re-read this run: Catalog owns `Category`, `Product`, `ProductVariant` plus the `Reviews` aggregate
-(`ProductReview`, `VerifiedPurchase`) with a derived `RatingSummary` owned by `Product`, and a variant
-carries an owned `VariantDiscount` resolved by `GetEffectivePrice(now)` (`MMCA.Store/CLAUDE.md:49`);
-Sales owns `Order` (plus `OrderLine` and an owned `Shipment`), `ShoppingCart` and `InventoryItem` with
-Stripe payments (`:50`), and the Sales cluster keeps YARP's HTTP/1.1-capable defaults for REST plus the
-Stripe webhook (`:44`). Dropped this run: `ShoppingCartItem` and "hierarchical categories, variant
-pricing and SKUs", none of which those lines state. ADC's Engagement module owns session bookmarks,
-feedback and the conference-day live layer (LivePolls + SessionQuestions, Happening Now / session Live /
-presenter UI, `MMCA.ADC/CLAUDE.md:51`); ownership authorization is not ADC-absent, ADC configures
-MMCA.Common's `OwnerOrAdminFilter` on the Bookmarks list endpoints in `AddModuleEngagementAPI`
-(`:66`); and the BR-207 divergence from Store is recorded as deliberate at `:57`. `VERSIONING.md` does
-not live in MMCA.Common, it is `Website/docs-src/guides/common-VERSIONING.md`, which states that the
-packages are versioned and released together as a single unit with the authoritative list and count in
-FACTS.md (`:5-7`, so the earlier "states fifteen packages" note is retired: the doc states no count),
-MinVer from annotated git tags (`:25`), no opt-in flags or phased rollouts (`:67`), and the
-fitness-tested MassTransit v8 pin (`:87`). Scorecard numbers re-read this run: the framework's two-axis
-index is Maturity 97.0% (318/328) and Implementation 86.0% (705/820)
-(`Website/docs-src/governance/common-ArchitectureScorecard.md:120-121`), nothing is excluded from the
-denominators (`:124`), and the latest cycle is the thirty-sixth-wave full 34-category re-score of
-2026-09-19 at v1.205.0 (git HEAD `90ffa7a`, clean tree), which moved no score: ten first-pass lifts came
-back FLAG and were refuted on the adversarial pass (header line `:5`). The earlier 314/324 and 687/810
-denominators were pre-rubric-v2; under ADR-110 the weight sum is 82, §10 is Messaging & Integration
-Architecture and §16 is AI-Native Application Architecture, which this article does not evidence: its
-categories are §4, §5, §7, §10 and §32. The downstream-evidence caveat is written into the rows
-themselves: §4 DDD holds at 8 with strategic DDD "still realized downstream (only Notifications lives
-here)" (`:84`), and §5 VSA holds at 8 on "the enforced in-repo slicing surface is still the Notifications
-family" (`:85`). Corrected this run: the stated reason for that §5 cap moved. v1.203.0 (commit
-`630afc9`) widened both slice rules to every Application class including abstract bases
-(`Rules/Cqrs/ArchitectureRules.Slices.cs:39,69`), so "outside the concrete-class slice gate" is not the
-cap; the row records that 12 of the 13 Users bases declare their contract over a generic parameter and
-stay exempt by design, that the family is 13 bases across 9 folders rather than five handlers, and that
-each use case still edits the shared `UserUseCaseLog` switchboard. Performance and cost are not "no
-in-repo evidence": §12 ships a repeatable BenchmarkDotNet hot-path harness (`:92`) and §31 cites a
-released cost guide (`:111`, the doc itself is `Website/docs-src/guides/common-COST.md`), with full
-load/stress data living in the consumer apps. The two consumer scorecards sit on the same instrument:
-ADC scores Maturity 98.5% (319/324) and Implementation 86.2% (698/810) on its thirty-second-cycle full
-re-score of 2026-09-16 at pin v1.204.0, git HEAD `631c7ba6`, its Implementation axis up from 85.4%
-(692/810) (`Website/docs-src/governance/adc-ArchitectureScorecard.md:92-93`), and Store scores Maturity
-97.8% (309/316) and Implementation 83.9% (663/790) on its 2026-09-04 full re-score, the first against
-rubric v2, which moved no score (`Website/docs-src/governance/store-ArchitectureScorecard.md:57-58`,
-header `:5`). That two-axis scorecard is canonical in the Website docs library since the 2026-07-20
-centralization (it is no longer carried in MMCA.Common), and it replaced an earlier single-axis 80%
-snapshot that survives only in git history and is therefore not checkable from the working tree: the
-original-snapshot-then-fixed-then-re-scored framing stands, the 80% figure is a history assertion.*
+`Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/` tree holds twenty-two domain REST
+controllers in feature subfolders (Activities, CategoryItems, ConferenceCategories, EventLifecycle,
+EventQuestionAnswers, Events, EventSpeakers, Partners, Questions, Rooms, SessionAssets, SessionCalendar,
+SessionCategoryItems, SessionQuestionAnswers, SessionSelection, SessionSpeakers, Sessions,
+SpeakerCategoryItems, SpeakerLinks, Speakers, SpeakerSessions, Sponsors) plus the root
+`ServiceInfoController`; the four added since the last count are EventLifecycle
+(`Controllers/Events/EventLifecycleController.cs`), SessionCalendar, SpeakerLinks and SpeakerSessions.
+`MMCA.ADC/AGENTS.md:50` still states seventeen and owns the domain list, so the article states the
+counted figure and that doc line is behind. Corrected this run: the bookmark-count sentence no longer
+credits a disabled-module stub for the extracted topology. Service hosts load only their own module and
+register no disabled-dependency stub (`MMCA.ADC/AGENTS.md:43`); Conference calls Engagement's
+`IBookmarkCountService` via gRPC (`:50`) through adapters implementing the same in-process interfaces
+(`:56`), registered by `AddEngagementBookmarkCountClient`, which replaces whatever is registered with
+`BookmarkCountServiceGrpcAdapter`
+(`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:49`).
+`DisabledBookmarkCountService`
+(`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/EngagementModule.cs:32`) covers only a
+host where the Engagement module is disabled. Store module contents re-read this run: Catalog owns
+`Category`, `Product`, `ProductVariant` with an owned `VariantDiscount` resolved by
+`GetEffectivePrice(now)`, plus the `Reviews` aggregate (`ProductReview`, `VerifiedPurchase`) with a
+derived `RatingSummary` owned by `Product` (`MMCA.Store/AGENTS.md:49`); Sales owns `Order` (plus
+`OrderLine` and an owned `Shipment`), `ShoppingCart` and `InventoryItem` with Stripe payments (`:50`);
+Identity owns `User`, `Customer` and JWT auth with refresh tokens (`:51`); the Sales cluster keeps
+YARP's HTTP/1.1-capable defaults for REST plus the Stripe webhook (`:44`). Catalog's
+`ProductVariantChanged` publishes after commit so the database-generated ID is known (`:56`), the
+in-process domain-event divergence from ADC is recorded at `:58`, compensating saga handlers restore
+inventory (`:102`), and Store configures `OwnerOrAdminFilter` (`:103`). ADC's Identity offers
+Google/GitHub social login (`MMCA.ADC/AGENTS.md:49`); Engagement owns bookmarks, feedback and the
+conference-day live layer (`:51`); Notification is the thin SignalR module (`:52`); ADC configures
+`OwnerOrAdminFilter` on the Bookmarks list endpoints in `AddModuleEngagementAPI` (`:66`); and the
+BR-207 `UserRegistered` flow and its deliberate divergence from Store are at `:57`. Shared fitness
+rules: rule bodies live once in `MMCA.Common.Testing.Architecture`, parameterized by `IArchitectureMap`,
+and Store and ADC subclass the same bases (`MMCA.Common/AGENTS.md:70`); Application, Domain and Shared
+never reference MassTransit, and `IMessageBus` is served by `InProcessMessageBus` or `BrokerMessageBus`
+(`:129`; `MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28`,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Messaging/InProcessMessageBus.cs:19`,
+`BrokerMessageBus.cs:43`); the MassTransit v8 pin is guarded by `DependencyVersionTests`
+(`MMCA.Common/AGENTS.md:40`). `Website/docs-src/guides/common-VERSIONING.md` states that the packages
+are versioned and released together as a single unit with the authoritative list and count in FACTS.md
+(`:5-7`), MinVer from annotated git tags (`:25`), no opt-in flags or phased rollouts (`:67`), and the
+MassTransit v8 pin (`:87`). Scorecard numbers re-read this run: the framework's two-axis index is
+Maturity 96.6% (317/328) and Implementation 86.0% (705/820)
+(`Website/docs-src/governance/common-ArchitectureScorecard.md:9-10`), evidence as of 2026-10-01 at
+v1.218.0, git HEAD `f93bc6e2`, dirty tree (`:5`), 34 rows with nothing excluded from the denominators
+and a weight sum of 82 (`:104`). The downstream-evidence caveat is written into the rows themselves: category 4
+DDD holds at 8 on two open criteria, strategic DDD realized downstream with one Domain aggregate family
+(Notifications) plus auth support types, and a plain-string tenant identifier (`:68`); category 5 VSA holds at
+8 because Common has no business use-case slices of its own, so slice cohesion is proven in the
+consumer repos, with generic-parameter handler bases exempt by design (`:69`). Corrected this run: the
+article's two quoted row phrases ("still realized downstream (only Notifications lives here)" and "the
+enforced in-repo slicing surface is still the Notifications family") are no longer in the scorecard and
+are replaced by the current row text; the shared logging-switchboard clause is removed, because a
+Grep over `MMCA.Common/Source` finds no such type (the bases are `partial` classes taking their own
+`ILogger`, for example `ChangePasswordHandlerBase.cs:42`). The `Users` family is thirteen
+`*HandlerBase.cs` files across nine folders under
+`MMCA.Common/Source/Core/MMCA.Common.Application/Users/UseCases/`; only
+`GetPreferences/GetUserPreferencesHandlerBase.cs:21-22` declares a concrete contract, and the slice
+rules document abstract-base scanning at
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Cqrs/ArchitectureRules.Slices.cs:27-32`,
+with the two rules at `:35` and `:65` scanning every Application class at `:39` and `:69`. Performance
+and cost are not "no in-repo evidence": category 12 ships a repeatable BenchmarkDotNet hot-path harness (`:76`)
+and category 31 cites a released cost guide (`:95`, the doc itself is `Website/docs-src/guides/common-COST.md`),
+with full load/stress data living in the consumer apps. The two consumer scorecards sit on the same
+instrument: ADC scores Maturity 96.9% (314/324) and Implementation 86.0% (697/810), evidence as of
+2026-10-01 at pin v1.217.0, git HEAD `2140ebd1`
+(`Website/docs-src/governance/adc-ArchitectureScorecard.md:9-10`, header `:5`), and Store scores
+Maturity 97.5% (308/316) and Implementation 83.4% (659/790), evidence as of 2026-10-01 at pin v1.217.0,
+git HEAD `579e395b` (`Website/docs-src/governance/store-ArchitectureScorecard.md:9-10`, header `:5`).
+Corrected this run: the previous Common, ADC and Store index figures are retired in favor of these.
+Apache-2.0 at `MMCA.Common/LICENSE:2`. That two-axis scorecard is canonical in the Website docs library
+since the 2026-07-20 centralization (it is no longer carried in MMCA.Common), and it replaced an
+earlier single-axis 80% snapshot that survives only in git history and is therefore not checkable from
+the working tree: the original-snapshot-then-fixed-then-re-scored framing stands, the 80% figure is a
+history assertion.*
 
 - Full series index: https://ivanball.github.io/writing.html

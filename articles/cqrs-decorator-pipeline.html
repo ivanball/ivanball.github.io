@@ -247,9 +247,11 @@ Validating -&gt; Timeout -&gt; Concrete Handler</code></pre>
           <li><strong>Caching sits outside validation</strong> so the cache is only touched after a valid, committed mutation. A
           validation failure or a rollback leaves the cache intact.</li>
           <li><strong>Validation sits outside the transaction</strong> so a malformed command never opens a database transaction.
-          The validating decorator resolves the registered <code>IValidator&lt;TCommand&gt;</code> and, on failure, returns a
-          <code>Result</code> failure tagged <code>ErrorType.Validation</code> (which the API edge maps to HTTP 400) <em>without ever
-          calling the handler</em>. Those validators are composed from reusable rule fragments rather than copy-pasted
+          The validating decorator takes every registered <code>IValidator&lt;TCommand&gt;</code>, runs them one after another
+          (sequentially on purpose, since a validator may reach the database through a scoped repository and a
+          <code>DbContext</code> is not thread-safe), and, when any of them fails, returns one <code>Result</code> failure carrying the
+          union of their errors, each tagged <code>ErrorType.Validation</code> (which the API edge maps to HTTP 400),
+          <em>without ever calling the handler</em>. Those validators are composed from reusable rule fragments rather than copy-pasted
           per command, a validation kit that gets its own deep-dive later in the series. On the query side the
           same concern sits one layer deeper, <em>inside</em> caching, for a deliberate reason: a cached entry can only
           exist because the same query already passed validation when that entry was produced, so re-validating
@@ -399,11 +401,15 @@ soft-deleted-user check -&gt; authorization -&gt; output cache -&gt; JWKS + OIDC
           fake. Cleartext HTTP/2 is exactly the gRPC-over-plaintext case that a 307 would break, and every
           browser-reachable request is HTTP/1.1 or HTTP/2 over TLS, so it keeps being redirected instead of being
           served plaintext on the strength of a forged header.</p>
-          <p>The conditional pieces are registered unconditionally and made inert by configuration: tenant
-          resolution and the soft-deleted-user check (which sits between the limiter and authorization so a
-          revoked account is rejected before any endpoint gets to authorize it) are always in the chain, each
-          gated by its own settings. That keeps the edge literally one shape on every host rather than a per-host permutation, so a diff
-          between two hosts&#39; pipelines is empty by construction. Every REST and gRPC service host in both
+          <p>The pieces that only some hosts need are registered unconditionally too. Tenant resolution is
+          always in the chain and stays inert unless the host called <code>AddMultiTenancy</code> and set
+          <code>Tenancy:Enabled</code>. The soft-deleted-user check (which sits between the limiter and authorization so a
+          revoked account is rejected before any endpoint gets to authorize it) has no setting at all: on every
+          host it answers an authenticated request with a 401 when the shared cache carries that user&#39;s
+          deleted marker, and only a host that registers an <code>ISoftDeletedUserValidator</code> (the one hosting
+          Identity) falls back to the database on a cache miss, while every other host passes the request
+          through. That keeps the edge literally one shape on every host rather than a per-host permutation, so
+          a diff between two hosts&#39; pipelines is empty by construction. Every REST and gRPC service host in both
           production applications calls the method, and so does the reference app.</p>
           <p>The edge carries the same two defenses as the decorator chain it mirrors. First, <strong>the order is
           frozen by a test, not by review</strong>. Every step is named and the defaults are seeded by a builder, so
@@ -426,9 +432,9 @@ soft-deleted-user check -&gt; authorization -&gt; output cache -&gt; JWKS + OIDC
           a seal on the service collection that every later registration method has to check.</li>
           <li><strong>A new concern means a new decorator at the correct depth.</strong> Inserting it at the wrong position can
           silently change semantics, as with validating inside the transaction. Adding to the pipeline requires
-          understanding the ordering argument, not just appending a class. That warning stopped being
-          hypothetical the day authorization and timeout went in: both were inserted <em>between</em> existing
-          neighbours, and getting either one wrong would have been a correctness bug rather than a style choice.</li>
+          understanding the ordering argument, not just appending a class. Authorization and
+          timeout show why: both sit <em>between</em> other decorators, and placing either one wrong is a
+          correctness bug rather than a style choice.</li>
           <li><strong>The chain is deep.</strong> Every command walks seven decorators and every query six, even when it declares
           none of the markers, because each one is registered unconditionally and decides at runtime whether it
           has work to do. The pass-through cost of an <code>is</code>-check is small, but it is not zero, and it grows every

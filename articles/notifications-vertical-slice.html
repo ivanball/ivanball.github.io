@@ -205,9 +205,11 @@
           <ol>
           <li><strong>Deduplicate, if the caller opted in.</strong> The command carries an optional <code>DedupKey</code>. A blank or
           whitespace-only value is normalized to null, so an empty header cannot claim the single &quot;empty&quot;
-          key. When a key is present the handler looks the notification up first, and a hit returns the
-          existing DTO without sending anything at all. No key means no lookup, which is the default path:
-          every send creates a new notification.</li>
+          key. A present key is scoped to the sender before it is used: the handler stores and looks up the
+          hex SHA-256 of <code>{sentByUserId}:{clientKey}</code>, so another caller reusing the same client key can
+          neither suppress this send nor be handed this sender&#39;s notification. The handler looks that scoped
+          key up first, and a hit returns the existing DTO without sending anything at all. No key means no
+          lookup, which is the default path: every send creates a new notification.</li>
           <li><strong>Resolve recipients.</strong> The handler does not know who the audience is. It asks the injected
           <code>INotificationRecipientProvider</code> for the user IDs. This is the key swap point: the framework ships a no-op
           <code>NullNotificationRecipientProvider</code> that returns an empty list, and the consuming app overrides it.
@@ -217,7 +219,8 @@
           <li><strong>Persist the audit aggregate, in its own save.</strong>
           <code>PushNotification.Create(title, body, sentByUserId, recipientCount, dedupKey, scopeKey)</code> validates
           title and body via <code>PushNotificationInvariants</code>, checks that the dedup key and the optional scope
-          key each stay within 128 characters, and returns a <code>Result&lt;PushNotification&gt;</code>. It is saved with
+          key each stay within 128 characters (the 64-character hash the handler passes always fits, so in
+          practice only the scope key can trip it), and returns a <code>Result&lt;PushNotification&gt;</code>. It is saved with
           <code>Status = Pending</code> and a snapshot <code>RecipientCount</code>. That save stands alone precisely so a lost
           race on the dedup key can be caught and answered (next section).</li>
           <li><strong>Fan out the inbox rows, in a second save.</strong> For every recipient the handler creates a
@@ -246,7 +249,9 @@
           a send nobody received is still recorded.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// SendPushNotificationHandler, in order: dedup first, then audit + inbox are written</span>
 <span class="hljs-comment">// BEFORE any delivery is attempted. The whole method runs in one transaction (ITransactional).</span>
-<span class="hljs-keyword">var</span> dedupKey = <span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(command.DedupKey) ? <span class="hljs-literal">null</span> : command.DedupKey;
+<span class="hljs-keyword">var</span> dedupKey = <span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(command.DedupKey)
+    ? <span class="hljs-literal">null</span>
+    : SenderScopedDedupKey(sentByUserId, command.DedupKey);         <span class="hljs-comment">// hex SHA-256 of &quot;{sender}:{key}&quot;</span>
 <span class="hljs-keyword">if</span> (dedupKey <span class="hljs-keyword">is</span> <span class="hljs-keyword">not</span> <span class="hljs-literal">null</span>)
 {
     <span class="hljs-keyword">var</span> alreadySent = <span class="hljs-keyword">await</span> FindByDedupKeyAsync(dedupKey, ct);
@@ -284,11 +289,13 @@
           <p>The send carries a second optional key alongside <code>DedupKey</code>: an opaque <code>ScopeKey</code> (for example
           <code>&quot;event:2&quot;</code>), stamped by the sending application and stored on the audit aggregate. The framework
           attaches no meaning to it. An app whose notifications belong to one edition of something sets it, and
-          every caller that omits it sends exactly as it always did. ADC resolves the current published event
-          and scopes to <code>event:{id}</code>, degrading to null (unscoped) if no event resolves, which is the safe
-          direction because scope is a view filter, not a security boundary. That is also why the column is
-          deliberately unindexed: the filter runs after the primary-key join from the inbox, over a table that
-          holds one row per send, so an index would cost writes without buying a read.</p>
+          every caller that omits it sends an unscoped notification. ADC resolves the current published event
+          and scopes to <code>event:{id}</code>. When no event resolves it fails narrow rather than wide: it answers with
+          the last key it resolved or, on an instance that has never resolved one, with <code>event:0</code>, a
+          well-formed key no row carries, so the reader sees an empty inbox instead of every event&#39;s
+          notifications. Scope is a view filter, not a security boundary, and the column is deliberately
+          unindexed: the filter runs after the primary-key join from the inbox, over a table that holds one row
+          per send, so an index would cost writes without buying a read.</p>
           <h2 id="retry-safety-on-two-levels-the-idempotency-filter-and-the-dedup-key">Retry safety on two levels: the idempotency filter and the dedup key</h2>
           <p>A broadcast is exactly the operation you never want to run twice, and the two ways it gets run twice
           are different problems. The client retries the HTTP call; or two retries arrive close enough together
@@ -297,17 +304,21 @@
           first response against the caller&#39;s <code>Idempotency-Key</code> and replays it for a repeat, which is the cheap
           answer to a retried HTTP call. Then the controller reads that same <code>Idempotency-Key</code> header itself
           and passes it into the command as <code>DedupKey</code> (absent or whitespace-only stays null, which leaves the
-          send on the default undeduplicated path). The division of labor is the point: <strong>the filter protects
+          send on the default undeduplicated path), and the handler scopes that key to the sender as described
+          above. The division of labor is the point: <strong>the filter protects
           the response, the dedup key protects the delivery.</strong> When the filter&#39;s cache is cold, evicted, or
           degraded (a restarted host, an expired entry, an unreachable distributed cache) the response replay is
           gone, but the domain still refuses to send a second time.</p>
-          <p>Underneath, <code>DedupKey</code> is a real column on the <code>PushNotification</code> aggregate (max 128 characters,
-          validated in the factory), with a filtered unique index over it. That matters because the handler&#39;s
+          <p>Underneath, <code>DedupKey</code> is a real column on the <code>PushNotification</code> aggregate holding the
+          sender-scoped hash (the column allows 128 characters, validated in the factory, and the hash is
+          always 64), with a filtered unique index over it. That matters because the handler&#39;s
           up-front lookup is a check-then-act: two concurrent retries of the same send can both pass it, and
           the loser only discovers the conflict when it tries to insert. So the audit save is its own
           <code>SaveChangesAsync</code>, wrapped in a catch that requeries by key: if the row exists now, the concurrent
           send is the cause and the caller gets that notification back; anything else is rethrown untouched and
-          reaches the exception middleware. The database, not the application, arbitrates the race.</p>
+          reaches the exception middleware. The requery runs on <code>CancellationToken.None</code>, so a save aborted by
+          the caller&#39;s own token can still be classified. The database, not the application, arbitrates the
+          race.</p>
           <p>That catch is deliberately broad (a suppressed CA1031), and the reason is a layer rule rather than
           laziness: Application has no EF Core dependency, so <code>DbUpdateException</code> is not a type this file is
           allowed to name. The requery is what narrows it. It is the same swallow-and-requery shape the
@@ -331,7 +342,9 @@
           <code>MMCA.Common.Infrastructure.Services</code>, so it is an Infrastructure registration, not an Application one).
           Infrastructure&#39;s <code>AddPushNotifications(configuration)</code> then replaces <code>IPushNotificationSender</code> with the
           SignalR implementation, wires <code>AddSignalR()</code>, and, if a <code>redis</code> connection string is present, adds a
-          Redis backplane for SignalR scale-out across replicas. A host that never calls <code>AddPushNotifications</code>
+          Redis backplane for SignalR scale-out across replicas, with a per-application channel prefix so two
+          applications sharing one Redis never receive each other&#39;s pushes. A host that never calls
+          <code>AddPushNotifications</code>
           keeps that no-op <code>NullPushNotificationSender</code>, so the send pipeline still resolves and runs (audit and
           inbox rows are written) with no real-time transport at all.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// The null-object discipline: the handler depends on the port; the adapter is chosen at the root.</span>
@@ -382,7 +395,7 @@
           on the controller: the list, the unread count (so the badge and the list agree), and the bulk
           mark-read (so a scoped client never marks rows it cannot see). A supplied scope narrows the read to
           the notifications carrying that scope plus every unscoped one; omitting it returns everything,
-          exactly as before, which is what keeps the pre-scope callers working.</p>
+          which keeps callers that never pass a scope working.</p>
           <p>Both the per-row read and the mark-read scope by the caller&#39;s <code>UserId</code> from <code>ICurrentUserService</code>, so
           one user cannot read or mutate another&#39;s inbox. Security is part of the slice, not a cross-cutting
           afterthought.</p>
@@ -420,12 +433,14 @@
           key that nothing delivered, and every retry of that key would answer success forever. The price is
           that the SignalR and native calls happen with the transaction still open. Both are bounded by their
           own timeouts and hold locks only on rows this request just inserted, but it is still a transaction
-          held across an out-of-process call.</li>
+          held across an out-of-process call. And because those calls run inside the unit, a transient fault
+          on the final status save re-runs them under the execution strategy: real-time and native delivery
+          are at-least-once, while the inbox rows are written exactly once.</li>
           <li><strong>Inbox fan-out cost.</strong> Step 4 writes one <code>UserNotification</code> row per recipient. For a broadcast to a
           large audience that is a lot of rows in one save. It is the price of a durable per-user inbox with
           per-user read state, and it is bounded by the recipient count, but it is real write amplification.</li>
           <li><strong>Deduplication is opt-in, and it is check-then-act plus a database index.</strong> A send that carries no
-          key behaves exactly as it always did: no protection at all. When a key is present, the up-front
+          key gets no protection at all. When a key is present, the up-front
           lookup is a race the handler cannot win on its own, so correctness rests on the filtered unique
           index and on a broad catch that has to requery to classify what it caught. That is a real cost in
           handler complexity, paid to keep Application free of an EF Core dependency.</li>
@@ -469,7 +484,7 @@
           vertical slice beats a horizontal layer cut for cohesion, the end-to-end send flow (deduplicate,
           resolve recipients, persist audit, fan out inbox, then best-effort deliver over SignalR and OS-level
           native push, the whole sequence one <code>ITransactional</code> transaction), the two levels of retry safety (the <code>[Idempotent]</code> filter replaying the response, the
-          <code>DedupKey</code> plus its filtered unique index protecting the delivery), the optional <code>ScopeKey</code> that
+          sender-scoped <code>DedupKey</code> plus its filtered unique index protecting the delivery), the optional <code>ScopeKey</code> that
           narrows a read without isolating anything, why each
           sender is a composition-root choice with a null-object fallback, the ADR-044 native push channel and its
           <code>DevicesController</code> registration surface, the CQRS inbox scoped to the caller, the email channel and the

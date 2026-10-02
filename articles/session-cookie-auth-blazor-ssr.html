@@ -190,13 +190,18 @@
           <p>The answer is an HttpOnly cookie for transport, a non-validating SSR reader for prerender, and a strict rule
           that the cookie reader is for rendering only. The API stays the boundary.</p>
           <h2 id="the-mmca-answer-httponly-cookies-plus-an-ssr-time-reader">The MMCA answer: HttpOnly cookies plus an SSR-time reader</h2>
-          <p>The mechanism ships in <code>MMCA.Common.API</code> (a <code>SessionCookies/</code> folder) with a <code>MMCA.Common.UI</code> companion,
-          and both apps&#39; Web UI hosts wire it. It has four moving parts.</p>
-          <p><strong>Two HttpOnly cookies, seeded from the client at login.</strong> <code>mmca_auth_access</code> carries the JWT and
-          <code>mmca_auth_refresh</code> carries the refresh token (the names are constants on <code>SessionCookieEndpoints</code>). After a
-          successful login the browser POSTs to <code>/auth/session-cookie</code>, and <code>SessionCookieJar.Append</code> writes both
-          cookies HttpOnly with <code>SameSite=Lax</code>; logout DELETEs them. Because they are HttpOnly, no script can read
-          either one.</p>
+          <p>The mechanism ships in <code>MMCA.Common.API</code> (a <code>SessionCookies/</code> folder) with a <code>MMCA.Common.UI</code> companion
+          and a same-origin API proxy in <code>MMCA.Common.UI.Web</code>, and both apps&#39; Web UI hosts wire all of it. It has
+          five moving parts.</p>
+          <p><strong>Two HttpOnly cookies, written by the server.</strong> <code>mmca_auth_access</code> carries the JWT and
+          <code>mmca_auth_refresh</code> carries the refresh token (the names are constants on <code>SessionCookieEndpoints</code>).
+          <code>SessionCookieJar</code> is the one writer: both cookies are HttpOnly, <code>Secure</code> outside Development, and carry
+          the <code>SameSite</code> mode from <code>SessionCookieSettings</code> (framework default <code>Lax</code>). Because they are HttpOnly, no
+          script can read either one. On a host that runs the same-origin proxy (both apps do), the UI host writes
+          the cookies itself: a sign-in from the WebAssembly client passes through the proxy, which moves the issued
+          pair into the cookies, and the Blazor Server circuit hands its tokens over as short-lived, data-protected
+          handoffs. The script-facing <code>POST /auth/session-cookie</code> therefore answers 204 without writing anything on
+          those hosts, and logout DELETEs the cookies.</p>
           <p><strong>An SSR-time scheme reads the access cookie, and deliberately does not validate its signature.</strong>
           <code>SessionCookieAuthenticationHandler</code> (scheme <code>&quot;SessionCookie&quot;</code>) reads <code>mmca_auth_access</code> during prerender,
           parses its claims, checks expiry, and populates <code>HttpContext.User</code> so <code>[Authorize]</code> passes.</p>
@@ -227,14 +232,20 @@
           reason: the cookie was minted by the UI host from a token the API already issued, and <strong>every API call
           still fully validates the JWT</strong> (the cross-service JWKS story from the auth article). The SSR handler only
           needs the user&#39;s claims to render the first paint; it is explicitly not the security boundary.</p>
-          <p><strong>The refresh token never leaves the server.</strong> When the interactive client starts, it calls
-          <code>POST /auth/session/token</code>, a same-origin &quot;validate-or-refresh&quot; endpoint, to hydrate its in-memory access
-          token. <code>CookieSessionRefresher.GetOrRefreshAsync</code> reads the HttpOnly refresh cookie server-side, refreshes
-          the access token if it has expired, writes fresh cookies back, and returns <strong>only</strong> the access token and
-          its expiry.</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// POST /auth/session/token: hydrate the in-memory access token; the refresh token never leaves the server.</span>
+          <p><strong>The browser holds a claims copy, never a credential.</strong> When the interactive client starts, it calls
+          <code>POST /auth/session/token</code>, a same-origin &quot;validate-or-refresh&quot; endpoint, to learn who is signed in.
+          <code>CookieSessionRefresher.GetOrRefreshAsync</code> reads the HttpOnly refresh cookie server-side, refreshes the
+          access token if it has expired, writes fresh cookies back, and returns the access token and its expiry.
+          On a host where <code>SessionCookieSettings.ClaimsOnlyBrowserTokens</code> is set (the proxy sets it, so both apps
+          run this way), the endpoint does not hand that token over either: it returns <code>SessionClaimsToken.Create</code>,
+          the token&#39;s own payload under an <code>alg: none</code> header with an empty signature. The client can read the
+          user&#39;s claims and the expiry to render its auth state, and no API accepts it, because every API checks
+          signatures.</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// POST /auth/session/token: the refresh token never leaves the server, and a claims-only host</span>
+<span class="hljs-comment">// never hands out the access token either.</span>
 endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</span>, <span class="hljs-keyword">async</span> (
-    HttpContext httpContext, ICookieSessionRefresher refresher, CancellationToken cancellationToken) =&gt;
+    HttpContext httpContext, ICookieSessionRefresher refresher,
+    IOptions&lt;SessionCookieSettings&gt; settings, CancellationToken cancellationToken) =&gt;
 {
     <span class="hljs-keyword">if</span> (IsCrossSite(httpContext.Request))                       <span class="hljs-comment">// Sec-Fetch-Site CSRF guard</span>
     {
@@ -242,31 +253,54 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
     }
 
     <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> refresher.GetOrRefreshAsync(httpContext, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
-    <span class="hljs-keyword">return</span> result <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>
-        ? Results.Json(<span class="hljs-keyword">new</span> { error = <span class="hljs-string">&quot;no_session&quot;</span> }, statusCode: StatusCodes.Status401Unauthorized)
-        : Results.Json(<span class="hljs-keyword">new</span> SessionTokenResponse(result.Value.AccessToken, result.Value.AccessTokenExpiry));
+    <span class="hljs-keyword">if</span> (result <span class="hljs-keyword">is</span> <span class="hljs-literal">null</span>)
+    {
+        <span class="hljs-keyword">return</span> Results.Json(<span class="hljs-keyword">new</span> { error = <span class="hljs-string">&quot;no_session&quot;</span> }, statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    <span class="hljs-keyword">var</span> browserToken = settings.Value.ClaimsOnlyBrowserTokens
+        ? SessionClaimsToken.Create(result.Value.AccessToken) ?? <span class="hljs-built_in">string</span>.Empty   <span class="hljs-comment">// unsigned claims copy</span>
+        : result.Value.AccessToken;
+    <span class="hljs-keyword">return</span> Results.Json(<span class="hljs-keyword">new</span> SessionTokenResponse(browserToken, result.Value.AccessTokenExpiry));
 });</code></pre>
-          <p>The response is a <code>SessionTokenResponse(AccessToken, AccessTokenExpiry)</code>. The refresh token is never
-          serialized to the browser. On the UI side, <code>ITokenStorageService</code> keeps the access token <strong>in memory</strong> and
-          treats the refresh token as living only in the HttpOnly cookie, and <code>ISessionCookieSync</code> (implemented by
-          <code>JsFetchSessionCookieSync</code>) mirrors the client&#39;s tokens back into the cookies via a small JS shim so the
-          next prerender sees a current session.</p>
+          <p>The response is a <code>SessionTokenResponse(AccessToken, AccessTokenExpiry)</code>, and the refresh token is never
+          serialized to the browser. On the UI side, <code>ITokenStorageService</code> keeps what the client holds in memory,
+          never in <code>localStorage</code>; on these hosts that is the claims copy.</p>
+          <p><strong>A same-origin proxy carries every browser API call (ADR-131).</strong> A claims copy cannot call the API, so
+          the browser never calls the API directly. The WebAssembly client&#39;s API client and notification hub point
+          at <code>/api/**</code> on the UI host&#39;s own origin, and the UI host forwards each call to the gateway server-side
+          with the bearer it reads from the HttpOnly cookie. <code>AddCommonSameOriginApiProxy(IConfiguration)</code>
+          registers it: it sets the session cookies&#39; <code>SameSite</code> mode from the proxy settings and turns on
+          claims-only browser tokens, registers YARP&#39;s forwarder, and replaces the Blazor Server circuit&#39;s
+          <code>ITokenRefresher</code> and <code>ISessionCookieSync</code> with handoff implementations, so the circuit keeps calling the
+          gateway server-to-server and trades tokens with the cookies only as protected handoffs. Before anything
+          is forwarded, the proxy endpoint refuses a cross-origin caller (403 <code>cross_origin_rejected</code>), requires an
+          <code>X-CSRF: 1</code> header on every unsafe method (403 <code>csrf_header_required</code>), and validates or refreshes the
+          session through <code>ICookieSessionRefresher.ValidateOrRefreshAsync</code>. When the identity endpoint is
+          unreachable it answers 503 <code>session_refresh_unavailable</code> and keeps the cookies, rather than signing the
+          user out over a blip. Both Web UI hosts register the proxy after their session-cookie wiring and map it
+          next to <code>MapSessionCookieEndpoints</code>.</p>
           <p><strong>A refresh middleware closes the expiry race.</strong> <code>CookieSessionRefreshMiddleware</code> runs <em>before</em>
           <code>UseAuthentication</code> and, only on GET requests that accept HTML, refreshes the access token server-side if it
           has expired but the refresh cookie is still good. So a fresh GET after the access token lapsed still renders
           authenticated, because the middleware has already minted a fresh access token (read by <code>CookieTokenReader</code>
           from <code>HttpContext.Items</code>) before the SSR scheme runs.</p>
-          <p>This is a backend-for-frontend (BFF) token-storage layer: the browser holds an HttpOnly session whose
-          refresh half it cannot read, the SSR pass authenticates from the access cookie without trusting it as the
-          boundary, and the real enforcement stays at the API.</p>
+          <p>This is a backend-for-frontend (BFF) layer: the browser holds an HttpOnly session it cannot read and a
+          claims copy that authorizes nothing, the SSR pass authenticates from the access cookie without trusting it
+          as the boundary, the UI host attaches the real bearer on the way to the gateway, and the real enforcement
+          stays at the API.</p>
           <h2 id="the-csrf-tax-and-how-it-is-paid">The CSRF tax, and how it is paid</h2>
           <p>Cookie-based auth reintroduces a concern that a pure bearer-header design does not have: a cross-site page
           can cause the browser to send your cookies. The framework pays that tax with defense-in-depth rather than a
-          single control. The cookies are <code>SameSite=Lax</code>, so they are not sent on cross-site subrequests. The
-          refresh endpoint additionally rejects cross-site POSTs by checking the <code>Sec-Fetch-Site</code> header
-          (<code>IsCrossSite</code>). The cookie endpoints disable antiforgery deliberately (they carry no antiforgery token and
-          are guarded by <code>SameSite</code> + <code>Sec-Fetch-Site</code> + POST-only instead). Three overlapping checks, none of them
-          load-bearing alone.</p>
+          single control, at two layers. On the session endpoints, the cookies carry a <code>SameSite</code> mode (framework
+          default <code>Lax</code>, so they are not sent on cross-site subrequests), the refresh endpoint rejects cross-site
+          POSTs by checking the <code>Sec-Fetch-Site</code> header (<code>IsCrossSite</code>), and the cookie endpoints disable antiforgery
+          deliberately (they carry no antiforgery token and are guarded by <code>SameSite</code> + <code>Sec-Fetch-Site</code> + POST-only
+          instead). On the proxied data path, the same-origin check and the <code>X-CSRF</code> header carry CSRF: a custom
+          header cannot be sent cross-origin without a preflight, and the proxy answers <code>OPTIONS</code> itself with no
+          CORS grant. That makes <code>SameSite</code> a usability choice there rather than the CSRF control. The proxy
+          defaults it to <code>Strict</code>; both apps choose <code>Lax</code>, so a signed-in user following a mailed deep link keeps
+          the session on the first server render. Overlapping checks, none of them load-bearing alone.</p>
           <h2 id="scaling-out-the-key-ring-has-to-be-shared">Scaling out: the key ring has to be shared</h2>
           <p>One replica is a special case. Add a second and a failure appears that has nothing to do with the design
           above: ASP.NET Core&#39;s DataProtection key ring lives <strong>in memory, per process</strong>, so every replica generates
@@ -288,8 +322,7 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           registers no DataProtection services at all. A developer machine, a test host and the Helpdesk seed all run
           single-process, keep the in-memory default, and take no Azure dependency at startup.</p>
           <p>Adoption is per host, and the shape of it is worth saying plainly. MMCA.ADC calls it on exactly the two
-          hosts that mint those payloads, its Identity service and its Web UI host, and points both at one private
-          container on a storage account it already had. MMCA.Store&#39;s Web UI host calls it as well, on a storage
+          hosts that mint those payloads, its Identity service and its Web UI host. MMCA.Store&#39;s Web UI host calls it as well, on a storage
           account provisioned for this and nothing else, with one extra catch on the infrastructure side: the blob
           URI is injected only when a <code>dataProtectionStorageReady</code> parameter is true (it defaults to false), because
           <code>AddCommonDataProtection</code> gates on the <em>presence</em> of the URI and never on its reachability, so wiring the
@@ -304,11 +337,16 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           host-minted and the API independently validates every call. Authorize a sensitive action on the SSR
           principal <em>without</em> an API round-trip and you have broken the safety argument. The rule &quot;the API is the
           boundary&quot; is not a nicety here, it is the whole proof.</li>
-          <li><strong>The session now lives in two places.</strong> Cookies for browser GETs and SSR, an in-memory bearer token for
-          interactive API calls. The two must stay in sync, which is exactly what <code>/auth/session/token</code> and the UI&#39;s
-          <code>ISessionCookieSync</code> exist to manage. A bug in that sync shows up as a flicker of the wrong auth state.</li>
-          <li><strong>CSRF surface a header-only design would not have.</strong> <code>SameSite=Lax</code> plus <code>Sec-Fetch-Site</code> plus POST-only
-          is solid, but it is a surface, and a reviewer has to understand all three to trust the cookie endpoints.</li>
+          <li><strong>The UI host becomes part of the API path.</strong> Every browser API call and hub frame passes through the UI
+          host before the gateway, which is one extra hop, and the UI host owns refresh, the refresh race and
+          cookie rotation for browser traffic. A UI host outage takes the browser&#39;s API path down with it, and the
+          UI host&#39;s rate limiter meters API traffic as well as pages.</li>
+          <li><strong>The proxy removes theft, not use.</strong> An injected script runs same-origin and passes both proxy gates,
+          so it can still act as the user while the page is open; it just cannot carry a token away. Content
+          Security Policy stays the control for that.</li>
+          <li><strong>CSRF surface a header-only design would not have.</strong> <code>SameSite</code> plus <code>Sec-Fetch-Site</code> plus POST-only on
+          the session endpoints, and an origin gate plus <code>X-CSRF</code> on the proxy, is solid, but it is a surface, and
+          a reviewer has to understand both layers to trust it.</li>
           <li><strong>Expiry is checked, not cryptographically enforced, at the SSR edge.</strong> A tampered cookie produces claims
           that fail at the API on the next call, but the one prerendered HTML pass is produced from unverified
           claims. For rendering, that is acceptable; for a decision, it is not, which loops back to the first point.</li>
@@ -328,27 +366,30 @@ endpoints.MapPost(<span class="hljs-string">&quot;/auth/session/token&quot;</spa
           <li><strong>Let the prerender pass read claims, not verify them, and make the API the only validator.</strong> A
           parse-don&#39;t-validate reader is safe only if a real validation boundary sits behind every state-changing
           call. Write that invariant down.</li>
-          <li><strong>Keep the refresh token server-side behind a hydrate endpoint.</strong> The browser asks a same-origin
-          endpoint for a fresh access token; the refresh token is exchanged on the server and never serialized to
-          the client.</li>
+          <li><strong>Keep every credential server-side and proxy the API through the UI origin.</strong> The browser asks a
+          same-origin endpoint for its session state and gets an unsigned claims copy; its API calls go to the UI
+          host, which attaches the real bearer from the HttpOnly cookie on the way to the API. The refresh token
+          is exchanged on the server and never serialized to the client.</li>
           <li><strong>Refresh before authentication on GETs.</strong> A small middleware that mints a fresh access token before the
           auth handler runs closes the &quot;expired between requests&quot; gap without a client round-trip.</li>
-          <li><strong>Budget for CSRF.</strong> Cookies bring it back. <code>SameSite=Lax</code> plus a <code>Sec-Fetch-Site</code> check plus POST-only
-          endpoints is a defensible, layered answer.</li>
+          <li><strong>Budget for CSRF.</strong> Cookies bring it back. <code>SameSite</code> plus a <code>Sec-Fetch-Site</code> check plus POST-only
+          endpoints protects the session endpoints, and a strict same-origin check plus a custom header protects a
+          cookie-authenticated proxy: a defensible, layered answer.</li>
           <li><strong>Share the key ring before you scale out.</strong> The moment a cookie-minting host runs more than one
           replica, per-process keys become random sign-outs. Persist the ring to one shared store with an
           application discriminator, and keep encryption of the ring at rest as a separate switch so a lagging
           role assignment costs you hardening rather than login.</li>
           </ol>
           <p>The takeaway: <strong>the SSR prerender gap is real, and the fix is an HttpOnly cookie the server can read plus
-          the discipline that reading it is for rendering, never for deciding. Keep the refresh token off the client,
+          the discipline that reading it is for rendering, never for deciding. Keep every credential off the client,
           keep the API as the one validator, and an <code>[Authorize]</code> page survives an F5 without weakening anything.</strong></p>
           <hr>
           <p><strong>What we covered:</strong> why a Blazor Web App&#39;s SSR prerender pass bounces <code>[Authorize]</code> pages to login on a
           fresh GET (no <code>Authorization</code> header, no server-readable token), how MMCA.Common closes the gap with two
           HttpOnly cookies, a <code>SessionCookieAuthenticationHandler</code> that reads claims for prerender without validating
-          the signature, a server-side <code>/auth/session/token</code> refresher that keeps the refresh token off the client,
-          and a pre-auth refresh middleware, why the design is safe only because the API stays the validation
+          the signature, a server-side <code>/auth/session/token</code> refresher that hands the browser only an unsigned
+          claims copy, a same-origin API proxy (ADR-131) that attaches the real bearer server-side, and a pre-auth
+          refresh middleware, why the design is safe only because the API stays the validation
           boundary, why a scaled-out cookie host also needs a shared DataProtection key ring (ADR-069, adopted by
           both apps, with Store&#39;s blob URI gated behind a readiness flag), and the CSRF and dual-path costs that buys.</p>
           <p><strong>Next in the series:</strong> external OAuth login, adding Google and GitHub sign-in behind your own local

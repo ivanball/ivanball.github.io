@@ -1,9 +1,11 @@
 # Scaffold a .NET modular monolith in one command, then build your first module
 
 > Series: MMCA.Common · Article #39 (tutorial) · Pillar P5 · Groups G02,G05,G14 · Rubric §33 · ADR-065 ·
-> Status: grounded in `MMCA.Common/CLAUDE.md` ("DI Registration Sequence", "Module System",
-> "Entity Model", "CQRS Decorator Pipeline"), `Website/docs-src/adr/065-scaffolding-templates.md`,
-> `Website/docs-src/guides/common-TEMPLATES.md`, and the overviews of
+> Status: grounded in `MMCA.Common/AGENTS.md` ("DI Registration Sequence", "CQRS Decorator Pipeline"),
+> `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs` and `DependencyInjection.ModuleScanning.cs`,
+> the MMCA.Helpdesk seed (`Source/Hosts/MMCA.Helpdesk.Web/Program.cs`,
+> `templates/mmca-module/.template.config/template.json`, `build/templates/overlay/mmca-app/README.md`),
+> `Website/docs-src/adr/065-scaffolding-templates.md`, `Website/docs-src/guides/common-TEMPLATES.md`, and the overviews of
 > `Website/docs-src/onboarding/group-14-module-system-composition.md`, `group-02-domain-building-blocks.md`,
 > `group-05-cqrs-pipeline.md`. No em dashes.
 
@@ -23,7 +25,7 @@ that declares its own dependencies so the host can assemble everything in the ri
 
 The framework ships a `dotnet new` pack, so you type none of that plumbing (ADR-065). Hand-rolling it
 costs a day before you write a line of business logic, and ADR-065 measures that starting cost against
-the framework's reference app: 12 projects, 133 files, and 10,662 lines of plumbing, an 827-line
+the framework's reference app: 12 projects, 136 files, and 11,532 lines of plumbing, an 827-line
 `.editorconfig` among them, plus the 100-line `Directory.Packages.props` that carries every package pin
 (58 of them in the seed today), several of those lines load-bearing in ways nothing tells you about
 until much later.
@@ -62,31 +64,34 @@ Three names, all independent: the solution (also your root namespace), the first
 PascalCase, and its aggregate root in singular PascalCase. Everything derived from them follows, from
 the routes and the identifier alias to the cache-key prefix and the Blazor pages.
 
-You get twelve projects: five module layers, a REST API host, a Blazor Server and MudBlazor UI host, an
-Aspire AppHost, a per-database migrations project, and three test projects. The aggregate arrives fully
-worked, in the same shape the rest of this article explains.
+You get twelve projects in the default shape: five module layers, a REST API host, a Blazor Server and
+MudBlazor UI host, an Aspire AppHost (`--no-aspire` leaves it out), a per-database migrations project,
+and three test projects. The aggregate arrives fully worked, in the same shape the rest of this article
+explains.
 
 Get that green **before** you change anything. It is the line you bisect against later, and if it is
 not green that is a template bug rather than yours: the pack is generated from the framework's runnable
-reference app, and a smoke job builds two generated solutions in package mode on every change.
+reference app, and a `template-smoke` CI job generates three solutions from it (two module shapes and
+one SQLite solution without an AppHost) and builds and tests each in package mode.
 
-Two things the scaffold deliberately refuses to hand over, because a rename or a shape flag
-invalidates them and no fixed value is right for every name you could pick.
+One thing the scaffold deliberately does not hand over, because a rename or a shape flag invalidates
+it and no fixed value is right for every name you could pick: **declaration order, plus one
+constructor shape**. Three analyzer rules, and only three, ship dropped to `suggestion` in a marked
+block appended to the *staged* `.editorconfig`; every other analyzer stays at error. `SA1210` cannot
+sort your namespace against `MMCA.Common.*` without knowing your name: an app namespace sorts above it
+for `Contoso.Support` and below it for `Zeta.App`, so no checked-in order survives both. `SA1211` is
+the same story one level down, on the identifier-alias file whose aliases re-sort when a shape flag
+renames them. `IDE0021` is the flags rather than the renames: the aggregate's private constructor
+assigns one property per optional axis, so `--no-status --no-description --no-owner` together leave it
+with a single statement, which the baseline then wants as an expression body. It is one-time, and the
+generated README carries the exact commands (one `dotnet format analyzers` run restores the two
+ordering rules; `IDE0021` is not fixable that way, so you fold the constructor by hand and delete the
+line).
 
-The first is **declaration order, plus one constructor shape**. Three analyzer rules, and only three,
-ship dropped to `suggestion` in a marked block appended to the *staged* `.editorconfig`; every other
-analyzer stays at error. `SA1210` cannot sort your namespace against `MMCA.Common.*` without knowing
-your name: an app namespace sorts above it for `Contoso.Support` and below it for `Zeta.App`, so no
-checked-in order survives both. `SA1211` is the same story one level down, on the identifier-alias
-file whose aliases re-sort when a shape flag renames them. `IDE0021` is the flags rather than the
-renames: the aggregate's private constructor assigns one property per optional axis, so
-`--no-status --no-description --no-owner` together leave it with a single statement, which the
-baseline then wants as an expression body.
-
-The second is **your integration-event wire contract**: a freeze inherited from someone else's sample
-module guarantees nothing. All of it is one-time, and the generated README carries the exact commands
-(one `dotnet format analyzers` run restores the two ordering rules; `IDE0021` is not fixable that way,
-so you fold the constructor by hand and delete the line).
+Your integration-event wire contract is not on that list: it arrives already frozen. The generated
+`IntegrationEventContractTests` holds your own event, under the names you scaffolded with, and passes
+on the first run. When you add or reshape an event on purpose, you version it and update
+`ExpectedContract` in the same commit.
 
 Now the part worth reading.
 
@@ -274,42 +279,58 @@ public sealed class PromotionsModule : IModule
 ```
 
 `Dependencies` is what lets the framework do something genuinely useful: `ModuleLoader` discovers every
-`IModule` and registers them in **topological order** (Kahn's algorithm) based on declared dependencies,
-so a module is always wired after the modules it depends on. `ModulesSettings` (the `"Modules"` config
-section) can disable a module; disabled modules receive stub registrations so cross-module interfaces
-stay resolvable. That last detail is the extraction boundary: a module that depends on a now-remote module
-keeps compiling and resolving because the stub stands in until a gRPC client takes over.
+`IModule` in the assemblies the host names and registers them in **topological order** (Kahn's
+algorithm) based on declared dependencies, so a module is always wired after the modules it depends on.
+`ModulesSettings` (the `"Modules"` config section) can disable a module; disabled modules receive stub
+registrations so cross-module interfaces stay resolvable. That last detail is the extraction boundary: a
+module that depends on a now-remote module keeps compiling and resolving because the stub stands in
+until a gRPC client takes over.
 
 ## Step 6: register in the exact DI sequence
 
 This is the step the most experienced developers still get wrong, because one ordering rule is
 load-bearing. `AddApplicationDecorators()` must run after every module's handler scan, because Scrutor's
 `TryDecorate` can only wrap handlers that are already registered. That is the only constraint that
-matters here. The relative position of `AddInfrastructure` and `AddAPI` is not load-bearing: DI
-dependencies resolve at runtime, not at registration time, so the infrastructure that backs the
-decorated handlers can be registered before or after them. The framework documents the sequence this
-way:
+matters here. Registrations that are not handlers (infrastructure, API, telemetry, options) can sit on
+either side of it: DI dependencies resolve at runtime, not at registration time, so the infrastructure
+that backs the decorated handlers can be registered before or after them. The generated host spells the
+sequence out by hand:
 
 ```csharp
-// Host composition root
-services.AddApplication()                              // core services, event dispatcher
-    .AddInfrastructure(configuration)                     // repos, UoW, DbContexts, caching, outbox
-    .AddAPI(modulesSettings)                              // controllers, idempotency, exception handlers
-    .ScanModuleApplicationServices<PromotionsClassRef>()  // this module's handlers, validators, mappers
-    .ScanModuleApplicationServices<SalesClassRef>()       // another module
-    .AddApplicationDecorators();                          // MUST be last: Scrutor wraps existing handlers
+// Host composition root: the generated Web/Program.cs, abridged (representative module names)
+services.AddApplication();                              // core services, event dispatcher
+services.AddInfrastructure(builder.Configuration);      // repos, UoW, DbContexts, caching, outbox
+services.AddAPI(modulesSettings);                       // controllers, idempotency, exception handlers
+services.AddErrorResources<OrdersErrorResources>();     // one per module: error-code translations
+services.AddErrorResources<PromotionsErrorResources>();
+
+moduleLoader.DiscoverAndRegister(
+    services, builder.Configuration, applicationSettings, modulesSettings,
+    builder.Environment.EnvironmentName,
+    [typeof(OrdersModule).Assembly, typeof(PromotionsModule).Assembly]); // each module scans itself
+
+services.AddBrokerMessaging(builder.Configuration);
+services.AddApplicationDecorators();                    // MUST be last: Scrutor wraps existing handlers
 ```
 
 The rules embedded in that order:
 
-- **`ScanModuleApplicationServices<TMarker>()`** runs once per module. It auto-registers that module's
-  domain-event handlers (singleton), DTO and request mappers (scoped), command and query handlers
-  (scoped), and FluentValidation validators. This is why you did not register the validator from Step 4
-  or the handler from Step 3 by hand: convention scanning found them by the marker type's assembly.
+- **`ScanModuleApplicationServices<TMarker>()`** runs once per module, from inside that module's own
+  registration, which `ModuleLoader` reaches through the module's `Register`. It auto-registers that
+  module's domain-event and integration-event handlers (singleton), DTO and request mappers, DTO
+  projectors and update appliers (scoped), command and query handlers (scoped), and FluentValidation
+  validators. This is why you did not register the validator from Step 4 or the handler from Step 3 by
+  hand: convention scanning found them by the marker type's assembly.
 - **`AddApplicationDecorators()` must be last** of the Application registrations. It uses Scrutor's
-  `TryDecorate` to wrap every already-registered handler. If you call it before a module's
-  `ScanModuleApplicationServices`, that module's handlers are registered too late to be wrapped, and
-  they silently run undecorated. No transactions, no caching, no logging, and no error to tell you.
+  `TryDecorate` to wrap every already-registered handler, then **seals** the pipeline. A module scan
+  that runs after the seal throws an `InvalidOperationException` naming the call, so a misplaced scan
+  fails at startup instead of running undecorated. A handler registered by hand after the seal is the
+  one case that still slips through: it runs with no transactions, no caching, no logging, and no error
+  to tell you.
+- **`AddMmcaApplicationPipeline(pipeline => ...)`** is the framework's preferred form of the same
+  sequence: it runs `AddApplication()`, then your callback (module scans, a `ModuleLoader` run, broker
+  wiring), then `AddApplicationDecorators()`, so the handler registrations cannot land on the wrong side
+  of the decorators. The generated host keeps the explicit calls shown above.
 
 ## Step 7: watch the decorator pipeline kick in, for free
 
@@ -326,8 +347,8 @@ You wrote a thin handler. The pipeline added the rest, driven by the marker inte
   query is turned off.
 - **Authorization** comes next, and sits outside caching on purpose. Commands and queries that
   implement `IRequiresPermission` are checked against the permission registry for the current user's
-  roles, and a denial short-circuits with a `Forbidden` error, so a denied query never reads from or
-  populates the cache.
+  roles (and those that implement `IRequiresMfa` against the `mfa` claim), and a denial short-circuits
+  with a `Forbidden` error, so a denied query never reads from or populates the cache.
 - **Logging** records the full pipeline duration via `ICorrelationContext`, for every handler, with no
   per-handler code.
 - **Caching** runs for queries that implement `IQueryCacheable` (supplying `CacheKey` + `CacheDuration`),
@@ -395,8 +416,10 @@ the script is doing on your behalf:
 4. **Architecture map.** Five lines in your `*ArchitectureMap.cs`, one per layer. **A module missing
    from the map is silently not covered by the layering and isolation rules.** No error, no warning:
    the rules simply stop watching the code you just added.
-5. **Host.** One `services.AddErrorResources<BillingErrorResources>();` next to the existing ones.
-   `ModuleLoader` discovers the `IModule` from Step 5 itself, so nothing else needs registering.
+5. **Host.** Two edits in the Web host's `Program.cs`. Add `typeof(BillingModule).Assembly` to the
+   list handed to `ModuleLoader.DiscoverAndRegister`: discovery scans only the assemblies the host
+   names, so a module left out of that list registers nothing. Then add one
+   `services.AddErrorResources<BillingErrorResources>();` next to the existing ones.
 6. **Database.** The module gets its own: an `AddDatabase` / `WithSQLServerDataSource` pair in the
    AppHost, `Modules` / `DataSources` / `Outbox` entries in the Web host's `appsettings.json`, and the
    deletion of the now-conflicting top-level `SQLServerMigrationsAssembly`. Every module database
@@ -405,18 +428,21 @@ the script is doing on your behalf:
    calls.
 7. **First migration.** `dotnet ef migrations add InitialCreate` against the new migrations project.
 
-The first two are what make it compile, so they fail loudly. Numbers three and four do not, which is
-why they are worth reading twice. And the honest reading of the script is not that the wire-ups
-stopped mattering: it is that the one code path CI exercises now applies them for you, on a solution
-the template generated.
+The first two are what make it compile, so they fail loudly. Numbers three and four do not, and neither
+does the module-assembly half of number five, which is why they are worth reading twice. And the honest
+reading of the script is not that the wire-ups stopped mattering: it is that the one code path CI
+exercises applies them for you, on a solution the template generated.
 
 ## Trade-offs and gotchas, honestly
 
 The shape buys consistency, and it asks for discipline in return:
 
-- **The DI order is unforgiving.** Call `AddApplicationDecorators()` too early and handlers run
-  undecorated with no warning. Treat the documented sequence as a hard rule, and consider an
-  architecture fitness test that asserts handlers are decorated (the next article covers fitness tests).
+- **The DI order is guarded, but not completely.** `AddApplicationDecorators()` seals the pipeline, so
+  a module scan placed after it throws at startup. A handler registered by hand after it still runs
+  undecorated with no warning. The generated solution ships `DecoratorPipelineOrderTests`, which builds
+  the module's registration sequence and asserts the decorator nesting for one command and one query,
+  and the framework exposes `VerifyDecoratorPipeline()` for a fitness test that checks every handler
+  (the next article covers fitness tests).
 - **Markers are easy to forget.** `ITransactional` and `ICacheInvalidating` are opt-in by presence.
   Forget the marker and you lose the behavior silently. The upside (no behavior you did not ask for) is
   also the trap (no behavior you forgot to ask for).
@@ -429,24 +455,24 @@ The shape buys consistency, and it asks for discipline in return:
 - **Soft-delete is the default.** Your aggregate is never hard-deleted; `IsDeleted` is set and global
   query filters hide it. Plan for the data to persist, which matters for both storage and privacy.
 - **A scaffold is a starting point, not an understanding.** The generated solution is green on day one,
-  which is exactly what makes it easy to change something load-bearing without noticing. The DI order,
-  the marker interfaces, and the architecture map are the three places where a wrong edit fails
-  silently rather than loudly, and none of them is protected by the template.
+  which is exactly what makes it easy to change something load-bearing without noticing. The marker
+  interfaces, the architecture map, and the host's list of module assemblies are the places where a
+  wrong edit fails silently rather than loudly.
 
 None of these are reasons to fight the shape. They are the reasons to learn it once and let it carry
 every module after.
 
 ---
 
-**What we covered:** scaffolding the whole solution with `dotnet new mmca-app` and the two fixups it
+**What we covered:** scaffolding the whole solution with `dotnet new mmca-app` and the one fixup it
 deliberately leaves you, the aggregate with a private constructor and a `Result` factory, raising a
 domain event with `AddDomainEvent`, a thin command handler marked `ITransactional`, a FluentValidation
-validator, the `IModule` contract with `Name` and `Dependencies`, the exact DI sequence
-(`AddApplication().AddInfrastructure(config).AddAPI(modulesSettings)
-.ScanModuleApplicationServices<T>()...AddApplicationDecorators()`), the decorator pipeline that wraps
-every handler automatically, and the seven wire-ups `mmca-module` prints because `dotnet new` cannot
-patch files that already exist (a solution generated by `mmca-app` applies all seven for you through
-its own `build/add-module.ps1`).
+validator, the `IModule` contract with `Name` and `Dependencies`, the DI sequence (each module's
+`ScanModuleApplicationServices<T>()` reached through `ModuleLoader.DiscoverAndRegister`, then
+`AddApplicationDecorators()` last, sealing the pipeline), the decorator pipeline that wraps every
+handler automatically, and the seven wire-ups `mmca-module` prints because `dotnet new` cannot patch
+files that already exist (a solution generated by `mmca-app` applies all seven for you through its own
+`build/add-module.ps1`).
 
 **Next in the series:** write your first architecture fitness test, so the conventions in this article
 become a red build instead of a code-review comment.
@@ -460,68 +486,72 @@ what breaks.*
 
 *Tags: .NET, C Sharp, Domain Driven Design, CQRS, Software Architecture*
 
-*Notes: verified type/behavior names: entity chain `BaseEntity<TId>` ->
-`AuditableBaseEntity<TId>` -> `AuditableAggregateRootEntity<TId>`; `AddDomainEvent`; private-ctor +
-static `Create` factory returning `Result<T>`; `ICommandHandler<TCommand, TResult>` with
-`HandleAsync`; markers `ITransactional` (empty interface), `ICacheInvalidating` (`CachePrefix`),
-`IRequiresPermission` (Authorization) and `IHasTimeout` (Timeout);
-`IModule` with `Name` / `Dependencies` / `RequiresDependencies` / `Register` / `RegisterDisabledStubs`;
-`ModuleLoader` topological (Kahn) ordering; `ModulesSettings` disable-with-stubs; convention scanning
-via `ScanModuleApplicationServices<TMarker>`; query-cache marker `IQueryCacheable` (`CacheKey` +
-`CacheDuration`); command decorator execution order FeatureGate -> Authorization -> Logging -> Caching
--> Validating -> Timeout -> Transactional -> Handler, and query order FeatureGate -> Authorization ->
-Logging -> Caching -> Validating -> Timeout -> Handler, read this pass off the registration inside
-`AddApplicationDecorators()` at
-`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:117-153` (seven command
-decorators at :137-143, SIX query decorators at :146-151; registered last = outermost, so execution
-order is the reverse of registration order), matching `MMCA.Common/CLAUDE.md:79-80` with the
-per-decorator descriptions at :83-89 (Authorization :84, Validating :87, Timeout :88). The query
-`Validating` decorator sits inside `Caching` by design, stated at `CLAUDE.md:87` ("a cached entry was
-validated when produced") and visible in the registration order at `DependencyInjection.cs:147-148`.
-Transactional rollback on business failure verified against
-`Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:573-588`,
-inside `RunTransactionalAttemptAsync` (:573): `if (result is Result { IsFailure: true })` at :582, the
-"Business failure: atomicity over partial persistence" comment at :584, `RollbackTransaction();` at
-:587; the behavior is unchanged, only the block's lines moved. Consistent with `MMCA.Common/CLAUDE.md`
-CQRS section ("exceptions AND `Result.Failure` both roll back", :89); cache invalidation runs only on
-success (:86). DI sequence: only `AddApplicationDecorators()`
-running after every module's handler scan is load-bearing (Scrutor `TryDecorate` wraps already-registered
-handlers); the relative position of `AddInfrastructure`/`AddAPI` is NOT load-bearing (DI resolves at
-runtime, not registration time), per `MMCA.Common/CLAUDE.md` "DI Registration Sequence" (line 72, which
-states verbatim "That ordering is the only load-bearing part."; that the relative position of
-`AddInfrastructure`/`AddAPI` is not load-bearing is this article's inference from the same section, not a
-quote); canonical fluent order is `AddApplication -> AddInfrastructure -> AddAPI -> module scans ->
-AddApplicationDecorators` (CLAUDE.md:72, re-read this pass). Sources: `MMCA.Common/CLAUDE.md` and the
-G14/G02/G05 onboarding chapters. ALL code blocks are labeled representative: they follow the documented
-base classes and conventions but are reconstructed (the `Coupon`/`Promotions` example is invented for
-the tutorial; exact factory/`Result` API shape, `ICommand` marker name, and repository surface may
-differ from source). Anchors re-read directly in the current tree this pass (2026-09-19): `IModule`'s
-five members at `MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModule.cs:7-35`
-(`Dependencies => []` at :17, `RequiresDependencies => false` at :23, defaulted `RegisterDisabledStubs`
-at :34). Scaffolding figures re-read against the current revision of
-`Website/docs-src/adr/065-scaffolding-templates.md`, whose seed measurements were last re-taken on
-2026-09-11 (:40): the seed tally the article cites (12 projects, 133 files, 10,662 lines) at :38-39,
-the counting method the ADR states inline at :40-43 (126 files and 9,524 lines under `Source/` and
-`Tests/`, plus 1,138 lines across seven root build files), and the 827-line `.editorconfig` plus the
-100-line `Directory.Packages.props` carrying 58 pins at :43. All three file figures corroborated
-directly: `MMCA.Helpdesk/.editorconfig` is 827 lines and `MMCA.Helpdesk/Directory.Packages.props` is
-100 lines with 58 `PackageVersion` entries. The THREE relaxed analyzer rules (`SA1210`, `SA1211`,
-`IDE0021`) and the reason no fixed value survives a rename or a shape flag at :78-90, with the
-`dotnet format analyzers MMCA.Helpdesk.slnx --diagnostics SA1210 SA1211 --severity info` command at
-`MMCA.Helpdesk/build/templates/overlay/mmca-app/README.md:111` and the `IDE0021` hand-fold from
-`README.md:117`; the SEVEN printed wire-ups plus the `build/add-module.ps1` that an `mmca-app` solution
-ships to perform them at `README.md:171` and :225-230, corroborated by the `manualInstructions` text in
-`MMCA.Helpdesk/templates/mmca-module/.template.config/template.json:264`, which enumerates steps 1
-through 7 (SOLUTION, PROJECT REFERENCES, IDENTIFIER ALIAS, ARCHITECTURE MAP, HOST, DATABASE, MIGRATION)
-and opens with the `pwsh build/add-module.ps1` redirect. One source inconsistency is recorded rather
-than resolved: that README says "seven wire-ups" at :171 and "six wire-ups" at :225; the article
-follows `template.json`, which enumerates seven. Corrections applied this pass: the seed tally moved to
-the ADR's current figures (133 files, 10,662 lines, an 827-line `.editorconfig`, a 100-line
-`Directory.Packages.props`); the Step 7 query pipeline gained the `Validating` stage and its bullet now
-covers both sides; the decorator registration anchor moved to `DependencyInjection.cs:117-153` with six
-query decorators rather than five; the CLAUDE.md anchors moved to :72 / :79-80 / :83-89 and the
-"DI Registration Sequence" quote was corrected to the source's own wording; the rollback anchors moved
-to :573 / :582 / :584 / :587; and the template README anchors moved to :111 / :117 / :171 / :225-230
-with `template.json:264`.*
+*Notes: 2026-10-02 pass against MMCA.Common v1.221.0. Re-read directly this pass: the decorator
+registration inside `AddApplicationDecorators()` at
+`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:114-153` (seven command
+decorators at :134-140, six query decorators at :143-148, query `Validating` registered inside
+`Caching` at :144-145; registered last = outermost, so execution order is the reverse of registration
+order), the `SealPipeline` call at :150, `AddMmcaApplicationPipeline` at :207-216 (calls only
+`AddApplication()`, the callback, and `AddApplicationDecorators()`; its remarks at :195-196 say non-handler
+registrations can stay outside the call), `VerifyDecoratorPipeline()` at :244 (never called
+automatically, :221-222), and `ThrowIfPipelineSealed` throwing `InvalidOperationException` at :310-319.
+`ScanModuleApplicationServices` calls `ThrowIfPipelineSealed` at
+`DependencyInjection.ModuleScanning.cs:49` and scans domain-event handlers (:52), integration-event
+handlers (:59), DTO mappers (:65), DTO projectors (:74), request mappers (:80), update appliers (:90),
+command-aware appliers (:99), command handlers (:105), query handlers (:111), validators (:117).
+`MMCA.Common/CLAUDE.md` is a six-line `@AGENTS.md` import, so the framework doc anchors moved to
+`MMCA.Common/AGENTS.md`: DI Registration Sequence at :72-74 ("That ordering is the only load-bearing
+part."), execution order at :81-82, per-decorator bullets at :85-91 (Authorization with `IRequiresMfa`
+:86, Caching :88, Validating :89, Timeout :90, Transactional :91). Source inconsistency recorded, not
+resolved: `AGENTS.md:74` says `AddMmcaApplicationPipeline` runs `AddInfrastructure` and `AddAPI`, but
+the method body at `DependencyInjection.cs:207-216` does not; the article follows the code. Generated
+host sequence read from `MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:78-132`
+(`AddApplication` :78, `AddInfrastructure` :79, `AddAPI` :101, `AddErrorResources` :106,
+`ModuleLoader.DiscoverAndRegister` with the host-named assembly list :116-124, `AddBrokerMessaging`
+:130, `AddApplicationDecorators` :132); the module's own scan at
+`Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Application/DependencyInjection.cs:35`. Seed fitness test
+`Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:35` (subclass of
+`DecoratorPipelineOrderTestsBase`, one command plus one query, sequence at :59-61); no stage or
+template exclusion names it. Transactional rollback on business failure at
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:599`
+(`RunTransactionalAttemptAsync`), `if (result is Result { IsFailure: true })` at :608, the "Business
+failure: atomicity over partial persistence" comment at :610, `RollbackTransaction();` at :613.
+`IModule` defaults at `Modules/IModule.cs:17` (`Dependencies => []`), :23 (`RequiresDependencies =>
+false`), :34 (`RegisterDisabledStubs`); Kahn at `Modules/ModuleLoader.cs:275`; `ModulesSettings.SectionName
+= "Modules"` at `Settings/ModulesSettings.cs:10`. Entity chain, `ICommandHandler`, `ITransactional`,
+`ICacheInvalidating` and `IQueryCacheable` anchors carried from the 2026-10-02 audit's CONFIRMED verdicts
+(`BaseEntity.cs:37`, `AuditableBaseEntity.cs:13`, `AuditableAggregateRootEntity.cs:13`,
+`ICommandHandler.cs:9,17`, `ITransactional.cs:6`, `ICacheInvalidating.cs:14`, `IQueryCacheable.cs:23,28`),
+not re-opened this pass. Scaffolding figures from `Website/docs-src/adr/065-scaffolding-templates.md`:
+seed tally 12 projects, 136 files, 11,532 lines at :38-39, method re-run 2026-10-01 at :40-42 (129 files
+and 10,394 lines under `Source/` and `Tests/`, plus 1,138 lines across seven root build files), the
+827-line `.editorconfig` and 100-line `Directory.Packages.props` with 58 pins at :43 (the audit
+re-counted the three file figures on disk). "One thing the scaffold deliberately does not hand over"
+and the three relaxed rules at ADR-065 :78-97; the wire-contract freeze shipping under the adopter's
+names at :99-115; the smoke job (`ci.yml:120`) generating three solutions at :157-164, cases at
+`MMCA.Helpdesk/build/templates/smoke.ps1:117`, :123, :129 (Contoso.Support, Zeta.Warehouse,
+Nordic.Books); `template-smoke` is advisory, the one required check being `build-and-test`
+(`MMCA.Helpdesk/AGENTS.md`, Contribution Flow). Generated README
+`MMCA.Helpdesk/build/templates/overlay/mmca-app/README.md`: "The one-time fixup" at :103,
+`dotnet format analyzers ... --diagnostics SA1210 SA1211 --severity info` at :111, `IDE0021` hand-fold
+at :117-120, "Your integration-event wire contract is already frozen" at :122-134, `--no-aspire` at
+:206, seven wire-ups at :171. Wire-ups from
+`MMCA.Helpdesk/templates/mmca-module/.template.config/template.json:264` (`manualInstructions`), sqlite
+entry :268, server-engine entry :271, step 5 being two host edits (module assembly into the
+`DiscoverAndRegister` list, then `AddErrorResources`) in both entries; ADR-065 :124-126 agrees. Source
+inconsistency still recorded rather than resolved: the README says "seven wire-ups" at :171 and "six
+wire-ups" at :225; the article follows `template.json`. ALL code blocks are labeled representative (the
+`Coupon`/`Promotions` example is invented; the Step 6 block is an abridged shape of the generated
+`Program.cs` with module names substituted). Corrections this pass: seed tally moved to the ADR's
+2026-10-01 figures (136 / 11,532); smoke solution count moved to three; "two things" the scaffold leaves -> one, with the wire
+contract described as shipping frozen; Step 6 rewritten to the generated host's shape (scans inside
+each module's registration via `ModuleLoader`) and to the sealed pipeline (a late scan throws; only a
+late hand-registered handler is silent), plus `AddMmcaApplicationPipeline`; wire-up 5 is two host
+edits and its assembly half joins the silent list; `ModuleLoader` discovers modules only in the
+host-named assemblies; trade-off bullets updated for the seal, `DecoratorPipelineOrderTests` and
+`VerifyDecoratorPipeline`; Authorization bullet gained `IRequiresMfa`; scan list gained
+integration-event handlers, projectors and appliers; all framework doc anchors moved from `CLAUDE.md`
+to `AGENTS.md`; decorator anchors :117-153 -> :114-153; rollback anchors :573/:582/:584/:587 ->
+:599/:608/:610/:613.*
 
 - Full series index: https://ivanball.github.io/writing.html

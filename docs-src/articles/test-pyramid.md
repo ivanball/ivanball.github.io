@@ -1,16 +1,17 @@
 # The test pyramid, not the ice-cream cone: 2,254 fast tests, zero Docker
 
-> Series: MMCA.Common · Article #35 (deep-dive) · Pillar P4 · Group G26 · Rubric §14 ·
+> Series: MMCA.Common · Article #35 (deep-dive) · Pillar P4 · Group G25 · Rubric §14 ·
 > Status: grounded in `MMCA.Common/CLAUDE.md` (Testing and Build & Test Commands sections),
 > `Website/docs-src/governance/common-ArchitectureScorecard.md` (§14, §28),
 > `Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md`,
 > `Website/docs-src/adr/063-accessibility-conformance-gate.md`,
-> `Website/docs-src/adr/117-apphost-integration-test-base.md`, and
+> `Website/docs-src/adr/117-apphost-integration-test-base.md`,
+> `MMCA.Common/.github/workflows/ci.yml`, `MMCA.Common/FACTS.md`, the `MMCA.Common.Testing*` sources, and
 > `Website/docs-src/onboarding/group-28-testing-infrastructure.md`. No em dashes.
 
 **Subtitle:** A suite you run constantly is worth more than a suite you run nervously. Here is how
 MMCA.Common keeps 2,254 tests fast enough to live in the inner loop, with real-database
-integration coverage and no Docker in sight.
+integration coverage and no Docker in that loop.
 
 ---
 
@@ -30,9 +31,9 @@ the enforced coverage floor and the size of the suite behind it.
 ## Why the shape matters more than the count
 
 The test-count number is not the point. The shape is. The rubric (`Website/docs-src/governance/ArchitectureEvaluationCriteria.md`,
-category 14) describes a healthy pyramid as "many fast unit tests on domain and application, fewer
-integration, few E2E," and names the inverted pyramid, "mostly slow E2E, flaky tests, tests disabled
-without tracking," as the headline red flag.
+category 14) describes a healthy pyramid as "many fast unit tests on domain/application, fewer
+integration, few E2E," and leads its red flags with "Inverted pyramid (mostly slow E2E), flaky tests,
+tests disabled/skipped without tracking."
 
 The reason is the inner loop. A wide base of fast tests is one you run after every change, which means
 defects surface in seconds, while you still have the context to fix them. A top-heavy suite is one you
@@ -42,12 +43,10 @@ you write code or a tax you pay at the end.
 
 ## The base: fast, pure, no infrastructure
 
-The wide base of the MMCA.Common pyramid is pure unit tests with no I/O
-(`Website/docs-src/onboarding/group-28-testing-infrastructure.md`): domain entity factories and invariants, value
-objects, the `Result`/`Error` primitives, CQRS handlers with mocked repositories, FluentValidation
-validators, and DTO and request mappers. These dominate the type count and run in-memory in
-milliseconds. The whole reason this layer can be wide is the framework's design: Clean Architecture
-keeps the Domain framework-pure and the Application layer testable without infrastructure, so the
+The wide base of the MMCA.Common pyramid is pure unit tests with no I/O: domain entity factories and
+invariants, value objects, the `Result`/`Error` primitives, CQRS handlers with mocked repositories,
+FluentValidation validators, and DTO and request mappers. They run in-memory in milliseconds. The
+whole reason this layer can be wide is the framework's design: Clean Architecture keeps the Domain framework-pure and the Application layer testable without infrastructure, so the
 logic worth testing is reachable without booting a host or touching a database.
 
 Two design choices keep this layer honest. First, time is injected: tests use `FakeTimeProvider` rather
@@ -91,7 +90,7 @@ would.
 
 ## Shipped test packages: consumers do not re-invent the harness
 
-Five of the framework's nineteen published NuGet packages are test *infrastructure*, not test code, and this is
+Six of the framework's twenty-two published NuGet packages are test *infrastructure*, not test code, and this is
 how the pyramid stays consistent across three codebases instead of being rebuilt three times:
 
 - `MMCA.Common.Testing`, the integration base: `IntegrationTestBase<TFixture>` supplies a configured
@@ -104,12 +103,17 @@ how the pyramid stays consistent across three codebases instead of being rebuilt
   an axe-core WCAG 2.1 AA assertion.
 - `MMCA.Common.Testing.UI`, the bUnit base: `BunitComponentTestBase` registers MudBlazor's services,
   configures loose JSInterop, and wires real auth doubles so component tests resolve `<AuthorizeView>`
-  cascades.
+  cascades; the same package ships the `MarkupSnapshot` golden-markup helper and page-test bases for the
+  framework's identity pages (`ConfirmEmailPageTestsBase`, `RoleAdminListPageTestsBase<TPage>`,
+  `RoleAdminEditPageTestsBase<TPage>`).
 - `MMCA.Common.Testing.Aspire`, the AppHost base: `AppHostFixtureBase` boots a real AppHost once per
   test collection and waits on each resource's own readiness signal, while `AppHostTestBase<TFixture>`
-  hands a test a client bound to a named resource plus typed health, readiness and JWKS assertions.
+  hands a test a client bound to a named resource plus typed health, readiness, JWKS, h2c and
+  data-source assertions.
 - `MMCA.Common.Testing.Architecture`, the fitness-rule library: the architecture rules defined once and
   consumed by each repo's thin test suite.
+- `MMCA.Common.AI.Testing`, the AI test harness: `ReplayChatClient`, `GoldenReplayTestsBase` and
+  `PromptContractPinTestsBase`, keyed on a `PromptContract`'s normalized SHA-256 hash.
 
 ```csharp
 // A downstream integration test: a few lines of fixture glue, then real HTTP calls.
@@ -151,8 +155,10 @@ contract, that a consuming host subclasses to prove it wired the framework corre
 - `MmcaGatewayHardeningTestsBase<TEntryPoint>` drives a booted gateway through eight edge gates: the
   per-client-IP rate limiter and its bypass list, the tighter named policy on the credential route, a
   correlation id generated when the caller supplies none and echoed when it does, one readiness check
-  per downstream service, an active health probe on every cluster, and partitioning by the forwarded
-  client IP rather than the proxy IP.
+  per downstream service, the active health-probe state of every cluster, and partitioning by the
+  forwarded client IP rather than the proxy IP. The probe gate is switchable: by default every cluster
+  must carry an enabled active probe, and both consumer gateways override `ActiveHealthChecksExpected`
+  to `false`, so on them it asserts that no cluster carries one.
 - `DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>` resolves the
   decorated handler out of a built provider and walks the constructed object graph, asserting the
   documented nesting order.
@@ -163,17 +169,21 @@ structure and registration, and their ADR draws that line itself in its trade-of
 behavior, and nothing here is inferred from a registration list. Service hosts boot through
 `SqlServerIntegrationTestFixtureBase<TEntryPoint>`, which creates a GUID-named throwaway SQL Server
 database, lets the host's own migrate-on-start strategy apply the schema, resets data between tests
-with Respawn, and drops the database on disposal. Database-free hosts (the two YARP gateways) boot
-through `ProductionHostApplicationFactory<TEntryPoint>`, which pins `UseEnvironment("Production")` so
-the production-only branches (restrictive CORS, HSTS emission) are the ones actually under test, and
-captures the started `IHost`, because `StopAsync` is not reachable through the `WebApplicationFactory`
+with Respawn, and drops the database on disposal. Database-free hosts boot through
+`ProductionHostApplicationFactory<TEntryPoint>`: the two YARP gateways, and the UI web heads through
+Production-pinned factories such as ADC's `ConferenceUiHostApplicationFactory`, which derives from it.
+The base pins `UseEnvironment("Production")` so the production-only branches (restrictive CORS, HSTS
+emission) are the ones actually under test, and captures the started `IHost`, because `StopAsync` is not reachable through the `WebApplicationFactory`
 surface at all.
 
 The cost of adopting one stays small, which is the point of writing the body once: a subclass supplies
 two probe requests, or a path-count floor plus a pinned resource list, or a client factory, and the two
-gateway shutdown subclasses are single-line declarations with no body. There are no committed snapshots
-either. The OpenAPI guard asserts against the live document rather than a checked-in file, so a new
-controller can never leave a stale snapshot behind.
+gateway shutdown subclasses are single-line declarations with no body. The runtime guard reads no
+committed snapshot either: the OpenAPI base asserts against the live document rather than a checked-in
+file, so a new controller can never leave a stale snapshot behind. ADC and Store do commit each host's
+`openapi/<host>.json` and fail CI on an uncommitted difference, but that is a separate build-time check
+each consumer owns, asking whether the contract changed without review rather than whether a booted
+host serves a usable one.
 
 Adoption is partial, and that is worth reporting as an inventory rather than a clean sweep. The OpenAPI
 guard and the problem-details guard both run on every extracted REST host: four ADC services and three
@@ -193,8 +203,9 @@ whole stack fits together, which project resources exist, which database each on
 share, where JWKS discovery points, and the `WaitFor` graph that orders the startup. A solution build
 type-checks that file and never runs it, so a resource renamed on one side of a `WithReference` still
 compiles. The in-process integration tier boots hosts directly through `WebApplicationFactory`, which is
-the point of that tier and also means it never sees the orchestration. The E2E tier runs against a
-deployed environment, by which time a composition mistake is an incident rather than a test failure.
+the point of that tier and also means it never sees the orchestration. The E2E tier does boot a full
+stack (ADC's E2E workflow brings the Aspire stack up in CI), but it asserts browser journeys rather than
+the wiring contracts, and the deploy path runs it only for UI-affecting changes.
 ADR-117 closes that gap as a package rather than a per-repo copy, and both consumer smoke tiers subclass
 it.
 
@@ -218,8 +229,10 @@ an eight-day red nightly to diagnose.
 
 `AppHostTestBase<TFixture>` then gives a test the two things only a running stack can hand it, an
 `HttpClient` bound to a named resource and a resolved connection string, plus typed assertions over the
-wiring contracts: `AssertHealthyAsync`, `AssertAliveAsync`, `AssertReadyAsync`, `AssertJwksAsync` and
-`AssertH2cAsync`. The probe paths are constants (`/health`, `/alive`, `/health/ready`,
+wiring contracts: `AssertHealthyAsync`, `AssertAliveAsync`, `AssertReadyAsync`, `AssertJwksAsync`,
+`AssertH2cAsync`, and `AssertDataSourceAsync`, which checks that the AppHost injected the data-source
+connection string the framework's multi-database resolver reads, a logical-name typo that no build and
+no in-process tier can see. The probe paths are constants (`/health`, `/alive`, `/health/ready`,
 `/.well-known/jwks.json`) mirrored from the framework's own, with a unit test cross-asserting each pair so
 a rename cannot silently orphan a probe. One rule is written into the constant's own documentation: a
 startup gate probes liveness, never readiness, because a readiness endpoint aggregates downstream checks
@@ -238,11 +251,19 @@ public sealed class StackSmokeTests(MyAppHostFixture fixture) : AppHostTestBase<
     [Fact]
     public async Task Identity_publishes_its_key_set()
     {
-        Assert.SkipWhen(!Fixture.IsAvailable, Fixture.SkipReason!);
+        if (!Fixture.IsAvailable)
+        {
+            Assert.Skip(Fixture.SkipReason!);
+        }
+
         await AssertJwksAsync("identity");
     }
 }
 ```
+
+The skip is written as a branch on purpose. `Assert.SkipWhen` validates its reason before its
+condition, and `SkipReason` is null exactly when the stack did start, so the one-line form throws on
+every runner able to boot the AppHost; the base class documentation prescribes the branch.
 
 ## Accessibility as a shipped test contract
 
@@ -279,7 +300,10 @@ Enforcement then differs per repo, and precision matters more than a slogan. MMC
 backend-less gallery across chromium, firefox, and webkit, and all three are required merge checks. ADC
 and Store run a chromium-only leg against the full Aspire stack as a deploy gate, and that gate is
 scoped to UI changes, so a backend-only or infra-only deploy legitimately skips it: "deployed" does not
-always mean "axe ran on this commit". MMCA.Helpdesk adopts none of it. It pins the package version,
+always mean "axe ran on this commit". Firefox and webkit run on separate weekly E2E runs instead, and a
+cross-browser freshness gate fails a deploy when either engine has no successful run inside a 10-day
+window, so cross-engine coverage is enforced by recency rather than per commit. MMCA.Helpdesk adopts
+none of it. It pins the package version,
 references it from no project, and has no E2E test project at all, so the seed demonstrates the layers
 and not this contract.
 
@@ -303,8 +327,8 @@ the floor only ever moves upward.
 
 The shape is right, but the scorecard names real gaps and one is squarely in the testing story.
 
-- **The UI tier's visual check is markup-deep, not pixel-deep.** The framework ships roughly a dozen
-  reusable Blazor primitives in `MMCA.Common.UI`, some with real branching logic (`MobileCardList`,
+- **The UI tier's visual check is markup-deep, not pixel-deep.** The framework ships 26 reusable
+  Blazor components in `MMCA.Common.UI`, some with real branching logic (`MobileCardList`,
   `MobileInfiniteScrollList`), and the pyramid carries a fast base layer *for the UI* under them: the
   `MMCA.Common.Testing.UI` bUnit base backs their component tests, a real-browser render-smoke gate
   runs in CI, and a render-snapshot regression tier diffs their markup against committed baselines.
@@ -312,15 +336,20 @@ The shape is right, but the scorecard names real gaps and one is squarely in the
   what a snapshot compares: markup structure, not rendered pixels.
 - **SQLite is not SQL Server.** The middle tier is fast precisely because it uses SQLite, which means
   SQL-Server-specific behavior (certain query translations, concurrency-token semantics) is validated
-  against an approximation. The scorecard's Data Architecture row is candid about the surrounding
+  in the inner loop only against an approximation. Common CI adds a SQL Server Testcontainers job that
+  asserts row-version concurrency, identity insert and outbox-in-the-same-save against the real engine,
+  but that is a container tier outside the fast run. The scorecard's Data Architecture row is candid about the surrounding
   shape: it holds maturity at 4 with implementation at 9, and ADR-018 records the non-SQL engines as
   deliberately latent, with no production entity on them. The trade buys a fast, Docker-free inner loop
   at the cost of needing the consumer apps and CI to cover the SQL-Server-specific paths.
-- **The honest limit is mutation testing, not coverage.** The unit tier holds a **68.3%** line-coverage
+- **The honest limits are mutation testing and the container tiers, not coverage.** The unit tier holds a **68.3%** line-coverage
   floor (measured about 70.3%), enforced in CI and ratcheted up as the suite grows rather than left as
-  an aspiration. What holds category 14 below the top band is a single Exemplary gap: there is no
-  mutation testing on the Core tier, so a green suite proves the lines run, not that every assertion
-  would catch a mutant. That is a real limit, stated plainly.
+  an aspiration. What holds category 14 below the top band starts with mutation testing: there is none
+  on the Core tier, so a green suite proves the lines run, not that every assertion would catch a
+  mutant. The scorecard names three structural gaps beside it: the integration tier (Redis, PostgreSQL,
+  package consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier is
+  advisory, and messaging never meets a real broker in the framework's own CI. Those are real limits,
+  stated plainly.
 
 None of these argue against the pyramid. They are the cost of keeping the base fast and honest about
 what each tier actually proves.
@@ -350,7 +379,7 @@ slow and flaky.
 **What we covered:** why the pyramid's shape matters more than its count, the fast no-Docker base
 (pure unit tests plus `FakeTimeProvider`), the real-SQLite middle tier with two databases in
 `MultiSourceSqliteIntegrationTests`, the thin bUnit/Playwright cap and the orthogonal fitness-test tier,
-the five shipped test packages that let consumers reuse the harness, the seven runtime conformance bases
+the six shipped test packages that let consumers reuse the harness, the seven runtime conformance bases
 that prove a really-booted host wired the framework's contracts (ADR-058) and their partial adoption, the
 AppHost tier that compiles a claim about the composition itself (ADR-117), WCAG 2.1 AA shipped as a named
 axe target with one recorded exception (ADR-063), the xUnit v3 / MTP runner and the CI coverage floor, and
@@ -368,117 +397,72 @@ own app.*
 
 *Tags: .NET, Testing, C Sharp, Software Architecture, Test Automation*
 
-*Notes (this run, re-verified at framework v1.205.0, snapshot 2026-09-17 (`MMCA.Common/FACTS.md:4,14`),
-against `Website/docs-src/governance/common-ArchitectureScorecard.md:5,88,94,120,121`,
-`MMCA.Common/.github/workflows/ci.yml:180,183,467-468,481`, and `MMCA.Common/FACTS.md:19,35-39`):
-verified names/facts: the suite is about 2,254 `[Fact]`/`[Theory]`, weighted to Core
-(`common-ArchitectureScorecard.md:94` §14, maturity 4 / implementation 9, "counts re-synced 2026-09-14";
-`ci.yml:180` comment, which floors the run at 2000 and puts the suite at about 2,254, above the
-`--minimum-expected-tests 2000` run at `:183`). The prior 1,880 across 262 files is sixteenth-wave history, not a current figure, so the H1, the
-subtitle and the opening paragraph were re-cut to the current number this run. `FakeTimeProvider`,
-`MultiSourceSqliteIntegrationTests`
-(`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/DataSources/MultiSourceSqliteIntegrationTests.cs:42-52`:
-two GUID-named `.db` files under `Path.GetTempPath()` `:44-45`, wired as `SourceA`/`SourceB` Sqlite
-connection strings `:50-51`), which is why the middle tier is described as embedded SQLite rather than
-SQLite in-memory this run: the standout suite is file-backed. xUnit v3 + Microsoft Testing Platform (not
-VSTest, per `global.json`); the unit-tier coverage floor 68.3% measured about 70.3% (`ci.yml:467-468`
-comment, `awk -v m="68.3"` at `:481`). Five Testing.* packages of the nineteen published
-(`FACTS.md:19` "Published packages - 19"; `Testing` `:35`, `Testing.Architecture` `:36`, `Testing.Aspire`
-`:37`, `Testing.E2E` `:38`, `Testing.UI` `:39`), so the package bullets gained the `MMCA.Common.Testing.Aspire`
-entry this run. `IntegrationTestBase<TFixture>`, `JwtTokenGenerator` (RS256), `BunitComponentTestBase`.
-§14 and §28 both hold at maturity 4 / implementation 9, and §14 is held below 10 by the one remaining
-Exemplary gap, no mutation testing on the Core tier (`common-ArchitectureScorecard.md:94`). The latest full
-re-score is the thirty-sixth wave (2026-09-19, framework v1.205.0, git HEAD `90ffa7a`, clean tree,
-`common-ArchitectureScorecard.md:5`, which also records rubric v2 per ADR-110 and §16 scored from this
-cycle, so Sigma-weight is 82): no maturity value and no implementation value moved, three maturity
-proposals and eight implementation proposals were refuted on the adversarial pass and held at prior, so
-Maturity is 97.0% (318/328) (`:120`) and Implementation is 86.0% (705/820) (`:121`). §8 Data Architecture
-is maturity 4 / implementation 9 on weight 3 (`:88`), its evidence names
-`CrossDataSourceDegradeConvention` and records ADR-018's non-SQL engines as deliberately latent with no
-production entity, so the trade-off bullet's "implementation at 8" was corrected this run. The rubric's
-pyramid and inverted-pyramid wording is in
-`Website/docs-src/governance/ArchitectureEvaluationCriteria.md`. The onboarding anchor moved: the testing
-group is `Website/docs-src/onboarding/group-28-testing-infrastructure.md` (group-27 is now
-`group-27-common-ai-integration.md`), which also fixed a dead published link in the paste render. The
-illustrative `CatalogTests` snippet is composed for shape; the base type and helpers are real.
-Runtime conformance suites re-read this run against
-`Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md`, which is Accepted 2026-07-28 and
-revised 2026-08-14, 2026-08-18, 2026-08-23 and 2026-09-03 (`:4`): **seven** contract bases, one per runtime
-contract (`:27`), all under `MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/` in namespace
-`MMCA.Common.Testing.Conformance`. The seventh, added by the 2026-09-03 revision, is
-`MmcaGatewayHardeningTestsBase<TEntryPoint>` (`MmcaGatewayHardeningTestsBase.cs:39`), which drives a booted
-gateway through eight edge gates: rate limiter and bypass list, the tighter named policy on the credential
-route, correlation id generated or echoed, one readiness check per downstream service, an active health
-probe per cluster, and partitioning by the forwarded client IP (ADR-058 `:47-52`). The other six are
-`ProblemDetailsContractTestsBase<TFixture>`, `OpenApiContractTestsBase<TFixture>`,
-`ServiceInfoVersioningContractTestsBase<TFixture>`, `SecurityHeadersTestsBase`,
-`GracefulShutdownTestsBase<TEntryPoint>` and `DecoratorPipelineOrderTestsBase<TCommand, TCommandResult,
-TQuery, TQueryResult>` (ADR-058 `:30-54`). An eighth base ships in that same folder without being one of
-ADR-058's seven runtime contracts, `MiddlewarePipelineOrderTestsBase`
-(`MiddlewarePipelineOrderTestsBase.cs:29`). The structure-vs-behavior boundary is ADR-015's own trade-off,
-"The tests assert **structure / registration**, not runtime behavior"
-(`Website/docs-src/adr/015-architecture-fitness-functions.md`). Adoption inventory re-verified by reading
-the subclasses: problem details now covers all seven extracted REST hosts, because ADC Notification gained
-one
-(`MMCA.ADC/Tests/Integration/MMCA.ADC.Notification.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16-17`,
-`: ProblemDetailsContractTestsBase<NotificationIntegrationTestFixture>(fixture)`), so the prior "all of
-those except ADC Notification" and the adjacent "the OpenAPI guard is the only one on every extracted REST
-host" were both corrected out. Security headers is now subclassed on four hosts, the two Gateways plus both
-web heads (`MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/SecurityHeadersTests.cs:17-18` and
-`MMCA.Store/Tests/Hosts/MMCA.Store.UI.Web.Tests/SecurityHeadersTests.cs:17-18`, each overriding
-`CreateClient()` off its own host factory); graceful shutdown remains Gateway-only. MMCA.Helpdesk no longer
-adopts none of them: `MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/DecoratorPipelineOrderTests.cs:13,35-37`
-imports `MMCA.Common.Testing.Conformance` and subclasses `DecoratorPipelineOrderTestsBase`, and
-`.../MiddlewarePipelineOrderTests.cs:1,15` subclasses `MiddlewarePipelineOrderTestsBase` for the ADR-079
-edge pipeline; that project carries the `MMCA.Common.Testing` reference itself
-(`MMCA.Helpdesk.Architecture.Tests.csproj:24,26`), and Helpdesk pins all four
-`MMCA.Common.Testing*` packages at 1.205.0 (`MMCA.Helpdesk/Directory.Packages.props:93-96`). Its test tree
-is `Tests/Architecture` plus `Tests/Modules`, with no E2E project, which is what keeps the accessibility
-section's Helpdesk sentence true.
-AppHost tier added this run against `Website/docs-src/adr/117-apphost-integration-test-base.md` (Accepted
-2026-09-09, revised 2026-09-11 and 2026-09-19; both consumer tiers subclass the package, `:8-10`; the gap
-statement, a build never runs the AppHost and the in-process tier bypasses the orchestration, `:16-29`).
-Read from source in `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/`: `AppHostFixtureBase`
-(`Fixtures/AppHostFixtureBase.cs:38`, an `IAsyncLifetime` collection fixture) evaluates the precondition
-gate first and returns without starting anything when it yields a reason (`:104-108`), boots through
-`CreateBuilderAsync` returning an `IDistributedApplicationTestingBuilder` (`:169`, implemented by
-`AppHostFixtureBase<TAppHost>`, `Fixtures/AppHostFixtureBase.Generic.cs:20`), then builds, starts and waits
-per resource (`:123-127`); readiness-not-liveness and the healthy-versus-Running distinction are the class
-docstring's own words (`:22-28`); teardown stops, disposes and restores every pushed environment variable
-(`:135-159`). The gate is `Preconditions/AppHostEnvironmentGate.cs`: opt-in variable `MMCA_APPHOST_TESTS`
-(`:16`) with the skip sentence at `:48-50`, surfaced as `SkipReason` (`AppHostFixtureBase.cs:53`) and
-`IsAvailable` (`:56`); the default requirement is opt-in plus Docker (`:76-77`), and `SuppliesE2eRsaKeys`
-(`:89`) mints an ephemeral RS256 keypair when `E2E_JWT_*` is absent, because an Identity resource with no
-key material answers every request including `/alive` with a 500 and never turns healthy (ADR-117 `:42-53`,
-where the ADC nightly ran red from 2026-09-01 to the 2026-09-09 root cause). `AppHostTestBase<TFixture>`
-(`Fixtures/AppHostTestBase.cs:29`) supplies `CreateHttpClient` (`:44`), `GetConnectionStringAsync` (`:54`),
-`CreateBearerToken` (`:74`) and the typed assertions `AssertHealthyAsync` (`:98`), `AssertAliveAsync`
-(`:113`), `AssertReadyAsync` (`:127`), `AssertJwksAsync` (`:147`) and `AssertH2cAsync` (`:203`); the skip
-call stays in the consuming project (`:20-24`). Probe paths are constants mirrored from the framework and
-cross-asserted by a unit test (`Probes/AppHostProbePaths.cs:3-13`): `/health` (`:18`), `/alive` (`:26`),
-`/health/ready` (`:32`), `/.well-known/jwks.json` (`:35`), with "a startup gate probes liveness, never
-readiness" and the deadlock reason at `:20-25`. The AppHost snippet is illustrative of that documented
-shape; the base types, the `RequiredEnvironment` override and the `Assert.SkipWhen(!Fixture.IsAvailable,
-Fixture.SkipReason!)` line are real (`AppHostFixtureBase.cs:35,76-77`).
-Accessibility section re-verified against `Website/docs-src/adr/063-accessibility-conformance-gate.md`
-(Accepted 2026-08-01, `:4`, revised 2026-08-14, 2026-08-23, 2026-08-31 and 2026-09-01, `:4-14`; the
-2026-08-23 revision records the fourth asserting Identity workflow base, `:6-8`). `AxeOptions.Wcag21Aa`
-(`MMCA.Common/Source/Hosting/MMCA.Common.Testing.E2E/Infrastructure/AxeOptions.cs:17`) pins a `RunOnly` tag
-list of exactly `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` (`:22`), with axe best-practice rules
-deliberately out of scope (`:12-15`); the one exception `Wcag21AaExceptMudPagerCombobox` (`:35`) repeats
-those four tags (`:40`) and disables only `aria-input-field-name` (`:44`), scoped to pages whose sole
-combobox is `MudTablePager`'s unlabelled select (`:26-33`). `AssertNoAccessibilityViolationsAsync`
-(`Infrastructure/PageExtensions.cs`) throws `AccessibilityViolationException` carrying impact, id, help text
-and one compacted markup line per node. Four Identity workflow bases assert with `AxeOptions.Wcag21Aa`, not
-three: `Workflows/Identity/UserLoginTestsBase.cs:82`, `UserRegistrationTestsBase.cs:95`,
-`ProfileManagementTestsBase.cs:178` and `PasswordResetTestsBase.cs:88` and `:99`. The same folder also holds
-`LogoutTestsBase.cs` and `AuthorizationTestsBase.cs`, neither of which calls
-`AssertNoAccessibilityViolationsAsync`, which is why the Testing.E2E bullet now says four of the named
-journeys close with an axe assertion rather than attaching the parenthetical to all of them; the package's
-`Workflows/` folder also carries `Globalization/` and `Preferences/` bases. The two consumer helpers are
-`ScanAsync` and `ScanGridAsync` on `Infrastructure/E2ETestBase.cs`. Enforcement per repo: Common's `ui-e2e`
-job runs a `chromium, firefox, webkit` matrix and all three are required merge gates; ADC and Store call the
-reusable E2E workflow chromium-only behind a UI-change filter that lets it skip; MMCA.Helpdesk pins
-`MMCA.Common.Testing.E2E` at 1.205.0 (`MMCA.Helpdesk/Directory.Packages.props:94`) and has no E2E project.*
+*Notes (this run, 2026-10-02, re-verified at framework v1.221.0 (`MMCA.Common/FACTS.md:4`) against source,
+the Common scorecard, the rubric and ADR-058/063/117; supersedes the 2026-09-17 v1.205.0 ledger).
+Header group cell corrected to G25, Testing & Quality Infrastructure
+(`Website/docs-src/onboarding/00-group-taxonomy.md:83`; G28 is Common AI Integration at `:82`, G26 the ADC
+engagement layer at `:78`); the group's page keeps the file name `group-28-testing-infrastructure.md`.
+Suite size: about 2,254 `[Fact]`/`[Theory]` behind `--minimum-expected-tests 2000`
+(`MMCA.Common/.github/workflows/ci.yml:158-161`); `dotnet-coverage` returns the test exit code (`:154`);
+unit-tier coverage floor 68.3%, measured 70.3% (comment `:448-449`, `awk -v m="68.3"` at `:462`); gallery
+a11y matrix `chromium, firefox, webkit` (`:257`). Scorecard evidence 2026-10-01 at v1.218.0
+(`Website/docs-src/governance/common-ArchitectureScorecard.md:5`), Maturity 96.6% (317/328) (`:9`),
+Implementation 86.0% (705/820) (`:10`). Category 8 Data Architecture is maturity 4 / implementation 9 with
+ADR-018's non-SQL engines latent (`:72`). Category 14 is 4/9 (`:78`) and is held at 9 by no mutation
+testing plus three structural gaps (integration tier not a merge gate, Redis `ci.yml:837` and PostgreSQL
+`ci.yml:881`; AppHost tier `continue-on-error: true` at `ci.yml:976`; no real broker in Common CI), so the
+trade-off bullet's "single Exemplary gap" was corrected this run. Category 28 is 4/9, markup not pixels
+(`:92`). Rubric quotes re-cut to the exact wording
+(`Website/docs-src/governance/ArchitectureEvaluationCriteria.md:430,433,440`). Packages: 22 published
+(`FACTS.md:19`, list `:22-43`), six of them test infrastructure: `MMCA.Common.AI.Testing` (`:34`, harness
+types and the hash it keys on per `MMCA.Common/AGENTS.md:141`), `Testing`, `Testing.Architecture`,
+`Testing.Aspire`, `Testing.E2E`, `Testing.UI` (`:38-42`); "five of nineteen" corrected and the AI.Testing
+bullet added. Testing.UI's `MarkupSnapshot` and the identity page-test bases per ADR-058's 2026-09-25
+revision (`Website/docs-src/adr/058-runtime-conformance-suites-as-a-package.md:286-313`). ADR-058 status
+`:4`, later revisions 2026-09-10 (`:246`), 2026-09-22 (`:264`), 2026-09-25 (`:286`), 2026-10-01 (`:315`);
+seven contract bases (`:29`). Gateway probe gate is switchable:
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Conformance/MmcaGatewayHardeningTestsBase.cs:111` (default
+true), inverse assertion `:308`, overridden to false by
+`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GatewayHardeningTests.cs:89` and
+`MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GatewayHardeningTests.cs:93`. The runtime OpenAPI guard
+reads no committed file (ADR-058 `:104-109`), while both consumers commit their documents and diff them in
+CI (`:288-294`), so the "no committed snapshots" sentence was scoped to the runtime guard. UI web heads boot
+over Production-pinned factories (ADR-058 `:142-145`;
+`MMCA.ADC/Tests/Hosts/MMCA.ADC.UI.Web.Tests/ConferenceUiHostApplicationFactory.cs:17` derives
+`ProductionHostApplicationFactory`, which pins Production at
+`MMCA.Common/Source/Hosting/MMCA.Common.Testing/Fixtures/ProductionHostApplicationFactory.cs:37`). Helpdesk
+pins all four `MMCA.Common.Testing*` packages at 1.221.0 (`MMCA.Helpdesk/Directory.Packages.props:93-96`).
+AppHost tier, read in `MMCA.Common/Source/Hosting/MMCA.Common.Testing.Aspire/`:
+`Fixtures/AppHostFixtureBase.cs:41` (collection fixture), readiness-not-liveness docstring `:23-28`, the
+branch-not-`SkipWhen` rule `:35-38`, `SkipReason` `:56`, `IsAvailable` `:59`, default requirement opt-in
+plus Docker `:79-80`, `SuppliesE2eRsaKeys` `:92`, gate evaluated first `:105-111`, builder `:123` and
+`:172`, teardown `:138`; opt-in variable `Preconditions/AppHostEnvironmentGate.cs:16`; probe constants
+`Probes/AppHostProbePaths.cs:18,26,32,35`; `Fixtures/AppHostTestBase.cs:29` with `CreateHttpClient` `:44`,
+`GetConnectionStringAsync` `:54`, `CreateBearerToken` `:74` and assertions `:98,113,127,147,203,246`
+(`AssertDataSourceAsync` at `:246` added this run). The snippet's skip line was corrected to the branch
+form, as ADC writes it (`MMCA.ADC/Tests/Integration/MMCA.ADC.AppHost.SmokeTests/AdcAppHostSmokeTests.cs:59,69-71`).
+The E2E sentence was corrected: ADC's E2E workflow brings the Aspire stack up in CI
+(`MMCA.ADC/.github/workflows/e2e.yml:3-4`, step `:200`), which contradicts ADR-117's "deployed environment"
+wording (`Website/docs-src/adr/117-apphost-integration-test-base.md:27-29`, not edited here); the eight-day
+red nightly is ADR-117 `:43`. Deploy gates: chromium-only, UI-scoped `e2e-gate`
+(`MMCA.ADC/.github/workflows/deploy.yml:861,875`, UI filter `:57`; `MMCA.Store/.github/workflows/deploy.yml:833,847`)
+plus `cross-browser-freshness` (ADC `:987`, 10-day window comment `:963-980`; Store `:946`, `:964`), now
+named in the enforcement paragraph. Trade-offs: 26 `.razor` components under
+`MMCA.Common/Source/Presentation/MMCA.Common.UI/Components` (Glob, this run) replace "roughly a dozen";
+the SQL Server Testcontainers job (`ci.yml:918`) runs
+`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.SQLServer.Tests/SQLServerPersistenceTests.cs:112,144,175`
+(identity insert, stale row-version save, outbox in the same save). The subtitle's "no Docker" is scoped to
+the inner loop, because the Redis, PostgreSQL and SQL Server Testcontainers jobs and the AppHost tier's
+default requirement all need a container runtime. The base tier's "dominate the type count" and its
+onboarding citation were removed: the group page does not carry that characterization. Carried from the
+2026-10-02 audit's confirmations without re-opening this run: `IntegrationTestBase.cs:31,42-48,51-71,75`,
+`JwtTokenGenerator.cs:14,131`, `SqlServerIntegrationTestFixtureBase.cs:90,183`,
+`MultiSourceSqliteIntegrationTests.cs:44-51,97,120,138,167-183`, `AxeOptions.cs:12-15,17,22,35,40,44`, the
+four Identity workflow bases (`UserLoginTestsBase.cs:82`, `UserRegistrationTestsBase.cs:95`,
+`ProfileManagementTestsBase.cs:191`, `PasswordResetTestsBase.cs:88,99`), `E2ETestBase.cs:372`,
+`PageExtensions.cs:326-327`, `MMCA.Common/global.json:3`, ADR-015's structure/registration trade-off
+(`Website/docs-src/adr/015-architecture-fitness-functions.md:83`), and the Helpdesk subclasses
+(`DecoratorPipelineOrderTests.cs:36`, `MiddlewarePipelineOrderTests.cs:15`). The illustrative `CatalogTests`
+snippet is composed for shape; the base type and helpers are real.*
 
 - Full series index: https://ivanball.github.io/writing.html

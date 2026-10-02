@@ -188,7 +188,7 @@
           red flag. The fix is to make conformance executable.</p>
           <h2 id="enforced-twice-compile-time-and-runtime">Enforced twice: compile-time and runtime</h2>
           <p>MMCA.Common enforces the dependency rules through two independent gates, and the redundancy is
-          deliberate (<code>MMCA.Common/CLAUDE.md</code>, Architecture Enforcement section).</p>
+          deliberate (<code>MMCA.Common/AGENTS.md</code>, Architecture section).</p>
           <p><strong>1. Compile-time, via MSBuild.</strong> <code>Source/Build/MMCA.Common.LayerEnforcement.targets</code> is imported from
           <code>Directory.Build.props</code> for every <code>MMCA.Common.*</code> project under <code>Source/</code>. It runs in a
           <code>BeforeTargets=&quot;ResolveProjectReferences&quot;</code> step, inspects the project&#39;s <code>ProjectReference</code> list, and
@@ -214,16 +214,20 @@
           <p>Here is the part that makes the fitness functions scale across more than one repo without rotting into
           three slightly-different copies.</p>
           <p>The rule <em>bodies</em> do not live in the test project. They live once, in a shipped NuGet package:
-          <code>MMCA.Common.Testing.Architecture</code> (package 15 of the nineteen the framework publishes, with
+          <code>MMCA.Common.Testing.Architecture</code> (package 18 of the twenty-two the framework publishes, with
           <code>FACTS.md</code> the canonical count). That
           package defines:</p>
           <ul>
           <li><code>ArchitectureRules</code>, the reusable rule library that expresses the actual assertions.</li>
-          <li>A set of 53 abstract <code>*TestsBase</code> classes holding 136 <code>[Fact]</code>s (for example
+          <li>A set of 55 abstract <code>*TestsBase</code> classes holding 141 test methods (for example
           <code>LayerDependencyTestsBase</code>, <code>DomainPurityTestsBase</code>, <code>MicroserviceExtractionTestsBase</code>,
-          <code>PiiConventionTestsBase</code>, <code>FolderWidthTestsBase</code>, <code>DataResidencyTestsBase</code>).</li>
-          <li>One extension point, <code>IArchitectureMap</code>, that every base class is parameterized by, with a shipped
-          <code>ArchitectureMapBase</code> that implements it so a per-repo map is a flat declaration of assemblies.</li>
+          <code>PiiConventionTestsBase</code>, <code>FolderWidthTestsBase</code>, <code>DataResidencyTestsBase</code>,
+          <code>RawSqlConventionTestsBase</code>, <code>ClockReadTestsBase</code>).</li>
+          <li>One extension point, <code>IArchitectureMap</code>, that most base classes are parameterized by, with a shipped
+          <code>ArchitectureMapBase</code> that implements it so a per-repo map is a flat declaration of assemblies. The
+          bases whose rule reads files rather than assemblies take only what that rule reads instead:
+          <code>FolderWidthTestsBase</code> a repo root, <code>ProtoContractTestsBase</code> a solution file and a list of <code>.proto</code>
+          paths.</li>
           </ul>
           <p>Each repo supplies exactly <strong>one</strong> map implementation that declares its own layer and module
           assemblies, and its arch-test classes shrink to thin sealed subclasses (three to ten lines) that
@@ -245,7 +249,8 @@
           also means no per-repo <code>ArchitectureTestHelper</code> duplication, and so none of the drift that four copies
           of a rule invite: exactly the kind of drift fitness functions are
           supposed to prevent. It is also a maintainability win
-          in its own right (rubric category 16): one rule evolves, all consumers inherit the fix.</p>
+          in its own right (rubric category 34, which absorbs the former maintainability criteria): one rule
+          evolves, all consumers inherit the fix.</p>
           <p>A small honest detail: a few checks genuinely do not generalize, so they stay local. The
           <code>MMCA.Common.Grpc</code> boundary check and the <code>IMessageBus</code> / <code>IJwksProvider</code> placement checks live in
           <code>FrameworkSanityTests</code> in the Common repo only, because they are about Common&#39;s own internal structure.
@@ -275,6 +280,26 @@
           <p>This is also where the doubled enforcement lifts category 3 and category 34 into the top maturity band
           (Maturity 4) in the scorecard (Implementation 9 and 8, respectively): the rules that protect the
           architecture are the ones that fail the build, not the ones written in a doc.</p>
+          <h3 id="two-gates-on-what-a-method-body-may-call">Two gates on what a method body may call</h3>
+          <p>The same shape reaches inside method bodies, where an assembly reference says nothing. Two bases hold
+          rules a reviewer is asked to remember on every PR and reliably forgets on one.</p>
+          <p><strong><code>RawSqlConventionTestsBase</code> (ADR-125).</strong> Module code reaches SQL only through the parameterizing
+          APIs. The inherited fact, <code>ModuleCode_UsesParameterizedSqlOnly</code>, scans the <code>.cs</code> files of every mapped
+          module and fails on a call to <code>FromSqlRaw</code>, <code>SqlQueryRaw</code>, <code>ExecuteSqlRaw</code> or <code>ExecuteSqlRawAsync</code>, the
+          four EF members that take a plain string, so a value concatenated into the statement compiles and runs
+          instead of becoming a command parameter. The interpolated siblings and the framework&#39;s
+          <code>IRawSqlQueryExecutor</code> stay allowed. The scan is textual and says so: whole-line comments are skipped,
+          a match inside a string literal is a rare false positive, and an <code>AllowedFiles</code> list is the adoption
+          ratchet. It also fails closed, because a scan that finds no module directories to read is a failure
+          rather than a pass. MMCA.Store&#39;s subclass supplies its map and an empty allowlist.</p>
+          <p><strong><code>ClockReadTestsBase</code> (ADR-128).</strong> Domain and Application code takes time as an input and never reads
+          the ambient clock. The rule reads IL through Mono.Cecil, not source, and fails on any call to
+          <code>DateTime.UtcNow</code>, <code>DateTime.Now</code>, <code>DateTime.Today</code>, <code>DateTimeOffset.UtcNow</code> or <code>DateTimeOffset.Now</code> in
+          the map&#39;s Domain and Application assemblies, lambdas and async state machines included. A business rule
+          that reads the clock itself cannot be driven by a test, so every expiry and cutoff it guards is either
+          untested or tested by sleeping. The framework&#39;s <code>BaseDomainEvent</code> occurrence stamp is the one built-in
+          exemption, and <code>AllowedClockReaders</code> takes any further entry as a reviewed type or member. MMCA.ADC&#39;s
+          subclass supplies its map and nothing else: no exemptions.</p>
           <h3 id="a-convention-becomes-a-test-twelve-files-per-folder">A convention becomes a test: twelve files per folder</h3>
           <p>The clearest case for turning a convention into an executable rule is the one that reads least like
           architecture: how wide a folder is allowed to get. The layout rule is module by project, feature by
@@ -331,7 +356,7 @@
           against the previous generation is now wrong. Nothing in a single repository&#39;s build notices, because
           everything the change breaks lives in another process.</p>
           <p>The framework freezes both halves of that surface. <code>IntegrationEventContractTestsBase</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventContractTestsBase.cs:11</code>)
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/IntegrationEventContractTestsBase.cs:18</code>)
           pins every integration-event payload against a committed contract. <code>ProtoContractTestsBase</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Contracts/ProtoContractTestsBase.cs:19</code>) does
           the same for the synchronous half, the gRPC protos, so a renumbered field, a retyped one, a renamed rpc
@@ -341,17 +366,17 @@
           (<code>:22</code>), the <code>.proto</code> files to pin as repo-root-relative paths (<code>:25</code>), and the committed snapshot itself
           (<code>:30</code>), with the fact at <code>:32-34</code>. The rule body,
           <code>ArchitectureRules.ProtoContractsMatchFrozenList</code>
-          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Protos.cs:37</code>), resolves
-          the repo root (<code>:45</code>), re-reads the real files from the working tree, rebuilds the contract, and diffs it
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Rules/Contracts/ArchitectureRules.Protos.cs:38</code>), resolves
+          the repo root (<code>:46</code>), re-reads the real files from the working tree, rebuilds the contract, and diffs it
           against the frozen list <strong>in both directions</strong>: a line present in the protos but not frozen, and a line
-          frozen but no longer present, are each a violation with its own prefix (<code>:67-70</code>). That is the same
+          frozen but no longer present, are each a violation with its own prefix (<code>:68-71</code>). That is the same
           both-directions discipline the navigation-doc gate uses below, aimed at a wire format instead of a table.</p>
           <p>What gets pinned is exactly what a peer can observe: the <code>package</code>, every rpc with its name, request and
-          response types and <strong>both</strong> streaming flags (<code>:198-208</code>), every message field with its name, declared
-          type, label and <strong>number</strong> (<code>:219-227</code>), and every enum value with its number (<code>:211-217</code>). Nested
+          response types and <strong>both</strong> streaming flags (<code>:199-209</code>), every message field with its name, declared
+          type, label and <strong>number</strong> (<code>:220-228</code>), and every enum value with its number (<code>:212-218</code>). Nested
           messages and enums are qualified under their parent, while a <code>oneof</code> contributes no name segment because
-          on the wire it does not (<code>:182-184</code>). Deliberately not pinned: <code>syntax</code>, <code>import</code> and every <code>option</code>,
-          <code>csharp_namespace</code> included (<code>:27-31</code>). The line is drawn at &quot;would a deployed peer notice.&quot; Pin the
+          on the wire it does not (<code>:183-185</code>). Deliberately not pinned: <code>syntax</code>, <code>import</code> and every <code>option</code>,
+          <code>csharp_namespace</code> included (<code>:28-31</code>). The line is drawn at &quot;would a deployed peer notice.&quot; Pin the
           file-level options and a reordered import turns into a red build, which is the fastest way to teach a
           team to regenerate the snapshot without reading it.</p>
           <p>Adoption is the shape this tier always uses. MMCA.ADC&#39;s subclass pins the seven protos its four
@@ -364,13 +389,13 @@
           and a deliberately drifted twin, which is the only way a repo can test a rule whose subject lives
           somewhere else: the clean file proves the parser accepts a real contract, and the drifted one proves the
           rule actually fails, reporting both sides of a renumbered field
-          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/ProtoContractFitnessTests.cs:52-64</code>) and
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Contracts/ProtoContractFitnessTests.cs:52-64</code>) and
           naming a missing file explicitly rather than silently pinning an empty contract (<code>:76-87</code>).</p>
           <p>Two honest costs. The frozen list is another committed baseline, the same obligation as the performance
           baseline further down: an intended contract change means regenerating the snapshot by printing
           <code>ArchitectureRules.BuildProtoContract(...)</code> for the same files, coordinating the peer rollout, and
-          committing the new list in that same change, never editing one line to turn a red test green. Both
-          consumer files say precisely that in a comment above the list
+          committing the new list in that same change, never editing one line to turn a red test green. MMCA.Store&#39;s
+          file says precisely that in a comment above its list
           (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Contracts/ProtoContractTests.cs:21-24</code>). And the
           unpinned options are not entirely harmless: changing <code>csharp_namespace</code> breaks the generated client code
           in every consumer while the wire stays byte-identical, and this gate passes it. The rule protects the
@@ -410,23 +435,29 @@ phantom.Should().BeEmpty(
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/Governance/ObservabilityConventionTestsBase.cs:30</code>)
           ships in the same <code>MMCA.Common.Testing.Architecture</code> package and turns the pairing into a build
           failure (ADR-062).</p>
-          <p>It fails in three distinct ways. An SLO alert declared in the consumer&#39;s Bicep template with no <code>###</code>
+          <p>It always fails in three distinct ways. An SLO alert declared in the consumer&#39;s Bicep template with no <code>###</code>
           section in <code>infra/OPERATIONS.md</code> whose heading carries the matching <code>-alert-&lt;key&gt;</code> infix is a
           violation, and so is a heading that does carry the key but not the alert&#39;s current severity as
-          <code>(sev N)</code> (<code>:64-84</code>), which means re-tiering an alert without moving its triage steps is a red build
+          <code>(sev N)</code> (<code>:89-115</code>), which means re-tiering an alert without moving its triage steps is a red build
           rather than a surprise at 3am. In the other direction, an orphan runbook section whose alert the
-          template no longer provisions is a violation too (<code>:92-103</code>). And discovering fewer than
-          <code>MinimumAlertSpecs</code> specs, default 3 (<code>:39</code>), is itself a failure (<code>:54-60</code>).</p>
-          <p>That third rule is the same fail-closed property the forms floor and the cost gate below both rely
+          template no longer provisions is a violation too (<code>:117-129</code>). And discovering fewer than
+          <code>MinimumAlertSpecs</code> specs, default 3 (<code>:39</code>), is itself a failure (<code>:79-87</code>). A fourth fact is opt-in:
+          a subclass that sets <code>RequireWorkbook</code> (off by default, <code>:58</code>) also fails unless the template declares
+          an Azure Monitor workbook or a portal dashboard, so the signals the alerts fire on have somewhere an
+          operator can look at them (<code>:65-77</code>).</p>
+          <p>That floor rule is the same fail-closed property the forms floor and the cost gate below both rely
           on, and it earns its keep here more than anywhere: discovery parses the template between two literal
-          anchors, <code>var sloAlertSpecs</code> and <code>resource sloAlerts</code> (<code>:109-114</code>), and a rename would otherwise leave
+          anchors, <code>var sloAlertSpecs</code> and <code>resource sloAlerts</code> (<code>:135-138</code>), and a rename would otherwise leave
           a gate that pairs zero alerts against zero runbook sections and reports success. A key count that
-          disagrees with the severity count fails for the same reason (<code>:117</code>).</p>
+          disagrees with the severity count fails for the same reason (<code>:143</code>).</p>
           <p>Adoption is the shape the rest of this tier already uses. MMCA.ADC and MMCA.Store each embed their
           real <code>infra/main.bicep</code> and <code>infra/OPERATIONS.md</code> as manifest resources
           (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/MMCA.ADC.Architecture.Tests.csproj:17-22</code>)
-          and declare a subclass whose only body is a raised floor, <code>protected override int MinimumAlertSpecs =&gt; 4;</code>, because each repo provisions four specs
-          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:13</code>).
+          and declare a subclass whose only body is a raised floor matching the specs that repo provisions:
+          MMCA.Store&#39;s <code>protected override int MinimumAlertSpecs =&gt; 4;</code>
+          (<code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Governance/ObservabilityConventionTests.cs:13</code>),
+          and MMCA.ADC&#39;s <code>=&gt; 5</code>, the four request and resilience SLOs plus the AI scoring token ceiling
+          (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Governance/ObservabilityConventionTests.cs:14</code>).
           Leaving the shipped default of 3 in place would let the gate pass on three discovered specs if the
           parse anchors ever drifted, which is the vacuity trap one level up. The
           base reads those resources from <code>ResourceAssembly</code>, which defaults to the <em>derived</em> type&#39;s assembly
@@ -500,13 +531,12 @@ phantom.Should().BeEmpty(
           the ceilings and exactly one ratio floor across the eight benchmarks, and the honest claim is that it
           catches collapses and new allocations, not creep. Nothing but review stops someone raising a ceiling to
           turn a red gate green.</li>
-          <li><strong>Prose masquerading as enforcement is the real trap.</strong> The framework&#39;s own backlog records the
-          failure mode in its own history: a blanket dependency update reintroduced the known-bad MassTransit
-          v9, and the response at the time was a comment, not a rule. Only the <code>DependencyVersionTests</code> gate
-          described above made a repeat impossible. The counterpart is instructive too: the last misleading
-          &quot;MassTransit will retry&quot; comment in that family was not retired by a gate but by somebody running a
-          repo-wide search and recording that it returned zero matches. A fitness-function culture must be
-          ruthless that a comment describing a check is not a check.</li>
+          <li><strong>Prose masquerading as enforcement is the real trap.</strong> A version pin held only by a comment is
+          exactly what a blanket dependency update walks straight through, and the known-bad MassTransit v9 is
+          the case in point. The <code>DependencyVersionTests</code> gate described above turns the licensing-driven v8 pin
+          into a build failure, and that gate, not the comment, is what lets the scorecard record that the
+          &quot;blanket update reintroduces known-bad dependency&quot; red flag cannot recur. A fitness-function culture
+          must be ruthless that a comment describing a check is not a check.</li>
           <li><strong>Two gates mean two places to update.</strong> Add a layer rule and you maintain both the MSBuild target and
           the NetArchTest suite. That is the cost of catching both direct and transitive violations, and the
           contributor doc calls it out so nobody forgets the second one.</li>
@@ -533,7 +563,8 @@ phantom.Should().BeEmpty(
           twice (compile-time MSBuild plus runtime NetArchTest), how the rule bodies live once in
           <code>MMCA.Common.Testing.Architecture</code> and run identically across four repos via <code>IArchitectureMap</code>, the
           three rule families that matter most (<code>LayerDependencyTests</code>, <code>DomainPurityTests</code>,
-          <code>MicroserviceExtractionTests</code>), how a folder-width rule turns a layout convention into a build failure
+          <code>MicroserviceExtractionTests</code>), two gates on what a method body may call (raw-string SQL and the
+          ambient clock), how a folder-width rule turns a layout convention into a build failure
           and a residency gate turns a published privacy claim into one, how a committed <code>.proto</code> snapshot
           freezes the gRPC wire contract in both
           directions, how the same package pairs every provisioned SLO alert to a
@@ -542,12 +573,12 @@ phantom.Should().BeEmpty(
           enforce what you write a rule for.</p>
           <p><strong>Next in the series:</strong> the test pyramid behind these fitness functions, roughly 2,254 fast tests with
           no Docker and no database.</p>
-          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Architecture Enforcement section
+          <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read the Architecture section
           of the contributor guide, or add one NetArchTest rule to your own codebase this week and watch it catch
           something.</em></p>
           <ul>
           <li>⭐ Repo: <a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">https://github.com/ivanball/MMCA.Common</a></li>
-          <li>📄 The package table (<code>README.md</code>) and the Architecture Enforcement section (<code>CLAUDE.md</code>) are in the
+          <li>📄 The fitness counts (<code>FACTS.md</code>) and the Architecture section (<code>AGENTS.md</code>) are in the
           repo.</li>
           </ul>
           <p><em>Tags: Software Architecture, .NET, C Sharp, Testing, Clean Architecture</em></p>

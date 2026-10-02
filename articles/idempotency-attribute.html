@@ -196,9 +196,9 @@
           <ol>
           <li>The client supplies an <code>Idempotency-Key</code> header (a value it generates per logical request, the same
           value across its own retries).</li>
-          <li>On the <strong>first</strong> request with a given key, the action runs, and its response (status code plus JSON
-          body) is serialized into an <code>IdempotencyRecord</code>, together with a SHA-256 hash of the request body
-          that produced it, and cached.</li>
+          <li>On the <strong>first</strong> request with a given key, the action runs, and its response (status code, JSON body,
+          and the <code>Location</code> and <code>ETag</code> headers a client may act on) is serialized into an <code>IdempotencyRecord</code>,
+          together with a SHA-256 hash of the request body that produced it, and cached.</li>
           <li>On a subsequent request with the same key <strong>and the same body</strong>, within the retention window, the
           cached response is replayed verbatim, with an extra header <code>X-Idempotent-Replay: true</code>, and <strong>the
           action does not run again</strong>.</li>
@@ -208,8 +208,9 @@
           <li>No <code>Idempotency-Key</code> header means the action just runs normally. Idempotency is opt-in per request.</li>
           </ol>
           <p>The cache window defaults to <strong>24 hours</strong> (bound from an <code>IdempotencySettings</code> section, range-guarded to a
-          one-week maximum, validated at startup). A first-call <code>201 Created</code> replays as a <code>201</code>, not a generic
-          <code>200</code>, because the record captures the original status code as well as the body.</p>
+          one-week maximum, validated at startup). A first-call <code>201 Created</code> replays as a <code>201</code> that still points at
+          the created resource, not as a generic <code>200</code>, because the record captures the original status code and its
+          <code>Location</code> header as well as the body.</p>
           <p>Binding the body to the key is why the filter runs at two pipeline stages rather than one. It is an
           <code>IAsyncResourceFilter</code> as well as an <code>IAsyncActionFilter</code>: the resource stage runs before model binding,
           which is the last point at which the request body can still be made re-readable, so that is where it calls
@@ -225,8 +226,10 @@
           hash-less record and therefore no path that replays without checking the payload.</p>
           <p>One thing that contract does not say out loud: the client&#39;s key is not the cache key. The filter derives
           <code>idempotency:{SHA-256(subject | method | route template | client key)}</code>, where the subject is the caller&#39;s
-          <code>user_id</code> claim or, for an unauthenticated call, <code>anon:{remote address}</code>. That is a security property before
-          it is anything else. Keying on the bare client value makes the key space global: two callers who happen to
+          user id (the <code>sub</code> claim, falling back to the mapped name-identifier claim) or, for an unauthenticated call,
+          <code>anon:{remote address}</code> (<code>anon:unknown</code> when there is no address). The four parts are joined with a newline,
+          which none of them can contain, so no value can be crafted to forge a different tuple. That is a security
+          property before it is anything else. Keying on the bare client value makes the key space global: two callers who happen to
           pick the same value share an entry, so one user&#39;s serialized response body gets replayed to another, and
           because services can share a single cache instance the collision reaches across endpoints and across
           services too. Hashing also keeps the stored key bounded no matter what the client sends.</p>
@@ -292,8 +295,8 @@
           such as the 204 from <code>NoContent()</code>, which stores an empty body and replays as a bare status code rather
           than as JSON with no content. Non-2xx results are deliberately not stored, because replaying a transient
           500 for the whole retention window is worse than letting the retry actually execute. Redirects and file
-          results are skipped: the record carries a status code, a JSON body, and the hash of the request that
-          produced them, and nothing else.)</p>
+          results are skipped: the record carries a status code, a JSON body, the <code>Location</code> and <code>ETag</code> headers, and
+          the hash of the request that produced them, and nothing else.)</p>
           <h2 id="the-same-problem-shows-up-on-the-broker-and-the-inbox-is-the-matching-mechanism">The same problem shows up on the broker, and the inbox is the matching mechanism</h2>
           <p>HTTP retries are one source of duplicates. The other is the message broker.</p>
           <p>MMCA.Common&#39;s outbox gives <strong>at-least-once</strong> delivery: an event may be published twice (the publish
@@ -311,8 +314,11 @@
           message the inbox already holds is skipped and acked, never reapplied. <code>TryBegin</code> also <em>stages</em> the
           inbox row, unsaved, in the scope&#39;s unit of work, so a handler that calls <code>SaveChangesAsync</code> on that
           same scope commits the row in the same transaction as its own mutations. A handler that throws has the
-          staged row abandoned before the rethrow, so the redelivery is not mistaken for a duplicate; a consume
-          that reaches the end calls <code>CompleteAsync(...)</code> to persist whatever is still unsaved.</li>
+          staged row abandoned before the rethrow, so the redelivery is not mistaken for a duplicate, as long as
+          the row is still unsaved. If an earlier handler&#39;s save already committed it, the abandon cannot take it
+          back: the store logs that case, the redelivery is skipped as a duplicate, and the handlers that had not
+          yet run never run. A consume that reaches the end calls <code>CompleteAsync(...)</code> to persist whatever is
+          still unsaved.</li>
           <li>The posture is resolved from the transport. <code>MessageBusSettings.EnableInbox</code> is a nullable bool left
           unset by default, and <code>IsInboxEnabled</code> reads that as on for a broker and off for the in-process
           provider, which has no redelivery to dedup. An explicit value wins in both directions: a host that sets
@@ -321,11 +327,11 @@
           <p>The retry half is wired too: every receive endpoint gets an exponential-backoff <code>UseMessageRetry</code> policy
           (<code>MessageBusSettings.RetryLimit</code>), and the consumer rethrows on handler failure so MassTransit applies it
           before dead-lettering. So the honest framing is: the HTTP write path is idempotent-by-attribute (the
-          scorecard credits the filter under §9 and §10, where §10 scores Implementation 9 on the strength of the
-          filter taking a distributed lock with the stripe as fallback, while §29 covers the Polly handlers and the
-          outbox&#39;s graceful degradation), and the broker consumer path dedups by <code>MessageId</code> by default on
-          any broker transport. The remaining discipline is treating the explicit opt-out as a decision with a cost,
-          and keeping handlers safe to repeat wherever the inbox resolves off.</p>
+          scorecard credits the filter under §9 and §10, where the §10 row, scored Implementation 9, lists the
+          filter taking a distributed lock with the stripe as fallback among its evidence, while §29 covers the Polly
+          handlers and the outbox&#39;s graceful degradation), and the broker consumer path dedups by <code>MessageId</code> by
+          default on any broker transport. The remaining discipline is treating the explicit opt-out as a decision
+          with a cost, and keeping handlers safe to repeat wherever the inbox resolves off.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <ul>
           <li><strong>Clients must send a stable key, from a stable identity.</strong> Idempotency is a contract, not magic. If a
@@ -341,8 +347,9 @@
           <li><strong>The window is bounded.</strong> Replay works for the retention window (default 24h, max one week). A retry
           after the window expires re-executes. Size the window to your realistic retry horizon.</li>
           <li><strong>Only successful, JSON-shaped responses replay.</strong> A 2xx <code>ObjectResult</code> or a body-less 2xx
-          <code>StatusCodeResult</code> is cached. Failures are not, and neither are redirects or file results. Response
-          headers are not part of the record either, so a replayed <code>201</code> does not carry the original <code>Location</code>.</li>
+          <code>StatusCodeResult</code> is cached. Failures are not, and neither are redirects or file results. Of the response
+          headers, only <code>Location</code> and <code>ETag</code> travel with the record; any other header the original wrote is not
+          replayed.</li>
           <li><strong>Cross-replica exclusivity is a deployment property, not a guarantee.</strong> You get it where a Redis
           multiplexer is registered. A host without one falls back to the process-local lock or the stripe, and
           there two duplicates on different instances can both miss the cache and execute. Even with Redis the
@@ -358,6 +365,9 @@
           <li><strong>Consumer-side idempotency follows the transport.</strong> The inbox above resolves on for a broker and off
           for the in-process provider, and a host can override either way with <code>MessageBus:EnableInbox</code>. Wherever
           it resolves off, every consumer&#39;s idempotency is code you own and test.</li>
+          <li><strong>On an event with several handlers, the inbox row commits with the first handler that saves.</strong> A later
+          handler that then fails is not retried by the redelivery, which is skipped as a duplicate. Ordering and
+          partial failure across handlers of one event are therefore yours to reason about.</li>
           </ul>
           <p>None of these are reasons to skip idempotent writes. They are the reasons to make the key contract
           explicit and to write your broker consumers defensively.</p>
@@ -366,11 +376,12 @@
           <ol>
           <li>Accept an <strong><code>Idempotency-Key</code> header</strong> on write endpoints and require clients to keep it stable across
           retries.</li>
-          <li><strong>Cache the first response</strong> (status and body) for a bounded window and replay it verbatim for
-          duplicates. Key the entry on a hash of caller identity plus method plus route plus the client&#39;s key,
-          never on the bare client value: otherwise two callers who pick the same string read each other&#39;s
-          responses. <strong>Store a hash of the request body with the record</strong> and compare it before replaying, so a
-          key reused with a different payload is refused rather than answered with a success that never happened.</li>
+          <li><strong>Cache the first response</strong> (status, body, and the headers a client acts on, such as <code>Location</code>) for a
+          bounded window and replay it verbatim for duplicates. Key the entry on a hash of caller identity plus
+          method plus route plus the client&#39;s key, never on the bare client value: otherwise two callers who pick
+          the same string read each other&#39;s responses. <strong>Store a hash of the request body with the record</strong> and
+          compare it before replaying, so a key reused with a different payload is refused rather than answered
+          with a success that never happened.</li>
           <li><strong>Hold a lock across execute-and-store</strong>, not just across the cache check, and re-check after
           acquiring. Use a lock every replica can see (<code>SET NX PX</code> with a compare-and-delete release is enough),
           because a per-process lock only serializes duplicates that land on the same instance. Answer a

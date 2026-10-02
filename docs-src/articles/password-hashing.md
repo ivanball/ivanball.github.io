@@ -1,7 +1,7 @@
 # Password hashing done right: PBKDF2-SHA512, 600k iterations, timing-safe
 
 > Series: MMCA.Common · Article #17 · Pillar P2/P4 · Group G08 · Rubric §11 · ADR-102 ·
-> Status: grounded in `Website/docs-src/onboarding/group-08-auth.md`, `MMCA.Common/CLAUDE.md`,
+> Status: grounded in `Website/docs-src/onboarding/group-08-auth.md`, `MMCA.Common/AGENTS.md`,
 > `Website/docs-src/adr/102-pbkdf2-only-password-hashing.md` (which supersedes ADR-032), and `Website/docs-src/governance/common-ArchitectureScorecard.md` (§11). No em dashes.
 
 **Subtitle:** Storing a password is a solved problem, and almost every breach headline is someone who
@@ -71,10 +71,12 @@ matching. A negative known-answer test derives a digest at a fraction of that it
 asserts verification rejects it, which proves the work factor really participates rather than sitting
 in a comment. Reflection reads the three private constants straight off the type and pins them (the
 iteration count, the 32-byte salt and the 64-byte digest), so lowering one fails the build instead of
-silently shipping. And an architecture rule reads the compiled type and fails the build if the slow key
-derivation function or the fixed-time comparison disappears from it, so a rewrite that swapped PBKDF2
-for a raw SHA-512, or `FixedTimeEquals` for `SequenceEqual`, cannot merge even if it kept the same
-output length.
+silently shipping. And an architecture rule reads the compiled type and fails the build if it stops
+depending on `Rfc2898DeriveBytes` (the slow key derivation function) or on `CryptographicOperations`
+(the class that holds the fixed-time comparison), so a rewrite that swapped PBKDF2 for a raw SHA-512
+cannot merge even if it kept the same output length. That second rule pins the class, not the method:
+`FixedTimeEquals` is the hasher's only use of `CryptographicOperations`, so swapping it for
+`SequenceEqual` fails the build, but a rewrite that kept some other call on that class would not.
 
 ### Why constant-time matters more than it looks
 
@@ -108,7 +110,7 @@ an Infrastructure registration change, and the application handlers never name a
 ## Defense in depth: PII at rest, not just passwords
 
 Passwords are the famous case, but they are not the only personal data sitting in your database.
-MMCA.Common ships field-level PII encryption as a separate control, now recorded in its own decision
+MMCA.Common ships field-level PII encryption as a separate control, recorded in its own decision
 record (ADR-037): `EncryptedStringConverter` is an EF Core value converter that encrypts a column with
 **AES-256-GCM** transparently on the way to the database and decrypts on the way out. GCM is
 authenticated encryption, so it protects confidentiality *and* detects tampering. It is the framework
@@ -123,8 +125,9 @@ analyzers run at error severity** with `TreatWarningsAsErrors` globally, and a c
 (SonarAnalyzer and Meziantou) carry security-relevant rules. The security category (§11) scored
 **Maturity 4 / Implementation 8** on the framework's two-axis rubric (Maturity 0-4, Implementation
 0-10), on the strength of JWT algorithm pinning, this hashing scheme (recorded in ADR-102),
-AES-256-GCM field encryption, server-side authorization, and rate limiting (brute-force protection
-applies exponential-backoff lockouts and clears the counter on success).
+permission-based server-side authorization, and rate limiting (brute-force protection applies
+exponential-backoff lockouts and clears the counter on success). The field-encryption converter is not
+part of that credit: the scorecard entry lists it as shipped but latent.
 
 ## Trade-offs, honestly
 
@@ -138,14 +141,17 @@ A credible security post owns its rough edges, and a few sit around this hash ra
   beside the setting). Permissive dev CORS is a development affordance in the code, not a
   recommendation for what you run in production.
 - **Iteration counts are a moving target.** 600,000 PBKDF2-SHA512 iterations matches 2023 OWASP
-  guidance; that number ratchets up with hardware. Treat the iteration count as a config decision you
-  revisit, and prefer a memory-hard KDF (Argon2id) when you can, which is exactly why the algorithm
-  lives behind an interface here.
+  guidance; that number ratchets up with hardware. Here it is a private constant pinned by a test, not
+  a setting, and because the stored record carries no iteration count, raising it is a deliberate code
+  change that needs a plan for the hashes already stored. Revisit it anyway, and prefer a memory-hard
+  KDF (Argon2id) when you can, which is exactly why the algorithm lives behind an interface here.
 
-The current §11 entry itself names two limitations, both upstream of the hash: vault/managed-identity
-secret binding is delegated to the deployer (correct for a library), and authorization is RBAC with a
-capability layer rather than a full resource- or attribute-based policy engine. None of these undermine
-the storage scheme. They are the operational and governance work that surrounds a correct hash.
+The current §11 entry itself names three reasons it holds at Implementation 8, all upstream of the
+hash: the rubric's threat-model criterion is unmet, authorization is RBAC with a capability layer plus
+opt-in ownership checks rather than a full resource- or attribute-based policy engine, and the
+failed-login counter behind the brute-force lockout is documented as non-atomic. None of these
+undermine the storage scheme. They are the operational and governance work that surrounds a correct
+hash.
 
 ## Apply this even without MMCA
 
@@ -188,85 +194,70 @@ response replayed instead of a duplicate.
 
 *Tags: .NET, C Sharp, Software Architecture, Security, Cryptography*
 
-*Notes (re-sourced 2026-09-19 against MMCA.Common v1.205.0): verified against source read this run.
-The `IPasswordHasher` **port** lives in `MMCA.Common.Application` (namespace
+*Notes (re-sourced 2026-10-02 against MMCA.Common v1.221.0): every anchor below was re-read this run.
+Port and adapter: `IPasswordHasher` in `MMCA.Common.Application` (namespace
 `MMCA.Common.Application.Interfaces.Infrastructure.Auth`,
 `Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Auth/IPasswordHasher.cs:1`, interface at
-`:6`); its single `PasswordHasher` **adapter** lives in `MMCA.Common.Infrastructure` (namespace
+`:6`); the single `PasswordHasher` in `MMCA.Common.Infrastructure` (namespace
 `MMCA.Common.Infrastructure.Auth`, `Source/Core/MMCA.Common.Infrastructure/Auth/PasswordHasher.cs:5`,
-class at `:12`). FOLDER MOVE (2026-09-19): both types moved into an `Auth/` folder since the last
-sourcing, taking their namespaces with them (previously `MMCA.Common.Infrastructure.Services` and
-`MMCA.Common.Application.Interfaces.Infrastructure`); the Clean-Architecture port/adapter split itself
-is unchanged. Behavior: PBKDF2-HMAC-SHA512 (`HashAlgorithmName.SHA512`, `PasswordHasher.cs:36` on the
-write path and `:73` inside the single private recompute `ComputePbkdf2Hash` at `:68-74`),
-`Iterations = 600_000` (`:24`), `SaltSize = 32` (`:15`), `HashSize = 64` (`:18`), the
-canonical-material guard `if (hash.Length != HashSize || salt.Length != SaltSize) return false`
-(`:55-58`, with its SECURITY rationale at `:49-54`), a recompute to `HashSize` rather than to the
-stored hash length (`:60`), and `CryptographicOperations.FixedTimeEquals` (`:64`). PREMISE INVERTED
-(2026-09-19): the prior draft's algorithm-migration-by-salt-length section is deleted and replaced by
-the single-algorithm section, because that migration path no longer exists. The legacy single-round
-HMAC-SHA512 verify branch, its `LegacyHmacSaltSize = 128` constant and its `ComputeLegacyHash` helper
-are absent from the file, whose class doc now reads "PBKDF2 is the only supported algorithm: every
-stored hash is derived and verified through it" (`PasswordHasher.cs:8-10`); the whole type is 75 lines.
-The decision is recorded in `Website/docs-src/adr/102-pbkdf2-only-password-hashing.md` ("ADR-102:
-PBKDF2-Only Password Hashing", `:1`), Accepted 2026-08-31 and superseding ADR-032 (`:4`), revised
-2026-09-11 to record the canonical-material guard and the derive-to-HashSize read path (`:5-8`).
-`Website/docs-src/adr/032-password-hashing.md:4` is marked "Superseded by ADR-102 (2026-08-31)" and is
-retained only as the migration-era record, so the header blockquote and the security-category sentence
-in the body were re-pointed at ADR-102. Tests:
-`Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherSecurityTests.cs` (namespace
-`MMCA.Common.Infrastructure.Tests.Auth`, `:7`) keeps the two known-answer tests and the negative one,
-and pins exactly **three** private constants by reflection, `Iterations` (`:88-89`), `SaltSize`
-(`:94-95`) and `HashSize` (`:100-101`), against the local expected values at `:20-22`
-(`ReadPrivateConstant` at `:164`, `NotNull` guard at `:168`). The fourth pin, on `LegacyHmacSaltSize`,
-went with the constant and is replaced by a behavioral test:
-`VerifyPassword_RejectsALegacyHmacDigest` (`:105`) builds a 128-byte HMAC key as the salt with the
-matching single-round digest and requires `false` for the **correct** password, on the stated ground
-that the HMAC-SHA512 verification branch is gone. The read-path guard has its own coverage in the same
-file, `VerifyPassword_AgainstAnEmptyStoredHashAndSalt_IsRejected` (`:121`) and the six-case `Theory`
-`VerifyPassword_WithNonCanonicalMaterial_IsRejected` (`:132`).
-`Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherTests.cs` (namespace
-`MMCA.Common.Infrastructure.Tests.Auth`, `:4`, class at `:6`) holds the nine behavioral test methods
-(7 `[Fact]` + 2 `[Theory]`) that remain alongside them, and
-`Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PasswordHashingFitnessTests.cs`
-(namespace `MMCA.Common.Architecture.Tests.Governance`, `:4`) asserts against compiled IL that the type
-depends on `System.Security.Cryptography.Rfc2898DeriveBytes` (type name at `:19`, rule at `:34`) and on
-`System.Security.Cryptography.CryptographicOperations` (`:17`, rule at `:47`), so swapping the slow KDF
-for a raw hash, or `FixedTimeEquals` for `SequenceEqual`, fails the build. The field-level PII
-encryption converter `EncryptedStringConverter` uses AES-256-GCM (`AesGcm`,
-`EncryptedStringConverter.cs:200,235`; nonce 12 at `:78`, tag 16 at `:81`, 32-byte key guard at `:130`
-on the single-key path and `:166` per key-ring entry) and stores a versioned envelope, Base64 of
-`[key version (1)][nonce (12)][ciphertext (N)][tag (16)]` (assembled at `:203-208`, documented at
-`:38-44`), for 29 bytes of per-value overhead; it has its own decision record,
-`Website/docs-src/adr/037-field-level-encryption-at-rest.md`, whose Decision item 10 (`:135-140`)
-records adoption as zero, and no `*Configuration.cs` in the consumer repos calls
-`.HasConversion(new EncryptedStringConverter(...))`, so zero production columns are encrypted (those
-converter anchors are carried forward from the 2026-08-15 sourcing and were not re-read line by line
-this run). Section 11 Security re-sourced to
-`Website/docs-src/governance/common-ArchitectureScorecard.md:91` (the anchor drifted from `:83`) =
-Weight 3, **Maturity 4 / Implementation 8**, weighted 12/24, unchanged on both axes. The scorecard is
-two-axis (Maturity 0-4 + Implementation 0-10). CITATION DROPPED (2026-09-19): the prior ledger sourced
-the hardening-wave-not-re-scored aside to
-`Website/docs-src/governance/common-RemediationBacklog.md:1080-1081`; no sentence supporting it is
-present in that file any more, so the aside is removed and the Maturity 4 / Implementation 8 reading is
-taken straight off the scorecard row. There is no dedicated "security analyzer": the five analyzers
-(Meziantou.Analyzer, Microsoft.VisualStudio.Threading.Analyzers, Roslynator.Analyzers,
-SonarAnalyzer.CSharp, StyleCop.Analyzers) all run at error severity under `TreatWarningsAsErrors`, and
-SonarAnalyzer/Meziantou carry some security-relevant rules. ANCHORS REBASED (2026-09-19): the
-HTTPS-metadata trade-off bullet describes unchanged behavior, but every citation behind it moved
-roughly 100 lines. `AddForwardedJwtBearer` takes `IConfiguration` + `IHostEnvironment`
-(`Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:545-551`) and resolves
-explicit argument, then `RequireHttpsMetadataConfigKey`
-(`= "Authentication:JwtBearer:RequireHttpsMetadata"`, `:56`), then `!environment.IsDevelopment()`
-(`:558-559`); a resolved `false` outside Development registers
-`InsecureJwtMetadataWarningStartupFilter` (`:561-564`), which logs one startup warning naming the key.
-The transitional old-signature overload the prior ledger recorded at `:479-482` is gone: there is
-exactly one public `AddForwardedJwtBearer` (`:545`) over the private `AddForwardedJwtBearerCore`
-(`:570`). Permissive dev CORS is genuinely unchanged (`AllowAnyOrigin` at
-`WebApplicationBuilderExtensions.cs:695`, inside the `#pragma warning disable S5122` at
-`:693`/`:698`), and stays a code observation rather than a scorecard-named gap. Both production apps
-opt out deliberately, with the justification beside the setting:
-`MMCA.ADC/infra/main.bicep:1830,1962,2112` (comment at `:1827-1829`) and
-`MMCA.Store/infra/main.bicep:1652,1779` (comments at `:1650-1651` and `:1777-1778`).*
+class at `:12`), registered by `TryAddSingleton<IPasswordHasher, PasswordHasher>`
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:314`). Behavior, unchanged:
+PBKDF2-HMAC-SHA512 (`HashAlgorithmName.SHA512`, `PasswordHasher.cs:36` on the write path and `:73`
+inside `ComputePbkdf2Hash` at `:68-74`), `Iterations = 600_000` (`:24`, a private const), `SaltSize = 32`
+(`:15`), `HashSize = 64` (`:18`), the canonical-material guard (`:55-58`, SECURITY rationale `:49-54`),
+recompute to `HashSize` (`:60`), `CryptographicOperations.FixedTimeEquals` (`:64`), class doc "PBKDF2 is
+the only supported algorithm" (`:8-10`); the type is 75 lines with no legacy HMAC branch. ADR:
+`Website/docs-src/adr/102-pbkdf2-only-password-hashing.md` (Accepted 2026-08-31, supersedes ADR-032 at
+`:4`, revised 2026-09-11 at `:5-8`). Tests:
+`Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherSecurityTests.cs` (namespace `:7`)
+pins `Iterations` (`:88-89`), `SaltSize` (`:94-95`) and `HashSize` (`:100-101`) against `:20-22` via
+`ReadPrivateConstant` (`:164`, `NotNull` guard `:168`), rejects a legacy HMAC digest (`:105`), an empty
+hash and salt (`:121`) and six non-canonical shapes (`:132`);
+`Tests/Core/MMCA.Common.Infrastructure.Tests/Auth/PasswordHasherTests.cs` (namespace `:4`, class `:6`)
+holds 7 `[Fact]` + 2 `[Theory]`. NARROWED (2026-10-02): the fitness-rule sentence.
+`Tests/Architecture/MMCA.Common.Architecture.Tests/Governance/PasswordHashingFitnessTests.cs` asserts
+`HaveDependencyOnAll` on the TYPES `System.Security.Cryptography.Rfc2898DeriveBytes` (`:19`, rule
+`:34`) and `System.Security.Cryptography.CryptographicOperations` (`:17`, rule `:47`), not on the
+`FixedTimeEquals` method, so the body now says the `SequenceEqual` swap fails only because
+`FixedTimeEquals` is the type's sole `CryptographicOperations` use (`PasswordHasher.cs:64`) and that a
+rewrite keeping another call on that class would pass. REWORDED (2026-10-02): "Treat the iteration count
+as a config decision" read as configurable; the count is a private const (`PasswordHasher.cs:24`) and the
+stored record is only `(Hash, Salt)` (`:27`, `:43`), so the bullet now says raising it is a code change
+needing a plan for stored hashes. "now recorded in its own decision record" lost its "now"
+(current-state rule). Field encryption: `EncryptedStringConverter`
+(`Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs`) uses
+`AesGcm` (`:200`, `:235`), nonce 12 (`:78`), tag 16 (`:81`), key guards `:130` (single key) and `:166`
+(per ring entry), envelope `[key version (1)][nonce (12)][ciphertext (N)][tag (16)]` assembled at
+`:203-208` and documented at `:38-44`, 29 bytes of overhead; re-read line by line this run.
+`Website/docs-src/adr/037-field-level-encryption-at-rest.md` Decision item 10 starts at `:122` and records
+zero adoption at `:136-141` (re-anchored from `:135-140`); ADR-005 names the converter for retrievable
+fields (`Website/docs-src/adr/005-soft-delete-vs-erasure.md:23`). Section 11 Security RE-ANCHORED to
+`Website/docs-src/governance/common-ArchitectureScorecard.md:75` (from `:91`, which is now section 27) =
+Weight 3, **Maturity 4 / Implementation 8**, weighted 12/24, unchanged. DRIFTED (2026-10-02): the row
+credits alg pinning, the PBKDF2 hasher, permission-based authz and rate limiting plus brute-force
+protection, and lists the ADR-037 converter only as "ships but is latent/unadopted", so AES-256-GCM was
+dropped from the strength list and the body says it is not part of the credit. The row's hold-at-8
+reasons are now THREE (threat-model criterion unmet; RBAC with capability indirection plus opt-in
+ownership rather than ABAC; failed-login counter documented non-atomic,
+`Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:55`), and vault binding is no
+longer a limitation (the row records opt-in `AddCommonKeyVaultConfiguration` via
+`DefaultAzureCredential`), so the trade-offs paragraph was rewritten to the three. Scorecard-side drift
+(not an article defect): the row still cites ADR-032 and `Infrastructure/Services/PasswordHasher.cs:9,53`
+plus `Services/PasswordHasherTests.cs` (11 tests). Brute force: exponential backoff
+`LoginProtectionService.cs:77` (clamped shift, `:71-78`), counter and lockout cleared in
+`ResetFailedAttemptsAsync` (`:85-86`). Analyzers: `TreatWarningsAsErrors` at
+`MMCA.Common/Directory.Build.props:7`; five analyzers, no dedicated security analyzer. Header
+re-pointed from `MMCA.Common/CLAUDE.md` (now a stub importing `AGENTS.md`, `:3`) to
+`MMCA.Common/AGENTS.md`, whose `:131` states the `AddForwardedJwtBearer` resolution order. ANCHORS
+REBASED (2026-10-02): the HTTPS-metadata bullet's behavior is unchanged, but the code moved into the
+partial `Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.Authentication.cs`:
+`RequireHttpsMetadataConfigKey` `:24`, the single public `AddForwardedJwtBearer` `:51-56`, the resolve
+chain argument then key then `!environment.IsDevelopment()` `:63-65`, the
+`InsecureJwtMetadataWarningStartupFilter` registration `:67-71` (type at
+`Startup/Auth/InsecureJwtMetadataWarningStartupFilter.cs:15`), private `AddForwardedJwtBearerCore` `:76`.
+Permissive dev CORS unchanged: `AllowAnyOrigin` at `WebApplicationBuilderExtensions.cs:140` inside the
+S5122 pragma (`:138` disable, `:143` restore). Production opt-outs with justification beside the setting
+re-anchored: `MMCA.ADC/infra/main.bicep:1941,2075,2227` (comments `:1938-1940`, `:2072-2074`,
+`:2224-2226`) and `MMCA.Store/infra/main.bicep:1686,1818` (comments `:1682-1685`, `:1814-1817`).*
 
 - Full series index: https://ivanball.github.io/writing.html

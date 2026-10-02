@@ -2,7 +2,7 @@
 
 > Series: MMCA.Common · Article #9 (cornerstone deep-dive) · Pillar P2/P3 · Group G04 · Rubric §6,§8 ·
 > ADR-003 · ADR-066 · ADR-075 · ADR-087 · ADR-100 · ADR-107 · Status: grounded in `Website/docs-src/onboarding/group-04-events-outbox.md`, `MMCA.Common/CLAUDE.md`,
-> and `Website/docs-src/adr/003-outbox-dual-dispatch.md`. No em dashes.
+> and `Website/docs-src/adr/003-outbox-dual-dispatch.md`, re-verified against MMCA.Common v1.221.0 source (see Notes). No em dashes.
 
 **Subtitle:** "Save to the database, then publish to the broker" is a dual write with no atomicity.
 Here is the at-least-once pattern that fixes it, in one SaveChanges call.
@@ -64,7 +64,8 @@ AddDomainEvent(new ProductVariantChanged(Id, newPrice));
 `AddDomainEvent` lives on the aggregate base (`AuditableAggregateRootEntity`), so any aggregate can
 raise events. The interesting work happens in `SaveChangesAsync`, which runs a fixed sequence:
 
-> stamp audit fields -> capture domain events from the aggregates -> serialize them to `OutboxMessage`
+> stamp audit fields -> stamp the tenant (when the host registers a tenant interceptor) -> capture
+> domain events from the aggregates -> serialize them to `OutboxMessage`
 > rows -> `base.SaveChangesAsync()` commits **data + outbox in the same transaction** -> dispatch the
 > local domain events in-process -> mark their outbox rows processed.
 
@@ -83,9 +84,9 @@ answer what changed, because the stamp is a single overwrite: a row edited nine 
 ninth editor and nothing else. **ADR-075** adds the missing half, and it belongs in this article
 because it does not invent a mechanic, it reuses this one.
 
-`AuditTrailSaveChangesInterceptor` is a third `SaveChangesInterceptor`, registered after the
-audit-stamp interceptor and after the domain-event interceptor that writes the outbox rows. The
-order is load-bearing: running last is what makes the diff it captures see the final stamped values
+`AuditTrailSaveChangesInterceptor` is one more `SaveChangesInterceptor`, registered last: after the
+audit-stamp interceptor, after the tenant interceptor when a host registers one, and after the
+domain-event interceptor that writes the outbox rows. The order is load-bearing: running last is what makes the diff it captures see the final stamped values
 rather than a half-populated entity. It walks the change tracker, compares each modified property's
 original value against its current one, and adds one `AuditTrailEntry` row per changed property into
 the same `SaveChanges` call. The history therefore commits or rolls back with the data it describes,
@@ -93,11 +94,13 @@ same transaction, same database. That is the outbox guarantee applied to a diffe
 trail that can be committed without its data, or lost to a crash in the window after the commit, is
 a hint rather than a record.
 
-It is opt-in twice over, which is what keeps the cost proportional to the value. A host has to call
-`AddAuditTrail(configuration)`, and an entity has to carry the `IAuditedEntity` marker. A host that
-never calls it resolves the interceptor as null (`GetService`, not `GetRequiredService`), so nothing
-joins the pipeline and the feature costs nothing. Seven service hosts across the reference apps opt
-in today, among them Store's Sales service, ADC's Identity service, and Helpdesk's web host.
+It is opt-in three times over, which is what keeps the cost proportional to the value. A host has
+to call `AddAuditTrail(configuration)`, it has to set `AuditTrail:Enabled` (default `false`, and the
+single switch for both recording and whether the `AuditTrailEntries` table is mapped into the model
+at all), and an entity has to carry the `IAuditedEntity` marker. A host that never calls
+`AddAuditTrail` resolves the interceptor as null (`GetService`, not `GetRequiredService`), so nothing
+joins the pipeline and the feature costs nothing. Seven hosts across the reference apps call it
+today, among them Store's Sales service, ADC's Identity service, and Helpdesk's web host.
 
 Two details follow from what a change history is. A property marked `[Pii]` records
 `PiiRedactor.RedactedToken` on both sides of the change rather than the values, redacted at capture
@@ -106,7 +109,9 @@ become a second copy of personal data that erasure has to chase. And `AuditTrail
 deliberately not an `IAuditableEntity`, exactly like `OutboxMessage`: no audit stamps of its own
 (stamping is itself a change, so it would recurse) and no soft-delete flag (a soft-deleted audit row
 is rewritten history that a query filter quietly hides). Rows are append-only and leave only through
-a scheduled retention purge.
+the scheduled `AuditTrailCleanupJob` (`AuditTrail:RetentionDays`, default 90), and that job runs only
+when the host also calls `AddScheduledJobs(configuration)` and sets `Scheduler:Enabled`. Without the
+scheduler the trail keeps recording, nothing purges it, and the retention setting is inert.
 
 The honest cost is that this one sits on the caller's latency path. An audited entity with twenty
 changed properties writes twenty extra rows inside your transaction, which is exactly not the
@@ -157,13 +162,16 @@ through one method: `IUnitOfWork.ExecuteInTransactionAsync` is the Application-l
 `UnitOfWork` forwards straight to `DbContextFactory.ExecuteInTransactionAsync`, and the CQRS
 pipeline's `TransactionalCommandDecorator` calls it for any command carrying `ITransactional`.
 Running the delegate inside SQL Server's retrying execution strategy (`EnableRetryOnFailure`, five
-attempts, a ten-second maximum delay) decides four things. The whole delegate is the retriable unit,
+attempts, a ten-second maximum delay) decides five things. The whole delegate is the retriable unit,
 so anything computed outside it but committed inside it is silently wrong on a second attempt. Every
 attempt after the first starts from `ResetForRetry`, which calls `ChangeTracker.Clear()` on every
 context, because the failed attempt's entities are still `Added` and would otherwise be inserted a
 second time with a duplicate outbox row per event. A returned failed `Result` rolls back exactly like
-a thrown exception, which is what a framework that mandates `Result` over exceptions owes itself. And
-the deferred in-process dispatch is flushed only after the commit succeeds (`FlushDeferredAsync`) and
+a thrown exception, which is what a framework that mandates `Result` over exceptions owes itself. On
+a successful result, `FlushEnrolledCommandsBeforeCommitAsync` runs just before the commit: it saves
+internal-command rows enrolled after the handler's last save, so they commit with the caller's
+change, and it throws on any other unsaved tracked change, which rolls the unit back rather than
+committing while silently discarding that change. And the deferred in-process dispatch is flushed only after the commit succeeds (`FlushDeferredAsync`) and
 dropped on every other path (`DropDeferred`), so an in-process handler only ever sees durable state
 while the outbox carries everything that crosses a process boundary. A re-entrant call joins the
 ambient transaction instead of nesting, and a Cosmos context is never enlisted at all, since
@@ -221,10 +229,10 @@ Which transport you get is a separate decision, and **ADR-066** records it: `Mes
 has exactly three values (`InProcess`, `RabbitMq`, `AzureServiceBus`), chosen at the deployment edge
 (the Aspire AppHost locally, Bicep environment variables in production) rather than anywhere in
 application code, and both broker branches are configured from one settings object with the same
-exponential retry, so the two products stay substitutable. It also records the honest gap: the
-production-only Azure Service Bus binding is exercised by a dedicated emulator test tier that runs
-nightly and non-gating, so it is evidence that the binding works, not a check that blocks a
-regression.
+exponential retry, so the two products stay substitutable. It also records the honest residual: the
+production-only Azure Service Bus binding is exercised by a dedicated emulator test tier that runs on
+the weekday nightly and gates deployment in both ADC and Store, so a Service-Bus-only regression
+blocks the next deploy, though not the merge that introduced it.
 
 ```csharp
 // One abstraction, two transports. Application code depends only on IMessageBus.
@@ -235,7 +243,7 @@ regression.
 Whether there is an outbox at all is resolved from that same mode. `MessageBus:EnableOutbox` is a
 `bool?` that defaults to unset, and `MessageBusSettings.IsOutboxEnabled` reads
 `EnableOutbox ?? Provider != MessageBusProvider.InProcess`, character for character the rule
-`IsInboxEnabled` uses one property above it. `AddInfrastructure` resolves that posture once, at
+`IsInboxEnabled` uses two properties above it. `AddInfrastructure` resolves that posture once, at
 registration: on the enabled path it registers `OutboxProcessor` and `OutboxCleanupService`, and on
 the disabled path it registers neither and adds `OutboxDisabledNoticeService`, which logs one startup
 line naming exactly what is not running. The one combination that cannot work is refused rather than
@@ -317,8 +325,16 @@ The framework's `IWriteRepository.ExecuteUpdateAsync` closes that hole by stampi
 // modification audit fields here unless the caller assigned them explicitly.
 if (!builder.SetsProperty(nameof(IAuditableEntity.LastModifiedOn)))
 {
-    var now = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+    var now = timeProvider.GetUtcNow().UtcDateTime;
     builder.Set(e => e.LastModifiedOn, (DateTime?)now);
+}
+
+// With no current user (a background or system scope) the editor is the default sentinel,
+// exactly as the save pipeline attributes a system save; leaving the column alone would keep
+// crediting the change to the previous human editor.
+if (!builder.SetsProperty(nameof(IAuditableEntity.LastModifiedBy)))
+{
+    builder.Set(e => e.LastModifiedBy, currentUserService?.UserId ?? default);
 }
 ```
 
@@ -345,13 +361,17 @@ The outbox is not free, and the rubric review of this framework names the rough 
 
 - **At-least-once means duplicates are possible.** A consumer can receive the same event twice (publish
   succeeded, the "mark processed" step did not). The framework does not just
-  document this, it ships an opt-in consumer-side inbox: `IInboxStore` (`EfInboxStore` records processed
-  messages in an `InboxMessages` table, `NoOpInboxStore` is the default no-op) dedups by `MessageId`,
-  switched on with `MessageBus:EnableInbox`, and the generic `IntegrationEventConsumer` checks before
-  handling and records only after every handler succeeds (**ADR-021**, enabled in production on five
-  service hosts). The honest residual is narrower: the inbox is opt-in per service, and it narrows the
-  duplicate window rather than closing it, so a crash between a handler committing and the inbox write
-  reprocesses the event once more. Handlers must still be idempotent for that window.
+  document this, it ships a consumer-side inbox that is on by default for a broker transport:
+  `IInboxStore` (`EfInboxStore` records processed messages in an `InboxMessages` table) dedups by
+  `MessageId`, and `MessageBus:EnableInbox` is a `bool?` that resolves ON for RabbitMQ and Azure
+  Service Bus when unset. `NoOpInboxStore` is reached only through an explicit `EnableInbox=false`,
+  and that opt-out logs a startup Warning rather than staying silent. The generic
+  `IntegrationEventConsumer` stages the inbox row in the scope's unit of work before the handlers
+  run and abandons it when a handler throws, so a handler that saves to the same source commits the
+  inbox row in its own transaction (**ADR-021**; every deployed service host also sets
+  `EnableInbox: true` explicitly, four in ADC and three in Store). The honest residual is narrower:
+  the duplicate window stays open for a handler that writes nothing or writes to a different source,
+  so handlers must still be idempotent for that case.
 - **The table grows, but it self-purges.** Processed outbox rows accumulate, and the serialized
   payloads can contain PII, so the framework ships an automatic `OutboxCleanupService` that sweeps every
   relational source and deletes processed rows whose `ProcessedOn` is older than `Outbox:RetentionDays`
@@ -398,97 +418,95 @@ pattern, or `dotnet add package MMCA.Common.API` and try it.*
 
 *Tags: .NET, C Sharp, Microservices, Distributed Systems, Software Architecture*
 
-*Notes: 2026-09-19 re-verification pass against MMCA.Common v1.205.0 (commit 90ffa7a). Section
-history: "The write that skips the whole pipeline" was added 2026-07-27 to close a recorded gap, the
-set-based-write audit-field trap was taught only inside Article 49's reconciliation section, and it
-lives here because this article already teaches the `SaveChangesAsync` sequence whose first step is
-"stamp audit fields". "When the commit itself is ambiguous" was added 2026-08-01 and gained the
-per-source outcome paragraph on 2026-08-15 (MMCA.Common PR #248). The transport-selection paragraph
-was added 2026-08-07, "The third participant in that sequence: the change trail" on 2026-08-14, and
-"When the consumer runs out of retries" on 2026-08-19. The two configuration-surface paragraphs (the
-outbox posture resolved from the messaging mode, and the transaction execution contract) were added
-2026-09-19. Anchors below were read against source in this pass; MMCA.Common PR #352 split the flat
-namespaces, so `OutboxProcessor.cs`, `OutboxSettings.cs`, `OutboxCleanupService.cs`,
-`MessageBusSettings.cs`, `FaultIntegrationEventConsumer.cs` and
-`IntegrationEventConsumerExtensions.cs` now sit under `Persistence/Outbox/Processing/`,
-`Persistence/Outbox/Administration/`, `Messaging/` and `Messaging/Consumers/` rather than the
-`Settings/` and `Services/` folders the earlier ledger cited. Outbox posture
+*Notes: 2026-10-02 re-verification pass against MMCA.Common v1.221.0 (audit findings
+`Reports/update-medium/2026-10-02/09.json`). Section history: "The write that skips the whole
+pipeline" was added 2026-07-27 (the set-based-write audit-field trap was taught only inside Article
+49's reconciliation section, and it lives here because this article teaches the `SaveChangesAsync`
+sequence whose first step is "stamp audit fields"); "When the commit itself is ambiguous" 2026-08-01,
+its per-source outcome paragraph 2026-08-15 (MMCA.Common PR #248); the transport-selection paragraph
+2026-08-07; "The third participant in that sequence: the change trail" 2026-08-14; "When the
+consumer runs out of retries" 2026-08-19; the outbox-posture and transaction-contract paragraphs
+2026-09-19. Changes in this pass: the inbox bullet described an opt-in inbox with `NoOpInboxStore`
+as the default, a check-before/record-after consumer and "five service hosts"; it now teaches the
+broker default-ON inbox, the staged row and the seven explicit `EnableInbox: true` hosts (ADR-021
+Revision 2026-08-26). The ADR-066 emulator tier read "nightly and non-gating"; it is deploy-gating
+since the 2026-09-01 revision. The audit trail gained its third gate (`AuditTrail:Enabled`) and the
+scheduler dependency of its retention purge; the interceptor paragraph and the SaveChanges sequence
+gained the optional tenant step. The ADR-107 contract decides five things after its 2026-10-01
+revision (`FlushEnrolledCommandsBeforeCommitAsync`). The set-based-write block lost the
+`?? TimeProvider.System` fallback and now also shows the `LastModifiedBy` stamp. "One property above
+it" corrected to two. Anchors read in this pass (paths under
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/` unless stated). Outbox posture
 (`Website/docs-src/adr/100-outbox-opt-in-resolved-from-messaging-mode.md`, Accepted 2026-08-29 at
-`:4`): `MessageBusSettings.EnableOutbox` is a `bool?`
-(`Source/Core/MMCA.Common.Infrastructure/Messaging/MessageBusSettings.cs:167`, doc `:143-166`) and
-`IsOutboxEnabled` resolves it as `EnableOutbox ?? Provider != MessageBusProvider.InProcess` (`:175`),
-the same rule `IsInboxEnabled` applies at `:141` over `EnableInbox` (`:133`); `AddInfrastructure`
-resolves once at registration and registers `OutboxProcessor` plus `OutboxCleanupService` on the
-enabled path or `OutboxDisabledNoticeService` on the disabled one
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:223-231`, the transport-decision
-comment at `:213-218`, `IOutboxSignal` at `:211`); `EnsureOutboxAvailableForProvider` throws when the
-provider is not `InProcess` and `EnableOutbox` is explicitly `false` (declared `:1138`, guard
-`:1140`, message `:1143`, doc `:1120-1128`); `OutboxDisabledNoticeService`
-(`Persistence/Outbox/Administration/OutboxDisabledNoticeService.cs:22`) logs one Information line
-naming what is not running and giving `MessageBus:EnableOutbox=true` as the restore path (`:35-38`).
-The in-process default, the explicit `true` a monolith or an in-process test host has to set, and the
-unchanged EF model are ADR-100's own decision and trade-off text (`:38-44`, `:46-50`, `:62-68`,
-`:70-76`, `:106-111`). Transaction execution contract
-(`Website/docs-src/adr/107-transaction-execution-contract.md`, Accepted 2026-09-03 and re-measured
-2026-09-19, `:4`): `IUnitOfWork.ExecuteInTransactionAsync`
-(`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:70`) is
-forwarded by `UnitOfWork` (`Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:88-91`)
-to `DbContextFactory.ExecuteInTransactionAsync`
-(`Persistence/DbContexts/Factory/DbContextFactory.cs:518`), and `TransactionalCommandDecorator`
-(`Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:20`) calls
-it for any `ITransactional` command (`:31`). The delegate runs inside the retrying execution strategy
-(`strategy.ExecuteAsync`, `DbContextFactory.cs:545`; `EnableRetryOnFailure(maxRetryCount: 5,
-maxRetryDelay: TimeSpan.FromSeconds(10))` at `Persistence/DbContexts/SQLServerDbContext.cs:63-66`);
-`ResetForRetry` runs from the second attempt on (`:548`, declared `:761`, `ChangeTracker.Clear()` at
-`:766`); a returned failed `Result` rolls back like a throw (`:587`, `RollbackTransaction` `:456`);
-the commit failure is returned rather than thrown (`TryCommit` invoked `:591`, declared `:640`) and
-rethrown past the strategy (`:559-560`, the inner-chain reason in the code comment at `:555-558`);
-`AbandonAfterCommitFailure` rolls back best-effort (`:664`, declared `:681`); deferred dispatch is
-flushed only after a successful commit (`:600`,
-`Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:145`) and dropped otherwise (`:162`);
-and Cosmos is excluded by `SupportsTransactions` (`DbContextFactory.cs:774`). ADR-107 records the
-same points at `:33-35`, `:43-51`, `:53-60`, `:62-67`, `:69-76`, `:93-100` and `:109-111`.
-`TransactionCommitAmbiguousException` is public and sealed
-(`Persistence/DbContexts/Factory/TransactionCommitAmbiguousException.cs:22`) and exposes
-`CommittedSources` (`:76`), `AmbiguousSource` (`:85`), `RolledBackSources` (`:93`) and the
-`ComposeMessage` clause builder (`:99`) that leaves out empty groups. Delivery side:
-`ClaimEligibleAsync` is declared at `Persistence/Outbox/Processing/OutboxProcessor.cs:463` and
-invoked at `:308`; `ComputeRetryBackoffSeconds` is declared at `:767` and applied at `:678` and
-`:746`. Settings (`Persistence/Outbox/Administration/OutboxSettings.cs`): `RetentionDays` defaults to
-7 (`:65`, with `0` disabling the purge, documented `:60-62`), `CleanupIntervalHours` to 6 (`:73`),
-`LeaseSeconds` to 300 (`:82`, `[Range(10, 3600)]` `:81`), `RetryBackoffBaseSeconds` to 10 (`:99`,
-`[Range(1, 3600)]` `:98`), and `DeadLetterRetentionDays` falls back to `RetentionDays` (`:108`, doc
-`:101-106`); the sweep that reads them is
-`Persistence/Outbox/Administration/OutboxCleanupService.cs`. Transport selection
-(`Website/docs-src/adr/066-broker-transport-selection.md`): `MessageBusProvider` is declared at
-`Messaging/MessageBusSettings.cs:236` with `InProcess = 0` (`:241`), `RabbitMq = 1` (`:246`) and
-`AzureServiceBus = 2` (`:251`). Consume-side faults
-(`Website/docs-src/adr/087-broker-poison-message-handling.md`):
-`FaultIntegrationEventConsumer<TEvent>` (`Messaging/Consumers/FaultIntegrationEventConsumer.cs:26`)
-resolves the id as `fault.FaultedMessageId ?? fault.FaultId` (`:39`), emits one Error log through
-`LogFault` (`:48`, declared `:58`) and increments `BrokerMetrics.FaultCounter` tagged by event type
-(`:50`); the counter is `broker.fault.count` on the meter `MMCA.Common.Broker`
-(`Messaging/BrokerMetrics.cs:30`, `MeterName` `:21`, `Meter` `:23`, class `:18`); registration is
-automatic through `RegisterIntegrationEventConsumer<TEvent>`
-(`Messaging/Consumers/IntegrationEventConsumerExtensions.cs:38`), whose
-`bool registerFaultConsumer = true` parameter (`:39`) is the only opt-out (guard `:44`).
-`MessageBus:EnableDelayedRedelivery` is a `bool` with no initializer, so it defaults to `false`
-(`Messaging/MessageBusSettings.cs:195`), and `RedeliveryIntervalsSeconds` defaults to `[60, 600,
-3600]` (`:211`). The set-based-write block is verbatim from
-`Persistence/Repositories/EFRepository.cs:140-146` (the comment at `:140-141` is the source's own),
-inside `ExecuteUpdateAsync`; the empty-assignment guard throws at `:137-138`, the `LastModifiedBy`
-stamp guarded by `currentUserService?.UserId` is at `:148-151`, and the final
-`Entities.Where(where).ExecuteUpdateAsync(builder.Apply, ...)` replay is at `:153`. Seven service
-hosts call `AddAuditTrail` today: `MMCA.Store` Sales `Program.cs:208`, Identity `:195`, Catalog
-`:228`; `MMCA.ADC` Identity `Program.cs:239`, Engagement `:198`, Conference `:333`; and
-`MMCA.Helpdesk` `Source/Hosts/MMCA.Helpdesk.Web/Program.cs:90`. Carried without line anchors in this
-pass, because they were not re-read this run and every file that was had moved by 1 to 168 lines:
-`Persistence/Repositories/UpdatePropertySetterBuilder.cs`, the internals of `OutboxCleanupService.cs`,
-`Persistence/DbContexts/ApplicationDbContext.cs` (the interceptor registration order),
-`Persistence/AuditTrail/AuditTrailSaveChangesInterceptor.cs`, `AuditTrailEntry.cs`,
-`AuditTrailSettings.cs`, `MMCA.Common.Domain/Privacy/PiiRedactor.cs`, the inbox stores under
-`Persistence/Inbox/`, `DbContextFactoryCommitAmbiguityTests.cs`, and the paragraph-level anchors into
-ADR-003, ADR-021, ADR-066, ADR-075 and ADR-087; their earlier line numbers were removed rather than
-restated.*
+`:4`, Decision item 1 at `:41-47`, the in-process default trade-off at `:113-118`):
+`Messaging/MessageBusSettings.cs` `EnableInbox` `bool?` `:133` (broker-ON doc `:115-124`,
+explicit-false Warning doc `:127-130`), `IsInboxEnabled` `:141`, `EnableOutbox` `bool?` `:167` (doc
+`:143-166`, the monolith's explicit `true` at `:159-161`), `IsOutboxEnabled` `:175`. The in-process
+test-host clause follows from that rule (an `InProcess` host with `EnableOutbox` unset resolves OFF
+at `:175` and writes no rows); ADR-100 carries no test-host text, so it is no longer attributed to
+ADR-100's own wording. `DependencyInjection.cs`: `IOutboxSignal` `:205`, transport-decision comment
+`:207-212`, guard call `:215`, enabled registration `:217-221`, disabled `:222-225`.
+`DependencyInjection.Messaging.cs`: `EnsureOutboxAvailableForProvider` declared `:196`, guard `:198`,
+throw `:200-201`, doc `:178-191`, second call site `:59`; `EfInboxStore` registered when
+`IsInboxEnabled` `:107-109`, `NoOpInboxStore` on an explicit false `:115-117` with the Warning comment
+`:119-120`. Inbox consume path: `Messaging/Consumers/IntegrationEventConsumer.cs` stages the row via
+`TryBeginAsync` (`:76-81`) and calls `Abandon` on a handler failure (`:101`) before rethrowing
+(`:108`). ADR-021 (`Website/docs-src/adr/021-consumer-inbox-idempotency.md`): Status revisions
+`:4-11`, opt-in superseded `:53-55`, check-before superseded `:60-62`, window narrowed `:76-79`,
+explicit `EnableInbox: true` on four ADC and three Store service hosts `:81-87` (Store Sales
+`appsettings.json:58` re-read), five of seven consuming from the broker `:96-97`. Audit trail:
+`Persistence/AuditTrail/AuditTrailSettings.cs` single-gate remarks `:11-14`, `Enabled` default false
+`:26`, `RetentionDays` 90 `:38` (`[Range(1, 3650)]` `:37`), scheduler dependency `:33-35`;
+`DependencyInjection.Jobs.cs` registration-is-not-enabling `:89-92`, retention needs the scheduler
+`:97-101`; `MMCA.Common.Domain/Interfaces/IAuditedEntity.cs:24`. Interceptor order in
+`Persistence/DbContexts/ApplicationDbContext.cs`: audit and domain-event interceptors resolved
+`:297-298`, the tenant interceptor between them when registered `:305-308` (otherwise `:311`), the
+trail last through `GetService` `:319-322` (comment `:314-318`). `AddAuditTrail` call sites:
+`MMCA.Store` Sales `Program.cs:208`, Catalog `:233`, Identity `:195`; `MMCA.ADC` Identity
+`Program.cs:238`, Conference `:348`, Engagement `:198`; `MMCA.Helpdesk`
+`Source/Hosts/MMCA.Helpdesk.Web/Program.cs:90`. Transaction contract
+(`Website/docs-src/adr/107-transaction-execution-contract.md`, Accepted 2026-09-03 at `:4`, revised
+2026-09-25 `:5-8` and 2026-10-01 `:9-11`): Decision `:39-42`, re-entrant join `:50-58`, retriable
+unit and `ResetForRetry` `:60-68`, failed-Result rollback and the enrolled-command flush `:70-80`,
+commit never retried `:82-89`, per-source outcome `:91-98`, best-effort rollback `:100-104`, deferred
+flush and drop `:106-110`, Revision `:202`. Source:
+`MMCA.Common.Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:63`;
+`Persistence/UnitOfWork.cs:76-79`; `MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs`
+class `:22`, `ITransactional` check `:30`, call `:33`. `Persistence/DbContexts/Factory/DbContextFactory.cs`:
+`ExecuteInTransactionAsync` `:544`, `strategy.ExecuteAsync` `:571`, `ResetForRetry` call `:574`
+(declared `:829`, `ChangeTracker.Clear()` `:834`), failed `Result` `:608` with `RollbackTransaction`
+call `:613` (declared `:477`), `FlushEnrolledCommandsBeforeCommitAsync` call `:618` (declared `:674`,
+throw `:691-697`, save `:699`), `TryCommit` call `:620` (declared `:712`), `FlushDeferredAsync` call
+`:634`, `AbandonAfterCommitFailure` call `:736` (declared `:753`), rethrow past the strategy
+`:585-586` with the inner-chain comment `:581-584`, `SupportsTransactions` `:853-854`
+(`Engine.Capabilities.IsRelational`, false for Cosmos);
+`Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs` `FlushDeferredAsync` `:145`,
+`DropDeferred` `:162`. Delivery side: `Persistence/Outbox/Processing/OutboxProcessor.cs`
+`ClaimEligibleAsync` declared `:367`, invoked `:214`; `ComputeRetryBackoffSeconds` `:680-681`
+(delegating to `Persistence/Polling/PollingLoop.cs:183`, jitter `0.8 + NextDouble() * 0.4` at
+`:193`), applied `:588` and `:660`. Consume-side faults: `RegisterIntegrationEventConsumer<TEvent>`
+(`Messaging/Consumers/IntegrationEventConsumerExtensions.cs:60`), `bool registerFaultConsumer = true`
+(`:61`), guard `:71`, the same opt-out on the sibling overloads (`:124`/`:134`, `:159-160`).
+Set-based write: the block is verbatim from `Persistence/Repositories/EFRepository.cs:140-154` inside
+`ExecuteUpdateAsync`, empty-assignment guard `:137-138`, `Entities.Where(where).ExecuteUpdateAsync(builder.Apply, ...)`
+replay `:156`. Carried from the 2026-10-02 audit's CONFIRMED verdicts, not re-read in this apply
+step: `Persistence/Outbox/Administration/OutboxSettings.cs` (`RetentionDays` 7 `:65`, `0` disables;
+`CleanupIntervalHours` 6 `:73`; `LeaseSeconds` 300 `:82`, `[Range(10, 3600)]` `:81`;
+`RetryBackoffBaseSeconds` 10 `:99`, `[Range(1, 3600)]` `:98`; `DeadLetterRetentionDays` fallback
+`:108`, doc `:101-106`), `OutboxDisabledNoticeService.cs:22` (restore path `:35-38`),
+`TransactionCommitAmbiguousException.cs` (sealed `:22`, `CommittedSources` `:76`, `AmbiguousSource`
+`:85`, `RolledBackSources` `:93`, `ComposeMessage` `:99`), `Persistence/DbContexts/SQLServerDbContext.cs:63-66`
+(`EnableRetryOnFailure`, 5 retries, 10s), `MessageBusProvider` (`Messaging/MessageBusSettings.cs:236`,
+`InProcess` `:241`, `RabbitMq` `:246`, `AzureServiceBus` `:251`), `EnableDelayedRedelivery` `:195`,
+`RedeliveryIntervalsSeconds` `[60, 600, 3600]` `:211`, `FaultIntegrationEventConsumer.cs`
+(`:26`, id `:39`, `LogFault` `:48` declared `:58`, counter `:50`) and `Messaging/BrokerMetrics.cs`
+(`broker.fault.count` `:30`, `MeterName` `:21`, `Meter` `:23`, class `:18`). ADR-066
+(`Website/docs-src/adr/066-broker-transport-selection.md`): the 2026-09-01 revision `:6-10`, both
+emulator jobs authoritative and deploy-gating `:161-172`, the nightly-not-per-commit trade-off
+`:213-222`. Carried without line anchors: `Persistence/Repositories/UpdatePropertySetterBuilder.cs`,
+the internals of `OutboxCleanupService.cs`, `AuditTrailSaveChangesInterceptor.cs`,
+`AuditTrailEntry.cs`, `MMCA.Common.Domain/Privacy/PiiRedactor.cs`, the inbox stores under
+`Persistence/Inbox/`, `InboxDisabledWarningService.cs`, `DbContextFactoryCommitAmbiguityTests.cs`,
+and paragraph-level anchors into ADR-003, ADR-075 and ADR-087.*
 
 - Full series index: https://ivanball.github.io/writing.html

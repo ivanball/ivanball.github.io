@@ -163,7 +163,7 @@
           <figure class="article-hero"><img src="../assets/img/articles/article-35.webp" alt="" width="800" height="420" decoding="async"></figure>
           <p class="article-subtitle">A suite you run constantly is worth more than a suite you run nervously. Here is how
           MMCA.Common keeps 2,254 tests fast enough to live in the inner loop, with real-database
-          integration coverage and no Docker in sight.</p>
+          integration coverage and no Docker in that loop.</p>
           <hr>
           <p>There is a failure mode that almost every long-lived codebase drifts into, and it has a name: the
           ice-cream cone. The pyramid is inverted. A thin layer of unit tests sits at the bottom, and the bulk of
@@ -178,21 +178,19 @@
           the enforced coverage floor and the size of the suite behind it.</p>
           <h2 id="why-the-shape-matters-more-than-the-count">Why the shape matters more than the count</h2>
           <p>The test-count number is not the point. The shape is. The rubric (<a href="../docs/governance/ArchitectureEvaluationCriteria.html">Architecture Evaluation Criteria</a>,
-          category 14) describes a healthy pyramid as &quot;many fast unit tests on domain and application, fewer
-          integration, few E2E,&quot; and names the inverted pyramid, &quot;mostly slow E2E, flaky tests, tests disabled
-          without tracking,&quot; as the headline red flag.</p>
+          category 14) describes a healthy pyramid as &quot;many fast unit tests on domain/application, fewer
+          integration, few E2E,&quot; and leads its red flags with &quot;Inverted pyramid (mostly slow E2E), flaky tests,
+          tests disabled/skipped without tracking.&quot;</p>
           <p>The reason is the inner loop. A wide base of fast tests is one you run after every change, which means
           defects surface in seconds, while you still have the context to fix them. A top-heavy suite is one you
           run at the end, in CI, after you have moved on, which means defects surface as a red build an hour later
           with no context. Speed is not a vanity metric. It is what determines whether the tests are part of how
           you write code or a tax you pay at the end.</p>
           <h2 id="the-base-fast-pure-no-infrastructure">The base: fast, pure, no infrastructure</h2>
-          <p>The wide base of the MMCA.Common pyramid is pure unit tests with no I/O
-          (<a href="../docs/onboarding/group-28-testing-infrastructure.html">28. Testing &amp; Quality Infrastructure</a>): domain entity factories and invariants, value
-          objects, the <code>Result</code>/<code>Error</code> primitives, CQRS handlers with mocked repositories, FluentValidation
-          validators, and DTO and request mappers. These dominate the type count and run in-memory in
-          milliseconds. The whole reason this layer can be wide is the framework&#39;s design: Clean Architecture
-          keeps the Domain framework-pure and the Application layer testable without infrastructure, so the
+          <p>The wide base of the MMCA.Common pyramid is pure unit tests with no I/O: domain entity factories and
+          invariants, value objects, the <code>Result</code>/<code>Error</code> primitives, CQRS handlers with mocked repositories,
+          FluentValidation validators, and DTO and request mappers. They run in-memory in milliseconds. The
+          whole reason this layer can be wide is the framework&#39;s design: Clean Architecture keeps the Domain framework-pure and the Application layer testable without infrastructure, so the
           logic worth testing is reachable without booting a host or touching a database.</p>
           <p>Two design choices keep this layer honest. First, time is injected: tests use <code>FakeTimeProvider</code> rather
           than <code>DateTime.Now</code>, so time-dependent logic (audit stamping, outbox eligibility delays) is
@@ -226,7 +224,7 @@
           fastest tier of all, pure reflection, and they catch a class of regression that no functional test
           would.</p>
           <h2 id="shipped-test-packages-consumers-do-not-re-invent-the-harness">Shipped test packages: consumers do not re-invent the harness</h2>
-          <p>Five of the framework&#39;s nineteen published NuGet packages are test <em>infrastructure</em>, not test code, and this is
+          <p>Six of the framework&#39;s twenty-two published NuGet packages are test <em>infrastructure</em>, not test code, and this is
           how the pyramid stays consistent across three codebases instead of being rebuilt three times:</p>
           <ul>
           <li><code>MMCA.Common.Testing</code>, the integration base: <code>IntegrationTestBase&lt;TFixture&gt;</code> supplies a configured
@@ -239,12 +237,17 @@
           an axe-core WCAG 2.1 AA assertion.</li>
           <li><code>MMCA.Common.Testing.UI</code>, the bUnit base: <code>BunitComponentTestBase</code> registers MudBlazor&#39;s services,
           configures loose JSInterop, and wires real auth doubles so component tests resolve <code>&lt;AuthorizeView&gt;</code>
-          cascades.</li>
+          cascades; the same package ships the <code>MarkupSnapshot</code> golden-markup helper and page-test bases for the
+          framework&#39;s identity pages (<code>ConfirmEmailPageTestsBase</code>, <code>RoleAdminListPageTestsBase&lt;TPage&gt;</code>,
+          <code>RoleAdminEditPageTestsBase&lt;TPage&gt;</code>).</li>
           <li><code>MMCA.Common.Testing.Aspire</code>, the AppHost base: <code>AppHostFixtureBase</code> boots a real AppHost once per
           test collection and waits on each resource&#39;s own readiness signal, while <code>AppHostTestBase&lt;TFixture&gt;</code>
-          hands a test a client bound to a named resource plus typed health, readiness and JWKS assertions.</li>
+          hands a test a client bound to a named resource plus typed health, readiness, JWKS, h2c and
+          data-source assertions.</li>
           <li><code>MMCA.Common.Testing.Architecture</code>, the fitness-rule library: the architecture rules defined once and
           consumed by each repo&#39;s thin test suite.</li>
+          <li><code>MMCA.Common.AI.Testing</code>, the AI test harness: <code>ReplayChatClient</code>, <code>GoldenReplayTestsBase</code> and
+          <code>PromptContractPinTestsBase</code>, keyed on a <code>PromptContract</code>&#39;s normalized SHA-256 hash.</li>
           </ul>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// A downstream integration test: a few lines of fixture glue, then real HTTP calls.</span>
 <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">CatalogTests</span> : <span class="hljs-title">IntegrationTestBase</span>&lt;<span class="hljs-title">CatalogFixture</span>&gt;
@@ -282,8 +285,10 @@
           <li><code>MmcaGatewayHardeningTestsBase&lt;TEntryPoint&gt;</code> drives a booted gateway through eight edge gates: the
           per-client-IP rate limiter and its bypass list, the tighter named policy on the credential route, a
           correlation id generated when the caller supplies none and echoed when it does, one readiness check
-          per downstream service, an active health probe on every cluster, and partitioning by the forwarded
-          client IP rather than the proxy IP.</li>
+          per downstream service, the active health-probe state of every cluster, and partitioning by the
+          forwarded client IP rather than the proxy IP. The probe gate is switchable: by default every cluster
+          must carry an enabled active probe, and both consumer gateways override <code>ActiveHealthChecksExpected</code>
+          to <code>false</code>, so on them it asserts that no cluster carries one.</li>
           <li><code>DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;</code> resolves the
           decorated handler out of a built provider and walks the constructed object graph, asserting the
           documented nesting order.</li>
@@ -294,16 +299,20 @@
           behavior, and nothing here is inferred from a registration list. Service hosts boot through
           <code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code>, which creates a GUID-named throwaway SQL Server
           database, lets the host&#39;s own migrate-on-start strategy apply the schema, resets data between tests
-          with Respawn, and drops the database on disposal. Database-free hosts (the two YARP gateways) boot
-          through <code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code>, which pins <code>UseEnvironment(&quot;Production&quot;)</code> so
-          the production-only branches (restrictive CORS, HSTS emission) are the ones actually under test, and
-          captures the started <code>IHost</code>, because <code>StopAsync</code> is not reachable through the <code>WebApplicationFactory</code>
+          with Respawn, and drops the database on disposal. Database-free hosts boot through
+          <code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code>: the two YARP gateways, and the UI web heads through
+          Production-pinned factories such as ADC&#39;s <code>ConferenceUiHostApplicationFactory</code>, which derives from it.
+          The base pins <code>UseEnvironment(&quot;Production&quot;)</code> so the production-only branches (restrictive CORS, HSTS
+          emission) are the ones actually under test, and captures the started <code>IHost</code>, because <code>StopAsync</code> is not reachable through the <code>WebApplicationFactory</code>
           surface at all.</p>
           <p>The cost of adopting one stays small, which is the point of writing the body once: a subclass supplies
           two probe requests, or a path-count floor plus a pinned resource list, or a client factory, and the two
-          gateway shutdown subclasses are single-line declarations with no body. There are no committed snapshots
-          either. The OpenAPI guard asserts against the live document rather than a checked-in file, so a new
-          controller can never leave a stale snapshot behind.</p>
+          gateway shutdown subclasses are single-line declarations with no body. The runtime guard reads no
+          committed snapshot either: the OpenAPI base asserts against the live document rather than a checked-in
+          file, so a new controller can never leave a stale snapshot behind. ADC and Store do commit each host&#39;s
+          <code>openapi/&lt;host&gt;.json</code> and fail CI on an uncommitted difference, but that is a separate build-time check
+          each consumer owns, asking whether the contract changed without review rather than whether a booted
+          host serves a usable one.</p>
           <p>Adoption is partial, and that is worth reporting as an inventory rather than a clean sweep. The OpenAPI
           guard and the problem-details guard both run on every extracted REST host: four ADC services and three
           Store services. Versioning is subclassed once per repo (ADC Conference and Store Catalog), enough to keep
@@ -320,8 +329,9 @@
           share, where JWKS discovery points, and the <code>WaitFor</code> graph that orders the startup. A solution build
           type-checks that file and never runs it, so a resource renamed on one side of a <code>WithReference</code> still
           compiles. The in-process integration tier boots hosts directly through <code>WebApplicationFactory</code>, which is
-          the point of that tier and also means it never sees the orchestration. The E2E tier runs against a
-          deployed environment, by which time a composition mistake is an incident rather than a test failure.
+          the point of that tier and also means it never sees the orchestration. The E2E tier does boot a full
+          stack (ADC&#39;s E2E workflow brings the Aspire stack up in CI), but it asserts browser journeys rather than
+          the wiring contracts, and the deploy path runs it only for UI-affecting changes.
           ADR-117 closes that gap as a package rather than a per-repo copy, and both consumer smoke tiers subclass
           it.</p>
           <p><code>AppHostFixtureBase</code> is a collection fixture: it boots the real AppHost once through an
@@ -342,8 +352,10 @@
           an eight-day red nightly to diagnose.</p>
           <p><code>AppHostTestBase&lt;TFixture&gt;</code> then gives a test the two things only a running stack can hand it, an
           <code>HttpClient</code> bound to a named resource and a resolved connection string, plus typed assertions over the
-          wiring contracts: <code>AssertHealthyAsync</code>, <code>AssertAliveAsync</code>, <code>AssertReadyAsync</code>, <code>AssertJwksAsync</code> and
-          <code>AssertH2cAsync</code>. The probe paths are constants (<code>/health</code>, <code>/alive</code>, <code>/health/ready</code>,
+          wiring contracts: <code>AssertHealthyAsync</code>, <code>AssertAliveAsync</code>, <code>AssertReadyAsync</code>, <code>AssertJwksAsync</code>,
+          <code>AssertH2cAsync</code>, and <code>AssertDataSourceAsync</code>, which checks that the AppHost injected the data-source
+          connection string the framework&#39;s multi-database resolver reads, a logical-name typo that no build and
+          no in-process tier can see. The probe paths are constants (<code>/health</code>, <code>/alive</code>, <code>/health/ready</code>,
           <code>/.well-known/jwks.json</code>) mirrored from the framework&#39;s own, with a unit test cross-asserting each pair so
           a rename cannot silently orphan a probe. One rule is written into the constant&#39;s own documentation: a
           startup gate probes liveness, never readiness, because a readiness endpoint aggregates downstream checks
@@ -360,10 +372,17 @@
     [<span class="hljs-meta">Fact</span>]
     <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task <span class="hljs-title">Identity_publishes_its_key_set</span>()</span>
     {
-        Assert.SkipWhen(!Fixture.IsAvailable, Fixture.SkipReason!);
+        <span class="hljs-keyword">if</span> (!Fixture.IsAvailable)
+        {
+            Assert.Skip(Fixture.SkipReason!);
+        }
+
         <span class="hljs-keyword">await</span> AssertJwksAsync(<span class="hljs-string">&quot;identity&quot;</span>);
     }
 }</code></pre>
+          <p>The skip is written as a branch on purpose. <code>Assert.SkipWhen</code> validates its reason before its
+          condition, and <code>SkipReason</code> is null exactly when the stack did start, so the one-line form throws on
+          every runner able to boot the AppHost; the base class documentation prescribes the branch.</p>
           <h2 id="accessibility-as-a-shipped-test-contract">Accessibility as a shipped test contract</h2>
           <p>The E2E package carries one more contract, and it is the tier where a published standard turns into a
           build failure instead of a review comment. ADR-063 records it: WCAG 2.1 AA ships as a named constant in
@@ -394,7 +413,10 @@
           backend-less gallery across chromium, firefox, and webkit, and all three are required merge checks. ADC
           and Store run a chromium-only leg against the full Aspire stack as a deploy gate, and that gate is
           scoped to UI changes, so a backend-only or infra-only deploy legitimately skips it: &quot;deployed&quot; does not
-          always mean &quot;axe ran on this commit&quot;. MMCA.Helpdesk adopts none of it. It pins the package version,
+          always mean &quot;axe ran on this commit&quot;. Firefox and webkit run on separate weekly E2E runs instead, and a
+          cross-browser freshness gate fails a deploy when either engine has no successful run inside a 10-day
+          window, so cross-engine coverage is enforced by recency rather than per commit. MMCA.Helpdesk adopts
+          none of it. It pins the package version,
           references it from no project, and has no E2E test project at all, so the seed demonstrates the layers
           and not this contract.</p>
           <h2 id="runner-and-gate-xunit-v3-mtp-and-a-coverage-floor">Runner and gate: xUnit v3, MTP, and a coverage floor</h2>
@@ -413,8 +435,8 @@
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <p>The shape is right, but the scorecard names real gaps and one is squarely in the testing story.</p>
           <ul>
-          <li><strong>The UI tier&#39;s visual check is markup-deep, not pixel-deep.</strong> The framework ships roughly a dozen
-          reusable Blazor primitives in <code>MMCA.Common.UI</code>, some with real branching logic (<code>MobileCardList</code>,
+          <li><strong>The UI tier&#39;s visual check is markup-deep, not pixel-deep.</strong> The framework ships 26 reusable
+          Blazor components in <code>MMCA.Common.UI</code>, some with real branching logic (<code>MobileCardList</code>,
           <code>MobileInfiniteScrollList</code>), and the pyramid carries a fast base layer <em>for the UI</em> under them: the
           <code>MMCA.Common.Testing.UI</code> bUnit base backs their component tests, a real-browser render-smoke gate
           runs in CI, and a render-snapshot regression tier diffs their markup against committed baselines.
@@ -422,15 +444,20 @@
           what a snapshot compares: markup structure, not rendered pixels.</li>
           <li><strong>SQLite is not SQL Server.</strong> The middle tier is fast precisely because it uses SQLite, which means
           SQL-Server-specific behavior (certain query translations, concurrency-token semantics) is validated
-          against an approximation. The scorecard&#39;s Data Architecture row is candid about the surrounding
+          in the inner loop only against an approximation. Common CI adds a SQL Server Testcontainers job that
+          asserts row-version concurrency, identity insert and outbox-in-the-same-save against the real engine,
+          but that is a container tier outside the fast run. The scorecard&#39;s Data Architecture row is candid about the surrounding
           shape: it holds maturity at 4 with implementation at 9, and ADR-018 records the non-SQL engines as
           deliberately latent, with no production entity on them. The trade buys a fast, Docker-free inner loop
           at the cost of needing the consumer apps and CI to cover the SQL-Server-specific paths.</li>
-          <li><strong>The honest limit is mutation testing, not coverage.</strong> The unit tier holds a <strong>68.3%</strong> line-coverage
+          <li><strong>The honest limits are mutation testing and the container tiers, not coverage.</strong> The unit tier holds a <strong>68.3%</strong> line-coverage
           floor (measured about 70.3%), enforced in CI and ratcheted up as the suite grows rather than left as
-          an aspiration. What holds category 14 below the top band is a single Exemplary gap: there is no
-          mutation testing on the Core tier, so a green suite proves the lines run, not that every assertion
-          would catch a mutant. That is a real limit, stated plainly.</li>
+          an aspiration. What holds category 14 below the top band starts with mutation testing: there is none
+          on the Core tier, so a green suite proves the lines run, not that every assertion would catch a
+          mutant. The scorecard names three structural gaps beside it: the integration tier (Redis, PostgreSQL,
+          package consumption, Bicep) runs on pull requests but is not a merge gate, the AppHost tier is
+          advisory, and messaging never meets a real broker in the framework&#39;s own CI. Those are real limits,
+          stated plainly.</li>
           </ul>
           <p>None of these argue against the pyramid. They are the cost of keeping the base fast and honest about
           what each tier actually proves.</p>
@@ -456,7 +483,7 @@
           <p><strong>What we covered:</strong> why the pyramid&#39;s shape matters more than its count, the fast no-Docker base
           (pure unit tests plus <code>FakeTimeProvider</code>), the real-SQLite middle tier with two databases in
           <code>MultiSourceSqliteIntegrationTests</code>, the thin bUnit/Playwright cap and the orthogonal fitness-test tier,
-          the five shipped test packages that let consumers reuse the harness, the seven runtime conformance bases
+          the six shipped test packages that let consumers reuse the harness, the seven runtime conformance bases
           that prove a really-booted host wired the framework&#39;s contracts (ADR-058) and their partial adoption, the
           AppHost tier that compiles a claim about the composition itself (ADR-117), WCAG 2.1 AA shipped as a named
           axe target with one recorded exception (ADR-063), the xUnit v3 / MTP runner and the CI coverage floor, and

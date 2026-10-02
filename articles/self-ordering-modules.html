@@ -225,12 +225,14 @@ services.AddNotificationModule(); <span class="hljs-comment">// needs Identity</
           come out of the sort than went in, the leftovers form a <strong>dependency cycle</strong>, and the loader throws with
           the offending module names. A circular dependency between modules becomes a loud, named startup failure
           instead of a subtle runtime surprise.</p>
-          <p>The scan is also defensive. Each <code>GetTypes()</code> call sits inside a try/catch (a
-          <code>ReflectionTypeLoadException</code> raised by a missing transitive reference is the case it exists for), so a
-          broken assembly contributes no types and logs why instead of aborting discovery of the rest. And every
-          step emits a structured <code>[LoggerMessage]</code>-generated log line, so the startup log tells you precisely
-          which modules loaded, in what order, and how long each took. When something is wrong, you read it, you
-          do not guess it.</p>
+          <p>The scan is also defensive. Each <code>GetTypes()</code> call sits inside a guard with two catches. A
+          <code>ReflectionTypeLoadException</code> (the shape a missing transitive reference produces) still carries every
+          type that did load, so the loader keeps those and the assembly&#39;s loadable modules still register; any
+          other exception drops that one assembly. Both paths log at Error, because a module that silently fails
+          to register is an outage that looks like a configuration choice, and neither aborts discovery of the
+          rest. And every step emits a structured <code>[LoggerMessage]</code>-generated log line, so the startup log tells
+          you precisely which modules loaded, in what order, and how long each took. When something is wrong, you
+          read it, you do not guess it.</p>
           <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// In each host&#x27;s Program.cs. AddModuleHost binds and validates ApplicationSettings and</span>
 <span class="hljs-comment">// ModulesSettings, builds the ModuleLoader and registers it as a singleton. It deliberately does</span>
 <span class="hljs-comment">// not run discovery itself.</span>
@@ -256,7 +258,8 @@ services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
           <p>Here is the part that turns this from a tidy registration trick into an extraction mechanism. A host can
           disable a module through configuration. <code>ModulesSettings</code> binds the <code>&quot;Modules&quot;</code> config section (it is a
           <code>Dictionary&lt;string, ModuleSettings&gt;</code>), and <code>ModuleSettings</code> carries a per-module <code>Enabled</code> flag
-          (default <code>true</code>) plus a <code>RemoteDependencies</code> list.</p>
+          (default <code>true</code>) plus a <code>RemoteDependencies</code> list. A module the section does not list at all counts as
+          disabled, so enabling a module is always an explicit line of configuration.</p>
           <pre class="doc-pre" tabindex="0" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">&quot;Modules&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">&quot;Conference&quot;</span><span class="hljs-punctuation">:</span>   <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
@@ -266,18 +269,22 @@ services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
           <p>When the loader reaches a disabled module it does not skip it. It calls that module&#39;s
           <code>RegisterDisabledStubs(services)</code> and records the name in <code>DisabledModuleNames</code>. This is the crux. A
           disabled Engagement module still contributes stub registrations for the cross-module interfaces other
-          modules depend on. So when Conference&#39;s <code>GetSessionBookmarkCountHandler</code> asks the container for
-          Engagement&#39;s <code>IBookmarkCountService</code>, resolution still succeeds, because the disabled module left a
-          <code>Disabled*</code> stub behind.</p>
+          modules depend on: <code>EngagementModule</code> registers <code>DisabledBookmarkCountService</code> as its
+          <code>IBookmarkCountService</code>. So in a host that names the Engagement assembly but disables the module,
+          Conference&#39;s <code>GetSessionBookmarkCountsHandler</code> still resolves <code>IBookmarkCountService</code>, because the
+          disabled module left a <code>Disabled*</code> stub behind.</p>
           <p>That is a clean strategy plus null-object pairing (real service, disabled stub, or remote client) rather
           than <code>if (moduleEnabled)</code> checks scattered through the call sites. The handler does not know or care
           which of the three it got.</p>
           <p>Dependency validation is microservice-aware to match. A dependency that is disabled in-process but
           listed in this host&#39;s <code>ModuleSettings.RemoteDependencies</code> is treated as satisfied remotely (the host
-          will wire a typed gRPC client to the extracted peer), and only a module with <code>RequiresDependencies = true</code> and a genuinely unsatisfied dependency throws at startup. The loader also loads per-module
-          configuration by convention: before calling <code>module.Register(...)</code> it adds <code>modules.{name}.json</code> (and
-          the environment-specific variant) to the configuration builder, so a module can ship its own config
-          file.</p>
+          will wire a typed gRPC client to the extracted peer), and only a module with <code>RequiresDependencies = true</code> and a genuinely unsatisfied dependency throws at startup. Because a remote declaration is
+          configuration the loader takes on trust, it also offers <code>ValidateRemoteDependencies(IServiceProvider)</code>,
+          an opt-in check a host runs against the built provider: every service type a remote-declared
+          dependency&#39;s disabled stubs registered must resolve (a miss throws), and one that still resolves to the
+          stub logs a warning. The loader also loads per-module configuration by convention: before calling
+          <code>module.Register(...)</code> it adds <code>modules.{name}.json</code> (and the environment-specific variant) to the
+          configuration builder, so a module can ship its own config file.</p>
           <h2 id="convention-scanning-what-a-modules-register-actually-wires">Convention scanning: what a module&#39;s Register actually wires</h2>
           <p>Modules do not hand-register every handler. <code>ScanModuleApplicationServices&lt;TAssemblyMarker&gt;()</code> is the
           Scrutor-based convention scan that a module&#39;s <code>Add{X}Module</code> calls to register, by assembly, every kind
@@ -321,12 +328,15 @@ services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
           enables every module and cross-module calls are in-process method calls: MMCA.Helpdesk is the framework&#39;s
           monolith-first reference app, a single <code>Tickets</code> module exercised end to end through all five layers to
           demonstrate the &quot;build the monolith now, extract a service later&quot; path. As a fleet, each service host
-          runs the same <code>ModuleLoader</code> with only its own module enabled (<code>Modules:{Module}:Enabled=true</code>); the
-          disabled peers contribute their stubs, and the host then replaces a stub with a typed gRPC client pointed
-          at the real, extracted peer process. MMCA.ADC runs this way today: four single-module service hosts
-          (Identity, Conference, Engagement, Notification) behind a YARP gateway, with no combined monolith host at
-          all. The Domain, Application, and Shared code is identical in both topologies. The transport choice lives
-          entirely at the composition edge (ADR-008).</p>
+          names only its own module assembly to <code>ModuleLoader</code>, so its peers are never discovered and contribute
+          no stubs; the host instead registers a typed gRPC client adapter for each cross-module interface it
+          consumes, pointed at the real, extracted peer process. MMCA.ADC runs this way: four single-module
+          service hosts (Identity, Conference, Engagement, Notification) behind a YARP gateway, with no combined
+          monolith host at all. In its Conference host, <code>IBookmarkCountService</code> resolves to a
+          <code>BookmarkCountServiceGrpcAdapter</code> that calls the Engagement service. The disabled-stub path serves the
+          other shape: a host that names a peer&#39;s assembly and switches the module off. The Domain, Application,
+          and Shared code is identical in every topology. The transport choice lives entirely at the composition
+          edge (ADR-008).</p>
           <p>That is the payoff of declaring intent instead of position: the same self-ordering registration that
           makes the monolith correct is what makes the split reversible. Nothing in Helpdesk&#39;s <code>TicketsModule</code> or
           ADC&#39;s <code>ConferenceModule</code> changes when it moves from one host to its own process.</p>
@@ -341,8 +351,9 @@ services.AddMmcaApplicationPipeline(pipeline =&gt; pipeline
           cost: the order is not visible as a list of lines. The structured startup log is the mitigation, but a
           developer used to reading the order off <code>Program.cs</code> has to learn to read it off the log instead.</li>
           <li><strong>Stubs must be maintained.</strong> <code>RegisterDisabledStubs</code> is a real obligation. Add a cross-module
-          interface and forget to register a stub for it, and a host that disables that module fails to resolve.
-          This is caught at startup rather than in production, but it is a discipline the contract assumes.</li>
+          interface and forget to register a stub for it, and a host that names that module&#39;s assembly but
+          disables it fails to resolve the interface the first time something asks for it. The loader does not
+          check stub coverage, so this is a discipline the contract assumes.</li>
           <li><strong>Cycles are rejected, not resolved.</strong> A dependency cycle is a hard startup failure by design. That is
           the correct behavior, but it means you cannot lean on lazy resolution to paper over a genuine circular
           design between modules.</li>

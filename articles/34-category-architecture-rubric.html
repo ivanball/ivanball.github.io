@@ -171,7 +171,7 @@
           impressions, and impressions do not survive a code review six months later, let alone an audit.</p>
           <p>I wanted something better for my own framework, so I wrote a rubric: 34 categories, each scored on two
           axes, each requiring evidence. Then I scored MMCA.Common against it in public and committed the
-          scorecard to the repo. The framework landed at a maturity index of 97.0% and an implementation index of
+          scorecard to the repo. The framework stands at a maturity index of 96.6% and an implementation index of
           86.0%. This article is about the rubric itself, because the scoring instrument is more reusable than the
           score.</p>
           <h2 id="why-good-architecture-needs-a-rubric">Why &quot;good architecture&quot; needs a rubric</h2>
@@ -237,25 +237,26 @@
           are.</p>
           <h2 id="the-worked-example-mmcacommon-scored-on-both-axes">The worked example: MMCA.Common, scored on both axes</h2>
           <p>When I ran MMCA.Common through the rubric (the canonical, version-controlled scorecard lives in
-          <a href="../docs/governance/common-ArchitectureScorecard.html">MMCA.Common: Architecture Scorecard</a>), it landed at a <strong>maturity index of 97.0% and
+          <a href="../docs/governance/common-ArchitectureScorecard.html">MMCA.Common: Architecture Scorecard</a>), it landed at a <strong>maturity index of 96.6% and
           an implementation index of 86.0%</strong> across <strong>all 34 categories</strong>. No category sits at N/A: multi-locale
           i18n ships under ADR-027, which supersedes the single-locale ADR-011, and Internationalization scores
-          maturity 4, implementation 9 on that evidence, while AI-Native Application Architecture carries a scored
-          maturity 3, implementation 6 rather than an exemption. The N/A verdict stays available on principle: do
-          not penalize a system for a category that does not apply to it, but say so explicitly, in a decision
-          record that any later evidence can reopen.</p>
-          <p>The high scores clustered exactly where I would want them to: Clean Architecture, SOLID, Microservices
+          maturity 4, implementation 8 on that evidence, while AI-Native Application Architecture carries a scored
+          maturity 4, implementation 9 rather than an exemption, because the framework ships its own governed
+          model-calling package. The N/A verdict stays available on principle: do not penalize a system for a
+          category that does not apply to it, but say so explicitly, in a decision record that any later evidence
+          can reopen.</p>
+          <p>The high scores clustered exactly where I would want them to: Clean Architecture, Microservices
           Readiness, Supply-Chain, and Testability all reached maturity 4 with implementation 9, each enforced
-          automatically. The two axes are deliberately asymmetric: maturity (97.0%) runs ahead of implementation
+          automatically. The two axes are deliberately asymmetric: maturity (96.6%) runs ahead of implementation
           (86.0%), and that gap is the most useful thing the scorecard says. It is structural, not a defect. It is
           also honest in both directions, which is rarer than it sounds: every score states what today&#39;s evidence
           supports and nothing more, so a category holds a 9 only while its stated reasoning still carries an
           Exemplary verdict, and it moves <em>down</em> as readily as up when the next re-score reads the evidence
           (Testability scores 9 on a gated coverage floor of 68.3%). A rubric that only ever ratchets up is not
-          being honest, and neither is one that only ratchets down. AI-Native Application Architecture carries the
-          lowest implementation on its own, at 6 on weight 2, and Cost Efficiency / FinOps holds the lowest
-          maturity, a 2, precisely because the substance those two reward (a product feature that calls a model,
-          right-sizing, per-service cost attribution) lives in consumer apps, not in a library.</p>
+          being honest, and neither is one that only ratchets down. No category scores below 8 on implementation,
+          and Cost Efficiency / FinOps holds the lowest maturity, a 2. Most of the remaining implementation gap is
+          structural rather than neglected: deployment execution, production SLOs, cost right-sizing and the
+          consent process belong to the consuming apps, not to a library.</p>
           <p>When I first scored the framework, the lowest category was <strong>Compliance, Privacy and Data Governance</strong>:
           soft-delete everywhere, with no right-to-erasure path. That is the exact GDPR conflict the rubric names
           as a red flag in category 30. I wrote it down rather than hiding it, and it became the roadmap: ADR-005&#39;s
@@ -264,13 +265,15 @@
           reason to score yourself in public.</p>
           <h2 id="the-one-insight-worth-the-whole-exercise">The one insight worth the whole exercise</h2>
           <p>When I lined the scores up, a single pattern explained almost all of the variance between the top tier
-          and the middle tier, and it is the pattern that has driven every re-score since. Every category that
-          reached maturity 4 is backed by a fitness function or a compile-time guard: layer rules, domain purity,
-          transport coupling, outbox behavior, an automated database restore drill. Every category still capped at
-          3 has the right design but leaves its enforcement short of a required merge gate. DevOps and Deployment
-          is the cleanest illustration: the repo ships a reference Bicep deployment sample plus a CI job that
-          compiles it, but that job is not one of the eight required contexts on the branch, and the deployment
-          machinery itself lives in consumer repos, so the rule is trusted rather than gated. Performance and
+          and the middle tier, and it is the pattern that has driven every re-score since. Thirty of the 34
+          categories sit at maturity 4, most of them on build-breaking gates: layer rules, domain purity,
+          transport coupling, outbox behavior, an automated database restore drill. The three categories still
+          capped at 3 have the right design but stop short of an automatic, always-on gate: SOLID enforces only its
+          single-responsibility and dependency-inversion rules automatically, Compliance ships its audit-trail and
+          data-export surfaces opt-in, and DevOps and Deployment is the cleanest illustration: the repo ships a
+          reference Bicep deployment sample plus a CI job that compiles it, but that job is not one of the eight
+          required contexts on the branch, and the deployment machinery itself lives in consumer repos, so the
+          rule is trusted rather than gated. Performance and
           Scalability sits on the other side of exactly that line: a BenchmarkDotNet harness fails CI on latency or
           allocation regressions against a committed baseline, its context is in the branch&#39;s required checks, and
           the category holds a 4 because the existing check is a check that can fail the merge.</p>
@@ -296,10 +299,10 @@
           <li><strong>Some categories are genuinely N/A.</strong> Be willing to exclude rather than fudge. But excluding should
           be a documented decision, not a convenient dodge for a category you would rather not face.</li>
           <li><strong>A snapshot ages.</strong> A scorecard is true only for the commit it was read against, and the thing being
-          scored keeps moving: nineteen published packages, lock files, an SBOM-gated release, a
+          scored keeps moving: twenty-two published packages, lock files, an SBOM-gated release, a
           <code>DependencyVersionTests</code> guard for the MassTransit pin, and the ADR-005 erasure extension point all
-          postdate the first committed pass. Re-verifications re-score it on both axes every release, through
-          thirty-six remediation waves. The honest framing is &quot;scored, published, then fixed, then re-scored&quot;:
+          postdate the first committed pass. Each re-verification re-scores it on both axes and stamps the
+          version and commit it read. The honest framing is &quot;scored, published, then fixed, then re-scored&quot;:
           the score is a starting line, not a trophy. Re-run it per release.</li>
           </ul>
           <h2 id="apply-this-even-without-mmca">Apply this even without MMCA</h2>
@@ -323,7 +326,7 @@
           <hr>
           <p><strong>What we covered:</strong> why &quot;good architecture&quot; needs a measurable rubric, the three-part 34-category
           structure, the two-axis (maturity plus implementation) scoring with mandatory evidence, MMCA.Common&#39;s
-          97.0% maturity / 86.0% implementation as a worked example including its first-scored lowest category and
+          96.6% maturity / 86.0% implementation as a worked example including its first-scored lowest category and
           its later remediation, and the single insight that explains the top tier: enforced beats convention-only.</p>
           <p><strong>Next in the series:</strong> the Result railway that retired exceptions-as-control-flow, the foundational
           pattern every layer returns instead of throwing.</p>

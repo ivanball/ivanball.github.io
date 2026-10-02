@@ -111,8 +111,10 @@ public sealed class PublicSessionStatusSpecification : Specification<Session, Se
     public override Expression<Func<Session, bool>> Criteria => StatusCriteria;
 }
 
-// The paged sessions read: the speaker scope (itself a specification, a Session.Id IN (...) filter
-// over the SessionSpeaker join) is ANDed with the public rule, never substituted for it.
+// The paged sessions read. publicSpecification is the public filter (null for a privileged caller):
+// a specification built from StatusCriteria plus a published-event scope. The speaker scope (itself a
+// specification, a Session.Id IN (...) filter over the SessionSpeaker join) is ANDed with it, never
+// substituted for it.
 return publicSpecification is null
     ? speakerResult.Value
     : publicSpecification.And(speakerResult.Value!);
@@ -120,9 +122,11 @@ return publicSpecification is null
 
 The leaked-query bug from the opening cannot happen here. Both halves of the composed query are named
 objects, not text someone retypes at every call site: the speaker scope arrives as a specification
-built by a query handler, and the public visibility rule is a type the controller always ANDs in,
-because substituting one for the other would leak non-accepted sessions to non-privileged callers (the
-composing method's own doc comment says exactly that). The criteria are server-authored, so the client
+built by a query handler, and the public visibility rule arrives the same way, built by another handler
+from the same `StatusCriteria` plus a published-event scope. For every non-privileged caller the
+controller always ANDs that rule in, because substituting one for the other would leak non-accepted
+sessions to non-privileged callers (the composing method's own doc comment says exactly that); a
+privileged caller (organizer or content editor) gets no public filter at all. The criteria are server-authored, so the client
 cannot tamper with them, and each rule is reusable and testable in isolation. This is a textbook
 Specification with security overtones: the authorization predicate is not something the request can
 override.
@@ -133,18 +137,24 @@ the entity type at the call site. Its generic constraint is deliberately the con
 `AuditableBaseEntity<TIdentifierType>` rather than an interface, because a member access declared on an
 interface is not guaranteed to map to the entity's audit column and the criteria has to stay
 EF-translatable. ADC's question-answer controllers show the intended shape: an organizer gets `null`
-(no scoping at all), and everyone else gets that specification bound to their own user id.
+(no scoping at all), and everyone else gets that specification bound to their own user id. The one
+other way to get `null` is a non-organizer whose owner claim cannot be resolved, and that caller is
+answered with a 403 by a fail-closed gate on the read endpoints, so `null` means "unscoped" only for
+the role that is allowed to read everything.
 
 ### 2. Dynamic filtering (the untrusted input)
 
 The other half of any list endpoint is user-driven shaping: the `?filter=...&sort=...&fields=...`
 querystring. This is *untrusted* and is handled completely separately. Each CLR type gets an
-`IFilterStrategy` (`StringFilterStrategy`, `IntFilterStrategy`, `DateTimeFilterStrategy`, and so on)
-that knows which operators it supports, and a `QueryFilterService` registry dispatches by type. It runs
-in two phases: `ValidateFilters` checks that the property exists on the entity and the operator is
-legal for its type *before* the query (so a bad filter is a 400, not a SQL exception), and
-`ApplyFilters` builds the `.Where()` chain. Untrusted input is allow-listed against real entity
-metadata, never concatenated blindly.
+`IFilterStrategy` (`StringFilterStrategy`, `IntFilterStrategy`, `DateTimeFilterStrategy`, and so on,
+plus one built on first use for a strongly typed identifier column) that knows which operators it
+supports, and a `QueryFilterService` registry dispatches by type. It runs in two phases:
+`ValidateFilters` checks every key and operator *before* the query (so a bad filter is a 400, not a SQL
+exception), and `ApplyFilters` builds the `.Where()` chain. Validation checks the response DTO's field
+contract before the entity: a key the client wrote must name a field the DTO declares and must not be a
+navigation path, a server-mapped path is capped in depth, the property must exist on the entity, and
+the operator must be legal for its type. Untrusted input is allow-listed against the response contract
+and real entity metadata, never concatenated blindly.
 
 The separation is deliberate and worth stating plainly: **specifications are trusted and live with the
 domain; dynamic filters are untrusted and are validated, capped, and reflection-cached at the
@@ -291,7 +301,29 @@ transactions wrap every command and query without touching a handler.
 
 *Tags: .NET, C Sharp, Software Architecture, Programming, Entity Framework*
 
-*Notes (re-verified against the current tree, 2026-09-19, MMCA.Common v1.205.0):
+*Notes (re-verified against the current tree, 2026-10-02, MMCA.Common v1.221.0; ADC, Store and
+Helpdesk read at current `main`):
+**This run's corrections:** the public visibility rule in the paged sessions read is not a
+`PublicSessionStatusSpecification` instance. `SessionsController.GetReadSpecificationAsync`
+(`MMCA.ADC/.../Conference.API/Controllers/Sessions/SessionsController.cs:75`) returns `null` for a
+privileged caller (`:78-79`) and otherwise the specification from `GetPublicSessionFilterHandler`
+(`:81-84`), which calls `CrossSourceSpecification.BuildAsync`
+(`MMCA.ADC/.../Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandler.cs:29-34`)
+with `principalPredicate: e => e.IsPublished` (`:32`) and `localPredicate:
+PublicSessionStatusSpecification.StatusCriteria` (`:34`); `BuildAsync`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:39`)
+returns an `InlineSpecification` (`:62`). The snippet comment and the prose after it were narrowed to
+that. The question-answer paragraph gained the fail-closed gate: `GetExportSpecification`
+(`MMCA.ADC/.../Conference.API/Controllers/Events/EventQuestionAnswersController.cs:107-112`) binds
+`OwnedByUserSpecification` per caller with the `Organizer` bypass, and `RequireResolvableOwner`
+(`:135`, rationale `:121-134`) answers a non-Organizer with an unresolvable owner claim with a 403;
+`SessionQuestionAnswersController.cs` has the same shape (`:107-112`, `:135`). The filtering paragraph
+gained the response-contract check: `EntityQueryService.FieldContract` is
+`QueryFieldContract.For<TEntityDTO>()` (`Application/Services/EntityQueryService.cs:123`) and is passed
+to `QueryFilterService.ValidateFilters` in Step 1 (`:301`); that overload (`QueryFilterService.cs:175`)
+validates against the contract before the entity (`:164-168`), and `IsAdmissibleKey` (`:209`, rules at
+`:195-208`) refuses a client-authored navigation path or a field the contract does not declare and caps
+server-mapped depth.
 `ISpecification<TEntity, TIdentifierType>` exposes `Criteria`
 (`Domain/Interfaces/ISpecification.cs:17`) and `IsSatisfiedBy` (`:22`); the abstract base's `Criteria`
 is a get-only abstract property (`Domain/Specifications/Specification.cs:23`) and `IsSatisfiedBy`
@@ -302,155 +334,114 @@ lazy-compiles and caches the delegate in a private field (`:27`, `:32`).
 (`var parameter = left.Parameters[0];`, `:167`), rebinds the right-hand body onto it with
 `ParameterReplacer.Replace` (`:171`), and joins the two bodies with `Expression.AndAlso`/`OrElse`
 (`:169-173`); `Negate` (`:181`) wraps the inner body in `Expression.Not` and keeps that lambda's own
-parameter (`:189-191`). No fresh parameter is created and no `Expression.Invoke` appears anywhere in
-the file. The rebinder is the internal `ExpressionVisitor` `ParameterReplacer`
+parameter (`:189-191`). The rebinder is the internal `ExpressionVisitor` `ParameterReplacer`
 (`Domain/Specifications/ParameterReplacer.cs:24`, static `Replace` with a `ReferenceEquals`
 short-circuit at `:34`/`:40`, `VisitParameter` at `:44`), shared with the Application layer through
 `InternalsVisibleTo` (`:18-23`). The portability rationale is in the XML docs at
-`Specification.cs:58-75`: substitution produces a tree indistinguishable from a hand-written predicate
-(`:60-63`), while an `InvocationExpression` "survives into the query tree, and while EF Core's
-relational providers can usually unwrap it, others (Cosmos in particular) throw at translation time"
-(`:66-69`); the per-instance caching rationale is at `:71-75` and the lazy fields themselves at
-`:88`/`:91-93`, `:112`/`:115-117`, `:134`/`:137-138`. `ParameterReplacer.cs:12-15` states the same
-avoidance. **Fluent forms:** `SpecificationExtensions`
+`Specification.cs:58-75`, the Cosmos sentence quoted in the body at `:66-69`, the per-instance caching
+rationale at `:71-75`, and the lazy fields at `:88`/`:91-93`, `:112`/`:115-117`, `:134`/`:137-138`.
+`ParameterReplacer.cs:12-15` states the same avoidance. **Fluent forms:** `SpecificationExtensions`
 (`Domain/Specifications/SpecificationExtensions.cs:30`) declares an
 `extension<TEntity, TIdentifierType>(ISpecification<...> specification)` block (`:32`) exposing `And`
-(`:48`), `Or` (`:68`), and `Not` (`:85`), each a thin factory over the corresponding combinator.
-`Website/docs-src/onboarding/group-03-querying-specifications.md:17` documents the same substitution
-mechanism and the same fluent members.
-`Website/docs-src/governance/common-ArchitectureScorecard.md` (Rubric 2, Design Patterns) cites
-Specification composition positively; its inline source anchors are not relied on here.
-**Composition call sites, five of them, in two applications, each feeding a database read:**
-(1) `MMCA.ADC/.../Conference.API/Controllers/Sessions/SessionsController.cs:129` evaluates
-`publicSpecification.And(speakerResult.Value!)` inside `BuildPagedSessionSpecificationAsync` (`:107`),
-and the result is the `specification:` argument (`:188`) of the paged `QueryService.GetAllAsync(` call
-at `:185`; the never-substitute rationale (dropping the public filter for a speaker-scoped request
-"would leak non-accepted sessions to non-privileged callers") is in that method's doc remarks at
-`:103`. (2) `.../Conference.API/Controllers/Speakers/SpeakersController.cs:174` ANDs the BR-239
-public-speaker specification with the event-scoped filter, feeding the `GetAllAsync` call at `:178` as
-its `specification:` argument at `:181`. (3)
-`.../Conference.Application/Common/PublicConferenceVisibility.cs:149` ANDs
-`PublicSessionStatusSpecification` with an `InlineSpecification` event scope (`Specification.cs:45`),
-and the composed specification itself (not its `Criteria`) feeds the spec-taking projecting
-`ListAsync` at `:154` (that helper, `GetEligibleSessionIdsAsync` at `:141`, backs
-`GetVisibleSpeakerIdsAsync` at `:104`). (4)
-`MMCA.Store/.../Catalog.API/Controllers/ReviewsController.cs:113` passes
+(`:48`), `Or` (`:68`), and `Not` (`:85`). `Website/docs-src/onboarding/group-03-querying-specifications.md:17`
+documents the same mechanism. `Website/docs-src/governance/common-ArchitectureScorecard.md` (Rubric 2)
+cites Specification composition positively; its inline anchors are not relied on here.
+**Composition call sites, five, in two applications, each feeding a database read:** (1)
+`SessionsController.cs:135` evaluates `publicSpecification.And(speakerResult.Value!)` inside
+`BuildPagedSessionSpecificationAsync` (`:113`, span `:113-135`), whose result is the `specification:`
+argument (`:195`) of the paged `QueryService.GetAllAsync(` call at `:192`; the never-substitute
+rationale is in that method's remarks at `:108-110`. (2)
+`.../Conference.API/Controllers/Speakers/SpeakersController.cs:174` ANDs the public-speaker
+specification with the event-scoped filter, feeding `GetAllAsync` at `:178` as its `specification:`
+argument at `:181`. (3) `.../Conference.Application/Common/PublicConferenceVisibility.cs:149` ANDs
+`PublicSessionStatusSpecification` with an `InlineSpecification` event scope, and the composed
+specification feeds the spec-taking projecting `ListAsync` at `:154` (in `GetEligibleSessionIdsAsync`,
+`:141`, backing `GetVisibleSpeakerIdsAsync` at `:104`). (4)
+`MMCA.Store/.../Catalog.API/Controllers/ReviewsController.cs:106` passes
 `new ReviewsByProductSpecification(productId).And(new PublishedReviewsSpecification())` as the
-`specification:` argument of the public paged reviews read (`GetAllAsync` at `:112`). (5)
-`MMCA.Store/.../Catalog.Application/Reviews/DomainEventHandlers/ProductReviewChangedHandler.cs:56`
-passes the same composed pair to the spec-taking projecting `ListAsync` (`:55`, projection
-`review => review.Rating` at `:57`) when recomputing a product's rating. The two Store specifications
-are `Catalog.Application/Reviews/Specifications/ReviewsByProductSpecification.cs:13` and
-`.../PublishedReviewsSpecification.cs` (`Criteria` override at `:17`).
-Scans of `MMCA.ADC/Source`, `MMCA.Store/Source`, and `MMCA.Helpdesk/Source` for
-`new AndSpecification`/`OrSpecification`/`NotSpecification` and for `.Or(`/`.Not(` return zero hits:
-every live composition uses the fluent `.And()`, and `Or` and `Not` have no consumer call site.
-MMCA.Helpdesk composes nothing. The specification-first `ListAsync` has three consumer call sites:
-`PublicConferenceVisibility.cs:78` (in `GetVisibleSessionIdsAsync`, `:57`) and `:154` above, plus
-`ProductReviewChangedHandler.cs:55`.
-The framework-shipped ownership scope is `OwnedByUserSpecification<TEntity, TIdentifierType>`
+`specification:` argument of `publicQueryService.GetAllAsync` (`:105`). (5)
+`MMCA.Store/.../Catalog.Application/Reviews/DomainEventHandlers/ProductReviewChangedHandler.cs:111`
+passes the same pair to the projecting `ListAsync` (`:110`, projection `review => review.Rating` at
+`:112`) inside `RecomputeAsync` (`:86`). The Store specifications are
+`Catalog.Application/Reviews/Specifications/ReviewsByProductSpecification.cs:13` and
+`.../PublishedReviewsSpecification.cs` (`Criteria` override at `:17`). Grep of `MMCA.ADC/Source`,
+`MMCA.Store/Source`, and `MMCA.Helpdesk/Source` for `.And(`/`.Or(`/`.Not(` and
+`new And|Or|NotSpecification` returns exactly those five `.And(` hits; `Or` and `Not` have no consumer
+call site and MMCA.Helpdesk composes nothing. The specification-first `ListAsync` has six consumer call
+sites: `PublicConferenceVisibility.cs:78` and `:154`, `ProductReviewChangedHandler.cs:110`,
+`Reviews/UseCases/Submit/SubmitReviewHandler.cs:43`,
+`Reviews/UseCases/Eligibility/GetReviewEligibilityHandler.cs:47`, and Store
+`Identity.Application/Users/Administration/UserAdministrationService.cs:68`.
+The snippet quotes `PublicSessionStatusSpecification`
+(`MMCA.ADC/.../Conference.Application/Sessions/Specifications/PublicSessionStatusSpecification.cs:21`,
+`StatusCriteria` `:24`, `Criteria` override `:28`); the speaker scope is the `Session.Id IN (...)`
+`InlineSpecification` built by `GetSessionsBySpeakerFilterHandler`
+(`.../Sessions/UseCases/GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterHandler.cs:42-43`).
+`OwnedByUserSpecification<TEntity, TIdentifierType>`
 (`Domain/Specifications/OwnedByUserSpecification.cs:20`), criteria `e => e.CreatedBy == UserId`
-(`:29-30`), constrained to the concrete `AuditableBaseEntity<TIdentifierType>` for EF-translatability
-(`:12-16`, `:22`); ADC binds it per caller in its event- and session-question-answer controllers
-(organizer gets `null`, everyone else gets the scope).
-The pipeline applies the composed criteria server-side as `query.Where(parameters.Criteria)`
-(`Application/Services/Query/EntityQueryPipeline.cs:74` in `ExecuteProjectedAsync` and `:149` in
-`ApplyIncludesCriteriaAndFilters`). Filtering: seven `IFilterStrategy` types
-(`String`/`Bool`/`Int`/`Long`/`DateTime`/`Decimal`/`Guid`) in the `QueryFilterService` type registry
-(`Application/Services/Filtering/QueryFilterService.cs:29-45`, entries at `:32-44`), two phases
-`ValidateFilters`/`ApplyFilters`. Pipeline: `IEntityQueryPipeline`/`EntityQueryPipeline`,
-`EntityQueryParameters<TEntity>`, `MaxUnboundedResultLimit` (1000) at `EntityQueryPipeline.cs:23`
-applied via `Take` at `:99`/`:195`/`:250`;
-`EntityQueryService<TEntity, TEntityDTO, TIdentifierType>` overloads are `public virtual`
-(`Application/Services/EntityQueryService.cs:262`, `:283`) and the source labels **three** steps, not
-four: "Step 1: Validate" at `:296` (via `Result.Combine`, `:297`), "Step 2: Execute the query pipeline"
-at `:316`, "Step 3: Shape output to requested fields" at `:363`, with `PaginationMetadata` built by
-`BuildPaginationMetadata` (`:608`, called at `:368`) and attached at `:377`. `IQueryableExecutor` is
-declared in `MMCA.Common.Application`
-(`Application/Interfaces/Infrastructure/Persistence/IQueryableExecutor.cs:7`, `Include` `:14`,
-`AsSplitQuery` `:26`, `ToListAsync` `:34`, `CountAsync` `:41`) with the EF implementation in
-Infrastructure.
-ADR-055 section verified against
-`Website/docs-src/adr/055-repository-and-specification-contract.md` and source. The read contract sits
-in `Application/Interfaces/Infrastructure/Persistence/IRepository.cs` (a `Persistence/` subfolder
-holds the persistence-facing interfaces): `IEntityReader<TEntity, TIdentifierType>` at `:21`
-(`GetByIdAsync` `:26`/`:31`, `GetByIdsAsync` `:48`, `ExistsAsync` `:56`/`:62`), `IEntityQuerier` at
-`:80` carrying the four parameter-driven reads (`GetAllAsync` `:85`, `GetProjectedAsync` `:105`,
-`GetAllForLookupAsync` `:222`, `CountAsync` `:229`/`:232`), five specification-first ones
-(`CountAsync(specification)` `:243`, `ListAsync(specification)` `:260`,
-`ListAsync<TResult>(specification, select)` `:279`, `AnyAsync(specification)` `:291`, and
-`FirstOrDefaultAsync(specification)` `:148`), the keyset-paged `GetPageByCursorAsync` `:316` whose
-optional `specification` scopes the page, and the expression-predicate members
-`FirstOrDefaultAsync(where)` `:133`, `CountByAsync` `:167`, `SumByAsync` `:184`, and
-`FindIncludingDeletedAsync` `:215`; `IReadRepository` composes both narrow halves at `:330-331` and
-alone declares `Table`/`TableNoTracking`/`TableNoTrackingSingleQuery`/`TableNoTrackingSplitQuery`
-(`:336`, `:339`, `:342`, `:345`). The build gate is
-`RawQueryableConventionTestsBase.ApplicationLayer_DoesNotUseRawQueryableSurfaces`
-(`Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/RawQueryableConventionTestsBase.cs:61`),
-scanning module Application projects for the `.Table`/`.TableNoTracking*` regex (`:103`), with the
-extraction rationale at `:5-12`/`:85`, the textual-scan limits at `:13-23`, and the `AllowedFiles`
-ratchet at `:38`/`:24-27`. Opt-in coverage is three of the four repos, each subclass sitting under a
-`Cqrs/` folder in its architecture test project: MMCA.Store subclasses with an empty `AllowedFiles`
+(`:29-30`), constrained to the concrete `AuditableBaseEntity<TIdentifierType>` (`:12-16`, `:22`).
+**Pipeline and filtering:** `query.Where(parameters.Criteria)` at
+`Application/Services/Query/EntityQueryPipeline.cs:74` and `:149`; `MaxUnboundedResultLimit` (1000) at
+`:23`, applied via `Take` at `:99`/`:195`/`:250`. `QueryFilterService` registry
+(`Application/Services/Filtering/QueryFilterService.cs:32-48`, entries `:35-47`) holds seven built-in
+strategies (`String`/`Bool`/`Int`/`Long`/`DateTime`/`Decimal`/`Guid`); an eighth,
+`StronglyTypedIdFilterStrategy` (`StronglyTypedIdFilterStrategy.cs:24`), is built on first use and
+memoized by `ResolveStrategy` (`QueryFilterService.cs:406-417`, `TryCreate` at `:414`).
+`EntityQueryService` overloads are `public virtual` (`EntityQueryService.cs:262`, `:283`); "Step 1:
+Validate" `:296` (`Result.Combine` `:297`), "Step 2: Execute the query pipeline" `:316`, "Step 3: Shape
+output to requested fields" `:363`, `BuildPaginationMetadata` `:608` (called `:368`, attached `:377`).
+`IQueryableExecutor` (`Application/Interfaces/Infrastructure/Persistence/IQueryableExecutor.cs:7`,
+`Include` `:14`, `AsSplitQuery` `:26`, `ToListAsync` `:34`, `CountAsync` `:41`); MMCA.Common.Application
+has zero `using Microsoft.EntityFrameworkCore`.
+**Read contract** (`Application/Interfaces/Infrastructure/Persistence/IRepository.cs`):
+`IEntityReader` `:21` (`GetByIdAsync` `:26`/`:31`, `GetByIdsAsync` `:48`, `ExistsAsync` `:56`/`:62`);
+`IEntityQuerier` `:80` (`GetAllAsync` `:85`, `GetProjectedAsync` `:105`, `FirstOrDefaultAsync(where)`
+`:134`, `FirstOrDefaultAsync(specification)` `:150`, `CountByAsync` `:169`, `SumByAsync` `:186`,
+`FindIncludingDeletedAsync` `:217`, `GetAllForLookupAsync` `:224`, `CountAsync` `:231`/`:234`,
+`CountAsync(specification)` `:245`, `ListAsync(specification)` `:262`, `ListAsync<TResult>` `:281`,
+`AnyAsync` `:293`, `GetPageByCursorAsync` `:318`); the two `FirstOrDefaultAsync` overloads carry RS0026
+suppressions at `:133`/`:149`. `IReadRepository` `:332` composes both halves and alone declares
+`Table`/`TableNoTracking`/`TableNoTrackingSingleQuery`/`TableNoTrackingSplitQuery` (`:338`, `:341`,
+`:344`, `:347`). `IUnitOfWork` hands out only the composites (`IUnitOfWork.cs:19`, `:29`); the
+container registers only the open generic `IRepository<,>`
+(`Infrastructure/DependencyInjection.cs:128`); `UnitOfWork.GetReadRepository` (`:53`) resolves and
+caches in `_repositories` (`:23`, `:57-64`).
+**Build gate:** `RawQueryableConventionTestsBase.ApplicationLayer_DoesNotUseRawQueryableSurfaces`
+(`Hosting/MMCA.Common.Testing.Architecture/Bases/Cqrs/RawQueryableConventionTestsBase.cs:61`), regex
+`:103`, rationale `:5-12`/`:85`, textual-scan limits `:13-23`, `AllowedFiles` ratchet `:38`/`:24-27`.
+Subclasses: MMCA.Store with an empty `AllowedFiles`
 (`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:9`,
-`:14`), alongside MMCA.Common
-(`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:13`,
-`AllowedFiles` at `:25` with six exempt files at `:28-36`) and MMCA.ADC
+`:14`), MMCA.Common (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:13`,
+`:25`, six files `:28-36`), MMCA.ADC
 (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/Cqrs/RawQueryableConventionTests.cs:11`,
-`AllowedFiles` at `:33` with nine exempt files at `:37-57`); only MMCA.Helpdesk has no subclass.
-ADR-055 states the three-repo opt-in in its Decision and restates it as the partial-coverage
-trade-off. The repository-resolution mechanics are in `Infrastructure/Persistence/UnitOfWork.cs`:
-`GetReadRepository` (`:53`) resolves the entity's data source key, gets the matching `DbContext`, and
-creates the repository (`:60-62`), caching it in the per-scope `_repositories` dictionary (`:23`,
-`:57-64`) so the same entity reuses one instance.
+`:33`, nine files `:37-57`); MMCA.Helpdesk has no subclass.
 **Editorial removal (carried forward):** the two adoption-status passages (the "honest part"
 paragraphs in the contract section and the "Half the composition surface still has no consumer"
-trade-off) were removed from the article body at the author's direction, along with the recap clause
-that echoed them. The consumption facts stay in this ledger as verified source state; do not re-add
-the passages on a future pass.
-**Consumption of the narrow interfaces:** a four-repo `.cs` scan for `IEntityReader`/`IEntityQuerier`
-finds dependents in all three consumer applications, every one of them a helper parameter or a local
-that only reads. MMCA.ADC: twenty declarations across thirteen files, among them
-`Conference.Application/Common/PublicConferenceVisibility.cs:40`, `:75`, `:126`, `:151`,
-`Conference.Application/SessionAssets/SessionAssetAccessService.cs:32`, `:65`, `:92`, `:125`,
-`Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:149` and `:186`,
-`Conference.Application/Sessions/Validation/SessionRoomScheduling.cs:45`,
-`Engagement.Application/SessionQuestions/UseCases/ToggleUpvote/ToggleUpvoteHandler.cs:107`,
-`Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:107`,
-`Engagement.Application/CheckIns/Services/CheckInProcessor.cs:202`, and
-`Engagement.Application/Points/UseCases/SetLeaderboardParticipation/SetLeaderboardParticipationHandler.cs:120`.
-MMCA.Store carries four on `main`:
-`Identity.Application/Customers/CustomerService.cs:14`,
-`Identity.Application/Users/AuthenticationService.cs:50`,
-`Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:96`, and
-`Catalog.Application/Categories/UseCases/AssignParentCategory/CategoryAssignParentUpdateHandler.cs:98`;
-`Catalog.Application/Products/ProductVariantService.cs` deliberately stays `IReadRepository`, because
-it calls members of both narrow halves. MMCA.Helpdesk carries one,
-`Tickets.Application/Tickets/UseCases/GetById/GetTicketByIdHandler.cs:24`, typed narrow with the
-reason in the comment above it (`:22`). (Store's holders reached `main` through PR #93, the v1.159.0
-sweep, not the earlier PR #92, which was closed unmerged.)
-The wiring is unchanged and the article says so: `IUnitOfWork` still hands out only the composites
-(`Application/Interfaces/Infrastructure/Persistence/IUnitOfWork.cs:19`, `:29`), the container still
-registers only the open generic `IRepository<,>` (`Infrastructure/DependencyInjection.cs:107`), and
-every narrowed holder is assigned from `GetReadRepository<...>()` by implicit reference conversion, so
-nothing constructor-injects a narrow interface. Both ADC and Store also wrote the convention into
-their own `CLAUDE.md`: read-only holders take `IEntityQuerier<,>`/`IEntityReader<,>` from
-`IUnitOfWork.GetReadRepository<>()`, compose with `.And()`/`.Or()`/`.Not()` rather than the combinator
-types, and pass a specification to the spec-taking members instead of unwrapping `.Criteria`.
-**ADR-055 state:** it carries the 2026-08-18 revision (`:285`: composition drops `Expression.Invoke`,
-the fluent members, the specification-first reads), the 2026-08-21 revision (`:448`: the first
-production consumers and the deliberately unchanged registration surface), and a 2026-08-31 revision
-(`:499`) whose "The querier carries five more members" section (`:503`) covers the aggregates and
-`FirstOrDefaultAsync` overloads above and whose "MMCA.Helpdesk narrows too" section (`:530`) records
-the third consumer. Its Status block notes at `:34` that the Store adoption, recorded as staged in the
-2026-08-21 revision, merged to `main` on 2026-08-22. Article and ADR agree; both follow source.
-The specification snippet quotes shipped code:
-`PublicSessionStatusSpecification` is
-`MMCA.ADC/.../Conference.Application/Sessions/Specifications/PublicSessionStatusSpecification.cs:20`
-(`StatusCriteria` `:23`, `Criteria` override `:27`); the ANDed composition is
-`SessionsController.BuildPagedSessionSpecificationAsync`
-(`MMCA.ADC/.../Conference.API/Controllers/Sessions/SessionsController.cs:107-129`) in its fluent
-`publicSpecification.And(speakerResult.Value!)` form at `:129`; the speaker scope is the
-`Session.Id IN (...)` `InlineSpecification` built by `GetSessionsBySpeakerFilterHandler`
-(`MMCA.ADC/.../Sessions/UseCases/GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterHandler.cs:42-43`).*
+trade-off) were removed from the body at the author's direction, along with the recap clause that
+echoed them. Do not re-add them on a future pass.
+**Consumption of the narrow interfaces:** MMCA.ADC declares `IEntityReader`/`IEntityQuerier` 40 times
+across 23 Application files (Grep count), among them `PublicConferenceVisibility.cs:40`, `:75`,
+`:126`, `:151`, `SessionAssetAccessService.cs:32`, `:65`, `:92`, `:125`,
+`Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:149`/`:186`,
+`SessionRoomScheduling.cs:45`, `Engagement.Application/SessionQuestions/UseCases/ToggleUpvote/ToggleUpvoteHandler.cs:150`,
+`LivePolls/UseCases/CastVote/CastVoteHandler.cs:123`/`:144`,
+`Points/UseCases/SetLeaderboardParticipation/SetLeaderboardParticipationHandler.cs:145`, and
+`CheckIns/Services/CheckInProcessor.cs:202`. MMCA.Store carries four:
+`Identity.Application/Customers/CustomerService.cs:14` and `Identity.Application/Users/AuthenticationService.cs:49`
+(both private readonly fields assigned from `GetReadRepository`),
+`Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs:131` and
+`Catalog.Application/Categories/UseCases/AssignParentCategory/CategoryAssignParentUpdateHandler.cs:98`
+(helper parameters). MMCA.Helpdesk carries one,
+`Tickets.Application/Tickets/UseCases/GetById/GetTicketByIdHandler.cs:24`, with its reason at `:22`.
+Every holder is assigned from `GetReadRepository<...>()` by implicit reference conversion; nothing
+constructor-injects a narrow interface. The read-only/compose convention lives in each consumer's
+`AGENTS.md` (`MMCA.ADC/AGENTS.md:106`, `MMCA.Store/AGENTS.md:105`), which each `CLAUDE.md` imports
+(`@AGENTS.md`, line 3).
+**ADR-055 state:** `Website/docs-src/adr/055-repository-and-specification-contract.md` carries the
+2026-08-18 revision (`:295`), the 2026-08-21 revision (`:458`), the 2026-08-31 revision (`:509`, "The
+querier carries five more members" `:513`, "MMCA.Helpdesk narrows too" `:540`), and a 2026-10-01
+revision (`:564`) recording the 40-site/23-file ADC count and the five composing call sites; Status
+block `:34`. The ADR cites Store `AuthenticationService.cs:54` (`:193`, `:572`) where source is `:49`:
+an ADR anchor drift, reported for `/update-adrs`, not followed here.*
 
 - Full series index: https://ivanball.github.io/writing.html

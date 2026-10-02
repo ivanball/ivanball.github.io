@@ -197,7 +197,7 @@
           startup. The clever part is collapse: a host with no <code>DataSources</code> configuration collapses every
           logical name onto a single <code>Default</code> source, so it behaves <strong>exactly</strong> like a single-database
           monolith (one context, one change tracker, foreign keys intact). Point one config entry at a separate
-          database and that module&#39;s data is now physically isolated, with no code change. This is the deep-dive
+          database and that module&#39;s data is physically isolated, with no code change. This is the deep-dive
           of its own article; the point here is that the data boundary exists from day one and costs nothing
           until you use it.</p>
           <h3 id="2-a-transport-agnostic-message-bus">2. A transport-agnostic message bus</h3>
@@ -224,10 +224,13 @@
           root just does <code>services.Replace(...)</code> to swap one for the other. The calling code never learns which
           it got.</p>
           <p>The error model survives the hop too. On the server, <code>GrpcResultExceptionInterceptor</code> turns a failed
-          <code>Result</code> (raised as a <code>ResultFailureException</code>) into an <code>RpcException</code> carrying the errors, and the typed
-          client adapter reconstructs <code>Result.Failure(errors)</code> from the trailers, so callers keep
-          programming against <code>Result&lt;T&gt;</code> whether the answer came from an object or a network round-trip. This
-          is &quot;Result over the wire,&quot; and it is why the wire hop does not poison your error handling.</p>
+          <code>Result</code> (raised as a <code>ResultFailureException</code>) into an <code>RpcException</code> carrying the errors as
+          structured trailers. On the client, an adapter whose interface returns a <code>Result</code> catches that
+          <code>RpcException</code> and calls <code>ToResult()</code> (or <code>ToResult&lt;T&gt;()</code>), which rebuilds <code>Result.Failure(errors)</code>
+          from the trailers and degrades a bare transport fault (a reset connection, a missed deadline) to a
+          single failure carrying the RPC detail. Callers keep programming against <code>Result&lt;T&gt;</code> whether the
+          answer came from an object or a network round-trip. This is &quot;Result over the wire,&quot; and it is why
+          the wire hop does not poison your error handling.</p>
           <h3 id="4-federated-auth-a-gateway-and-aspire-hosting-adr-008">4. Federated auth, a gateway, and Aspire hosting (ADR-008)</h3>
           <p>The last leak is everything around the services. Cross-service auth uses JWKS, not a shared secret:
           <code>IJwksProvider</code> (<code>RsaJwksProvider</code>) exposes signing keys, and <code>JwksEndpointExtensions</code> serves
@@ -243,11 +246,12 @@
           <h2 id="what-the-boundary-looks-like-in-code">What the boundary looks like in code</h2>
           <p>The whole thesis fits in one DI swap. The same handler depends on the same interface; only the
           registration line differs between the two topologies.</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Application/Domain code depends ONLY on the interface. It never sees the transport.</span>
-<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">GetSessionBookmarkCountHandler</span>(<span class="hljs-params">IBookmarkCountService counts</span>)</span>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Application code depends ONLY on the interface. It never sees the transport.</span>
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">GetSessionBookmarkCountHandler</span>(<span class="hljs-params">
+    IBookmarkCountService bookmarkCountService</span>) : IQueryHandler&lt;GetSessionBookmarkCountQuery, Result&lt;<span class="hljs-built_in">int</span>&gt;&gt;</span>
 {
-    <span class="hljs-comment">// ... calls counts.GetBookmarkCountForSessionAsync(sessionId), which returns a plain int (Task&lt;int&gt;);</span>
-    <span class="hljs-comment">// the handler wraps that count as Result.Success(count) and returns Result&lt;int&gt;.</span>
+    <span class="hljs-comment">// ... var count = await bookmarkCountService.GetBookmarkCountForSessionAsync(query.SessionId, cancellationToken);</span>
+    <span class="hljs-comment">//     return Result.Success(count);   // the interface returns a plain Task&lt;int&gt;; the handler returns Result&lt;int&gt;</span>
 }
 
 <span class="hljs-comment">// MONOLITH host: the real in-process implementation is registered (peer module enabled).</span>

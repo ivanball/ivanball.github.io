@@ -212,11 +212,13 @@
           </ol>
           <p>Manufacturing that typed failure is the one subtle piece. <code>TResult</code> is unconstrained (it is <code>Result</code> for
           some handlers and <code>Result&lt;T&gt;</code> for others), so the decorator cannot just <code>new</code> up a failure. It holds a
-          cached delegate, <code>CreateFailure</code>, built once per closed generic type via <code>ResultFailureFactory.Build</code>
+          static delegate field, <code>_createFailure</code> (<code>FeatureGateCommandDecorator.cs:38</code>), filled once per closed
+          generic type by the <code>CreateFailure()</code> accessor through <code>ResultFailureFactory.Build</code>
           (<code>FeatureGateCommandDecorator.cs:44-45</code>), which turns an error list into the right <code>TResult</code> failure with no
-          per-call reflection.</p>
+          per-call reflection. The field is built on the first short-circuit, not eagerly, so the happy path never
+          touches it (<code>FeatureGateCommandDecorator.cs:29-37</code>).</p>
           <p>The last, load-bearing detail is where the decorator sits. In <code>AddApplicationDecorators</code> the feature gate
-          is registered last on both sides (<code>DependencyInjection.cs:143</code> for commands, <code>:151</code> for queries). Because
+          is registered last on both sides (<code>DependencyInjection.cs:140</code> for commands, <code>:148</code> for queries). Because
           the pipeline applies decorators in reverse registration order (ADR-014), last-registered is outermost, so
           the feature gate is the first decorator every request meets. A command runs feature gate, authorization,
           logging, caching, validation, timeout, transaction, handler; a query runs feature gate, authorization,
@@ -264,7 +266,9 @@
           = <code>&quot;Sales.PaymentVerification&quot;</code> (<code>SalesFeatures.cs:23</code>), <code>ConferenceFeatures.SessionizeIntegration</code> =
           <code>&quot;Conference.SessionizeIntegration&quot;</code> (<code>ConferenceFeatures.cs:23</code>), <code>NotificationFeatures.PushNotifications</code>
           = <code>&quot;Notification.PushNotifications&quot;</code> (<code>NotificationFeatures.cs:12</code>). ADC&#39;s <code>RefreshFromSessionizeCommand</code>
-          gates the Sessionize sync this way (<code>RefreshFromSessionizeCommand.cs:13,19</code>); Store&#39;s <code>VerifyPaymentCommand</code>
+          gates the Sessionize sync this way (<code>RefreshFromSessionizeCommand.cs:15,21</code>), ADC&#39;s
+          <code>ScoreEventSessionsInternalCommand</code> gates the paid AI session-scoring pass
+          (<code>ScoreEventSessionsInternalCommand.cs:39,48</code>), and Store&#39;s <code>VerifyPaymentCommand</code>
           gates the direct Stripe verification path (<code>VerifyPaymentCommand.cs:20,35</code>).</p>
           <h2 id="the-second-surface-and-why-disabled-means-404">The second surface, and why disabled means 404</h2>
           <p>A feature can be reachable from the CQRS pipeline, but it can also be reachable straight from an MVC
@@ -278,9 +282,12 @@
           <code>404 Not Found</code> and the title <code>&quot;Feature not available&quot;</code> (<code>DisabledFeatureHandler.cs:18-26</code>).</p>
           <p>Both surfaces agree on one convention that is worth stating plainly: a disabled feature returns
           not-found, never <code>403 Forbidden</code>. The pipeline decorator short-circuits with <code>ErrorType.NotFound</code>; the
-          edge handler returns <code>404</code>. A disabled feature is therefore indistinguishable from a nonexistent one. That
-          is deliberate: <code>404</code> hides the feature&#39;s existence rather than advertising a capability the caller is not
-          allowed to use. Turning a flag off makes the feature vanish, not merely refuse.</p>
+          edge handler returns <code>404</code>. Neither answer looks like a permissions problem, but neither body is
+          anonymous either (ADR-031). The edge body is titled &quot;Feature not available&quot; (<code>DisabledFeatureHandler.cs:21</code>).
+          The CQRS failure travels through the Result to ProblemDetails mapping, whose <code>errors</code> extension serializes
+          each error&#39;s code and message (<code>ErrorHttpMapping.cs:62-69</code>), so the caller sees the <code>Feature.Disabled</code> code
+          and a message naming the flag (<code>FeatureGateCommandDecorator.cs:57-59</code>). Turning a flag off makes the
+          feature answer not-found and say that a feature is unavailable, not report a locked door.</p>
           <h2 id="trade-offs-honestly">Trade-offs, honestly</h2>
           <ul>
           <li><strong>The two surfaces must be kept in agreement by hand.</strong> Gating the controller but not the command (or
@@ -317,10 +324,16 @@
           (<code>AuthClaimTypes.Subject</code>, <code>AuthClaimTypes.cs:34</code>) and falls back to the mapped
           <code>ClaimTypes.NameIdentifier</code> (<code>ClaimsPrincipalExtensions.cs:26-28</code>) and then to <code>Identity.Name</code>. A filter
           configured with no targeting audience gains no stickiness from the accessor at all.</li>
-          <li><strong>It is opt-in, and the pipeline side is adopted narrowly.</strong> Exactly two use cases implement
-          <code>IFeatureGated</code> across both apps, both of them commands: ADC&#39;s <code>RefreshFromSessionizeCommand</code>
-          (<code>RefreshFromSessionizeCommand.cs:13</code>) and Store&#39;s <code>VerifyPaymentCommand</code> (<code>VerifyPaymentCommand.cs:20</code>).
-          No query is gated. The flag inventory is wider than the pipeline usage: twelve flag-name constants
+          <li><strong>It is opt-in, and the pipeline side is adopted narrowly.</strong> Three use cases implement
+          <code>IFeatureGated</code> across both apps, all of them commands: ADC&#39;s <code>RefreshFromSessionizeCommand</code>
+          (<code>RefreshFromSessionizeCommand.cs:15</code>) and <code>ScoreEventSessionsInternalCommand</code>
+          (<code>ScoreEventSessionsInternalCommand.cs:39</code>), and Store&#39;s <code>VerifyPaymentCommand</code> (<code>VerifyPaymentCommand.cs:20</code>).
+          The scoring command is a durable internal command that the framework&#39;s processor runs through the same
+          decorator pipeline, so with its flag off the gate&#39;s failure completes the queued row rather than retrying
+          it (<code>ScoreEventSessionsInternalCommand.cs:42-46</code>); its trigger endpoint also carries
+          <code>[FeatureGate(ConferenceFeatures.SessionScoring)]</code> (<code>SessionSelectionController.cs:125</code>), so that flag is
+          enforced at both surfaces. No query is gated. The flag inventory is wider than the pipeline usage:
+          thirteen flag-name constants
           across six <code>*Features</code> classes (Common&#39;s Notifications and Privacy, ADC&#39;s Conference and Engagement,
           Store&#39;s Catalog and Sales), every one of them annotated <code>Permanent</code>, with the rest enforced at the HTTP
           edge by <code>[FeatureGate]</code>. It is a capability the pipeline offers uniformly, not something every handler
@@ -338,14 +351,15 @@
           validation, or a transaction. The cheapest request is the one you decline first.</li>
           <li><strong>Manufacture a typed failure</strong>, do not throw, when the flag is off. In a Result-based codebase that is
           a not-found value flowing back through the pipeline; the caller translates it to a <code>404</code>.</li>
-          <li><strong>Return not-found, never forbidden</strong>, for a disabled feature, so turning a flag off hides the feature
-          rather than announcing a capability behind a locked door.</li>
+          <li><strong>Return not-found, never forbidden</strong>, for a disabled feature, and say in the body that the feature is
+          unavailable, so turning a flag off reads as &quot;not here right now&quot; rather than a capability behind a locked door.</li>
           <li><strong>Name flags as constants next to the module</strong> they belong to, matched to config keys, so a flag flips
           at config-and-restart and there are no magic strings in handlers.</li>
           </ol>
           <p>The takeaway: <strong>a feature flag is a cross-cutting concern, so put it where the other cross-cutting concerns
           live. Gate the pipeline at its outermost edge with a one-property marker interface, and your handlers stay
-          flag-free, your kill switch rejects with zero wasted work, and a disabled feature simply is not there.</strong></p>
+          flag-free, your kill switch rejects with zero wasted work, and a disabled feature answers not-found before
+          any of it runs.</strong></p>
           <hr>
           <p><strong>What we covered:</strong> why a flag check inside a handler is a copy-paste cross-cutting concern, how
           <code>IFeatureGated</code> plus the outermost <code>FeatureGateCommandDecorator</code> / <code>FeatureGateQueryDecorator</code> gate

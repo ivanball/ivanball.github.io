@@ -173,7 +173,7 @@
           that declares its own dependencies so the host can assemble everything in the right order.</p>
           <p>The framework ships a <code>dotnet new</code> pack, so you type none of that plumbing (ADR-065). Hand-rolling it
           costs a day before you write a line of business logic, and ADR-065 measures that starting cost against
-          the framework&#39;s reference app: 12 projects, 133 files, and 10,662 lines of plumbing, an 827-line
+          the framework&#39;s reference app: 12 projects, 136 files, and 11,532 lines of plumbing, an 827-line
           <code>.editorconfig</code> among them, plus the 100-line <code>Directory.Packages.props</code> that carries every package pin
           (58 of them in the seed today), several of those lines load-bearing in ways nothing tells you about
           until much later.</p>
@@ -203,27 +203,31 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
           <p>Three names, all independent: the solution (also your root namespace), the first module in plural
           PascalCase, and its aggregate root in singular PascalCase. Everything derived from them follows, from
           the routes and the identifier alias to the cache-key prefix and the Blazor pages.</p>
-          <p>You get twelve projects: five module layers, a REST API host, a Blazor Server and MudBlazor UI host, an
-          Aspire AppHost, a per-database migrations project, and three test projects. The aggregate arrives fully
-          worked, in the same shape the rest of this article explains.</p>
+          <p>You get twelve projects in the default shape: five module layers, a REST API host, a Blazor Server and
+          MudBlazor UI host, an Aspire AppHost (<code>--no-aspire</code> leaves it out), a per-database migrations project,
+          and three test projects. The aggregate arrives fully worked, in the same shape the rest of this article
+          explains.</p>
           <p>Get that green <strong>before</strong> you change anything. It is the line you bisect against later, and if it is
           not green that is a template bug rather than yours: the pack is generated from the framework&#39;s runnable
-          reference app, and a smoke job builds two generated solutions in package mode on every change.</p>
-          <p>Two things the scaffold deliberately refuses to hand over, because a rename or a shape flag
-          invalidates them and no fixed value is right for every name you could pick.</p>
-          <p>The first is <strong>declaration order, plus one constructor shape</strong>. Three analyzer rules, and only three,
-          ship dropped to <code>suggestion</code> in a marked block appended to the <em>staged</em> <code>.editorconfig</code>; every other
-          analyzer stays at error. <code>SA1210</code> cannot sort your namespace against <code>MMCA.Common.*</code> without knowing
-          your name: an app namespace sorts above it for <code>Contoso.Support</code> and below it for <code>Zeta.App</code>, so no
-          checked-in order survives both. <code>SA1211</code> is the same story one level down, on the identifier-alias
-          file whose aliases re-sort when a shape flag renames them. <code>IDE0021</code> is the flags rather than the
-          renames: the aggregate&#39;s private constructor assigns one property per optional axis, so
-          <code>--no-status --no-description --no-owner</code> together leave it with a single statement, which the
-          baseline then wants as an expression body.</p>
-          <p>The second is <strong>your integration-event wire contract</strong>: a freeze inherited from someone else&#39;s sample
-          module guarantees nothing. All of it is one-time, and the generated README carries the exact commands
-          (one <code>dotnet format analyzers</code> run restores the two ordering rules; <code>IDE0021</code> is not fixable that way,
-          so you fold the constructor by hand and delete the line).</p>
+          reference app, and a <code>template-smoke</code> CI job generates three solutions from it (two module shapes and
+          one SQLite solution without an AppHost) and builds and tests each in package mode.</p>
+          <p>One thing the scaffold deliberately does not hand over, because a rename or a shape flag invalidates
+          it and no fixed value is right for every name you could pick: <strong>declaration order, plus one
+          constructor shape</strong>. Three analyzer rules, and only three, ship dropped to <code>suggestion</code> in a marked
+          block appended to the <em>staged</em> <code>.editorconfig</code>; every other analyzer stays at error. <code>SA1210</code> cannot
+          sort your namespace against <code>MMCA.Common.*</code> without knowing your name: an app namespace sorts above it
+          for <code>Contoso.Support</code> and below it for <code>Zeta.App</code>, so no checked-in order survives both. <code>SA1211</code> is
+          the same story one level down, on the identifier-alias file whose aliases re-sort when a shape flag
+          renames them. <code>IDE0021</code> is the flags rather than the renames: the aggregate&#39;s private constructor
+          assigns one property per optional axis, so <code>--no-status --no-description --no-owner</code> together leave it
+          with a single statement, which the baseline then wants as an expression body. It is one-time, and the
+          generated README carries the exact commands (one <code>dotnet format analyzers</code> run restores the two
+          ordering rules; <code>IDE0021</code> is not fixable that way, so you fold the constructor by hand and delete the
+          line).</p>
+          <p>Your integration-event wire contract is not on that list: it arrives already frozen. The generated
+          <code>IntegrationEventContractTests</code> holds your own event, under the names you scaffolded with, and passes
+          on the first run. When you add or reshape an event on purpose, you version it and update
+          <code>ExpectedContract</code> in the same commit.</p>
           <p>Now the part worth reading.</p>
           <h2 id="step-1-define-the-aggregate-with-a-private-constructor-and-a-result-factory">Step 1: define the aggregate with a private constructor and a <code>Result</code> factory</h2>
           <p>Open the Domain layer of the module you just generated (<code>Source/Modules/Orders/...Orders.Domain/</code>), or
@@ -372,36 +376,52 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx  
     }
 }</code></pre>
           <p><code>Dependencies</code> is what lets the framework do something genuinely useful: <code>ModuleLoader</code> discovers every
-          <code>IModule</code> and registers them in <strong>topological order</strong> (Kahn&#39;s algorithm) based on declared dependencies,
-          so a module is always wired after the modules it depends on. <code>ModulesSettings</code> (the <code>&quot;Modules&quot;</code> config
-          section) can disable a module; disabled modules receive stub registrations so cross-module interfaces
-          stay resolvable. That last detail is the extraction boundary: a module that depends on a now-remote module
-          keeps compiling and resolving because the stub stands in until a gRPC client takes over.</p>
+          <code>IModule</code> in the assemblies the host names and registers them in <strong>topological order</strong> (Kahn&#39;s
+          algorithm) based on declared dependencies, so a module is always wired after the modules it depends on.
+          <code>ModulesSettings</code> (the <code>&quot;Modules&quot;</code> config section) can disable a module; disabled modules receive stub
+          registrations so cross-module interfaces stay resolvable. That last detail is the extraction boundary: a
+          module that depends on a now-remote module keeps compiling and resolving because the stub stands in
+          until a gRPC client takes over.</p>
           <h2 id="step-6-register-in-the-exact-di-sequence">Step 6: register in the exact DI sequence</h2>
           <p>This is the step the most experienced developers still get wrong, because one ordering rule is
           load-bearing. <code>AddApplicationDecorators()</code> must run after every module&#39;s handler scan, because Scrutor&#39;s
           <code>TryDecorate</code> can only wrap handlers that are already registered. That is the only constraint that
-          matters here. The relative position of <code>AddInfrastructure</code> and <code>AddAPI</code> is not load-bearing: DI
-          dependencies resolve at runtime, not at registration time, so the infrastructure that backs the
-          decorated handlers can be registered before or after them. The framework documents the sequence this
-          way:</p>
-          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Host composition root</span>
-services.AddApplication()                              <span class="hljs-comment">// core services, event dispatcher</span>
-    .AddInfrastructure(configuration)                     <span class="hljs-comment">// repos, UoW, DbContexts, caching, outbox</span>
-    .AddAPI(modulesSettings)                              <span class="hljs-comment">// controllers, idempotency, exception handlers</span>
-    .ScanModuleApplicationServices&lt;PromotionsClassRef&gt;()  <span class="hljs-comment">// this module&#x27;s handlers, validators, mappers</span>
-    .ScanModuleApplicationServices&lt;SalesClassRef&gt;()       <span class="hljs-comment">// another module</span>
-    .AddApplicationDecorators();                          <span class="hljs-comment">// MUST be last: Scrutor wraps existing handlers</span></code></pre>
+          matters here. Registrations that are not handlers (infrastructure, API, telemetry, options) can sit on
+          either side of it: DI dependencies resolve at runtime, not at registration time, so the infrastructure
+          that backs the decorated handlers can be registered before or after them. The generated host spells the
+          sequence out by hand:</p>
+          <pre class="doc-pre" tabindex="0" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Host composition root: the generated Web/Program.cs, abridged (representative module names)</span>
+services.AddApplication();                              <span class="hljs-comment">// core services, event dispatcher</span>
+services.AddInfrastructure(builder.Configuration);      <span class="hljs-comment">// repos, UoW, DbContexts, caching, outbox</span>
+services.AddAPI(modulesSettings);                       <span class="hljs-comment">// controllers, idempotency, exception handlers</span>
+services.AddErrorResources&lt;OrdersErrorResources&gt;();     <span class="hljs-comment">// one per module: error-code translations</span>
+services.AddErrorResources&lt;PromotionsErrorResources&gt;();
+
+moduleLoader.DiscoverAndRegister(
+    services, builder.Configuration, applicationSettings, modulesSettings,
+    builder.Environment.EnvironmentName,
+    [<span class="hljs-meta">typeof(OrdersModule).Assembly, typeof(PromotionsModule).Assembly</span>]); <span class="hljs-comment">// each module scans itself</span>
+
+services.AddBrokerMessaging(builder.Configuration);
+services.AddApplicationDecorators();                    <span class="hljs-comment">// MUST be last: Scrutor wraps existing handlers</span></code></pre>
           <p>The rules embedded in that order:</p>
           <ul>
-          <li><strong><code>ScanModuleApplicationServices&lt;TMarker&gt;()</code></strong> runs once per module. It auto-registers that module&#39;s
-          domain-event handlers (singleton), DTO and request mappers (scoped), command and query handlers
-          (scoped), and FluentValidation validators. This is why you did not register the validator from Step 4
-          or the handler from Step 3 by hand: convention scanning found them by the marker type&#39;s assembly.</li>
+          <li><strong><code>ScanModuleApplicationServices&lt;TMarker&gt;()</code></strong> runs once per module, from inside that module&#39;s own
+          registration, which <code>ModuleLoader</code> reaches through the module&#39;s <code>Register</code>. It auto-registers that
+          module&#39;s domain-event and integration-event handlers (singleton), DTO and request mappers, DTO
+          projectors and update appliers (scoped), command and query handlers (scoped), and FluentValidation
+          validators. This is why you did not register the validator from Step 4 or the handler from Step 3 by
+          hand: convention scanning found them by the marker type&#39;s assembly.</li>
           <li><strong><code>AddApplicationDecorators()</code> must be last</strong> of the Application registrations. It uses Scrutor&#39;s
-          <code>TryDecorate</code> to wrap every already-registered handler. If you call it before a module&#39;s
-          <code>ScanModuleApplicationServices</code>, that module&#39;s handlers are registered too late to be wrapped, and
-          they silently run undecorated. No transactions, no caching, no logging, and no error to tell you.</li>
+          <code>TryDecorate</code> to wrap every already-registered handler, then <strong>seals</strong> the pipeline. A module scan
+          that runs after the seal throws an <code>InvalidOperationException</code> naming the call, so a misplaced scan
+          fails at startup instead of running undecorated. A handler registered by hand after the seal is the
+          one case that still slips through: it runs with no transactions, no caching, no logging, and no error
+          to tell you.</li>
+          <li><strong><code>AddMmcaApplicationPipeline(pipeline =&gt; ...)</code></strong> is the framework&#39;s preferred form of the same
+          sequence: it runs <code>AddApplication()</code>, then your callback (module scans, a <code>ModuleLoader</code> run, broker
+          wiring), then <code>AddApplicationDecorators()</code>, so the handler registrations cannot land on the wrong side
+          of the decorators. The generated host keeps the explicit calls shown above.</li>
           </ul>
           <h2 id="step-7-watch-the-decorator-pipeline-kick-in-for-free">Step 7: watch the decorator pipeline kick in, for free</h2>
           <p>With the sequence correct, every command and query handler is now wrapped, in this execution order:</p>
@@ -413,8 +433,8 @@ Queries:  FeatureGate -&gt; Authorization -&gt; Logging -&gt; Caching -&gt; Vali
           query is turned off.</li>
           <li><strong>Authorization</strong> comes next, and sits outside caching on purpose. Commands and queries that
           implement <code>IRequiresPermission</code> are checked against the permission registry for the current user&#39;s
-          roles, and a denial short-circuits with a <code>Forbidden</code> error, so a denied query never reads from or
-          populates the cache.</li>
+          roles (and those that implement <code>IRequiresMfa</code> against the <code>mfa</code> claim), and a denial short-circuits
+          with a <code>Forbidden</code> error, so a denied query never reads from or populates the cache.</li>
           <li><strong>Logging</strong> records the full pipeline duration via <code>ICorrelationContext</code>, for every handler, with no
           per-handler code.</li>
           <li><strong>Caching</strong> runs for queries that implement <code>IQueryCacheable</code> (supplying <code>CacheKey</code> + <code>CacheDuration</code>),
@@ -471,8 +491,10 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <li><strong>Architecture map.</strong> Five lines in your <code>*ArchitectureMap.cs</code>, one per layer. <strong>A module missing
           from the map is silently not covered by the layering and isolation rules.</strong> No error, no warning:
           the rules simply stop watching the code you just added.</li>
-          <li><strong>Host.</strong> One <code>services.AddErrorResources&lt;BillingErrorResources&gt;();</code> next to the existing ones.
-          <code>ModuleLoader</code> discovers the <code>IModule</code> from Step 5 itself, so nothing else needs registering.</li>
+          <li><strong>Host.</strong> Two edits in the Web host&#39;s <code>Program.cs</code>. Add <code>typeof(BillingModule).Assembly</code> to the
+          list handed to <code>ModuleLoader.DiscoverAndRegister</code>: discovery scans only the assemblies the host
+          names, so a module left out of that list registers nothing. Then add one
+          <code>services.AddErrorResources&lt;BillingErrorResources&gt;();</code> next to the existing ones.</li>
           <li><strong>Database.</strong> The module gets its own: an <code>AddDatabase</code> / <code>WithSQLServerDataSource</code> pair in the
           AppHost, <code>Modules</code> / <code>DataSources</code> / <code>Outbox</code> entries in the Web host&#39;s <code>appsettings.json</code>, and the
           deletion of the now-conflicting top-level <code>SQLServerMigrationsAssembly</code>. Every module database
@@ -481,16 +503,19 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           calls.</li>
           <li><strong>First migration.</strong> <code>dotnet ef migrations add InitialCreate</code> against the new migrations project.</li>
           </ol>
-          <p>The first two are what make it compile, so they fail loudly. Numbers three and four do not, which is
-          why they are worth reading twice. And the honest reading of the script is not that the wire-ups
-          stopped mattering: it is that the one code path CI exercises now applies them for you, on a solution
-          the template generated.</p>
+          <p>The first two are what make it compile, so they fail loudly. Numbers three and four do not, and neither
+          does the module-assembly half of number five, which is why they are worth reading twice. And the honest
+          reading of the script is not that the wire-ups stopped mattering: it is that the one code path CI
+          exercises applies them for you, on a solution the template generated.</p>
           <h2 id="trade-offs-and-gotchas-honestly">Trade-offs and gotchas, honestly</h2>
           <p>The shape buys consistency, and it asks for discipline in return:</p>
           <ul>
-          <li><strong>The DI order is unforgiving.</strong> Call <code>AddApplicationDecorators()</code> too early and handlers run
-          undecorated with no warning. Treat the documented sequence as a hard rule, and consider an
-          architecture fitness test that asserts handlers are decorated (the next article covers fitness tests).</li>
+          <li><strong>The DI order is guarded, but not completely.</strong> <code>AddApplicationDecorators()</code> seals the pipeline, so
+          a module scan placed after it throws at startup. A handler registered by hand after it still runs
+          undecorated with no warning. The generated solution ships <code>DecoratorPipelineOrderTests</code>, which builds
+          the module&#39;s registration sequence and asserts the decorator nesting for one command and one query,
+          and the framework exposes <code>VerifyDecoratorPipeline()</code> for a fitness test that checks every handler
+          (the next article covers fitness tests).</li>
           <li><strong>Markers are easy to forget.</strong> <code>ITransactional</code> and <code>ICacheInvalidating</code> are opt-in by presence.
           Forget the marker and you lose the behavior silently. The upside (no behavior you did not ask for) is
           also the trap (no behavior you forgot to ask for).</li>
@@ -503,21 +528,22 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <li><strong>Soft-delete is the default.</strong> Your aggregate is never hard-deleted; <code>IsDeleted</code> is set and global
           query filters hide it. Plan for the data to persist, which matters for both storage and privacy.</li>
           <li><strong>A scaffold is a starting point, not an understanding.</strong> The generated solution is green on day one,
-          which is exactly what makes it easy to change something load-bearing without noticing. The DI order,
-          the marker interfaces, and the architecture map are the three places where a wrong edit fails
-          silently rather than loudly, and none of them is protected by the template.</li>
+          which is exactly what makes it easy to change something load-bearing without noticing. The marker
+          interfaces, the architecture map, and the host&#39;s list of module assemblies are the places where a
+          wrong edit fails silently rather than loudly.</li>
           </ul>
           <p>None of these are reasons to fight the shape. They are the reasons to learn it once and let it carry
           every module after.</p>
           <hr>
-          <p><strong>What we covered:</strong> scaffolding the whole solution with <code>dotnet new mmca-app</code> and the two fixups it
+          <p><strong>What we covered:</strong> scaffolding the whole solution with <code>dotnet new mmca-app</code> and the one fixup it
           deliberately leaves you, the aggregate with a private constructor and a <code>Result</code> factory, raising a
           domain event with <code>AddDomainEvent</code>, a thin command handler marked <code>ITransactional</code>, a FluentValidation
-          validator, the <code>IModule</code> contract with <code>Name</code> and <code>Dependencies</code>, the exact DI sequence
-          (<code>AddApplication().AddInfrastructure(config).AddAPI(modulesSettings) .ScanModuleApplicationServices&lt;T&gt;()...AddApplicationDecorators()</code>), the decorator pipeline that wraps
-          every handler automatically, and the seven wire-ups <code>mmca-module</code> prints because <code>dotnet new</code> cannot
-          patch files that already exist (a solution generated by <code>mmca-app</code> applies all seven for you through
-          its own <code>build/add-module.ps1</code>).</p>
+          validator, the <code>IModule</code> contract with <code>Name</code> and <code>Dependencies</code>, the DI sequence (each module&#39;s
+          <code>ScanModuleApplicationServices&lt;T&gt;()</code> reached through <code>ModuleLoader.DiscoverAndRegister</code>, then
+          <code>AddApplicationDecorators()</code> last, sealing the pipeline), the decorator pipeline that wraps every
+          handler automatically, and the seven wire-ups <code>mmca-module</code> prints because <code>dotnet new</code> cannot patch
+          files that already exist (a solution generated by <code>mmca-app</code> applies all seven for you through its own
+          <code>build/add-module.ps1</code>).</p>
           <p><strong>Next in the series:</strong> write your first architecture fitness test, so the conventions in this article
           become a red build instead of a code-review comment.</p>
           <p><em>MMCA.Common is Apache-2.0 licensed and open source. Star the repo, read ADR-065 on why the template is
